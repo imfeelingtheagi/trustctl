@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 
 	"golang.org/x/crypto/acme"
 )
@@ -16,6 +17,16 @@ import (
 // freshly generated ECDSA P-256 account key.
 func NewClient(directoryURL string) (*acme.Client, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return &acme.Client{Key: key, DirectoryURL: directoryURL}, nil
+}
+
+// NewRSAClient returns an ACME client with a freshly generated RSA account key
+// (RS256 JWS). The built-in ACME server verifies RSA account keys.
+func NewRSAClient(directoryURL string) (*acme.Client, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
 	}
