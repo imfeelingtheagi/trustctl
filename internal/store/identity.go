@@ -67,6 +67,16 @@ func (s *Store) UpsertIdentity(ctx context.Context, id Identity) error {
 	})
 }
 
+// SetIdentityStatusTx updates an identity's lifecycle status on the caller's
+// transaction, so a state change and its outbox side effect (AN-6) commit
+// atomically. It is tenant-scoped; the caller supplies a WithTenant transaction.
+func (s *Store) SetIdentityStatusTx(ctx context.Context, tx pgx.Tx, tenantID, id, status string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE identities SET status = $3 WHERE tenant_id = $1 AND id = $2`,
+		tenantID, id, status)
+	return err
+}
+
 // GetIdentity loads an identity in its tenant context.
 func (s *Store) GetIdentity(ctx context.Context, tenantID, id string) (Identity, error) {
 	var (
