@@ -39,13 +39,19 @@ Only a CSR ever crosses the wire to the control plane — never a private key.
 ## End-to-end test
 
 `test/e2e/kubernetes` exercises the secret destination and the cert-manager
-bridge against a real API server. CI runs it on a `kind` cluster with
-cert-manager installed (the `kubernetes / kind e2e` job); locally:
+bridge against a real API server. CI runs it on a `kind` cluster with the
+cert-manager CRDs installed (the `kubernetes / kind e2e` job). The agent uses
+its restricted service-account token (`K8S_TOKEN`); fixtures and verification
+use an admin token (`K8S_ADMIN_TOKEN`), because the agent service account is
+least-privilege and cannot create `CertificateRequest`s. Locally:
 
 ```sh
-export K8S_SERVER=... K8S_TOKEN=... K8S_CA_FILE=... K8S_NAMESPACE=certctl
+export K8S_SERVER=... K8S_TOKEN=... K8S_ADMIN_TOKEN=... K8S_CA_FILE=... K8S_NAMESPACE=certctl
 go test -tags e2e ./test/e2e/kubernetes/...
 ```
 
-The platform-neutral logic is also covered on every platform by unit tests
-against an in-process Kubernetes API double (`internal/agent/k8s`).
+The bridge merges into a request's status (it preserves conditions such as
+cert-manager's `Approved`, upserting `Ready`), so it composes with cert-manager's
+approval flow; exercising that full controller/approval path end-to-end is a
+follow-up. The platform-neutral logic is covered on every platform by unit
+tests against an in-process Kubernetes API double (`internal/agent/k8s`).

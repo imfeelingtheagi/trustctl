@@ -121,17 +121,19 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 
 	meta, _ := cr["metadata"].(map[string]any)
 	name, _ := meta["name"].(string)
-	cr["status"] = map[string]any{
-		"certificate": string(chainPEM),
-		"conditions": []any{
-			map[string]any{
-				"type":    "Ready",
-				"status":  "True",
-				"reason":  "Issued",
-				"message": "certctl signed the request",
-			},
-		},
+
+	// Merge into the existing status: set the issued certificate and upsert the
+	// Ready condition, preserving any other conditions (for example the
+	// Approved condition cert-manager requires before issuance). Replacing the
+	// status wholesale would drop those and the API server would reject it.
+	status, _ := cr["status"].(map[string]any)
+	if status == nil {
+		status = map[string]any{}
 	}
+	status["certificate"] = string(chainPEM)
+	status["conditions"] = upsertReady(status["conditions"])
+	cr["status"] = status
+
 	st, rb, err := b.client.request(ctx, http.MethodPut, certificateRequestsPath(namespace)+"/"+name+"/status", cr)
 	if err != nil {
 		return err
@@ -140,4 +142,23 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 		return fmt.Errorf("k8s: update CertificateRequest %s/%s status: %d: %s", namespace, name, st, string(rb))
 	}
 	return nil
+}
+
+// upsertReady returns the condition list with a true Ready condition, replacing
+// an existing Ready condition in place and preserving every other condition.
+func upsertReady(existing any) []any {
+	ready := map[string]any{
+		"type":    "Ready",
+		"status":  "True",
+		"reason":  "Issued",
+		"message": "certctl signed the request",
+	}
+	conds, _ := existing.([]any)
+	for i, c := range conds {
+		if m, ok := c.(map[string]any); ok && m["type"] == "Ready" {
+			conds[i] = ready
+			return conds
+		}
+	}
+	return append(conds, ready)
 }

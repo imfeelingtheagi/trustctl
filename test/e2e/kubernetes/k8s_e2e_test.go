@@ -36,12 +36,19 @@ func env(t *testing.T, key string) string {
 	return v
 }
 
-// cluster builds a k8s.Client and a raw HTTP helper from the environment.
+// cluster builds the agent's k8s.Client (the code under test, using the
+// restricted agent service-account token) plus a raw HTTP helper that uses an
+// admin token for test fixtures and verification — because the agent SA is
+// least-privilege and cannot, for example, create CertificateRequests.
 func cluster(t *testing.T) (*k8s.Client, func(method, path string, body any) (int, []byte), string) {
 	t.Helper()
 	server := env(t, "K8S_SERVER")
 	token := env(t, "K8S_TOKEN")
 	caFile := env(t, "K8S_CA_FILE")
+	adminToken := os.Getenv("K8S_ADMIN_TOKEN")
+	if adminToken == "" {
+		adminToken = token // local single-token runs
+	}
 	ns := os.Getenv("K8S_NAMESPACE")
 	if ns == "" {
 		ns = "default"
@@ -57,6 +64,8 @@ func cluster(t *testing.T) (*k8s.Client, func(method, path string, body any) (in
 	httpClient := &http.Client{Transport: transport, Timeout: 30 * time.Second}
 	client := k8s.New(server, token, ns, httpClient)
 
+	// raw uses the admin token: fixtures and verification, not the code path
+	// under test (the agent client / bridge use the restricted agent token).
 	raw := func(method, path string, body any) (int, []byte) {
 		var r io.Reader
 		if body != nil {
@@ -64,7 +73,7 @@ func cluster(t *testing.T) (*k8s.Client, func(method, path string, body any) (in
 			r = bytes.NewReader(b)
 		}
 		req, _ := http.NewRequest(method, server+path, r)
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Authorization", "Bearer "+adminToken)
 		req.Header.Set("Accept", "application/json")
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")

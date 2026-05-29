@@ -178,6 +178,56 @@ func TestBridgeSkipsOtherIssuers(t *testing.T) {
 	}
 }
 
+// TestBridgePreservesExistingConditions: signing an Approved (but not yet
+// Ready) request adds the Ready condition and the certificate while keeping the
+// Approved condition — cert-manager requires Approved to remain for issuance.
+func TestBridgePreservesExistingConditions(t *testing.T) {
+	signer, _ := caSigner(t)
+	cm := &fakeCertManager{items: []map[string]any{
+		func() map[string]any {
+			cr := certRequest("approved", "certctl", "certctl.io", false)
+			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
+			cr["status"] = map[string]any{"conditions": []any{
+				map[string]any{"type": "Approved", "status": "True", "reason": "cert-manager.io"},
+			}}
+			return cr
+		}(),
+	}}
+	srv := httptest.NewServer(cm.handler())
+	defer srv.Close()
+
+	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "certctl", "certctl.io")
+	if n, err := bridge.Reconcile(context.Background(), "apps"); err != nil || n != 1 {
+		t.Fatalf("Reconcile n=%d err=%v, want 1", n, err)
+	}
+
+	obj := cm.statusPut["approved"]
+	if obj == nil {
+		t.Fatal("no status update written")
+	}
+	status, _ := obj["status"].(map[string]any)
+	conds, _ := status["conditions"].([]any)
+	var approved, ready bool
+	for _, c := range conds {
+		m, _ := c.(map[string]any)
+		switch m["type"] {
+		case "Approved":
+			approved = true
+		case "Ready":
+			ready = m["status"] == "True"
+		}
+	}
+	if !approved {
+		t.Error("Approved condition was dropped during the status update")
+	}
+	if !ready {
+		t.Error("Ready=True condition was not added")
+	}
+	if _, ok := status["certificate"].(string); !ok {
+		t.Error("issued certificate was not set on the status")
+	}
+}
+
 // TestBridgeIdempotentOnReady: an already-Ready request is not re-signed.
 func TestBridgeIdempotentOnReady(t *testing.T) {
 	signer, _ := caSigner(t)
