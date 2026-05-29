@@ -13,6 +13,7 @@ require (
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nats-io/nuid v1.0.1
 	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/tetratelabs/wazero v1.8.2
 	golang.org/x/sys v0.28.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 	google.golang.org/grpc v1.64.0
