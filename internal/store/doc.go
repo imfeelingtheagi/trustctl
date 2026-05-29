@@ -7,5 +7,7 @@
 // path), and no other datastore is introduced. The architecture linter
 // (tools/certctllint) fails any repository query missing a tenant_id filter.
 //
-// Implementation begins in sprint S2.2; this file reserves the package.
+// Store exposes the connection pool, the migration runner, the Tenant entity
+// and its repository, and WithTenant, which runs tenant-scoped queries under
+// row-level security.
 package store

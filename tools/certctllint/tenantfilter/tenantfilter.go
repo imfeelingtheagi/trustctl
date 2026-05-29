@@ -46,7 +46,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if err != nil {
 				return true
 			}
-			if isDML(sql) && !mentionsTenantID(sql) {
+			if isDML(sql) && !mentionsTenantID(sql) && !referencesSystemTable(sql) {
 				pass.Reportf(lit.Pos(),
 					"repository query does not filter on tenant_id (AN-1)")
 			}
@@ -85,4 +85,21 @@ func isDML(s string) bool {
 
 func mentionsTenantID(s string) bool {
 	return strings.Contains(strings.ToLower(s), "tenant_id")
+}
+
+// systemTables are non-tenant, infrastructure tables that legitimately carry no
+// tenant_id (e.g. the migration ledger). This is the sanctioned escape hatch —
+// a fix to the rule itself, not a per-line ignore — and is extended only here,
+// with a test fixture.
+var systemTables = []string{"schema_migrations"}
+
+// referencesSystemTable reports whether a query targets a known system table.
+func referencesSystemTable(s string) bool {
+	lower := strings.ToLower(s)
+	for _, tbl := range systemTables {
+		if strings.Contains(lower, tbl) {
+			return true
+		}
+	}
+	return false
 }

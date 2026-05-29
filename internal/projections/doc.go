@@ -5,5 +5,6 @@
 // written directly to represent a state change; replaying the log reproduces
 // them deterministically.
 //
-// Implementation begins in sprint S2.2; this file reserves the package.
+// Projector.Project replays the event log into the read model and Rebuild
+// re-derives it from scratch; both write only through internal/store.
 package projections

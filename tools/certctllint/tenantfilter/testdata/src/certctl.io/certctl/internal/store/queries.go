@@ -16,4 +16,8 @@ const (
 
 	// Not a DML statement, so it is not subject to the rule.
 	ddl = "CREATE TABLE certificates (id uuid primary key)"
+
+	// System (non-tenant) tables are exempt: no tenant_id is expected.
+	migCheck  = "SELECT version FROM schema_migrations"
+	migRecord = "INSERT INTO schema_migrations (version) VALUES ($1)"
 )
