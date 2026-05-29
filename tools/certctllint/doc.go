@@ -1,13 +1,23 @@
-// Package certctllint will provide the custom go/analysis linter that makes the
-// architectural non-negotiables un-violable and is wired CI-blocking.
+// Command certctllint is the certctl architecture linter: a go/analysis
+// multichecker that makes the architectural non-negotiables un-violable and is
+// wired CI-blocking through `make lint`.
 //
-// It will enforce, at minimum: no crypto/* import outside internal/crypto
-// (AN-3); no repository query missing a tenant_id filter (AN-1); no string-typed
-// field or parameter in a key-handling package (AN-8); and an honored
-// idempotency key on every mutating API handler (AN-5). The only sanctioned
-// escape hatch is fixing a rule (with a test fixture), never a blanket ignore.
+// It bundles four analyzers, each implemented and tested in its own subpackage:
 //
-// This is deliberately a placeholder: the analyzers, their fixtures, and the CI
-// wiring are the entire scope of sprint S0.2 and are intentionally NOT
-// implemented here in S0.1.
-package certctllint
+//   - cryptoboundary (AN-3): crypto/* may be imported only inside internal/crypto.
+//   - tenantfilter   (AN-1): repository SQL queries must filter on tenant_id.
+//   - keymaterial    (AN-8): key-handling packages must not use string for key material.
+//   - idempotency    (AN-5): mutating handlers must accept and honor an idempotency key.
+//
+// As built by multichecker, the binary runs standalone over the module
+//
+//	go run ./tools/certctllint ./...
+//
+// and also works as a `go vet -vettool`. Per-analyzer flags are available, for
+// example `certctllint -tenantfilter=false ./...` to run a single rule.
+//
+// Escape hatch: there is deliberately no per-line suppression (no //nolint, no
+// blanket ignore). The only sanctioned way to resolve a false positive is to
+// fix the offending rule in this package together with a test fixture. See
+// README.md.
+package main

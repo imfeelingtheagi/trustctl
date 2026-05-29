@@ -49,9 +49,9 @@ test: ## Run all tests with the race detector and coverage
 	$(GO) test -race -count=1 -covermode=atomic ./...
 
 .PHONY: lint
-lint: ## Run gofmt and go vet (plus golangci-lint if installed)
+lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if installed)
 	@echo ">> gofmt"
-	@unformatted=$$(gofmt -l -s .); \
+	@unformatted=$$(gofmt -l -s $$(find . -name '*.go' -not -path '*/testdata/*' -not -path './.git/*')); \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files are not gofmt-clean (run: gofmt -w -s .):"; \
 		echo "$$unformatted"; \
@@ -59,6 +59,8 @@ lint: ## Run gofmt and go vet (plus golangci-lint if installed)
 	fi
 	@echo ">> go vet"
 	$(GO) vet ./...
+	@echo ">> certctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
+	$(GO) run ./tools/certctllint ./...
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		echo ">> golangci-lint"; golangci-lint run ./...; \
 	else \
