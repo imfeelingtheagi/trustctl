@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"certctl.io/certctl/internal/api/problem"
+	"certctl.io/certctl/internal/audit"
 	"certctl.io/certctl/internal/auth"
 	"certctl.io/certctl/internal/authz"
 	"certctl.io/certctl/internal/orchestrator"
@@ -30,6 +31,7 @@ type API struct {
 	tenantFn  func(*http.Request) (string, error)
 	roles     *authz.Registry
 	principal func(*http.Request) (authz.Principal, error)
+	audit     *audit.Service
 	mux       *http.ServeMux
 	spec      *Document
 }
@@ -40,6 +42,12 @@ type Option func(*config)
 type config struct {
 	customRoles []authz.Role
 	principalFn func(*http.Request) (authz.Principal, error)
+	audit       *audit.Service
+}
+
+// WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
+func WithAudit(svc *audit.Service) Option {
+	return func(c *config) { c.audit = svc }
 }
 
 // WithRoles registers custom (tenant-defined) roles alongside the built-ins.
@@ -63,7 +71,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit}
 	a.principal = cfg.principalFn
 	if a.principal == nil {
 		a.principal = a.resolvePrincipal
@@ -127,6 +135,14 @@ func (a *API) routes() []route {
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 	}
+	auditQuery := []param{
+		{name: "type", typ: "string", desc: "comma-separated event types to include"},
+		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
+		{name: "until", typ: "string", desc: "RFC3339 inclusive upper time bound"},
+		{name: "as_of", typ: "integer", desc: "point-in-time: only events with sequence <= this"},
+		{name: "q", typ: "string", desc: "substring match on event type or data"},
+		{name: "limit", typ: "integer", desc: "maximum records to return"},
+	}
 	return []route{
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
@@ -142,6 +158,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: []string{"id"}, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: []string{"id"}, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
+
+		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
+		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}

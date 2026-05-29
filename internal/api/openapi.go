@@ -181,8 +181,24 @@ func componentSchemas() map[string]*Schema {
 		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(),
 	})
 
+	auditEvent := object(map[string]*Schema{
+		"sequence": {Type: "integer"}, "id": str(), "type": str(),
+		"tenant_id": uuid(), "time": timestamp(), "data": {Type: "object"},
+	}, "sequence", "type", "tenant_id", "time")
+	auditEventList := object(map[string]*Schema{
+		"events": {Type: "array", Items: ref("AuditEvent")},
+		"count":  {Type: "integer"},
+	}, "events")
+	auditBundle := object(map[string]*Schema{
+		"format": str(),
+		"bundle": str(), // a compact JWS whose payload is the signed evidence bundle
+	}, "format", "bundle")
+
 	return map[string]*Schema{
 		"Problem":           problemSchema,
+		"AuditEvent":        auditEvent,
+		"AuditEventList":    auditEventList,
+		"AuditBundle":       auditBundle,
 		"Owner":             owner,
 		"OwnerRequest":      ownerReq,
 		"OwnerList":         list("Owner"),
