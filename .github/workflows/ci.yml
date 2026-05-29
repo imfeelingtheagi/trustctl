@@ -64,3 +64,58 @@ jobs:
       # release pipeline (make dist-windows), not on every PR.
       - name: Cross-build for Windows (amd64)
         run: make windows-build
+
+  windows:
+    name: windows / test + MSI
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      # Run the Windows-specific surface natively: the agent — including the
+      # real CryptoAPI certificate store, which installs into the per-user store
+      # and asserts the key association — the destinations, the release checksum
+      # helper, and the crypto boundary. The PostgreSQL/NATS integration tests
+      # stay on the Linux job.
+      - name: Test (Windows agent surface, incl. real certificate store)
+        run: go test ./internal/agent/... ./internal/dist/... ./internal/crypto/...
+
+      - name: Build MSI (WiX v3)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          go build -o dist\certctl-agent.exe .\cmd\certctl-agent
+          choco install wixtoolset --no-progress -y
+          $wixDir = Get-ChildItem 'C:\Program Files (x86)' -Directory -Filter 'WiX Toolset *' |
+            Sort-Object Name -Descending | Select-Object -First 1
+          $bin = Join-Path $wixDir.FullName 'bin'
+          Copy-Item deploy\windows\certctl-agent.wxs dist\certctl-agent.wxs
+          & "$bin\candle.exe" -arch x64 -out dist\ dist\certctl-agent.wxs
+          & "$bin\light.exe" -b dist -out dist\certctl-agent.msi dist\certctl-agent.wixobj
+          Get-ChildItem dist
+
+      - name: Publish SHA-256 sums
+        shell: pwsh
+        run: |
+          Get-FileHash dist\certctl-agent.exe, dist\certctl-agent.msi -Algorithm SHA256 |
+            ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } |
+            Tee-Object -FilePath dist\SHA256SUMS
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: certctl-agent-windows
+          path: |
+            dist/certctl-agent.exe
+            dist/certctl-agent.msi
+            dist/SHA256SUMS

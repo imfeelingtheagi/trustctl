@@ -110,10 +110,18 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 	else \
 		echo ">> SIGN_PFX not set; skipping signing (set SIGN_PFX/SIGN_PASS to sign)"; \
 	fi
-	@# Build the MSI when a WiX toolchain (msitools' wixl) is present.
+	@# Build the MSI when a WiX toolchain (msitools' wixl) is present, then sign
+	@# it the same way as the binary so the installer itself is trusted.
 	@if command -v wixl >/dev/null 2>&1; then \
 		echo ">> build MSI (wixl)"; \
 		( cd $(DIST_DIR) && wixl -o certctl-agent.msi certctl-agent.wxs ); \
+		if [ -n "$$SIGN_PFX" ]; then \
+			echo ">> Authenticode-sign certctl-agent.msi"; \
+			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "certctl agent" \
+				-t http://timestamp.digicert.com \
+				-in $(DIST_DIR)/certctl-agent.msi -out $(DIST_DIR)/certctl-agent.signed.msi && \
+			mv $(DIST_DIR)/certctl-agent.signed.msi $(DIST_DIR)/certctl-agent.msi; \
+		fi; \
 	else \
 		echo ">> wixl not found; skipping MSI build (install msitools, or use WiX on Windows)"; \
 	fi

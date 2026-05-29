@@ -14,10 +14,12 @@ require (
 	github.com/nats-io/nuid v1.0.1
 	github.com/russellhaering/goxmldsig v1.4.0
 	github.com/tetratelabs/wazero v1.8.2
+	golang.org/x/crypto v0.30.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1
+	software.sslmate.com/src/go-pkcs12 v0.7.1
 )
 
 require (
@@ -31,7 +33,6 @@ require (
 	github.com/nats-io/jwt/v2 v2.5.8 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
-	golang.org/x/crypto v0.30.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect

@@ -25,8 +25,11 @@ toolchain is present), and writes a `SHA256SUMS` manifest into `dist/`.
   (`sha256sum -c` compatible). The same manifest can be produced
   programmatically via `internal/dist.Checksums`.
 
-The Windows binary is kept compiling on every PR by the `windows cross-build` CI
-job (`make windows-build`: `GOOS=windows go build ./... && go vet ./...`).
+CI exercises this on two jobs: `windows cross-build` (Linux,
+`make windows-build`: `GOOS=windows go build ./... && go vet ./...`) for a fast
+guard, and `windows / test + MSI` (a real `windows-latest` runner) which runs
+the Windows agent tests — including a round-trip against the live per-user
+certificate store — and builds the MSI with the WiX Toolset.
 
 ## Install / uninstall
 
@@ -50,6 +53,9 @@ The agent installs certificates into a Windows system store — for example the
 machine Personal store, `LocalMachine\MY` — associating the private key
 non-exportable under the Microsoft Software Key Storage Provider (CNG). The
 CryptoAPI/CNG backend (`internal/agent/destination/certstore`, build-tagged for
-Windows) is verified to compile via the Windows cross-build; its behavior is
-validated on Windows hosts, and the platform-neutral contract it implements is
-exercised on every platform by the in-process `Memory` store used in tests.
+Windows) installs a cert-with-key by encoding a transient PKCS#12 in the crypto
+boundary (`internal/crypto/pfx`) and importing it with `PFXImportCertStore`,
+which persists and links the key. The `windows / test + MSI` CI job runs this
+end-to-end against the per-user store on a real Windows runner; the
+platform-neutral contract is also exercised on every platform by the in-process
+`Memory` store.
