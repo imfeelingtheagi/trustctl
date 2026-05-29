@@ -1,0 +1,93 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestDefaultIsValid(t *testing.T) {
+	if err := Default().Validate(); err != nil {
+		t.Fatalf("Default() must be valid, got: %v", err)
+	}
+}
+
+func TestParseOverlaysDefaults(t *testing.T) {
+	cfg, err := Parse([]byte(`{"postgres":{"mode":"external","dsn":"postgres://x"}}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.Postgres.Mode != "external" || cfg.Postgres.DSN != "postgres://x" {
+		t.Errorf("file values not applied: %+v", cfg.Postgres)
+	}
+	// Fields absent from the file keep their defaults.
+	if cfg.Server.Addr != Default().Server.Addr {
+		t.Errorf("Server.Addr should keep default, got %q", cfg.Server.Addr)
+	}
+	if cfg.Log.Format != "json" {
+		t.Errorf("Log.Format should keep default json, got %q", cfg.Log.Format)
+	}
+}
+
+// TestEnvOverridesFile pins the precedence: defaults < file < environment.
+func TestEnvOverridesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "certctl.json")
+	body := `{"server":{"addr":":1111"},"postgres":{"mode":"external","dsn":"file-dsn"}}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{
+		"CERTCTL_CONFIG_FILE":  path,
+		"CERTCTL_POSTGRES_DSN": "env-dsn",
+		"CERTCTL_LOG_LEVEL":    "debug",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Postgres.DSN != "env-dsn" {
+		t.Errorf("env must override file dsn: got %q", cfg.Postgres.DSN)
+	}
+	if cfg.Server.Addr != ":1111" {
+		t.Errorf("file must override default addr: got %q", cfg.Server.Addr)
+	}
+	if cfg.Log.Level != "debug" {
+		t.Errorf("env must override default log level: got %q", cfg.Log.Level)
+	}
+	if cfg.NATS.Mode != Default().NATS.Mode {
+		t.Errorf("untouched NATS.Mode should be default: got %q", cfg.NATS.Mode)
+	}
+}
+
+func TestValidateRejectsBadValues(t *testing.T) {
+	cases := map[string]func(*Config){
+		"postgres mode":        func(c *Config) { c.Postgres.Mode = "weird" },
+		"external without dsn": func(c *Config) { c.Postgres.Mode = "external"; c.Postgres.DSN = "" },
+		"nats mode":            func(c *Config) { c.NATS.Mode = "weird" },
+		"external without url": func(c *Config) { c.NATS.Mode = "external"; c.NATS.URL = "" },
+		"log level":            func(c *Config) { c.Log.Level = "loud" },
+		"log format":           func(c *Config) { c.Log.Format = "binary" },
+		"empty addr":           func(c *Config) { c.Server.Addr = "" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			mutate(c)
+			if err := c.Validate(); err == nil {
+				t.Errorf("expected a validation error for %q", name)
+			}
+		})
+	}
+}
+
+func TestExternalModesValidWithConnection(t *testing.T) {
+	c := Default()
+	c.Postgres.Mode = "external"
+	c.Postgres.DSN = "postgres://u:p@host:5432/db"
+	c.NATS.Mode = "external"
+	c.NATS.URL = "nats://host:4222"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("external config with connection strings should validate: %v", err)
+	}
+}
