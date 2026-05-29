@@ -3,8 +3,9 @@
 // The agent registers with the control plane (bootstrap token; attestation is a
 // later addition), communicates over mTLS with a short-lived, auto-rotating
 // client certificate, and performs all key operations locally so that private
-// keys never leave the host. Discovery, deployment, SSH trust, and drift
-// reconciliation build on this core in later sprints.
+// keys never leave the host. On Windows it can run under the Service Control
+// Manager (--service); see service_windows.go. Discovery, deployment, SSH
+// trust, and drift reconciliation build on this core in later sprints.
 package main
 
 import (
@@ -23,6 +24,7 @@ import (
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version information and exit")
+	service := flag.String("service", "", "Windows service control: install | uninstall | run")
 	enrollURL := flag.String("enroll-url", "", "control-plane enrollment base URL")
 	token := flag.String("bootstrap-token", "", "one-time bootstrap token")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
@@ -38,16 +40,32 @@ func main() {
 		fmt.Println(buildinfo.String("certctl-agent"))
 		return
 	}
-	if *enrollURL == "" || *caBundle == "" || *serverAddr == "" || *commonName == "" {
-		fmt.Fprintln(os.Stderr, "certctl-agent: --enroll-url, --ca-bundle, --server, and --name are required")
-		os.Exit(2)
-	}
 
-	if err := run(agentOptions{
+	o := agentOptions{
 		enrollURL: *enrollURL, token: *token, caBundle: *caBundle,
 		serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
-	}); err != nil {
+	}
+
+	// Uninstalling a service needs no connection settings; everything else does.
+	if *service != "uninstall" {
+		if o.enrollURL == "" || o.caBundle == "" || o.serverAddr == "" || o.commonName == "" {
+			fmt.Fprintln(os.Stderr, "certctl-agent: --enroll-url, --ca-bundle, --server, and --name are required")
+			os.Exit(2)
+		}
+	}
+
+	if *service != "" {
+		if err := handleService(*service, o); err != nil {
+			fmt.Fprintln(os.Stderr, "certctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if err := runAgent(ctx, o); err != nil {
 		fmt.Fprintln(os.Stderr, "certctl-agent:", err)
 		os.Exit(1)
 	}
@@ -58,7 +76,10 @@ type agentOptions struct {
 	rotateEvery                                                                       time.Duration
 }
 
-func run(o agentOptions) error {
+// runAgent bootstraps the agent, connects to the control plane over mTLS, and
+// rotates its client certificate on a timer until ctx is cancelled. It is the
+// shared loop for both interactive use and the Windows service.
+func runAgent(ctx context.Context, o agentOptions) error {
 	caPEM, err := os.ReadFile(o.caBundle)
 	if err != nil {
 		return fmt.Errorf("read CA bundle: %w", err)
@@ -77,9 +98,6 @@ func run(o agentOptions) error {
 		ServerCAPEM:    caPEM,
 		RefreshBefore:  o.rotateEvery,
 	}, agent.NewHTTPEnroller(o.enrollURL, nil))
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)

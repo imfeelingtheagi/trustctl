@@ -43,3 +43,24 @@ jobs:
 
       - name: Lint
         run: make lint
+
+  windows-build:
+    name: windows cross-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      # Cross-compile and vet the whole module for Windows so the CryptoAPI
+      # certificate store and the Service Control Manager integration are kept
+      # building. The agent's Windows binary and signed MSI are produced by the
+      # release pipeline (make dist-windows), not on every PR.
+      - name: Cross-build for Windows (amd64)
+        run: make windows-build

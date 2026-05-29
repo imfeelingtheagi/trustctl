@@ -85,6 +85,41 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version)
 	$(GO) run ./cmd/certctl $(ARGS)
 
+DIST_DIR ?= dist
+WIN_ARCH ?= amd64
+
+.PHONY: windows-build
+windows-build: ## Cross-compile every package for windows/amd64 (compile check)
+	GOOS=windows GOARCH=$(WIN_ARCH) $(GO) build ./...
+	GOOS=windows GOARCH=$(WIN_ARCH) $(GO) vet ./...
+
+.PHONY: dist-windows
+dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish SHA-256 sums
+	@mkdir -p $(DIST_DIR)
+	@echo ">> cross-build certctl-agent.exe (windows/$(WIN_ARCH))"
+	GOOS=windows GOARCH=$(WIN_ARCH) $(GO_BUILD) -o $(DIST_DIR)/certctl-agent.exe ./cmd/certctl-agent
+	@cp deploy/windows/certctl-agent.wxs $(DIST_DIR)/certctl-agent.wxs
+	@# Authenticode-sign the binary when a signing identity is provided (osslsigncode on
+	@# Linux/macOS, or signtool on Windows). Unsigned otherwise.
+	@if [ -n "$$SIGN_PFX" ]; then \
+		echo ">> Authenticode-sign certctl-agent.exe"; \
+		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "certctl agent" \
+			-t http://timestamp.digicert.com \
+			-in $(DIST_DIR)/certctl-agent.exe -out $(DIST_DIR)/certctl-agent.signed.exe && \
+		mv $(DIST_DIR)/certctl-agent.signed.exe $(DIST_DIR)/certctl-agent.exe; \
+	else \
+		echo ">> SIGN_PFX not set; skipping signing (set SIGN_PFX/SIGN_PASS to sign)"; \
+	fi
+	@# Build the MSI when a WiX toolchain (msitools' wixl) is present.
+	@if command -v wixl >/dev/null 2>&1; then \
+		echo ">> build MSI (wixl)"; \
+		( cd $(DIST_DIR) && wixl -o certctl-agent.msi certctl-agent.wxs ); \
+	else \
+		echo ">> wixl not found; skipping MSI build (install msitools, or use WiX on Windows)"; \
+	fi
+	@echo ">> publish SHA-256 sums"
+	@( cd $(DIST_DIR) && sha256sum $$(ls certctl-agent.exe certctl-agent.msi 2>/dev/null) > SHA256SUMS && cat SHA256SUMS )
+
 .PHONY: tools
 tools: ## Install developer tooling (golangci-lint)
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
