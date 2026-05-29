@@ -1,0 +1,123 @@
+// Protocol stub for the isolated signing service (AN-4). This is the wire
+// contract the control plane uses to reach certctl-signer over a Unix domain
+// socket (single node) or mTLS (across nodes). It is committed as the reviewed
+// protocol design for sprint S1.3; Go code is generated and the service is
+// implemented in S1.4.
+//
+// Design rationale, threat model, and the dependency budget live in
+// docs/design/signing-service.md.
+syntax = "proto3";
+
+package certctl.signing.v1;
+
+option go_package = "certctl.io/certctl/internal/signing/proto;signerpb";
+
+// SignerService performs all private-key operations inside the sacred signer
+// process. Private key material never crosses this boundary: callers receive
+// opaque key handles and public keys only.
+//
+// The service has no HTTP surface and no database access; it speaks only this
+// gRPC contract over UDS/mTLS (AN-4).
+service SignerService {
+  // GenerateKey creates a new private key inside the signer and returns its
+  // handle and public key. The private key never leaves the process.
+  rpc GenerateKey(GenerateKeyRequest) returns (GenerateKeyResponse);
+
+  // GetPublicKey returns the public key for an existing handle.
+  rpc GetPublicKey(GetPublicKeyRequest) returns (GetPublicKeyResponse);
+
+  // Sign produces a signature over a message using the keyed handle.
+  rpc Sign(SignRequest) returns (SignResponse);
+
+  // DestroyKey zeroizes and forgets a key handle. It is idempotent.
+  rpc DestroyKey(DestroyKeyRequest) returns (DestroyKeyResponse);
+
+  // Health reports liveness and readiness. It returns no secret material.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// Algorithm mirrors internal/crypto.Algorithm.
+enum Algorithm {
+  ALGORITHM_UNSPECIFIED = 0;
+  ALGORITHM_RSA_2048 = 1;
+  ALGORITHM_RSA_3072 = 2;
+  ALGORITHM_RSA_4096 = 3;
+  ALGORITHM_ECDSA_P256 = 4;
+  ALGORITHM_ECDSA_P384 = 5;
+  ALGORITHM_ECDSA_P521 = 6;
+}
+
+// Hash mirrors internal/crypto.Hash.
+enum Hash {
+  HASH_UNSPECIFIED = 0;
+  HASH_SHA256 = 1;
+  HASH_SHA384 = 2;
+  HASH_SHA512 = 3;
+}
+
+// RSAPadding mirrors internal/crypto.RSAPadding; ignored for non-RSA keys.
+enum RSAPadding {
+  RSA_PADDING_UNSPECIFIED = 0; // treated as PKCS#1 v1.5
+  RSA_PADDING_PKCS1V15 = 1;
+  RSA_PADDING_PSS = 2;
+}
+
+// KeyHandle is an opaque, unguessable reference to a private key held by the
+// signer. The control plane stores the handle and the public key; it never sees
+// the private key bytes.
+message KeyHandle {
+  string id = 1;
+}
+
+message GenerateKeyRequest {
+  Algorithm algorithm = 1;
+  // Optional caller-chosen handle id for idempotent creation; empty means the
+  // signer assigns one.
+  string requested_id = 2;
+}
+
+message GenerateKeyResponse {
+  KeyHandle handle = 1;
+  Algorithm algorithm = 2;
+  // public_key is the PKIX/DER (SubjectPublicKeyInfo) encoding.
+  bytes public_key = 3;
+}
+
+message GetPublicKeyRequest {
+  KeyHandle handle = 1;
+}
+
+message GetPublicKeyResponse {
+  Algorithm algorithm = 1;
+  bytes public_key = 2;
+}
+
+message SignRequest {
+  KeyHandle handle = 1;
+  // message is the raw message to be hashed-then-signed by the signer.
+  bytes message = 2;
+  Hash hash = 3;
+  RSAPadding rsa_padding = 4;
+}
+
+message SignResponse {
+  bytes signature = 1;
+}
+
+message DestroyKeyRequest {
+  KeyHandle handle = 1;
+}
+
+message DestroyKeyResponse {}
+
+message HealthRequest {}
+
+message HealthResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_SERVING = 1;
+    STATUS_NOT_SERVING = 2;
+    STATUS_DRAINING = 3;
+  }
+  Status status = 1;
+}
