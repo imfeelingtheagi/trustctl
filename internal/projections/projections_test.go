@@ -75,7 +75,10 @@ func newStore(t *testing.T) *store.Store {
 	// Per-test isolation: the whole package shares one database, so reset the
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.Pool().Exec(ctx,
-		"TRUNCATE tenants, idempotency_keys, outbox RESTART IDENTITY"); err != nil {
+		`TRUNCATE tenants, idempotency_keys, outbox,
+		          owners, issuers, identities, deployment_targets,
+		          agents, policy_bindings, attestations
+		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })
