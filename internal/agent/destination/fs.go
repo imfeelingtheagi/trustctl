@@ -22,6 +22,10 @@ const (
 // created private. The final permissions are set explicitly (independent of the
 // process umask or any pre-existing file mode), so a key is never left more
 // permissive than 0600.
+//
+// The exact 0600/0644/0700 guarantee is POSIX. On Windows the files are still
+// written, but Go's mode bits are not the access-control mechanism (NTFS ACLs
+// are) — Windows hosts use the certificate-store destination instead.
 type Filesystem struct {
 	certPath string
 	keyPath  string

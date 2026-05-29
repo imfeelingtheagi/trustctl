@@ -61,24 +61,21 @@ var (
 	_ destination.Destination = (*destination.PKCS11)(nil)
 )
 
-// TestFilesystemInstallSetsPermissions is half of the acceptance: a certificate
-// (and its key) installs to the filesystem, the bytes round-trip, and the
-// permissions are correct — the key is owner-only (0600), the certificate is
-// world-readable (0644), and the directory that holds the key is private
-// (0700). The destination must create the directory itself.
-func TestFilesystemInstallSetsPermissions(t *testing.T) {
+// TestFilesystemInstallWritesCertAndKey is half of the acceptance: a
+// certificate and its key install to the filesystem and the bytes round-trip,
+// with the destination creating the directory itself. The exact owner-only
+// permission modes are a POSIX guarantee, asserted in fs_unix_test.go.
+func TestFilesystemInstallWritesCertAndKey(t *testing.T) {
 	root := t.TempDir()
 	sub := filepath.Join(root, "tls") // deliberately not pre-created
 	certPath := filepath.Join(sub, "workload.crt")
 	keyPath := filepath.Join(sub, "workload.key")
 
 	cred := makeCredential(t)
-	fs := destination.NewFilesystem(certPath, keyPath)
-	if err := fs.Install(context.Background(), cred); err != nil {
+	if err := destination.NewFilesystem(certPath, keyPath).Install(context.Background(), cred); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
-	// The certificate round-trips.
 	gotCert, err := os.ReadFile(certPath)
 	if err != nil {
 		t.Fatalf("read installed cert: %v", err)
@@ -86,56 +83,12 @@ func TestFilesystemInstallSetsPermissions(t *testing.T) {
 	if !bytes.Equal(gotCert, cred.CertPEM) {
 		t.Error("installed certificate bytes differ from the credential")
 	}
-	// The key round-trips.
 	gotKey, err := os.ReadFile(keyPath)
 	if err != nil {
 		t.Fatalf("read installed key: %v", err)
 	}
 	if !bytes.Equal(gotKey, cred.KeyPEM) {
 		t.Error("installed key bytes differ from the credential")
-	}
-
-	// Permissions: key 0600, cert 0644, key directory 0700.
-	if ki, err := os.Stat(keyPath); err != nil {
-		t.Fatal(err)
-	} else if perm := ki.Mode().Perm(); perm != 0o600 {
-		t.Errorf("key permissions = %o, want 0600", perm)
-	}
-	if ci, err := os.Stat(certPath); err != nil {
-		t.Fatal(err)
-	} else if perm := ci.Mode().Perm(); perm != 0o644 {
-		t.Errorf("cert permissions = %o, want 0644", perm)
-	}
-	if di, err := os.Stat(sub); err != nil {
-		t.Fatal(err)
-	} else if perm := di.Mode().Perm(); perm != 0o700 {
-		t.Errorf("key directory permissions = %o, want 0700", perm)
-	}
-}
-
-// TestFilesystemReinstallTightensLoosePermissions: installing over a key file
-// that was left world-readable re-tightens it to 0600 (the destination owns the
-// final mode regardless of a permissive umask or a pre-existing loose file).
-func TestFilesystemReinstallTightensLoosePermissions(t *testing.T) {
-	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "workload.key")
-	certPath := filepath.Join(dir, "workload.crt")
-
-	// Pre-existing, world-readable key file.
-	if err := os.WriteFile(keyPath, []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	cred := makeCredential(t)
-	if err := destination.NewFilesystem(certPath, keyPath).Install(context.Background(), cred); err != nil {
-		t.Fatalf("Install: %v", err)
-	}
-	ki, err := os.Stat(keyPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := ki.Mode().Perm(); perm != 0o600 {
-		t.Errorf("key permissions after reinstall = %o, want 0600 (tightened)", perm)
 	}
 }
 
