@@ -17,6 +17,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	log := openLog(t) // embedded NATS JetStream
 	ctx := context.Background()
 	svc := app.New(log, s)
+	defer svc.Close()
 
 	const id = tenantA
 	if err := svc.RegisterTenant(ctx, id, "Acme", "skeleton-key"); err != nil {

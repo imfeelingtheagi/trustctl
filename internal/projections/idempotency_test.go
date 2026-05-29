@@ -95,6 +95,7 @@ func TestRegisterTenantIdempotent(t *testing.T) {
 	log := openLog(t)
 	ctx := context.Background()
 	svc := app.New(log, s)
+	defer svc.Close()
 
 	const key = "register-acme-once"
 	if err := svc.RegisterTenant(ctx, tenantA, "Acme", key); err != nil {

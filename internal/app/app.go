@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"certctl.io/certctl/internal/bulkhead"
 	"certctl.io/certctl/internal/events"
 	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/projections"
@@ -24,17 +25,31 @@ type Service struct {
 	store *store.Store
 	proj  *projections.Projector
 	idem  *orchestrator.Idempotency
+	bulk  *bulkhead.Set
 }
 
-// New returns a Service over the given event log and store.
+// New returns a Service over the given event log and store. It provisions an
+// isolated, bounded worker pool per subsystem (AN-7); call Close to release them.
 func New(log *events.Log, st *store.Store) *Service {
 	return &Service{
 		log:   log,
 		store: st,
 		proj:  projections.New(st),
 		idem:  orchestrator.NewIdempotency(st),
+		bulk:  bulkhead.Default(),
 	}
 }
+
+// Submit runs task on the named subsystem's bounded pool (AN-7). It returns a
+// structured *bulkhead.Rejected if that subsystem is saturated or unknown, so one
+// subsystem's backlog can never starve another.
+func (s *Service) Submit(subsystem string, task func()) error {
+	return s.bulk.Submit(subsystem, task)
+}
+
+// Close releases the service's per-subsystem worker pools, draining queued work.
+// It is safe to call more than once.
+func (s *Service) Close() { s.bulk.Close() }
 
 // RegisterTenant emits a tenant.registered event and projects it into the read
 // model, then returns. The projection is driven synchronously here so the
