@@ -63,3 +63,13 @@ type Signer interface {
 type KeyGenerator interface {
 	GenerateKey(algorithm Algorithm) (Signer, error)
 }
+
+// DigestSigner signs a pre-computed digest. This is the canonical signing
+// operation for X.509/CSR and certificate signing and for HSMs, and it is
+// implemented by both in-process keys (LockedSigner) and remote keys (the
+// signing service client), so the same code can drive either.
+type DigestSigner interface {
+	Public() PublicKey
+	Algorithm() Algorithm
+	SignDigest(digest []byte, opts SignOptions) (signature []byte, err error)
+}

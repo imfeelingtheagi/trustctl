@@ -32,6 +32,11 @@ GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAG
 
 GOLANGCI_LINT_VERSION ?= v1.59.1
 
+# Minimum total test coverage (percent), enforced by `make test`. Generated code
+# (*.pb.go) is excluded from the measurement.
+COVERAGE_MIN ?= 70
+COVERPROFILE := cover.out
+
 .PHONY: help
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*##"; printf "Usage: make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*?##/{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,8 +50,17 @@ build: ## Build all binaries into ./bin
 	done
 
 .PHONY: test
-test: ## Run all tests with the race detector and coverage
-	$(GO) test -race -count=1 -covermode=atomic ./...
+test: ## Run all tests (race + coverage) and enforce the coverage minimum
+	$(GO) test -race -count=1 -covermode=atomic -coverpkg=./... -coverprofile=$(COVERPROFILE) ./...
+	@grep -v -E '\.pb\.go:' $(COVERPROFILE) > $(COVERPROFILE).nogen
+	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
+	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
+	awk -v t="$$total" -v m=$(COVERAGE_MIN) 'BEGIN { if (t+0 < m+0) exit 1 }' || \
+		{ echo "FAIL: coverage $$total% is below the required $(COVERAGE_MIN)%"; exit 1; }
+
+.PHONY: cover
+cover: test ## Alias for `make test`; writes cover.out and prints per-function coverage
+	@$(GO) tool cover -func=$(COVERPROFILE).nogen | tail -1
 
 .PHONY: lint
 lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if installed)
@@ -74,6 +88,13 @@ run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version
 .PHONY: tools
 tools: ## Install developer tooling (golangci-lint)
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+.PHONY: generate
+generate: ## Regenerate code from .proto (needs protoc + protoc-gen-go + protoc-gen-go-grpc)
+	protoc -I . \
+		--go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		internal/signing/proto/signer.proto
 
 .PHONY: tidy
 tidy: ## Tidy and verify the module graph

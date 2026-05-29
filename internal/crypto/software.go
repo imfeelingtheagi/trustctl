@@ -19,24 +19,44 @@ type SoftwareBackend struct{}
 // NewSoftwareBackend returns a software (stdlib) crypto backend.
 func NewSoftwareBackend() *SoftwareBackend { return &SoftwareBackend{} }
 
+// RandomBytes returns n cryptographically-secure random bytes. It lets callers
+// outside the boundary obtain randomness (e.g. for opaque identifiers) without
+// importing crypto/rand (AN-3).
+func RandomBytes(n int) ([]byte, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 // Name identifies the backend, for diagnostics.
 func (*SoftwareBackend) Name() string { return "software" }
 
 // GenerateKey implements KeyGenerator for RSA and ECDSA.
 func (*SoftwareBackend) GenerateKey(algorithm Algorithm) (Signer, error) {
+	key, err := generateStdlibKey(algorithm)
+	if err != nil {
+		return nil, err
+	}
+	return &softwareSigner{algorithm: algorithm, key: key}, nil
+}
+
+// generateStdlibKey generates a standard-library private key for the algorithm.
+func generateStdlibKey(algorithm Algorithm) (crypto.Signer, error) {
 	switch algorithm {
 	case RSA2048, RSA3072, RSA4096:
 		key, err := rsa.GenerateKey(rand.Reader, rsaBits(algorithm))
 		if err != nil {
 			return nil, fmt.Errorf("generate %s: %w", algorithm, err)
 		}
-		return &softwareSigner{algorithm: algorithm, key: key}, nil
+		return key, nil
 	case ECDSAP256, ECDSAP384, ECDSAP521:
 		key, err := ecdsa.GenerateKey(ecdsaCurve(algorithm), rand.Reader)
 		if err != nil {
 			return nil, fmt.Errorf("generate %s: %w", algorithm, err)
 		}
-		return &softwareSigner{algorithm: algorithm, key: key}, nil
+		return key, nil
 	default:
 		return nil, fmt.Errorf("unsupported algorithm %q", algorithm)
 	}
@@ -57,51 +77,84 @@ func (s *softwareSigner) Public() PublicKey {
 }
 
 func (s *softwareSigner) Sign(message []byte, opts SignOptions) ([]byte, error) {
-	h, digest, err := hashMessage(opts.Hash, message)
+	digest, err := Digest(opts.Hash, message)
 	if err != nil {
 		return nil, err
 	}
-	switch key := s.key.(type) {
+	return signDigest(s.key, digest, opts)
+}
+
+// Digest hashes data with the given hash algorithm. It exists so callers that
+// must sign or verify a pre-computed digest can produce one without importing a
+// standard-library crypto package (AN-3).
+func Digest(h Hash, data []byte) ([]byte, error) {
+	ch, err := cryptoHash(h)
+	if err != nil {
+		return nil, err
+	}
+	hasher := ch.New()
+	if _, err := hasher.Write(data); err != nil {
+		return nil, err
+	}
+	return hasher.Sum(nil), nil
+}
+
+// signDigest signs a pre-computed digest with a standard-library private key.
+func signDigest(key crypto.Signer, digest []byte, opts SignOptions) ([]byte, error) {
+	switch k := key.(type) {
 	case *rsa.PrivateKey:
+		ch, err := cryptoHash(opts.Hash)
+		if err != nil {
+			return nil, err
+		}
 		switch opts.RSAPadding {
 		case "", RSAPKCS1v15:
-			return rsa.SignPKCS1v15(rand.Reader, key, h, digest)
+			return rsa.SignPKCS1v15(rand.Reader, k, ch, digest)
 		case RSAPSS:
-			return rsa.SignPSS(rand.Reader, key, h, digest, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: h})
+			return rsa.SignPSS(rand.Reader, k, ch, digest, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: ch})
 		default:
 			return nil, fmt.Errorf("unsupported RSA padding %q", opts.RSAPadding)
 		}
 	case *ecdsa.PrivateKey:
-		return ecdsa.SignASN1(rand.Reader, key, digest)
+		return ecdsa.SignASN1(rand.Reader, k, digest)
 	default:
-		return nil, fmt.Errorf("unsupported key type %T", s.key)
+		return nil, fmt.Errorf("unsupported key type %T", key)
 	}
 }
 
-// Verify checks signature over message using pub. It is backend-independent
+// Verify checks a signature over message using pub. It is backend-independent
 // (public-key math only), so callers verify without touching a private key or a
 // specific backend.
 func Verify(pub PublicKey, message, signature []byte, opts SignOptions) error {
-	h, digest, err := hashMessage(opts.Hash, message)
+	digest, err := Digest(opts.Hash, message)
 	if err != nil {
 		return err
 	}
+	return VerifyDigest(pub, digest, signature, opts)
+}
+
+// VerifyDigest checks a signature over a pre-computed digest.
+func VerifyDigest(pub PublicKey, digest, signature []byte, opts SignOptions) error {
 	parsed, err := x509.ParsePKIXPublicKey(pub.DER)
 	if err != nil {
 		return fmt.Errorf("parse public key: %w", err)
 	}
-	switch key := parsed.(type) {
+	switch k := parsed.(type) {
 	case *rsa.PublicKey:
+		ch, err := cryptoHash(opts.Hash)
+		if err != nil {
+			return err
+		}
 		switch opts.RSAPadding {
 		case "", RSAPKCS1v15:
-			return rsa.VerifyPKCS1v15(key, h, digest, signature)
+			return rsa.VerifyPKCS1v15(k, ch, digest, signature)
 		case RSAPSS:
-			return rsa.VerifyPSS(key, h, digest, signature, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: h})
+			return rsa.VerifyPSS(k, ch, digest, signature, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: ch})
 		default:
 			return fmt.Errorf("unsupported RSA padding %q", opts.RSAPadding)
 		}
 	case *ecdsa.PublicKey:
-		if !ecdsa.VerifyASN1(key, digest, signature) {
+		if !ecdsa.VerifyASN1(k, digest, signature) {
 			return fmt.Errorf("ecdsa: signature verification failed")
 		}
 		return nil
@@ -134,19 +187,6 @@ func ecdsaCurve(a Algorithm) elliptic.Curve {
 	default:
 		return nil
 	}
-}
-
-// hashMessage returns the crypto.Hash id and the digest of message.
-func hashMessage(h Hash, message []byte) (crypto.Hash, []byte, error) {
-	ch, err := cryptoHash(h)
-	if err != nil {
-		return 0, nil, err
-	}
-	hasher := ch.New()
-	if _, err := hasher.Write(message); err != nil {
-		return 0, nil, err
-	}
-	return ch, hasher.Sum(nil), nil
 }
 
 func cryptoHash(h Hash) (crypto.Hash, error) {

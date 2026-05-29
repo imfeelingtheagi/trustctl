@@ -163,9 +163,12 @@ follow.
 `SignerService` (see proto) exposes: `GenerateKey`, `GetPublicKey`, `Sign`,
 `DestroyKey`, and `Health`. Keys are referenced by an **opaque `KeyHandle`**; the
 control plane stores the handle and the PKIX/DER public key and never receives
-private-key bytes. `Sign` takes a handle, the message, a hash, and (for RSA) a
-padding scheme — mirroring `internal/crypto.SignOptions` so the signer is a thin,
-audited front to the AN-3 boundary.
+private-key bytes. `Sign` takes a handle, a **pre-computed digest**, the hash
+that produced it, and (for RSA) a padding scheme — mirroring
+`internal/crypto.SignOptions`. Signing a digest (rather than a raw message) is
+the canonical signer operation: it matches `crypto.Signer`/HSM semantics and is
+what X.509 CSR and certificate signing require, so the signer is a thin, audited
+front to the AN-3 boundary.
 
 ### 5.4 Limits and resource bounds
 

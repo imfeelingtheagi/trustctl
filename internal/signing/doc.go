@@ -6,6 +6,9 @@
 // HTTP server, no SQL driver, and a minimal, fully-audited transport
 // dependency.
 //
-// Design lands in sprint S1.3 and implementation in S1.4; this file reserves
-// the package.
+// The Server implements the SignerService over the UDS; private keys are held
+// as crypto.LockedSigner values (AN-8) and never cross the boundary. Client and
+// StartChild are the control-plane side: StartChild launches the signer as a
+// child process and Client/RemoteSigner sign through it. See the design at
+// docs/design/signing-service.md.
 package signing

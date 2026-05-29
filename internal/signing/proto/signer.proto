@@ -94,8 +94,12 @@ message GetPublicKeyResponse {
 
 message SignRequest {
   KeyHandle handle = 1;
-  // message is the raw message to be hashed-then-signed by the signer.
-  bytes message = 2;
+  // digest is the pre-computed message digest to sign. Signing a digest (rather
+  // than a raw message) is the canonical signer operation: it matches
+  // crypto.Signer/HSM semantics and is what X.509 CSR and certificate signing
+  // require.
+  bytes digest = 2;
+  // hash identifies the algorithm that produced digest (needed for RSA).
   Hash hash = 3;
   RSAPadding rsa_padding = 4;
 }
