@@ -12,6 +12,7 @@ require (
 	github.com/nats-io/nats-server/v2 v2.11.15
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nuid v1.0.1
+	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
 	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/tetratelabs/wazero v1.8.2
 	golang.org/x/crypto v0.51.0

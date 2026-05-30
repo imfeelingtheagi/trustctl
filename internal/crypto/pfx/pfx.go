@@ -19,6 +19,8 @@ import (
 	"fmt"
 
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
+
+	"certctl.io/certctl/internal/crypto/detrand"
 )
 
 // EncodeTransient packages the key and certificate chain into a PKCS#12 blob
@@ -49,6 +51,46 @@ func Encode(keyPEM, certChainPEM []byte, password string) ([]byte, error) {
 		return nil, err
 	}
 	return pkcs12.Modern.Encode(key, leaf, cas, password)
+}
+
+// EncodeDeterministic is like Encode but derives the PKCS#12 randomness (the
+// PBKDF salt and encryption IV) deterministically from the credential and
+// password, so the same input always encodes to byte-identical output. This
+// makes a keystore deployment idempotent (AN-5/AN-6): redelivering the same
+// renewal rewrites identical bytes. It is sound because PKCS#12 salts are not
+// secret — they are stored in the blob in the clear — and remain unique per
+// distinct credential; the password protection is unchanged.
+func EncodeDeterministic(keyPEM, certChainPEM []byte, password string) ([]byte, error) {
+	key, err := parsePrivateKey(keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	leaf, cas, err := parseCertChain(certChainPEM)
+	if err != nil {
+		return nil, err
+	}
+	r := detrand.New([]byte("certctl/pfx/v1"), []byte(password), keyPEM, certChainPEM)
+	return pkcs12.Modern.WithRand(r).Encode(key, leaf, cas, password)
+}
+
+// Decode parses a PKCS#12 blob with password and returns the private key and
+// certificate chain (leaf first) as PEM. It is the inverse of Encode, used to
+// verify a written keystore.
+func Decode(pfxData []byte, password string) (keyPEM, certChainPEM []byte, err error) {
+	key, cert, caCerts, err := pkcs12.DecodeChain(pfxData, password)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pfx: decode: %w", err)
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("pfx: marshal key: %w", err)
+	}
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	certChainPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	for _, ca := range caCerts {
+		certChainPEM = append(certChainPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw})...)
+	}
+	return keyPEM, certChainPEM, nil
 }
 
 func parsePrivateKey(keyPEM []byte) (any, error) {
