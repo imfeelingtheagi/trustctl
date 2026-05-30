@@ -27,7 +27,9 @@ func install(t *testing.T, path, class string, content []byte) drift.Watched {
 	return drift.Watched{Path: path, Class: class, Fingerprint: drift.Fingerprint(content), Mode: 0o644}
 }
 
-func certBytes() []byte { return []byte("-----BEGIN CERTIFICATE-----\ndeclared\n-----END CERTIFICATE-----\n") }
+func certBytes() []byte {
+	return []byte("-----BEGIN CERTIFICATE-----\ndeclared\n-----END CERTIFICATE-----\n")
+}
 
 // A file that matches its declared content and mode is not drift.
 func TestDetectNoDrift(t *testing.T) {

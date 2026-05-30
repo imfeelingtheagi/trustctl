@@ -98,7 +98,7 @@ func detectOne(w Watched, scope []string) (Finding, error) {
 	if Fingerprint(data) != w.Fingerprint {
 		return Finding{Watched: w, Type: Replaced}, nil
 	}
-	if w.Mode != 0 && info.Mode().Perm() != w.Mode.Perm() {
+	if modeDrifted(info.Mode(), w.Mode) {
 		return Finding{Watched: w, Type: PermissionChanged, ActualMode: info.Mode()}, nil
 	}
 	return Finding{Watched: w, Type: None}, nil

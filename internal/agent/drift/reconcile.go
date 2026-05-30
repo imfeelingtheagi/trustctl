@@ -69,7 +69,7 @@ type Restorer interface {
 type Reconciler struct {
 	Policy   Policy
 	Auditor  Auditor
-	Restorer Restorer       // required for AutoRemediate
+	Restorer Restorer         // required for AutoRemediate
 	Clock    func() time.Time // defaults to time.Now
 }
 
