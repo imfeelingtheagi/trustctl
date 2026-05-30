@@ -12,6 +12,7 @@
 package softtoken
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -93,6 +94,21 @@ func (t *Token) FindCertificate(label string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	return clone(obj.pem), true, nil
+}
+
+// EnumerateCertificates returns every certificate object on the token, keyed by
+// its label, as PEM — the read side used by agent discovery (S6.2). Only
+// certificates are returned; private keys are never exported.
+func (t *Token) EnumerateCertificates(_ context.Context) (map[string][]byte, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make(map[string][]byte, len(t.objects))
+	for label, byClass := range t.objects {
+		if obj, ok := byClass[classCertificate]; ok {
+			out[label] = clone(obj.pem)
+		}
+	}
+	return out, nil
 }
 
 // KeyAttributes returns the access-control attributes of the private-key object

@@ -12,6 +12,7 @@
 package certstore
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -87,6 +88,22 @@ func (m *Memory) Find(ref destination.StoreRef, friendlyName string) (destinatio
 		Exportable:    e.exportable,
 		Ref:           ref,
 	}, true, nil
+}
+
+// EnumerateCertificates returns every certificate in the store, keyed by its
+// friendly name, as PEM — the read side used by agent discovery (S6.2). Entries
+// across all store refs are flattened; the real CryptoAPI store enumerates a
+// single named store.
+func (m *Memory) EnumerateCertificates(_ context.Context) (map[string][]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string][]byte)
+	for _, byName := range m.entries {
+		for name, e := range byName {
+			out[name] = clone(e.cert)
+		}
+	}
+	return out, nil
 }
 
 func clone(b []byte) []byte {
