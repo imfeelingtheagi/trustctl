@@ -21,20 +21,29 @@ import (
 
 const specPath = "/api/v1/openapi.json"
 
+// BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1). The web
+// first-run wizard (S7.3) uses it to build the agent install command; the agent
+// presents the token once to enroll. The API depends only on this minimal
+// interface so it never imports the enrollment authority's transport stack.
+type BootstrapTokenIssuer interface {
+	IssueBootstrapToken() (string, error)
+}
+
 // API is the REST surface. It holds the read store, the idempotency recorder
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store     *store.Store
-	idem      *orchestrator.Idempotency
-	orch      *orchestrator.Orchestrator
-	tenantFn  func(*http.Request) (string, error)
-	roles     *authz.Registry
-	principal func(*http.Request) (authz.Principal, error)
-	audit     *audit.Service
-	auth      *AuthConfig
-	mux       *http.ServeMux
-	spec      *Document
+	store       *store.Store
+	idem        *orchestrator.Idempotency
+	orch        *orchestrator.Orchestrator
+	tenantFn    func(*http.Request) (string, error)
+	roles       *authz.Registry
+	principal   func(*http.Request) (authz.Principal, error)
+	audit       *audit.Service
+	auth        *AuthConfig
+	agentTokens BootstrapTokenIssuer
+	mux         *http.ServeMux
+	spec        *Document
 }
 
 // Option configures an API.
@@ -45,6 +54,7 @@ type config struct {
 	principalFn func(*http.Request) (authz.Principal, error)
 	audit       *audit.Service
 	auth        *AuthConfig
+	agentTokens BootstrapTokenIssuer
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -64,6 +74,13 @@ func WithAuth(cfg AuthConfig) Option {
 	return func(c *config) { c.auth = &cfg }
 }
 
+// WithAgentEnrollment wires the agent bootstrap-token issuer that backs
+// POST /api/v1/agents/enrollment-tokens (the web wizard's "install an agent"
+// step). When unset, that endpoint reports the capability is unavailable.
+func WithAgentEnrollment(issuer BootstrapTokenIssuer) Option {
+	return func(c *config) { c.agentTokens = issuer }
+}
+
 // WithPrincipalResolver overrides how the caller's principal (tenant, subject,
 // role grants) is resolved from a request — the seam where OIDC/token auth
 // (S3.6) plugs in. The default reads request headers.
@@ -80,7 +97,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens}
 	a.principal = cfg.principalFn
 	if a.principal == nil {
 		a.principal = a.resolvePrincipal
@@ -195,6 +212,9 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, successCode: "200", perm: authz.RiskRead},
+
+		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
+		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}

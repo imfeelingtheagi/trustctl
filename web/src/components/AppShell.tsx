@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, ScrollText, Users, ShieldAlert } from "lucide-react";
+import { LayoutDashboard, ScrollText, Users, ShieldAlert, KeyRound, Rocket } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -7,8 +7,10 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/certificates", label: "Certificates", icon: ScrollText },
+  { to: "/identities", label: "Identities", icon: KeyRound },
   { to: "/owners", label: "Owners", icon: Users },
   { to: "/risk", label: "Risk", icon: ShieldAlert },
+  { to: "/wizard", label: "Set up", icon: Rocket },
 ];
 
 /** AppShell is the authenticated layout: a skip link, a banner header, a

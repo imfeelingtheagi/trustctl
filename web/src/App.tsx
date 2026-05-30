@@ -6,8 +6,10 @@ import { AppShell } from "@/components/AppShell";
 import { Login } from "@/pages/Login";
 import { Dashboard } from "@/pages/Dashboard";
 import { Certificates } from "@/pages/Certificates";
+import { Identities } from "@/pages/Identities";
 import { Owners } from "@/pages/Owners";
 import { Risk } from "@/pages/Risk";
+import { Wizard } from "@/pages/Wizard";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -39,8 +41,10 @@ export function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="certificates" element={<Certificates />} />
+        <Route path="identities" element={<Identities />} />
         <Route path="owners" element={<Owners />} />
         <Route path="risk" element={<Risk />} />
+        <Route path="wizard" element={<Wizard />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

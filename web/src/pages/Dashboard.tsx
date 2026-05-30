@@ -1,18 +1,34 @@
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/EmptyState";
 
 export function Dashboard() {
   const certs = useResource(api.certificates);
   const risk = useResource(api.risk);
 
   const topRisk = (risk.data ?? []).slice(0, 5);
+  const fresh =
+    !certs.loading && !risk.loading && (certs.data?.length ?? 0) === 0 && (risk.data?.length ?? 0) === 0;
 
   return (
     <section aria-labelledby="dashboard-heading">
       <h1 id="dashboard-heading" className="mb-4 text-2xl font-semibold">
         Overview
       </h1>
+
+      {fresh && (
+        <div className="mb-6">
+          <EmptyState
+            title="Welcome to certctl"
+            ctaTo="/wizard"
+            ctaLabel="Get started"
+          >
+            Connect a CA, install an agent, and issue your first certificate — in under 15 minutes.
+          </EmptyState>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
