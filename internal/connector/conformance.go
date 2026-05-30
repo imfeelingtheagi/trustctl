@@ -9,10 +9,28 @@ import (
 	"certctl.io/certctl/internal/pluginhost"
 )
 
-// conformance sample credential (opaque bytes; connectors do not parse PEM).
+// conformance sample credential: a real ECDSA P-256 certificate and key, so the
+// suite works for connectors that parse the certificate (compute a thumbprint,
+// build a PFX) as well as those that treat it as opaque bytes.
 var (
-	conformanceCert = []byte("-----BEGIN CERTIFICATE-----\nconformance-leaf\n-----END CERTIFICATE-----\n")
-	conformanceKey  = []byte("-----BEGIN PRIVATE KEY-----\nconformance-key\n-----END PRIVATE KEY-----\n")
+	conformanceCert = []byte(`-----BEGIN CERTIFICATE-----
+MIIBiDCCAS2gAwIBAgIBATAKBggqhkjOPQQDAjAlMSMwIQYDVQQDExpjb25mb3Jt
+YW5jZS5jb25uZWN0b3IudGVzdDAeFw0yNTAxMDEwMDAwMDBaFw0zNTAxMDEwMDAw
+MDBaMCUxIzAhBgNVBAMTGmNvbmZvcm1hbmNlLmNvbm5lY3Rvci50ZXN0MFkwEwYH
+KoZIzj0CAQYIKoZIzj0DAQcDQgAE4TYNtNbbVlPcVpyznJuujANXTbsaRNL5D41K
+VfB5GdJEG372Pgtn59Mp7+1+PUbyHTbaKJ1RU0n6vgW5/BCC1aNOMEwwDgYDVR0P
+AQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMBMCUGA1UdEQQeMByCGmNvbmZv
+cm1hbmNlLmNvbm5lY3Rvci50ZXN0MAoGCCqGSM49BAMCA0kAMEYCIQD2NqiRyoq8
+T1vJogCsCMRDiEMMsA04Qhbs5uF149egpgIhALTX3I6Xe4dQk3GMTEaXC5GWXkaj
+O9xXOtFRqPTY0dXn
+-----END CERTIFICATE-----
+`)
+	conformanceKey = []byte(`-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2drNvkGQeqFUx3xE
+zejpKQlXChZFd7J3qw/JXoL+x72hRANCAAThNg201ttWU9xWnLOcm66MA1dNuxpE
+0vkPjUpV8HkZ0kQbfvY+C2fn0ynv7X49RvIdNtoonVFTSfq+Bbn8EILV
+-----END PRIVATE KEY-----
+`)
 )
 
 const conformanceTarget = "conformance.target"

@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -78,6 +79,29 @@ func TestInspectAcceptsDER(t *testing.T) {
 func TestInspectRejectsGarbage(t *testing.T) {
 	if _, err := Inspect([]byte("not a certificate")); err == nil {
 		t.Error("Inspect accepted non-certificate bytes")
+	}
+}
+
+func TestThumbprint(t *testing.T) {
+	pemBytes, derBytes := testCert(t)
+
+	fromPEM, err := Thumbprint(pemBytes)
+	if err != nil {
+		t.Fatalf("Thumbprint(PEM): %v", err)
+	}
+	// SHA-1 is 20 bytes -> 40 uppercase hex characters.
+	if len(fromPEM) != 40 || fromPEM != strings.ToUpper(fromPEM) {
+		t.Errorf("thumbprint = %q, want 40 uppercase hex chars", fromPEM)
+	}
+	fromDER, err := Thumbprint(derBytes)
+	if err != nil {
+		t.Fatalf("Thumbprint(DER): %v", err)
+	}
+	if fromPEM != fromDER {
+		t.Errorf("thumbprint differs for PEM (%s) and DER (%s)", fromPEM, fromDER)
+	}
+	if _, err := Thumbprint([]byte("not a certificate")); err == nil {
+		t.Error("Thumbprint of garbage should error")
 	}
 }
 

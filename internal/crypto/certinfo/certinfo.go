@@ -5,12 +5,14 @@
 package certinfo
 
 import (
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -67,4 +69,24 @@ func Inspect(raw []byte) (Info, error) {
 		info.URIs = append(info.URIs, u.String())
 	}
 	return info, nil
+}
+
+// Thumbprint returns the certificate's Windows thumbprint: the uppercase
+// hex-encoded SHA-1 digest of the certificate's DER encoding — the value the
+// Windows certificate store and `netsh http ... certhash=` use to identify a
+// certificate. SHA-1 is used here as an identifier, not a signature.
+func Thumbprint(raw []byte) (string, error) {
+	der := raw
+	if block, _ := pem.Decode(raw); block != nil {
+		if block.Type != "CERTIFICATE" {
+			return "", fmt.Errorf("certinfo: PEM block is %q, not CERTIFICATE", block.Type)
+		}
+		der = block.Bytes
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return "", fmt.Errorf("certinfo: parse certificate: %w", err)
+	}
+	sum := sha1.Sum(cert.Raw)
+	return strings.ToUpper(hex.EncodeToString(sum[:])), nil
 }
