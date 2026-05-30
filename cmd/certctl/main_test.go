@@ -9,12 +9,21 @@ import (
 	"time"
 )
 
+// emptyEnv is a getenv that resolves every variable to "" (no overrides), so the
+// binary falls back to its built-in single-node defaults.
+func emptyEnv(string) string { return "" }
+
+// envFunc builds a getenv backed by a map, for exercising configuration.
+func envFunc(m map[string]string) func(string) string {
+	return func(k string) string { return m[k] }
+}
+
 // TestRun_VersionFlag encodes the acceptance criterion that the binary reports
 // its version and exits cleanly (no error) for both --version and -version.
 func TestRun_VersionFlag(t *testing.T) {
 	for _, arg := range []string{"--version", "-version"} {
 		var stdout, stderr bytes.Buffer
-		if err := run(context.Background(), []string{arg}, &stdout, &stderr); err != nil {
+		if err := run(context.Background(), []string{arg}, emptyEnv, &stdout, &stderr); err != nil {
 			t.Fatalf("run(%q) returned error: %v", arg, err)
 		}
 		out := stdout.String()
@@ -33,7 +42,7 @@ func TestRun_VersionFlag(t *testing.T) {
 func TestRun_CleanShutdownOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- run(ctx, nil, io.Discard, io.Discard) }()
+	go func() { done <- run(ctx, nil, emptyEnv, io.Discard, io.Discard) }()
 
 	// Give run a moment to boot, then request shutdown.
 	time.Sleep(50 * time.Millisecond)
@@ -52,7 +61,7 @@ func TestRun_CleanShutdownOnContextCancel(t *testing.T) {
 // TestRun_UnknownFlagIsError ensures bad input fails loudly rather than booting.
 func TestRun_UnknownFlagIsError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if err := run(context.Background(), []string{"--no-such-flag"}, &stdout, &stderr); err == nil {
+	if err := run(context.Background(), []string{"--no-such-flag"}, emptyEnv, &stdout, &stderr); err == nil {
 		t.Fatal("run with an unknown flag returned nil, want an error")
 	}
 }
@@ -62,8 +71,62 @@ func TestRun_UnknownFlagIsError(t *testing.T) {
 func TestRun_HelpExitsCleanly(t *testing.T) {
 	for _, arg := range []string{"-h", "--help"} {
 		var stdout, stderr bytes.Buffer
-		if err := run(context.Background(), []string{arg}, &stdout, &stderr); err != nil {
+		if err := run(context.Background(), []string{arg}, emptyEnv, &stdout, &stderr); err != nil {
 			t.Errorf("run(%q) returned error %v, want clean exit", arg, err)
 		}
+	}
+}
+
+// TestRun_CheckConfigDefault encodes that --check-config resolves and prints the
+// effective configuration and exits cleanly. With no environment the binary
+// reports its self-contained single-node defaults (bundled Postgres, embedded
+// NATS).
+func TestRun_CheckConfigDefault(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, emptyEnv, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config) returned error: %v", err)
+	}
+	out := stdout.String()
+	for _, want := range []string{"bundled", "embedded"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("check-config output %q missing %q", out, want)
+		}
+	}
+}
+
+// TestRun_CheckConfigExternalTargets encodes the S7.4 acceptance that pointing
+// at external Postgres/NATS is a supported, exercised configuration: the binary
+// resolves the external targets from the environment and reports them, with the
+// DSN password redacted.
+func TestRun_CheckConfigExternalTargets(t *testing.T) {
+	env := envFunc(map[string]string{
+		"CERTCTL_POSTGRES_MODE": "external",
+		"CERTCTL_POSTGRES_DSN":  "postgres://certctl:s3cretpw@db.example.com:5432/certctl?sslmode=require",
+		"CERTCTL_NATS_MODE":     "external",
+		"CERTCTL_NATS_URL":      "nats://nats.example.com:4222",
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config, external) returned error: %v", err)
+	}
+	out := stdout.String()
+	for _, want := range []string{"external", "db.example.com", "nats.example.com"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("check-config output %q missing %q", out, want)
+		}
+	}
+	if strings.Contains(out, "s3cretpw") {
+		t.Errorf("check-config output leaked the DSN password: %q", out)
+	}
+}
+
+// TestRun_InvalidConfigFailsFast encodes that an invalid configuration is
+// rejected before the control plane boots — external Postgres with no DSN must
+// be an error, not a silent fallback.
+func TestRun_InvalidConfigFailsFast(t *testing.T) {
+	env := envFunc(map[string]string{"CERTCTL_POSTGRES_MODE": "external"}) // no DSN
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err == nil {
+		t.Fatal("run with external Postgres and no DSN returned nil, want a configuration error")
 	}
 }

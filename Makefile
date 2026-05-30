@@ -152,3 +152,22 @@ clean: ## Remove build artifacts
 .PHONY: web
 web: ## Install deps and build the web UI into internal/webui/dist (embedded by the binary)
 	cd web && npm ci && npm run build
+
+.PHONY: image
+image: ## Build the control-plane container image (deploy/docker/Dockerfile)
+	docker build -f deploy/docker/Dockerfile \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
+		-t certctl:$(VERSION) .
+
+.PHONY: compose-up
+compose-up: ## Bring up the evaluation stack (Postgres + NATS + certctl)
+	docker compose -f deploy/docker/docker-compose.yml up --build
+
+.PHONY: reproducible-check
+reproducible-check: ## Build the control plane twice and verify byte-identical output
+	@set -euo pipefail; \
+	a=$$(mktemp); b=$$(mktemp); \
+	$(GO_BUILD) -buildvcs=false -o $$a ./cmd/certctl; \
+	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/certctl; \
+	if cmp -s $$a $$b; then echo "reproducible: identical binaries"; else echo "NOT reproducible" >&2; exit 1; fi; \
+	rm -f $$a $$b

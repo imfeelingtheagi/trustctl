@@ -1,0 +1,29 @@
+# Keep the image build context small and deterministic.
+#
+# .git is excluded (so the build uses -buildvcs=false and version metadata comes
+# from --build-arg), along with built artifacts, web dependencies, and editor
+# cruft. The committed web embed placeholder (internal/webui/dist/index.html) is
+# kept; only the regenerated assets are excluded.
+
+.git
+.github
+.gitignore
+.dockerignore
+
+# Build outputs
+bin/
+dist/
+*.out
+*.test
+coverage*
+cover.out
+
+# Web UI dependencies and generated assets (the embed placeholder is kept)
+web/node_modules/
+internal/webui/dist/assets/
+
+# Editor / OS cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp
