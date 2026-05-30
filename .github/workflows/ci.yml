@@ -89,10 +89,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
+      # Pin to the 9.x line; MkDocs/Material 2.0 is a backward-incompatible rewrite.
       - name: Install MkDocs
-        run: pip install mkdocs-material
+        run: pip install "mkdocs-material>=9.5,<10"
 
       # --strict fails the build on broken navigation or internal links, so the
       # published site is always consistent.

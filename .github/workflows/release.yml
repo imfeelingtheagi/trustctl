@@ -24,6 +24,11 @@ jobs:
   image:
     name: build / sign / publish
     runs-on: ubuntu-latest
+    env:
+      # Surface the Docker Hub mirror credentials as env vars so they can be used
+      # in an `if:` condition — the `secrets` context is not allowed there.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,12 +55,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub (mirror)
-        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ env.DOCKERHUB_TOKEN != '' }}
         uses: docker/login-action@v3
         with:
           registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Build amd64 image locally for the size check
         uses: docker/build-push-action@v6
@@ -79,6 +84,17 @@ jobs:
             exit 1
           fi
 
+      - name: Compute image tags
+        id: tags
+        run: |
+          # GHCR is the primary; the Docker Hub mirror is added only when its
+          # credentials are configured, so a GHCR-only release still succeeds.
+          tags="${GHCR_IMAGE}:${{ steps.meta.outputs.version }},${GHCR_IMAGE}:latest"
+          if [ -n "${DOCKERHUB_TOKEN}" ]; then
+            tags="${tags},${DOCKERHUB_IMAGE}:${{ steps.meta.outputs.version }},${DOCKERHUB_IMAGE}:latest"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push (reproducible, multi-arch)
         id: build
         uses: docker/build-push-action@v6
@@ -94,11 +110,7 @@ jobs:
             DATE=${{ steps.meta.outputs.date }}
           # Rewrite layer timestamps to SOURCE_DATE_EPOCH for reproducibility.
           outputs: type=image,rewrite-timestamp=true
-          tags: |
-            ${{ env.GHCR_IMAGE }}:${{ steps.meta.outputs.version }}
-            ${{ env.GHCR_IMAGE }}:latest
-            ${{ env.DOCKERHUB_IMAGE }}:${{ steps.meta.outputs.version }}
-            ${{ env.DOCKERHUB_IMAGE }}:latest
+          tags: ${{ steps.tags.outputs.tags }}
 
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@v0
@@ -121,7 +133,10 @@ jobs:
           COSIGN_YES: "true"
         run: |
           digest='${{ steps.build.outputs.digest }}'
-          # Sign by digest in both registries (the digest is identical across mirrors).
+          # Sign by digest in GHCR, and in the Docker Hub mirror when configured
+          # (the digest is identical across registries).
           cosign sign "${GHCR_IMAGE}@${digest}"
-          cosign sign "${DOCKERHUB_IMAGE}@${digest}" || echo "Docker Hub mirror not configured; skipping"
+          if [ -n "${DOCKERHUB_TOKEN}" ]; then
+            cosign sign "${DOCKERHUB_IMAGE}@${digest}"
+          fi
           cosign attest --yes --predicate sbom.cyclonedx.json --type cyclonedx "${GHCR_IMAGE}@${digest}"
