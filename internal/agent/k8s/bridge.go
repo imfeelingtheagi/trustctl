@@ -130,7 +130,9 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 	if status == nil {
 		status = map[string]any{}
 	}
-	status["certificate"] = string(chainPEM)
+	// status.certificate is a Kubernetes []byte field, so it must be
+	// base64-encoded in JSON (as spec.request is); the raw PEM is rejected.
+	status["certificate"] = base64.StdEncoding.EncodeToString(chainPEM)
 	status["conditions"] = upsertReady(status["conditions"])
 	cr["status"] = status
 

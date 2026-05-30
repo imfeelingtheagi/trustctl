@@ -147,8 +147,13 @@ func TestBridgeSignsPendingRequest(t *testing.T) {
 	if status != "True" {
 		t.Errorf("Ready condition = %q, want True", status)
 	}
-	if block, _ := pem.Decode([]byte(certificate)); block == nil || block.Type != "CERTIFICATE" {
-		t.Errorf("status.certificate is not a PEM certificate: %q", certificate)
+	// status.certificate is a []byte API field: base64-encoded PEM.
+	der, err := base64.StdEncoding.DecodeString(certificate)
+	if err != nil {
+		t.Fatalf("status.certificate is not base64-encoded: %v", err)
+	}
+	if block, _ := pem.Decode(der); block == nil || block.Type != "CERTIFICATE" {
+		t.Errorf("status.certificate does not decode to a PEM certificate")
 	}
 }
 

@@ -170,7 +170,15 @@ func TestCertManagerBridgeInCluster(t *testing.T) {
 	if st != 200 {
 		t.Fatalf("GET CertificateRequest: status %d", st)
 	}
-	if !bytes.Contains(body, []byte(`"certificate"`)) || !bytes.Contains(body, []byte("BEGIN CERTIFICATE")) {
-		t.Errorf("CertificateRequest status carries no issued certificate: %s", body)
+	var got struct {
+		Status struct {
+			Certificate []byte `json:"certificate"` // []byte: base64 in JSON, decoded here
+		} `json:"status"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode CertificateRequest: %v", err)
+	}
+	if block, _ := pem.Decode(got.Status.Certificate); block == nil || block.Type != "CERTIFICATE" {
+		t.Errorf("CertificateRequest status carries no issued PEM certificate: %s", body)
 	}
 }
