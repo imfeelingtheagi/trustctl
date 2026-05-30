@@ -2,6 +2,13 @@
 /bin/
 /dist/
 
+# Bare `go build ./cmd/...` binaries dropped at the repo root. The Makefile
+# builds into dist/; these are stray local builds and must never be committed.
+/certctl
+/certctl-agent
+/certctl-cli
+/certctl-signer
+
 # Test and coverage output
 *.out
 *.test
