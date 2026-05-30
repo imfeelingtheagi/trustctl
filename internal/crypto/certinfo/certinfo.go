@@ -5,6 +5,9 @@
 package certinfo
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
@@ -29,6 +32,7 @@ type Info struct {
 	NotAfter          time.Time
 	SHA256Fingerprint string // hex of the DER
 	KeyAlgorithm      string
+	PublicKeyBits     int // key size in bits (RSA modulus, EC curve, 256 for Ed25519); 0 if unknown
 	IsCA              bool
 }
 
@@ -60,6 +64,7 @@ func Inspect(raw []byte) (Info, error) {
 		NotAfter:          cert.NotAfter,
 		SHA256Fingerprint: hex.EncodeToString(sum[:]),
 		KeyAlgorithm:      cert.PublicKeyAlgorithm.String(),
+		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,
 	}
 	for _, ip := range cert.IPAddresses {
@@ -69,6 +74,22 @@ func Inspect(raw []byte) (Info, error) {
 		info.URIs = append(info.URIs, u.String())
 	}
 	return info, nil
+}
+
+// publicKeyBits returns the key size in bits: the RSA modulus length, the EC
+// curve size, 256 for Ed25519, or 0 for an unrecognized key. It is the signal
+// the crypto-inventory (F52) uses to flag undersized keys.
+func publicKeyBits(pub any) int {
+	switch k := pub.(type) {
+	case *rsa.PublicKey:
+		return k.N.BitLen()
+	case *ecdsa.PublicKey:
+		return k.Curve.Params().BitSize
+	case ed25519.PublicKey:
+		return 256
+	default:
+		return 0
+	}
 }
 
 // Thumbprint returns the certificate's Windows thumbprint: the uppercase

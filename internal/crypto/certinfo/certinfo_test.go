@@ -37,6 +37,17 @@ func testCert(t *testing.T) (pemBytes, derBytes []byte) {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), der
 }
 
+func TestInspectPublicKeyBits(t *testing.T) {
+	pemBytes, _ := testCert(t)
+	info, err := Inspect(pemBytes)
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if info.PublicKeyBits != 256 {
+		t.Errorf("PublicKeyBits = %d, want 256 (ECDSA P-256)", info.PublicKeyBits)
+	}
+}
+
 func TestInspectExtractsMetadata(t *testing.T) {
 	pemBytes, _ := testCert(t)
 	info, err := Inspect(pemBytes)

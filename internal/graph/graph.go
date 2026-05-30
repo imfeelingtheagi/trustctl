@@ -8,10 +8,11 @@ import "sort"
 type NodeKind string
 
 const (
-	KindWorkload   NodeKind = "workload"   // a non-human principal (service, agent, app)
-	KindCredential NodeKind = "credential" // a certificate, SSH key, secret, or token
-	KindResource   NodeKind = "resource"   // a place a credential is deployed to or grants access to
-	KindIssuer     NodeKind = "issuer"     // a CA or other authority that issues credentials
+	KindWorkload    NodeKind = "workload"     // a non-human principal (service, agent, app)
+	KindCredential  NodeKind = "credential"   // a certificate, SSH key, secret, or token
+	KindResource    NodeKind = "resource"     // a place a credential is deployed to or grants access to
+	KindIssuer      NodeKind = "issuer"       // a CA or other authority that issues credentials
+	KindCryptoAsset NodeKind = "crypto-asset" // an observed cryptographic usage (CBOM, F52)
 )
 
 // EdgeType names a directed relationship. Direction is oriented so that impact
@@ -25,6 +26,7 @@ const (
 	EdgeDeployedTo   EdgeType = "DEPLOYED_TO"   // credential → resource it is installed on
 	EdgeGrantsAccess EdgeType = "GRANTS_ACCESS" // credential → resource it can authenticate to
 	EdgeConnectsTo   EdgeType = "CONNECTS_TO"   // workload/resource → workload it talks to
+	EdgeExhibits     EdgeType = "EXHIBITS"      // resource → crypto asset it exhibits (CBOM, F52)
 )
 
 // Node is a vertex in the credential graph. ID is the stable, unique key;

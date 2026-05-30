@@ -152,7 +152,47 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		}
 	}
 
+	// Cryptographic assets from the CBOM (F52): each observed crypto usage is a
+	// node, linked to the resource that exhibits it.
+	assets, err := st.ListCryptoAssets(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range assets {
+		nid := "crypto:" + a.ID
+		name := firstNonEmpty(a.Algorithm, a.Protocol, a.Cipher)
+		g.AddNode(Node{
+			ID:   nid,
+			Kind: KindCryptoAsset,
+			Name: name,
+			Attrs: map[string]string{
+				"asset_kind":         a.Kind,
+				"location":           a.Location,
+				"algorithm":          a.Algorithm,
+				"protocol":           a.Protocol,
+				"cipher":             a.Cipher,
+				"strength":           a.Strength,
+				"quantum_vulnerable": strconv.FormatBool(a.QuantumVulnerable),
+				"out_of_policy":      strconv.FormatBool(a.OutOfPolicy),
+			},
+		})
+		if a.Location != "" {
+			ensureResource(g, a.Location)
+			g.AddEdge(Edge{From: resourceID(a.Location), To: nid, Type: EdgeExhibits})
+		}
+	}
+
 	return g, nil
+}
+
+// firstNonEmpty returns the first non-empty string, or "".
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func workloadID(id string) string           { return "wl:" + id }
