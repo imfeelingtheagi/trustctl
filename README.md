@@ -14,6 +14,7 @@ and user certificates, secrets, API keys, tokens, and SPIFFE workload identities
 — across hybrid infrastructure, fully self-hosted.
 
 [![CI](https://github.com/imfeelingtheagi/certctl/actions/workflows/ci.yml/badge.svg)](https://github.com/imfeelingtheagi/certctl/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/imfeelingtheagi/certctl)](https://goreportcard.com/report/github.com/imfeelingtheagi/certctl)
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
 ![Status](https://img.shields.io/badge/status-active%20development-orange)
 ![License](https://img.shields.io/badge/license-source--available%20(TBD)-lightgrey)
