@@ -19,6 +19,7 @@ var requiredPages = []string{
 	"configuration.md",
 	"compliance.md",
 	"observability.md",
+	"operations.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -174,6 +175,28 @@ func TestObservabilityDocIsReal(t *testing.T) {
 	}
 }
 
+// TestOperationsDocIsReal cross-checks the resilience page against the code: it
+// documents the live-path controls (bulkheads, rate limiting with 429, graceful
+// drain, fail-closed signing) and a setting the loader actually reads, and the
+// server actually wires the bulkhead.
+func TestOperationsDocIsReal(t *testing.T) {
+	lower := strings.ToLower(read(t, "operations.md"))
+	for _, want := range []string{"bulkhead", "rate limit", "429", "retry-after", "drain", "fail"} {
+		if !strings.Contains(lower, want) {
+			t.Errorf("operations.md should cover %q", want)
+		}
+	}
+	if !strings.Contains(read(t, "operations.md"), "CERTCTL_RATE_LIMIT_REQUESTS") {
+		t.Error("operations.md should document the rate-limit budget setting")
+	}
+	if code := read(t, "../internal/config/config.go"); !strings.Contains(code, "CERTCTL_RATE_LIMIT_REQUESTS") {
+		t.Error("CERTCTL_RATE_LIMIT_REQUESTS is documented but the loader does not read it")
+	}
+	if srv := read(t, "../internal/server/server.go"); !strings.Contains(srv, "bulkhead") {
+		t.Error("operations.md documents bulkheads but the server does not wire one")
+	}
+}
+
 var mdRef = regexp.MustCompile(`[\w./-]+\.md`)
 
 // TestMkdocsNavResolves: every page the MkDocs nav references exists under the
@@ -229,7 +252,7 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION"} {
+	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION", "CERTCTL_RATE_LIMIT_REQUESTS"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}

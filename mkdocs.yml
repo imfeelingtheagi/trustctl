@@ -36,6 +36,7 @@ nav:
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
   - Observability: observability.md
+  - Operations & resilience: operations.md
   - CLI: cli.md
   - Telemetry: telemetry.md
   - Troubleshooting: troubleshooting.md

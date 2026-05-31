@@ -45,6 +45,7 @@ type Config struct {
 	Lifecycle Lifecycle `json:"lifecycle"`
 	Telemetry Telemetry `json:"telemetry"`
 	Audit     Audit     `json:"audit"`
+	RateLimit RateLimit `json:"rate_limit"`
 }
 
 // Server holds the control-plane listen settings.
@@ -136,6 +137,21 @@ func (a Audit) RetentionDuration() (time.Duration, error) {
 	return time.ParseDuration(a.Retention)
 }
 
+// RateLimit configures the PostgreSQL-backed per-tenant rate limiter (R2.3 /
+// AN-7): each tenant may make Requests calls per Window (a token bucket admitting
+// a burst of Requests, refilling steadily over Window). It sheds excess load with
+// 429 + Retry-After so one noisy tenant cannot exhaust the control plane.
+type RateLimit struct {
+	Enabled  bool   `json:"enabled"`
+	Requests int    `json:"requests"` // burst/budget per window, per tenant
+	Window   string `json:"window"`   // Go duration, e.g. "1m"
+}
+
+// WindowDuration parses the rate-limit window.
+func (r RateLimit) WindowDuration() (time.Duration, error) {
+	return time.ParseDuration(r.Window)
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
@@ -151,6 +167,9 @@ func Default() *Config {
 		// The audit export key persists under the data directory so signed evidence
 		// bundles verify across restarts; retention is indefinite by default.
 		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
+		// Per-tenant rate limiting is on by default so the product ships with
+		// backpressure; the budget is generous and tunable.
+		RateLimit: RateLimit{Enabled: true, Requests: 600, Window: "1m"},
 	}
 }
 
@@ -211,6 +230,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "CERTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "CERTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "CERTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setBool(getenv, "CERTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
+	setInt(getenv, "CERTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
+	setString(getenv, "CERTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -225,6 +247,16 @@ func setBool(getenv func(string) string, key string, dst *bool) {
 	if v := getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			*dst = b
+		}
+	}
+}
+
+// setInt overlays an integer environment variable. A malformed value is ignored
+// (the prior value stands).
+func setInt(getenv func(string) string, key string, dst *int) {
+	if v := getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			*dst = n
 		}
 	}
 }
@@ -308,6 +340,18 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("audit.retention %q is invalid: %w", c.Audit.Retention, err))
 	} else if d < 0 {
 		errs = append(errs, errors.New("audit.retention must not be negative"))
+	}
+	// Rate limiting, when enabled, needs a positive per-tenant budget and a valid,
+	// positive window.
+	if c.RateLimit.Enabled {
+		if c.RateLimit.Requests <= 0 {
+			errs = append(errs, errors.New("rate_limit.requests must be positive when rate limiting is enabled"))
+		}
+		if d, err := c.RateLimit.WindowDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("rate_limit.window %q is invalid: %w", c.RateLimit.Window, err))
+		} else if d <= 0 {
+			errs = append(errs, errors.New("rate_limit.window must be positive"))
+		}
 	}
 	return errors.Join(errs...)
 }

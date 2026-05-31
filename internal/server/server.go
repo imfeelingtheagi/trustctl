@@ -19,6 +19,7 @@ import (
 	"certctl.io/certctl/internal/agent/enroll"
 	"certctl.io/certctl/internal/api"
 	"certctl.io/certctl/internal/audit"
+	"certctl.io/certctl/internal/bulkhead"
 	"certctl.io/certctl/internal/crypto"
 	"certctl.io/certctl/internal/crypto/jose"
 	"certctl.io/certctl/internal/events"
@@ -49,6 +50,8 @@ type Deps struct {
 	AuditSigningKey *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
 	Logger          *slog.Logger     // structured access log sink (R2.2); nil discards
 	TraceExporter   observ.Exporter  // completed-span sink (R2.2); nil is a no-op
+	Bulkhead        *bulkhead.Set    // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
+	RateLimiter     api.RateLimiter  // per-tenant rate limiter (R2.3); nil disables rate limiting
 }
 
 // Server is the assembled control plane.
@@ -68,6 +71,7 @@ type Server struct {
 	registry  *observ.Registry
 	tracer    *observ.Tracer
 	readiness *observ.Readiness
+	bulk      *bulkhead.Set
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -117,6 +121,10 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// across restarts. A caller's APIOptions still override these defaults.
 	if d.AuditSigningKey != nil {
 		defaults = append(defaults, api.WithAudit(audit.NewService(d.Log, d.AuditSigningKey)))
+	}
+	// Shed load per tenant on the guarded routes when a limiter is wired (R2.3).
+	if d.RateLimiter != nil {
+		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
 	}
 	apiOpts := append(defaults, d.APIOptions...)
 	a := api.New(d.Store, idem, orch, apiOpts...)
@@ -169,17 +177,27 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	}
 	s.readiness = observ.NewReadiness(s.tracer, checks...)
 
-	// 5) Root mux: liveness/readiness/metrics, API (/api + /auth + /enroll), and the
+	// 5) Resilience (R2.3 / AN-7 in the live path): isolated, bounded worker pools
+	// per subsystem. The API surface runs on the "api" pool so a flood there sheds
+	// fast and can never starve liveness, readiness, metrics, or the signer — which
+	// are served outside the API pool.
+	s.bulk = d.Bulkhead
+	if s.bulk == nil {
+		s.bulk = bulkhead.Default()
+	}
+	apiHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a)
+
+	// 6) Root mux: liveness/readiness/metrics (never bulkheaded, so they answer even
+	// under API saturation), the bulkheaded API (/api + /auth + /enroll), and the
 	// web UI at /. The whole surface is wrapped with the observability middleware,
-	// so every request is traced, counted, and access-logged (with no secret
-	// material — AN-8).
+	// so every request is traced, counted, and access-logged (no secrets — AN-8).
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.readiness.Handler())
 	mux.Handle("GET /metrics", s.registry.Handler())
-	mux.Handle("/api/", a)
-	mux.Handle("/auth/", a)
-	mux.Handle("/enroll/", a)
+	mux.Handle("/api/", apiHandler)
+	mux.Handle("/auth/", apiHandler)
+	mux.Handle("/enroll/", apiHandler)
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
 	s.handler = mw.Handler(mux)
@@ -302,9 +320,23 @@ func (s *Server) RunDispatcher(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			_, _ = s.outbox.Dispatch(ctx, s.obHandler)
+			s.dispatchOnce(ctx)
 		}
 	}
+}
+
+// dispatchOnce sweeps the outbox once, routed through the outbox bulkhead pool so
+// delivery participates in backpressure (a saturated pool sheds the tick rather
+// than piling up sweeps) and is drained on shutdown (AN-7). Concurrent sweeps are
+// safe — the outbox claims rows FOR UPDATE SKIP LOCKED. With no outbox pool
+// configured it sweeps directly.
+func (s *Server) dispatchOnce(ctx context.Context) {
+	run := func() { _, _ = s.outbox.Dispatch(ctx, s.obHandler) }
+	if s.bulk == nil || s.bulk.Pool(bulkhead.SubsystemOutbox) == nil {
+		run()
+		return
+	}
+	_ = s.bulk.Submit(bulkhead.SubsystemOutbox, run)
 }
 
 // Drain delivers any pending outbox entries through the configured handler — the
@@ -314,9 +346,16 @@ func (s *Server) Drain(ctx context.Context) error {
 	return err
 }
 
-// Shutdown drains the outbox and closes the event log and datastore in order.
+// Shutdown drains the subsystem pools and the outbox, then closes the event log
+// and datastore in order — the graceful drain that completes in-flight work
+// without loss (R2.3 / AN-7).
 func (s *Server) Shutdown(ctx context.Context) error {
 	var errs []error
+	// Stop accepting new pool work and drain everything already in flight (AN-7
+	// graceful drain) before the final outbox sweep.
+	if s.bulk != nil {
+		s.bulk.Close()
+	}
 	if err := s.Drain(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("drain outbox: %w", err))
 	}

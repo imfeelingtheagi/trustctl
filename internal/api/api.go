@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ type API struct {
 	auth          *AuthConfig
 	agentTokens   BootstrapTokenIssuer
 	agentEnroller BootstrapEnroller
+	rateLimiter   RateLimiter
 	mux           *http.ServeMux
 	spec          *Document
 }
@@ -64,6 +66,7 @@ type config struct {
 	auth             *AuthConfig
 	agentTokens      BootstrapTokenIssuer
 	agentEnroller    BootstrapEnroller
+	rateLimiter      RateLimiter
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -97,6 +100,20 @@ func WithPrincipalResolver(fn func(*http.Request) (authz.Principal, error)) Opti
 	return func(c *config) { c.principalFn = fn }
 }
 
+// RateLimiter sheds load per authenticated tenant (R2.3). Allow takes one unit of
+// quota for tenantID; allowed is false when the tenant is over budget, with
+// retryAfter indicating when to retry. The API depends only on this interface so
+// it does not import the PostgreSQL-backed implementation (no datastore coupling).
+type RateLimiter interface {
+	Allow(ctx context.Context, tenantID string) (allowed bool, retryAfter time.Duration, err error)
+}
+
+// WithRateLimiter wires a per-tenant rate limiter onto the guarded routes. When
+// unset, no rate limiting is applied.
+func WithRateLimiter(rl RateLimiter) Option {
+	return func(c *config) { c.rateLimiter = rl }
+}
+
 // New builds the API over its dependencies and wires the routes. The static
 // OpenAPI document is built once from the route registry. The dependencies may
 // be nil when only the spec is needed (e.g. for documentation tooling).
@@ -106,7 +123,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -344,6 +361,23 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 		if !principal.Can(perm, target) {
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
+		}
+		// Shed load per tenant (R2.3): an authenticated-but-over-budget caller is
+		// rejected with 429 + Retry-After so one noisy tenant cannot exhaust the
+		// control plane. Checked after authz so denials don't consume quota.
+		if a.rateLimiter != nil {
+			allowed, retryAfter, err := a.rateLimiter.Allow(r.Context(), principal.TenantID)
+			if err != nil {
+				a.writeError(w, err)
+				return
+			}
+			if !allowed {
+				if retryAfter > 0 {
+					w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retryAfter.Seconds()))))
+				}
+				a.writeProblem(w, problem.New(http.StatusTooManyRequests, "rate limit exceeded for this tenant"))
+				return
+			}
 		}
 		// Attribute every event this request appends to the authenticated caller
 		// and the roles it acted under (R2.1) — the audit trail's who/under-what.

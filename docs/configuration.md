@@ -124,6 +124,21 @@ endpoints are wired into the serving binary, so they return real data — not an
 error — out of the box. Protect the signing key file and back it up; distribute
 its public half to auditors out of band.
 
+## Rate limiting
+
+A per-tenant, PostgreSQL-backed rate limiter sheds load on the guarded routes
+(429 + `Retry-After`). See [Operations & resilience](operations.md) for the model
+and the bulkheads it complements.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CERTCTL_RATE_LIMIT_ENABLED` | `true` | Turn per-tenant rate limiting on/off. |
+| `CERTCTL_RATE_LIMIT_REQUESTS` | `600` | Burst/budget per window, per tenant. |
+| `CERTCTL_RATE_LIMIT_WINDOW` | `1m` | The refill window (Go duration). |
+
+When enabled, `requests` must be positive and `window` a valid positive duration,
+or the control plane fails fast at startup.
+
 ## Config file
 
 Any of the above can also be set in a JSON file named by `CERTCTL_CONFIG_FILE`;

@@ -11,10 +11,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"certctl.io/certctl/internal/api"
 	"certctl.io/certctl/internal/audit"
 	"certctl.io/certctl/internal/config"
 	"certctl.io/certctl/internal/events"
 	"certctl.io/certctl/internal/logging"
+	"certctl.io/certctl/internal/ratelimit"
 	"certctl.io/certctl/internal/signing"
 	"certctl.io/certctl/internal/store"
 )
@@ -73,7 +75,20 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("audit signing key: %w", err)
 	}
 
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup, AuditSigningKey: auditKey, Logger: logger})
+	// Build the per-tenant rate limiter from config (R2.3). Disabled config leaves
+	// it nil (no limiting); the bulkheads default inside Build (always on, AN-7).
+	var rateLimiter api.RateLimiter
+	if cfg.RateLimit.Enabled {
+		window, werr := cfg.RateLimit.WindowDuration()
+		if werr != nil {
+			_ = log.Close()
+			st.Close()
+			return fmt.Errorf("rate limit window: %w", werr)
+		}
+		rateLimiter = ratelimit.FromRate(st, cfg.RateLimit.Requests, window)
+	}
+
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup, AuditSigningKey: auditKey, Logger: logger, RateLimiter: rateLimiter})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
