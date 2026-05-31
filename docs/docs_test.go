@@ -116,16 +116,20 @@ func TestInstallAndUninstallCoverAllPlatforms(t *testing.T) {
 	}
 }
 
-// TestGettingStartedMatchesProduct encodes "a new user reaches a first cert in
-// under 15 minutes following the docs": the getting-started page cites the real
-// one-command eval and walks the real first-run wizard (S7.3) toward a first
-// certificate.
+// TestGettingStartedMatchesProduct encodes "a new user reaches a first cert in a
+// few minutes following the docs, and the page is honest about timing": the
+// getting-started page cites the real one-command eval, walks the real first-run
+// wizard (S7.3) toward a first certificate, and backs its timing claim with the
+// measured issuance figure (R1.4) rather than an unverified marketing number.
 func TestGettingStartedMatchesProduct(t *testing.T) {
 	body := read(t, "getting-started.md")
 	lower := strings.ToLower(body)
 
-	if !strings.Contains(body, "15") {
-		t.Error("getting-started should reference the 15-minute first-cert goal")
+	if !strings.Contains(lower, "minute") {
+		t.Error("getting-started should set an honest first-cert time expectation in minutes")
+	}
+	if !strings.Contains(lower, "measured") || !strings.Contains(lower, "millisecond") {
+		t.Error("getting-started should cite the measured issuance time (R1.4), not an unverified number")
 	}
 	if !strings.Contains(body, "docker compose") || !strings.Contains(body, "deploy/docker/docker-compose.yml") {
 		t.Error("getting-started should cite the real Compose eval command")

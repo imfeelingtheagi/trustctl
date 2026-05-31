@@ -1,8 +1,12 @@
 # Getting started
 
-This walkthrough takes a fresh machine to its **first issued certificate in under
-15 minutes**. You will bring up the control plane with one command, then follow
-the in-product wizard to connect a CA, install an agent, and issue a certificate.
+This walkthrough takes a fresh machine to its **first issued certificate in a few
+minutes** — and most of those minutes are the single agent-install step, not
+waiting on certctl. The control plane is serving about two minutes after
+`compose up`, and issuance itself is a sub-second operation (see the measured
+figure under [Issue your first cert](#issue-your-first-cert)). You will bring up
+the control plane with one command, then follow the in-product wizard to connect
+a CA, install an agent, and issue a certificate.
 
 ## Prerequisites
 
@@ -41,9 +45,17 @@ The web UI is served by the same binary at <https://localhost:8443>.
     [Configuration](configuration.md#transport-encryption-tls).
 
 !!! tip
-    Want to point at your own managed Postgres/NATS instead of the bundled ones?
-    See [Configuration](configuration.md#external-datastores). The same env vars
-    the Compose file sets are all you need.
+    Want to point at your own managed Postgres/NATS instead of the
+    Compose-provided ones? See [Configuration](configuration.md#external-datastores).
+    The same env vars the Compose file sets are all you need.
+
+!!! note "The serving binary needs external Postgres and NATS"
+    The control plane serves against **external** PostgreSQL and NATS — exactly
+    what the Compose stack wires up. If you run the `certctl` binary directly
+    instead of via Compose, set `CERTCTL_POSTGRES_MODE=external` /
+    `CERTCTL_POSTGRES_DSN` and `CERTCTL_NATS_MODE=external` / `CERTCTL_NATS_URL`;
+    it fails fast otherwise. A bundled single-node datastore is not yet wired into
+    the serving path — see [Configuration](configuration.md#datastores).
 
 ## 2. Open the UI and sign in
 
@@ -82,6 +94,16 @@ to the certificate inventory.
 That is your first certificate — discovered, owned, and tracked. certctl will now
 rotate and renew it automatically.
 
+!!! note "Measured issuance time"
+    Issuance is fast. In certctl's end-to-end integration test — the assembled
+    control plane with the out-of-process signer — a lifecycle transition to
+    *issued* drives the outbox handler to mint the certificate and record it in
+    inventory in **tens of milliseconds** (`TestAssembledServerIssuesCertIntoInventory`
+    measured ~20 ms). In the running server the outbox dispatcher polls about once
+    a second, so the certificate appears within roughly a second of clicking
+    **Issue**. The wall-clock for the whole walkthrough is dominated by installing
+    the agent, not by certctl.
+
 ## Prefer the command line?
 
 Everything the wizard does is also scriptable with `certctl-cli`. With a CI token
@@ -91,9 +113,17 @@ Everything the wizard does is also scriptable with `certctl-cli`. With a CI toke
 export CERTCTL_SERVER=https://localhost:8443
 export CERTCTL_TOKEN=certctl_pat_...
 
-# Create an owner and an issuer, then issue and inspect.
-echo '{"kind":"workload","name":"payments"}' | certctl-cli owners create -f -
-echo '{"kind":"x509_ca","name":"Primary CA"}' | certctl-cli issuers create -f -
+# Create an owner, an issuer, and an identity; the *id of each is in its JSON.
+owner=$(echo '{"kind":"workload","name":"payments"}' | certctl-cli owners create -f - | jq -r .id)
+issuer=$(echo '{"kind":"x509_ca","name":"Primary CA"}' | certctl-cli issuers create -f - | jq -r .id)
+ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\",\"issuer_id\":\"$issuer\"}" \
+          | certctl-cli identities create -f - | jq -r .id)
+
+# Transition it to "issued": the running outbox dispatcher mints the certificate.
+echo '{"to":"issued"}' | certctl-cli identities transition "$ident" -f -
+sleep 2
+
+# The newly minted certificate is now in inventory.
 certctl-cli certificates list
 ```
 

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"time"
 
+	"certctl.io/certctl/internal/agent/enroll"
 	"certctl.io/certctl/internal/api"
 	"certctl.io/certctl/internal/crypto"
 	"certctl.io/certctl/internal/events"
@@ -75,11 +76,6 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if s.signTO <= 0 {
 		s.signTO = 10 * time.Second
 	}
-	if s.obHandler == nil {
-		// Default: acknowledge delivery. A production deployment wires the
-		// connector/webhook dispatcher here; the outbox guarantees at-least-once.
-		s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
-	}
 
 	// 1) Read model catches up from the event log (AN-2): the relational state is
 	// a projection, so we replay before serving reads.
@@ -92,7 +88,17 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	s.outbox = orchestrator.NewOutbox(d.Store)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
 	idem := orchestrator.NewIdempotency(d.Store)
-	a := api.New(d.Store, idem, orch, d.APIOptions...)
+
+	// Agent enrollment (F3/F15, S5.1): mint one-time bootstrap tokens and sign
+	// agents' CSRs into mTLS client certificates. Defaults are prepended so a
+	// caller's APIOptions still override them.
+	authority, err := enroll.NewAuthority("certctl Agent Enrollment CA")
+	if err != nil {
+		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
+	}
+	ea := enrollAuthority{authority}
+	apiOpts := append([]api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea)}, d.APIOptions...)
+	a := api.New(d.Store, idem, orch, apiOpts...)
 
 	// 3) Provision the issuing CA inside the signer (AN-4). If no signer is
 	// available, leave the CA unset — issuance then fails closed.
@@ -104,11 +110,26 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		}
 	}
 
+	// 3a) Outbox handler. An explicit Deps.OutboxHandler wins (tests, custom
+	// dispatchers). Otherwise, when an issuing CA is provisioned, the real
+	// issuance dispatcher mints a certificate for a requested→issued transition
+	// and records it in inventory; with no CA, issuance is unavailable so the
+	// handler acknowledges (the entry cannot be served and must not dead-letter).
+	switch {
+	case s.obHandler != nil:
+		// keep the injected handler
+	case s.caSigner != nil:
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store}
+	default:
+		s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
+	}
+
 	// 4) Root mux: health, API (/api + /auth), and the web UI at /.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.Handle("/api/", a)
 	mux.Handle("/auth/", a)
+	mux.Handle("/enroll/", a)
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	s.handler = mux
 	return s, nil
@@ -210,6 +231,29 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
+}
+
+// dispatchInterval is how often the running dispatcher sweeps the outbox for due
+// entries.
+const dispatchInterval = time.Second
+
+// RunDispatcher runs the outbox dispatcher continuously until ctx is cancelled,
+// delivering due entries (issuance, deployment, notifications) on a short
+// interval — so external effects happen while the process runs, not only at
+// shutdown. Per-entry failures are recorded on the row for retry inside Dispatch;
+// only a transient store/transport fault returns from Dispatch, and the next tick
+// retries. It is meant to run in its own goroutine.
+func (s *Server) RunDispatcher(ctx context.Context) {
+	t := time.NewTicker(dispatchInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			_, _ = s.outbox.Dispatch(ctx, s.obHandler)
+		}
+	}
 }
 
 // Drain delivers any pending outbox entries through the configured handler — the

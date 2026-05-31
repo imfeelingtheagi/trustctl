@@ -33,17 +33,18 @@ type BootstrapTokenIssuer interface {
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store       *store.Store
-	idem        *orchestrator.Idempotency
-	orch        *orchestrator.Orchestrator
-	tenantFn    func(*http.Request) (string, error)
-	roles       *authz.Registry
-	principal   func(*http.Request) (authz.Principal, error)
-	audit       *audit.Service
-	auth        *AuthConfig
-	agentTokens BootstrapTokenIssuer
-	mux         *http.ServeMux
-	spec        *Document
+	store         *store.Store
+	idem          *orchestrator.Idempotency
+	orch          *orchestrator.Orchestrator
+	tenantFn      func(*http.Request) (string, error)
+	roles         *authz.Registry
+	principal     func(*http.Request) (authz.Principal, error)
+	audit         *audit.Service
+	auth          *AuthConfig
+	agentTokens   BootstrapTokenIssuer
+	agentEnroller BootstrapEnroller
+	mux           *http.ServeMux
+	spec          *Document
 }
 
 // Option configures an API.
@@ -61,6 +62,7 @@ type config struct {
 	audit            *audit.Service
 	auth             *AuthConfig
 	agentTokens      BootstrapTokenIssuer
+	agentEnroller    BootstrapEnroller
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -103,7 +105,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -128,6 +130,12 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		mux.HandleFunc("GET /auth/callback", a.authCallback)
 		mux.HandleFunc("GET /auth/me", a.authMe)
 		mux.HandleFunc("POST /auth/logout", a.authLogout)
+	}
+	// Agent bootstrap enrollment (S5.1/F15). The one-time token authenticates the
+	// request, so this route carries no RBAC permission and stays out of the
+	// /api, CLI, and OpenAPI surfaces — the same treatment as the OIDC bridge.
+	if a.agentEnroller != nil {
+		mux.HandleFunc("POST /enroll/bootstrap", a.enrollBootstrap)
 	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux

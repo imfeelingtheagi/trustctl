@@ -77,7 +77,7 @@ Phase 1 — built and tested:
 | Discovery | network/filesystem, SSH keys & trust, agentless cloud certs, CBOM + PQC posture, CT monitoring |
 | Posture | drift detection, composite risk scoring, the credential graph |
 | Platform | RBAC, SSO (OIDC), append-only audit, multi-tenancy |
-| Delivery | web UI with a sub-15-minute first-run wizard, a CLI at full API parity, reproducible & cosign-signed images with an SBOM |
+| Delivery | web UI with a first-run wizard, a CLI at full API parity, reproducible & cosign-signed images with an SBOM |
 
 ## Built differently
 

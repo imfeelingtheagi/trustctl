@@ -45,18 +45,28 @@ service (AN-4) is independent of this setting and always enabled.
 ## Datastores
 
 certctl stores its read state in **PostgreSQL** (the source-of-truth event log
-lives in **NATS JetStream**). Both can run **bundled** for single-node evaluation
-or **external** for production. PostgreSQL is the datastore in every deployment
-mode — there is no SQLite path.
+lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mode
+— there is no SQLite path.
+
+!!! important "The serving control plane requires external Postgres and NATS"
+    The serving binary (`certctl`, via `server.Run`) connects to **external**
+    PostgreSQL and NATS and **fails fast** at startup if either is not in external
+    mode. Set `CERTCTL_POSTGRES_MODE=external` (with `CERTCTL_POSTGRES_DSN`) and
+    `CERTCTL_NATS_MODE=external` (with `CERTCTL_NATS_URL`) — the Compose stack and
+    Helm chart wire exactly this. A **bundled/embedded** single-node datastore that
+    the binary supervises itself is on the roadmap but **not yet wired into the
+    serving path**: the loader accepts those values, but the server rejects them
+    until then. The `*_DATA_DIR` / `*_STORE_DIR` settings below apply only once
+    that bundled path lands.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CERTCTL_POSTGRES_MODE` | `bundled` | `bundled` or `external`. |
-| `CERTCTL_POSTGRES_DSN` | — | Connection string; **required** when external. |
-| `CERTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory when bundled. |
-| `CERTCTL_NATS_MODE` | `embedded` | `embedded` or `external`. |
-| `CERTCTL_NATS_URL` | — | NATS URL; **required** when external. |
-| `CERTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory when embedded. |
+| `CERTCTL_POSTGRES_MODE` | `bundled` | `bundled` or `external`. **Serving requires `external`** (see note above). |
+| `CERTCTL_POSTGRES_DSN` | — | Connection string; **required** when external (i.e. to serve). |
+| `CERTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the bundled datastore (roadmap; not yet served). |
+| `CERTCTL_NATS_MODE` | `embedded` | `embedded` or `external`. **Serving requires `external`** (see note above). |
+| `CERTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
+| `CERTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore (roadmap; not yet served). |
 
 ### External datastores
 

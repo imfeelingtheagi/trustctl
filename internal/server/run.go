@@ -61,9 +61,19 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
+	// Run the outbox dispatcher continuously (AN-6): external effects — issuance,
+	// notifications — happen while the process is live, not only at shutdown
+	// (closing the audit's "drains only at shutdown" finding). It stops before the
+	// final drain so the two never race on the same entries.
+	dispCtx, stopDispatcher := context.WithCancel(ctx)
+	dispatcherDone := make(chan struct{})
+	go func() { defer close(dispatcherDone); srv.RunDispatcher(dispCtx) }()
+
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", cfg.Server.Addr)
 	if err != nil {
+		stopDispatcher()
+		<-dispatcherDone
 		_ = srv.Shutdown(ctx)
 		return fmt.Errorf("listen %s: %w", cfg.Server.Addr, err)
 	}
@@ -74,12 +84,18 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	case <-ctx.Done():
 	case err := <-serveErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			stopDispatcher()
+			<-dispatcherDone
 			_ = srv.Shutdown(context.Background())
 			return fmt.Errorf("serve: %w", err)
 		}
 	}
 
-	// Graceful shutdown: stop accepting connections, then drain + close in order.
+	// Graceful shutdown: stop accepting connections, stop the dispatcher, then
+	// drain + close in order. Stopping the dispatcher first means Shutdown's final
+	// drain has exclusive ownership of the outbox.
+	stopDispatcher()
+	<-dispatcherDone
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)
