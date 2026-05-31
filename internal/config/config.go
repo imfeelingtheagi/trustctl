@@ -46,6 +46,7 @@ type Config struct {
 	Telemetry Telemetry `json:"telemetry"`
 	Audit     Audit     `json:"audit"`
 	RateLimit RateLimit `json:"rate_limit"`
+	Migrate   Migrate   `json:"migrate"`
 }
 
 // Server holds the control-plane listen settings.
@@ -152,6 +153,17 @@ func (r RateLimit) WindowDuration() (time.Duration, error) {
 	return time.ParseDuration(r.Window)
 }
 
+// Migrate configures database schema migration at boot (R2.5). With Auto on
+// (the default), the control plane applies any pending migrations on startup,
+// serialized across instances by an advisory lock. With Auto off, a boot that
+// finds pending migrations fails fast with guidance instead of migrating
+// silently — the pre-migration backup gate: an operator inspects the plan
+// (`certctl --migrate-status`), takes a backup, then applies them explicitly
+// (`certctl --migrate`).
+type Migrate struct {
+	Auto bool `json:"auto"`
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
@@ -170,6 +182,10 @@ func Default() *Config {
 		// Per-tenant rate limiting is on by default so the product ships with
 		// backpressure; the budget is generous and tunable.
 		RateLimit: RateLimit{Enabled: true, Requests: 600, Window: "1m"},
+		// Automatic migration is on by default so first boot and the single-node
+		// eval path apply the schema without extra steps; production deployments
+		// can disable it to gate migrations behind an explicit, backed-up step.
+		Migrate: Migrate{Auto: true},
 	}
 }
 
@@ -233,6 +249,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "CERTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
 	setInt(getenv, "CERTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
 	setString(getenv, "CERTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
+	setBool(getenv, "CERTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {

@@ -1,7 +1,15 @@
 -- The RLS-subject role that tenant-scoped operations assume (see
 -- Store.WithTenant). It holds only the table grants below; superusers bypass
--- RLS, so tenant queries SET ROLE to this role to be subject to it.
-CREATE ROLE certctl_app NOLOGIN;
+-- RLS, so tenant queries SET ROLE to this role to be subject to it. Roles are
+-- cluster-global, so create it only if absent: this keeps the migration
+-- re-runnable across databases in one cluster (and idempotent under retry).
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'certctl_app') THEN
+        CREATE ROLE certctl_app NOLOGIN;
+    END IF;
+END
+$$;
 
 -- Tenants read model (the Tenant entity). tenant_id is the tenant's own id; per
 -- AN-1 every table carries tenant_id.

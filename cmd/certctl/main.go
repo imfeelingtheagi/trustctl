@@ -54,6 +54,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
 	backupPath := fs.String("backup", "", "back up the event log (source of truth) to FILE, then exit")
 	restorePath := fs.String("restore", "", "restore the event log from FILE, rebuild the read model, then exit")
+	migrateStatus := fs.Bool("migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
+	migrate := fs.Bool("migrate", false, "apply pending database migrations under an advisory lock, then exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			// -h/--help already printed usage to stderr; this is a clean exit.
@@ -93,6 +95,29 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 			return fmt.Errorf("restore: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "restored %d events from %s and rebuilt the read model\n", n, *restorePath)
+		return nil
+	}
+	if *migrateStatus {
+		pending, err := server.MigrateStatus(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("migrate-status: %w", err)
+		}
+		if len(pending) == 0 {
+			_, _ = fmt.Fprintln(stdout, "no pending migrations")
+			return nil
+		}
+		_, _ = fmt.Fprintf(stdout, "%d pending migration(s):\n", len(pending))
+		for _, p := range pending {
+			_, _ = fmt.Fprintf(stdout, "  %s\n", p)
+		}
+		return nil
+	}
+	if *migrate {
+		n, err := server.RunMigrate(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "applied %d migration(s)\n", n)
 		return nil
 	}
 
@@ -160,6 +185,7 @@ func configSummary(cfg *config.Config) string {
 	}
 	fmt.Fprintf(&b, "log.level: %s\n", cfg.Log.Level)
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
+	fmt.Fprintf(&b, "migrate.auto: %t\n", cfg.Migrate.Auto)
 	fmt.Fprintf(&b, "telemetry.enabled: %t\n", cfg.Telemetry.Enabled)
 	if cfg.Telemetry.Enabled {
 		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)

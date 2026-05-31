@@ -38,6 +38,7 @@ nav:
   - Observability: observability.md
   - Operations & resilience: operations.md
   - Backup & disaster recovery: disaster-recovery.md
+  - Migrations & upgrades: migrations.md
   - CLI: cli.md
   - Telemetry: telemetry.md
   - Troubleshooting: troubleshooting.md

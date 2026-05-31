@@ -40,6 +40,22 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
+	// Migration gate (R2.5): inspect the plan first. When migrations are pending
+	// and automatic migration is disabled, fail fast with guidance instead of
+	// migrating silently — the pre-migration backup gate. Migrate itself takes an
+	// advisory lock, so concurrent instances cannot double-apply.
+	pending, err := st.PendingMigrations(ctx)
+	if err != nil {
+		st.Close()
+		return fmt.Errorf("inspect migrations: %w", err)
+	}
+	if len(pending) > 0 {
+		if !cfg.Migrate.Auto {
+			st.Close()
+			return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (CERTCTL_MIGRATE_AUTO=false): take a backup (certctl --backup), then apply them with 'certctl --migrate'; pending: %v", len(pending), pending)
+		}
+		logger.Info("applying pending database migrations", "count", len(pending))
+	}
 	if err := st.Migrate(ctx); err != nil {
 		st.Close()
 		return fmt.Errorf("migrate: %w", err)

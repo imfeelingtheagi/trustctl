@@ -46,7 +46,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if err != nil {
 				return true
 			}
-			if isDML(sql) && !mentionsTenantID(sql) && !referencesSystemTable(sql) {
+			if isDML(sql) && !mentionsTenantID(sql) && !referencesSystemTable(sql) && !isSessionControl(sql) {
 				pass.Reportf(lit.Pos(),
 					"repository query does not filter on tenant_id (AN-1)")
 			}
@@ -98,6 +98,30 @@ func referencesSystemTable(s string) bool {
 	lower := strings.ToLower(s)
 	for _, tbl := range systemTables {
 		if strings.Contains(lower, tbl) {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionControlFuncs are PostgreSQL control functions that operate on the
+// session or on cluster-wide locks, not on tenant rows: a `SELECT
+// pg_advisory_lock(...)` reads no table and so carries no tenant_id (R2.5's
+// migration lock uses these). Like systemTables, this is the sanctioned escape
+// hatch — extended only here, with a test fixture.
+var sessionControlFuncs = []string{
+	"pg_advisory_lock",
+	"pg_advisory_unlock",
+	"pg_try_advisory_lock",
+	"pg_advisory_xact_lock",
+}
+
+// isSessionControl reports whether a query is a session/lock control call rather
+// than a data query over a table.
+func isSessionControl(s string) bool {
+	lower := strings.ToLower(s)
+	for _, fn := range sessionControlFuncs {
+		if strings.Contains(lower, fn) {
 			return true
 		}
 	}

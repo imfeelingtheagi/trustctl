@@ -20,4 +20,9 @@ const (
 	// System (non-tenant) tables are exempt: no tenant_id is expected.
 	migCheck  = "SELECT version FROM schema_migrations"
 	migRecord = "INSERT INTO schema_migrations (version) VALUES ($1)"
+
+	// Session/lock control functions read no table, so they are exempt: the
+	// migration advisory lock (AN-1 R2.5) carries no tenant_id.
+	migLock   = "SELECT pg_advisory_lock($1)"
+	migUnlock = "SELECT pg_advisory_unlock($1)"
 )

@@ -21,6 +21,7 @@ var requiredPages = []string{
 	"observability.md",
 	"operations.md",
 	"disaster-recovery.md",
+	"migrations.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -218,6 +219,37 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 	// The restore path rebuilds from the event log (the AN-2 guarantee the doc rests on).
 	if !strings.Contains(read(t, "../internal/server/backup.go"), "Rebuild") {
 		t.Error("restore should rebuild the read model from the restored log")
+	}
+}
+
+// TestMigrationsDocIsReal cross-checks the migration runbook against the code: it
+// documents the real commands and the advisory-lock / forward-only safeguards,
+// and the binary and store actually implement what it cites.
+func TestMigrationsDocIsReal(t *testing.T) {
+	body := read(t, "migrations.md")
+	for _, want := range []string{
+		"--migrate-status", "--migrate", "CERTCTL_MIGRATE_AUTO",
+		"advisory lock", "forward-only", "pg_advisory_lock", "rollback",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("migrations.md should cover %q", want)
+		}
+	}
+	// The documented flags exist in the binary.
+	main := read(t, "../cmd/certctl/main.go")
+	for _, flag := range []string{`"migrate-status"`, `"migrate"`} {
+		if !strings.Contains(main, flag) {
+			t.Errorf("migrations.md documents a flag the binary does not define: %s", flag)
+		}
+	}
+	// The migration runner really takes the advisory lock the doc rests on.
+	migrate := read(t, "../internal/store/migrate.go")
+	if !strings.Contains(migrate, "pg_advisory_lock") || !strings.Contains(migrate, "MigrateAdvisoryLockKey") {
+		t.Error("Migrate should serialize the run on a PostgreSQL advisory lock")
+	}
+	// The gate (CERTCTL_MIGRATE_AUTO) is honored by config.
+	if !strings.Contains(read(t, "../internal/config/config.go"), "CERTCTL_MIGRATE_AUTO") {
+		t.Error("the config loader should read CERTCTL_MIGRATE_AUTO (the pre-migration backup gate)")
 	}
 }
 
