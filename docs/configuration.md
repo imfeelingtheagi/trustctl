@@ -116,8 +116,8 @@ you must operate.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CERTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | PEM path for the evidence-export signing key. It is **persisted** (created `0600` on first boot) so signed bundles verify across restarts; the key no longer rotates each restart. |
-| `CERTCTL_AUDIT_RETENTION` | — (indefinite) | Documents your retention policy as a Go duration. The event log (source of truth) is retained **indefinitely** by default; certctl does not prune the spine. |
-| `CERTCTL_AUDIT_ARCHIVE_DIR` | — | Optional directory for long-term archival of signed evidence bundles (your archival pipeline / WORM storage). |
+| `CERTCTL_AUDIT_RETENTION` | — (indefinite) | Retention window, a Go duration (e.g. `8760h`). Empty means **indefinite** (no pruning, the default). When set **and** `CERTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker **enforces** it: records older than the window are archived to signed bundles, a checkpoint is sealed, and the records are pruned from the hot event log — the chain stays verifiable across the prune. |
+| `CERTCTL_AUDIT_ARCHIVE_DIR` | — | Cold-storage directory for the signed archive bundles (`<dir>/<tenant>/audit-<seq>.jws`, `0600`). **Required to enable retention pruning** (without it, retention is documentation only). Point it at WORM-backed storage you protect. See [Audit retention and archive lifecycle](compliance.md#audit-retention-and-archive-lifecycle). |
 
 The audit query (`/api/v1/audit/events`) and signed export (`/api/v1/audit/export`)
 endpoints are wired into the serving binary, so they return real data — not an

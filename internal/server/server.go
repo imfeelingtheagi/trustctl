@@ -51,6 +51,8 @@ type Deps struct {
 	CACommonName    string
 	CACertFile      string           // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
 	AuditSigningKey *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
+	AuditRetention  time.Duration    // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
+	AuditArchiveDir string           // cold-storage directory for signed audit archive bundles (R4.4)
 	Logger          *slog.Logger     // structured access log sink (R2.2); nil discards
 	TraceExporter   observ.Exporter  // completed-span sink (R2.2); nil is a no-op
 	Bulkhead        *bulkhead.Set    // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
@@ -75,6 +77,12 @@ type Server struct {
 	tracer    *observ.Tracer
 	readiness *observ.Readiness
 	bulk      *bulkhead.Set
+
+	// Audit retention worker (R4.4); nil unless retention + archive are configured.
+	retention    *audit.RetentionWorker
+	mRetRuns     *observ.Counter
+	mRetArchived *observ.Counter
+	mRetPruned   *observ.Counter
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -122,8 +130,13 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// export endpoints serve real data instead of HTTP 500. The signing key is
 	// persistent (loaded from disk by Run), so signed evidence bundles verify
 	// across restarts. A caller's APIOptions still override these defaults.
+	var auditSvc *audit.Service
 	if d.AuditSigningKey != nil {
-		defaults = append(defaults, api.WithAudit(audit.NewService(d.Log, d.AuditSigningKey)))
+		// The audit service anchors a tenant's queries on its latest sealed retention
+		// boundary (R4.4), so the chain stays verifiable after archived records are
+		// pruned. The same store is the retention worker's checkpoint sink below.
+		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store))
+		defaults = append(defaults, api.WithAudit(auditSvc))
 	}
 	// Shed load per tenant on the guarded routes when a limiter is wired (R2.3).
 	if d.RateLimiter != nil {
@@ -165,6 +178,20 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	}
 	s.registry = observ.NewRegistry()
 	s.tracer = observ.NewTracer(d.TraceExporter)
+
+	// Audit retention worker (R4.4): when a retention window and an archive
+	// directory are configured, a background worker archives audit records older
+	// than the window to signed, offline-verifiable cold-storage bundles, seals a
+	// checkpoint, then prunes them from the hot log — so Audit.Retention/ArchiveDir
+	// do real work instead of being inert. Each run's counts are exported as
+	// metrics; the run also emits an audit event of its own.
+	if auditSvc != nil && d.AuditRetention > 0 && d.AuditArchiveDir != "" {
+		s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
+		s.mRetRuns = s.registry.CounterVec("certctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
+		s.mRetArchived = s.registry.CounterVec("certctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
+		s.mRetPruned = s.registry.CounterVec("certctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
+	}
+
 	checks := []observ.Check{
 		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.Pool().Ping(ctx) }},
 		{Name: "nats", Probe: func(ctx context.Context) error { return d.Log.Ping(ctx) }},
@@ -377,6 +404,62 @@ func (s *Server) dispatchOnce(ctx context.Context) {
 		return
 	}
 	_ = s.bulk.Submit(bulkhead.SubsystemOutbox, run)
+}
+
+// retentionInterval is how often the audit retention worker sweeps for records
+// past the retention window. Archival is a slow, low-urgency maintenance task, so
+// the cadence is hourly (the window itself is typically days to years).
+const retentionInterval = time.Hour
+
+// RunRetention runs the audit retention worker on the retention cadence until ctx
+// is cancelled (R4.4). It is a no-op when retention/archive are not configured, so
+// it is always safe to start in its own goroutine. It sweeps once on start so a
+// freshly booted, long-overdue deployment archives promptly rather than waiting a
+// full interval.
+func (s *Server) RunRetention(ctx context.Context) {
+	if s.retention == nil {
+		return
+	}
+	// RunRetentionOnce logs and records its own errors; the loop ignores the return
+	// and the next tick retries (same pattern as the outbox dispatcher).
+	_, _ = s.RunRetentionOnce(ctx)
+	t := time.NewTicker(retentionInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			_, _ = s.RunRetentionOnce(ctx)
+		}
+	}
+}
+
+// RunRetentionOnce performs one audit retention pass and records its outcome as
+// metrics. It is exported so the assembled server can be driven through a single
+// archive/prune cycle in tests. A nil worker (retention not configured) is a
+// no-op. Errors are logged, not fatal — the next sweep retries.
+func (s *Server) RunRetentionOnce(ctx context.Context) (audit.Summary, error) {
+	if s.retention == nil {
+		return audit.Summary{}, nil
+	}
+	sum, err := s.retention.RunOnce(ctx)
+	if err != nil {
+		s.logger.Error("audit retention run failed", slog.String("error", err.Error()))
+		return sum, err
+	}
+	if s.mRetArchived != nil {
+		s.mRetArchived.Add(float64(sum.RecordsArchived))
+		s.mRetPruned.Add(float64(sum.RecordsPruned))
+		if sum.SegmentsArchived > 0 {
+			s.mRetRuns.Inc()
+		}
+	}
+	if sum.RecordsArchived > 0 {
+		s.logger.Info("audit retention archived and pruned records",
+			slog.Int("records", sum.RecordsArchived), slog.Int("tenants", sum.TenantsProcessed))
+	}
+	return sum, nil
 }
 
 // Drain delivers any pending outbox entries through the configured handler — the

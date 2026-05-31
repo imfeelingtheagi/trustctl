@@ -140,7 +140,18 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		rateLimiter = ratelimit.FromRate(st, cfg.RateLimit.Requests, window)
 	}
 
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile, AuditSigningKey: auditKey, Logger: logger, RateLimiter: rateLimiter})
+	// Parse the audit retention window (R4.4). Empty means indefinite (the worker
+	// stays off); a positive window plus an archive directory enables it.
+	retention, err := cfg.Audit.RetentionDuration()
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return fmt.Errorf("audit retention: %w", err)
+	}
+
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile,
+		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
+		Logger: logger, RateLimiter: rateLimiter})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
@@ -157,11 +168,28 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	dispatcherDone := make(chan struct{})
 	go func() { defer close(dispatcherDone); srv.RunDispatcher(dispCtx) }()
 
+	// Run the audit retention worker on its own cadence (R4.4): it archives records
+	// past the window to signed cold-storage bundles and prunes them from the hot
+	// log, so Audit.Retention/ArchiveDir do real work rather than nothing. A no-op
+	// when not configured. Stopped alongside the dispatcher before shutdown.
+	retCtx, stopRetention := context.WithCancel(ctx)
+	retentionDone := make(chan struct{})
+	go func() { defer close(retentionDone); srv.RunRetention(retCtx) }()
+
+	// stopBackground halts both background workers and waits for them to exit, so the
+	// final drain in Shutdown owns the outbox exclusively and the retention worker is
+	// never mid-run when the event log closes.
+	stopBackground := func() {
+		stopDispatcher()
+		<-dispatcherDone
+		stopRetention()
+		<-retentionDone
+	}
+
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", cfg.Server.Addr)
 	if err != nil {
-		stopDispatcher()
-		<-dispatcherDone
+		stopBackground()
 		_ = srv.Shutdown(ctx)
 		return fmt.Errorf("listen %s: %w", cfg.Server.Addr, err)
 	}
@@ -172,8 +200,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	case <-ctx.Done():
 	case err := <-serveErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			stopDispatcher()
-			<-dispatcherDone
+			stopBackground()
 			_ = srv.Shutdown(context.Background())
 			return fmt.Errorf("serve: %w", err)
 		}
@@ -183,8 +210,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// drain + close in order. Stopping the dispatcher first means Shutdown's final
 	// drain has exclusive ownership of the outbox.
 	logger.Info("control plane shutting down")
-	stopDispatcher()
-	<-dispatcherDone
+	stopBackground()
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)

@@ -194,6 +194,19 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 	return nil
 }
 
+// Delete removes a single event by its stream sequence. It is the one exception
+// to the append-only discipline (AN-2), used solely by the audit retention worker
+// (R4.4): an event is deleted only after it has been archived to cold storage as a
+// signed, offline-verifiable bundle and sealed behind a signed checkpoint, so the
+// authoritative history is preserved (archive + live log) and the audit chain
+// stays verifiable across the prune. Replay tolerates the resulting gap.
+func (l *Log) Delete(ctx context.Context, seq uint64) error {
+	if err := l.stream.DeleteMsg(ctx, seq); err != nil {
+		return fmt.Errorf("events: delete seq %d: %w", seq, err)
+	}
+	return nil
+}
+
 // Ping reports whether the event log is reachable — the NATS connection is up and
 // JetStream answers. It backs the control plane's readiness probe (R2.2) so
 // readiness flips when the event spine is unavailable.

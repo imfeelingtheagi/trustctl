@@ -56,15 +56,47 @@ certctl enables the controls below; **you** operate them:
   half) but you cannot produce new bundles under the same key; rotating it changes
   the verification key your auditor pins.
 - **Distribute the verification (public) key** to auditors out of band.
-- **Set and enforce a retention policy.** The event log is the source of truth and
-  is **retained indefinitely by default** (certctl does not prune the spine —
-  pruning would break projection rebuilds). `CERTCTL_AUDIT_RETENTION` documents
-  your policy; long-term archival of signed bundles to WORM storage
-  (`CERTCTL_AUDIT_ARCHIVE_DIR` or your own pipeline) is your responsibility.
+- **Set a retention policy — certctl can now enforce it.** By default the event log
+  is **retained indefinitely** (no pruning). When you set **both**
+  `CERTCTL_AUDIT_RETENTION` (a window, e.g. `8760h`) **and**
+  `CERTCTL_AUDIT_ARCHIVE_DIR`, a background worker enforces it: see
+  [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle) below.
+  Pointing `CERTCTL_AUDIT_ARCHIVE_DIR` at WORM-backed storage is still your call.
 - **Schedule periodic signed exports** to anchor the log over time (above).
 - **Run the rest of the program**: access reviews, change management, incident
   response, vendor management, and the framework-specific evidence your auditor
   requires.
+
+## Audit retention and archive lifecycle
+
+When `CERTCTL_AUDIT_RETENTION` and `CERTCTL_AUDIT_ARCHIVE_DIR` are both set, a
+bounded background worker (per tenant, AN-1; hourly cadence) enforces the policy in
+four ordered steps, so the configuration does real work rather than merely
+documenting intent:
+
+1. **Archive.** Records older than the window are signed as a self-contained,
+   offline-verifiable bundle (a compact JWS) and written to
+   `ARCHIVE_DIR/<tenant>/audit-<sequence>.jws` (`0600`). Verify any archive with the
+   audit verification key, exactly like a live export.
+2. **Verify.** The worker re-verifies the bundle it just wrote — it recovers and its
+   hash chain checks out — **before** anything is deleted. A bundle that fails
+   verification aborts the run; nothing is pruned.
+3. **Seal a checkpoint.** A signed checkpoint records the boundary (sequence + the
+   audit chain head at that point) in `audit_checkpoints` (tenant-scoped, RLS). The
+   checkpoint is the surviving records' new chain anchor.
+4. **Prune.** Only now are the archived records deleted from the hot event log. The
+   surviving records hash-link onto the checkpoint, so **`VerifyChain` still holds
+   across the prune** and a previously exported bundle still verifies. Each run also
+   emits an `audit.archived` event (itself auditable) and increments
+   `certctl_audit_records_archived_total`, `certctl_audit_records_pruned_total`, and
+   `certctl_audit_retention_runs_total` on `/metrics`.
+
+Each archived segment chains onto the previous one (its `prev_hash` is the prior
+segment's head), so the **archive bundles plus the live log are the authoritative
+history**: a full disaster-recovery rebuild restores from the archive **and** the
+live log together. Archiving to immutable/WORM storage (and protecting it) remains
+the operator's responsibility. This is the one place certctl deletes from the event
+log, and it does so only after archive → verify → seal.
 
 ## Framework mapping — *enables* vs. operator responsibility
 
@@ -76,15 +108,17 @@ control.
 | --- | --- | --- |
 | SOC 2 | CC7.2/7.3 (security event logging), CC8.1 (change tracking) — *attributable, tamper-evident event trail + signed evidence* | Monitoring/alerting program, change-management process, retention enforcement, the audit engagement |
 | ISO 27001 | A.8.15/8.16 (logging, monitoring), A.5.28 (evidence collection) — *event capture + exportable evidence* | Log review cadence, retention schedule, ISMS scope and operation |
-| PCI DSS v4 | Req. 10 (log and monitor access) — *who/what/when trail*; 10.5 supported by retention config + archive | 10.5 retention **enforcement** (≥12 months, 3 readily available), daily review, FIM, key custody |
+| PCI DSS v4 | Req. 10 (log and monitor access) — *who/what/when trail*; 10.5 — *enforced retention: archive to signed bundles → checkpoint → prune, when configured* | 10.5 the chosen window (≥12 months) + WORM archive storage + 3-readily-available copies, daily review, FIM, key custody |
 | HIPAA | §164.312(b) audit controls — *recording and examining activity* | §164.308 review procedures, retention (6 years), BAAs |
-| FedRAMP / NIST 800-53 | AU-2/3 (event content), AU-9 (protection of audit info, via the chain + signed export), AU-12 (generation) | AU-6 review, AU-11 retention enforcement, AU-9 storage hardening (WORM), FIPS-validated crypto (a build caveat) |
+| FedRAMP / NIST 800-53 | AU-2/3 (event content), AU-9 (protection of audit info, via the chain + signed export), AU-11 (retention — *enforced archive + prune when configured*), AU-12 (generation) | AU-6 review, AU-11 retention schedule + WORM storage, AU-9 storage hardening (WORM), FIPS-validated crypto (a build caveat) |
 
 **Defensible today:** an attributable, tamper-evident, event-sourced audit trail
-with signed, offline-verifiable evidence export, and multi-tenant isolation.
+with signed, offline-verifiable evidence export, multi-tenant isolation, and
+**enforced retention** (archive → checkpoint → prune, chain-verifiable across the
+prune) when a window and an archive directory are configured.
 **Explicitly not claimed:** that certctl is "compliant" or "certified" with any
-framework, that FIPS-validated cryptography is in the default build, or that
-retention is enforced for you.
+framework, that FIPS-validated cryptography is in the default build, or that your
+archive storage is WORM-hardened (that is yours to provide).
 
 See [Configuration → Audit](configuration.md#audit) for the settings referenced
 here.

@@ -56,8 +56,16 @@ func link(prevHash string, r Record) (string, error) {
 // Seal fills in each record's chain hash in order and returns the head (the last
 // record's hash, or "" for an empty slice). It is what Search and Export use to
 // produce a verifiable chain.
-func Seal(records []Record) string {
-	prev := ""
+func Seal(records []Record) string { return SealFrom("", records) }
+
+// SealFrom is Seal seeded from a prior chain head: it links the first record to
+// seed instead of to genesis, so a slice that is the *continuation* of an
+// already-archived prefix reproduces the exact hashes it had in the full chain.
+// This is what makes retention pruning hash-stable (R4.4): after the prefix is
+// archived behind a signed checkpoint, the surviving suffix is sealed from the
+// checkpoint's boundary hash and verifies unchanged.
+func SealFrom(seed string, records []Record) string {
+	prev := seed
 	for i := range records {
 		h, err := link(prev, records[i])
 		if err != nil {
@@ -85,8 +93,15 @@ func chainHead(records []Record) string {
 // hash matches its recomputed link. It returns the verified head, or an error
 // naming the first record whose hash does not match — i.e. evidence that a stored
 // event was altered, dropped, inserted, or reordered.
-func VerifyChain(records []Record) (string, error) {
-	prev := ""
+func VerifyChain(records []Record) (string, error) { return VerifyChainFrom("", records) }
+
+// VerifyChainFrom is VerifyChain seeded from a prior chain head: it verifies a
+// continuation slice against the head it chains onto. A retention checkpoint's
+// boundary hash is the seed, so the surviving suffix verifies across the prune
+// (R4.4); an archived segment whose PrevHash is the previous segment's head
+// verifies the two are contiguous.
+func VerifyChainFrom(seed string, records []Record) (string, error) {
+	prev := seed
 	for i := range records {
 		want, err := link(prev, records[i])
 		if err != nil {
