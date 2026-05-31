@@ -228,7 +228,10 @@ jobs:
       # against Pebble — a divergence in certctl's protocol surface from the
       # reference surfaces as a test failure.
       pebble:
-        image: ghcr.io/letsencrypt/pebble:v2.6.0
+        # ghcr.io/letsencrypt/pebble:2.10.1 — the reference test ACME CA, pinned by
+        # digest. GHCR publishes un-prefixed tags and never carried v2.6.0; 2.10.1 is
+        # the current published release.
+        image: ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
         env:
           PEBBLE_VA_NOSLEEP: "1"
         ports:
@@ -249,7 +252,7 @@ jobs:
       # client can reach the directory. No crypto/tls in the test itself (AN-3) —
       # SSL_CERT_FILE makes Go's standard pool trust Pebble's CA.
       - name: Trust Pebble's test CA
-        run: curl -fsSL "https://raw.githubusercontent.com/letsencrypt/pebble/v2.6.0/test/certs/pebble.minica.pem" -o "${RUNNER_TEMP}/pebble-ca.pem"
+        run: curl -fsSL "https://raw.githubusercontent.com/letsencrypt/pebble/v2.10.1/test/certs/pebble.minica.pem" -o "${RUNNER_TEMP}/pebble-ca.pem"
 
       - name: Wait for Pebble to be ready
         run: |
