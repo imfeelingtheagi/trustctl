@@ -182,3 +182,21 @@ func TestDockerignoreKeepsContextSmall(t *testing.T) {
 	di := readArtifact(t, filepath.Join("..", "..", ".dockerignore"))
 	mustContainAll(t, ".dockerignore", di, "node_modules", ".git", "bin")
 }
+
+// TestServerCoverageIsReportedAndGated encodes the R4.3 coverage half: the build
+// measures coverage with -coverpkg (so the assembled control plane is credited for
+// the branches its cross-package e2e exercises), and it both SURFACES and GATES
+// the real per-function coverage of internal/server's lifecycle
+// (Build/IssueLeaf/Drain/Shutdown) — rather than letting the misleading ~15%
+// in-package figure stand. Red before R4.3 (no server floor existed), green after.
+func TestServerCoverageIsReportedAndGated(t *testing.T) {
+	mk := repoFile(t, "Makefile")
+	// Cross-package attribution is on (the merge that credits internal/server with
+	// the coverage from the projections e2e).
+	mustContainAll(t, "Makefile measures cross-package coverage", mk, "-coverpkg=./...")
+	// The assembled server's real coverage is surfaced and gated by function.
+	mustContainAll(t, "Makefile gates the assembled server lifecycle coverage", mk,
+		"SERVER_FUNC_COVERAGE_MIN", "internal/server")
+	mustContainAll(t, "Makefile names the assembled-lifecycle functions it gates", mk,
+		"Build", "IssueLeaf", "Drain", "Shutdown")
+}

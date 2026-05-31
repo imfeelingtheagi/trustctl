@@ -41,6 +41,16 @@ CYCLONEDX_GOMOD_VERSION ?= v1.7.0
 COVERAGE_MIN ?= 70
 COVERPROFILE := cover.out
 
+# Minimum coverage (percent) for the assembled control plane's core lifecycle
+# functions (server.Build / IssueLeaf / Drain / Shutdown). These are exercised by
+# the cross-package projections e2e, so the in-package figure badly understates
+# them (Build/Drain/Shutdown read 0% measured in-package); the merged -coverpkg
+# profile shows their real ~80-100%. This floor surfaces and guards that real
+# number so CI reports the assembled server honestly, not the misleading 15%
+# in-package figure (R4.3).
+SERVER_FUNC_COVERAGE_MIN ?= 70
+SERVER_LIFECYCLE_FUNCS := Build|IssueLeaf|Drain|Shutdown
+
 .PHONY: help
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*##"; printf "Usage: make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*?##/{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -61,6 +71,9 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
 	awk -v t="$$total" -v m=$(COVERAGE_MIN) 'BEGIN { if (t+0 < m+0) exit 1 }' || \
 		{ echo "FAIL: coverage $$total% is below the required $(COVERAGE_MIN)%"; exit 1; }
+	@echo ">> internal/server assembled-lifecycle coverage (merged via -coverpkg; exercised by the cross-package e2e, not in-package):"
+	@$(GO) tool cover -func=$(COVERPROFILE).nogen | awk '$$1 ~ /\/internal\/server\/server\.go:/ && $$2 ~ /^($(SERVER_LIFECYCLE_FUNCS))$$/ { printf "   %-10s %s\n", $$2, $$3 }'
+	@$(GO) tool cover -func=$(COVERPROFILE).nogen | awk -v m=$(SERVER_FUNC_COVERAGE_MIN) '$$1 ~ /\/internal\/server\/server\.go:/ && $$2 ~ /^($(SERVER_LIFECYCLE_FUNCS))$$/ { seen++; cov=$$3; sub(/%$$/,"",cov); if (cov+0 < m+0) { bad++; printf "FAIL: internal/server %s coverage %s is below the required %d%% (assembled fail-closed/drain branches regressed, or were measured in-package only)\n", $$2, $$3, m } } END { if (seen+0 < 4) { printf "FAIL: expected 4 assembled-lifecycle functions in the merged profile, saw %d (did the cross-package e2e run under -coverpkg=./...?)\n", seen+0; exit 1 } if (bad) exit 1 }'
 
 .PHONY: cover
 cover: test ## Alias for `make test`; writes cover.out and prints per-function coverage
