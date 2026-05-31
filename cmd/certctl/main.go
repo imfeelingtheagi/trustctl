@@ -52,6 +52,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	showVersion := fs.Bool("version", false, "print version information and exit")
 	checkConfig := fs.Bool("check-config", false, "resolve and print the effective configuration, then exit")
 	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
+	backupPath := fs.String("backup", "", "back up the event log (source of truth) to FILE, then exit")
+	restorePath := fs.String("restore", "", "restore the event log from FILE, rebuild the read model, then exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			// -h/--help already printed usage to stderr; this is a clean exit.
@@ -76,6 +78,22 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	if *healthCheck {
 		return healthProbe(cfg)
+	}
+	if *backupPath != "" {
+		n, err := server.RunBackup(ctx, cfg, *backupPath)
+		if err != nil {
+			return fmt.Errorf("backup: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "backed up %d events to %s\n", n, *backupPath)
+		return nil
+	}
+	if *restorePath != "" {
+		n, err := server.RunRestore(ctx, cfg, *restorePath)
+		if err != nil {
+			return fmt.Errorf("restore: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "restored %d events from %s and rebuilt the read model\n", n, *restorePath)
+		return nil
 	}
 
 	// Assemble and serve the control plane (S7.7). Run starts the event log,

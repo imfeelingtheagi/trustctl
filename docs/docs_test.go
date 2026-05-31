@@ -20,6 +20,7 @@ var requiredPages = []string{
 	"compliance.md",
 	"observability.md",
 	"operations.md",
+	"disaster-recovery.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -194,6 +195,29 @@ func TestOperationsDocIsReal(t *testing.T) {
 	}
 	if srv := read(t, "../internal/server/server.go"); !strings.Contains(srv, "bulkhead") {
 		t.Error("operations.md documents bulkheads but the server does not wire one")
+	}
+}
+
+// TestDisasterRecoveryDocIsReal cross-checks the DR page against the code: it
+// documents the real backup/restore commands and recovery objectives, and the
+// binary actually implements the flags it cites.
+func TestDisasterRecoveryDocIsReal(t *testing.T) {
+	body := read(t, "disaster-recovery.md")
+	for _, want := range []string{"--backup", "--restore", "RPO", "RTO", "event log", "rebuild"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("disaster-recovery.md should cover %q", want)
+		}
+	}
+	// The documented flags exist in the binary.
+	main := read(t, "../cmd/certctl/main.go")
+	for _, flag := range []string{`"backup"`, `"restore"`} {
+		if !strings.Contains(main, flag) {
+			t.Errorf("disaster-recovery.md documents a flag the binary does not define: %s", flag)
+		}
+	}
+	// The restore path rebuilds from the event log (the AN-2 guarantee the doc rests on).
+	if !strings.Contains(read(t, "../internal/server/backup.go"), "Rebuild") {
+		t.Error("restore should rebuild the read model from the restored log")
 	}
 }
 
