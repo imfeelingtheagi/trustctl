@@ -41,7 +41,9 @@ boundaries. Usage [telemetry](telemetry.md) is opt-in and off by default.
 
 ## License and data
 
-certctl is source-available; revenue comes from commercial/enterprise licensing,
-support, and a managed offering rather than from gating features. It runs entirely
-on infrastructure you control: PostgreSQL for state and NATS JetStream for the
-event log, bundled for single-node evaluation or external for production.
+certctl is source-available with no feature gating; revenue comes from
+commercial/enterprise licensing, support, and a managed offering rather than from
+gating features. **No license file is published yet**: the specific license is being
+finalized, and until then **all rights reserved**. It runs entirely on infrastructure
+you control: PostgreSQL for state and NATS JetStream for the event log, bundled for
+single-node evaluation or external for production.

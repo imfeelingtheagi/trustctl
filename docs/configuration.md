@@ -39,8 +39,12 @@ session ever travels in cleartext.
   configure the proxy to **strip inbound `X-*` identity headers** — certctl does
   not trust them (R1.2), so a proxy cannot reintroduce a header-auth bypass.
 
-The mutual-TLS transport between the control plane and the isolated signing
-service (AN-4) is independent of this setting and always enabled.
+The control-plane↔signer channel (AN-4) is independent of this setting: it is a
+**peer-authenticated Unix domain socket** — a `0600` socket in a `0700` directory,
+restricted to the signer's own uid via `SO_PEERCRED` on Linux — not a TLS channel.
+Cross-node **mTLS** transport for a separately-hosted signer is a deferred item
+(S15.1, planned) and **not yet implemented**; today the signer is always reached
+over the local UDS, in both `child` and `external` modes.
 
 ## Datastores
 

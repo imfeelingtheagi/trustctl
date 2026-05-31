@@ -35,10 +35,12 @@ worst case.
    it). Isolate the host.
 2. **Assess.** Use the audit chain to determine what was issued during the exposure
    window.
-3. **Rotate the CA** via an m-of-n [key ceremony](key-ceremony.md) — stand up a new
-   CA key; do not reuse the compromised one. (Today the signer regenerates its CA
-   key on restart, which itself rotates the CA; treat that as the rotation event and
-   re-issue under the new CA.)
+3. **Rotate the CA** via an m-of-n [key ceremony](key-ceremony.md) — provision a new
+   issuing CA key in the signer's key store; do not reuse the compromised one. The
+   signer **persists and seals its CA key and preserves it across restarts** (R3.2),
+   so rotation is a **deliberate re-key**, not an automatic restart side-effect:
+   per the key ceremony, replace the signer's sealed key store with the new CA key,
+   then restart the signer so it adopts it, and re-issue under the new CA.
 4. **Revoke** the compromised CA and any suspect leaves. Revocation (CRL and OCSP)
    is implemented in `internal/ca/revocation`; publish updated CRLs / OCSP responses
    to relying parties. Until revocation is served end to end, distribute the new CA

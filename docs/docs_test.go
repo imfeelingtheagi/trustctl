@@ -728,3 +728,99 @@ func TestSecurityPolicyExists(t *testing.T) {
 		}
 	}
 }
+
+// TestSignerChannelDocumentedAsUDS (R4.6 #1a): the control-plane↔signer channel is
+// a peer-authenticated Unix domain socket (SO_PEERCRED, 0600), NOT mTLS — cross-node
+// mTLS is the deferred S15.1 item (documented as planned in install/design docs).
+// The docs must match the code: no "mTLS, always enabled" overclaim, no "UDS / mTLS"
+// hedge on the live channel.
+func TestSignerChannelDocumentedAsUDS(t *testing.T) {
+	// Code reality: the signer listens on a unix socket and authenticates the peer
+	// uid via SO_PEERCRED.
+	if !strings.Contains(read(t, "../internal/signing/serve.go"), `net.Listen("unix"`) {
+		t.Fatal("signer no longer listens on a unix socket; revisit this reality test")
+	}
+	if !strings.Contains(read(t, "../internal/signing/peercred_linux.go"), "SO_PEERCRED") {
+		t.Fatal("signer no longer uses SO_PEERCRED; revisit this reality test")
+	}
+	// configuration.md must not use the false "mutual-TLS [always enabled]" framing
+	// for the signer channel, and must describe the real UDS channel. An honest
+	// mention of cross-node mTLS is allowed ONLY as the deferred, not-yet-implemented
+	// item (see below) — never as the live transport.
+	cfg := read(t, "configuration.md")
+	for _, bad := range []string{"mutual-TLS", "mutual TLS"} {
+		if strings.Contains(cfg, bad) {
+			t.Errorf("configuration.md uses %q for the signer channel; it is a peer-authenticated UDS", bad)
+		}
+	}
+	if !strings.Contains(cfg, "SO_PEERCRED") {
+		t.Error("configuration.md should describe the signer channel as a peer-authenticated UDS (SO_PEERCRED)")
+	}
+	if !strings.Contains(cfg, "peer-authenticated") {
+		t.Error("configuration.md should call the signer channel a peer-authenticated UDS")
+	}
+	// If mTLS is mentioned at all, it must be disclosed as the deferred (S15.1),
+	// not-yet-implemented cross-node option — never framed as live or always-on.
+	if strings.Contains(cfg, "mTLS") {
+		low := strings.ToLower(cfg)
+		if !strings.Contains(low, "deferred") || !strings.Contains(low, "not yet implemented") {
+			t.Error("configuration.md mentions mTLS but does not disclose it as the deferred, not-yet-implemented cross-node option")
+		}
+		if strings.Contains(low, "always enabled") {
+			t.Error("configuration.md frames the signer mTLS channel as always enabled (false; the live channel is UDS)")
+		}
+	}
+	// The architecture diagram and threat model must not hedge the implemented local
+	// channel as "UDS / mTLS" (cross-node mTLS is future S15.1, marked planned).
+	if strings.Contains(read(t, "../README.md"), "UDS / mTLS") {
+		t.Error("README architecture diagram hedges the signer channel as 'UDS / mTLS'; the implemented channel is UDS")
+	}
+	if strings.Contains(read(t, "security/threat-model.md"), "UDS/mTLS") {
+		t.Error("threat-model.md hedges the signer channel as 'UDS/mTLS'; the implemented channel is UDS")
+	}
+}
+
+// TestSignerCAKeyDocumentedAsPersisted (R4.6 #1b): post-R3.2 the signer seals and
+// persists the CA key and preserves it across restart. The runbook and threat model
+// must not say it regenerates on restart, nor that it is RAM-only/not persisted.
+func TestSignerCAKeyDocumentedAsPersisted(t *testing.T) {
+	// Code reality: the signer keystore seals keys at rest.
+	if !strings.Contains(read(t, "../internal/signing/keystore.go"), "seal") {
+		t.Fatal("signer keystore no longer seals keys; revisit this reality test")
+	}
+	ir := strings.ToLower(read(t, "runbooks/incident-response.md"))
+	if strings.Contains(ir, "regenerates its ca") {
+		t.Error("incident-response.md still says the signer regenerates its CA key on restart (false post-R3.2)")
+	}
+	if !strings.Contains(ir, "rotat") {
+		t.Error("incident-response.md should give a deliberate CA rotation procedure")
+	}
+	if strings.Contains(read(t, "security/threat-model.md"), "RAM-generated and not") {
+		t.Error("threat-model.md still says the CA key is RAM-generated and not persisted (false post-R3.2)")
+	}
+}
+
+// TestLicenseStatusIsConsistent (R4.6 #1c): README and docs/index state the same
+// current license status — no license file published yet; all rights reserved —
+// without claiming a specific license.
+func TestLicenseStatusIsConsistent(t *testing.T) {
+	for name, body := range map[string]string{
+		"README.md":     strings.ToLower(read(t, "../README.md")),
+		"docs/index.md": strings.ToLower(read(t, "index.md")),
+	} {
+		if !strings.Contains(body, "all rights reserved") {
+			t.Errorf("%s should state the current license status (all rights reserved until a license is published)", name)
+		}
+	}
+}
+
+// TestOpenAPISpecIsAdvertised (R4.6 #2): the served OpenAPI 3.1 spec
+// (/api/v1/openapi.json) is advertised to users, and the route exists in the API.
+func TestOpenAPISpecIsAdvertised(t *testing.T) {
+	if !strings.Contains(read(t, "../internal/api/api.go"), "/api/v1/openapi.json") {
+		t.Fatal("the API no longer serves /api/v1/openapi.json; revisit this reality test")
+	}
+	if !strings.Contains(read(t, "../README.md"), "openapi.json") && !strings.Contains(read(t, "cli.md"), "openapi.json") {
+		t.Error("the served OpenAPI spec /api/v1/openapi.json is not advertised in README or the CLI/API docs")
+	}
+}

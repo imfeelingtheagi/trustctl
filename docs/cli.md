@@ -5,6 +5,10 @@ scripts and CI: machine-readable JSON output and a CI-friendly API token. The
 command set is generated from the API route table, so it stays in lockstep with
 the server.
 
+The running control plane also publishes its full **OpenAPI 3.1** specification at
+`/api/v1/openapi.json` — fetch it to generate clients or import the API into your
+tooling.
+
 ## Global flags
 
 Every command accepts these, each with a `CERTCTL_*` environment fallback:

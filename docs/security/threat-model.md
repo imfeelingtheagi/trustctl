@@ -76,16 +76,17 @@ defenses.
 
 ## Out of scope / residual risk (honest)
 
-- **CA-key custody at rest.** The assembled issuing CA key is RAM-generated and not
-  yet persisted to an HSM/sealed store; persistent custody and a served break-glass
-  flow are future work ([limitations](../limitations.md),
+- **CA-key custody at rest.** The issuing CA key is **persisted, sealed at rest** in
+  the signer's key store and **preserved across restarts** (R3.2). What remains
+  future work is **HSM/KMS-backed** custody (instead of a local sealed key file) and a
+  served m-of-n break-glass flow ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
 - **Plugin trust model & blast radius.** The shipped first-party CA and connector
   integrations run as **trusted in-process Go code**, not in the WASM sandbox. Their
   **blast radius** if one is defective or malicious is therefore the control plane's
   own address space: the PostgreSQL connection pool (the application role, still
   RLS-scoped per tenant), the signer *client* handle (it can **request** signatures
-  over the UDS/mTLS channel), and any credential material in flight. It is **not**
+  over the peer-authenticated UDS channel), and any credential material in flight. It is **not**
   the CA private key — that stays in the separate signer process (AN-4), so even a
   compromised connector cannot exfiltrate it. Mitigations: code review, the
   conformance suite, the connector SDK's capability-scoped `Sandbox` facade (each

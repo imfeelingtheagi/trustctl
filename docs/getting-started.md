@@ -60,7 +60,8 @@ The web UI is served by the same binary at <https://localhost:8443>.
 
 ## 2. Open the UI and sign in
 
-Visit <http://localhost:8443> and sign in. On a fresh install you land on a
+Visit <https://localhost:8443> (accept the self-signed evaluation certificate) and
+sign in. On a fresh install you land on a
 **Get started** prompt that launches the setup wizard. The wizard has three
 steps, each a single screen.
 

@@ -80,12 +80,12 @@ end at runtime versus what is library code.
 | Area | What's there |
 | --- | --- |
 | Issuance | ACME server with ARI; private CA hierarchy with OCSP/CRL revocation; 9 CA integrations |
-| Deployment | 9 connectors (web servers, load balancers, appliances, cloud cert stores) |
+| Deployment | 10 connectors (web servers, load balancers, appliances, cloud cert stores) plus Kubernetes |
 | Agent | Linux, macOS, and Windows; local key generation — private keys never leave the host |
 | Discovery | network/filesystem, SSH keys & trust, agentless cloud certs, CBOM + PQC posture, CT monitoring |
 | Posture | drift detection, composite risk scoring, the credential graph |
 | Platform | RBAC, SSO (OIDC), append-only audit, multi-tenancy |
-| Delivery | web UI with a first-run wizard, a CLI at full API parity, reproducible & cosign-signed images with an SBOM |
+| Delivery | web UI with a first-run wizard, a REST API publishing its **OpenAPI 3.1** spec at `/api/v1/openapi.json`, a CLI at full API parity, reproducible & cosign-signed images with an SBOM |
 
 ## Built differently
 
@@ -117,7 +117,7 @@ flowchart LR
     proj --> pg[(PostgreSQL<br/>row-level security)]
   end
 
-  orch -- gRPC over UDS / mTLS --> signer[Signing service<br/>isolated process]
+  orch -- gRPC over peer-authenticated UDS --> signer[Signing service<br/>isolated process]
 ```
 
 ## Try it
@@ -193,5 +193,6 @@ the way.
 certctl is intended to be **source-available with no feature gating** — the same
 platform whether you self-host the open edition or take a commercial/enterprise
 license or managed offering. Revenue comes from licensing, support, and a managed
-offering, not from withholding features. The specific license is being finalized
-and will be added here; until then, all rights reserved.
+offering, not from withholding features. **No license file is published yet** —
+the specific license is being finalized and will be added here, and until a license
+is published, all rights reserved.
