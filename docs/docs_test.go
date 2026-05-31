@@ -18,6 +18,7 @@ var requiredPages = []string{
 	"uninstall.md",
 	"configuration.md",
 	"compliance.md",
+	"observability.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -141,6 +142,34 @@ func TestGettingStartedMatchesProduct(t *testing.T) {
 	for _, step := range []string{"connect a ca", "install an agent", "first cert"} {
 		if !strings.Contains(lower, step) {
 			t.Errorf("getting-started should walk the wizard step %q", step)
+		}
+	}
+}
+
+// TestObservabilityDocIsReal cross-checks the observability page against the
+// code: it documents the real endpoints and a metric the control plane actually
+// emits, and the shipped Prometheus rules / dashboard exist.
+func TestObservabilityDocIsReal(t *testing.T) {
+	body := read(t, "observability.md")
+	for _, want := range []string{"/metrics", "/readyz", "traceparent", "certctl_http_requests_total"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("observability.md should document %q", want)
+		}
+	}
+	// The documented metric is the one the middleware emits.
+	mw := read(t, "../internal/observ/middleware.go")
+	if !strings.Contains(mw, "certctl_http_requests_total") {
+		t.Error("observability.md cites certctl_http_requests_total but the middleware does not emit it")
+	}
+	// The control plane mounts the documented endpoints.
+	srv := read(t, "../internal/server/server.go")
+	if !strings.Contains(srv, "/metrics") || !strings.Contains(srv, "/readyz") {
+		t.Error("observability.md documents /metrics and /readyz but the server does not mount them")
+	}
+	// The baseline operator assets exist.
+	for _, f := range []string{"../deploy/observability/alerts.yml", "../deploy/observability/dashboard.json"} {
+		if _, err := os.Stat(filepath.FromSlash(f)); err != nil {
+			t.Errorf("missing operator asset %s: %v", f, err)
 		}
 	}
 }

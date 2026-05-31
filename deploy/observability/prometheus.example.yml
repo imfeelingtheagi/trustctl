@@ -1,0 +1,22 @@
+# Example Prometheus scrape configuration for certctl (R2.2).
+#
+#   prometheus --config.file=prometheus.example.yml
+#
+# The control plane serves TLS by default, so the scrape uses https with the
+# eval/self-signed certificate (insecure_skip_verify). In production, point
+# tls_config.ca_file at your CA, or scrape an internal plaintext sidecar.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: certctl
+    metrics_path: /metrics
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets: ["localhost:8443"]

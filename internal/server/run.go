@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"certctl.io/certctl/internal/audit"
 	"certctl.io/certctl/internal/config"
 	"certctl.io/certctl/internal/events"
+	"certctl.io/certctl/internal/logging"
 	"certctl.io/certctl/internal/signing"
 	"certctl.io/certctl/internal/store"
 )
@@ -25,6 +27,12 @@ import (
 func Run(ctx context.Context, cfg *config.Config) error {
 	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
 		return errors.New("server: a serving control plane requires an external Postgres DSN (set CERTCTL_POSTGRES_MODE=external and CERTCTL_POSTGRES_DSN)")
+	}
+	// Build the structured logger from config and wire it into the serving path
+	// (R2.2 / B6): it backs the request access log and lifecycle events.
+	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "certctl"}, os.Stderr)
+	if err != nil {
+		return fmt.Errorf("build logger: %w", err)
 	}
 	st, err := store.Open(ctx, cfg.Postgres.DSN)
 	if err != nil {
@@ -65,12 +73,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("audit signing key: %w", err)
 	}
 
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup, AuditSigningKey: auditKey})
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup, AuditSigningKey: auditKey, Logger: logger})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
 		return err
 	}
+	logger.Info("control plane assembled",
+		slog.String("addr", cfg.Server.Addr), slog.String("tls_mode", cfg.Server.TLS.Mode))
 
 	// Run the outbox dispatcher continuously (AN-6): external effects — issuance,
 	// notifications — happen while the process is live, not only at shutdown
@@ -105,6 +115,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// Graceful shutdown: stop accepting connections, stop the dispatcher, then
 	// drain + close in order. Stopping the dispatcher first means Shutdown's final
 	// drain has exclusive ownership of the outbox.
+	logger.Info("control plane shutting down")
 	stopDispatcher()
 	<-dispatcherDone
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

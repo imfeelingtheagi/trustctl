@@ -11,6 +11,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"certctl.io/certctl/internal/crypto"
 	"certctl.io/certctl/internal/crypto/jose"
 	"certctl.io/certctl/internal/events"
+	"certctl.io/certctl/internal/observ"
 	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/projections"
 	"certctl.io/certctl/internal/signing"
@@ -44,6 +47,8 @@ type Deps struct {
 	SignTimeout     time.Duration        // per-issuance signer deadline (slow → fail closed)
 	CACommonName    string
 	AuditSigningKey *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
+	Logger          *slog.Logger     // structured access log sink (R2.2); nil discards
+	TraceExporter   observ.Exporter  // completed-span sink (R2.2); nil is a no-op
 }
 
 // Server is the assembled control plane.
@@ -58,6 +63,11 @@ type Server struct {
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER []byte
 	signTO    time.Duration
+
+	logger    *slog.Logger
+	registry  *observ.Registry
+	tracer    *observ.Tracer
+	readiness *observ.Readiness
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -135,14 +145,44 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
 	}
 
-	// 4) Root mux: health, API (/api + /auth), and the web UI at /.
+	// 4) Observability (R2.2 / B6): a metrics registry, a tracer, and the readiness
+	// aggregator that probes the real dependencies (DB, NATS, signer) — each under
+	// a child span, so a /readyz call produces a trace spanning the subsystems.
+	s.logger = d.Logger
+	if s.logger == nil {
+		s.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	s.registry = observ.NewRegistry()
+	s.tracer = observ.NewTracer(d.TraceExporter)
+	checks := []observ.Check{
+		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.Pool().Ping(ctx) }},
+		{Name: "nats", Probe: func(ctx context.Context) error { return d.Log.Ping(ctx) }},
+	}
+	if d.Signer != nil {
+		checks = append(checks, observ.Check{Name: "signer", Probe: func(ctx context.Context) error {
+			c := d.Signer.Client()
+			if c == nil || !c.Healthy(ctx) {
+				return errors.New("signer unreachable")
+			}
+			return nil
+		}})
+	}
+	s.readiness = observ.NewReadiness(s.tracer, checks...)
+
+	// 5) Root mux: liveness/readiness/metrics, API (/api + /auth + /enroll), and the
+	// web UI at /. The whole surface is wrapped with the observability middleware,
+	// so every request is traced, counted, and access-logged (with no secret
+	// material — AN-8).
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc("GET /readyz", s.readiness.Handler())
+	mux.Handle("GET /metrics", s.registry.Handler())
 	mux.Handle("/api/", a)
 	mux.Handle("/auth/", a)
 	mux.Handle("/enroll/", a)
 	mux.Handle("/", webui.Handler(webui.Assets()))
-	s.handler = mux
+	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
+	s.handler = mw.Handler(mux)
 	return s, nil
 }
 

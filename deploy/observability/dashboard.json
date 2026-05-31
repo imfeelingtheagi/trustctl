@@ -1,0 +1,73 @@
+{
+  "title": "certctl control plane",
+  "uid": "certctl-control-plane",
+  "schemaVersion": 39,
+  "editable": true,
+  "tags": ["certctl"],
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate (by route)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(certctl_http_requests_total[5m])) by (route)",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "5xx error ratio",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.05 } ] } } },
+      "targets": [
+        {
+          "expr": "sum(rate(certctl_http_requests_total{code=~\"5..\"}[5m])) / clamp_min(sum(rate(certctl_http_requests_total[5m])), 1)",
+          "legendFormat": "5xx ratio"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Request latency (p50 / p90 / p99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.90, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p90" },
+        { "expr": "histogram_quantile(0.99, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Request throughput by status code",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(certctl_http_requests_total[5m])) by (code)",
+          "legendFormat": "{{code}}"
+        }
+      ]
+    }
+  ]
+}

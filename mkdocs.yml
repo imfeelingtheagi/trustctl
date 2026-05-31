@@ -35,6 +35,7 @@ nav:
   - Install: install.md
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
+  - Observability: observability.md
   - CLI: cli.md
   - Telemetry: telemetry.md
   - Troubleshooting: troubleshooting.md

@@ -194,6 +194,21 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 	return nil
 }
 
+// Ping reports whether the event log is reachable — the NATS connection is up and
+// JetStream answers. It backs the control plane's readiness probe (R2.2) so
+// readiness flips when the event spine is unavailable.
+func (l *Log) Ping(ctx context.Context) error {
+	if l.nc != nil && !l.nc.IsConnected() {
+		return errors.New("events: nats connection is down")
+	}
+	if l.stream != nil {
+		if _, err := l.stream.Info(ctx); err != nil {
+			return fmt.Errorf("events: jetstream unreachable: %w", err)
+		}
+	}
+	return nil
+}
+
 // Close closes the connection and, in embedded mode, shuts the server down.
 func (l *Log) Close() error {
 	shutdown(l.srv, l.nc)
