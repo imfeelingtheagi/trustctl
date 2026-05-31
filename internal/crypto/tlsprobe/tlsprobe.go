@@ -30,11 +30,16 @@ type Result struct {
 	TLSVersion uint16
 	// NegotiatedProtocol is the ALPN protocol, if any.
 	NegotiatedProtocol string
+	// ACMEIdentifier is the 32-byte digest carried in the leaf's id-pe-acmeIdentifier
+	// extension (RFC 8737), or nil when absent. TLS-ALPN-01 validation compares it to
+	// SHA-256 of the key authorization.
+	ACMEIdentifier []byte
 }
 
 type config struct {
 	timeout time.Duration
 	dialer  *net.Dialer
+	alpn    []string
 }
 
 // Option configures a probe.
@@ -47,6 +52,13 @@ func WithTimeout(d time.Duration) Option {
 			c.timeout = d
 		}
 	}
+}
+
+// WithALPN offers the given ALPN protocols in the handshake (e.g. "acme-tls/1"
+// for TLS-ALPN-01 validation). The negotiated protocol is reported in
+// Result.NegotiatedProtocol.
+func WithALPN(protos ...string) Option {
+	return func(c *config) { c.alpn = protos }
 }
 
 // Probe dials addr (host:port), performs a TLS handshake to capture the
@@ -82,6 +94,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 		InsecureSkipVerify: true, // discovery captures the served cert; it never trusts the connection
 		ServerName:         host,
 		MinVersion:         tls.VersionTLS10,
+		NextProtos:         cfg.alpn,
 	})
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return Result{}, fmt.Errorf("tlsprobe: handshake %s: %w", addr, err)
@@ -97,6 +110,9 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 	}
 	if len(res.PeerCertificates) == 0 {
 		return Result{}, fmt.Errorf("tlsprobe: %s presented no certificate", addr)
+	}
+	if len(state.PeerCertificates) > 0 {
+		res.ACMEIdentifier = acmeIdentifierFromCert(state.PeerCertificates[0])
 	}
 	return res, nil
 }

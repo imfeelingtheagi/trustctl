@@ -256,16 +256,9 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 }
 
 func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
-	var req struct {
-		Identifiers []struct{ Type, Value string } `json:"identifiers"`
-		Replaces    string                         `json:"replaces"` // ARI (RFC 9773)
-	}
-	if err := json.Unmarshal(msg.Payload, &req); err != nil {
+	req, err := ParseOrderRequest(msg.Payload)
+	if err != nil {
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
-		return
-	}
-	if req.Replaces != "" && !ari.ValidCertID(req.Replaces) {
-		s.problem(w, r, http.StatusBadRequest, "malformed", "replaces is not a valid certificate identifier")
 		return
 	}
 	base := baseURL(r)
@@ -366,14 +359,7 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusForbidden, "orderNotReady", "order is not ready to finalize")
 		return
 	}
-	var req struct {
-		CSR string `json:"csr"`
-	}
-	if err := json.Unmarshal(msg.Payload, &req); err != nil {
-		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
-		return
-	}
-	csr, err := base64.RawURLEncoding.DecodeString(req.CSR)
+	csr, err := ParseFinalizeRequest(msg.Payload)
 	if err != nil {
 		s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
 		return

@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 )
 
@@ -13,6 +14,23 @@ import (
 func SHA256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+// SHA256Sum returns the raw 32-byte SHA-256 digest of data. The TLS-ALPN-01
+// acmeIdentifier extension (RFC 8737) carries this digest of the key
+// authorization; routing it through the boundary keeps crypto/* out of the ACME
+// validators (AN-3).
+func SHA256Sum(data []byte) []byte {
+	sum := sha256.Sum256(data)
+	return sum[:]
+}
+
+// SHA256Base64URL returns the unpadded base64url-encoded SHA-256 digest of data.
+// The DNS-01 challenge TXT record (RFC 8555 §8.4) is this digest of the key
+// authorization.
+func SHA256Base64URL(data []byte) string {
+	sum := sha256.Sum256(data)
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // HMACSHA256 returns the HMAC-SHA256 of data under key. It lives in the crypto

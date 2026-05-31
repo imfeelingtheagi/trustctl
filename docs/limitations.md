@@ -57,7 +57,18 @@ host (wazero) and its capability model exist, but the shipped integrations are
 
 ## Protocols
 
-- **ACME** server with **ARI** is present; **only HTTP-01** is validated today.
+- **ACME** server with **ARI**: all three domain-validation challenges are now
+  validated **for real**, each failing closed — **HTTP-01** (RFC 8555 §8.3),
+  **DNS-01** (§8.4, the `_acme-challenge` TXT digest), and **TLS-ALPN-01**
+  (RFC 8737, the `acme-tls/1` `id-pe-acmeIdentifier` handshake) — behind a
+  multiplexer with an automatic method selector (wildcards → DNS-01, no inbound
+  `:80` → TLS-ALPN-01, else HTTP-01). The prior accept-everything validator has
+  been **removed from the production build** (it survives only in the test
+  binary). A DNS-01 solver with a reference provider and conformance harness ships
+  for the publish side. Still outstanding: real hosted DNS providers
+  (Route53/Cloudflare) and a **live Boulder/Pebble differential + cert-manager
+  interop** run in CI; and the ACME server is **library code, not yet mounted in
+  the served binary**.
 - **EST**, **SCEP**, **SPIFFE** (Workload API), and the **SSH CA** issuance servers
   are Phase 2 — placeholders in `internal/protocols/`, correctly not served.
 

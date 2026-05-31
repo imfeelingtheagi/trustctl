@@ -548,6 +548,55 @@ func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	}
 }
 
+// TestACMEChallengeValidationIsReal cross-checks the R3.3 docs against the code:
+// the limitations page must no longer claim "only HTTP-01" is validated, and the
+// acme package must implement real DNS-01 and TLS-ALPN-01 validators behind a
+// fail-closed multiplexer — with NO accept-everything validator anywhere in the
+// production (non-test) build. This is the static companion to the behavioral
+// validator tests and closes B9/N3.
+func TestACMEChallengeValidationIsReal(t *testing.T) {
+	lim := read(t, "limitations.md")
+	if strings.Contains(lim, "only HTTP-01") || strings.Contains(lim, "only **HTTP-01**") {
+		t.Error("limitations.md still says only HTTP-01 is validated; DNS-01 and TLS-ALPN-01 are real now")
+	}
+	lower := strings.ToLower(lim)
+	for _, want := range []string{"dns-01", "tls-alpn-01"} {
+		if !strings.Contains(lower, want) {
+			t.Errorf("limitations.md should state that %q is validated for real", want)
+		}
+	}
+
+	// The acme package really implements all three validators and the fail-closed
+	// multiplexer the docs rest on.
+	for file, syms := range map[string][]string{
+		"../internal/protocols/acme/dns01.go":    {"DNS01Validator", "LookupTXT"},
+		"../internal/protocols/acme/tlsalpn.go":  {"TLSALPN01Validator", "acme-tls/1", "ACMEIdentifier"},
+		"../internal/protocols/acme/dvmethod.go": {"Validators", "fail closed", "SelectMethod"},
+	} {
+		code := read(t, file)
+		for _, sym := range syms {
+			if !strings.Contains(code, sym) {
+				t.Errorf("%s should reference %q (the validator the docs describe)", file, sym)
+			}
+		}
+	}
+
+	// No accept-everything validator in any production (non-test) source file: the
+	// removal of AcceptAll from a production-reachable path is the heart of B9.
+	files, err := filepath.Glob(filepath.FromSlash("../internal/protocols/acme/*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		if strings.Contains(read(t, f), "AcceptAll") {
+			t.Errorf("%s references AcceptAll in the production build; it must be test-only", f)
+		}
+	}
+}
+
 // TestSecurityPolicyExists: a SECURITY.md exists at the repo root (GitHub's
 // disclosure-policy convention) with a private reporting path and supported
 // versions.

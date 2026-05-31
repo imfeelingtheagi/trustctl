@@ -18,16 +18,16 @@ const (
 
 // Validator proves a client controls an identifier by completing a challenge.
 // keyAuth is the expected key authorization (token "." accountKeyThumbprint).
+//
+// The production validator is Validators (dvmethod.go), which dispatches each of
+// the three DV methods to a real per-type validator and fails closed on anything
+// unknown. There is deliberately no accept-everything validator in the production
+// build — the trivial always-accept one lives only in the test binary (see the
+// internal acceptall_test.go), so no production-reachable path can skip
+// validation.
 type Validator interface {
 	Validate(ctx context.Context, challengeType, domain, token, keyAuth string) error
 }
-
-// AcceptAll is a Validator that accepts every challenge without checking. It is
-// for tests and local development only — never for a real deployment.
-type AcceptAll struct{}
-
-// Validate always succeeds.
-func (AcceptAll) Validate(context.Context, string, string, string, string) error { return nil }
 
 // HTTP01Validator validates http-01 challenges by fetching the key authorization
 // from the well-known URL on the identifier's domain (RFC 8555 §8.3).
