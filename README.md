@@ -55,9 +55,11 @@ The lifecycle, for every credential type:
   Certificate Transparency monitoring for unexpected issuance.
 - **Issue** through a built-in ACME server (including ARI) brokering to your CA,
   or a private CA hierarchy with OCSP/CRL revocation.
-- **Deploy** renewed credentials to where they live, through sandboxed
+- **Deploy** renewed credentials to where they live, through capability-scoped
   connectors — load balancers and web servers, appliances, and cloud certificate
-  stores.
+  stores. (The shipped connectors are trusted in-process code, scoped to the
+  capabilities they declare; the WASM sandbox isolates *third-party* plugins —
+  see [the plugin trust model](docs/security/threat-model.md).)
 - **Rotate, revoke, retire** on a lifecycle state machine, with drift detection
   that notices when something changes a credential out from under you.
 - **Understand** the whole estate: a credential graph (reachability and blast

@@ -80,9 +80,22 @@ defenses.
   yet persisted to an HSM/sealed store; persistent custody and a served break-glass
   flow are future work ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
-- **In-process integrations.** CA and connector integrations are trusted in-process
-  Go code today; the WASM sandbox exists but the integrations are not yet isolated
-  through it.
+- **Plugin trust model & blast radius.** The shipped first-party CA and connector
+  integrations run as **trusted in-process Go code**, not in the WASM sandbox. Their
+  **blast radius** if one is defective or malicious is therefore the control plane's
+  own address space: the PostgreSQL connection pool (the application role, still
+  RLS-scoped per tenant), the signer *client* handle (it can **request** signatures
+  over the UDS/mTLS channel), and any credential material in flight. It is **not**
+  the CA private key — that stays in the separate signer process (AN-4), so even a
+  compromised connector cannot exfiltrate it. Mitigations: code review, the
+  conformance suite, the connector SDK's capability-scoped `Sandbox` facade (each
+  connector receives only the operations it declares), and AN-7 bulkheads. The
+  genuine WASM isolation (`internal/pluginhost`, wazero) is the boundary for
+  **third-party** plugins — a loaded plugin has no ambient capabilities and only the
+  host functions its grant permits, the host holds no DB pool or signer handle, and
+  a deliberately misbehaving plugin is proven contained by test
+  (`TestMisbehavingPluginIsContained`). Moving the first-party integrations into that
+  sandbox is future work ([limitations](../limitations.md)).
 - **Host & operator security.** certctl assumes a reasonably trusted host and that
   custodians/operators protect their own credentials.
 

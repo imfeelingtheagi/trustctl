@@ -597,6 +597,60 @@ func TestACMEChallengeValidationIsReal(t *testing.T) {
 	}
 }
 
+// TestPluginSandboxClaimIsHonest cross-checks the R3.4 rescope (B8/N2): the docs
+// no longer claim the shipped connectors are sandboxed, the in-process trust model
+// and its blast radius are documented, and the plugin host genuinely holds no
+// privileged handle (it imports neither the store nor the signer) — so the
+// sandbox certctl DOES still advertise, for third-party WASM plugins, is real and
+// is proven by a containment test.
+func TestPluginSandboxClaimIsHonest(t *testing.T) {
+	// (1) No "sandboxed connector(s)" overclaim in the README: the shipped
+	// connectors run in-process, not in the WASM sandbox. Whitespace is collapsed
+	// first so the phrase is caught even when it wraps across a line.
+	readme := strings.Join(strings.Fields(strings.ToLower(read(t, "../README.md"))), " ")
+	if strings.Contains(readme, "sandboxed connector") {
+		t.Error("README still calls the shipped connectors \"sandboxed\"; they run trusted in-process")
+	}
+
+	// (2) The in-process trust model and its blast radius are documented.
+	lim := strings.ToLower(read(t, "limitations.md"))
+	for _, want := range []string{"in-process", "trusted", "blast radius"} {
+		if !strings.Contains(lim, want) {
+			t.Errorf("limitations.md should document the in-process plugin trust model (%q)", want)
+		}
+	}
+	tm := strings.ToLower(read(t, "security/threat-model.md"))
+	for _, want := range []string{"blast radius", "in-process"} {
+		if !strings.Contains(tm, want) {
+			t.Errorf("threat-model.md should document the plugin blast radius (%q)", want)
+		}
+	}
+
+	// (3) The plugin host holds no privileged handle: it imports neither the store
+	// (the DB pool) nor the signer, so a plugin on it cannot reach them by
+	// construction — the containment the docs claim is structurally real.
+	files, err := filepath.Glob(filepath.FromSlash("../internal/pluginhost/*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		src := read(t, f)
+		for _, forbidden := range []string{"internal/store", "internal/signing"} {
+			if strings.Contains(src, forbidden) {
+				t.Errorf("%s imports %s; the plugin host must hold no DB pool or signer handle", f, forbidden)
+			}
+		}
+	}
+
+	// (4) The containment guarantee is actually tested with a hostile plugin.
+	if !strings.Contains(read(t, "../internal/pluginhost/containment_test.go"), "TestMisbehavingPluginIsContained") {
+		t.Error("the plugin host should have a misbehaving-plugin containment test")
+	}
+}
+
 // TestSecurityPolicyExists: a SECURITY.md exists at the repo root (GitHub's
 // disclosure-policy convention) with a private reporting path and supported
 // versions.

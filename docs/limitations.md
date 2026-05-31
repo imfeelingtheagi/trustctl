@@ -49,11 +49,23 @@ remaining integration work.
 - **Posture**: the **credential graph** (reachability, blast radius), **composite
   risk scoring**, and **drift detection**.
 
-## Not WASM-sandboxed yet
+## Plugin isolation: first-party in-process, third-party sandboxed
 
-CA and connector integrations are in-process Go packages today. The WASM plugin
-host (wazero) and its capability model exist, but the shipped integrations are
-**not yet sandboxed through it**. Treat them as trusted in-process code for now.
+This is a deliberate, documented trust boundary (not an accident):
+
+- **Shipped first-party CA and connector integrations run as trusted in-process
+  Go code** — they are *not* sandboxed through the WASM host. Their **blast radius**
+  if one is defective is the control plane's address space: the DB connection pool
+  (RLS-scoped) and the signer *client* handle (it can request signatures), but
+  **not** the CA private key, which stays in the separate signer process (AN-4).
+  They are mitigated by code review, the conformance suite, the connector SDK's
+  capability-scoped `Sandbox` facade, and AN-7 bulkheads.
+- **The WASM plugin host (`internal/pluginhost`, wazero) is real and is the
+  isolation boundary for third-party plugins.** A loaded plugin has no ambient
+  capabilities and only the host functions its grant permits; the host holds no DB
+  pool or signer handle; and a deliberately misbehaving plugin is **proven
+  contained** by test. Migrating the first-party integrations onto it is future
+  work. See the [plugin trust model](security/threat-model.md).
 
 ## Protocols
 
