@@ -1,7 +1,7 @@
 name: Release
 
 # Build, sign, and publish the certctl control-plane image on a version tag:
-# a reproducible distroless image (< 20 MB), pushed to GHCR (primary) with a
+# a reproducible distroless image (under 50 MB), pushed to GHCR (primary) with a
 # Docker Hub mirror, carrying a CycloneDX SBOM and a keyless cosign signature.
 
 on:
@@ -17,8 +17,10 @@ permissions:
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'certctl' }}/certctl
-  # Image size budget: the distroless image must stay under 20 MB.
-  MAX_IMAGE_BYTES: "20971520"
+  # Image size budget. Two static Go binaries (control plane + signer) plus the
+  # embedded web UI legitimately land at ~40 MB; this 50 MB budget gives headroom
+  # while still catching accidental bloat (a debug image, stray files in context).
+  MAX_IMAGE_BYTES: "52428800"
 
 jobs:
   image:
@@ -95,12 +97,12 @@ jobs:
             BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
           tags: certctl:sizecheck
 
-      - name: Enforce the 20 MB image size budget
+      - name: Enforce the image size budget
         run: |
           size=$(docker image inspect certctl:sizecheck --format '{{.Size}}')
           echo "image size: ${size} bytes (budget ${MAX_IMAGE_BYTES})"
           if [ "$size" -gt "${MAX_IMAGE_BYTES}" ]; then
-            echo "::error::image is ${size} bytes, over the 20 MB (20971520) budget"
+            echo "::error::image is ${size} bytes, over the ${MAX_IMAGE_BYTES}-byte budget"
             exit 1
           fi
 

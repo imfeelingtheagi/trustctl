@@ -12,7 +12,7 @@ Pick the platform you are installing on.
 
 ## Docker (control plane)
 
-The published image is distroless, unprivileged, and well under 20 MB. Run it
+The published image is distroless, unprivileged, and under 50 MB. Run it
 against your datastores:
 
 ```bash

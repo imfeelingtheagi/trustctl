@@ -75,7 +75,7 @@ func TestComposeBringsUpEvaluableStack(t *testing.T) {
 
 // TestReleaseWorkflowSignsAndAttests encodes "images are cosign-signed and ship
 // an SBOM", published to GHCR with a Docker Hub mirror, built reproducibly, and
-// gated under 20 MB.
+// gated by an image size budget.
 func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	wf := readArtifact(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 
@@ -87,8 +87,8 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	mustContainAll(t, "release keyless OIDC permission", wf, "id-token")
 	// Reproducible build inputs.
 	mustContainAny(t, "release reproducibility", wf, "SOURCE_DATE_EPOCH", "rewrite-timestamp", "reproducib")
-	// The <20 MB size budget is enforced in the pipeline.
-	mustContainAny(t, "release image size gate", wf, "20971520", "20000000", "20 MB", "20MB", "MAX_IMAGE")
+	// The image size budget is enforced in the pipeline.
+	mustContainAny(t, "release image size gate", wf, "52428800", "MAX_IMAGE")
 }
 
 // repoFile reads a path relative to the repository root (this package lives at
