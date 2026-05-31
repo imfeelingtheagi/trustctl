@@ -113,7 +113,7 @@ func (a *API) createOwner(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		o, err := a.store.CreateOwner(ctx, store.Owner{TenantID: tenantID, Kind: store.OwnerKind(req.Kind), Name: req.Name, Email: req.Email})
+		o, err := a.orch.CreateOwner(ctx, tenantID, req.Kind, req.Name, req.Email)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -171,8 +171,7 @@ func (a *API) updateOwner(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		o := store.Owner{ID: id, TenantID: tenantID, Kind: store.OwnerKind(req.Kind), Name: req.Name, Email: req.Email}
-		if err := a.store.UpdateOwner(ctx, o); err != nil {
+		if err := a.orch.UpdateOwner(ctx, tenantID, id, req.Kind, req.Name, req.Email); err != nil {
 			return 0, nil, err
 		}
 		updated, err := a.store.GetOwner(ctx, tenantID, id)
@@ -188,7 +187,7 @@ func (a *API) deleteOwner(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		if err := a.store.DeleteOwner(ctx, tenantID, id); err != nil {
+		if err := a.orch.DeleteOwner(ctx, tenantID, id); err != nil {
 			return 0, nil, err
 		}
 		return http.StatusNoContent, nil, nil
@@ -209,7 +208,7 @@ func (a *API) createIssuer(w http.ResponseWriter, r *http.Request) {
 		if err := iss.Validate(); err != nil {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
 		}
-		created, err := a.store.CreateIssuer(ctx, iss)
+		created, err := a.orch.CreateIssuer(ctx, tenantID, iss)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -287,8 +286,8 @@ func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 			}
 			issuerID = &req.IssuerID
 		}
-		created, err := a.store.CreateIdentity(ctx, store.Identity{
-			TenantID: tenantID, Kind: store.IdentityKind(req.Kind), Name: req.Name,
+		created, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
+			Kind: store.IdentityKind(req.Kind), Name: req.Name,
 			OwnerID: req.OwnerID, IssuerID: issuerID, Attributes: req.Attributes,
 		})
 		if err != nil {

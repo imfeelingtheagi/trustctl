@@ -9,27 +9,32 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"certctl.io/certctl/internal/events"
+	"certctl.io/certctl/internal/projections"
 	"certctl.io/certctl/internal/store"
 )
 
 // eventPrefix marks the lifecycle events the orchestrator emits and replays.
 const eventPrefix = "identity."
 
-// Orchestrator drives an identity through its lifecycle state machine. Each valid
-// transition emits an event (AN-2, the source of truth), then atomically updates
-// the read-model status and enqueues any outbox side effect (AN-6) in one
-// transaction. An identity's state and history are reconstructable purely from
-// the event log.
+// Orchestrator is the command (write) side of the event-sourced spine. It drives
+// an identity through its lifecycle state machine and records every served
+// domain mutation (owners, issuers, identities, certificates) as an event (AN-2,
+// the source of truth). For a lifecycle transition it atomically projects the
+// read-model status change and enqueues any outbox side effect (AN-6) in one
+// transaction. The read model is written only by the projector, so the state and
+// history are reconstructable purely from the event log.
 type Orchestrator struct {
 	log    *events.Log
 	store  *store.Store
 	outbox *Outbox
+	proj   *projections.Projector
 }
 
 // NewOrchestrator returns an Orchestrator over the event log, read store, and
-// outbox.
+// outbox. It builds its own projector so a mutation it records is projected with
+// the same logic a rebuild uses.
 func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox) *Orchestrator {
-	return &Orchestrator{log: log, store: st, outbox: ob}
+	return &Orchestrator{log: log, store: st, outbox: ob, proj: projections.New(st)}
 }
 
 // Transition moves an identity from its current state to "to". It rejects an
@@ -59,7 +64,9 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 	}
 
 	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		if err := o.store.SetIdentityStatusTx(ctx, tx, tenantID, identityID, string(to)); err != nil {
+		// Project the status change through the projector (the sole read-model
+		// writer, AN-2) in the same transaction as the outbox enqueue (AN-6).
+		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
 		}
 		if dest, ok := sideEffectFor(from, to); ok {
