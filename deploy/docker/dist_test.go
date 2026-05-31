@@ -211,6 +211,17 @@ func TestReleasePinsTheDistrolessBaseByDigest(t *testing.T) {
 	mustContainAll(t, "Dockerfile takes a pin-able base image arg", df,
 		"ARG BASE_IMAGE", "FROM ${BASE_IMAGE}")
 
+	// The base-image arg must be declared in the GLOBAL scope — before the FIRST
+	// FROM. A variable used in a FROM is only substituted from globally-scoped ARGs,
+	// so an `ARG BASE_IMAGE` placed after the build stage's FROM leaves
+	// `FROM ${BASE_IMAGE}` blank and the build fails ("base name should not be
+	// blank"). This guards the scope, not just the presence of the tokens.
+	firstFROM := strings.Index(df, "\nFROM ")
+	argBase := strings.Index(df, "ARG BASE_IMAGE")
+	if argBase < 0 || firstFROM < 0 || argBase > firstFROM {
+		t.Error("ARG BASE_IMAGE must be declared before the first FROM (global scope), else FROM ${BASE_IMAGE} resolves to blank at build time")
+	}
+
 	rel := repoFile(t, ".github", "workflows", "release.yml")
 	// The pipeline resolves the base to a digest...
 	mustContainAll(t, "release resolves the distroless base digest", rel,

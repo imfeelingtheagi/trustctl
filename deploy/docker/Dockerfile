@@ -14,6 +14,13 @@
 
 ARG GO_VERSION=1.25
 
+# Runtime base image. Declared in the GLOBAL scope (before the first FROM) so the
+# runtime stage's `FROM ${BASE_IMAGE}` can resolve it — a variable in a FROM is
+# only substituted from globally-scoped ARGs. Defaults to the :nonroot tag for
+# local builds; the release pipeline overrides it with an immutable @sha256 digest
+# via --build-arg BASE_IMAGE (see .github/workflows/release.yml).
+ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
+
 # ---- build stage ----------------------------------------------------------
 FROM golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
@@ -46,8 +53,8 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/certctl-sig
 # nonroot user — no shell, no package manager. The base defaults to the :nonroot
 # tag for local builds; the release pipeline resolves it to an immutable @sha256
 # digest and builds with that via BASE_IMAGE, so released images pin the exact
-# base. See .github/workflows/release.yml ("Resolve … distroless base … by digest").
-ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
+# base. BASE_IMAGE is declared in the global scope at the top of this file (it must
+# be, to be usable here). See .github/workflows/release.yml ("Resolve … by digest").
 FROM ${BASE_IMAGE}
 
 COPY --from=build /out/certctl        /usr/local/bin/certctl
