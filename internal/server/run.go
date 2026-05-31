@@ -1,0 +1,95 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
+	"certctl.io/certctl/internal/config"
+	"certctl.io/certctl/internal/events"
+	"certctl.io/certctl/internal/signing"
+	"certctl.io/certctl/internal/store"
+)
+
+// Run opens the datastore and event log, supervises the signer as a child
+// process (AN-4), assembles the control plane, and serves until ctx is
+// cancelled — then shuts down in order (stop accepting → drain the outbox →
+// close the event log and datastore). It is the production composition the
+// certctl binary calls.
+func Run(ctx context.Context, cfg *config.Config) error {
+	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
+		return errors.New("server: a serving control plane requires an external Postgres DSN (set CERTCTL_POSTGRES_MODE=external and CERTCTL_POSTGRES_DSN)")
+	}
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	if err := st.Migrate(ctx); err != nil {
+		st.Close()
+		return fmt.Errorf("migrate: %w", err)
+	}
+	log, err := events.Open(ctx, cfg.NATS)
+	if err != nil {
+		st.Close()
+		return fmt.Errorf("open event log: %w", err)
+	}
+
+	signerBin, err := siblingBinary("certctl-signer")
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return err
+	}
+	socket := filepath.Join(os.TempDir(), "certctl-signer.sock")
+	sup, err := signing.Supervise(ctx, signerBin, socket)
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return fmt.Errorf("start signer: %w", err)
+	}
+	defer sup.Close()
+
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup})
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return err
+	}
+
+	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	ln, err := net.Listen("tcp", cfg.Server.Addr)
+	if err != nil {
+		_ = srv.Shutdown(ctx)
+		return fmt.Errorf("listen %s: %w", cfg.Server.Addr, err)
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- httpSrv.Serve(ln) }()
+
+	select {
+	case <-ctx.Done():
+	case err := <-serveErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			_ = srv.Shutdown(context.Background())
+			return fmt.Errorf("serve: %w", err)
+		}
+	}
+
+	// Graceful shutdown: stop accepting connections, then drain + close in order.
+	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = httpSrv.Shutdown(shutCtx)
+	return srv.Shutdown(shutCtx)
+}
+
+func siblingBinary(name string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("locate executable: %w", err)
+	}
+	return filepath.Join(filepath.Dir(exe), name), nil
+}

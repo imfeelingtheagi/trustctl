@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 )
 
@@ -40,6 +41,144 @@ func StartChild(ctx context.Context, binaryPath, socketPath string) (*Client, fu
 		}
 	}
 	return client, stop, nil
+}
+
+// Supervisor keeps the signer child process running: it launches
+// cmd/certctl-signer, and if the child exits it relaunches it with capped
+// exponential backoff until its context is cancelled. The control plane signs
+// only through the current child (AN-4); when the child is down, Client returns
+// nil and signing operations fail closed.
+//
+// Keys live in the signer's memory and do NOT survive a restart — recovery means
+// the process is back and serving, not that prior keys are restored.
+type Supervisor struct {
+	mu     sync.RWMutex
+	client *Client
+	pid    int
+
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// Supervise starts the signer child and supervises it. It blocks until the first
+// launch is healthy (returning a connected Supervisor) or that first launch
+// fails (returning an error) — so a bad binary fails fast rather than looping.
+func Supervise(ctx context.Context, binaryPath, socketPath string) (*Supervisor, error) {
+	sctx, cancel := context.WithCancel(ctx)
+	s := &Supervisor{cancel: cancel, done: make(chan struct{})}
+	ready := make(chan error, 1)
+	go s.run(sctx, binaryPath, socketPath, ready)
+	select {
+	case err := <-ready:
+		if err != nil {
+			cancel()
+			<-s.done
+			return nil, err
+		}
+		return s, nil
+	case <-sctx.Done():
+		cancel()
+		<-s.done
+		return nil, sctx.Err()
+	}
+}
+
+// Client returns the current connected signer client, or nil while no child is
+// healthy (e.g. mid-restart). Callers must treat nil as "signer unavailable" and
+// fail closed.
+func (s *Supervisor) Client() *Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.client
+}
+
+// Pid returns the current child process id, or 0 when no child is running.
+func (s *Supervisor) Pid() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pid
+}
+
+// Close stops supervision and the child, and waits for the loop to exit.
+func (s *Supervisor) Close() {
+	s.cancel()
+	<-s.done
+}
+
+func (s *Supervisor) set(c *Client, pid int) {
+	s.mu.Lock()
+	old := s.client
+	s.client = c
+	s.pid = pid
+	s.mu.Unlock()
+	if old != nil && old != c {
+		_ = old.Close()
+	}
+}
+
+func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, ready chan<- error) {
+	defer close(s.done)
+	const maxBackoff = 5 * time.Second
+	backoff := 100 * time.Millisecond
+	first := true
+
+	for ctx.Err() == nil {
+		// A stale socket from a dead child would block the new child's listen.
+		_ = os.Remove(socketPath)
+
+		// CommandContext so cancelling the supervisor terminates the child; a
+		// graceful SIGINT with a kill fallback after WaitDelay.
+		cmd := exec.CommandContext(ctx, binaryPath, "--socket", socketPath)
+		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+		cmd.WaitDelay = 5 * time.Second
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
+			if first {
+				ready <- fmt.Errorf("start signer: %w", err)
+				return
+			}
+			s.backoffSleep(ctx, &backoff, maxBackoff)
+			continue
+		}
+
+		client, err := dialReady(ctx, socketPath, 10*time.Second)
+		if err != nil {
+			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
+			if first {
+				ready <- err
+				return
+			}
+			s.backoffSleep(ctx, &backoff, maxBackoff)
+			continue
+		}
+
+		s.set(client, cmd.Process.Pid)
+		if first {
+			ready <- nil
+			first = false
+		}
+		backoff = 100 * time.Millisecond // healthy run resets backoff
+
+		// Block until the child exits (killed, crashed, or stopped on cancel).
+		_ = cmd.Wait()
+		s.set(nil, 0)
+		if ctx.Err() != nil {
+			return
+		}
+		s.backoffSleep(ctx, &backoff, maxBackoff)
+	}
+}
+
+func (s *Supervisor) backoffSleep(ctx context.Context, backoff *time.Duration, max time.Duration) {
+	select {
+	case <-ctx.Done():
+	case <-time.After(*backoff):
+	}
+	if *backoff < max {
+		*backoff *= 2
+	}
 }
 
 // dialReady connects and retries Health until the signer is serving or the

@@ -15,14 +15,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"certctl.io/certctl/internal/buildinfo"
 	"certctl.io/certctl/internal/config"
+	"certctl.io/certctl/internal/server"
 )
 
 func main() {
@@ -47,6 +50,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version information and exit")
 	checkConfig := fs.Bool("check-config", false, "resolve and print the effective configuration, then exit")
+	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			// -h/--help already printed usage to stderr; this is a clean exit.
@@ -69,11 +73,40 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		_, _ = io.WriteString(stdout, configSummary(cfg))
 		return nil
 	}
+	if *healthCheck {
+		return healthProbe(cfg.Server.Addr)
+	}
 
+	// Assemble and serve the control plane (S7.7). Run starts the event log,
+	// projections, orchestrator, and API in order, supervises the signer as a
+	// child process (AN-4), serves until ctx is cancelled, and then shuts down
+	// gracefully (drain the outbox, close connections in order).
 	_, _ = fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("certctl"))
 	_, _ = io.WriteString(stderr, configSummary(cfg))
-	<-ctx.Done()
-	_, _ = fmt.Fprintln(stderr, "shutdown signal received; certctl stopped cleanly")
+	if err := server.Run(ctx, cfg); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(stderr, "certctl stopped cleanly")
+	return nil
+}
+
+// healthProbe makes an HTTP GET to the local control plane's /healthz and returns
+// nil only on a 2xx. It is what the container health check execs (distroless has
+// no shell or curl).
+func healthProbe(addr string) error {
+	host := addr
+	if strings.HasPrefix(host, ":") {
+		host = "127.0.0.1" + host
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://" + host + "/healthz")
+	if err != nil {
+		return fmt.Errorf("health check: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("health check: status %d", resp.StatusCode)
+	}
 	return nil
 }
 

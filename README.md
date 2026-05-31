@@ -21,12 +21,12 @@ and user certificates, secrets, API keys, tokens, and SPIFFE workload identities
 
 > **Status — active development.** Phase 1 is capability-complete and tested (see
 > [Capabilities](#capabilities)) on the architectural bedrock below, with the
-> custom architecture linter green in CI. The remaining milestone is *runtime
-> assembly* — wiring the API server and datastore connections into the single
-> binary. Until it lands, `cmd/certctl` boots and validates its configuration but
-> does not yet serve traffic, and the system is exercised through an extensive
-> unit, property, differential, and embedded-PostgreSQL integration test suite.
-> The README will drop this note when the binary serves end to end.
+> custom architecture linter green in CI. `cmd/certctl` now **assembles and serves
+> the control plane** — it starts the event log, projections, orchestrator, and
+> API in order, supervises the signing service as a separate child process (AN-4),
+> answers real API requests, and shuts down gracefully — so `docker compose up`
+> yields an evaluable control plane. It is pre-1.0 and under active hardening, but
+> the runtime-assembly gap is closed.
 
 ---
 

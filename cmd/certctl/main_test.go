@@ -6,7 +6,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-	"time"
 )
 
 // emptyEnv is a getenv that resolves every variable to "" (no overrides), so the
@@ -36,25 +35,18 @@ func TestRun_VersionFlag(t *testing.T) {
 	}
 }
 
-// TestRun_CleanShutdownOnContextCancel encodes "boots and shuts down cleanly":
-// the control plane blocks until its context is cancelled (as it would be on
-// SIGINT/SIGTERM) and then returns nil.
-func TestRun_CleanShutdownOnContextCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- run(ctx, nil, emptyEnv, io.Discard, io.Discard) }()
-
-	// Give run a moment to boot, then request shutdown.
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("clean shutdown returned error: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("run did not return within 2s of context cancellation")
+// TestRun_ServeWithoutDatastoreFailsFast: now that the binary assembles and
+// serves the control plane (S7.7), starting it with the default (bundled) config
+// and no external datastore fails fast with a clear error rather than idling.
+// The full serve/shutdown path is exercised by the assembled-server tests in
+// internal/projections.
+func TestRun_ServeWithoutDatastoreFailsFast(t *testing.T) {
+	err := run(context.Background(), nil, emptyEnv, io.Discard, io.Discard)
+	if err == nil {
+		t.Fatal("serving without an external datastore should fail fast")
+	}
+	if !strings.Contains(err.Error(), "Postgres") && !strings.Contains(strings.ToLower(err.Error()), "datastore") {
+		t.Errorf("error %q should name the missing datastore", err)
 	}
 }
 

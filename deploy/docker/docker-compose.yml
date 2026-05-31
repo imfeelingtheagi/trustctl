@@ -58,11 +58,14 @@ services:
     ports:
       - "8443:8443"
     healthcheck:
-      # Distroless has no shell; exec the binary's own config self-check.
-      test: ["CMD", "/usr/local/bin/certctl", "-check-config"]
+      # Distroless has no shell; the binary probes its own /healthz. The control
+      # plane also supervises the signer as a child process (AN-4), so a single
+      # container runs both certctl and certctl-signer.
+      test: ["CMD", "/usr/local/bin/certctl", "--health-check"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 25s
 
 volumes:
   pgdata:

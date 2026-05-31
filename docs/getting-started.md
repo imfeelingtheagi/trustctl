@@ -21,8 +21,15 @@ docker compose -f deploy/docker/docker-compose.yml up --build
 
 Compose starts Postgres and NATS, waits for both to report healthy, and then
 starts the control plane wired to them through its **external** datastore
-configuration. The web UI is served by the control-plane binary at
-<http://localhost:8443>.
+configuration. The control-plane process starts the event log, projections,
+orchestrator, and API in order and supervises the signing service as a child
+process, so it answers real API requests end to end. Confirm it is up:
+
+```bash
+curl -fsS http://localhost:8443/healthz   # {"status":"ok"}
+```
+
+The web UI is served by the same binary at <http://localhost:8443>.
 
 !!! tip
     Want to point at your own managed Postgres/NATS instead of the bundled ones?
