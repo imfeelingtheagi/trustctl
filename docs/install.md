@@ -31,13 +31,24 @@ Compose stack from [Getting started](getting-started.md):
 docker compose -f deploy/docker/docker-compose.yml up --build
 ```
 
-Verify a published image's signature with cosign:
+Verify a published image before you run it — its keyless cosign signature and its
+CycloneDX SBOM attestation — with the helper:
+
+```bash
+scripts/verify-image.sh ghcr.io/imfeelingtheagi/certctl:<tag>
+```
+
+That wraps the underlying cosign check (only an image built by this repo's release
+workflow verifies):
 
 ```bash
 cosign verify ghcr.io/imfeelingtheagi/certctl:<tag> \
   --certificate-identity-regexp '^https://github.com/.*/certctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+See [Supply chain](supply-chain.md) for the full signing, SBOM, provenance, and
+dependency-scanning story.
 
 ## Kubernetes (agent)
 

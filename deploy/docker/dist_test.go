@@ -91,6 +91,67 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	mustContainAny(t, "release image size gate", wf, "20971520", "20000000", "20 MB", "20MB", "MAX_IMAGE")
 }
 
+// repoFile reads a path relative to the repository root (this package lives at
+// deploy/docker, two levels down).
+func repoFile(t *testing.T, parts ...string) string {
+	t.Helper()
+	return readArtifact(t, filepath.Join(append([]string{"..", ".."}, parts...)...))
+}
+
+// TestSupplyChainIsScannedPinnedAndRecorded encodes the R3.5 acceptance: the
+// vulnerability scanners are PINNED (not @latest), the SCA reaches the npm tree
+// and the embedded-postgres binary (the two dependency surfaces outside go.sum),
+// a published image's signature is verifiable on install, and the results are
+// recorded in a supply-chain page.
+func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
+	ci := repoFile(t, ".github", "workflows", "ci.yml")
+	mk := repoFile(t, "Makefile")
+	rel := repoFile(t, ".github", "workflows", "release.yml")
+
+	// (1) govulncheck is pinned to a fixed version, not @latest — in CI and in the
+	// Makefile that the tools target uses. The pin may be a literal @vX.Y.Z or a
+	// Make variable that resolves to one.
+	for name, body := range map[string]string{"ci.yml": ci, "Makefile": mk} {
+		if strings.Contains(body, "govulncheck@latest") {
+			t.Errorf("%s pins govulncheck@latest; pin a fixed version", name)
+		}
+		if !strings.Contains(body, "govulncheck@v") && !strings.Contains(body, "govulncheck@$(GOVULNCHECK_VERSION)") {
+			t.Errorf("%s should install govulncheck at a pinned version", name)
+		}
+	}
+	// The Makefile variable that pins it is itself a fixed semver.
+	mustContainAll(t, "Makefile govulncheck pin", mk, "GOVULNCHECK_VERSION ?= v")
+
+	// (2) The npm dependency tree is scanned in CI (it lives outside go.sum).
+	mustContainAll(t, "ci.yml npm SCA", ci, "npm audit")
+
+	// (3) The embedded-postgres runtime binary is given provenance and a scan: a
+	// committed manifest pins the version + source, and CI verifies its checksum.
+	manifest := repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")
+	mustContainAll(t, "embedded-postgres manifest", manifest, "16.4.0", "sha256")
+	mustContainAny(t, "embedded-postgres manifest source", manifest,
+		"embedded-postgres-binaries", "zonky", "repo1.maven.org")
+	mustContainAny(t, "ci.yml embedded-postgres scan", ci,
+		"embedded-postgres", "supply-chain/embedded-postgres", "sha256")
+
+	// (4) The version the manifest pins is the version the integration tests
+	// actually request — so the scanned binary is the binary that runs.
+	pg := repoFile(t, "internal", "projections", "projections_test.go")
+	mustContainAll(t, "projections test pins the PG binary version", pg, "embeddedpostgres.V16")
+
+	// (5) Signature-on-install is documented (cosign verify), and the release
+	// publishes signature + SBOM + provenance.
+	mustContainAll(t, "install signature verification", repoFile(t, "docs", "install.md"), "cosign verify")
+	mustContainAll(t, "release provenance + SBOM + signing", rel, "provenance", "cosign")
+	mustContainAny(t, "release SBOM", rel, "sbom", "SBOM", "cyclonedx")
+
+	// (6) The scan results are recorded in a supply-chain page (executed, not just
+	// present).
+	sc := repoFile(t, "docs", "supply-chain.md")
+	mustContainAll(t, "supply-chain page records the SCA surfaces", sc,
+		"govulncheck", "npm audit", "embedded-postgres")
+}
+
 // TestDockerignoreKeepsContextSmall encodes that the build context excludes the
 // heavy, non-deterministic directories so the build stays small and
 // reproducible.

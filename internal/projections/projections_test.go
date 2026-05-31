@@ -35,6 +35,11 @@ func TestMain(m *testing.M) {
 	}
 	port := freePort()
 	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
+		// Pin the PostgreSQL binary version explicitly so the runtime binary this
+		// pulls from Maven Central (outside go.sum) is the one the supply-chain
+		// manifest records and CI checksum-verifies + scans. See
+		// deploy/supply-chain/embedded-postgres.json.
+		Version(embeddedpostgres.V16).
 		Port(uint32(port)).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").

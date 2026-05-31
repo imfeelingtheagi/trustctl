@@ -1,0 +1,27 @@
+{
+  "_comment": "Provenance + scan policy for the PostgreSQL binary that the embedded-postgres TEST dependency downloads at runtime. It lives OUTSIDE go.sum (Maven Central, not the Go module proxy), so it needs its own pin + scan. See deploy/supply-chain/README.md and docs/supply-chain.md.",
+  "module": "github.com/fergusstrange/embedded-postgres",
+  "moduleVersion": "v1.29.0",
+  "postgresVersion": "16.4.0",
+  "pinnedBy": "internal/projections/projections_test.go (embeddedpostgres.V16)",
+  "shippedInReleaseImage": false,
+  "source": {
+    "registry": "Maven Central",
+    "group": "io.zonky.test.postgres",
+    "artifact": "embedded-postgres-binaries-linux-amd64",
+    "version": "16.4.0",
+    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.4.0/embedded-postgres-binaries-linux-amd64-16.4.0.jar"
+  },
+  "checksum": {
+    "algorithm": "sha256",
+    "sha256": "",
+    "policy": "trust-on-first-use: scripts/supply-chain/verify-embedded-postgres.sh prints the SHA-256 on first run; a maintainer pins it here and commits, after which every CI run verifies it and fails the build if it ever changes for the pinned version."
+  },
+  "scan": {
+    "tool": "trivy",
+    "scope": "extracted PostgreSQL binaries (rootfs)",
+    "policy": "fail on HIGH/CRITICAL, ignore-unfixed",
+    "lastResult": "pending first CI run on a network-enabled runner"
+  },
+  "notes": "PostgreSQL 16.4 is a supported release. This dependency is integration-test only and is NOT bundled in the shipped distroless image (which carries only the Go binaries). It must be scanned before any redistribution that bundles it."
+}

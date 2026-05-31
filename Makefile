@@ -32,6 +32,9 @@ GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAG
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.7
+# Supply-chain tooling, pinned so the vulnerability gate and SBOM are deterministic.
+GOVULNCHECK_VERSION ?= v1.1.4
+CYCLONEDX_GOMOD_VERSION ?= v1.7.0
 
 # Minimum total test coverage (percent), enforced by `make test`. Generated code
 # (*.pb.go) is excluded from the measurement.
@@ -137,8 +140,28 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 .PHONY: tools
 tools: ## Install developer tooling (golangci-lint v2, govulncheck, actionlint)
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 	$(GO) install github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
+
+.PHONY: vuln
+vuln: ## Reachability-aware vulnerability scan (pinned govulncheck) over shipped packages
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	govulncheck ./...
+
+.PHONY: sbom
+sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx.json)
+	$(GO) install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@$(CYCLONEDX_GOMOD_VERSION)
+	cyclonedx-gomod mod -json -licenses -output sbom.module.cyclonedx.json
+	@test -s sbom.module.cyclonedx.json && echo ">> wrote sbom.module.cyclonedx.json"
+
+.PHONY: sca
+sca: ## Software-composition analysis across all dependency surfaces (Go + npm + embedded-postgres)
+	@echo ">> Go module SCA (pinned govulncheck)"; $(MAKE) --no-print-directory vuln
+	@echo ">> npm dependency tree SCA"; ( cd web && npm audit --omit=dev --audit-level=high )
+	@echo ">> embedded-postgres runtime-binary provenance + scan"; scripts/supply-chain/verify-embedded-postgres.sh
+
+.PHONY: supply-chain
+supply-chain: sbom sca ## Full supply-chain pass: module SBOM + SCA over every dependency surface
 
 .PHONY: generate
 generate: ## Regenerate code from .proto (needs protoc + protoc-gen-go + protoc-gen-go-grpc)
