@@ -52,9 +52,15 @@ type Option func(*config)
 type config struct {
 	customRoles []authz.Role
 	principalFn func(*http.Request) (authz.Principal, error)
-	audit       *audit.Service
-	auth        *AuthConfig
-	agentTokens BootstrapTokenIssuer
+	// principalFromReg is a resolver factory the test-only header resolver uses.
+	// It is built against the API's role registry (so custom roles work) and the
+	// real authenticated resolver (so test servers still accept bearer tokens and
+	// sessions). It is referenced only from WithInsecureHeaderResolver, so it is
+	// not linked into the production build. See WithInsecureHeaderResolver.
+	principalFromReg func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
+	audit            *audit.Service
+	auth             *AuthConfig
+	agentTokens      BootstrapTokenIssuer
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -98,8 +104,16 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
 	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens}
-	a.principal = cfg.principalFn
-	if a.principal == nil {
+	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
+	// session, else unauthenticated). A custom resolver is honored when given; the
+	// header-trusting resolver is reachable ONLY through its factory option
+	// (test/dev), never by default — so production never trusts identity headers.
+	switch {
+	case cfg.principalFn != nil:
+		a.principal = cfg.principalFn
+	case cfg.principalFromReg != nil:
+		a.principal = cfg.principalFromReg(reg, a.resolvePrincipal)
+	default:
 		a.principal = a.resolvePrincipal
 	}
 	mux := http.NewServeMux()
@@ -248,10 +262,12 @@ func (a *API) tenant(r *http.Request) (string, bool) {
 	return t, err == nil
 }
 
-// resolvePrincipal is the default principal resolver: an Authorization: Bearer
-// certctl API token authenticates by its hash (carrying its own tenant and
-// scopes); otherwise the request is resolved from headers (the dev/test path
-// that OIDC/SAML session cookies will replace).
+// resolvePrincipal is the default, authenticated resolver: an Authorization:
+// Bearer certctl API token authenticates by its hash (carrying its own tenant
+// and scopes), or a verified OIDC session cookie authenticates a browser user
+// (carrying their tenant and roles). A request with neither is unauthenticated.
+// It NEVER trusts client-supplied identity headers — that path is test-only
+// (WithInsecureHeaderResolver) and is not linked into the production binary.
 func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 	if tok := bearerToken(r); strings.HasPrefix(tok, auth.TokenPrefix) {
 		if a.store == nil {
@@ -270,7 +286,26 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 		}
 		return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal(), nil
 	}
-	return principalFromHeaders(a.roles)(r)
+	if a.auth != nil {
+		if sess, ok := a.sessionFrom(r); ok {
+			return a.sessionPrincipal(sess), nil
+		}
+	}
+	return authz.Principal{}, errors.New("api: unauthenticated")
+}
+
+// sessionPrincipal builds the RBAC principal for a verified OIDC session: the
+// session's role names resolve (against the role registry) to grants held
+// tenant-wide within the session's tenant. This is what makes a browser login
+// authorize API calls, not just /auth/me.
+func (a *API) sessionPrincipal(sess auth.Session) authz.Principal {
+	grants := make([]authz.Grant, 0, len(sess.Roles))
+	for _, name := range sess.Roles {
+		if role, ok := a.roles.Role(name); ok {
+			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
+		}
+	}
+	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}
 }
 
 func bearerToken(r *http.Request) string {
@@ -280,31 +315,6 @@ func bearerToken(r *http.Request) string {
 		return strings.TrimSpace(h[len(prefix):])
 	}
 	return ""
-}
-
-// principalFromHeaders resolves the caller's principal from request headers — a
-// placeholder for auth-derived claims (S3.6). X-Roles is a comma-separated list
-// of role names (resolved against the registry); X-Role-Project is the project
-// those roles are granted in ("" = tenant-wide).
-func principalFromHeaders(reg *authz.Registry) func(*http.Request) (authz.Principal, error) {
-	return func(r *http.Request) (authz.Principal, error) {
-		tenantID := r.Header.Get("X-Tenant-ID")
-		if tenantID == "" {
-			return authz.Principal{}, errors.New("missing X-Tenant-ID")
-		}
-		scope := authz.Scope{TenantID: tenantID, Project: r.Header.Get("X-Role-Project")}
-		var grants []authz.Grant
-		for _, name := range strings.Split(r.Header.Get("X-Roles"), ",") {
-			name = strings.TrimSpace(name)
-			if name == "" {
-				continue
-			}
-			if role, ok := reg.Role(name); ok {
-				grants = append(grants, authz.Grant{Role: role, Scope: scope})
-			}
-		}
-		return authz.Principal{TenantID: tenantID, Subject: r.Header.Get("X-Subject"), Grants: grants}, nil
-	}
 }
 
 // guard enforces the route's required permission (AN: RBAC/F8) before invoking

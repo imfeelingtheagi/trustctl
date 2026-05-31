@@ -26,7 +26,7 @@ func newAuditServer(t *testing.T) (*httptest.Server, *events.Log, *audit.Service
 	}
 	svc := audit.NewService(log, sk)
 	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
-		api.WithAudit(svc))
+		api.WithAudit(svc), api.WithInsecureHeaderResolver())
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
 	return srv, log, svc

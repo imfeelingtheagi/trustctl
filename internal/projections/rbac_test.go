@@ -15,7 +15,7 @@ func newRBACServer(t *testing.T, custom ...authz.Role) *httptest.Server {
 	s := newStore(t)
 	log := openLog(t)
 	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)),
-		api.WithRoles(custom...))
+		api.WithRoles(custom...), api.WithInsecureHeaderResolver())
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
 	return srv

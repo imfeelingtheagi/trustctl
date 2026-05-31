@@ -8,12 +8,15 @@ import (
 	"certctl.io/certctl/internal/crypto/jose"
 )
 
-// Session is the authenticated session minted after a successful login.
+// Session is the authenticated session minted after a successful login. Roles
+// are the RBAC role names the logged-in user holds; the API's principal resolver
+// maps them to grants so a session authorizes API calls (not just /auth/me).
 type Session struct {
-	Subject   string `json:"sub"`
-	TenantID  string `json:"tenant"`
-	Email     string `json:"email,omitempty"`
-	ExpiresAt int64  `json:"exp"`
+	Subject   string   `json:"sub"`
+	TenantID  string   `json:"tenant"`
+	Email     string   `json:"email,omitempty"`
+	Roles     []string `json:"roles,omitempty"`
+	ExpiresAt int64    `json:"exp"`
 }
 
 // SessionIssuer mints and verifies stateless, HMAC-signed session tokens.
@@ -36,10 +39,11 @@ func (s *SessionIssuer) now() time.Time {
 	return time.Now()
 }
 
-// Issue mints a signed session token for the subject in a tenant.
-func (s *SessionIssuer) Issue(subject, tenantID, email string) (string, error) {
+// Issue mints a signed session token for the subject in a tenant, carrying the
+// RBAC role names the user holds.
+func (s *SessionIssuer) Issue(subject, tenantID, email string, roles []string) (string, error) {
 	b, err := json.Marshal(Session{
-		Subject: subject, TenantID: tenantID, Email: email,
+		Subject: subject, TenantID: tenantID, Email: email, Roles: roles,
 		ExpiresAt: s.now().Add(s.ttl).Unix(),
 	})
 	if err != nil {

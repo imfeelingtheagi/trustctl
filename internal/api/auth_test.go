@@ -120,7 +120,7 @@ func TestAuthCallbackRejectsBadState(t *testing.T) {
 
 func TestAuthMeReturnsSessionPrincipal(t *testing.T) {
 	h, sessions := authAPI(t)
-	tok, err := sessions.Issue("user-1", testTenant, "u@example.test")
+	tok, err := sessions.Issue("user-1", testTenant, "u@example.test", []string{"viewer"})
 	if err != nil {
 		t.Fatal(err)
 	}

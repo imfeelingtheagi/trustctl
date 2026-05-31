@@ -1,8 +1,9 @@
-// Package auth implements authentication for certctl: OIDC login (UI/CLI), SAML
-// 2.0 (validated in internal/crypto/saml), session issuance, and scoped API
-// tokens (CI/CD). All cryptography routes through the internal/crypto boundary
-// (AN-3): JWS/JWKS via internal/crypto/jose, hashing/RNG via internal/crypto.
-// Nothing here is gated — every auth method is in the open-source build.
+// Package auth implements authentication for certctl: OIDC login (UI/CLI),
+// session issuance, and scoped API tokens (CI/CD). All cryptography routes
+// through the internal/crypto boundary (AN-3): JWS/JWKS via internal/crypto/jose,
+// hashing/RNG via internal/crypto. Nothing here is gated — every auth method is
+// in the open-source build. (SAML 2.0 SSO is a planned login method, not yet
+// wired to a login route.)
 package auth
 
 import (
@@ -70,7 +71,12 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 	if c.Exp <= v.now().Unix() {
 		return Claims{}, fmt.Errorf("auth: id_token has expired")
 	}
-	if expectedNonce != "" && c.Nonce != expectedNonce {
+	// The nonce is mandatory: an empty expected nonce is a rejection, not a skip
+	// (closing the replay window). The token must carry a nonce that matches.
+	if expectedNonce == "" {
+		return Claims{}, fmt.Errorf("auth: id_token verification requires a nonce")
+	}
+	if c.Nonce != expectedNonce {
 		return Claims{}, fmt.Errorf("auth: id_token nonce mismatch")
 	}
 	return Claims{

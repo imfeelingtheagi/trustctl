@@ -5,7 +5,6 @@ go 1.25.0
 toolchain go1.25.10
 
 require (
-	github.com/beevik/etree v1.6.0
 	github.com/cloudflare/circl v1.6.3
 	github.com/fergusstrange/embedded-postgres v1.29.0
 	github.com/google/uuid v1.6.0
@@ -14,7 +13,6 @@ require (
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nuid v1.0.1
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
-	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/tetratelabs/wazero v1.8.2
 	golang.org/x/crypto v0.52.0
 	golang.org/x/sys v0.45.0

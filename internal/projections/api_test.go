@@ -17,7 +17,7 @@ func newAPIServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	s := newStore(t)
 	log := openLog(t)
-	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)))
+	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)), api.WithInsecureHeaderResolver())
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
 	return srv

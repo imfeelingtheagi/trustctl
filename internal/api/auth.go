@@ -22,8 +22,9 @@ const (
 type AuthConfig struct {
 	AuthEndpoint  string // provider authorization endpoint
 	ClientID      string
-	RedirectURI   string // this server's /auth/callback URL, registered with the provider
-	DefaultTenant string // tenant assigned to a logged-in user (until per-user mapping lands)
+	RedirectURI   string   // this server's /auth/callback URL, registered with the provider
+	DefaultTenant string   // tenant assigned to a logged-in user (until per-user mapping lands)
+	DefaultRoles  []string // RBAC roles a logged-in OIDC user receives (until per-user mapping lands)
 	// Exchange swaps an authorization code for an id_token at the provider.
 	Exchange func(ctx context.Context, code string) (idToken string, err error)
 	// VerifyIDToken validates an id_token against the expected nonce and returns
@@ -78,16 +79,20 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadGateway, "token exchange failed"))
 		return
 	}
-	nonce := ""
-	if c, err := r.Cookie(nonceCookieName); err == nil {
-		nonce = c.Value
+	// The nonce cookie is mandatory: without it, verification cannot bind the
+	// id_token to this login attempt, so reject rather than proceed with an empty
+	// (skipped) nonce (closing the replay window).
+	nonceCookie, err := r.Cookie(nonceCookieName)
+	if err != nil || nonceCookie.Value == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "missing OIDC nonce"))
+		return
 	}
-	claims, err := a.auth.VerifyIDToken(idToken, nonce)
+	claims, err := a.auth.VerifyIDToken(idToken, nonceCookie.Value)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "id_token verification failed"))
 		return
 	}
-	token, err := a.auth.Sessions.Issue(claims.Subject, a.auth.DefaultTenant, claims.Email)
+	token, err := a.auth.Sessions.Issue(claims.Subject, a.auth.DefaultTenant, claims.Email, a.auth.DefaultRoles)
 	if err != nil {
 		a.writeError(w, err)
 		return

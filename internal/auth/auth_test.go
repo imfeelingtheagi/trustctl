@@ -58,7 +58,7 @@ func TestOIDCLoginIssuesSession(t *testing.T) {
 
 	issuer := auth.NewSessionIssuer([]byte("0123456789abcdef0123456789abcdef"), time.Hour)
 	issuer.Now = func() time.Time { return now }
-	sess, err := issuer.Issue(claims.Subject, "tenant-1", claims.Email)
+	sess, err := issuer.Issue(claims.Subject, "tenant-1", claims.Email, []string{"viewer"})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSessionRejectsExpired(t *testing.T) {
 	issuer := auth.NewSessionIssuer([]byte("0123456789abcdef0123456789abcdef"), time.Hour)
 	base := time.Unix(1_700_000_000, 0)
 	issuer.Now = func() time.Time { return base }
-	sess, err := issuer.Issue("u", "t", "")
+	sess, err := issuer.Issue("u", "t", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
