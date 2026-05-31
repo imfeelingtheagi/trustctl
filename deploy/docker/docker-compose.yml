@@ -55,12 +55,16 @@ services:
       CERTCTL_NATS_MODE: external
       CERTCTL_NATS_URL: "nats://nats:4222"
       CERTCTL_LOG_FORMAT: json
+      # TLS is on by default (server.tls.mode=internal): the control plane serves
+      # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
+      # (curl -k). For production set CERTCTL_SERVER_TLS_MODE=file with your cert.
     ports:
       - "8443:8443"
     healthcheck:
-      # Distroless has no shell; the binary probes its own /healthz. The control
-      # plane also supervises the signer as a child process (AN-4), so a single
-      # container runs both certctl and certctl-signer.
+      # Distroless has no shell; the binary probes its own /healthz over the same
+      # transport the server uses (HTTPS by default). The control plane also
+      # supervises the signer as a child process (AN-4), so a single container
+      # runs both certctl and certctl-signer.
       test: ["CMD", "/usr/local/bin/certctl", "--health-check"]
       interval: 10s
       timeout: 5s

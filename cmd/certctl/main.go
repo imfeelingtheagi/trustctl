@@ -25,6 +25,7 @@ import (
 
 	"certctl.io/certctl/internal/buildinfo"
 	"certctl.io/certctl/internal/config"
+	"certctl.io/certctl/internal/crypto/mtls"
 	"certctl.io/certctl/internal/server"
 )
 
@@ -74,7 +75,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return nil
 	}
 	if *healthCheck {
-		return healthProbe(cfg.Server.Addr)
+		return healthProbe(cfg)
 	}
 
 	// Assemble and serve the control plane (S7.7). Run starts the event log,
@@ -90,16 +91,23 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	return nil
 }
 
-// healthProbe makes an HTTP GET to the local control plane's /healthz and returns
-// nil only on a 2xx. It is what the container health check execs (distroless has
-// no shell or curl).
-func healthProbe(addr string) error {
-	host := addr
+// healthProbe makes a GET to the local control plane's /healthz and returns nil
+// only on a 2xx. It is what the container health check execs (distroless has no
+// shell or curl). It matches the server's transport: HTTPS for the TLS modes
+// (over a loopback liveness client that does not verify the ephemeral internal
+// certificate), plaintext only when TLS is explicitly disabled.
+func healthProbe(cfg *config.Config) error {
+	host := cfg.Server.Addr
 	if strings.HasPrefix(host, ":") {
 		host = "127.0.0.1" + host
 	}
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("http://" + host + "/healthz")
+	scheme := "https"
+	client := mtls.LoopbackProbeClient(3 * time.Second)
+	if cfg.Server.TLS.Mode == config.TLSDisabled {
+		scheme = "http"
+		client = &http.Client{Timeout: 3 * time.Second}
+	}
+	resp, err := client.Get(scheme + "://" + host + "/healthz")
 	if err != nil {
 		return fmt.Errorf("health check: %w", err)
 	}
@@ -115,6 +123,11 @@ func healthProbe(addr string) error {
 func configSummary(cfg *config.Config) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "server.addr: %s\n", cfg.Server.Addr)
+	fmt.Fprintf(&b, "server.tls.mode: %s\n", cfg.Server.TLS.Mode)
+	if cfg.Server.TLS.Mode == config.TLSFile {
+		fmt.Fprintf(&b, "server.tls.cert_file: %s\n", cfg.Server.TLS.CertFile)
+		fmt.Fprintf(&b, "server.tls.key_file: %s\n", cfg.Server.TLS.KeyFile)
+	}
 	fmt.Fprintf(&b, "postgres.mode: %s\n", cfg.Postgres.Mode)
 	if cfg.Postgres.Mode == config.PostgresExternal {
 		fmt.Fprintf(&b, "postgres.dsn: %s\n", redact(cfg.Postgres.DSN))

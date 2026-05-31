@@ -23,13 +23,22 @@ Compose starts Postgres and NATS, waits for both to report healthy, and then
 starts the control plane wired to them through its **external** datastore
 configuration. The control-plane process starts the event log, projections,
 orchestrator, and API in order and supervises the signing service as a child
-process, so it answers real API requests end to end. Confirm it is up:
+process, so it answers real API requests end to end. The control plane serves
+over **TLS by default** with a self-signed internal certificate, so confirm it is
+up with `-k` (the eval certificate is not from a public CA):
 
 ```bash
-curl -fsS http://localhost:8443/healthz   # {"status":"ok"}
+curl -fksS https://localhost:8443/healthz   # {"status":"ok"}
 ```
 
-The web UI is served by the same binary at <http://localhost:8443>.
+The web UI is served by the same binary at <https://localhost:8443>.
+
+!!! tip "Transport encryption"
+    TLS is on out of the box (`server.tls.mode=internal`). For production, set
+    `server.tls.mode=file` with your own certificate (`CERTCTL_SERVER_TLS_CERT_FILE`
+    / `CERTCTL_SERVER_TLS_KEY_FILE`). Only set `server.tls.mode=disabled` for local
+    development — it serves plaintext and logs a loud warning. See
+    [Configuration](configuration.md#transport-encryption-tls).
 
 !!! tip
     Want to point at your own managed Postgres/NATS instead of the bundled ones?

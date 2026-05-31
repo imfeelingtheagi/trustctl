@@ -68,7 +68,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("listen %s: %w", cfg.Server.Addr, err)
 	}
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- httpSrv.Serve(ln) }()
+	go func() { serveErr <- serveControlPlane(httpSrv, ln, cfg.Server.TLS, os.Stderr) }()
 
 	select {
 	case <-ctx.Done():

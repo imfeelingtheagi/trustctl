@@ -22,6 +22,20 @@ const (
 	NATSExternal     = "external"
 )
 
+// Control-plane TLS modes. The default is internal (TLS on with a self-signed
+// certificate); plaintext (disabled) is an explicit, dev-only opt-in.
+const (
+	// TLSInternal serves TLS with a self-signed, internally-issued certificate —
+	// the default, so the control plane is never plaintext out of the box. Clients
+	// trust the certctl-generated CA (suitable for evaluation / internal use).
+	TLSInternal = "internal"
+	// TLSFile serves TLS with an operator-provided certificate and key (PEM).
+	TLSFile = "file"
+	// TLSDisabled serves plaintext HTTP. It is for local development only and is
+	// loudly warned: credentials and sessions travel in the clear.
+	TLSDisabled = "disabled"
+)
+
 // Config is the top-level configuration.
 type Config struct {
 	Server    Server    `json:"server"`
@@ -35,6 +49,16 @@ type Config struct {
 // Server holds the control-plane listen settings.
 type Server struct {
 	Addr string `json:"addr"`
+	TLS  TLS    `json:"tls"`
+}
+
+// TLS configures the control plane's transport encryption (B4). Mode is one of
+// internal (self-signed, the default), file (operator-provided cert+key), or
+// disabled (plaintext, dev-only).
+type TLS struct {
+	Mode     string `json:"mode"`
+	CertFile string `json:"cert_file"` // required when mode is file
+	KeyFile  string `json:"key_file"`  // required when mode is file
 }
 
 // Postgres selects the bundled single-node datastore or an external cluster.
@@ -95,7 +119,7 @@ func (t Telemetry) IntervalDuration() (time.Duration, error) {
 // deployment that needs no external services.
 func Default() *Config {
 	return &Config{
-		Server:    Server{Addr: ":8443"},
+		Server:    Server{Addr: ":8443", TLS: TLS{Mode: TLSInternal}},
 		Postgres:  Postgres{Mode: PostgresBundled, DataDir: "data/postgres"},
 		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats"},
 		Log:       Log{Level: "info", Format: "json"},
@@ -144,6 +168,9 @@ func Load(getenv func(string) string) (*Config, error) {
 // file or default values.
 func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "CERTCTL_SERVER_ADDR", &c.Server.Addr)
+	setString(getenv, "CERTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
+	setString(getenv, "CERTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
+	setString(getenv, "CERTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
 	setString(getenv, "CERTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "CERTCTL_POSTGRES_DSN", &c.Postgres.DSN)
 	setString(getenv, "CERTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
@@ -181,6 +208,19 @@ func (c *Config) Validate() error {
 	var errs []error
 	if c.Server.Addr == "" {
 		errs = append(errs, errors.New("server.addr must not be empty"))
+	}
+	switch c.Server.TLS.Mode {
+	case TLSInternal, TLSDisabled:
+		// no extra requirements
+	case TLSFile:
+		if c.Server.TLS.CertFile == "" {
+			errs = append(errs, errors.New("server.tls.cert_file is required when server.tls.mode is file"))
+		}
+		if c.Server.TLS.KeyFile == "" {
+			errs = append(errs, errors.New("server.tls.key_file is required when server.tls.mode is file"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("server.tls.mode %q is invalid (want %q, %q, or %q)", c.Server.TLS.Mode, TLSInternal, TLSFile, TLSDisabled))
 	}
 	switch c.Postgres.Mode {
 	case PostgresBundled:

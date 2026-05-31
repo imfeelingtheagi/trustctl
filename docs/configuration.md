@@ -16,8 +16,31 @@ certctl -check-config
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CERTCTL_SERVER_ADDR` | `:8443` | Address the control plane listens on. |
+| `CERTCTL_SERVER_TLS_MODE` | `internal` | `internal` (self-signed), `file` (operator cert), or `disabled` (plaintext, dev only). |
+| `CERTCTL_SERVER_TLS_CERT_FILE` | — | Server certificate chain (PEM); **required** when `mode=file`. |
+| `CERTCTL_SERVER_TLS_KEY_FILE` | — | Server private key (PEM); **required** when `mode=file`. |
 | `CERTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 | `CERTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
+
+### Transport encryption (TLS)
+
+The control plane serves over **TLS by default** so no credential, token, or
+session ever travels in cleartext.
+
+- **`internal`** (default) — the control plane presents a self-signed certificate
+  it generates at startup, covering `localhost`, `127.0.0.1`, the container
+  hostname, and the Compose service name `certctl`. Clients must trust it (or use
+  `curl -k`); suitable for evaluation and internal/air-gapped use.
+- **`file`** — the control plane presents an operator-provided certificate and
+  key. Use this in production with a certificate from your CA. A missing or
+  malformed file fails fast at startup rather than falling back to plaintext.
+- **`disabled`** — plaintext HTTP. **Local development only**; the server logs a
+  loud warning at startup. If you terminate TLS at a reverse proxy instead,
+  configure the proxy to **strip inbound `X-*` identity headers** — certctl does
+  not trust them (R1.2), so a proxy cannot reintroduce a header-auth bypass.
+
+The mutual-TLS transport between the control plane and the isolated signing
+service (AN-4) is independent of this setting and always enabled.
 
 ## Datastores
 
