@@ -175,7 +175,10 @@ sends only coarse, anonymized, non-PII data, and never any credential content.
 
 If you find a security issue, please report it privately rather than opening a
 public issue — see **[SECURITY.md](SECURITY.md)** for the disclosure process,
-supported versions, and contact. The product threat model is in
+supported versions, and contact. Our triage, patch SLA, and advisory process are
+documented in
+[docs/security/vulnerability-management.md](docs/security/vulnerability-management.md).
+The product threat model is in
 [docs/security/threat-model.md](docs/security/threat-model.md), and the
 security-critical signing service has its own
 [design & threat model](docs/design/signing-service.md).

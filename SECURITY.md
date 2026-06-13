@@ -41,6 +41,12 @@ trustctl is pre-1.0 and under active development. Security fixes target the
 **latest `main`**; there are no long-term support branches yet. Once releases are
 tagged, this section will list the supported versions and their support windows.
 
+## Triage, patch SLA & advisories
+
+How we triage a report, our patch timelines by severity, the security-release and
+GitHub-advisory (GHSA) process, and a worked dry-run of the whole flow are documented in
+[docs/security/vulnerability-management.md](docs/security/vulnerability-management.md).
+
 ## Our commitments
 
 - We use the cryptography boundary (AN-3) and the out-of-process signer (AN-4) to

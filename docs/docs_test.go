@@ -26,6 +26,7 @@ var requiredPages = []string{
 	"runbooks/key-ceremony.md",
 	"runbooks/incident-response.md",
 	"security/threat-model.md",
+	"security/vulnerability-management.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -491,6 +492,49 @@ func TestThreatModelExtendsSigner(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.FromSlash("design/signing-service.md")); err != nil {
 		t.Fatalf("the signer design doc the threat model extends must exist: %v", err)
+	}
+}
+
+// TestVulnerabilityManagementProcess (SF.2): the security process an enterprise
+// vendor-risk review expects exists in-repo and is linked. The vulnerability-
+// management doc must carry a coordinated-disclosure pointer, a CVE triage flow,
+// a patch SLA with per-severity timelines, a security-release/advisory process,
+// and a worked end-to-end dry-run against a sample advisory; README and
+// SECURITY.md must link to it.
+func TestVulnerabilityManagementProcess(t *testing.T) {
+	body := read(t, "security/vulnerability-management.md")
+	low := strings.ToLower(body)
+
+	// Coordinated disclosure is anchored on SECURITY.md.
+	if !strings.Contains(body, "SECURITY.md") || !strings.Contains(low, "coordinated disclosure") {
+		t.Error("vulnerability-management.md should reference SECURITY.md and coordinated disclosure")
+	}
+	// CVE triage and a security-release/advisory process.
+	for _, want := range []string{"triage", "advisory", "security release"} {
+		if !strings.Contains(low, want) {
+			t.Errorf("vulnerability-management.md should document the %q process", want)
+		}
+	}
+	// A patch SLA with every severity and timeline language.
+	for _, sev := range []string{"critical", "high", "medium", "low"} {
+		if !strings.Contains(low, sev) {
+			t.Errorf("the patch SLA must cover %q severity", sev)
+		}
+	}
+	if !strings.Contains(low, "sla") || !(strings.Contains(low, "day") || strings.Contains(low, "hour")) {
+		t.Error("the patch SLA must state timelines (hours/days) by severity")
+	}
+	// Worked dry-run against a sample advisory, end to end.
+	if !strings.Contains(low, "dry-run") && !strings.Contains(low, "dry run") {
+		t.Error("vulnerability-management.md must include a triage dry-run against a sample advisory")
+	}
+
+	// Linked from README and SECURITY.md so it is discoverable.
+	if !strings.Contains(read(t, "../README.md"), "security/vulnerability-management.md") {
+		t.Error("README.md should link to the vulnerability-management process")
+	}
+	if !strings.Contains(read(t, "../SECURITY.md"), "vulnerability-management.md") {
+		t.Error("SECURITY.md should link to the vulnerability-management process")
 	}
 }
 

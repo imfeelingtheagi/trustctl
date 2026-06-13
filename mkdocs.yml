@@ -49,6 +49,7 @@ nav:
       - Incident response: runbooks/incident-response.md
   - Security:
       - Product threat model: security/threat-model.md
+      - Vulnerability management: security/vulnerability-management.md
       - Supply chain: supply-chain.md
       - Signing service design: design/signing-service.md
   - Authoring guides:
