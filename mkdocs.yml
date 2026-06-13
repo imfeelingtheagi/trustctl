@@ -52,6 +52,7 @@ nav:
       - Vulnerability management: security/vulnerability-management.md
       - Supply chain: supply-chain.md
       - Signing service design: design/signing-service.md
+      - Semantic query layer design: design/semantic-query-layer.md
   - Authoring guides:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md
