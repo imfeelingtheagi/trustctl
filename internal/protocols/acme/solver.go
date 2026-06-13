@@ -31,7 +31,10 @@ type DNSProvider interface {
 // propagation has happened.
 type DNS01Solver struct {
 	Provider DNSProvider
-	Resolver Resolver // optional self-check before the CA validates
+	Resolver Resolver // optional single self-check before the CA validates
+	// Propagation, when set, waits for the record to be visible across every
+	// authoritative view before returning (S8b.2); it supersedes Resolver.
+	Propagation *PropagationChecker
 }
 
 // Present publishes the TXT record for (domain, keyAuth) and returns a cleanup
@@ -47,7 +50,16 @@ func (s DNS01Solver) Present(ctx context.Context, domain, keyAuth string) (clean
 		return nil, fmt.Errorf("acme: dns-01 present %s: %w", name, err)
 	}
 	cleanup = func() error { return s.Provider.CleanupTXT(ctx, name, value) }
-	if s.Resolver != nil {
+	// Wait for the record to be observable before the CA validates. A configured
+	// PropagationChecker confirms visibility across every authoritative view
+	// (S8b.2) and supersedes the single-Resolver self-check.
+	switch {
+	case s.Propagation != nil:
+		if perr := s.Propagation.Wait(ctx, name, value); perr != nil {
+			_ = cleanup()
+			return nil, fmt.Errorf("acme: dns-01 propagation %s: %w", name, perr)
+		}
+	case s.Resolver != nil:
 		records, lerr := s.Resolver.LookupTXT(ctx, name)
 		if lerr != nil {
 			_ = cleanup()
