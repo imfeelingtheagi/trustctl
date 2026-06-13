@@ -1,0 +1,232 @@
+// Package est implements the RFC 7030 EST enrollment server, so network devices
+// and IoT fleets enroll and re-enroll for certificates automatically, under
+// certificate-profile control (S8.1). It is the server side only; the embedded
+// device client is S8.6.
+//
+// The wire formats (base64 PKCS#10 in, certs-only PKCS#7 out) route through the
+// crypto boundary (AN-3). Enrollment is an audited event (AN-2), issuance is
+// idempotent and outbox-mediated through the injected Enroller (AN-5/AN-6), and
+// every enrollment runs on a bounded pool so a burst cannot starve other
+// subsystems (AN-7).
+package est
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/events"
+)
+
+// Enroller brokers an EST enrollment to the platform issuance path: it validates
+// the CSR against profileName (S8.1) and mints a certificate idempotently
+// (AN-5/AN-6), returning the issued leaf in DER. A real implementation wraps
+// ca.IssuanceService; tests inject a double.
+type Enroller interface {
+	Enroll(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) (leafDER []byte, err error)
+}
+
+// Authenticator authorizes an enrolling client (RFC 7030 §3.2.3 HTTP auth, on top
+// of TLS). A real deployment checks an enrollment credential; tests inject a double.
+type Authenticator interface {
+	Authenticate(r *http.Request) bool
+}
+
+// Server is the EST endpoint set. Mount Handler() under the control plane's TLS
+// listener (the S15.0 assembly mounts it live).
+type Server struct {
+	enroller Enroller
+	auth     Authenticator
+	caChain  [][]byte // CA certificate chain, DER, for /cacerts
+	profile  string   // the certificate profile this endpoint binds (S8.1)
+	pool     *bulkhead.Pool
+	log      *events.Log
+	mux      *http.ServeMux
+}
+
+// Config wires a Server.
+type Config struct {
+	Enroller    Enroller
+	Auth        Authenticator
+	CAChainDER  [][]byte
+	ProfileName string
+	Pool        *bulkhead.Pool // AN-7; nil runs inline
+	Log         *events.Log    // AN-2; nil disables audit emit
+}
+
+// New builds the EST server.
+func New(cfg Config) *Server {
+	s := &Server{
+		enroller: cfg.Enroller, auth: cfg.Auth, caChain: cfg.CAChainDER,
+		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /.well-known/est/cacerts", s.cacerts)
+	mux.HandleFunc("POST /.well-known/est/simpleenroll", s.enroll("est-enroll"))
+	mux.HandleFunc("POST /.well-known/est/simplereenroll", s.enroll("est-reenroll"))
+	mux.HandleFunc("GET /.well-known/est/csrattrs", s.csrattrs)
+	s.mux = mux
+	return s
+}
+
+// Handler returns the EST http.Handler.
+func (s *Server) Handler() http.Handler { return s.mux }
+
+// ServeHTTP implements http.Handler.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+
+const maxEnrollBody = 1 << 16 // 64 KiB: a CSR is small; bound untrusted input.
+
+func writePKCS7(w http.ResponseWriter, p7 []byte) {
+	w.Header().Set("Content-Type", "application/pkcs7-mime; smime-type=certs-only")
+	w.Header().Set("Content-Transfer-Encoding", "base64")
+	w.WriteHeader(http.StatusOK)
+	enc := base64.NewEncoder(base64.StdEncoding, w)
+	_, _ = enc.Write(p7)
+	_ = enc.Close()
+}
+
+// cacerts returns the CA chain as a certs-only PKCS#7 (RFC 7030 §4.1). No auth
+// required — a client needs the CA to establish explicit TLS trust.
+func (s *Server) cacerts(w http.ResponseWriter, _ *http.Request) {
+	p7, err := crypto.DegeneratePKCS7(s.caChain)
+	if err != nil {
+		http.Error(w, "ca unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	writePKCS7(w, p7)
+}
+
+// csrattrs advertises required CSR attributes (RFC 7030 §4.5). This server imposes
+// none beyond the bound profile, so it returns 204 No Content (a valid response).
+func (s *Server) csrattrs(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// parseEnrollBody decodes the base64 PKCS#10 request body to CSR DER and verifies
+// its self-signature. It fails closed on oversize, bad base64, or an unparseable
+// CSR — the fuzz target.
+func parseEnrollBody(r io.Reader) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(r, maxEnrollBody))
+	if err != nil {
+		return nil, err
+	}
+	der, err := base64.StdEncoding.DecodeString(string(trimSpace(raw)))
+	if err != nil {
+		return nil, errors.New("est: body is not valid base64 PKCS#10")
+	}
+	if err := crypto.VerifyCertificateRequest(der); err != nil {
+		return nil, errors.New("est: invalid CSR")
+	}
+	return der, nil
+}
+
+func trimSpace(b []byte) []byte {
+	out := b[:0]
+	for _, c := range b {
+		if c == '\n' || c == '\r' || c == ' ' || c == '\t' {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// enroll handles /simpleenroll and /simplereenroll. The opType distinguishes them
+// in the audit trail.
+func (s *Server) enroll(opType string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.auth == nil || !s.auth.Authenticate(r) {
+			w.Header().Set("WWW-Authenticate", `Basic realm="est"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		csrDER, err := parseEnrollBody(r.Body)
+		if err != nil {
+			s.audit(r.Context(), opType, "deny", err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// AN-7: run the issuance on the bounded pool; a saturated pool sheds fast.
+		leafDER, rerr := s.runBounded(r.Context(), func(ctx context.Context) ([]byte, error) {
+			// The Idempotency-Key (RFC-agnostic but honored when the client sends one)
+			// makes a retried enrollment safe (AN-5).
+			idem := r.Header.Get("Idempotency-Key")
+			if idem == "" {
+				idem = opType + ":" + base64.StdEncoding.EncodeToString(csrDER)[:32]
+			}
+			return s.enroller.Enroll(ctx, csrDER, s.profile, "est", idem)
+		})
+		if errors.Is(rerr, bulkhead.ErrRejected) {
+			s.audit(r.Context(), opType, "shed", "bulkhead full")
+			http.Error(w, "busy", http.StatusServiceUnavailable)
+			return
+		}
+		if rerr != nil {
+			s.audit(r.Context(), opType, "deny", rerr.Error())
+			http.Error(w, "enrollment refused", http.StatusForbidden)
+			return
+		}
+		p7, err := crypto.DegeneratePKCS7([][]byte{leafDER})
+		if err != nil {
+			http.Error(w, "encode error", http.StatusInternalServerError)
+			return
+		}
+		s.audit(r.Context(), opType, "allow", "")
+		writePKCS7(w, p7)
+	}
+}
+
+// runBounded executes fn on the pool (AN-7); a nil pool runs inline.
+func (s *Server) runBounded(ctx context.Context, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if s.pool == nil {
+		return fn(ctx)
+	}
+	type res struct {
+		der []byte
+		err error
+	}
+	done := make(chan res, 1)
+	if err := s.pool.Submit(func() { d, e := fn(ctx); done <- res{d, e} }); err != nil {
+		return nil, bulkhead.ErrRejected
+	}
+	r := <-done
+	return r.der, r.err
+}
+
+// audit emits an AN-2 enrollment event (actor attached from ctx). A nil log is a
+// no-op.
+func (s *Server) audit(ctx context.Context, opType, decision, reason string) {
+	if s.log == nil {
+		return
+	}
+	payload, _ := json.Marshal(struct {
+		Op       string `json:"op"`
+		Decision string `json:"decision"`
+		Reason   string `json:"reason,omitempty"`
+		Profile  string `json:"profile,omitempty"`
+	}{opType, decision, reason, s.profile})
+	_, _ = s.log.Append(ctx, events.Event{Type: "protocol.est." + opType, TenantID: tenantFromCtx(ctx), Data: payload})
+}
+
+// tenantFromCtx resolves the tenant the EST endpoint serves. EST endpoints are
+// tenant-scoped by their mount (S15.0); when unset (standalone/tests) the event is
+// honestly unattributed to a tenant.
+func tenantFromCtx(ctx context.Context) string {
+	if t, ok := ctx.Value(tenantKey{}).(string); ok {
+		return t
+	}
+	return ""
+}
+
+type tenantKey struct{}
+
+// WithTenant tags ctx with the tenant an EST request serves (used by the live mount).
+func WithTenant(ctx context.Context, tenant string) context.Context {
+	return context.WithValue(ctx, tenantKey{}, tenant)
+}

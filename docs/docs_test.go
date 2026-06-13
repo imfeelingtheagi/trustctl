@@ -33,6 +33,7 @@ var requiredPages = []string{
 	"guides/plugin-authoring.md",
 	"guides/connector-authoring.md",
 	"guides/profile-authoring.md",
+	"guides/est-enrollment.md",
 }
 
 func read(t *testing.T, rel string) string {
@@ -493,6 +494,17 @@ func TestThreatModelExtendsSigner(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.FromSlash("design/signing-service.md")); err != nil {
 		t.Fatalf("the signer design doc the threat model extends must exist: %v", err)
+	}
+}
+
+// TestESTEnrollmentGuide (S8.2): the EST device-enrollment guide documents the
+// RFC 7030 endpoints, profile control, and the fail-closed behavior.
+func TestESTEnrollmentGuide(t *testing.T) {
+	low := strings.ToLower(read(t, "guides/est-enrollment.md"))
+	for _, want := range []string{"rfc 7030", "/cacerts", "/simpleenroll", "/simplereenroll", "/csrattrs", "pkcs#7", "profile", "bulkhead"} {
+		if !strings.Contains(low, want) {
+			t.Errorf("EST guide should cover %q", want)
+		}
 	}
 }
 
