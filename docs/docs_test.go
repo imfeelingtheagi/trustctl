@@ -32,6 +32,7 @@ var requiredPages = []string{
 	"telemetry.md",
 	"guides/plugin-authoring.md",
 	"guides/connector-authoring.md",
+	"guides/profile-authoring.md",
 }
 
 func read(t *testing.T, rel string) string {
@@ -492,6 +493,21 @@ func TestThreatModelExtendsSigner(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.FromSlash("design/signing-service.md")); err != nil {
 		t.Fatalf("the signer design doc the threat model extends must exist: %v", err)
+	}
+}
+
+// TestProfileAuthoringGuide (S8.1): the operator guide documents how to author
+// versioned, tenant-scoped certificate profiles and the registration-authority
+// separation (a requester cannot self-issue).
+func TestProfileAuthoringGuide(t *testing.T) {
+	low := strings.ToLower(read(t, "guides/profile-authoring.md"))
+	for _, want := range []string{"profile", "version", "ra-officer", "certs:issue", "allowed_key_algorithms", "max_validity", "trustctl-cli profiles"} {
+		if !strings.Contains(low, strings.ToLower(want)) {
+			t.Errorf("profile-authoring guide should cover %q", want)
+		}
+	}
+	if !strings.Contains(low, "cannot self-issue") && !strings.Contains(low, "cannot issue") {
+		t.Error("guide must explain the RA separation (a requester cannot self-issue)")
 	}
 }
 

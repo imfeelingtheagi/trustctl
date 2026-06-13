@@ -32,6 +32,37 @@ func (o *Orchestrator) emit(ctx context.Context, eventType, tenantID string, pay
 	return ev, nil
 }
 
+// CreateProfile records a new certificate-profile version and emits a
+// profile.created (or profile.updated for a later version) AN-2 audit event,
+// attributed to the actor in ctx (S8.1). Certificate profiles are not an
+// event-sourced read model, so the event IS the audit record; the versioned row
+// is written directly under RLS by the store.
+func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string, spec json.RawMessage) (store.ProfileRecord, error) {
+	actor := ""
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = a.Subject
+	}
+	rec, err := o.store.CreateProfileVersion(ctx, store.ProfileRecord{TenantID: tenantID, Name: name, Spec: spec, CreatedBy: actor})
+	if err != nil {
+		return store.ProfileRecord{}, err
+	}
+	evType := "profile.created"
+	if rec.Version > 1 {
+		evType = "profile.updated"
+	}
+	payload, err := json.Marshal(struct {
+		Name    string `json:"name"`
+		Version int    `json:"version"`
+	}{name, rec.Version})
+	if err != nil {
+		return store.ProfileRecord{}, err
+	}
+	if _, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, Data: payload}); err != nil {
+		return store.ProfileRecord{}, err
+	}
+	return rec, nil
+}
+
 // CreateOwner records an owner.created event and returns the new owner.
 func (o *Orchestrator) CreateOwner(ctx context.Context, tenantID, kind, name, email string) (store.Owner, error) {
 	id := uuid.NewString()

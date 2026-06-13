@@ -214,6 +214,14 @@ func componentSchemas() map[string]*Schema {
 		"token": str(), "enroll_path": str(),
 	}, "token")
 
+	profile := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "version": {Type: "integer"},
+		"active": {Type: "boolean"}, "created_by": str(), "spec": {Type: "object"},
+	}, "id", "name", "version")
+	profileReq := object(map[string]*Schema{
+		"name": str(), "spec": {Type: "object"},
+	}, "name", "spec")
+
 	return map[string]*Schema{
 		"Problem":           problemSchema,
 		"Agent":             agent,
@@ -228,6 +236,9 @@ func componentSchemas() map[string]*Schema {
 		"Owner":             owner,
 		"OwnerRequest":      ownerReq,
 		"OwnerList":         list("Owner"),
+		"Profile":           profile,
+		"ProfileRequest":    profileReq,
+		"ProfileList":       list("Profile"),
 		"Issuer":            issuer,
 		"IssuerRequest":     issuerReq,
 		"IssuerList":        list("Issuer"),

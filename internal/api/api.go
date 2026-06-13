@@ -243,6 +243,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: []string{"id"}, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
 
+		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite},
+		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},
+		{method: "GET", path: "/api/v1/profiles/{name}/versions/{version}", opID: "getProfileVersion", summary: "Get a certificate-profile version", handler: a.getProfileVersion, pathParams: []string{"name", "version"}, resSchema: "Profile", successCode: "200", perm: authz.ProfilesRead},
+
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
 

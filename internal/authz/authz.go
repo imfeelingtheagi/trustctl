@@ -27,6 +27,14 @@ const (
 	RiskRead        Permission = "risk:read"
 	AgentsRead      Permission = "agents:read"
 	AgentsWrite     Permission = "agents:write"
+
+	// Certificate-profile and registration-authority permissions (S8.1). The RA
+	// model separates who may REQUEST a certificate (CertsRequest) from who may
+	// APPROVE/ISSUE it (CertsIssue), so a requester cannot self-issue.
+	ProfilesRead  Permission = "profiles:read"
+	ProfilesWrite Permission = "profiles:write"
+	CertsRequest  Permission = "certs:request"
+	CertsIssue    Permission = "certs:issue"
 )
 
 // Wildcard is a permission that allows every action; it is held by admin.
@@ -38,6 +46,7 @@ func allResourcePermissions() []Permission {
 		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
+		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 	}
 }
 
@@ -61,12 +70,15 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, ProfilesRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
 		"viewer":   {Name: "viewer", Permissions: readOnly},
 		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead}},
+		// Registration authority: may author/read profiles and REQUEST certificates,
+		// but may NOT approve/issue them (no certs:issue) — the RA separation (S8.1).
+		"ra-officer": {Name: "ra-officer", Permissions: []Permission{ProfilesRead, ProfilesWrite, CertsRead, CertsRequest}},
 	}
 }
 

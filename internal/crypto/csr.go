@@ -2,6 +2,8 @@ package crypto
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -39,6 +41,41 @@ func VerifyCertificateRequest(der []byte) error {
 		return err
 	}
 	return csr.CheckSignature()
+}
+
+// CSRInfo is the backend-agnostic view of a CSR a caller needs to validate it
+// against a certificate profile (S8.1), so profile enforcement never imports
+// crypto/x509 (AN-3).
+type CSRInfo struct {
+	KeyAlgorithm string   // "RSA" | "ECDSA" | "Ed25519"
+	KeyBits      int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
+	DNSNames     []string // SAN dNSNames in the request
+	CommonName   string
+}
+
+// InspectCSR parses a CSR (verifying its self-signature) and returns the
+// profile-relevant attributes of its public key and subject. It is the single
+// inspection seam used by profile validation.
+func InspectCSR(der []byte) (CSRInfo, error) {
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return CSRInfo{}, err
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return CSRInfo{}, err
+	}
+	info := CSRInfo{DNSNames: csr.DNSNames, CommonName: csr.Subject.CommonName}
+	switch pub := csr.PublicKey.(type) {
+	case *rsa.PublicKey:
+		info.KeyAlgorithm, info.KeyBits = "RSA", pub.N.BitLen()
+	case *ecdsa.PublicKey:
+		info.KeyAlgorithm, info.KeyBits = "ECDSA", pub.Curve.Params().BitSize
+	case ed25519.PublicKey:
+		info.KeyAlgorithm, info.KeyBits = "Ed25519", 256
+	default:
+		info.KeyAlgorithm = "unknown"
+	}
+	return info, nil
 }
 
 // x509Signer adapts a DigestSigner to the standard library's crypto.Signer so a

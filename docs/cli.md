@@ -40,6 +40,7 @@ One command per core API operation:
 | `issuers` | `create` · `list` · `get` |
 | `identities` | `create` · `list` · `get` · `transition` |
 | `certificates` | `ingest` · `list` · `get` |
+| `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
 | `graph` | `nodes` · `reachable` · `blast-radius` · `query` |
 | `risk` | `credentials` |

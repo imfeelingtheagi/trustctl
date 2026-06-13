@@ -56,3 +56,4 @@ nav:
   - Authoring guides:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md
+      - Certificate profiles: guides/profile-authoring.md

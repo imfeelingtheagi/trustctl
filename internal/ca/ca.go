@@ -20,6 +20,15 @@ type IssueRequest struct {
 	CSR      []byte // PKCS#10 DER
 	DNSNames []string
 	TTL      time.Duration
+
+	// Profile binding (S8.1). When ProfileName is set, the issuance service
+	// validates the request against that tenant's active profile version before
+	// signing. Protocol names the enrollment path ("api"/"acme"/"est"/...), which a
+	// profile may restrict; RequestedEKUs are the extended key usages the caller
+	// asks for, checked against the profile's allow-list.
+	ProfileName   string
+	Protocol      string
+	RequestedEKUs []string
 }
 
 // Certificate is an issued certificate (the leaf followed by its chain, PEM).

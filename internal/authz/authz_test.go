@@ -106,3 +106,25 @@ func TestPrincipalWithoutGrantsIsDenied(t *testing.T) {
 		t.Error("a principal with no grants must be denied")
 	}
 }
+
+// TestRegistrationAuthoritySeparation is the S8.1 RA acceptance: the registration
+// authority may REQUEST a certificate (and author profiles) but may NOT
+// approve/issue one — a requester cannot self-issue. An operator/approver can.
+func TestRegistrationAuthoritySeparation(t *testing.T) {
+	scope := authz.Scope{TenantID: "t1"}
+	ra := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: authz.BuiltinRoles()["ra-officer"], Scope: scope}}}
+	op := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: authz.BuiltinRoles()["operator"], Scope: scope}}}
+
+	if !ra.Can(authz.CertsRequest, scope) {
+		t.Error("ra-officer must be able to request certificates")
+	}
+	if !ra.Can(authz.ProfilesWrite, scope) {
+		t.Error("ra-officer must be able to author profiles")
+	}
+	if ra.Can(authz.CertsIssue, scope) {
+		t.Error("SEPARATION VIOLATED: ra-officer must NOT be able to self-issue (certs:issue)")
+	}
+	if !op.Can(authz.CertsIssue, scope) {
+		t.Error("operator (approver) must be able to issue certificates")
+	}
+}

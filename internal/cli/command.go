@@ -43,6 +43,10 @@ var commandTable = []Command{
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
 
+	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
+	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},
+	{Name: []string{"profiles", "get-version"}, Method: "GET", Path: "/api/v1/profiles/{name}/versions/{version}", Summary: "Get a certificate-profile version"},
+
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Export a signed audit bundle"},
 
