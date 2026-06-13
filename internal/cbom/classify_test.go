@@ -3,7 +3,7 @@ package cbom_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/cbom"
+	"trustctl.io/trustctl/internal/cbom"
 )
 
 func TestClassifyKey(t *testing.T) {

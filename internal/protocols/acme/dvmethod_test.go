@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/tlsprobe"
-	acmesrv "certctl.io/certctl/internal/protocols/acme"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/tlsprobe"
+	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
 )
 
 // validatorFunc adapts a function to the Validator interface for routing tests.

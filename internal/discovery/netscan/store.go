@@ -3,8 +3,8 @@ package netscan
 import (
 	"context"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // sourceNetworkScan labels inventory rows that this scanner discovered.

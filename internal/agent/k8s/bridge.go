@@ -24,7 +24,7 @@ type SignerFunc func(ctx context.Context, csrDER []byte) ([]byte, error)
 func (f SignerFunc) Sign(ctx context.Context, csrDER []byte) ([]byte, error) { return f(ctx, csrDER) }
 
 // Bridge is a cert-manager external issuer: it signs CertificateRequests that
-// name certctl as their issuer and writes the issued certificate back to each
+// name trustctl as their issuer and writes the issued certificate back to each
 // request's status.
 type Bridge struct {
 	client      *Client
@@ -153,7 +153,7 @@ func upsertReady(existing any) []any {
 		"type":    "Ready",
 		"status":  "True",
 		"reason":  "Issued",
-		"message": "certctl signed the request",
+		"message": "trustctl signed the request",
 	}
 	conds, _ := existing.([]any)
 	for i, c := range conds {

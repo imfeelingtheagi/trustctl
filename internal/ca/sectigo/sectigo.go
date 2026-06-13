@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/catemplate"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/catemplate"
 )
 
 const (
@@ -116,7 +116,7 @@ func (b *backend) enroll(ctx context.Context, req ca.IssueRequest) (int, error) 
 		"numberServers": 1,
 		"serverType":    -1,
 		"subjAltNames":  strings.Join(req.DNSNames, ","),
-		"comments":      "Issued by certctl",
+		"comments":      "Issued by trustctl",
 	}
 	var out struct {
 		SSLID   int    `json:"sslId"`

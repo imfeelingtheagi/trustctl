@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	cryptoca "certctl.io/certctl/internal/crypto/ca"
+	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
 )
 
 // devKey is the API key this double accepts in X-DC-DEVKEY.

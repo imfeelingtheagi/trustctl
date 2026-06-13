@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 )
 
 // TestServeHTTPSEncryptsAndRefusesPlaintext is the B4 acceptance: the control
@@ -26,7 +26,7 @@ func TestServeHTTPSEncryptsAndRefusesPlaintext(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "certctl_session", Value: "top-secret-session"})
+		http.SetCookie(w, &http.Cookie{Name: "trustctl_session", Value: "top-secret-session"})
 		_, _ = io.WriteString(w, "ok")
 	})}
 	go func() { _ = sc.ServeHTTPS(srv, ln) }()
@@ -55,7 +55,7 @@ func TestServeHTTPSEncryptsAndRefusesPlaintext(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("HTTPS GET = %d, want 200", resp.StatusCode)
 	}
-	if !strings.Contains(resp.Header.Get("Set-Cookie"), "certctl_session") {
+	if !strings.Contains(resp.Header.Get("Set-Cookie"), "trustctl_session") {
 		t.Errorf("session cookie not delivered over TLS: %q", resp.Header.Get("Set-Cookie"))
 	}
 
@@ -69,7 +69,7 @@ func TestServeHTTPSEncryptsAndRefusesPlaintext(t *testing.T) {
 		if presp.StatusCode/100 == 2 {
 			t.Errorf("plaintext request to the TLS socket was served by the handler (%d); cleartext must be refused", presp.StatusCode)
 		}
-		if strings.Contains(presp.Header.Get("Set-Cookie"), "certctl_session") {
+		if strings.Contains(presp.Header.Get("Set-Cookie"), "trustctl_session") {
 			t.Error("session cookie was delivered over a plaintext request")
 		}
 	}
@@ -78,7 +78,7 @@ func TestServeHTTPSEncryptsAndRefusesPlaintext(t *testing.T) {
 // TestSelfSignedServerCertHasUsableSANs: the generated certificate is a server
 // certificate covering the requested hostnames and IPs.
 func TestSelfSignedServerCertHasUsableSANs(t *testing.T) {
-	sc, err := mtls.SelfSignedServerCert([]string{"localhost", "127.0.0.1", "certctl"}, time.Hour)
+	sc, err := mtls.SelfSignedServerCert([]string{"localhost", "127.0.0.1", "trustctl"}, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

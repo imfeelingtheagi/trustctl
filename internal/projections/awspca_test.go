@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/awspca"
-	"certctl.io/certctl/internal/ca/awspca/awspcafake"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/awspca"
+	"trustctl.io/trustctl/internal/ca/awspca/awspcafake"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // TestAWSPCAPluginRidesIssuanceRails proves the AWS Private CA plugin rides the

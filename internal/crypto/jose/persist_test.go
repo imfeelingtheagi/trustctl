@@ -3,7 +3,7 @@ package jose_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/crypto/jose"
 )
 
 // TestSigningKeyPersistRoundTrip is the R2.1 persistent-export-key acceptance at

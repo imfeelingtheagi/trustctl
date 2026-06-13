@@ -2,7 +2,7 @@
 
 // Package kubernetes_e2e is the in-cluster acceptance for S5.4: against a real
 // Kubernetes API server (kind/k3s in CI), the agent writes a certificate into a
-// Secret and bridges a cert-manager CertificateRequest to certctl issuance.
+// Secret and bridges a cert-manager CertificateRequest to trustctl issuance.
 //
 // It runs only under `go test -tags e2e` with the cluster coordinates in the
 // environment (K8S_SERVER, K8S_TOKEN, K8S_CA_FILE, K8S_NAMESPACE), which the CI
@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/agent/destination"
-	"certctl.io/certctl/internal/agent/k8s"
-	"certctl.io/certctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/agent/k8s"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 )
 
 func env(t *testing.T, key string) string {
@@ -93,7 +93,7 @@ func cluster(t *testing.T) (*k8s.Client, func(method, path string, body any) (in
 // Secret, which is then readable from the API server.
 func TestSecretDestinationWritesToCluster(t *testing.T) {
 	client, raw, ns := cluster(t)
-	name := fmt.Sprintf("certctl-e2e-%d", time.Now().Unix())
+	name := fmt.Sprintf("trustctl-e2e-%d", time.Now().Unix())
 
 	cred := destination.Credential{CertPEM: []byte("E2E-CERT-PEM"), KeyPEM: []byte("E2E-KEY-PEM")}
 	if err := k8s.NewSecretDestination(client, ns, name).Install(context.Background(), cred); err != nil {
@@ -124,7 +124,7 @@ func TestSecretDestinationWritesToCluster(t *testing.T) {
 func TestCertManagerBridgeInCluster(t *testing.T) {
 	client, raw, ns := cluster(t)
 
-	ca, err := mtls.NewCA("certctl e2e issuer")
+	ca, err := mtls.NewCA("trustctl e2e issuer")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestCertManagerBridgeInCluster(t *testing.T) {
 		"metadata": map[string]any{"name": name, "namespace": ns},
 		"spec": map[string]any{
 			"request":   base64.StdEncoding.EncodeToString(reqPEM),
-			"issuerRef": map[string]any{"name": "certctl", "kind": "ClusterIssuer", "group": "certctl.io"},
+			"issuerRef": map[string]any{"name": "trustctl", "kind": "ClusterIssuer", "group": "trustctl.io"},
 		},
 	}
 	if st, body := raw(http.MethodPost, "/apis/cert-manager.io/v1/namespaces/"+ns+"/certificaterequests", cr); st/100 != 2 {
@@ -156,7 +156,7 @@ func TestCertManagerBridgeInCluster(t *testing.T) {
 
 	bridge := k8s.NewBridge(client, k8s.SignerFunc(func(_ context.Context, csrDER []byte) ([]byte, error) {
 		return ca.SignClientCSR(csrDER, time.Hour)
-	}), "certctl", "certctl.io")
+	}), "trustctl", "trustctl.io")
 
 	n, err := bridge.Reconcile(context.Background(), ns)
 	if err != nil {

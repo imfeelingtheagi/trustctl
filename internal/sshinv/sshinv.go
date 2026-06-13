@@ -13,7 +13,7 @@ import (
 	"context"
 	"sync"
 
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // Discovery source kinds.

@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/detrand"
+	"trustctl.io/trustctl/internal/crypto/detrand"
 )
 
 // The stream is a pure function of the seed: identical seeds produce identical
@@ -13,10 +13,10 @@ import (
 func TestSameSeedSameStream(t *testing.T) {
 	a := make([]byte, 96)
 	b := make([]byte, 96)
-	if _, err := io.ReadFull(detrand.New([]byte("certctl"), []byte("seed")), a); err != nil {
+	if _, err := io.ReadFull(detrand.New([]byte("trustctl"), []byte("seed")), a); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := io.ReadFull(detrand.New([]byte("certctl"), []byte("seed")), b); err != nil {
+	if _, err := io.ReadFull(detrand.New([]byte("trustctl"), []byte("seed")), b); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(a, b) {

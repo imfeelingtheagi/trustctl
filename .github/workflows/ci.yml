@@ -36,7 +36,7 @@ jobs:
         run: make build
 
       - name: Smoke test (--version boots and exits cleanly)
-        run: ./bin/certctl --version
+        run: ./bin/trustctl --version
 
       - name: Test
         run: make test
@@ -198,8 +198,8 @@ jobs:
       # Lint the control-plane chart with the required external-datastore values.
       - name: Helm lint
         run: |
-          helm lint deploy/helm/certctl \
-            --set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+          helm lint deploy/helm/trustctl \
+            --set postgres.dsn='postgres://u:p@pg:5432/trustctl?sslmode=require' \
             --set nats.url='nats://nats:4222' --set kek.generate=true
 
       - name: Set up Go
@@ -214,8 +214,8 @@ jobs:
 
       - name: Render + schema-validate the chart
         run: |
-          helm template certctl deploy/helm/certctl --namespace certctl \
-            --set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+          helm template trustctl deploy/helm/trustctl --namespace trustctl \
+            --set postgres.dsn='postgres://u:p@pg:5432/trustctl?sslmode=require' \
             --set nats.url='nats://nats:4222' --set kek.generate=true \
             | kubeconform -strict -summary -ignore-missing-schemas
 
@@ -224,8 +224,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       # Pebble is the reference test ACME CA. The same RFC 8555 protocol-
-      # conformance routine that runs against certctl in the unit suite runs here
-      # against Pebble — a divergence in certctl's protocol surface from the
+      # conformance routine that runs against trustctl in the unit suite runs here
+      # against Pebble — a divergence in trustctl's protocol surface from the
       # reference surfaces as a test failure.
       pebble:
         # ghcr.io/letsencrypt/pebble:2.10.1 — the reference test ACME CA, pinned by
@@ -318,30 +318,30 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          go build -o dist\certctl-agent.exe .\cmd\certctl-agent
+          go build -o dist\trustctl-agent.exe .\cmd\trustctl-agent
           choco install wixtoolset --no-progress -y
           $wixDir = Get-ChildItem 'C:\Program Files (x86)' -Directory -Filter 'WiX Toolset *' |
             Sort-Object Name -Descending | Select-Object -First 1
           $bin = Join-Path $wixDir.FullName 'bin'
-          Copy-Item deploy\windows\certctl-agent.wxs dist\certctl-agent.wxs
-          & "$bin\candle.exe" -arch x64 -out dist\ dist\certctl-agent.wxs
-          & "$bin\light.exe" -b dist -out dist\certctl-agent.msi dist\certctl-agent.wixobj
+          Copy-Item deploy\windows\trustctl-agent.wxs dist\trustctl-agent.wxs
+          & "$bin\candle.exe" -arch x64 -out dist\ dist\trustctl-agent.wxs
+          & "$bin\light.exe" -b dist -out dist\trustctl-agent.msi dist\trustctl-agent.wixobj
           Get-ChildItem dist
 
       - name: Publish SHA-256 sums
         shell: pwsh
         run: |
-          Get-FileHash dist\certctl-agent.exe, dist\certctl-agent.msi -Algorithm SHA256 |
+          Get-FileHash dist\trustctl-agent.exe, dist\trustctl-agent.msi -Algorithm SHA256 |
             ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } |
             Tee-Object -FilePath dist\SHA256SUMS
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: certctl-agent-windows
+          name: trustctl-agent-windows
           path: |
-            dist/certctl-agent.exe
-            dist/certctl-agent.msi
+            dist/trustctl-agent.exe
+            dist/trustctl-agent.msi
             dist/SHA256SUMS
 
   kubernetes:
@@ -361,7 +361,7 @@ jobs:
       - name: Create kind cluster
         uses: helm/kind-action@v1
         with:
-          cluster_name: certctl-e2e
+          cluster_name: trustctl-e2e
 
       # Install the cert-manager API (CRDs). The bridge is the external issuer
       # for our CertificateRequests, so it is exercised against the real
@@ -376,8 +376,8 @@ jobs:
         run: |
           kubectl apply -f deploy/kubernetes/namespace.yaml
           kubectl apply -f deploy/kubernetes/rbac.yaml
-          kubectl -n certctl create serviceaccount certctl-e2e-admin
-          kubectl create clusterrolebinding certctl-e2e-admin --clusterrole=cluster-admin --serviceaccount=certctl:certctl-e2e-admin
+          kubectl -n trustctl create serviceaccount trustctl-e2e-admin
+          kubectl create clusterrolebinding trustctl-e2e-admin --clusterrole=cluster-admin --serviceaccount=trustctl:trustctl-e2e-admin
 
       - name: Run the in-cluster e2e (secret write + cert-manager bridge)
         shell: bash
@@ -387,13 +387,13 @@ jobs:
           # not masked by export's exit status (shellcheck SC2155).
           K8S_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
           # Agent token: the restricted identity the code under test uses.
-          K8S_TOKEN="$(kubectl -n certctl create token certctl-agent --duration=1h)"
+          K8S_TOKEN="$(kubectl -n trustctl create token trustctl-agent --duration=1h)"
           # Admin token: test fixtures and verification (the agent SA cannot
           # create CertificateRequests, by design).
-          K8S_ADMIN_TOKEN="$(kubectl -n certctl create token certctl-e2e-admin --duration=1h)"
+          K8S_ADMIN_TOKEN="$(kubectl -n trustctl create token trustctl-e2e-admin --duration=1h)"
           K8S_CA_FILE="$(mktemp)"
           kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_FILE"
-          K8S_NAMESPACE="certctl"
+          K8S_NAMESPACE="trustctl"
           export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE
           go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...
 

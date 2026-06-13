@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"certctl.io/certctl/internal/crypto"
-	signerpb "certctl.io/certctl/internal/signing/proto"
+	"trustctl.io/trustctl/internal/crypto"
+	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
 // Client is a control-plane client of the signing service over a Unix domain

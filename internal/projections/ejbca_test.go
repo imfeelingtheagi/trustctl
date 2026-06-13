@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/ejbca"
-	"certctl.io/certctl/internal/ca/ejbca/ejbcafake"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/ejbca"
+	"trustctl.io/trustctl/internal/ca/ejbca/ejbcafake"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // TestEJBCAPluginRidesIssuanceRails proves the EJBCA plugin rides the platform
@@ -27,7 +27,7 @@ func TestEJBCAPluginRidesIssuanceRails(t *testing.T) {
 	plugin := ejbca.New(ejbca.Config{
 		Name: "ejbca", BaseURL: srv.URL(), Token: srv.Token(),
 		CAName: "ManagementCA", CertificateProfile: "ENDUSER", EndEntityProfile: "User",
-		Username: "certctl", Password: "enroll-secret",
+		Username: "trustctl", Password: "enroll-secret",
 	})
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 

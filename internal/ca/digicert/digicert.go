@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/catemplate"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/catemplate"
 )
 
 const (

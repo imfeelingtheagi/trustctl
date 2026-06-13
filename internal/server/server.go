@@ -1,4 +1,4 @@
-// Package server is the composition root of the certctl control plane (S7.7): it
+// Package server is the composition root of the trustctl control plane (S7.7): it
 // wires the configuration, datastore, event log, projections, orchestrator, and
 // REST API into one serving process, provisions an issuing CA whose key lives in
 // the out-of-process signer (AN-4), and shuts everything down in order. It is the
@@ -18,19 +18,19 @@ import (
 	"path/filepath"
 	"time"
 
-	"certctl.io/certctl/internal/agent/enroll"
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/audit"
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/jose"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/observ"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/projections"
-	"certctl.io/certctl/internal/signing"
-	"certctl.io/certctl/internal/store"
-	"certctl.io/certctl/internal/webui"
+	"trustctl.io/trustctl/internal/agent/enroll"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/audit"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/observ"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/projections"
+	"trustctl.io/trustctl/internal/signing"
+	"trustctl.io/trustctl/internal/store"
+	"trustctl.io/trustctl/internal/webui"
 )
 
 // SignerProvider yields the current connected signer client, or nil when no
@@ -120,7 +120,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// Agent enrollment (F3/F15, S5.1): mint one-time bootstrap tokens and sign
 	// agents' CSRs into mTLS client certificates. Defaults are prepended so a
 	// caller's APIOptions still override them.
-	authority, err := enroll.NewAuthority("certctl Agent Enrollment CA")
+	authority, err := enroll.NewAuthority("trustctl Agent Enrollment CA")
 	if err != nil {
 		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
 	}
@@ -187,9 +187,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// metrics; the run also emits an audit event of its own.
 	if auditSvc != nil && d.AuditRetention > 0 && d.AuditArchiveDir != "" {
 		s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
-		s.mRetRuns = s.registry.CounterVec("certctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
-		s.mRetArchived = s.registry.CounterVec("certctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
-		s.mRetPruned = s.registry.CounterVec("certctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
+		s.mRetRuns = s.registry.CounterVec("trustctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
+		s.mRetArchived = s.registry.CounterVec("trustctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
+		s.mRetPruned = s.registry.CounterVec("trustctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
 	}
 
 	checks := []observ.Check{
@@ -246,7 +246,7 @@ const issuingCAHandle = "issuing-ca"
 // under the fixed handle, self-signs, and persists the cert for future boots.
 func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertFile string) error {
 	if cn == "" {
-		cn = "certctl Issuing CA"
+		cn = "trustctl Issuing CA"
 	}
 
 	// Reuse path: persisted cert + a signer that still has the CA key.

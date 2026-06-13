@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1.7
 
-# certctl control-plane image.
+# trustctl control-plane image.
 #
 # Reproducible, minimal (distroless "static", under 80 MB), and
 # unprivileged. It carries BOTH the control plane and the isolated signing
-# service (AN-4): in single-node mode certctl supervises certctl-signer as a
+# service (AN-4): in single-node mode trustctl supervises trustctl-signer as a
 # child process, so both binaries ship in one image.
 #
 # Reproducibility: CGO is disabled, paths are trimmed, the build id is pinned
@@ -44,9 +44,9 @@ ENV CGO_ENABLED=0 \
 
 # The shipped reproducible flags. Build the control plane and the signer with
 # identical flags so a rebuild of the same commit yields identical binaries.
-ARG LDFLAGS="-s -w -buildid= -X certctl.io/certctl/internal/buildinfo.version=${VERSION} -X certctl.io/certctl/internal/buildinfo.commit=${COMMIT} -X certctl.io/certctl/internal/buildinfo.date=${DATE}"
-RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/certctl        ./cmd/certctl
-RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/certctl-signer ./cmd/certctl-signer
+ARG LDFLAGS="-s -w -buildid= -X trustctl.io/trustctl/internal/buildinfo.version=${VERSION} -X trustctl.io/trustctl/internal/buildinfo.commit=${COMMIT} -X trustctl.io/trustctl/internal/buildinfo.date=${DATE}"
+RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl        ./cmd/trustctl
+RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl-signer ./cmd/trustctl-signer
 
 # ---- runtime stage --------------------------------------------------------
 # Distroless "static" is ~2 MB and ships only CA certificates, tzdata, and a
@@ -57,10 +57,10 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/certctl-sig
 # be, to be usable here). See .github/workflows/release.yml ("Resolve … by digest").
 FROM ${BASE_IMAGE}
 
-COPY --from=build /out/certctl        /usr/local/bin/certctl
-COPY --from=build /out/certctl-signer /usr/local/bin/certctl-signer
+COPY --from=build /out/trustctl        /usr/local/bin/trustctl
+COPY --from=build /out/trustctl-signer /usr/local/bin/trustctl-signer
 
 # 65532 is distroless' "nonroot" uid:gid — the process never runs as root.
 USER 65532:65532
 EXPOSE 8443
-ENTRYPOINT ["/usr/local/bin/certctl"]
+ENTRYPOINT ["/usr/local/bin/trustctl"]

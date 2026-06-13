@@ -1,6 +1,6 @@
-# certctl container distribution
+# trustctl container distribution
 
-Reproducible, signed, SBOM-bearing container images for the certctl control
+Reproducible, signed, SBOM-bearing container images for the trustctl control
 plane, plus a one-command evaluation stack.
 
 ## Evaluate with Docker Compose
@@ -13,27 +13,27 @@ This brings up three services:
 
 - **postgres** — PostgreSQL 16 (the read store; AN-1), health-gated.
 - **nats** — NATS 2.10 with JetStream enabled (the event spine; AN-2).
-- **certctl** — the control plane, built from `deploy/docker/Dockerfile`,
+- **trustctl** — the control plane, built from `deploy/docker/Dockerfile`,
   starting only once Postgres and NATS report healthy.
 
 The control plane is wired to Postgres and NATS through the **external** datastore
-configuration (`CERTCTL_POSTGRES_MODE=external`, `CERTCTL_NATS_MODE=external`),
+configuration (`TRUSTCTL_POSTGRES_MODE=external`, `TRUSTCTL_NATS_MODE=external`),
 so the eval stack exercises the same code path a production deployment uses.
 
 ## Point at your own external datastores
 
-The bundled `postgres`/`nats` services are a convenience. To run certctl against
+The bundled `postgres`/`nats` services are a convenience. To run trustctl against
 managed datastores, set the connection variables and drop the bundled services:
 
 ```bash
-export CERTCTL_POSTGRES_MODE=external
-export CERTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/certctl?sslmode=require'
-export CERTCTL_NATS_MODE=external
-export CERTCTL_NATS_URL='nats://nats.internal:4222'
+export TRUSTCTL_POSTGRES_MODE=external
+export TRUSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trustctl?sslmode=require'
+export TRUSTCTL_NATS_MODE=external
+export TRUSTCTL_NATS_URL='nats://nats.internal:4222'
 
-docker run --rm -e CERTCTL_POSTGRES_MODE -e CERTCTL_POSTGRES_DSN \
-  -e CERTCTL_NATS_MODE -e CERTCTL_NATS_URL -p 8443:8443 \
-  ghcr.io/imfeelingtheagi/certctl:latest
+docker run --rm -e TRUSTCTL_POSTGRES_MODE -e TRUSTCTL_POSTGRES_DSN \
+  -e TRUSTCTL_NATS_MODE -e TRUSTCTL_NATS_URL -p 8443:8443 \
+  ghcr.io/imfeelingtheagi/trustctl:latest
 ```
 
 The binary validates configuration on boot and **fails fast** on a bad
@@ -41,8 +41,8 @@ combination (for example, external Postgres with no DSN). Verify a configuration
 without starting the server:
 
 ```bash
-docker run --rm -e CERTCTL_POSTGRES_MODE=external -e CERTCTL_POSTGRES_DSN=... \
-  ghcr.io/imfeelingtheagi/certctl:latest -check-config
+docker run --rm -e TRUSTCTL_POSTGRES_MODE=external -e TRUSTCTL_POSTGRES_DSN=... \
+  ghcr.io/imfeelingtheagi/trustctl:latest -check-config
 ```
 
 `-check-config` prints the effective configuration with datastore credentials
@@ -53,7 +53,7 @@ redacted; it is also the container's health check.
 - **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no package
   manager, runs as uid/gid 65532. The image is ~40 MB — two static Go binaries
   plus the embedded web UI — and stays **under an 80 MB budget**, enforced in CI.
-- **Contents:** both `certctl` and `certctl-signer`. In single-node mode the
+- **Contents:** both `trustctl` and `trustctl-signer`. In single-node mode the
   control plane supervises the signer as a child process (AN-4); shipping both in
   one image keeps that boundary intact.
 - **Reproducible:** built with `CGO_ENABLED=0`, `-trimpath`, `-buildid=`, and
@@ -74,7 +74,7 @@ redacted; it is also the container's health check.
 Verify a published image:
 
 ```bash
-cosign verify ghcr.io/imfeelingtheagi/certctl:<tag> \
-  --certificate-identity-regexp '^https://github.com/.*/certctl/.github/workflows/release.yml@.*' \
+cosign verify ghcr.io/imfeelingtheagi/trustctl:<tag> \
+  --certificate-identity-regexp '^https://github.com/.*/trustctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

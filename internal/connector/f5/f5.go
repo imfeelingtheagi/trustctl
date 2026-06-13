@@ -16,8 +16,8 @@ import (
 	"net/url"
 	"strings"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 // Connector deploys certificates to an F5 BIG-IP over iControl REST.

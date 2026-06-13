@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/api/problem"
-	"certctl.io/certctl/internal/audit"
+	"trustctl.io/trustctl/internal/api/problem"
+	"trustctl.io/trustctl/internal/audit"
 )
 
 // auditQueryFromRequest builds an audit query from the request's tenant

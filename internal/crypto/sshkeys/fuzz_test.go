@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"certctl.io/certctl/internal/crypto/sshkeys"
+	"trustctl.io/trustctl/internal/crypto/sshkeys"
 )
 
 // seedAuthorizedLine builds one real "ssh-ed25519 AAAA... comment" line so the

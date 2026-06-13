@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/authz"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/authz"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 func newRBACServer(t *testing.T, custom ...authz.Role) *httptest.Server {

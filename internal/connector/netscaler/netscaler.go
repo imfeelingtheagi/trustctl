@@ -26,8 +26,8 @@ import (
 	"net/url"
 	"strings"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 const defaultFileLocation = "/nsconfig/ssl"

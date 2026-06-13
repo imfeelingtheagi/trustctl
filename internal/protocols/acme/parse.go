@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"certctl.io/certctl/internal/protocols/ari"
+	"trustctl.io/trustctl/internal/protocols/ari"
 )
 
 // Identifier is a single ACME order identifier (RFC 8555 §7.1.4). This server

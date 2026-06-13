@@ -1,6 +1,6 @@
 # Observability
 
-certctl's serving control plane is instrumented so an operator can answer "is it
+trustctl's serving control plane is instrumented so an operator can answer "is it
 healthy, and if not, where does it hurt" from telemetry alone (B6). Every request
 is traced, counted, and access-logged, and the real dependencies are health- and
 readiness-probed.
@@ -20,16 +20,16 @@ dependency blip.
 
 ```bash
 curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","signer":"ok"}}
-curl -fksS https://localhost:8443/metrics  # # TYPE certctl_http_requests_total counter ...
+curl -fksS https://localhost:8443/metrics  # # TYPE trustctl_http_requests_total counter ...
 ```
 
 ## Metrics
 
 The control plane emits, at minimum:
 
-- **`certctl_http_requests_total{method,route,code}`** — a counter of HTTP
+- **`trustctl_http_requests_total{method,route,code}`** — a counter of HTTP
   requests by method, normalized route, and status code.
-- **`certctl_http_request_duration_seconds{method,route}`** — a latency histogram
+- **`trustctl_http_request_duration_seconds{method,route}`** — a latency histogram
   (with `_bucket`, `_sum`, `_count`).
 
 Routes are **normalized** — opaque path segments (UUIDs, long hex ids, numeric
@@ -37,7 +37,7 @@ ids) are collapsed to `:id` — so per-id paths do not explode label cardinality
 no identifier leaks into a label.
 
 Scrape it with the example config in
-[`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/certctl/blob/main/deploy/observability/prometheus.example.yml).
+[`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/trustctl/blob/main/deploy/observability/prometheus.example.yml).
 
 ## Tracing
 
@@ -59,7 +59,7 @@ standard, so it interoperates with OpenTelemetry/Jaeger collectors on the wire:
 
 ## Structured logs
 
-The control plane logs in **structured JSON** (or text — set `CERTCTL_LOG_FORMAT`)
+The control plane logs in **structured JSON** (or text — set `TRUSTCTL_LOG_FORMAT`)
 via `log/slog`, wired into the serving path. Each request emits one access-log
 record carrying the **`trace_id`** correlation field plus the method, normalized
 route, status, response size, and duration.
@@ -71,7 +71,7 @@ the normalized route, and the status. This is asserted by a test.
 ## Dashboards & alerts
 
 Baseline operator assets ship under
-[`deploy/observability/`](https://github.com/imfeelingtheagi/certctl/tree/main/deploy/observability):
+[`deploy/observability/`](https://github.com/imfeelingtheagi/trustctl/tree/main/deploy/observability):
 
 - **`alerts.yml`** — Prometheus alerting rules: control plane down, 5xx error rate
   above 5%, and p99 latency above 1s. Every metric the rules reference is one the
@@ -85,8 +85,8 @@ Baseline operator assets ship under
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CERTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
-| `CERTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
+| `TRUSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
+| `TRUSTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
 
 `/metrics` and `/readyz` are always served and unauthenticated; restrict them at
 your ingress / network policy if you do not want them publicly reachable.

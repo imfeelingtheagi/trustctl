@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"certctl.io/certctl/internal/ca/gcpcas"
-	cryptoca "certctl.io/certctl/internal/crypto/ca"
+	"trustctl.io/trustctl/internal/ca/gcpcas"
+	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
 )
 
 // caPool is the CA pool resource this double recognizes.
-const caPool = "projects/certctl-test/locations/us-central1/caPools/test-pool"
+const caPool = "projects/trustctl-test/locations/us-central1/caPools/test-pool"
 
 // API is an in-process CAS double backed by a software CA.
 type API struct {

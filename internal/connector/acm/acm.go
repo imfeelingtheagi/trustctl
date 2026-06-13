@@ -35,9 +35,9 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 const (

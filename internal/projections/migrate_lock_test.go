@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // TestMigrateSerializesViaAdvisoryLock is the R2.5 disconfirming test for the
@@ -162,7 +162,7 @@ func freshMigrationDB(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("connect admin: %v", err)
 	}
-	name := fmt.Sprintf("certctl_migr_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("trustctl_migr_%d", time.Now().UnixNano())
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		_ = admin.Close(ctx)
 		t.Fatalf("create database: %v", err)

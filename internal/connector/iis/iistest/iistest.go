@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"certctl.io/certctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector"
 )
 
 // Server is an in-process stand-in for an IIS host. It satisfies connector.Ops.

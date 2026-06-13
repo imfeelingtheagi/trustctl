@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // Found is a certificate discovered through a cloud-provider API.

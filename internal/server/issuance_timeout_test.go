@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // slowSigner wraps a real signer but stalls before each signature — the fault we

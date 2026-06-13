@@ -12,10 +12,10 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/crypto/pfx"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/pfx"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 // defaultAppID is the HTTP.SYS application id IIS uses for its SSL bindings.

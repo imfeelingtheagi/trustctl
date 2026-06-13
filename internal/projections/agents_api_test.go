@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // stubTokenIssuer is a fake agent BootstrapTokenIssuer. It records how many

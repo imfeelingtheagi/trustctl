@@ -7,9 +7,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/signing"
-	signerpb "certctl.io/certctl/internal/signing/proto"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/signing"
+	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
 // TestServerLifecycle exercises the handlers in-process (the over-UDS path is

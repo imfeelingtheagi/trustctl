@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // ---- DTOs -----------------------------------------------------------------
@@ -105,7 +105,7 @@ type listResponse struct {
 
 // ---- owners ---------------------------------------------------------------
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) createOwner(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -162,7 +162,7 @@ func (a *API) listOwners(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
 }
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) updateOwner(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
@@ -182,7 +182,7 @@ func (a *API) updateOwner(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) deleteOwner(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")
@@ -196,7 +196,7 @@ func (a *API) deleteOwner(w http.ResponseWriter, r *http.Request) {
 
 // ---- issuers --------------------------------------------------------------
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) createIssuer(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -259,7 +259,7 @@ func (a *API) listIssuers(w http.ResponseWriter, r *http.Request) {
 
 // ---- identities -----------------------------------------------------------
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -338,7 +338,7 @@ func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
 }
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")

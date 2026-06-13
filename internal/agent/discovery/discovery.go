@@ -15,7 +15,7 @@ import (
 	"context"
 	"fmt"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // Source kinds recorded on each discovery.

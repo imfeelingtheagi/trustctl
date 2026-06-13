@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/auth"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/auth"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // TestAPITokenScopesEnforced is the acceptance: an API token presented as a
@@ -50,7 +50,7 @@ func TestAPITokenScopesEnforced(t *testing.T) {
 	assertProblem(t, hdr, body, http.StatusForbidden)
 
 	// An unknown token is rejected.
-	if st, _, _ := do(t, srv, "GET", "/api/v1/identities", reqOpts{bearer: "ct_deadbeefdeadbeefdeadbeef"}); st != http.StatusUnauthorized {
+	if st, _, _ := do(t, srv, "GET", "/api/v1/identities", reqOpts{bearer: "tt_deadbeefdeadbeefdeadbeef"}); st != http.StatusUnauthorized {
 		t.Errorf("unknown token GET = %d, want 401", st)
 	}
 }

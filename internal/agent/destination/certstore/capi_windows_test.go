@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/agent/destination"
-	"certctl.io/certctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 )
 
 // winTestCredential mints a real key + certificate chain via the crypto
@@ -20,7 +20,7 @@ import (
 // only (no crypto/* in a non-boundary package; AN-3).
 func winTestCredential(t *testing.T) (certPEM, keyPEM []byte) {
 	t.Helper()
-	ca, err := mtls.NewCA("certctl windows store test CA")
+	ca, err := mtls.NewCA("trustctl windows store test CA")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ var userMY = destination.StoreRef{Location: destination.CurrentUser, Name: "MY"}
 // (non-exportable) private key.
 func TestWindowsStoreInstallsCertWithKey(t *testing.T) {
 	w := NewWindows()
-	name := fmt.Sprintf("certctl-test-key-%d", time.Now().UnixNano())
+	name := fmt.Sprintf("trustctl-test-key-%d", time.Now().UnixNano())
 	certPEM, keyPEM := winTestCredential(t)
 
 	if err := w.ImportWithKey(userMY, name, certPEM, keyPEM); err != nil {
@@ -102,7 +102,7 @@ func TestWindowsStoreInstallsCertWithKey(t *testing.T) {
 // associated key, and Delete removes it.
 func TestWindowsStoreCertOnly(t *testing.T) {
 	w := NewWindows()
-	name := fmt.Sprintf("certctl-test-certonly-%d", time.Now().UnixNano())
+	name := fmt.Sprintf("trustctl-test-certonly-%d", time.Now().UnixNano())
 	certPEM, _ := winTestCredential(t)
 
 	if err := w.AddCertificate(userMY, name, certPEM); err != nil {

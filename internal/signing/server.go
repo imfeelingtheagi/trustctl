@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"certctl.io/certctl/internal/crypto"
-	signerpb "certctl.io/certctl/internal/signing/proto"
+	"trustctl.io/trustctl/internal/crypto"
+	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
 // Server implements signerpb.SignerServiceServer. Private keys are held as

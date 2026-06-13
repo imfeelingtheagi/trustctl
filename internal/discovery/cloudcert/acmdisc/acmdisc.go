@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/discovery/cloudcert"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/discovery/cloudcert"
 )
 
 const (

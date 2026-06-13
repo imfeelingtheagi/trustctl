@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/config"
+	"trustctl.io/trustctl/internal/config"
 )
 
 // TestSignerDefaultsToChild: the signer is a supervised child by default, with a
@@ -25,22 +25,22 @@ func TestSignerDefaultsToChild(t *testing.T) {
 // mode fails fast.
 func TestSignerExternalRequiresSocket(t *testing.T) {
 	base := map[string]string{
-		"CERTCTL_POSTGRES_MODE": "external",
-		"CERTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"CERTCTL_NATS_MODE":     "external",
-		"CERTCTL_NATS_URL":      "nats://h:4222",
+		"TRUSTCTL_POSTGRES_MODE": "external",
+		"TRUSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRUSTCTL_NATS_MODE":     "external",
+		"TRUSTCTL_NATS_URL":      "nats://h:4222",
 	}
 
-	if _, err := config.Load(envFunc(base, map[string]string{"CERTCTL_SIGNER_MODE": "external"})); err == nil {
+	if _, err := config.Load(envFunc(base, map[string]string{"TRUSTCTL_SIGNER_MODE": "external"})); err == nil {
 		t.Error("external signer without a socket should fail validation")
 	}
 	if _, err := config.Load(envFunc(base, map[string]string{
-		"CERTCTL_SIGNER_MODE":   "external",
-		"CERTCTL_SIGNER_SOCKET": "/run/certctl/signer.sock",
+		"TRUSTCTL_SIGNER_MODE":   "external",
+		"TRUSTCTL_SIGNER_SOCKET": "/run/trustctl/signer.sock",
 	})); err != nil {
 		t.Errorf("external signer with a socket should validate: %v", err)
 	}
-	if _, err := config.Load(envFunc(base, map[string]string{"CERTCTL_SIGNER_MODE": "bogus"})); err == nil {
+	if _, err := config.Load(envFunc(base, map[string]string{"TRUSTCTL_SIGNER_MODE": "bogus"})); err == nil {
 		t.Error("an invalid signer.mode should fail validation")
 	}
 }

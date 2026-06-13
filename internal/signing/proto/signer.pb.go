@@ -1,5 +1,5 @@
 // Protocol stub for the isolated signing service (AN-4). This is the wire
-// contract the control plane uses to reach certctl-signer over a Unix domain
+// contract the control plane uses to reach trustctl-signer over a Unix domain
 // socket (single node) or mTLS (across nodes). It is committed as the reviewed
 // protocol design for sprint S1.3; Go code is generated and the service is
 // implemented in S1.4.
@@ -301,7 +301,7 @@ type GenerateKeyRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Algorithm Algorithm `protobuf:"varint,1,opt,name=algorithm,proto3,enum=certctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	Algorithm Algorithm `protobuf:"varint,1,opt,name=algorithm,proto3,enum=trustctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	// Optional caller-chosen handle id for idempotent creation; empty means the
 	// signer assigns one.
 	RequestedId string `protobuf:"bytes,2,opt,name=requested_id,json=requestedId,proto3" json:"requested_id,omitempty"`
@@ -359,7 +359,7 @@ type GenerateKeyResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	Handle    *KeyHandle `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
-	Algorithm Algorithm  `protobuf:"varint,2,opt,name=algorithm,proto3,enum=certctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	Algorithm Algorithm  `protobuf:"varint,2,opt,name=algorithm,proto3,enum=trustctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	// public_key is the PKIX/DER (SubjectPublicKeyInfo) encoding.
 	PublicKey []byte `protobuf:"bytes,3,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
 }
@@ -469,7 +469,7 @@ type GetPublicKeyResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Algorithm Algorithm `protobuf:"varint,1,opt,name=algorithm,proto3,enum=certctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	Algorithm Algorithm `protobuf:"varint,1,opt,name=algorithm,proto3,enum=trustctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	PublicKey []byte    `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
 }
 
@@ -531,8 +531,8 @@ type SignRequest struct {
 	// require.
 	Digest []byte `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
 	// hash identifies the algorithm that produced digest (needed for RSA).
-	Hash       Hash       `protobuf:"varint,3,opt,name=hash,proto3,enum=certctl.signing.v1.Hash" json:"hash,omitempty"`
-	RsaPadding RSAPadding `protobuf:"varint,4,opt,name=rsa_padding,json=rsaPadding,proto3,enum=certctl.signing.v1.RSAPadding" json:"rsa_padding,omitempty"`
+	Hash       Hash       `protobuf:"varint,3,opt,name=hash,proto3,enum=trustctl.signing.v1.Hash" json:"hash,omitempty"`
+	RsaPadding RSAPadding `protobuf:"varint,4,opt,name=rsa_padding,json=rsaPadding,proto3,enum=trustctl.signing.v1.RSAPadding" json:"rsa_padding,omitempty"`
 }
 
 func (x *SignRequest) Reset() {
@@ -770,7 +770,7 @@ type HealthResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Status HealthResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=certctl.signing.v1.HealthResponse_Status" json:"status,omitempty"`
+	Status HealthResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=trustctl.signing.v1.HealthResponse_Status" json:"status,omitempty"`
 }
 
 func (x *HealthResponse) Reset() {
@@ -958,43 +958,43 @@ func file_internal_signing_proto_signer_proto_rawDescGZIP() []byte {
 var file_internal_signing_proto_signer_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_internal_signing_proto_signer_proto_goTypes = []interface{}{
-	(Algorithm)(0),               // 0: certctl.signing.v1.Algorithm
-	(Hash)(0),                    // 1: certctl.signing.v1.Hash
-	(RSAPadding)(0),              // 2: certctl.signing.v1.RSAPadding
-	(HealthResponse_Status)(0),   // 3: certctl.signing.v1.HealthResponse.Status
-	(*KeyHandle)(nil),            // 4: certctl.signing.v1.KeyHandle
-	(*GenerateKeyRequest)(nil),   // 5: certctl.signing.v1.GenerateKeyRequest
-	(*GenerateKeyResponse)(nil),  // 6: certctl.signing.v1.GenerateKeyResponse
-	(*GetPublicKeyRequest)(nil),  // 7: certctl.signing.v1.GetPublicKeyRequest
-	(*GetPublicKeyResponse)(nil), // 8: certctl.signing.v1.GetPublicKeyResponse
-	(*SignRequest)(nil),          // 9: certctl.signing.v1.SignRequest
-	(*SignResponse)(nil),         // 10: certctl.signing.v1.SignResponse
-	(*DestroyKeyRequest)(nil),    // 11: certctl.signing.v1.DestroyKeyRequest
-	(*DestroyKeyResponse)(nil),   // 12: certctl.signing.v1.DestroyKeyResponse
-	(*HealthRequest)(nil),        // 13: certctl.signing.v1.HealthRequest
-	(*HealthResponse)(nil),       // 14: certctl.signing.v1.HealthResponse
+	(Algorithm)(0),               // 0: trustctl.signing.v1.Algorithm
+	(Hash)(0),                    // 1: trustctl.signing.v1.Hash
+	(RSAPadding)(0),              // 2: trustctl.signing.v1.RSAPadding
+	(HealthResponse_Status)(0),   // 3: trustctl.signing.v1.HealthResponse.Status
+	(*KeyHandle)(nil),            // 4: trustctl.signing.v1.KeyHandle
+	(*GenerateKeyRequest)(nil),   // 5: trustctl.signing.v1.GenerateKeyRequest
+	(*GenerateKeyResponse)(nil),  // 6: trustctl.signing.v1.GenerateKeyResponse
+	(*GetPublicKeyRequest)(nil),  // 7: trustctl.signing.v1.GetPublicKeyRequest
+	(*GetPublicKeyResponse)(nil), // 8: trustctl.signing.v1.GetPublicKeyResponse
+	(*SignRequest)(nil),          // 9: trustctl.signing.v1.SignRequest
+	(*SignResponse)(nil),         // 10: trustctl.signing.v1.SignResponse
+	(*DestroyKeyRequest)(nil),    // 11: trustctl.signing.v1.DestroyKeyRequest
+	(*DestroyKeyResponse)(nil),   // 12: trustctl.signing.v1.DestroyKeyResponse
+	(*HealthRequest)(nil),        // 13: trustctl.signing.v1.HealthRequest
+	(*HealthResponse)(nil),       // 14: trustctl.signing.v1.HealthResponse
 }
 var file_internal_signing_proto_signer_proto_depIdxs = []int32{
-	0,  // 0: certctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> certctl.signing.v1.Algorithm
-	4,  // 1: certctl.signing.v1.GenerateKeyResponse.handle:type_name -> certctl.signing.v1.KeyHandle
-	0,  // 2: certctl.signing.v1.GenerateKeyResponse.algorithm:type_name -> certctl.signing.v1.Algorithm
-	4,  // 3: certctl.signing.v1.GetPublicKeyRequest.handle:type_name -> certctl.signing.v1.KeyHandle
-	0,  // 4: certctl.signing.v1.GetPublicKeyResponse.algorithm:type_name -> certctl.signing.v1.Algorithm
-	4,  // 5: certctl.signing.v1.SignRequest.handle:type_name -> certctl.signing.v1.KeyHandle
-	1,  // 6: certctl.signing.v1.SignRequest.hash:type_name -> certctl.signing.v1.Hash
-	2,  // 7: certctl.signing.v1.SignRequest.rsa_padding:type_name -> certctl.signing.v1.RSAPadding
-	4,  // 8: certctl.signing.v1.DestroyKeyRequest.handle:type_name -> certctl.signing.v1.KeyHandle
-	3,  // 9: certctl.signing.v1.HealthResponse.status:type_name -> certctl.signing.v1.HealthResponse.Status
-	5,  // 10: certctl.signing.v1.SignerService.GenerateKey:input_type -> certctl.signing.v1.GenerateKeyRequest
-	7,  // 11: certctl.signing.v1.SignerService.GetPublicKey:input_type -> certctl.signing.v1.GetPublicKeyRequest
-	9,  // 12: certctl.signing.v1.SignerService.Sign:input_type -> certctl.signing.v1.SignRequest
-	11, // 13: certctl.signing.v1.SignerService.DestroyKey:input_type -> certctl.signing.v1.DestroyKeyRequest
-	13, // 14: certctl.signing.v1.SignerService.Health:input_type -> certctl.signing.v1.HealthRequest
-	6,  // 15: certctl.signing.v1.SignerService.GenerateKey:output_type -> certctl.signing.v1.GenerateKeyResponse
-	8,  // 16: certctl.signing.v1.SignerService.GetPublicKey:output_type -> certctl.signing.v1.GetPublicKeyResponse
-	10, // 17: certctl.signing.v1.SignerService.Sign:output_type -> certctl.signing.v1.SignResponse
-	12, // 18: certctl.signing.v1.SignerService.DestroyKey:output_type -> certctl.signing.v1.DestroyKeyResponse
-	14, // 19: certctl.signing.v1.SignerService.Health:output_type -> certctl.signing.v1.HealthResponse
+	0,  // 0: trustctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> trustctl.signing.v1.Algorithm
+	4,  // 1: trustctl.signing.v1.GenerateKeyResponse.handle:type_name -> trustctl.signing.v1.KeyHandle
+	0,  // 2: trustctl.signing.v1.GenerateKeyResponse.algorithm:type_name -> trustctl.signing.v1.Algorithm
+	4,  // 3: trustctl.signing.v1.GetPublicKeyRequest.handle:type_name -> trustctl.signing.v1.KeyHandle
+	0,  // 4: trustctl.signing.v1.GetPublicKeyResponse.algorithm:type_name -> trustctl.signing.v1.Algorithm
+	4,  // 5: trustctl.signing.v1.SignRequest.handle:type_name -> trustctl.signing.v1.KeyHandle
+	1,  // 6: trustctl.signing.v1.SignRequest.hash:type_name -> trustctl.signing.v1.Hash
+	2,  // 7: trustctl.signing.v1.SignRequest.rsa_padding:type_name -> trustctl.signing.v1.RSAPadding
+	4,  // 8: trustctl.signing.v1.DestroyKeyRequest.handle:type_name -> trustctl.signing.v1.KeyHandle
+	3,  // 9: trustctl.signing.v1.HealthResponse.status:type_name -> trustctl.signing.v1.HealthResponse.Status
+	5,  // 10: trustctl.signing.v1.SignerService.GenerateKey:input_type -> trustctl.signing.v1.GenerateKeyRequest
+	7,  // 11: trustctl.signing.v1.SignerService.GetPublicKey:input_type -> trustctl.signing.v1.GetPublicKeyRequest
+	9,  // 12: trustctl.signing.v1.SignerService.Sign:input_type -> trustctl.signing.v1.SignRequest
+	11, // 13: trustctl.signing.v1.SignerService.DestroyKey:input_type -> trustctl.signing.v1.DestroyKeyRequest
+	13, // 14: trustctl.signing.v1.SignerService.Health:input_type -> trustctl.signing.v1.HealthRequest
+	6,  // 15: trustctl.signing.v1.SignerService.GenerateKey:output_type -> trustctl.signing.v1.GenerateKeyResponse
+	8,  // 16: trustctl.signing.v1.SignerService.GetPublicKey:output_type -> trustctl.signing.v1.GetPublicKeyResponse
+	10, // 17: trustctl.signing.v1.SignerService.Sign:output_type -> trustctl.signing.v1.SignResponse
+	12, // 18: trustctl.signing.v1.SignerService.DestroyKey:output_type -> trustctl.signing.v1.DestroyKeyResponse
+	14, // 19: trustctl.signing.v1.SignerService.Health:output_type -> trustctl.signing.v1.HealthResponse
 	15, // [15:20] is the sub-list for method output_type
 	10, // [10:15] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name

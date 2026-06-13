@@ -14,13 +14,13 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"certctl.io/certctl/internal/crypto"
-	cryptoca "certctl.io/certctl/internal/crypto/ca"
-	"certctl.io/certctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/crypto"
+	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trustctl.io/trustctl/internal/crypto/jose"
 )
 
 const (
-	provisionerName = "certctl@smallstep.test"
+	provisionerName = "trustctl@smallstep.test"
 	certValidity    = 24 * time.Hour
 )
 

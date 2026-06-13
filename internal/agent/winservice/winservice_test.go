@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/agent/winservice"
+	"trustctl.io/trustctl/internal/agent/winservice"
 )
 
-const exe = `C:\Program Files\certctl\certctl-agent.exe`
+const exe = `C:\Program Files\trustctl\trustctl-agent.exe`
 
 func mustSpec(t *testing.T) winservice.Spec {
 	t.Helper()
@@ -24,13 +24,13 @@ func mustSpec(t *testing.T) winservice.Spec {
 }
 
 // TestBuildSpecDefaultsToAutomaticService is part of the "registers as a
-// service" acceptance: the service is named certctl-agent, starts
+// service" acceptance: the service is named trustctl-agent, starts
 // automatically, has a display name and description, and runs the configured
 // executable with its arguments.
 func TestBuildSpecDefaultsToAutomaticService(t *testing.T) {
 	s := mustSpec(t)
-	if s.Name != "certctl-agent" {
-		t.Errorf("service name = %q, want certctl-agent", s.Name)
+	if s.Name != "trustctl-agent" {
+		t.Errorf("service name = %q, want trustctl-agent", s.Name)
 	}
 	if !s.AutomaticStart {
 		t.Error("service does not start automatically, want auto-start")
@@ -82,10 +82,10 @@ func TestWiXSourceRegistersServiceAndBinary(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<ServiceInstall`,
-		`Name="certctl-agent"`,
+		`Name="trustctl-agent"`,
 		`Start="auto"`,
 		`<ServiceControl`,
-		`certctl-agent.exe`,
+		`trustctl-agent.exe`,
 		`Version="1.2.3"`,
 		`UpgradeCode="`,
 	} {

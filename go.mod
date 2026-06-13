@@ -1,4 +1,4 @@
-module certctl.io/certctl
+module trustctl.io/trustctl
 
 go 1.25.0
 

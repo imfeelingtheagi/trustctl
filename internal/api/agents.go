@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // agentResponse is an in-network agent in the API's JSON shape.
@@ -64,7 +64,7 @@ type enrollmentTokenResponse struct {
 // than minting a second one. When no issuer is wired, the capability is reported
 // unavailable.
 //
-//certctl:mutation
+//trustctl:mutation
 func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	if a.agentTokens == nil {

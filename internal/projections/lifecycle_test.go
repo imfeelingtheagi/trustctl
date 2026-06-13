@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // seedIdentity creates an owner and a freshly-requested identity so the

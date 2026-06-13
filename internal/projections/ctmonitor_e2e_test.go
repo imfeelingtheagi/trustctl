@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/crypto/ctlog/ctlogtest"
-	"certctl.io/certctl/internal/discovery/ctmonitor"
-	"certctl.io/certctl/internal/notify"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
+	"trustctl.io/trustctl/internal/discovery/ctmonitor"
+	"trustctl.io/trustctl/internal/notify"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // TestCTMonitorEndToEndOverHTTP exercises the whole CT path with nothing faked
@@ -19,7 +19,7 @@ import (
 // faithful in-process CT log, the certificates are parsed through the crypto
 // boundary, the known-good check and the alert both hit embedded PostgreSQL, and
 // the scheduler loads watched domains and persists its checkpoint from the
-// store. A logged certificate that certctl already inventoried raises nothing; a
+// store. A logged certificate that trustctl already inventoried raises nothing; a
 // rogue one for a watched domain raises exactly one alert on the shared
 // notification surface; and the persisted checkpoint stops it re-alerting.
 func TestCTMonitorEndToEndOverHTTP(t *testing.T) {
@@ -27,7 +27,7 @@ func TestCTMonitorEndToEndOverHTTP(t *testing.T) {
 	ctx := context.Background()
 	exp := time.Now().Add(720 * time.Hour)
 
-	// A certificate certctl already knows: issue it, then inventory it by the
+	// A certificate trustctl already knows: issue it, then inventory it by the
 	// exact fingerprint the CT parser will compute.
 	knownDER, _, err := ctlogtest.IssueCert("known", "known.example.com")
 	if err != nil {

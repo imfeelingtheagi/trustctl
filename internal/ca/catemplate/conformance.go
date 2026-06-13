@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // conformanceDomain is the identifier the suite asks a plugin to certify.
-const conformanceDomain = "conformance.certctl.test"
+const conformanceDomain = "conformance.trustctl.test"
 
 // Check is one conformance check and its outcome.
 type Check struct {

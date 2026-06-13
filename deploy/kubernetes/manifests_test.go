@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	kubernetes "certctl.io/certctl/deploy/kubernetes"
+	kubernetes "trustctl.io/trustctl/deploy/kubernetes"
 )
 
 // docs parses every embedded manifest into individual YAML documents.
@@ -72,7 +72,7 @@ func TestManifestsDeclareTheDaemonSetAndItsRBAC(t *testing.T) {
 	}
 }
 
-// TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the certctl-agent
+// TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trustctl-agent
 // image in --k8s mode under the dedicated service account.
 func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	var ds map[string]any
@@ -93,8 +93,8 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 		t.Fatal("DaemonSet has no containers")
 	}
 	c := containers[0].(map[string]any)
-	if img, _ := c["image"].(string); !strings.Contains(img, "certctl-agent") {
-		t.Errorf("container image = %v, want the certctl-agent image", c["image"])
+	if img, _ := c["image"].(string); !strings.Contains(img, "trustctl-agent") {
+		t.Errorf("container image = %v, want the trustctl-agent image", c["image"])
 	}
 	args := ""
 	for _, a := range asStringSlice(c["args"]) {

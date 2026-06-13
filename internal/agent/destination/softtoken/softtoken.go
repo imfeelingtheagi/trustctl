@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"sync"
 
-	"certctl.io/certctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/agent/destination"
 )
 
 // object classes (a subset of PKCS#11 CKO_* object classes).

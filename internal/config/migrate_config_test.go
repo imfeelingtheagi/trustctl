@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/config"
+	"trustctl.io/trustctl/internal/config"
 )
 
 // TestMigrateAutoDefaultsOn: automatic migration ships on, so the single-node
@@ -20,18 +20,18 @@ func TestMigrateAutoDefaultsOn(t *testing.T) {
 // actually pending.
 func TestMigrateAutoEnvOverride(t *testing.T) {
 	env := map[string]string{
-		"CERTCTL_POSTGRES_MODE": "external",
-		"CERTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"CERTCTL_NATS_MODE":     "external",
-		"CERTCTL_NATS_URL":      "nats://h:4222",
-		"CERTCTL_MIGRATE_AUTO":  "false",
+		"TRUSTCTL_POSTGRES_MODE": "external",
+		"TRUSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRUSTCTL_NATS_MODE":     "external",
+		"TRUSTCTL_NATS_URL":      "nats://h:4222",
+		"TRUSTCTL_MIGRATE_AUTO":  "false",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if cfg.Migrate.Auto {
-		t.Error("CERTCTL_MIGRATE_AUTO=false should disable automatic migration")
+		t.Error("TRUSTCTL_MIGRATE_AUTO=false should disable automatic migration")
 	}
 }
 
@@ -39,17 +39,17 @@ func TestMigrateAutoEnvOverride(t *testing.T) {
 // prior (default-on) value stands.
 func TestMigrateAutoMalformedEnvIgnored(t *testing.T) {
 	env := map[string]string{
-		"CERTCTL_POSTGRES_MODE": "external",
-		"CERTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"CERTCTL_NATS_MODE":     "external",
-		"CERTCTL_NATS_URL":      "nats://h:4222",
-		"CERTCTL_MIGRATE_AUTO":  "yep",
+		"TRUSTCTL_POSTGRES_MODE": "external",
+		"TRUSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRUSTCTL_NATS_MODE":     "external",
+		"TRUSTCTL_NATS_URL":      "nats://h:4222",
+		"TRUSTCTL_MIGRATE_AUTO":  "yep",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !cfg.Migrate.Auto {
-		t.Error("a malformed CERTCTL_MIGRATE_AUTO should be ignored, leaving auto-migrate on")
+		t.Error("a malformed TRUSTCTL_MIGRATE_AUTO should be ignored, leaving auto-migrate on")
 	}
 }

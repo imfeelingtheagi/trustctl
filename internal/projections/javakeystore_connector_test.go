@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/javakeystore"
-	"certctl.io/certctl/internal/crypto/pfx"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/javakeystore"
+	"trustctl.io/trustctl/internal/crypto/pfx"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 const (

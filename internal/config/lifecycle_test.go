@@ -25,7 +25,7 @@ func TestLifecycleDefaults(t *testing.T) {
 	}
 }
 
-// TestLifecycleParseAndEnv: JSON overlays and CERTCTL_LIFECYCLE_* env vars set
+// TestLifecycleParseAndEnv: JSON overlays and TRUSTCTL_LIFECYCLE_* env vars set
 // the thresholds.
 func TestLifecycleParseAndEnv(t *testing.T) {
 	cfg, err := Parse([]byte(`{"lifecycle":{"renew_before":"240h","alert_before":"48h"}}`))
@@ -37,8 +37,8 @@ func TestLifecycleParseAndEnv(t *testing.T) {
 	}
 
 	env := map[string]string{
-		"CERTCTL_LIFECYCLE_RENEW_BEFORE": "120h",
-		"CERTCTL_LIFECYCLE_ALERT_BEFORE": "12h",
+		"TRUSTCTL_LIFECYCLE_RENEW_BEFORE": "120h",
+		"TRUSTCTL_LIFECYCLE_ALERT_BEFORE": "12h",
 	}
 	loaded, err := Load(func(k string) string { return env[k] })
 	if err != nil {

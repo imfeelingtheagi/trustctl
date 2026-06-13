@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"certctl.io/certctl/internal/agent/destination"
-	"certctl.io/certctl/internal/crypto/pfx"
+	"trustctl.io/trustctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/crypto/pfx"
 )
 
 // Windows is a CryptoAPI/CNG-backed certificate store. It installs certificates

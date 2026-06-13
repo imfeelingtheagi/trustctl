@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // TestSHA256Hex pins the digest of the empty input and a known string.

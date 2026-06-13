@@ -8,13 +8,13 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"certctl.io/certctl/internal/webui"
+	"trustctl.io/trustctl/internal/webui"
 )
 
 func fixtureFS() fs.FS {
 	return fstest.MapFS{
-		"index.html":     {Data: []byte("<!doctype html><title>certctl</title><div id=root></div>")},
-		"assets/app.js":  {Data: []byte("console.log('certctl')")},
+		"index.html":     {Data: []byte("<!doctype html><title>trustctl</title><div id=root></div>")},
+		"assets/app.js":  {Data: []byte("console.log('trustctl')")},
 		"assets/app.css": {Data: []byte("body{color:#000}")},
 		"favicon.svg":    {Data: []byte("<svg/>")},
 	}
@@ -44,7 +44,7 @@ func TestServesIndexAtRoot(t *testing.T) {
 
 func TestServesAssetWithContentType(t *testing.T) {
 	res, body := get(t, webui.Handler(fixtureFS()), "/assets/app.js")
-	if res.StatusCode != 200 || !strings.Contains(body, "certctl") {
+	if res.StatusCode != 200 || !strings.Contains(body, "trustctl") {
 		t.Fatalf("asset = %d %q", res.StatusCode, body)
 	}
 	if ct := res.Header.Get("Content-Type"); !strings.Contains(ct, "javascript") {

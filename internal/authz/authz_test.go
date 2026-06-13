@@ -3,7 +3,7 @@ package authz_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/authz"
+	"trustctl.io/trustctl/internal/authz"
 )
 
 func TestRoleAllows(t *testing.T) {

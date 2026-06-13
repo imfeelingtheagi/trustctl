@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	acmesrv "certctl.io/certctl/internal/protocols/acme"
+	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
 )
 
 // TestHTTP01Validator validates the real http-01 check against a server serving

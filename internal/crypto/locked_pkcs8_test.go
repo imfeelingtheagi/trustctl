@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // TestLockedKeyPKCS8RoundTrip: a locked key can be exported as PKCS#8 (for sealed

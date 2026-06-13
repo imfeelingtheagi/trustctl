@@ -13,4 +13,4 @@
 // locked, dump-protected, and zeroized.
 package seal
 
-//certctl:keymaterial
+//trustctl:keymaterial

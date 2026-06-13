@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"certctl.io/certctl/internal/agent/k8s"
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/agent/k8s"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 const discoverCertPEM = `-----BEGIN CERTIFICATE-----

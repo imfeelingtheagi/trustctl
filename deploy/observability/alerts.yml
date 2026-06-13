@@ -1,41 +1,41 @@
-# Prometheus alerting rules for the certctl control plane (R2.2).
+# Prometheus alerting rules for the trustctl control plane (R2.2).
 #
 # Load these with `rule_files: ["alerts.yml"]` in prometheus.yml and scrape the
-# control plane's /metrics endpoint with a job named "certctl".
+# control plane's /metrics endpoint with a job named "trustctl".
 #
-# Every certctl_ metric referenced here is emitted by /metrics — this is asserted
+# Every trustctl_ metric referenced here is emitted by /metrics — this is asserted
 # by internal/observ TestAlertRulesReferenceRealMetrics, so an alert can never
 # silently reference a metric the code does not produce.
 groups:
-  - name: certctl-availability
+  - name: trustctl-availability
     rules:
-      - alert: CertctlDown
-        expr: up{job="certctl"} == 0
+      - alert: TrustctlDown
+        expr: up{job="trustctl"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "certctl control plane is down"
-          description: "Prometheus has not been able to scrape the certctl /metrics target for 1 minute."
+          summary: "trustctl control plane is down"
+          description: "Prometheus has not been able to scrape the trustctl /metrics target for 1 minute."
 
-      - alert: CertctlHighErrorRate
+      - alert: TrustctlHighErrorRate
         expr: |
-          sum(rate(certctl_http_requests_total{code=~"5.."}[5m]))
+          sum(rate(trustctl_http_requests_total{code=~"5.."}[5m]))
             /
-          clamp_min(sum(rate(certctl_http_requests_total[5m])), 1) > 0.05
+          clamp_min(sum(rate(trustctl_http_requests_total[5m])), 1) > 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "certctl 5xx error rate above 5%"
+          summary: "trustctl 5xx error rate above 5%"
           description: "More than 5% of HTTP responses have been 5xx over the last 5 minutes."
 
-      - alert: CertctlHighLatencyP99
+      - alert: TrustctlHighLatencyP99
         expr: |
-          histogram_quantile(0.99, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+          histogram_quantile(0.99, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le)) > 1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "certctl p99 request latency above 1s"
+          summary: "trustctl p99 request latency above 1s"
           description: "The 99th percentile HTTP request latency has exceeded 1 second over the last 5 minutes."

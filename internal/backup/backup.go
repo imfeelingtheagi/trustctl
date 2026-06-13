@@ -15,11 +15,11 @@ import (
 	"io"
 	"time"
 
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/events"
 )
 
 const (
-	formatTag = "certctl-event-log-backup"
+	formatTag = "trustctl-event-log-backup"
 	version   = 1
 )
 
@@ -83,7 +83,7 @@ func RestoreLog(ctx context.Context, log *events.Log, r io.Reader) (int, error) 
 		return 0, fmt.Errorf("backup: read header: %w", err)
 	}
 	if h.Format != formatTag {
-		return 0, fmt.Errorf("backup: not a certctl event-log backup (format %q)", h.Format)
+		return 0, fmt.Errorf("backup: not a trustctl event-log backup (format %q)", h.Format)
 	}
 	if h.Version != version {
 		return 0, fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)

@@ -1,6 +1,6 @@
 // Package k8s lets the agent run as a Kubernetes DaemonSet: it installs
 // certificates into Kubernetes Secrets and bridges cert-manager
-// CertificateRequests to certctl issuance.
+// CertificateRequests to trustctl issuance.
 //
 // It speaks the Kubernetes API server's JSON-over-HTTPS wire protocol directly
 // (no client-go), authenticating with the pod's service-account token. TLS
@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 )
 
 const (

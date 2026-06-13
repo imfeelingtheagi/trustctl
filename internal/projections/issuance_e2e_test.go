@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/server"
+	"trustctl.io/trustctl/internal/server"
 )
 
 // TestAssembledServerIssuesCertIntoInventory is the R1.4 disconfirming test for
@@ -70,8 +70,8 @@ func TestAssembledServerIssuesCertIntoInventory(t *testing.T) {
 	if subj, _ := cert["subject"].(string); !strings.Contains(subj, "payments.svc") {
 		t.Errorf("issued certificate subject = %q, want it to contain the identity CN payments.svc", subj)
 	}
-	if iss, _ := cert["issuer"].(string); !strings.Contains(iss, "certctl Issuing CA") {
-		t.Errorf("issued certificate issuer = %q, want the assembled CA (certctl Issuing CA)", iss)
+	if iss, _ := cert["issuer"].(string); !strings.Contains(iss, "trustctl Issuing CA") {
+		t.Errorf("issued certificate issuer = %q, want the assembled CA (trustctl Issuing CA)", iss)
 	}
 	if src, _ := cert["source"].(string); src != "issued" {
 		t.Errorf("issued certificate source = %q, want \"issued\"", src)

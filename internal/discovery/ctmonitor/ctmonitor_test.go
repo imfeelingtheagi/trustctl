@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/ctlog"
-	"certctl.io/certctl/internal/discovery/ctmonitor"
+	"trustctl.io/trustctl/internal/crypto/ctlog"
+	"trustctl.io/trustctl/internal/discovery/ctmonitor"
 )
 
 // fakeFetcher serves a fixed in-memory tree of entries.

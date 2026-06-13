@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"certctl.io/certctl/internal/graph"
+	"trustctl.io/trustctl/internal/graph"
 )
 
 func TestNodesAndEdgesAreIdempotent(t *testing.T) {

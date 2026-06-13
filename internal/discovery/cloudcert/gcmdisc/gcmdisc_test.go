@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/ctlog/ctlogtest"
-	"certctl.io/certctl/internal/discovery/cloudcert"
-	"certctl.io/certctl/internal/discovery/cloudcert/gcmdisc"
+	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
+	"trustctl.io/trustctl/internal/discovery/cloudcert"
+	"trustctl.io/trustctl/internal/discovery/cloudcert/gcmdisc"
 )
 
 func certPEM(t *testing.T, cn string, dns ...string) string {

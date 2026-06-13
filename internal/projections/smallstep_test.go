@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/smallstep"
-	"certctl.io/certctl/internal/ca/smallstep/smallstepfake"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/smallstep"
+	"trustctl.io/trustctl/internal/ca/smallstep/smallstepfake"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // TestSmallstepPluginRidesIssuanceRails proves the Smallstep plugin rides the

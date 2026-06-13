@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // FuzzInspect drives arbitrary bytes through the X.509 inventory parser (PEM

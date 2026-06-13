@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // Fixed ids for the core-entity graph under test.

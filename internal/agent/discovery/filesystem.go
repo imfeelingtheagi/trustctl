@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // maxCertFileSize bounds how large a file the filesystem source will read and

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/backup"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/projections"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/backup"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/projections"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // TestBackupRestoreDRDrillReproducesState is the R2.4 disconfirming test for the

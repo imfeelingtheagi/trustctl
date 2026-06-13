@@ -1,6 +1,6 @@
-site_name: certctl
+site_name: trustctl
 site_description: Self-hosted control plane for every non-human identity.
-repo_url: https://github.com/imfeelingtheagi/certctl
+repo_url: https://github.com/imfeelingtheagi/trustctl
 docs_dir: docs
 
 theme:

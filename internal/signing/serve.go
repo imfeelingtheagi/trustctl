@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	signerpb "certctl.io/certctl/internal/signing/proto"
+	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
 // maxMessageBytes bounds gRPC request/response size; the signer signs digests,

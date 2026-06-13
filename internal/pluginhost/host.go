@@ -8,7 +8,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 
-	"certctl.io/certctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/bulkhead"
 )
 
 // denyCode is the value a gated host function returns to the guest when the

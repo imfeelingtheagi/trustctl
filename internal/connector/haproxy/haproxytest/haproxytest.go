@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"sync"
 
-	"certctl.io/certctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector"
 )
 
 // Server is an in-process stand-in for an HAProxy host. It satisfies

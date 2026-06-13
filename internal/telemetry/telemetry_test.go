@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/telemetry"
+	"trustctl.io/trustctl/internal/telemetry"
 )
 
 // fakeCounter reports fixed credential counts by type.

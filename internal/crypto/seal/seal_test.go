@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/seal"
+	"trustctl.io/trustctl/internal/crypto/seal"
 )
 
 func newKEK(t *testing.T) *seal.LocalKEK {

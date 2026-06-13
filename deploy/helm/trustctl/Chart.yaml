@@ -1,0 +1,29 @@
+apiVersion: v2
+name: trustctl
+description: >-
+  The trustctl control plane (non-human-identity / certificate lifecycle
+  management) for Kubernetes: the API + web UI, with the signing service
+  isolated as a locked-down, network-unreachable sidecar (AN-4), wired to
+  external PostgreSQL and NATS JetStream.
+type: application
+# Chart version (SemVer). Bump on any chart change.
+version: 0.1.0
+# The trustctl release this chart deploys by default (the image tag).
+appVersion: "0.1.0"
+keywords:
+  - certificates
+  - pki
+  - acme
+  - non-human-identity
+  - certificate-lifecycle
+home: https://github.com/imfeelingtheagi/trustctl
+sources:
+  - https://github.com/imfeelingtheagi/trustctl
+maintainers:
+  - name: trustctl maintainers
+    url: https://github.com/imfeelingtheagi/trustctl
+annotations:
+  # The signing service runs as an isolated sidecar with a UDS-only transport
+  # (no network surface). A fully separate signer pod with cross-pod mTLS, and
+  # multi-replica HA, are tracked for S15.1.
+  trustctl.io/signer-topology: "isolated-sidecar-uds"

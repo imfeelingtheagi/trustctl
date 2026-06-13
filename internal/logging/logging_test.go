@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/logging"
+	"trustctl.io/trustctl/internal/logging"
 )
 
 func TestJSONHasConsistentFields(t *testing.T) {
 	var buf bytes.Buffer
-	logger, err := logging.New(logging.Options{Level: "info", Format: "json", Service: "certctl"}, &buf)
+	logger, err := logging.New(logging.Options{Level: "info", Format: "json", Service: "trustctl"}, &buf)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestJSONHasConsistentFields(t *testing.T) {
 			t.Errorf("missing field %q in %v", k, rec)
 		}
 	}
-	if rec["msg"] != "hello" || rec["service"] != "certctl" || rec["request_id"] != "abc" {
+	if rec["msg"] != "hello" || rec["service"] != "trustctl" || rec["request_id"] != "abc" {
 		t.Errorf("unexpected field values: %v", rec)
 	}
 	if lvl, _ := rec["level"].(string); !strings.EqualFold(lvl, "info") {

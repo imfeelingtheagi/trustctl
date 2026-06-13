@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/crypto/mtls"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 func tptr(tm time.Time) *time.Time { return &tm }

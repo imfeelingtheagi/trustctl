@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	cryptoca "certctl.io/certctl/internal/crypto/ca"
+	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
 )
 
 const (

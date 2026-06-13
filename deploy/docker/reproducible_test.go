@@ -56,13 +56,13 @@ func TestControlPlaneBinaryBuildsReproducibly(t *testing.T) {
 	// The same reproducible flags the Dockerfile and Makefile use, with fixed
 	// version metadata so the test isolates toolchain determinism.
 	const ldflags = "-s -w -buildid= " +
-		"-X certctl.io/certctl/internal/buildinfo.version=test " +
-		"-X certctl.io/certctl/internal/buildinfo.commit=test " +
-		"-X certctl.io/certctl/internal/buildinfo.date=2026-01-01T00:00:00Z"
+		"-X trustctl.io/trustctl/internal/buildinfo.version=test " +
+		"-X trustctl.io/trustctl/internal/buildinfo.commit=test " +
+		"-X trustctl.io/trustctl/internal/buildinfo.date=2026-01-01T00:00:00Z"
 
 	build := func(out string) {
 		cmd := exec.Command(goBin, "build", "-trimpath", "-buildvcs=false",
-			"-ldflags", ldflags, "-o", out, "./cmd/certctl")
+			"-ldflags", ldflags, "-o", out, "./cmd/trustctl")
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if b, err := cmd.CombinedOutput(); err != nil {
@@ -71,8 +71,8 @@ func TestControlPlaneBinaryBuildsReproducibly(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	a := filepath.Join(dir, "certctl.a")
-	b := filepath.Join(dir, "certctl.b")
+	a := filepath.Join(dir, "trustctl.a")
+	b := filepath.Join(dir, "trustctl.b")
 	build(a)
 	build(b)
 

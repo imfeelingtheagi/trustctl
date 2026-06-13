@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/acm"
-	"certctl.io/certctl/internal/connector/acm/acmtest"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/acm"
+	"trustctl.io/trustctl/internal/connector/acm/acmtest"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // TestACMDeploysRenewedCertViaOutbox is the S5.11 AN-6 acceptance: a renewed

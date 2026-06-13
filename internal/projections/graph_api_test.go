@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/graph"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/sshinv"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/graph"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/sshinv"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // newGraphAPI builds an API server over a fresh store and returns both, so the

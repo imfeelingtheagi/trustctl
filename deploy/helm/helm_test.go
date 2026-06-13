@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const chart = "certctl"
+const chart = "trustctl"
 
 func read(t *testing.T, parts ...string) string {
 	t.Helper()
@@ -75,15 +75,15 @@ func TestSignerIsIsolated(t *testing.T) {
 	dep := read(t, "templates", "deployment.yaml")
 
 	containsAll(t, "deployment signer container", dep,
-		"certctl-signer", // the signer binary/entrypoint
-		"/run/certctl",   // the shared UDS mount path
-		"signer.sock",    // the socket the control plane dials
+		"trustctl-signer", // the signer binary/entrypoint
+		"/run/trustctl",   // the shared UDS mount path
+		"signer.sock",     // the socket the control plane dials
 	)
 	// The control plane reaches the signer in external mode over that socket
 	// (wired via the ConfigMap the deployment loads with envFrom).
 	cfg := read(t, "templates", "configmap.yaml")
 	containsAll(t, "configmap signer wiring", cfg,
-		"CERTCTL_SIGNER_MODE", "external", "CERTCTL_SIGNER_SOCKET")
+		"TRUSTCTL_SIGNER_MODE", "external", "TRUSTCTL_SIGNER_SOCKET")
 	// A shared in-memory volume carries the socket (not the network).
 	containsAll(t, "deployment shared socket volume", dep, "emptyDir")
 	// Hardened containers.
@@ -110,7 +110,7 @@ func TestExternalDatastoresAreTheDefault(t *testing.T) {
 	}
 	cfg := read(t, "templates", "configmap.yaml")
 	containsAll(t, "configmap external datastores", cfg,
-		"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_MODE", "external", "CERTCTL_NATS_URL")
+		"TRUSTCTL_POSTGRES_MODE", "TRUSTCTL_NATS_MODE", "external", "TRUSTCTL_NATS_URL")
 }
 
 // TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS
@@ -121,7 +121,7 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 	containsAll(t, "networkpolicy locks both directions", np, "Ingress", "Egress")
 
 	cfg := read(t, "templates", "configmap.yaml")
-	if !strings.Contains(cfg, "CERTCTL_SERVER_TLS_MODE") {
+	if !strings.Contains(cfg, "TRUSTCTL_SERVER_TLS_MODE") {
 		t.Error("the chart should wire the server TLS mode (R1.3)")
 	}
 	values := read(t, "values.yaml")

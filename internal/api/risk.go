@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"certctl.io/certctl/internal/risk"
+	"trustctl.io/trustctl/internal/risk"
 )
 
 // riskListResponse is the scored, sorted, filtered credential list.

@@ -1,4 +1,4 @@
-// Package kubernetes embeds the Kubernetes deployment manifests for the certctl
+// Package kubernetes embeds the Kubernetes deployment manifests for the trustctl
 // agent — the namespace, the service account and RBAC, and the DaemonSet — so
 // they ship inside the binary and are validated by tests.
 package kubernetes

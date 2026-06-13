@@ -1,9 +1,9 @@
-// Package buildinfo exposes build and version metadata shared by every certctl
-// binary (certctl, certctl-signer, certctl-agent).
+// Package buildinfo exposes build and version metadata shared by every trustctl
+// binary (trustctl, trustctl-signer, trustctl-agent).
 //
 // The unexported variables below are populated at link time via
 //
-//	-ldflags "-X certctl.io/certctl/internal/buildinfo.version=..."
+//	-ldflags "-X trustctl.io/trustctl/internal/buildinfo.version=..."
 //
 // (see the Makefile). When a binary is built without those flags — for example
 // under "go run" or "go test" — the accessors fall back to the VCS metadata the

@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // Message is one external call to perform, as recorded in the outbox. The

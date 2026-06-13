@@ -20,7 +20,7 @@ func IsNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
 // appRole is the non-superuser role that tenant-scoped operations run as, so
 // that row-level security applies (superusers and table owners bypass RLS).
-const appRole = "certctl_app"
+const appRole = "trustctl_app"
 
 // Store is the PostgreSQL-backed repository layer (AN-1). Tenant-scoped reads run
 // under row-level security via WithTenant; system operations (migrations,
@@ -61,7 +61,7 @@ func (s *Store) Close() { s.pool.Close() }
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
 // WithTenant runs fn in a transaction scoped to tenantID: it assumes the RLS
-// role and sets the certctl.tenant_id session variable, so row-level security
+// role and sets the trustctl.tenant_id session variable, so row-level security
 // confines every query in fn to that tenant.
 func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
 	tx, err := s.pool.Begin(ctx)
@@ -73,7 +73,7 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 	if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
 		return fmt.Errorf("store: set role: %w", err)
 	}
-	if _, err := tx.Exec(ctx, "SELECT set_config('certctl.tenant_id', $1, true)", tenantID); err != nil {
+	if _, err := tx.Exec(ctx, "SELECT set_config('trustctl.tenant_id', $1, true)", tenantID); err != nil {
 		return fmt.Errorf("store: set tenant: %w", err)
 	}
 	if err := fn(tx); err != nil {

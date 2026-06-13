@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/letsencrypt"
-	"certctl.io/certctl/internal/ca/letsencrypt/acmefake"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/letsencrypt"
+	"trustctl.io/trustctl/internal/ca/letsencrypt/acmefake"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 func leCSR(t *testing.T) []byte {

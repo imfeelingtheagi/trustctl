@@ -1,6 +1,6 @@
 # Authoring a plugin
 
-certctl loads CA integrations and deployment connectors as **WASM plugins** in an
+trustctl loads CA integrations and deployment connectors as **WASM plugins** in an
 in-process sandbox (package `internal/pluginhost`, built on wazero/extism). A
 plugin runs in its own wazero runtime with **no ambient syscalls**: the only
 privileged operations it can perform are host functions gated by a
@@ -19,7 +19,7 @@ specific path prefix):
 
 ```go
 grant := pluginhost.NewGrant(pluginhost.CapFSWrite, pluginhost.CapNetDial).
-    WithPathPrefix(pluginhost.CapFSWrite, "/etc/ssl/certctl")
+    WithPathPrefix(pluginhost.CapFSWrite, "/etc/ssl/trustctl")
 ```
 
 At runtime the host checks each host-function call against the grant

@@ -9,13 +9,13 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"certctl.io/certctl/internal/config"
+	"trustctl.io/trustctl/internal/config"
 )
 
 // defaultBundledPGPort is the loopback port the bundled evaluation Postgres
 // listens on when none is configured. Bundled mode is single-node eval, so a
-// predictable default is friendly; CERTCTL_POSTGRES_PORT overrides it (e.g. when
-// 5432 is already taken). Production runs CERTCTL_POSTGRES_MODE=external.
+// predictable default is friendly; TRUSTCTL_POSTGRES_PORT overrides it (e.g. when
+// 5432 is already taken). Production runs TRUSTCTL_POSTGRES_MODE=external.
 const defaultBundledPGPort = 5432
 
 // bundledPort returns the configured bundled Postgres port, or the default.
@@ -31,7 +31,7 @@ func bundledPort(cfg config.Postgres) int {
 // the supply-chain manifest record (V16 = 16.4.0, see
 // deploy/supply-chain/embedded-postgres.json), and returns a loopback DSN plus a
 // stop function. The control plane connects as the bootstrap superuser, but the
-// store drops to the non-superuser `certctl_app` role per transaction (SET LOCAL
+// store drops to the non-superuser `trustctl_app` role per transaction (SET LOCAL
 // ROLE), so row-level security still applies (AN-1) exactly as in external mode.
 //
 // Evaluation state persists under cfg.DataDir/db so it survives restarts; the
@@ -51,11 +51,11 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 		RuntimePath(filepath.Join(dataDir, "rt")).
 		// Cache the pinned binary outside the data dir so it is not re-downloaded on
 		// every fresh eval; the same path the integration tests use.
-		BinariesPath(filepath.Join(os.TempDir(), "certctl-pg-bin")).
+		BinariesPath(filepath.Join(os.TempDir(), "trustctl-pg-bin")).
 		Logger(io.Discard).
 		StartTimeout(90 * time.Second))
 	if err := db.Start(); err != nil {
-		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set CERTCTL_POSTGRES_PORT to a free port, or use CERTCTL_POSTGRES_MODE=external)", port, err)
+		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRUSTCTL_POSTGRES_PORT to a free port, or use TRUSTCTL_POSTGRES_MODE=external)", port, err)
 	}
 	dsn = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
 	return dsn, db.Stop, nil

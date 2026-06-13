@@ -1,5 +1,5 @@
 // Package revocation is the X.509 revocation infrastructure (F47, sprint S4.16)
-// for certificates certctl issues from its own private CA (F48): an OCSP
+// for certificates trustctl issues from its own private CA (F48): an OCSP
 // responder and CRL generation/publication. Revocation status is persisted
 // tenant-scoped (AN-1); OCSP responses and CRLs are signed through the
 // internal/crypto/ca boundary (AN-3, with signer/HSM custody under AN-4); every
@@ -16,10 +16,10 @@ import (
 	"fmt"
 	"time"
 
-	"certctl.io/certctl/internal/bulkhead"
-	cryptoca "certctl.io/certctl/internal/crypto/ca"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/bulkhead"
+	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // CALookup resolves the signing CA for a (tenant, caID) so OCSP responses and

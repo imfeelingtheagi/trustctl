@@ -1,4 +1,4 @@
-// Package config loads, merges, and validates certctl's configuration from a
+// Package config loads, merges, and validates trustctl's configuration from a
 // JSON file and the environment, with precedence defaults < file < environment.
 // It includes the bundled-vs-external datastore switches for PostgreSQL and
 // NATS and carries no business logic.
@@ -27,7 +27,7 @@ const (
 const (
 	// TLSInternal serves TLS with a self-signed, internally-issued certificate —
 	// the default, so the control plane is never plaintext out of the box. Clients
-	// trust the certctl-generated CA (suitable for evaluation / internal use).
+	// trust the trustctl-generated CA (suitable for evaluation / internal use).
 	TLSInternal = "internal"
 	// TLSFile serves TLS with an operator-provided certificate and key (PEM).
 	TLSFile = "file"
@@ -166,8 +166,8 @@ func (r RateLimit) WindowDuration() (time.Duration, error) {
 // serialized across instances by an advisory lock. With Auto off, a boot that
 // finds pending migrations fails fast with guidance instead of migrating
 // silently — the pre-migration backup gate: an operator inspects the plan
-// (`certctl --migrate-status`), takes a backup, then applies them explicitly
-// (`certctl --migrate`).
+// (`trustctl --migrate-status`), takes a backup, then applies them explicitly
+// (`trustctl --migrate`).
 type Migrate struct {
 	Auto bool `json:"auto"`
 }
@@ -182,7 +182,7 @@ type Secrets struct {
 }
 
 // Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
-// mode the control plane supervises certctl-signer as a child process (single
+// mode the control plane supervises trustctl-signer as a child process (single
 // binary); in "external" mode it connects to a separately deployed signer over
 // Socket (the Compose/topology isolation). KeyStoreDir is where the signer seals
 // its keys at rest so a restart preserves the issuing CA rather than rotating it;
@@ -194,7 +194,7 @@ type Signer struct {
 }
 
 const (
-	// SignerChild supervises certctl-signer as a child process (single binary).
+	// SignerChild supervises trustctl-signer as a child process (single binary).
 	SignerChild = "child"
 	// SignerExternal connects to a separately deployed signer over a socket.
 	SignerExternal = "external"
@@ -218,7 +218,7 @@ func Default() *Config {
 		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
-		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.certctl.io/v1/usage", Interval: "24h"},
+		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trustctl.io/v1/usage", Interval: "24h"},
 		// The audit export key persists under the data directory so signed evidence
 		// bundles verify across restarts; retention is indefinite by default.
 		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
@@ -251,11 +251,11 @@ func Parse(data []byte) (*Config, error) {
 }
 
 // Load builds the effective configuration from defaults, then the optional file
-// named by CERTCTL_CONFIG_FILE, then environment overrides, and validates it.
+// named by TRUSTCTL_CONFIG_FILE, then environment overrides, and validates it.
 // getenv is injected (pass os.Getenv) for testability.
 func Load(getenv func(string) string) (*Config, error) {
 	cfg := Default()
-	if path := getenv("CERTCTL_CONFIG_FILE"); path != "" {
+	if path := getenv("TRUSTCTL_CONFIG_FILE"); path != "" {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("read config file %q: %w", path, err)
@@ -273,40 +273,40 @@ func Load(getenv func(string) string) (*Config, error) {
 	return cfg, nil
 }
 
-// applyEnv overlays CERTCTL_*-prefixed environment variables. Only non-empty
+// applyEnv overlays TRUSTCTL_*-prefixed environment variables. Only non-empty
 // variables take effect, so the environment can override but not blank out
 // file or default values.
 func (c *Config) applyEnv(getenv func(string) string) {
-	setString(getenv, "CERTCTL_SERVER_ADDR", &c.Server.Addr)
-	setString(getenv, "CERTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
-	setString(getenv, "CERTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
-	setString(getenv, "CERTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
-	setString(getenv, "CERTCTL_POSTGRES_MODE", &c.Postgres.Mode)
-	setString(getenv, "CERTCTL_POSTGRES_DSN", &c.Postgres.DSN)
-	setString(getenv, "CERTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
-	setInt(getenv, "CERTCTL_POSTGRES_PORT", &c.Postgres.Port)
-	setString(getenv, "CERTCTL_NATS_MODE", &c.NATS.Mode)
-	setString(getenv, "CERTCTL_NATS_URL", &c.NATS.URL)
-	setString(getenv, "CERTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
-	setString(getenv, "CERTCTL_LOG_LEVEL", &c.Log.Level)
-	setString(getenv, "CERTCTL_LOG_FORMAT", &c.Log.Format)
-	setString(getenv, "CERTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
-	setString(getenv, "CERTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
-	setBool(getenv, "CERTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
-	setString(getenv, "CERTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
-	setString(getenv, "CERTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
-	setString(getenv, "CERTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
-	setString(getenv, "CERTCTL_AUDIT_RETENTION", &c.Audit.Retention)
-	setString(getenv, "CERTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
-	setBool(getenv, "CERTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
-	setInt(getenv, "CERTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
-	setString(getenv, "CERTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
-	setBool(getenv, "CERTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
-	setString(getenv, "CERTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
-	setString(getenv, "CERTCTL_SIGNER_MODE", &c.Signer.Mode)
-	setString(getenv, "CERTCTL_SIGNER_SOCKET", &c.Signer.Socket)
-	setString(getenv, "CERTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
-	setString(getenv, "CERTCTL_CA_CERT_FILE", &c.CA.CertFile)
+	setString(getenv, "TRUSTCTL_SERVER_ADDR", &c.Server.Addr)
+	setString(getenv, "TRUSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
+	setString(getenv, "TRUSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
+	setString(getenv, "TRUSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+	setString(getenv, "TRUSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
+	setString(getenv, "TRUSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
+	setString(getenv, "TRUSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
+	setInt(getenv, "TRUSTCTL_POSTGRES_PORT", &c.Postgres.Port)
+	setString(getenv, "TRUSTCTL_NATS_MODE", &c.NATS.Mode)
+	setString(getenv, "TRUSTCTL_NATS_URL", &c.NATS.URL)
+	setString(getenv, "TRUSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
+	setString(getenv, "TRUSTCTL_LOG_LEVEL", &c.Log.Level)
+	setString(getenv, "TRUSTCTL_LOG_FORMAT", &c.Log.Format)
+	setString(getenv, "TRUSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
+	setString(getenv, "TRUSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setBool(getenv, "TRUSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
+	setString(getenv, "TRUSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
+	setString(getenv, "TRUSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
+	setString(getenv, "TRUSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
+	setString(getenv, "TRUSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
+	setString(getenv, "TRUSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setBool(getenv, "TRUSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
+	setInt(getenv, "TRUSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
+	setString(getenv, "TRUSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
+	setBool(getenv, "TRUSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
+	setString(getenv, "TRUSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
+	setString(getenv, "TRUSTCTL_SIGNER_MODE", &c.Signer.Mode)
+	setString(getenv, "TRUSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
+	setString(getenv, "TRUSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
+	setString(getenv, "TRUSTCTL_CA_CERT_FILE", &c.CA.CertFile)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {

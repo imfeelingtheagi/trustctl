@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/bulkhead"
 )
 
 // waitTimeout fails the test if wg does not complete within d.

@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // RFC 6962 §3.4 enumerations.

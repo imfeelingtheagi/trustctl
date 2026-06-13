@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"certctl.io/certctl/internal/agent/enroll"
-	"certctl.io/certctl/internal/api"
+	"trustctl.io/trustctl/internal/agent/enroll"
+	"trustctl.io/trustctl/internal/api"
 )
 
 // enrollAuthority adapts the agent-enrollment authority to the API's minimal

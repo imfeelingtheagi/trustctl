@@ -7,10 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/nginx"
-	"certctl.io/certctl/internal/connector/nginx/nginxtest"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/nginx"
+	"trustctl.io/trustctl/internal/connector/nginx/nginxtest"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 var (

@@ -44,7 +44,7 @@ func StartChild(ctx context.Context, binaryPath, socketPath string) (*Client, fu
 }
 
 // Supervisor keeps the signer child process running: it launches
-// cmd/certctl-signer, and if the child exits it relaunches it with capped
+// cmd/trustctl-signer, and if the child exits it relaunches it with capped
 // exponential backoff until its context is cancelled. The control plane signs
 // only through the current child (AN-4); when the child is down, Client returns
 // nil and signing operations fail closed.

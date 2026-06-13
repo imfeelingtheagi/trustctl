@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"certctl.io/certctl/internal/agent/destination"
-	"certctl.io/certctl/internal/agent/destination/certstore"
-	"certctl.io/certctl/internal/agent/destination/softtoken"
-	"certctl.io/certctl/internal/agent/discovery"
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/agent/destination/certstore"
+	"trustctl.io/trustctl/internal/agent/destination/softtoken"
+	"trustctl.io/trustctl/internal/agent/discovery"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // Four distinct real ECDSA self-signed certificates.

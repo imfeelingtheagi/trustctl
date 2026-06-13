@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/mtls"
-	"certctl.io/certctl/internal/crypto/pfx"
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
+	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/crypto/pfx"
 )
 
 // credential mints a real PEM key + cert chain via the crypto boundary.

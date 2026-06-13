@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"certctl.io/certctl/internal/connector/gcpcm"
+	"trustctl.io/trustctl/internal/connector/gcpcm"
 )
 
 // MetadataToken fetches a token from the GCE/GKE metadata server (the canonical

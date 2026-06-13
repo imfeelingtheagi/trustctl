@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/tlsprobe"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/tlsprobe"
 )
 
 // Probe returns the exact certificate the server presents, and is non-invasive:

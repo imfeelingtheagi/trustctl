@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/ctlog"
-	"certctl.io/certctl/internal/discovery/ctmonitor"
+	"trustctl.io/trustctl/internal/crypto/ctlog"
+	"trustctl.io/trustctl/internal/discovery/ctmonitor"
 )
 
 // fakePersist is an in-memory Persistence for scheduler tests.

@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"certctl.io/certctl/internal/crypto/sshkeys"
-	"certctl.io/certctl/internal/sshinv"
+	"trustctl.io/trustctl/internal/crypto/sshkeys"
+	"trustctl.io/trustctl/internal/sshinv"
 )
 
 // Config locates the SSH material to inventory. All fields are optional; paths

@@ -5,7 +5,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/pfx"
+	"trustctl.io/trustctl/internal/crypto/pfx"
 )
 
 // derOf decodes the first PEM block and returns its DER bytes, so two PEM

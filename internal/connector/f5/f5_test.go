@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"testing"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/f5"
-	"certctl.io/certctl/internal/connector/f5/f5test"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/f5"
+	"trustctl.io/trustctl/internal/connector/f5/f5test"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 var (

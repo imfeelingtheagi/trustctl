@@ -9,8 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // Event types for the served domain (AN-2). Every served mutation emits one of

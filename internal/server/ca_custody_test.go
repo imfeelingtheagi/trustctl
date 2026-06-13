@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/kek"
-	"certctl.io/certctl/internal/crypto/seal"
-	"certctl.io/certctl/internal/signing"
+	"trustctl.io/trustctl/internal/crypto/kek"
+	"trustctl.io/trustctl/internal/crypto/seal"
+	"trustctl.io/trustctl/internal/signing"
 )
 
 // TestProvisionCAStableAcrossSignerRestart is the R3.2 disconfirming test for the

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/cbom"
+	"trustctl.io/trustctl/internal/cbom"
 )
 
 type fakeSource struct {

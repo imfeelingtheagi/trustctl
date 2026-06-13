@@ -10,10 +10,10 @@ import (
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"certctl.io/certctl/internal/agent"
-	"certctl.io/certctl/internal/agent/enroll"
-	"certctl.io/certctl/internal/agent/transport"
-	"certctl.io/certctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/agent"
+	"trustctl.io/trustctl/internal/agent/enroll"
+	"trustctl.io/trustctl/internal/agent/transport"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 )
 
 // countingEnroller wraps an Enroller and counts bootstrap calls, and captures the
@@ -97,7 +97,7 @@ func newAgent(t *testing.T, en agent.Enroller, authority *enroll.Authority, serv
 // TestAgentRegistersAndEstablishesMTLS is the acceptance: the agent registers via
 // a bootstrap token and establishes mTLS with the control plane.
 func TestAgentRegistersAndEstablishesMTLS(t *testing.T) {
-	authority, err := enroll.NewAuthority("certctl Control Plane")
+	authority, err := enroll.NewAuthority("trustctl Control Plane")
 	if err != nil {
 		t.Fatal(err)
 	}

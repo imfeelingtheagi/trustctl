@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/discovery/netscan"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/discovery/netscan"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // TestNetscanMergesDiscoveryIntoInventory is the S6.1 acceptance: the scanner

@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/discovery/cloudcert"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/discovery/cloudcert"
 )
 
 const defaultAPIVersion = "7.4"

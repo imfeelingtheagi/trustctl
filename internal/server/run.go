@@ -11,26 +11,26 @@ import (
 	"path/filepath"
 	"time"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/audit"
-	"certctl.io/certctl/internal/config"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/logging"
-	"certctl.io/certctl/internal/ratelimit"
-	"certctl.io/certctl/internal/secrets"
-	"certctl.io/certctl/internal/signing"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/audit"
+	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/logging"
+	"trustctl.io/trustctl/internal/ratelimit"
+	"trustctl.io/trustctl/internal/secrets"
+	"trustctl.io/trustctl/internal/signing"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // Run opens the datastore and event log, supervises the signer as a child
 // process (AN-4), assembles the control plane, and serves until ctx is
 // cancelled — then shuts down in order (stop accepting → drain the outbox →
 // close the event log and datastore). It is the production composition the
-// certctl binary calls.
+// trustctl binary calls.
 func Run(ctx context.Context, cfg *config.Config) error {
 	// Build the structured logger first (R2.2 / B6): it backs the request access log
 	// and lifecycle events, and the bundled-datastore startup logs through it.
-	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "certctl"}, os.Stderr)
+	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trustctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
@@ -65,7 +65,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if len(pending) > 0 {
 		if !cfg.Migrate.Auto {
 			st.Close()
-			return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (CERTCTL_MIGRATE_AUTO=false): take a backup (certctl --backup), then apply them with 'certctl --migrate'; pending: %v", len(pending), pending)
+			return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRUSTCTL_MIGRATE_AUTO=false): take a backup (trustctl --backup), then apply them with 'trustctl --migrate'; pending: %v", len(pending), pending)
 		}
 		logger.Info("applying pending database migrations", "count", len(pending))
 	}
@@ -108,7 +108,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		signer = signing.StaticProvider{C: c}
 		signerClose = func() { _ = c.Close() }
 	default: // child
-		signerBin, berr := siblingBinary("certctl-signer")
+		signerBin, berr := siblingBinary("trustctl-signer")
 		if berr != nil {
 			_ = log.Close()
 			st.Close()
@@ -116,7 +116,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 		socket := cfg.Signer.Socket
 		if socket == "" {
-			socket = filepath.Join(os.TempDir(), "certctl-signer.sock")
+			socket = filepath.Join(os.TempDir(), "trustctl-signer.sock")
 		}
 		sup, serr := signing.Supervise(ctx, signerBin, socket, "--keystore", cfg.Signer.KeyStoreDir, "--kek", cfg.Secrets.KEKFile)
 		if serr != nil {
@@ -246,13 +246,13 @@ func openDatastore(pg config.Postgres, logger *slog.Logger) (dsn string, stop fu
 	switch pg.Mode {
 	case config.PostgresExternal:
 		if pg.DSN == "" {
-			return "", nil, errors.New("server: external Postgres requires a DSN (set CERTCTL_POSTGRES_DSN), or use CERTCTL_POSTGRES_MODE=bundled for single-node evaluation")
+			return "", nil, errors.New("server: external Postgres requires a DSN (set TRUSTCTL_POSTGRES_DSN), or use TRUSTCTL_POSTGRES_MODE=bundled for single-node evaluation")
 		}
 		return pg.DSN, nil, nil
 	case config.PostgresBundled:
 		logger.Info("starting bundled single-node PostgreSQL for evaluation",
 			slog.String("data_dir", pg.DataDir),
-			slog.String("note", "production should run CERTCTL_POSTGRES_MODE=external against a managed cluster"))
+			slog.String("note", "production should run TRUSTCTL_POSTGRES_MODE=external against a managed cluster"))
 		dsn, stop, err := startBundledPostgres(pg)
 		if err != nil {
 			return "", nil, err

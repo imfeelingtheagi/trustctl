@@ -32,15 +32,15 @@ func TestParseOverlaysDefaults(t *testing.T) {
 // TestEnvOverridesFile pins the precedence: defaults < file < environment.
 func TestEnvOverridesFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "certctl.json")
+	path := filepath.Join(dir, "trustctl.json")
 	body := `{"server":{"addr":":1111"},"postgres":{"mode":"external","dsn":"file-dsn"}}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	env := map[string]string{
-		"CERTCTL_CONFIG_FILE":  path,
-		"CERTCTL_POSTGRES_DSN": "env-dsn",
-		"CERTCTL_LOG_LEVEL":    "debug",
+		"TRUSTCTL_CONFIG_FILE":  path,
+		"TRUSTCTL_POSTGRES_DSN": "env-dsn",
+		"TRUSTCTL_LOG_LEVEL":    "debug",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -111,13 +111,13 @@ func TestTelemetryOffByDefault(t *testing.T) {
 // TestTelemetryOptInViaEnv: the operator opts in explicitly through the
 // environment, and the endpoint/interval defaults are present.
 func TestTelemetryOptInViaEnv(t *testing.T) {
-	env := map[string]string{"CERTCTL_TELEMETRY_ENABLED": "true"}
+	env := map[string]string{"TRUSTCTL_TELEMETRY_ENABLED": "true"}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !cfg.Telemetry.Enabled {
-		t.Error("CERTCTL_TELEMETRY_ENABLED=true must enable telemetry")
+		t.Error("TRUSTCTL_TELEMETRY_ENABLED=true must enable telemetry")
 	}
 	if cfg.Telemetry.Endpoint == "" {
 		t.Error("an enabled telemetry config must have a default endpoint")

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/auth"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/auth"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // prodAPIServer builds the API the way the production composition root does: with
@@ -141,7 +141,7 @@ func sessionReq(t *testing.T, srv *httptest.Server, method, path, session, body 
 		r = strings.NewReader(body)
 	}
 	req, _ := http.NewRequest(method, srv.URL+path, r)
-	req.AddCookie(&http.Cookie{Name: "certctl_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: "trustctl_session", Value: session})
 	if method != http.MethodGet {
 		req.Header.Set("Idempotency-Key", "sess-"+method+path)
 		req.Header.Set("Content-Type", "application/json")

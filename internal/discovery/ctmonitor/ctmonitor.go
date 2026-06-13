@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/crypto/ctlog"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/crypto/ctlog"
 )
 
 // defaultMaxBatch bounds how many entries a single Poll reads from a log.

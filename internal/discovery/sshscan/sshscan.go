@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/crypto/sshprobe"
-	"certctl.io/certctl/internal/sshinv"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/crypto/sshprobe"
+	"trustctl.io/trustctl/internal/sshinv"
 )
 
 // Prober captures the host key served at addr. The default uses the crypto

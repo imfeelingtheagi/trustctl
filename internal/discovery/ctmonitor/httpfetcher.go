@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/ctlog"
+	"trustctl.io/trustctl/internal/crypto/ctlog"
 )
 
 // maxCTResponse caps a single CT response body to keep a hostile or buggy log

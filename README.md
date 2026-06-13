@@ -1,10 +1,10 @@
 <!--
   TODO before going public:
   - set the real license + license badge once finalized
-  (Repo/registry namespace is standardized on imfeelingtheagi/certctl.)
+  (Repo/registry namespace is standardized on imfeelingtheagi/trustctl.)
 -->
 
-# certctl
+# trustctl
 
 **The control plane for every credential that isn't a human.**
 
@@ -12,16 +12,16 @@ Discover, issue, deploy, rotate, revoke, and retire X.509 certificates, SSH host
 and user certificates, secrets, API keys, tokens, and SPIFFE workload identities
 — across hybrid infrastructure, fully self-hosted.
 
-[![CI](https://github.com/imfeelingtheagi/certctl/actions/workflows/ci.yml/badge.svg)](https://github.com/imfeelingtheagi/certctl/actions/workflows/ci.yml)
-[![Tag](https://img.shields.io/github/v/tag/imfeelingtheagi/certctl?sort=semver&label=tag&color=blue)](https://github.com/imfeelingtheagi/certctl/tags)
-[![Go Report Card](https://goreportcard.com/badge/github.com/imfeelingtheagi/certctl)](https://goreportcard.com/report/github.com/imfeelingtheagi/certctl)
+[![CI](https://github.com/imfeelingtheagi/trustctl/actions/workflows/ci.yml/badge.svg)](https://github.com/imfeelingtheagi/trustctl/actions/workflows/ci.yml)
+[![Tag](https://img.shields.io/github/v/tag/imfeelingtheagi/trustctl?sort=semver&label=tag&color=blue)](https://github.com/imfeelingtheagi/trustctl/tags)
+[![Go Report Card](https://goreportcard.com/badge/github.com/imfeelingtheagi/trustctl)](https://goreportcard.com/report/github.com/imfeelingtheagi/trustctl)
 ![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)
 ![Status](https://img.shields.io/badge/status-active%20development-orange)
 ![License](https://img.shields.io/badge/license-source--available%20(TBD)-lightgrey)
 
 > **Status — active development.** Phase 1 is capability-complete and tested (see
 > [Capabilities](#capabilities)) on the architectural bedrock below, with the
-> custom architecture linter green in CI. `cmd/certctl` now **assembles and serves
+> custom architecture linter green in CI. `cmd/trustctl` now **assembles and serves
 > the control plane** — it starts the event log, projections, orchestrator, and
 > API in order, supervises the signing service as a separate child process (AN-4),
 > answers real API requests, and shuts down gracefully — so `docker compose up`
@@ -39,7 +39,7 @@ SaaS-only suite for the enterprise features on top. The result is no single
 inventory, no shared ownership model, no consistent rotation, and no one view of
 blast radius when something leaks.
 
-certctl is one self-hosted control plane for *all* non-human credentials. It
+trustctl is one self-hosted control plane for *all* non-human credentials. It
 treats them as a single graph of owners, issuers, identities, and the targets
 they're deployed to — so discovery, lifecycle, policy, risk, and audit are the
 same everywhere, and you run the whole thing on infrastructure you control.
@@ -90,7 +90,7 @@ end at runtime versus what is library code.
 
 ## Built differently
 
-certctl is opinionated about architecture from the first commit, because these
+trustctl is opinionated about architecture from the first commit, because these
 properties are impossible to retrofit. Eight non-negotiables are enforced by a
 custom `go/analysis` linter that fails the build on violation:
 
@@ -108,7 +108,7 @@ custom `go/analysis` linter that fails the build on violation:
 ```mermaid
 flowchart LR
   ui[Web UI] --> api
-  cli[certctl-cli] --> api
+  cli[trustctl-cli] --> api
   agent[In-network agents] -- mTLS --> api
 
   subgraph cp [Control plane]
@@ -127,8 +127,8 @@ Requires Go 1.25+, Node 22+ (for the web UI), and Docker (for the evaluation
 stack).
 
 ```bash
-git clone https://github.com/imfeelingtheagi/certctl
-cd certctl
+git clone https://github.com/imfeelingtheagi/trustctl
+cd trustctl
 
 make build    # control plane, signer, agent, and CLI
 make web      # build the React UI into the binary's embed
@@ -167,7 +167,7 @@ post-quantum-migration layer built on the Phase 1 CBOM.
 
 ## Privacy
 
-certctl runs entirely on infrastructure you control. Usage
+trustctl runs entirely on infrastructure you control. Usage
 [telemetry](docs/telemetry.md) is **opt-in and off by default**; when enabled it
 sends only coarse, anonymized, non-PII data, and never any credential content.
 
@@ -182,7 +182,7 @@ security-critical signing service has its own
 
 ## Contributing
 
-certctl is built sprint by sprint with a tests-first discipline and the
+trustctl is built sprint by sprint with a tests-first discipline and the
 architecture linter as a hard gate — `make lint test` must be green, and the
 non-negotiables above are not optional. Start with the authoring guides for
 [connectors](docs/guides/connector-authoring.md) and
@@ -191,9 +191,10 @@ the way.
 
 ## License
 
-certctl is intended to be **source-available with no feature gating** — the same
-platform whether you self-host the open edition or take a commercial/enterprise
-license or managed offering. Revenue comes from licensing, support, and a managed
-offering, not from withholding features. **No license file is published yet** —
-the specific license is being finalized and will be added here, and until a license
-is published, all rights reserved.
+trustctl is **source-available, but not open-source**: the full source is published
+to read and build, but no open-source (OSI-approved) license has been granted. **The
+license is undecided** — no license file is published yet; the specific instrument is
+still being chosen and will be added here before any public release, and until a
+license is published, **all rights reserved**. Nothing is feature-gated today; revenue
+is intended to come from commercial/enterprise and MSP licensing, support, and a
+managed offering, not from withholding the platform's capabilities.

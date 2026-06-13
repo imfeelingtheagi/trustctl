@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/seal"
-	"certctl.io/certctl/internal/crypto/secret"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/seal"
+	"trustctl.io/trustctl/internal/crypto/secret"
 )
 
 // KeyStore persists signer keys to a directory, each sealed at rest with a KEK

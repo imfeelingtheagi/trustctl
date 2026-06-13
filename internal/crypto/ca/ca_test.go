@@ -28,7 +28,7 @@ func testCSR(t *testing.T, cn string, dnsNames []string) []byte {
 }
 
 func TestIssueFromCSRProducesChainedCert(t *testing.T) {
-	auth, err := NewAuthority("certctl Built-in CA")
+	auth, err := NewAuthority("trustctl Built-in CA")
 	if err != nil {
 		t.Fatalf("NewAuthority: %v", err)
 	}

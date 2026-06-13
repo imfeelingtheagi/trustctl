@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/auth"
-	"certctl.io/certctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/auth"
+	"trustctl.io/trustctl/internal/crypto/jose"
 )
 
 // TestOIDCNonceIsMandatory closes the replay window the audit flagged: the

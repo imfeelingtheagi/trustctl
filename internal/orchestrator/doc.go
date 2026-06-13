@@ -9,8 +9,8 @@
 // exactly-once effect.
 //
 // The package persists idempotency keys in tenant-scoped tables, so it carries
-// the //certctl:repository marker below and its SQL is subject to the AN-1
+// the //trustctl:repository marker below and its SQL is subject to the AN-1
 // tenant-filter rule. The lifecycle state machine itself lands in S3.2.
 //
-//certctl:repository
+//trustctl:repository
 package orchestrator

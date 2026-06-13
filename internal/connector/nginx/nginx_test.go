@@ -5,10 +5,10 @@ import (
 	"context"
 	"testing"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/nginx"
-	"certctl.io/certctl/internal/connector/nginx/nginxtest"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/nginx"
+	"trustctl.io/trustctl/internal/connector/nginx/nginxtest"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"certctl.io/certctl/internal/crypto"
-	signerpb "certctl.io/certctl/internal/signing/proto"
+	"trustctl.io/trustctl/internal/crypto"
+	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
 // maxDigestLen bounds an accepted digest (SHA-512 is 64 bytes).

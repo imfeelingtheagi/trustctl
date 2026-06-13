@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/ctlog"
-	"certctl.io/certctl/internal/crypto/ctlog/ctlogtest"
+	"trustctl.io/trustctl/internal/crypto/ctlog"
+	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
 )
 
 // FuzzCTLog drives arbitrary bytes through the RFC 6962 response parsers — both

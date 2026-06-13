@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"time"
 
-	"certctl.io/certctl/internal/auth"
+	"trustctl.io/trustctl/internal/auth"
 )
 
 // Cookie names for the browser OIDC login + session flow.
 const (
-	sessionCookieName = "certctl_session"
-	stateCookieName   = "certctl_oidc_state"
-	nonceCookieName   = "certctl_oidc_nonce"
+	sessionCookieName = "trustctl_session"
+	stateCookieName   = "trustctl_oidc_state"
+	nonceCookieName   = "trustctl_oidc_nonce"
 )
 
 // AuthConfig configures the browser OIDC login and session bridge the web UI

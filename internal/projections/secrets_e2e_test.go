@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"certctl.io/certctl/internal/secrets"
+	"trustctl.io/trustctl/internal/secrets"
 )
 
 // TestSealedCredentialsAtRestAndTenantIsolated is the R3.1 disconfirming test for

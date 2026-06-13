@@ -1,26 +1,26 @@
-# certctl evaluation stack.
+# trustctl evaluation stack.
 #
 #   docker compose -f deploy/docker/docker-compose.yml up --build
 #
 # brings up the control plane against PostgreSQL and NATS JetStream. The control
 # plane is wired to them as an EXTERNAL datastore configuration — which is
-# exactly the code path you use when pointing certctl at your own managed
-# Postgres/NATS. To do that, override CERTCTL_POSTGRES_DSN and CERTCTL_NATS_URL
+# exactly the code path you use when pointing trustctl at your own managed
+# Postgres/NATS. To do that, override TRUSTCTL_POSTGRES_DSN and TRUSTCTL_NATS_URL
 # (and drop the bundled postgres/nats services).
 
-name: certctl
+name: trustctl
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: certctl
-      POSTGRES_USER: certctl
-      POSTGRES_PASSWORD: certctl
+      POSTGRES_DB: trustctl
+      POSTGRES_USER: trustctl
+      POSTGRES_PASSWORD: trustctl
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U certctl -d certctl"]
+      test: ["CMD-SHELL", "pg_isready -U trustctl -d trustctl"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -44,22 +44,22 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    image: ghcr.io/imfeelingtheagi/certctl:latest
-    entrypoint: ["/usr/local/bin/certctl-signer"]
+    image: ghcr.io/imfeelingtheagi/trustctl:latest
+    entrypoint: ["/usr/local/bin/trustctl-signer"]
     command:
-      - "--socket=/run/certctl/signer.sock"
+      - "--socket=/run/trustctl/signer.sock"
       - "--keystore=/data/signer/keys"
       - "--kek=/data/secrets/kek.bin"
     volumes:
-      - signersock:/run/certctl   # UDS shared with the control plane
+      - signersock:/run/trustctl   # UDS shared with the control plane
       - signerkeys:/data/signer   # sealed CA-key custody (survives restart)
       - secrets:/data/secrets     # the deployment KEK (shared with the control plane)
 
-  certctl:
+  trustctl:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    image: ghcr.io/imfeelingtheagi/certctl:latest
+    image: ghcr.io/imfeelingtheagi/trustctl:latest
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,32 +68,32 @@ services:
       signer:
         condition: service_started
     environment:
-      CERTCTL_SERVER_ADDR: ":8443"
+      TRUSTCTL_SERVER_ADDR: ":8443"
       # External-datastore configuration (the tested external path).
-      CERTCTL_POSTGRES_MODE: external
-      CERTCTL_POSTGRES_DSN: "postgres://certctl:certctl@postgres:5432/certctl?sslmode=disable"
-      CERTCTL_NATS_MODE: external
-      CERTCTL_NATS_URL: "nats://nats:4222"
-      CERTCTL_LOG_FORMAT: json
+      TRUSTCTL_POSTGRES_MODE: external
+      TRUSTCTL_POSTGRES_DSN: "postgres://trustctl:trustctl@postgres:5432/trustctl?sslmode=disable"
+      TRUSTCTL_NATS_MODE: external
+      TRUSTCTL_NATS_URL: "nats://nats:4222"
+      TRUSTCTL_LOG_FORMAT: json
       # Connect to the separately deployed signer over its UDS (R3.2). The CA cert
       # and the KEK persist so the issuing CA is stable across restarts.
-      CERTCTL_SIGNER_MODE: external
-      CERTCTL_SIGNER_SOCKET: /run/certctl/signer.sock
-      CERTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
-      CERTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      TRUSTCTL_SIGNER_MODE: external
+      TRUSTCTL_SIGNER_SOCKET: /run/trustctl/signer.sock
+      TRUSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
+      TRUSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
       # TLS is on by default (server.tls.mode=internal): the control plane serves
       # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
-      # (curl -k). For production set CERTCTL_SERVER_TLS_MODE=file with your cert.
+      # (curl -k). For production set TRUSTCTL_SERVER_TLS_MODE=file with your cert.
     volumes:
-      - signersock:/run/certctl   # reach the signer over the shared UDS
+      - signersock:/run/trustctl   # reach the signer over the shared UDS
       - secrets:/data/secrets     # the same deployment KEK as the signer
-      - certctldata:/data         # CA cert + audit key persistence
+      - trustctldata:/data         # CA cert + audit key persistence
     ports:
       - "8443:8443"
     healthcheck:
       # Distroless has no shell; the binary probes its own /healthz over the same
       # transport the server uses (HTTPS by default).
-      test: ["CMD", "/usr/local/bin/certctl", "--health-check"]
+      test: ["CMD", "/usr/local/bin/trustctl", "--health-check"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -105,4 +105,4 @@ volumes:
   signersock:
   signerkeys:
   secrets:
-  certctldata:
+  trustctldata:

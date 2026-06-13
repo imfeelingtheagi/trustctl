@@ -6,7 +6,7 @@ import (
 	"net"
 	"strings"
 
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // Resolver looks up TXT records; *net.Resolver satisfies it. It is an injectable

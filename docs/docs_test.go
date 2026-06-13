@@ -108,7 +108,7 @@ func TestNoBrokenInternalLinks(t *testing.T) {
 	}
 }
 
-// supportedPlatforms are the platforms certctl ships for; install and uninstall
+// supportedPlatforms are the platforms trustctl ships for; install and uninstall
 // must be documented for each.
 var supportedPlatforms = []string{"Linux", "macOS", "Windows", "Docker", "Kubernetes"}
 
@@ -158,15 +158,15 @@ func TestGettingStartedMatchesProduct(t *testing.T) {
 // emits, and the shipped Prometheus rules / dashboard exist.
 func TestObservabilityDocIsReal(t *testing.T) {
 	body := read(t, "observability.md")
-	for _, want := range []string{"/metrics", "/readyz", "traceparent", "certctl_http_requests_total"} {
+	for _, want := range []string{"/metrics", "/readyz", "traceparent", "trustctl_http_requests_total"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("observability.md should document %q", want)
 		}
 	}
 	// The documented metric is the one the middleware emits.
 	mw := read(t, "../internal/observ/middleware.go")
-	if !strings.Contains(mw, "certctl_http_requests_total") {
-		t.Error("observability.md cites certctl_http_requests_total but the middleware does not emit it")
+	if !strings.Contains(mw, "trustctl_http_requests_total") {
+		t.Error("observability.md cites trustctl_http_requests_total but the middleware does not emit it")
 	}
 	// The control plane mounts the documented endpoints.
 	srv := read(t, "../internal/server/server.go")
@@ -192,11 +192,11 @@ func TestOperationsDocIsReal(t *testing.T) {
 			t.Errorf("operations.md should cover %q", want)
 		}
 	}
-	if !strings.Contains(read(t, "operations.md"), "CERTCTL_RATE_LIMIT_REQUESTS") {
+	if !strings.Contains(read(t, "operations.md"), "TRUSTCTL_RATE_LIMIT_REQUESTS") {
 		t.Error("operations.md should document the rate-limit budget setting")
 	}
-	if code := read(t, "../internal/config/config.go"); !strings.Contains(code, "CERTCTL_RATE_LIMIT_REQUESTS") {
-		t.Error("CERTCTL_RATE_LIMIT_REQUESTS is documented but the loader does not read it")
+	if code := read(t, "../internal/config/config.go"); !strings.Contains(code, "TRUSTCTL_RATE_LIMIT_REQUESTS") {
+		t.Error("TRUSTCTL_RATE_LIMIT_REQUESTS is documented but the loader does not read it")
 	}
 	if srv := read(t, "../internal/server/server.go"); !strings.Contains(srv, "bulkhead") {
 		t.Error("operations.md documents bulkheads but the server does not wire one")
@@ -214,7 +214,7 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 		}
 	}
 	// The documented flags exist in the binary.
-	main := read(t, "../cmd/certctl/main.go")
+	main := read(t, "../cmd/trustctl/main.go")
 	for _, flag := range []string{`"backup"`, `"restore"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("disaster-recovery.md documents a flag the binary does not define: %s", flag)
@@ -232,7 +232,7 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 func TestMigrationsDocIsReal(t *testing.T) {
 	body := read(t, "migrations.md")
 	for _, want := range []string{
-		"--migrate-status", "--migrate", "CERTCTL_MIGRATE_AUTO",
+		"--migrate-status", "--migrate", "TRUSTCTL_MIGRATE_AUTO",
 		"advisory lock", "forward-only", "pg_advisory_lock", "rollback",
 	} {
 		if !strings.Contains(body, want) {
@@ -240,7 +240,7 @@ func TestMigrationsDocIsReal(t *testing.T) {
 		}
 	}
 	// The documented flags exist in the binary.
-	main := read(t, "../cmd/certctl/main.go")
+	main := read(t, "../cmd/trustctl/main.go")
 	for _, flag := range []string{`"migrate-status"`, `"migrate"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("migrations.md documents a flag the binary does not define: %s", flag)
@@ -251,9 +251,9 @@ func TestMigrationsDocIsReal(t *testing.T) {
 	if !strings.Contains(migrate, "pg_advisory_lock") || !strings.Contains(migrate, "MigrateAdvisoryLockKey") {
 		t.Error("Migrate should serialize the run on a PostgreSQL advisory lock")
 	}
-	// The gate (CERTCTL_MIGRATE_AUTO) is honored by config.
-	if !strings.Contains(read(t, "../internal/config/config.go"), "CERTCTL_MIGRATE_AUTO") {
-		t.Error("the config loader should read CERTCTL_MIGRATE_AUTO (the pre-migration backup gate)")
+	// The gate (TRUSTCTL_MIGRATE_AUTO) is honored by config.
+	if !strings.Contains(read(t, "../internal/config/config.go"), "TRUSTCTL_MIGRATE_AUTO") {
+		t.Error("the config loader should read TRUSTCTL_MIGRATE_AUTO (the pre-migration backup gate)")
 	}
 }
 
@@ -312,7 +312,7 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION", "CERTCTL_RATE_LIMIT_REQUESTS", "CERTCTL_SECRETS_KEK_FILE", "CERTCTL_SIGNER_MODE", "CERTCTL_CA_CERT_FILE"} {
+	for _, env := range []string{"TRUSTCTL_POSTGRES_MODE", "TRUSTCTL_NATS_URL", "TRUSTCTL_TELEMETRY_ENABLED", "TRUSTCTL_SERVER_ADDR", "TRUSTCTL_AUDIT_SIGNING_KEY_FILE", "TRUSTCTL_AUDIT_RETENTION", "TRUSTCTL_RATE_LIMIT_REQUESTS", "TRUSTCTL_SECRETS_KEK_FILE", "TRUSTCTL_SIGNER_MODE", "TRUSTCTL_CA_CERT_FILE"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}
@@ -336,18 +336,18 @@ func TestComplianceDocIsHonest(t *testing.T) {
 			t.Errorf("compliance.md should address %q", marker)
 		}
 	}
-	// No-overclaiming: an explicit disclaimer that deploying certctl is not itself
+	// No-overclaiming: an explicit disclaimer that deploying trustctl is not itself
 	// compliance/certification.
 	if !strings.Contains(lower, "not a claim") && !strings.Contains(lower, "certification is yours") {
-		t.Error("compliance.md must explicitly disclaim that certctl alone makes you compliant/certified")
+		t.Error("compliance.md must explicitly disclaim that trustctl alone makes you compliant/certified")
 	}
 	// Reality cross-check: it points at a setting the config loader actually reads.
-	if !strings.Contains(body, "CERTCTL_AUDIT_SIGNING_KEY_FILE") {
+	if !strings.Contains(body, "TRUSTCTL_AUDIT_SIGNING_KEY_FILE") {
 		t.Error("compliance.md should reference the persistent audit signing-key setting")
 	}
 	code := read(t, "../internal/config/config.go")
-	if !strings.Contains(code, "CERTCTL_AUDIT_SIGNING_KEY_FILE") {
-		t.Error("CERTCTL_AUDIT_SIGNING_KEY_FILE is referenced in docs but the config loader does not read it")
+	if !strings.Contains(code, "TRUSTCTL_AUDIT_SIGNING_KEY_FILE") {
+		t.Error("TRUSTCTL_AUDIT_SIGNING_KEY_FILE is referenced in docs but the config loader does not read it")
 	}
 }
 
@@ -402,8 +402,8 @@ func TestLimitationsStatementIsHonest(t *testing.T) {
 }
 
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
-// canonical namespace (imfeelingtheagi). The audit flagged certctl/certctl vs
-// imfeelingtheagi/certctl drift; this fails if it ever returns.
+// canonical namespace (imfeelingtheagi). The audit flagged trustctl/trustctl vs
+// imfeelingtheagi/trustctl drift; this fails if it ever returns.
 func TestCloneAndImageURLsConsistent(t *testing.T) {
 	files := []string{
 		"../README.md",
@@ -417,11 +417,11 @@ func TestCloneAndImageURLsConsistent(t *testing.T) {
 			continue // not all referenced files must exist
 		}
 		s := string(body)
-		if strings.Contains(s, "github.com/certctl/certctl") {
-			t.Errorf("%s uses github.com/certctl/certctl; standardize on github.com/imfeelingtheagi/certctl", f)
+		if strings.Contains(s, "github.com/trustctl/trustctl") {
+			t.Errorf("%s uses github.com/trustctl/trustctl; standardize on github.com/imfeelingtheagi/trustctl", f)
 		}
-		if strings.Contains(s, "ghcr.io/certctl/certctl") {
-			t.Errorf("%s uses ghcr.io/certctl/certctl; standardize on ghcr.io/imfeelingtheagi/certctl", f)
+		if strings.Contains(s, "ghcr.io/trustctl/trustctl") {
+			t.Errorf("%s uses ghcr.io/trustctl/trustctl; standardize on ghcr.io/imfeelingtheagi/trustctl", f)
 		}
 	}
 }
@@ -504,7 +504,7 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 			t.Errorf("configuration.md should describe credentials at rest (%q)", want)
 		}
 	}
-	if !strings.Contains(read(t, "configuration.md"), "CERTCTL_SECRETS_KEK_FILE") {
+	if !strings.Contains(read(t, "configuration.md"), "TRUSTCTL_SECRETS_KEK_FILE") {
 		t.Error("configuration.md should document the KEK file setting")
 	}
 	if tm := strings.ToLower(read(t, "security/threat-model.md")); !strings.Contains(tm, "envelope") || !strings.Contains(tm, "at rest") {
@@ -522,7 +522,7 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 // as its own Compose service, and the code actually implements persistence.
 func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	cfgDoc := read(t, "configuration.md")
-	for _, want := range []string{"CERTCTL_SIGNER_MODE", "CERTCTL_CA_CERT_FILE", "external", "sealed"} {
+	for _, want := range []string{"TRUSTCTL_SIGNER_MODE", "TRUSTCTL_CA_CERT_FILE", "external", "sealed"} {
 		if !strings.Contains(cfgDoc, want) {
 			t.Errorf("configuration.md should document the signer topology / CA custody (%q)", want)
 		}
@@ -541,7 +541,7 @@ func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	}
 	// Compose runs the signer as its own service, in external mode.
 	compose := read(t, "../deploy/docker/docker-compose.yml")
-	for _, want := range []string{"signer:", "certctl-signer", "CERTCTL_SIGNER_MODE: external"} {
+	for _, want := range []string{"signer:", "trustctl-signer", "TRUSTCTL_SIGNER_MODE: external"} {
 		if !strings.Contains(compose, want) {
 			t.Errorf("docker-compose.yml should run the signer as its own service (%q)", want)
 		}
@@ -601,7 +601,7 @@ func TestACMEChallengeValidationIsReal(t *testing.T) {
 // no longer claim the shipped connectors are sandboxed, the in-process trust model
 // and its blast radius are documented, and the plugin host genuinely holds no
 // privileged handle (it imports neither the store nor the signer) — so the
-// sandbox certctl DOES still advertise, for third-party WASM plugins, is real and
+// sandbox trustctl DOES still advertise, for third-party WASM plugins, is real and
 // is proven by a containment test.
 func TestPluginSandboxClaimIsHonest(t *testing.T) {
 	// (1) No "sandboxed connector(s)" overclaim in the README: the shipped
@@ -659,17 +659,17 @@ func TestPluginSandboxClaimIsHonest(t *testing.T) {
 func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	install := read(t, "install.md")
 	// The docs install the control plane via the Helm chart.
-	for _, want := range []string{"deploy/helm/certctl", "helm install"} {
+	for _, want := range []string{"deploy/helm/trustctl", "helm install"} {
 		if !strings.Contains(install, want) {
 			t.Errorf("install.md should document the control-plane Helm chart (%q)", want)
 		}
 	}
 	// The chart actually exists, with the signer isolated.
-	if _, err := os.Stat(filepath.FromSlash("../deploy/helm/certctl/Chart.yaml")); err != nil {
+	if _, err := os.Stat(filepath.FromSlash("../deploy/helm/trustctl/Chart.yaml")); err != nil {
 		t.Fatalf("the Helm chart the docs cite must exist: %v", err)
 	}
-	dep := read(t, "../deploy/helm/certctl/templates/deployment.yaml")
-	for _, want := range []string{"certctl-signer", "/run/certctl", "readOnlyRootFilesystem"} {
+	dep := read(t, "../deploy/helm/trustctl/templates/deployment.yaml")
+	for _, want := range []string{"trustctl-signer", "/run/trustctl", "readOnlyRootFilesystem"} {
 		if !strings.Contains(dep, want) {
 			t.Errorf("the chart's deployment should isolate the signer (%q)", want)
 		}
@@ -681,7 +681,7 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	}
 }
 
-// TestSSOIsOIDCOnlyAndDisclosed encodes the R4.1 decision (Path B): certctl's SSO
+// TestSSOIsOIDCOnlyAndDisclosed encodes the R4.1 decision (Path B): trustctl's SSO
 // is OIDC-only, and SAML 2.0 (PRD F13) is formally rescoped out and DISCLOSED —
 // not silently dropped. limitations.md must say so, no shipped doc may claim SAML
 // support, and the auth package must not frame SAML as a "planned" login method.
@@ -800,16 +800,22 @@ func TestSignerCAKeyDocumentedAsPersisted(t *testing.T) {
 	}
 }
 
-// TestLicenseStatusIsConsistent (R4.6 #1c): README and docs/index state the same
-// current license status — no license file published yet; all rights reserved —
-// without claiming a specific license.
+// TestLicenseStatusIsConsistent (R4.6 #1c; updated): README and docs/index state the
+// same current license status — source-available but NOT open-source, the license
+// undecided, no license file published yet, all rights reserved — without claiming a
+// specific license or calling the project open-source.
 func TestLicenseStatusIsConsistent(t *testing.T) {
 	for name, body := range map[string]string{
 		"README.md":     strings.ToLower(read(t, "../README.md")),
 		"docs/index.md": strings.ToLower(read(t, "index.md")),
 	} {
-		if !strings.Contains(body, "all rights reserved") {
-			t.Errorf("%s should state the current license status (all rights reserved until a license is published)", name)
+		for _, want := range []string{"source-available", "not open-source", "all rights reserved"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s should state the current license status (missing %q): source-available but not open-source, license undecided, all rights reserved", name, want)
+			}
+		}
+		if strings.Contains(body, "open-source edition") {
+			t.Errorf("%s must not call trustctl an \"open-source edition\" — it is source-available, not OSS", name)
 		}
 	}
 }
@@ -825,7 +831,7 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 	}
 }
 
-// TestPQCAlgorithmsDisclosed (R4.7): the docs disclose certctl's real post-quantum
+// TestPQCAlgorithmsDisclosed (R4.7): the docs disclose trustctl's real post-quantum
 // posture and it matches the code. The crypto boundary (internal/crypto/pqc, via
 // CIRCL) provides ML-DSA, ML-KEM, and a hybrid scheme; SLH-DSA / SPHINCS+ is
 // recognized by the CBOM scanner for discovery but is NOT a supported issuance

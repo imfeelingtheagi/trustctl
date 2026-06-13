@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/azurekv"
-	"certctl.io/certctl/internal/ca/azurekv/azurekvfake"
-	"certctl.io/certctl/internal/ca/catemplate"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/azurekv"
+	"trustctl.io/trustctl/internal/ca/azurekv/azurekvfake"
+	"trustctl.io/trustctl/internal/ca/catemplate"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 func azurekvCSR(t *testing.T, cn string) []byte {

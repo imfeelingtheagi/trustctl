@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 func newAPIServer(t *testing.T) *httptest.Server {

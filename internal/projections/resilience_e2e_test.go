@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/ratelimit"
-	"certctl.io/certctl/internal/server"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/ratelimit"
+	"trustctl.io/trustctl/internal/server"
 )
 
 // TestAssembledServerBulkheadIsolatesHealth is the R2.3 acceptance "one subsystem

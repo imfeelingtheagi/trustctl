@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/signing"
+	"trustctl.io/trustctl/internal/signing"
 )
 
 // TestSupervisorRestartsKilledChild is the AN-4 supervision acceptance: the
@@ -64,7 +64,7 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 func TestSupervisorFailsFastOnBadBinary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := signing.Supervise(ctx, "/nonexistent/certctl-signer", filepath.Join(t.TempDir(), "s.sock"))
+	_, err := signing.Supervise(ctx, "/nonexistent/trustctl-signer", filepath.Join(t.TempDir(), "s.sock"))
 	if err == nil {
 		t.Fatal("Supervise with a nonexistent binary should return an error")
 	}

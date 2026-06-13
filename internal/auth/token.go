@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"time"
 
-	"certctl.io/certctl/internal/authz"
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/authz"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
-// TokenPrefix marks certctl API tokens.
-const TokenPrefix = "ct_"
+// TokenPrefix marks trustctl API tokens.
+const TokenPrefix = "tt_"
 
 // APIToken is a stored API token's record — its identity, scopes, and expiry. The
 // secret itself is never stored; only its hash is (see GenerateAPIToken).

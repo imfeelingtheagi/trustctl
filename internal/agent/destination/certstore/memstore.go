@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"sync"
 
-	"certctl.io/certctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/agent/destination"
 )
 
 type entry struct {

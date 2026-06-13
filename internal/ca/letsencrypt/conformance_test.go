@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"certctl.io/certctl/internal/ca/catemplate"
-	"certctl.io/certctl/internal/ca/letsencrypt"
-	"certctl.io/certctl/internal/ca/letsencrypt/acmefake"
+	"trustctl.io/trustctl/internal/ca/catemplate"
+	"trustctl.io/trustctl/internal/ca/letsencrypt"
+	"trustctl.io/trustctl/internal/ca/letsencrypt/acmefake"
 )
 
 // TestLetsEncryptPassesCAConformance proves the shared CA-plugin conformance

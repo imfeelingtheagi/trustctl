@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: certctl-agent
-  namespace: certctl
+  name: trustctl-agent
+  namespace: trustctl
   labels:
-    app.kubernetes.io/name: certctl-agent
-    app.kubernetes.io/part-of: certctl
+    app.kubernetes.io/name: trustctl-agent
+    app.kubernetes.io/part-of: trustctl
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: certctl-agent
+      app.kubernetes.io/name: trustctl-agent
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: certctl-agent
+        app.kubernetes.io/name: trustctl-agent
     spec:
-      serviceAccountName: certctl-agent
+      serviceAccountName: trustctl-agent
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -23,27 +23,27 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent
-          image: ghcr.io/imfeelingtheagi/certctl-agent:latest
+          image: ghcr.io/imfeelingtheagi/trustctl-agent:latest
           args:
             - "--k8s"
-            - "--enroll-url=$(CERTCTL_ENROLL_URL)"
-            - "--ca-bundle=/etc/certctl/ca-bundle.pem"
-            - "--server=$(CERTCTL_SERVER)"
+            - "--enroll-url=$(TRUSTCTL_ENROLL_URL)"
+            - "--ca-bundle=/etc/trustctl/ca-bundle.pem"
+            - "--server=$(TRUSTCTL_SERVER)"
             - "--name=$(NODE_NAME)"
-            - "--k8s-secret=certctl/$(NODE_NAME)-tls"
-            - "--cert-manager-issuer=certctl"
+            - "--k8s-secret=trustctl/$(NODE_NAME)-tls"
+            - "--cert-manager-issuer=trustctl"
           env:
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            - name: CERTCTL_ENROLL_URL
-              value: "https://certctl.certctl.svc:8443/enroll"
-            - name: CERTCTL_SERVER
-              value: "certctl.certctl.svc:9443"
+            - name: TRUSTCTL_ENROLL_URL
+              value: "https://trustctl.trustctl.svc:8443/enroll"
+            - name: TRUSTCTL_SERVER
+              value: "trustctl.trustctl.svc:9443"
           volumeMounts:
             - name: ca-bundle
-              mountPath: /etc/certctl
+              mountPath: /etc/trustctl
               readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
@@ -60,5 +60,5 @@ spec:
       volumes:
         - name: ca-bundle
           configMap:
-            name: certctl-ca-bundle
+            name: trustctl-ca-bundle
             optional: true

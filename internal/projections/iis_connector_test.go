@@ -6,11 +6,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/iis"
-	"certctl.io/certctl/internal/connector/iis/iistest"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/iis"
+	"trustctl.io/trustctl/internal/connector/iis/iistest"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 var (

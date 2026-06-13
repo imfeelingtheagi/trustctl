@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/store"
 )
 
 type certificateIngestRequest struct {
@@ -55,7 +55,7 @@ func sansOf(info certinfo.Info) []string {
 	return sans
 }
 
-//certctl:mutation
+//trustctl:mutation
 func (a *API) ingestCertificate(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {

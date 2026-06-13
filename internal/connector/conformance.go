@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 // conformance sample credential: a real ECDSA P-256 certificate and key, so the

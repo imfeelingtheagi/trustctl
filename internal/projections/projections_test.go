@@ -13,10 +13,10 @@ import (
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/config"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/projections"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/projections"
+	"trustctl.io/trustctl/internal/store"
 )
 
 const (
@@ -29,7 +29,7 @@ var testDSN string
 // TestMain starts a single real PostgreSQL (downloaded, no external service) for
 // the whole package; the spine is integration-tested against it, never mocked.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "certctl-pg")
+	dir, err := os.MkdirTemp("", "trustctl-pg")
 	if err != nil {
 		panic(err)
 	}
@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 		Port(uint32(port)).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
-		BinariesPath(os.TempDir() + "/certctl-pg-bin"). // stable cache across runs
+		BinariesPath(os.TempDir() + "/trustctl-pg-bin"). // stable cache across runs
 		Logger(io.Discard).
 		StartTimeout(60 * time.Second))
 	if err := pg.Start(); err != nil {

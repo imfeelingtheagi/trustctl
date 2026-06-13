@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/agent"
-	"certctl.io/certctl/internal/agent/enroll"
+	"trustctl.io/trustctl/internal/agent"
+	"trustctl.io/trustctl/internal/agent/enroll"
 )
 
 // TestAgentBootstrapsOverHTTP exercises the binary's enrollment transport: the

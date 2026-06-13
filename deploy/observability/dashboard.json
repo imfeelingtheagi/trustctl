@@ -1,9 +1,9 @@
 {
-  "title": "certctl control plane",
-  "uid": "certctl-control-plane",
+  "title": "trustctl control plane",
+  "uid": "trustctl-control-plane",
   "schemaVersion": 39,
   "editable": true,
-  "tags": ["certctl"],
+  "tags": ["trustctl"],
   "time": { "from": "now-6h", "to": "now" },
   "templating": {
     "list": [
@@ -24,7 +24,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
-          "expr": "sum(rate(certctl_http_requests_total[5m])) by (route)",
+          "expr": "sum(rate(trustctl_http_requests_total[5m])) by (route)",
           "legendFormat": "{{route}}"
         }
       ]
@@ -38,7 +38,7 @@
       "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.05 } ] } } },
       "targets": [
         {
-          "expr": "sum(rate(certctl_http_requests_total{code=~\"5..\"}[5m])) / clamp_min(sum(rate(certctl_http_requests_total[5m])), 1)",
+          "expr": "sum(rate(trustctl_http_requests_total{code=~\"5..\"}[5m])) / clamp_min(sum(rate(trustctl_http_requests_total[5m])), 1)",
           "legendFormat": "5xx ratio"
         }
       ]
@@ -51,9 +51,9 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.90, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p90" },
-        { "expr": "histogram_quantile(0.99, sum(rate(certctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+        { "expr": "histogram_quantile(0.50, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.90, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p90" },
+        { "expr": "histogram_quantile(0.99, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
       ]
     },
     {
@@ -64,7 +64,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
       "targets": [
         {
-          "expr": "sum(rate(certctl_http_requests_total[5m])) by (code)",
+          "expr": "sum(rate(trustctl_http_requests_total[5m])) by (code)",
           "legendFormat": "{{code}}"
         }
       ]

@@ -20,7 +20,7 @@ export function Dashboard() {
       {fresh && (
         <div className="mb-6">
           <EmptyState
-            title="Welcome to certctl"
+            title="Welcome to trustctl"
             ctaTo="/wizard"
             ctaLabel="Get started"
           >

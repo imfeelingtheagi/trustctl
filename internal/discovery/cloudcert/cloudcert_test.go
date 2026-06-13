@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/discovery/cloudcert"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/discovery/cloudcert"
 )
 
 // fakeProvider enumerates a fixed set of certificates, optionally with a delay

@@ -8,9 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/projections"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/projections"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // eventPrefix marks the lifecycle events the orchestrator emits and replays.

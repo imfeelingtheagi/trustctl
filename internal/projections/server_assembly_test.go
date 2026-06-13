@@ -15,11 +15,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/orchestrator"
-	"certctl.io/certctl/internal/server"
-	"certctl.io/certctl/internal/signing"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/server"
+	"trustctl.io/trustctl/internal/signing"
 )
 
 // staticSigner is a server.SignerProvider holding one client (a real signer
@@ -30,10 +30,10 @@ func (s staticSigner) Client() *signing.Client { return s.c }
 
 func buildSignerBin(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "certctl-signer")
-	out, err := exec.Command("go", "build", "-o", bin, "certctl.io/certctl/cmd/certctl-signer").CombinedOutput()
+	bin := filepath.Join(t.TempDir(), "trustctl-signer")
+	out, err := exec.Command("go", "build", "-o", bin, "trustctl.io/trustctl/cmd/trustctl-signer").CombinedOutput()
 	if err != nil {
-		t.Fatalf("build certctl-signer: %v\n%s", err, out)
+		t.Fatalf("build trustctl-signer: %v\n%s", err, out)
 	}
 	return bin
 }

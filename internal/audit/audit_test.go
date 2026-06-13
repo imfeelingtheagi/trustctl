@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/audit"
-	"certctl.io/certctl/internal/config"
-	"certctl.io/certctl/internal/crypto/jose"
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/audit"
+	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/events"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"certctl.io/certctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // This file implements the tamper-evident hash chain over audit records (R2.1).

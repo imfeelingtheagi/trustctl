@@ -11,13 +11,13 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/ctlog/ctlogtest"
-	"certctl.io/certctl/internal/discovery/cloudcert"
-	"certctl.io/certctl/internal/discovery/cloudcert/acmdisc"
-	"certctl.io/certctl/internal/discovery/cloudcert/gcmdisc"
-	"certctl.io/certctl/internal/discovery/cloudcert/kvdisc"
-	"certctl.io/certctl/internal/graph"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
+	"trustctl.io/trustctl/internal/discovery/cloudcert"
+	"trustctl.io/trustctl/internal/discovery/cloudcert/acmdisc"
+	"trustctl.io/trustctl/internal/discovery/cloudcert/gcmdisc"
+	"trustctl.io/trustctl/internal/discovery/cloudcert/kvdisc"
+	"trustctl.io/trustctl/internal/graph"
+	"trustctl.io/trustctl/internal/store"
 )
 
 func cloudCertDER(t *testing.T, cn string) []byte {

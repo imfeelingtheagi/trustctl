@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"certctl.io/certctl/internal/agent/destination"
+	"trustctl.io/trustctl/internal/agent/destination"
 )
 
 // SecretDestination installs a credential into a Kubernetes Secret of type

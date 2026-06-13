@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"certctl.io/certctl/internal/config"
-	"certctl.io/certctl/internal/crypto/mtls"
+	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 )
 
 // internalCertTTL is the validity of the self-signed internal server certificate.
@@ -46,7 +46,7 @@ func serveControlPlane(srv *http.Server, ln net.Listener, tlsCfg config.TLS, war
 // loopback, the conventional Compose service name, and the machine hostname, so
 // the common ways an evaluator reaches the control plane verify.
 func serverHosts() []string {
-	hosts := []string{"localhost", "127.0.0.1", "::1", "certctl"}
+	hosts := []string{"localhost", "127.0.0.1", "::1", "trustctl"}
 	if h, err := os.Hostname(); err == nil && h != "" {
 		hosts = append(hosts, h)
 	}

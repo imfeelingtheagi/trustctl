@@ -52,7 +52,7 @@ plan.
 
 ## 3. Process boundary (AN-4)
 
-- **Separate process.** The signer is `cmd/certctl-signer`, a distinct binary
+- **Separate process.** The signer is `cmd/trustctl-signer`, a distinct binary
   with its own address space. It is never run in-process with the control plane.
 - **Single-binary mode.** The control plane launches the signer as a **child
   process** and communicates over a Unix domain socket (UDS). The child inherits
@@ -190,7 +190,7 @@ an optional caller-chosen handle id for idempotent creation.
 
 ### 5.6 Versioning
 
-The proto package is `certctl.signing.v1`; evolution is additive within v1, with
+The proto package is `trustctl.signing.v1`; evolution is additive within v1, with
 a new package for breaking changes.
 
 ## 6. Memory-safety obligations (AN-8)
@@ -201,7 +201,7 @@ At the **buffer** level (delivered in S1.2, `internal/crypto/secret`):
   region that is **mlock**'d (never swapped) and marked **MADV_DONTDUMP**
   (excluded from core dumps), and is explicitly zeroized on `Destroy` (manual
   zero loop kept alive with `runtime.KeepAlive`). Key material is `[]byte`, never
-  `string`; the certctllint AN-8 rule enforces this in key-handling packages.
+  `string`; the trustctllint AN-8 rule enforces this in key-handling packages.
 
 At the **process** level (delivered in S1.4):
 
@@ -231,7 +231,7 @@ anything to this list requires explicit review recorded in the PR.
 - `google.golang.org/grpc` — the transport. Audited, pinned.
 - `google.golang.org/protobuf` — message encoding. Audited, pinned.
 - `golang.org/x/sys` — `prctl`, `setrlimit`, `mlock`/`mlockall`, `SO_PEERCRED`.
-- `certctl.io/certctl/internal/crypto` and `internal/crypto/secret` — the AN-3
+- `trustctl.io/trustctl/internal/crypto` and `internal/crypto/secret` — the AN-3
   boundary and AN-8 buffers.
 
 **Forbidden** (non-exhaustive; the intent is "nothing else")

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/events"
 )
 
 // EventTypeArchived is the event appended after a retention run, recording that a

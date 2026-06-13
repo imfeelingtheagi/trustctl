@@ -3,8 +3,8 @@ package pqc_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/pqc"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/pqc"
 )
 
 func TestSignVerify(t *testing.T) {

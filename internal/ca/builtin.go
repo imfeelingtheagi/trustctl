@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	cryptoca "certctl.io/certctl/internal/crypto/ca"
+	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
 )
 
 // defaultTTL is used when an issue request does not specify one.

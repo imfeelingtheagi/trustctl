@@ -28,7 +28,7 @@ export function AppShell() {
       </a>
 
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
-        <span className="text-base font-semibold">certctl</span>
+        <span className="text-base font-semibold">trustctl</span>
         <div className="flex items-center gap-3">
           <ThemeToggle />
           {user && (

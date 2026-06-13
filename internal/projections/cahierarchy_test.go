@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca/hierarchy"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/ca/hierarchy"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/store"
 )
 
 func caHierCSR(t *testing.T, cn string, sans []string) []byte {

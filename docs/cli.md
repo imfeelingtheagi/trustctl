@@ -1,6 +1,6 @@
 # CLI
 
-`certctl-cli` is a command-line interface at parity with the REST API, built for
+`trustctl-cli` is a command-line interface at parity with the REST API, built for
 scripts and CI: machine-readable JSON output and a CI-friendly API token. The
 command set is generated from the API route table, so it stays in lockstep with
 the server.
@@ -11,16 +11,16 @@ tooling.
 
 ## Global flags
 
-Every command accepts these, each with a `CERTCTL_*` environment fallback:
+Every command accepts these, each with a `TRUSTCTL_*` environment fallback:
 
 | Flag | Env | Meaning |
 | --- | --- | --- |
-| `--server` | `CERTCTL_SERVER` | Base URL of the control plane. |
-| `--token` | `CERTCTL_TOKEN` | API token, sent as `Authorization: Bearer`. |
-| `--tenant` | `CERTCTL_TENANT` | Tenant id (`X-Tenant-ID`) for header/dev auth. |
-| `--idempotency-key` | `CERTCTL_IDEMPOTENCY_KEY` | Stable key for safe retries; generated per call if unset. |
+| `--server` | `TRUSTCTL_SERVER` | Base URL of the control plane. |
+| `--token` | `TRUSTCTL_TOKEN` | API token, sent as `Authorization: Bearer`. |
+| `--tenant` | `TRUSTCTL_TENANT` | Tenant id (`X-Tenant-ID`) for header/dev auth. |
+| `--idempotency-key` | `TRUSTCTL_IDEMPOTENCY_KEY` | Stable key for safe retries; generated per call if unset. |
 
-A certctl API token carries its own tenant and scopes, so with `--token` you
+A trustctl API token carries its own tenant and scopes, so with `--token` you
 usually need nothing else. Mutations always send an `Idempotency-Key` so a
 retried command can never execute twice.
 
@@ -50,24 +50,24 @@ Plus `version`.
 ## Examples
 
 ```bash
-export CERTCTL_SERVER=https://localhost:8443
-export CERTCTL_TOKEN=certctl_pat_...
+export TRUSTCTL_SERVER=https://localhost:8443
+export TRUSTCTL_TOKEN=trustctl_pat_...
 
 # Create an owner from a JSON body on stdin.
-echo '{"kind":"workload","name":"payments"}' | certctl-cli owners create -f -
+echo '{"kind":"workload","name":"payments"}' | trustctl-cli owners create -f -
 
 # List the certificate inventory.
-certctl-cli certificates list --limit 50
+trustctl-cli certificates list --limit 50
 
 # Rank credentials by risk — what to rotate first.
-certctl-cli risk credentials --sort score
+trustctl-cli risk credentials --sort score
 
 # Mint a one-time agent bootstrap token, then list registered agents.
-certctl-cli agents enroll-token
-certctl-cli agents list
+trustctl-cli agents enroll-token
+trustctl-cli agents list
 
 # Run a graph query.
-certctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
+trustctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
 ```
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,

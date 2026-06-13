@@ -13,7 +13,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"certctl.io/certctl/internal/crypto/secret"
+	"trustctl.io/trustctl/internal/crypto/secret"
 )
 
 // TestBufferLockedAndNoDumpLinux verifies, via /proc/self/smaps, that a secret

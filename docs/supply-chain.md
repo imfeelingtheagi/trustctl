@@ -1,6 +1,6 @@
 # Supply chain
 
-certctl ships with a signed, attested, scanned supply chain. This page is the
+trustctl ships with a signed, attested, scanned supply chain. This page is the
 single source of truth for **what is signed, what is scanned, and how you verify
 it**. Nothing here is aspirational — each gate runs in CI, and the scan results
 are recorded below.
@@ -24,7 +24,7 @@ A version tag (`vX.Y.Z`) drives `.github/workflows/release.yml`, which:
 ### Verify a published image (signature-on-install)
 
 ```bash
-scripts/verify-image.sh ghcr.io/imfeelingtheagi/certctl:<tag>
+scripts/verify-image.sh ghcr.io/imfeelingtheagi/trustctl:<tag>
 ```
 
 This confirms the image was signed by **this repo's release workflow** (the cosign
@@ -48,7 +48,7 @@ $ govulncheck ./...
 === Symbol Results ===
 No vulnerabilities found.
 Your code is affected by 0 vulnerabilities.
-(2 advisories exist in imported packages but are not reachable from certctl's code.)
+(2 advisories exist in imported packages but are not reachable from trustctl's code.)
 ```
 
 ### npm (web UI) — `npm audit`

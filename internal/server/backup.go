@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 
-	"certctl.io/certctl/internal/backup"
-	"certctl.io/certctl/internal/config"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/projections"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/backup"
+	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/projections"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // RunBackup writes a portable backup of the event log (the AN-2 source of truth)
@@ -19,7 +19,7 @@ import (
 // otherwise (a bundled/embedded store is per-process and not a backup target).
 func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
-		return 0, errors.New("backup requires an external event store (set CERTCTL_NATS_MODE=external and CERTCTL_NATS_URL)")
+		return 0, errors.New("backup requires an external event store (set TRUSTCTL_NATS_MODE=external and TRUSTCTL_NATS_URL)")
 	}
 	log, err := events.Open(ctx, cfg.NATS)
 	if err != nil {
@@ -49,10 +49,10 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 // event store must be empty. It returns the number of events restored.
 func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
-		return 0, errors.New("restore requires an external event store (set CERTCTL_NATS_MODE=external and CERTCTL_NATS_URL)")
+		return 0, errors.New("restore requires an external event store (set TRUSTCTL_NATS_MODE=external and TRUSTCTL_NATS_URL)")
 	}
 	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
-		return 0, errors.New("restore requires an external Postgres (set CERTCTL_POSTGRES_MODE=external and CERTCTL_POSTGRES_DSN)")
+		return 0, errors.New("restore requires an external Postgres (set TRUSTCTL_POSTGRES_MODE=external and TRUSTCTL_POSTGRES_DSN)")
 	}
 	f, err := os.Open(path)
 	if err != nil {

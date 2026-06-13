@@ -1,11 +1,11 @@
 # Install
 
-certctl has two binaries you install depending on the role:
+trustctl has two binaries you install depending on the role:
 
-- **Control plane** (`certctl`) — the API, web UI, orchestrator, and event spine.
+- **Control plane** (`trustctl`) — the API, web UI, orchestrator, and event spine.
   In single-node mode it also supervises the isolated signing service
-  (`certctl-signer`) as a child process.
-- **Agent** (`certctl-agent`) — runs inside your network to discover, deploy, and
+  (`trustctl-signer`) as a child process.
+- **Agent** (`trustctl-agent`) — runs inside your network to discover, deploy, and
   monitor credentials on a host.
 
 Pick the platform you are installing on.
@@ -17,11 +17,11 @@ against your datastores:
 
 ```bash
 docker run --rm -p 8443:8443 \
-  -e CERTCTL_POSTGRES_MODE=external \
-  -e CERTCTL_POSTGRES_DSN='postgres://user:pass@db:5432/certctl?sslmode=require' \
-  -e CERTCTL_NATS_MODE=external \
-  -e CERTCTL_NATS_URL='nats://nats:4222' \
-  ghcr.io/imfeelingtheagi/certctl:latest
+  -e TRUSTCTL_POSTGRES_MODE=external \
+  -e TRUSTCTL_POSTGRES_DSN='postgres://user:pass@db:5432/trustctl?sslmode=require' \
+  -e TRUSTCTL_NATS_MODE=external \
+  -e TRUSTCTL_NATS_URL='nats://nats:4222' \
+  ghcr.io/imfeelingtheagi/trustctl:latest
 ```
 
 For a self-contained evaluation that brings up Postgres and NATS for you, use the
@@ -35,15 +35,15 @@ Verify a published image before you run it — its keyless cosign signature and 
 CycloneDX SBOM attestation — with the helper:
 
 ```bash
-scripts/verify-image.sh ghcr.io/imfeelingtheagi/certctl:<tag>
+scripts/verify-image.sh ghcr.io/imfeelingtheagi/trustctl:<tag>
 ```
 
 That wraps the underlying cosign check (only an image built by this repo's release
 workflow verifies):
 
 ```bash
-cosign verify ghcr.io/imfeelingtheagi/certctl:<tag> \
-  --certificate-identity-regexp '^https://github.com/.*/certctl/.github/workflows/release.yml@.*' \
+cosign verify ghcr.io/imfeelingtheagi/trustctl:<tag> \
+  --certificate-identity-regexp '^https://github.com/.*/trustctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -52,26 +52,26 @@ dependency-scanning story.
 
 ## Kubernetes (control plane via Helm)
 
-The control plane installs with the Helm chart under `deploy/helm/certctl`. It
+The control plane installs with the Helm chart under `deploy/helm/trustctl`. It
 deploys the API/UI with the **signing service isolated** as a locked-down sidecar
 that has **no network listener** (it talks to the control plane only over a shared
 in-memory socket — AN-4), against **external PostgreSQL and NATS**, behind a
 default-deny `NetworkPolicy`, with TLS on by default (R1.3):
 
 ```bash
-helm install certctl deploy/helm/certctl \
-  --namespace certctl --create-namespace \
-  --set postgres.dsn='postgres://user:pass@pg-host:5432/certctl?sslmode=require' \
+helm install trustctl deploy/helm/trustctl \
+  --namespace trustctl --create-namespace \
+  --set postgres.dsn='postgres://user:pass@pg-host:5432/trustctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
   --set kek.generate=true   # eval only; set kek.existingSecret in production
 ```
 
 ```bash
-kubectl -n certctl rollout status deploy/certctl
-kubectl -n certctl port-forward svc/certctl 8443:8443   # https://localhost:8443 (-k)
+kubectl -n trustctl rollout status deploy/trustctl
+kubectl -n trustctl port-forward svc/trustctl 8443:8443   # https://localhost:8443 (-k)
 ```
 
-See [`deploy/helm/certctl/README.md`](https://github.com/imfeelingtheagi/certctl/tree/main/deploy/helm/certctl)
+See [`deploy/helm/trustctl/README.md`](https://github.com/imfeelingtheagi/trustctl/tree/main/deploy/helm/trustctl)
 for the full values reference. A Kubernetes **Operator** and multi-replica HA (a
 fully separate signer pod over mTLS) are **planned for S15.1** — see
 [limitations](limitations.md); today the Helm chart is the supported control-plane
@@ -79,7 +79,7 @@ install.
 
 ## Kubernetes (agent)
 
-The certctl agent runs as a **DaemonSet** so every node is covered. The manifests
+The trustctl agent runs as a **DaemonSet** so every node is covered. The manifests
 live under `deploy/kubernetes` (namespace, RBAC, and the DaemonSet):
 
 ```bash
@@ -99,26 +99,26 @@ Install from a release binary or build from source.
 **From source** (requires Go 1.25+):
 
 ```bash
-git clone https://github.com/imfeelingtheagi/certctl
-cd certctl
-make build           # builds ./bin/certctl, certctl-signer, and certctl-agent
-sudo install -m 0755 bin/certctl /usr/local/bin/certctl
-sudo install -m 0755 bin/certctl-agent /usr/local/bin/certctl-agent
+git clone https://github.com/imfeelingtheagi/trustctl
+cd trustctl
+make build           # builds ./bin/trustctl, trustctl-signer, and trustctl-agent
+sudo install -m 0755 bin/trustctl /usr/local/bin/trustctl
+sudo install -m 0755 bin/trustctl-agent /usr/local/bin/trustctl-agent
 ```
 
 Run the agent under systemd so it restarts on failure and on boot. A minimal
 unit:
 
 ```ini
-# /etc/systemd/system/certctl-agent.service
+# /etc/systemd/system/trustctl-agent.service
 [Unit]
-Description=certctl agent
+Description=trustctl agent
 After=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/certctl-agent
+ExecStart=/usr/local/bin/trustctl-agent
 Restart=on-failure
-User=certctl
+User=trustctl
 
 [Install]
 WantedBy=multi-user.target
@@ -126,7 +126,7 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now certctl-agent
+sudo systemctl enable --now trustctl-agent
 ```
 
 ## macOS (agent)
@@ -135,15 +135,15 @@ Build the agent (or download the macOS release) and run it as a `launchd` agent.
 
 ```bash
 make build
-sudo install -m 0755 bin/certctl-agent /usr/local/bin/certctl-agent
+sudo install -m 0755 bin/trustctl-agent /usr/local/bin/trustctl-agent
 ```
 
 Create a `launchd` job at
-`/Library/LaunchDaemons/io.certctl.agent.plist` with a `ProgramArguments` entry
-of `/usr/local/bin/certctl-agent` and `KeepAlive` set, then load it:
+`/Library/LaunchDaemons/io.trustctl.agent.plist` with a `ProgramArguments` entry
+of `/usr/local/bin/trustctl-agent` and `KeepAlive` set, then load it:
 
 ```bash
-sudo launchctl load /Library/LaunchDaemons/io.certctl.agent.plist
+sudo launchctl load /Library/LaunchDaemons/io.trustctl.agent.plist
 ```
 
 The agent installs certificates into the login/keychain destinations you
@@ -156,16 +156,16 @@ installs certificates into the Windows certificate store (CryptoAPI / CNG). Buil
 the signed MSI:
 
 ```bash
-make dist-windows     # cross-compiles certctl-agent.exe and packages the MSI
+make dist-windows     # cross-compiles trustctl-agent.exe and packages the MSI
 ```
 
 Install it (elevated PowerShell):
 
 ```powershell
-msiexec /i certctl-agent.msi /qn
+msiexec /i trustctl-agent.msi /qn
 ```
 
-The MSI registers and starts the `certctl-agent` service. See
+The MSI registers and starts the `trustctl-agent` service. See
 `deploy/windows/README.md` for Authenticode signing and the WiX/msitools build
 details.
 
@@ -174,10 +174,10 @@ details.
 On any platform:
 
 ```bash
-certctl --version
-certctl -check-config        # prints the effective configuration; non-zero on a bad config
+trustctl --version
+trustctl -check-config        # prints the effective configuration; non-zero on a bad config
 ```
 
-Next: [Configuration](configuration.md) to point certctl at your datastores, then
-[Getting started](getting-started.md) to issue a certificate. To remove certctl,
+Next: [Configuration](configuration.md) to point trustctl at your datastores, then
+[Getting started](getting-started.md) to issue a certificate. To remove trustctl,
 see [Uninstall](uninstall.md).

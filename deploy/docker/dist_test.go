@@ -48,7 +48,7 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	mustContainAll(t, "Dockerfile reproducible build flags", df,
 		"CGO_ENABLED=0", "-trimpath", "-buildid=", "-buildvcs=false")
 	// Both binaries ship: the control plane and the sacred signer process (AN-4).
-	mustContainAll(t, "Dockerfile binaries", df, "./cmd/certctl", "./cmd/certctl-signer")
+	mustContainAll(t, "Dockerfile binaries", df, "./cmd/trustctl", "./cmd/trustctl-signer")
 	// Unprivileged runtime.
 	mustContainAny(t, "Dockerfile non-root user", df, "nonroot", "USER 65532")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
@@ -62,13 +62,13 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 func TestComposeBringsUpEvaluableStack(t *testing.T) {
 	c := readArtifact(t, "docker-compose.yml")
 
-	mustContainAll(t, "compose services", c, "postgres", "nats", "certctl")
+	mustContainAll(t, "compose services", c, "postgres", "nats", "trustctl")
 	// JetStream must be enabled for the event spine (AN-2).
 	mustContainAny(t, "compose nats jetstream", c, "-js", "--jetstream", "jetstream")
 	// The control plane points at the external datastores by environment.
 	mustContainAll(t, "compose external datastore wiring", c,
-		"CERTCTL_POSTGRES_MODE", "external",
-		"CERTCTL_POSTGRES_DSN", "CERTCTL_NATS_MODE", "CERTCTL_NATS_URL")
+		"TRUSTCTL_POSTGRES_MODE", "external",
+		"TRUSTCTL_POSTGRES_DSN", "TRUSTCTL_NATS_MODE", "TRUSTCTL_NATS_URL")
 	// Ordered, health-gated startup.
 	mustContainAll(t, "compose health/ordering", c, "healthcheck", "depends_on")
 }

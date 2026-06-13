@@ -20,7 +20,7 @@ import (
 
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
 
-	"certctl.io/certctl/internal/crypto/detrand"
+	"trustctl.io/trustctl/internal/crypto/detrand"
 )
 
 // EncodeTransient packages the key and certificate chain into a PKCS#12 blob
@@ -69,7 +69,7 @@ func EncodeDeterministic(keyPEM, certChainPEM []byte, password string) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	r := detrand.New([]byte("certctl/pfx/v1"), []byte(password), keyPEM, certChainPEM)
+	r := detrand.New([]byte("trustctl/pfx/v1"), []byte(password), keyPEM, certChainPEM)
 	return pkcs12.Modern.WithRand(r).Encode(key, leaf, cas, password)
 }
 

@@ -10,8 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"certctl.io/certctl/internal/crypto/seal"
-	"certctl.io/certctl/internal/crypto/secret"
+	"trustctl.io/trustctl/internal/crypto/seal"
+	"trustctl.io/trustctl/internal/crypto/secret"
 )
 
 // LoadOrCreate loads a 32-byte KEK from path, creating one (random, written

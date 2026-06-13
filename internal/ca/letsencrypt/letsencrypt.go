@@ -16,9 +16,9 @@ import (
 
 	"golang.org/x/crypto/acme"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/crypto/acmekey"
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/crypto/acmekey"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 // ChallengeSolver provisions and removes the response for an ACME challenge (for

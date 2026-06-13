@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/catemplate"
-	"certctl.io/certctl/internal/ca/smallstep"
-	"certctl.io/certctl/internal/ca/smallstep/smallstepfake"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/catemplate"
+	"trustctl.io/trustctl/internal/ca/smallstep"
+	"trustctl.io/trustctl/internal/ca/smallstep/smallstepfake"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
 )
 
 func smallstepCSR(t *testing.T, cn string) []byte {

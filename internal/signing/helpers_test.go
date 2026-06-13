@@ -18,14 +18,14 @@ func repoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
-// buildSigner compiles cmd/certctl-signer to a temp path and returns it.
+// buildSigner compiles cmd/trustctl-signer to a temp path and returns it.
 func buildSigner(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "certctl-signer")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/certctl-signer")
+	bin := filepath.Join(t.TempDir(), "trustctl-signer")
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/trustctl-signer")
 	cmd.Dir = repoRoot(t)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build certctl-signer: %v\n%s", err, out)
+		t.Fatalf("build trustctl-signer: %v\n%s", err, out)
 	}
 	return bin
 }

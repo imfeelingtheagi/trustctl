@@ -3,7 +3,7 @@ package sshkeys_test
 import (
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/sshkeys"
+	"trustctl.io/trustctl/internal/crypto/sshkeys"
 )
 
 const (

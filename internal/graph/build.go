@@ -4,7 +4,7 @@ import (
 	"context"
 	"strconv"
 
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // pageSize bounds each keyset page when reading the paginated inventory tables.

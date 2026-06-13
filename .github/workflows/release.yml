@@ -1,6 +1,6 @@
 name: Release
 
-# Build, sign, and publish the certctl control-plane image on a version tag:
+# Build, sign, and publish the trustctl control-plane image on a version tag:
 # a reproducible distroless image (under 80 MB), pushed to GHCR (primary) with a
 # Docker Hub mirror, carrying a CycloneDX SBOM and a keyless cosign signature.
 
@@ -16,7 +16,7 @@ permissions:
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
-  DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'certctl' }}/certctl
+  DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trustctl' }}/trustctl
   # Image size budget. Two static Go binaries (control plane + signer) plus the
   # embedded web UI land at ~40 MB today; this 80 MB budget gives Phase-2 headroom
   # while still catching accidental bloat (a debug image, stray files in context).
@@ -95,11 +95,11 @@ jobs:
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
             BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
-          tags: certctl:sizecheck
+          tags: trustctl:sizecheck
 
       - name: Enforce the image size budget
         run: |
-          size=$(docker image inspect certctl:sizecheck --format '{{.Size}}')
+          size=$(docker image inspect trustctl:sizecheck --format '{{.Size}}')
           echo "image size: ${size} bytes (budget ${MAX_IMAGE_BYTES})"
           if [ "$size" -gt "${MAX_IMAGE_BYTES}" ]; then
             echo "::error::image is ${size} bytes, over the ${MAX_IMAGE_BYTES}-byte budget"

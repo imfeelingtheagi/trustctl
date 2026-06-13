@@ -1,17 +1,17 @@
-# certctl --- build, test, lint, run.
+# trustctl --- build, test, lint, run.
 #
 # Reproducible builds: -trimpath strips local filesystem paths, CGO is disabled
 # for the shipped binaries, and version metadata is derived from git (with safe
 # fallbacks) and injected via -ldflags so that rebuilding the same commit yields
-# identical binaries. The architecture linter (tools/certctllint) is the scope
+# identical binaries. The architecture linter (tools/trustctllint) is the scope
 # of sprint S0.2 and will be wired into the `lint` target when it lands.
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
-MODULE  := certctl.io/certctl
+MODULE  := trustctl.io/trustctl
 BIN_DIR := bin
-CMDS    := certctl certctl-signer certctl-agent
+CMDS    := trustctl trustctl-signer trustctl-agent
 
 GO          ?= go
 CGO_ENABLED ?= 0
@@ -90,8 +90,8 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 	fi
 	@echo ">> go vet"
 	$(GO) vet ./...
-	@echo ">> certctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
-	$(GO) run ./tools/certctllint ./...
+	@echo ">> trustctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
+	$(GO) run ./tools/trustctllint ./...
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		echo ">> golangci-lint"; golangci-lint run ./...; \
 	else \
@@ -105,7 +105,7 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 
 .PHONY: run
 run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version)
-	$(GO) run ./cmd/certctl $(ARGS)
+	$(GO) run ./cmd/trustctl $(ARGS)
 
 DIST_DIR ?= dist
 WIN_ARCH ?= amd64
@@ -118,17 +118,17 @@ windows-build: ## Cross-compile every package for windows/amd64 (compile check)
 .PHONY: dist-windows
 dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish SHA-256 sums
 	@mkdir -p $(DIST_DIR)
-	@echo ">> cross-build certctl-agent.exe (windows/$(WIN_ARCH))"
-	GOOS=windows GOARCH=$(WIN_ARCH) $(GO_BUILD) -o $(DIST_DIR)/certctl-agent.exe ./cmd/certctl-agent
-	@cp deploy/windows/certctl-agent.wxs $(DIST_DIR)/certctl-agent.wxs
+	@echo ">> cross-build trustctl-agent.exe (windows/$(WIN_ARCH))"
+	GOOS=windows GOARCH=$(WIN_ARCH) $(GO_BUILD) -o $(DIST_DIR)/trustctl-agent.exe ./cmd/trustctl-agent
+	@cp deploy/windows/trustctl-agent.wxs $(DIST_DIR)/trustctl-agent.wxs
 	@# Authenticode-sign the binary when a signing identity is provided (osslsigncode on
 	@# Linux/macOS, or signtool on Windows). Unsigned otherwise.
 	@if [ -n "$$SIGN_PFX" ]; then \
-		echo ">> Authenticode-sign certctl-agent.exe"; \
-		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "certctl agent" \
+		echo ">> Authenticode-sign trustctl-agent.exe"; \
+		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trustctl agent" \
 			-t http://timestamp.digicert.com \
-			-in $(DIST_DIR)/certctl-agent.exe -out $(DIST_DIR)/certctl-agent.signed.exe && \
-		mv $(DIST_DIR)/certctl-agent.signed.exe $(DIST_DIR)/certctl-agent.exe; \
+			-in $(DIST_DIR)/trustctl-agent.exe -out $(DIST_DIR)/trustctl-agent.signed.exe && \
+		mv $(DIST_DIR)/trustctl-agent.signed.exe $(DIST_DIR)/trustctl-agent.exe; \
 	else \
 		echo ">> SIGN_PFX not set; skipping signing (set SIGN_PFX/SIGN_PASS to sign)"; \
 	fi
@@ -136,19 +136,19 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 	@# it the same way as the binary so the installer itself is trusted.
 	@if command -v wixl >/dev/null 2>&1; then \
 		echo ">> build MSI (wixl)"; \
-		( cd $(DIST_DIR) && wixl -o certctl-agent.msi certctl-agent.wxs ); \
+		( cd $(DIST_DIR) && wixl -o trustctl-agent.msi trustctl-agent.wxs ); \
 		if [ -n "$$SIGN_PFX" ]; then \
-			echo ">> Authenticode-sign certctl-agent.msi"; \
-			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "certctl agent" \
+			echo ">> Authenticode-sign trustctl-agent.msi"; \
+			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trustctl agent" \
 				-t http://timestamp.digicert.com \
-				-in $(DIST_DIR)/certctl-agent.msi -out $(DIST_DIR)/certctl-agent.signed.msi && \
-			mv $(DIST_DIR)/certctl-agent.signed.msi $(DIST_DIR)/certctl-agent.msi; \
+				-in $(DIST_DIR)/trustctl-agent.msi -out $(DIST_DIR)/trustctl-agent.signed.msi && \
+			mv $(DIST_DIR)/trustctl-agent.signed.msi $(DIST_DIR)/trustctl-agent.msi; \
 		fi; \
 	else \
 		echo ">> wixl not found; skipping MSI build (install msitools, or use WiX on Windows)"; \
 	fi
 	@echo ">> publish SHA-256 sums"
-	@( cd $(DIST_DIR) && sha256sum $$(ls certctl-agent.exe certctl-agent.msi 2>/dev/null) > SHA256SUMS && cat SHA256SUMS )
+	@( cd $(DIST_DIR) && sha256sum $$(ls trustctl-agent.exe trustctl-agent.msi 2>/dev/null) > SHA256SUMS && cat SHA256SUMS )
 
 .PHONY: tools
 tools: ## Install developer tooling (golangci-lint v2, govulncheck, actionlint)
@@ -200,27 +200,27 @@ web: ## Install deps and build the web UI into internal/webui/dist (embedded by 
 image: ## Build the control-plane container image (deploy/docker/Dockerfile)
 	docker build -f deploy/docker/Dockerfile \
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
-		-t certctl:$(VERSION) .
+		-t trustctl:$(VERSION) .
 
 .PHONY: compose-up
-compose-up: ## Bring up the evaluation stack (Postgres + NATS + certctl)
+compose-up: ## Bring up the evaluation stack (Postgres + NATS + trustctl)
 	docker compose -f deploy/docker/docker-compose.yml up --build
 
 .PHONY: reproducible-check
 reproducible-check: ## Build the control plane twice and verify byte-identical output
 	@set -euo pipefail; \
 	a=$$(mktemp); b=$$(mktemp); \
-	$(GO_BUILD) -buildvcs=false -o $$a ./cmd/certctl; \
-	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/certctl; \
+	$(GO_BUILD) -buildvcs=false -o $$a ./cmd/trustctl; \
+	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/trustctl; \
 	if cmp -s $$a $$b; then echo "reproducible: identical binaries"; else echo "NOT reproducible" >&2; exit 1; fi; \
 	rm -f $$a $$b
 
 .PHONY: helm-lint
 helm-lint: ## Lint + render the control-plane Helm chart (requires helm)
-	helm lint deploy/helm/certctl \
-		--set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+	helm lint deploy/helm/trustctl \
+		--set postgres.dsn='postgres://u:p@pg:5432/trustctl?sslmode=require' \
 		--set nats.url='nats://nats:4222' --set kek.generate=true
-	helm template certctl deploy/helm/certctl --namespace certctl \
-		--set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+	helm template trustctl deploy/helm/trustctl --namespace trustctl \
+		--set postgres.dsn='postgres://u:p@pg:5432/trustctl?sslmode=require' \
 		--set nats.url='nats://nats:4222' --set kek.generate=true >/dev/null
 	@echo ">> helm chart lints and renders"

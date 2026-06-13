@@ -12,11 +12,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nuid"
 
-	"certctl.io/certctl/internal/config"
+	"trustctl.io/trustctl/internal/config"
 )
 
 const (
-	streamName    = "CERTCTL_EVENTS"
+	streamName    = "TRUSTCTL_EVENTS"
 	subjectPrefix = "events"
 	subjectFilter = "events.>"
 
@@ -103,7 +103,7 @@ func openEmbedded(storeDir string) (*natsserver.Server, *nats.Conn, error) {
 		return nil, nil, errors.New("events: embedded nats requires a store dir")
 	}
 	srv, err := natsserver.NewServer(&natsserver.Options{
-		ServerName: "certctl-events",
+		ServerName: "trustctl-events",
 		JetStream:  true,
 		StoreDir:   storeDir,
 		DontListen: true, // in-process only; no network listener

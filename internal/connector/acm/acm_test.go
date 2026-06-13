@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/connector/acm"
-	"certctl.io/certctl/internal/connector/acm/acmtest"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/connector/acm"
+	"trustctl.io/trustctl/internal/connector/acm/acmtest"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 const (

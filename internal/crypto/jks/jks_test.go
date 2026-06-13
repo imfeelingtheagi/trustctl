@@ -5,7 +5,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"certctl.io/certctl/internal/crypto/jks"
+	"trustctl.io/trustctl/internal/crypto/jks"
 )
 
 // A real ECDSA P-256 key (PKCS#8) and self-signed certificate.

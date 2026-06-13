@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"certctl.io/certctl/internal/app"
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/app"
+	"trustctl.io/trustctl/internal/events"
 )
 
 // TestWalkingSkeleton proves the whole spine end-to-end: a RegisterTenant

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"certctl.io/certctl/internal/crypto/secret"
+	"trustctl.io/trustctl/internal/crypto/secret"
 )
 
 // LockedSigner holds its private key as PKCS#8 DER inside a locked secret buffer

@@ -1,6 +1,6 @@
 # Current limitations & what's not yet served
 
-certctl is pre-1.0 and under active hardening. This page is the honest companion
+trustctl is pre-1.0 and under active hardening. This page is the honest companion
 to the capability list: it states plainly **what the running binary serves today**
 versus **what is built and tested as library code but not yet wired into the
 served product**, and which surfaces are explicitly Phase 2. Nothing here is
@@ -11,7 +11,7 @@ If a capability matters to your evaluation, check this page before relying on it
 
 ## Served by the running binary today
 
-`cmd/certctl` assembles and serves a control plane: the event log, projections,
+`cmd/trustctl` assembles and serves a control plane: the event log, projections,
 orchestrator, and REST API, with the signing service supervised as a separate
 out-of-process child (AN-4). What you can do end to end against the running binary:
 
@@ -27,7 +27,7 @@ out-of-process child (AN-4). What you can do end to end against the running bina
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
   and **safe schema migrations**.
 
-The web UI and the `certctl-cli` drive this same served surface.
+The web UI and the `trustctl-cli` drive this same served surface.
 
 ## Built and tested, but not yet served by the binary
 
@@ -92,10 +92,10 @@ This is a deliberate, documented trust boundary (not an accident):
 
 ## Single sign-on (OIDC only)
 
-certctl's interactive SSO is **OIDC only**: the UI and CLI authenticate against any
+trustctl's interactive SSO is **OIDC only**: the UI and CLI authenticate against any
 OpenID Connect provider (Microsoft Entra ID / Azure AD, Okta, Ping, Google, Auth0,
 Keycloak, and the like), and API/CI access uses scoped API tokens. **SAML 2.0 is
-not supported.** PRD F13 originally named SAML as a Phase-1 SSO method, but certctl
+not supported.** PRD F13 originally named SAML as a Phase-1 SSO method, but trustctl
 is **OIDC-only by decision** (R4.1): OIDC covers the modern identity-provider
 landscape, and SAML's XML-signature handling is a security-sensitive surface we
 chose not to carry. A SAML 2.0 Service Provider is a candidate for a future epoch —
@@ -115,7 +115,7 @@ See the [key-ceremony runbook](runbooks/key-ceremony.md),
 
 ## Post-quantum cryptography (issuance algorithms)
 
-certctl's cryptography sits behind one boundary (AN-3, `internal/crypto`), and the
+trustctl's cryptography sits behind one boundary (AN-3, `internal/crypto`), and the
 post-quantum support lives there in `internal/crypto/pqc` (built on Cloudflare's
 CIRCL). What is available today:
 
@@ -137,14 +137,14 @@ issuance — a deliberate Phase-1 scope decision: the NIST-standard ML-DSA / ML-
 the hybrid cover the Phase-1 post-quantum need, and the heavier hash-based signature
 belongs with the migration epoch. The discovery side already knows about it — the
 **CBOM** scanner recognizes SLH-DSA / SPHINCS+ as a quantum-safe algorithm when it
-encounters one in your estate — but certctl cannot itself issue under it today.
+encounters one in your estate — but trustctl cannot itself issue under it today.
 Because all cryptography enters through the single AN-3 boundary, adding SLH-DSA later
 is a contained, one-package change (one CIRCL scheme registration plus known-answer
 tests), with no ripple into the rest of the system.
 
 ## Kubernetes deployment
 
-The control plane ships a production-shaped **Helm chart** (`deploy/helm/certctl`):
+The control plane ships a production-shaped **Helm chart** (`deploy/helm/trustctl`):
 the API/UI with the **signing service isolated** (its own locked-down, network-
 unreachable sidecar), external PostgreSQL and NATS as the default, a default-deny
 `NetworkPolicy`, and TLS. Two things are **deliberately deferred to S15.1**:
@@ -159,7 +159,7 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
 
 ## How to read the roadmap against this
 
-The [README capability table](https://github.com/imfeelingtheagi/certctl#capabilities)
+The [README capability table](https://github.com/imfeelingtheagi/trustctl#capabilities)
 describes what is **built and tested**; this page tells you what is **served by the
 binary today**. When the two differ, this page is the authority for what you can
 rely on at runtime.

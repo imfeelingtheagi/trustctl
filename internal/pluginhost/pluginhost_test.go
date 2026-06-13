@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 // helloWASM exports run() i32 returning 42, with no imports — the simplest fully

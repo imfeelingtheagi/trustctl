@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"certctl.io/certctl/internal/api"
-	"certctl.io/certctl/internal/audit"
-	"certctl.io/certctl/internal/crypto/jose"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/api"
+	"trustctl.io/trustctl/internal/audit"
+	"trustctl.io/trustctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // newAuditServer builds an API with the audit service wired over a fresh event

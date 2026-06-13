@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/ca/catemplate"
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/ca/catemplate"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/jose"
 )
 
 const (

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"certctl.io/certctl/internal/connector"
-	"certctl.io/certctl/internal/pluginhost"
+	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 // sampleCert/sampleKey are opaque PEM bytes; connectors never parse them.

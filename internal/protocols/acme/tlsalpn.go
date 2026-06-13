@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net"
 
-	"certctl.io/certctl/internal/crypto"
-	"certctl.io/certctl/internal/crypto/tlsprobe"
+	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/tlsprobe"
 )
 
 // ALPNProber performs a TLS-ALPN-01 probe of addr and returns the handshake

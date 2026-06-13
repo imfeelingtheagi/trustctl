@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/ctlog"
-	"certctl.io/certctl/internal/discovery/ctmonitor"
-	"certctl.io/certctl/internal/notify"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/crypto/ctlog"
+	"trustctl.io/trustctl/internal/discovery/ctmonitor"
+	"trustctl.io/trustctl/internal/notify"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // ctFakeFetcher serves a fixed set of CT entries (the parsing of real RFC 6962
@@ -39,7 +39,7 @@ func TestCTUnexpectedIssuanceReachesNotificationSurface(t *testing.T) {
 	ctx := context.Background()
 	exp := time.Now().Add(720 * time.Hour)
 
-	// A certificate certctl already knows about (it is in the inventory).
+	// A certificate trustctl already knows about (it is in the inventory).
 	known := sampleCert(tenantA, "known-fp", "CN=known.example.com", exp)
 	known.Issuer = "CN=Acme Root"
 	known.Serial = "01"

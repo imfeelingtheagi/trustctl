@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"certctl.io/certctl/internal/bulkhead"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	"certctl.io/certctl/internal/crypto/tlsprobe"
+	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/crypto/tlsprobe"
 )
 
 // Found is a certificate discovered at a network address.

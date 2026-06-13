@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/jose"
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/events"
 )
 
 // Record is one audit entry: a projection of an event for an auditor. Actor is

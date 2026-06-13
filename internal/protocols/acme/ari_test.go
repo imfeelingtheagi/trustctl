@@ -10,16 +10,16 @@ import (
 
 	xacme "golang.org/x/crypto/acme"
 
-	"certctl.io/certctl/internal/ca"
-	"certctl.io/certctl/internal/crypto/acmekey"
-	"certctl.io/certctl/internal/crypto/certinfo"
-	acmesrv "certctl.io/certctl/internal/protocols/acme"
-	"certctl.io/certctl/internal/protocols/ari"
+	"trustctl.io/trustctl/internal/ca"
+	"trustctl.io/trustctl/internal/crypto/acmekey"
+	"trustctl.io/trustctl/internal/crypto/certinfo"
+	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
+	"trustctl.io/trustctl/internal/protocols/ari"
 )
 
 func mustBuiltin(t *testing.T) ca.CA {
 	t.Helper()
-	b, err := ca.NewBuiltin("certctl ARI Test CA")
+	b, err := ca.NewBuiltin("trustctl ARI Test CA")
 	if err != nil {
 		t.Fatal(err)
 	}

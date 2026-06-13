@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"certctl.io/certctl/internal/app"
-	"certctl.io/certctl/internal/events"
-	"certctl.io/certctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/app"
+	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/orchestrator"
 )
 
 // TestIdempotencyReplayReturnsCached is the AN-5 acceptance: replaying a key

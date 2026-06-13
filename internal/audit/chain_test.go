@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"certctl.io/certctl/internal/audit"
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/audit"
+	"trustctl.io/trustctl/internal/events"
 )
 
 // appendActor appends an event attributed to subject (R2.1 attribution).

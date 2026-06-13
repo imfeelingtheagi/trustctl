@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"certctl.io/certctl/internal/cbom"
-	"certctl.io/certctl/internal/cbom/hostsource"
+	"trustctl.io/trustctl/internal/cbom"
+	"trustctl.io/trustctl/internal/cbom/hostsource"
 )
 
 func TestScanFlagsWeakProtocolAndCipher(t *testing.T) {

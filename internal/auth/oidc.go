@@ -1,8 +1,8 @@
-// Package auth implements authentication for certctl: OIDC login (UI/CLI),
+// Package auth implements authentication for trustctl: OIDC login (UI/CLI),
 // session issuance, and scoped API tokens (CI/CD). All cryptography routes
 // through the internal/crypto boundary (AN-3): JWS/JWKS via internal/crypto/jose,
 // hashing/RNG via internal/crypto. Nothing here is gated — every auth method is
-// in the open-source build. Interactive SSO is OIDC only; SAML 2.0 is not a
+// in the one source-available build. Interactive SSO is OIDC only; SAML 2.0 is not a
 // supported login method (see docs/limitations.md, "Single sign-on (OIDC only)").
 package auth
 
@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/jose"
+	"trustctl.io/trustctl/internal/crypto/jose"
 )
 
 // Claims are the verified, relevant fields of an OIDC id_token.

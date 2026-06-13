@@ -8,9 +8,9 @@ package secrets
 import (
 	"context"
 
-	"certctl.io/certctl/internal/crypto/kek"
-	"certctl.io/certctl/internal/crypto/seal"
-	"certctl.io/certctl/internal/store"
+	"trustctl.io/trustctl/internal/crypto/kek"
+	"trustctl.io/trustctl/internal/crypto/seal"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // KEK is the key-encryption key that wraps each credential's data key. It is a

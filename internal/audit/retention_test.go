@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/audit"
-	"certctl.io/certctl/internal/config"
-	"certctl.io/certctl/internal/events"
+	"trustctl.io/trustctl/internal/audit"
+	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/events"
 )
 
 // memCheckpoints is an in-memory audit.CheckpointSource + audit.CheckpointSink for

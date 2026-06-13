@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"certctl.io/certctl/internal/crypto/sshprobe"
-	"certctl.io/certctl/internal/crypto/sshtestserver"
+	"trustctl.io/trustctl/internal/crypto/sshprobe"
+	"trustctl.io/trustctl/internal/crypto/sshtestserver"
 )
 
 // Probe captures the server's host key and is non-invasive: it never attempts
