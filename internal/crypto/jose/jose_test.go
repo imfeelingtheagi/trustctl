@@ -3,6 +3,7 @@ package jose
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"strings"
 	"testing"
 )
 
@@ -42,10 +43,36 @@ func TestVerifyRejectsTamperedPayload(t *testing.T) {
 	token, _ := SignRS256(key, "k", []byte(`{"sub":"alice"}`))
 	set, _ := NewJWKSet("k", key.Public())
 
-	// Flip the last character of the payload segment.
-	bad := token[:len(token)-30] + "x" + token[len(token)-29:]
-	if _, err := set.Verify(bad); err == nil {
-		t.Error("Verify accepted a tampered token")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		t.Fatalf("expected a 3-part JWS, got %d parts", len(parts))
+	}
+
+	// flip mutates one base64url character of segment i to a guaranteed-DIFFERENT
+	// character, so the tamper is deterministic (the old test substituted a literal
+	// 'x' that was already 'x' ~1/64 of the time, making Verify's correct acceptance
+	// of an unchanged token look like a failure — a flaky CI red, TEST-001/CRYPTO-009).
+	flip := func(seg string) string {
+		b := []byte(seg)
+		if b[0] == 'A' {
+			b[0] = 'B'
+		} else {
+			b[0] = 'A'
+		}
+		return string(b)
+	}
+
+	// Tamper the PAYLOAD segment: the RS256 signature is over header.payload, so any
+	// change to the payload string must make a correct verifier reject.
+	tamperedPayload := parts[0] + "." + flip(parts[1]) + "." + parts[2]
+	if _, err := set.Verify(tamperedPayload); err == nil {
+		t.Error("Verify accepted a token with a tampered payload")
+	}
+
+	// Tamper the SIGNATURE segment: must also be rejected.
+	tamperedSig := parts[0] + "." + parts[1] + "." + flip(parts[2])
+	if _, err := set.Verify(tamperedSig); err == nil {
+		t.Error("Verify accepted a token with a tampered signature")
 	}
 }
 
