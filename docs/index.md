@@ -17,6 +17,9 @@ binary serves today versus what is built as library code but not yet served.
 
 - **[Getting started](getting-started.md)** — bring up trustctl and issue your
   first certificate in under 15 minutes.
+- **[All features](features.md)** — the full catalog of all 78 capabilities, each
+  with its own deep-dive page written for both newcomers and experts; start here to
+  find anything, and keep the **[glossary](glossary.md)** open if a term is new.
 - **[Install](install.md)** — install the control plane and agent on Linux,
   macOS, Windows, Docker, and Kubernetes.
 - **[Configuration](configuration.md)** — the bundled vs. external datastore

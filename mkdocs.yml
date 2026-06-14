@@ -33,6 +33,25 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Current limitations: limitations.md
+  - Features:
+      - All features (index): features.md
+      - Discovery & inventory: features/discovery-and-inventory.md
+      - Observability & risk: features/observability-and-risk.md
+      - Issuance & certificate authorities: features/issuance-and-cas.md
+      - ACME & DNS validation: features/acme-and-dns.md
+      - Enrollment protocols: features/enrollment-protocols.md
+      - Workload identity: features/workload-identity.md
+      - SSH: features/ssh.md
+      - Lifecycle & PQC: features/lifecycle-and-pqc.md
+      - Deployment connectors: features/deployment-connectors.md
+      - Code signing & timestamping: features/code-signing-and-timestamping.md
+      - Incident response & JIT: features/incident-and-jit.md
+      - Secrets: features/secrets.md
+      - Policy & governance: features/policy-and-governance.md
+      - Platform & API: features/platform-and-api.md
+      - Extensibility & plugins: features/extensibility-plugins.md
+      - Graph, query & AI: features/graph-query-ai.md
+  - Glossary: glossary.md
   - Install: install.md
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
