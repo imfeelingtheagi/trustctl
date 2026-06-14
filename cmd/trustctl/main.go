@@ -47,6 +47,15 @@ func main() {
 // error before the control plane boots, so a bad deployment fails fast rather
 // than starting half-configured.
 func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
+	// Admin subcommands are positional verbs (e.g. `trustctl token create`), handled
+	// before the top-level flag parsing so they can carry their own flag set. The
+	// token bootstrap (WIRE-002) is the first-run on-ramp: it mints the first
+	// tenant-scoped API token directly against the datastore, needing no existing
+	// credential and no network trust.
+	if len(args) > 0 && args[0] == "token" {
+		return runToken(ctx, args[1:], getenv, stdout, stderr)
+	}
+
 	fs := flag.NewFlagSet("trustctl", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version information and exit")
@@ -131,6 +140,67 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return err
 	}
 	_, _ = fmt.Fprintln(stderr, "trustctl stopped cleanly")
+	return nil
+}
+
+// runToken dispatches the `trustctl token ...` admin subcommands. Today it serves
+// `token create`, the network-trust-free first-run bootstrap (WIRE-002) that mints
+// the first tenant-scoped API token so a freshly deployed binary — which fails
+// closed (401) until a credential exists and has no OIDC login wired yet — has an
+// obtainable credential. It writes through the same store path the API
+// authenticates against (store.CreateAPIToken) and never requires an existing
+// credential.
+func runToken(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || args[0] != "create" {
+		return errors.New("usage: trustctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]")
+	}
+
+	fs := flag.NewFlagSet("trustctl token create", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	tenant := fs.String("tenant", "", "tenant id (UUID) the token is scoped to (required); registered via the event log if new")
+	tenantName := fs.String("tenant-name", "default", "human label recorded for a freshly registered tenant")
+	subject := fs.String("subject", "bootstrap-admin", "the token's principal subject (who it acts as)")
+	scopesCSV := fs.String("scopes", "", "comma-separated permission scopes; default is full operator control EXCLUDING certs:issue")
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if *tenant == "" {
+		return errors.New("token create: --tenant <uuid> is required (the tenant the token is scoped to; a single-tenant deployment picks one well-known id)")
+	}
+
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		return fmt.Errorf("configuration: %w", err)
+	}
+
+	var scopes []string
+	if s := strings.TrimSpace(*scopesCSV); s != "" {
+		for _, p := range strings.Split(s, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				scopes = append(scopes, p)
+			}
+		}
+	}
+
+	raw, err := server.RunTokenCreate(ctx, cfg, server.TokenCreateOptions{
+		TenantID:   *tenant,
+		TenantName: *tenantName,
+		Subject:    *subject,
+		Scopes:     scopes,
+	})
+	if err != nil {
+		return fmt.Errorf("token create: %w", err)
+	}
+
+	// The raw token is printed ONCE, to stdout only, so it can be captured by a
+	// pipe; it is never logged or stored (only its hash is persisted). Operator
+	// guidance goes to stderr so `... | read TOKEN` gets the bare secret.
+	_, _ = fmt.Fprintf(stderr, "Created a tenant-scoped API token for tenant %s (subject %q).\n", *tenant, *subject)
+	_, _ = fmt.Fprintln(stderr, "Store it now — it is shown only once and cannot be recovered. Use it as: Authorization: Bearer <token>")
+	_, _ = fmt.Fprintln(stdout, raw)
 	return nil
 }
 

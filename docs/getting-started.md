@@ -106,14 +106,33 @@ rotate and renew it automatically.
     **Issue**. The wall-clock for the whole walkthrough is dominated by installing
     the agent, not by trustctl.
 
+## Get your first API token
+
+A freshly booted control plane **fails closed**: every API route returns `401`
+until you present a credential, and interactive OIDC login is not wired in this
+build. To get the first credential, run the network-trust-free bootstrap verb on
+the host (it talks straight to the datastore — no existing token required) and it
+prints a tenant-scoped token **once**:
+
+```bash
+# Pick any UUID as your tenant id (a single-tenant deployment uses one well-known id):
+trustctl token create --tenant 11111111-1111-1111-1111-111111111111 --subject ci-bot
+# -> prints a tt_... token on stdout. Store it now; it is shown only once.
+```
+
+The token carries its tenant and a full set of operator scopes — deliberately
+**excluding** certificate issuance (`certs:issue`), so a bootstrap credential can
+administer the platform but cannot self-issue a certificate. Use it as
+`Authorization: Bearer <token>` (or `TRUSTCTL_TOKEN` for the CLI).
+
 ## Prefer the command line?
 
-Everything the wizard does is also scriptable with `trustctl-cli`. With a CI token
-(see the [CLI reference](cli.md)):
+Everything the wizard does is also scriptable with `trustctl-cli`. With the API
+token you minted above (see the [CLI reference](cli.md)):
 
 ```bash
 export TRUSTCTL_SERVER=https://localhost:8443
-export TRUSTCTL_TOKEN=trustctl_pat_...
+export TRUSTCTL_TOKEN=tt_...
 
 # Create an owner, an issuer, and an identity; the *id of each is in its JSON.
 owner=$(echo '{"kind":"workload","name":"payments"}' | trustctl-cli owners create -f - | jq -r .id)

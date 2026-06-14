@@ -48,11 +48,30 @@ One command per core API operation:
 
 Plus `version`.
 
+## Bootstrapping the first API token
+
+`trustctl-cli` authenticates with an API token, but a freshly deployed control
+plane has none and fails closed (every route `401`s). Mint the first one with the
+**server** binary's first-run bootstrap verb, run on the control-plane host — it
+writes straight to the datastore (no existing credential, no network trust
+required) and prints a tenant-scoped token once:
+
+```bash
+trustctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]
+```
+
+- `--tenant` (required) is the UUID the token is scoped to; the tenant is
+  registered through the event log if it does not exist yet.
+- The default scope set is full operator control **excluding** certificate
+  issuance (`certs:issue`) — bootstrapping a credential never grants self-issue.
+- The raw `tt_…` token is printed once to stdout (only its hash is stored); save
+  it immediately. Then export it as `TRUSTCTL_TOKEN` for `trustctl-cli`.
+
 ## Examples
 
 ```bash
 export TRUSTCTL_SERVER=https://localhost:8443
-export TRUSTCTL_TOKEN=trustctl_pat_...
+export TRUSTCTL_TOKEN=tt_...
 
 # Create an owner from a JSON body on stdin.
 echo '{"kind":"workload","name":"payments"}' | trustctl-cli owners create -f -
