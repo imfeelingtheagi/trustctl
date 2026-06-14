@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -96,6 +97,22 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, c.CreatedAt)
+	return err
+}
+
+// SetCertificateRevokedTx projects a certificate.revoked event: it marks the
+// inventoried certificate revoked (status, reason, timestamp) on the caller's
+// transaction, the same way an identity transition status change is projected.
+// Because the status change is driven by the projector (the sole read-model
+// writer, AN-2) rather than a direct UPDATE, it is reconstructed from the log on
+// a Rebuild() instead of being lost. Keyed by fingerprint so a replay is
+// deterministic and idempotent.
+func (s *Store) SetCertificateRevokedTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint, reason string, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE certificates
+		    SET status = 'revoked', revoked_at = $3, revocation_reason = $4
+		  WHERE tenant_id = $1 AND fingerprint = $2`,
+		tenantID, fingerprint, at, reason)
 	return err
 }
 

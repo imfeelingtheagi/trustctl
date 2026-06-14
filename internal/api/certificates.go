@@ -31,6 +31,12 @@ type certificateResponse struct {
 	DeploymentLocation string     `json:"deployment_location"`
 	Source             string     `json:"source"`
 	CreatedAt          time.Time  `json:"created_at"`
+	// Lifecycle status (active | superseded | revoked) and revocation metadata, so
+	// the served surface reflects a revoked certificate — a revoked cert is
+	// visibly "revoked", not silently still "active".
+	Status           string     `json:"status"`
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	RevocationReason string     `json:"revocation_reason,omitempty"`
 }
 
 func toCertificateResponse(c store.Certificate) certificateResponse {
@@ -43,6 +49,7 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		Issuer: c.Issuer, Serial: c.Serial, Fingerprint: c.Fingerprint, KeyAlgorithm: c.KeyAlgorithm,
 		NotBefore: c.NotBefore, NotAfter: c.NotAfter, DeploymentLocation: c.DeploymentLocation,
 		Source: c.Source, CreatedAt: c.CreatedAt,
+		Status: c.Status, RevokedAt: c.RevokedAt, RevocationReason: c.RevocationReason,
 	}
 }
 

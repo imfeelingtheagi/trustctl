@@ -25,6 +25,7 @@ const (
 	EventIssuerCreated       = "issuer.created"
 	EventIdentityCreated     = "identity.created"
 	EventCertificateRecorded = "certificate.recorded"
+	EventCertificateRevoked  = "certificate.revoked"
 
 	// identityPrefix marks the identity lifecycle events the orchestrator emits
 	// (identity.issued, identity.deployed, …). The projector applies them as a
@@ -98,6 +99,18 @@ type CertificateRecorded struct {
 	NotAfter           *time.Time `json:"not_after"`
 	DeploymentLocation string     `json:"deployment_location"`
 	Source             string     `json:"source"`
+}
+
+// CertificateRevoked is the payload of a certificate.revoked event. The
+// inventoried certificate is keyed by fingerprint; the projector sets its status
+// to revoked with the reason and time. Driving the status change through an event
+// (rather than a direct read-table UPDATE) keeps it reconstructable from the log
+// on a Rebuild() (AN-2).
+type CertificateRevoked struct {
+	Fingerprint string    `json:"fingerprint"`
+	Serial      string    `json:"serial"`
+	Reason      string    `json:"reason"`
+	RevokedAt   time.Time `json:"revoked_at"`
 }
 
 // identityTransition decodes the orchestrator's lifecycle event payload; the
@@ -200,6 +213,12 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
 			Source: pl.Source, CreatedAt: e.Time,
 		})
+	case EventCertificateRevoked:
+		var pl CertificateRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.SetCertificateRevokedTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.Reason, pl.RevokedAt)
 	default:
 		// An identity lifecycle transition (identity.issued, …) is a status change.
 		if strings.HasPrefix(e.Type, identityPrefix) {

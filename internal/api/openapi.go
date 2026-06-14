@@ -186,7 +186,10 @@ func componentSchemas() map[string]*Schema {
 		"sans": {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
 		"fingerprint": str(), "key_algorithm": str(), "not_before": timestamp(), "not_after": timestamp(),
 		"deployment_location": str(), "source": str(), "created_at": timestamp(),
-	}, "id", "tenant_id", "subject", "fingerprint")
+		"status":            {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
+		"revoked_at":        timestamp(),
+		"revocation_reason": str(),
+	}, "id", "tenant_id", "subject", "fingerprint", "status")
 	certificateIngest := object(map[string]*Schema{
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
 	}, "pem")

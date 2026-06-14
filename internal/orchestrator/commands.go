@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -168,4 +169,21 @@ func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, i
 		return store.Certificate{}, err
 	}
 	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
+}
+
+// RevokeCertificate records a certificate.revoked event (keyed by the cert's
+// fingerprint) and projects it, so the inventoried certificate's status becomes
+// revoked. The status change is driven through the projector (the sole
+// read-model writer, AN-2), so it is reconstructed from the log on a Rebuild()
+// rather than lost. revokedAt is supplied by the caller so a redelivery (AN-5)
+// re-applies the same revocation time deterministically.
+func (o *Orchestrator) RevokeCertificate(ctx context.Context, tenantID, fingerprint, serial, reason string, revokedAt time.Time) error {
+	payload, err := json.Marshal(projections.CertificateRevoked{
+		Fingerprint: fingerprint, Serial: serial, Reason: reason, RevokedAt: revokedAt.UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventCertificateRevoked, tenantID, payload)
+	return err
 }

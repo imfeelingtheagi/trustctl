@@ -104,6 +104,43 @@ func (s *Store) CertificateExists(ctx context.Context, tenantID, fingerprint, is
 	return exists, err
 }
 
+// ListActiveIssuedCertificatesForIdentity returns the active, internally-issued
+// certificates that belong to an identity, matched by the identity's owner and
+// its name appearing as a DNS SAN. The served mint sets owner_id =
+// identity.owner, source = "issued", and DNS SAN = identity.name (the subject is
+// stored as the full DN "CN=<name>", so the name is matched against the SANs, not
+// the subject string). The served revocation handler uses it to find the cert(s)
+// to revoke when an identity transitions to revoked. Only active certs are
+// returned, so a superseded or already-revoked row is left untouched. Tenant
+// scoped under RLS (AN-1).
+func (s *Store) ListActiveIssuedCertificatesForIdentity(ctx context.Context, tenantID, ownerID, name string) ([]Certificate, error) {
+	var out []Certificate
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			   FROM certificates
+			  WHERE tenant_id = $1 AND owner_id = $2 AND $3 = ANY(sans)
+			    AND source = 'issued' AND status = 'active'
+			  ORDER BY created_at`,
+			tenantID, ownerID, name)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c Certificate
+			if err := scanCertificate(rows, &c); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ListCertificatesPage returns up to limit certificates with id greater than
 // afterID (keyset pagination; pass ZeroUUID for the first page). When
 // expiringBefore is non-nil, only certificates whose not_after is before it are

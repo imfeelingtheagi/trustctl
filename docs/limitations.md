@@ -20,8 +20,14 @@ out-of-process child (AN-4). What you can do end to end against the running bina
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
-- **Authentication and RBAC** (API tokens and OIDC SSO sessions), **multi-tenancy**
-  with PostgreSQL row-level security, and a **tamper-evident audit chain**.
+- **Authentication and RBAC** via **scoped API tokens** (sent as
+  `Authorization: Bearer`), **multi-tenancy** with PostgreSQL row-level security,
+  and a **tamper-evident audit chain**. A fresh boot fails closed (every route
+  `401`s until a credential exists); mint the first tenant-scoped token on the host
+  with `trustctl token create --tenant <uuid>` (it writes through the store and
+  prints the token once). Interactive **OIDC SSO login is not yet wired into the
+  served binary** (see "Single sign-on" below); API-token auth is the served path
+  today.
 - **Transport security** (TLS, internal or file-based), **idempotency** and the
   **outbox**, **observability** (`/metrics`, `/readyz`, W3C trace headers),
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
@@ -89,6 +95,32 @@ This is a deliberate, documented trust boundary (not an accident):
   conformance suite is the cert-manager-enrollment proxy.
 - **EST**, **SCEP**, **SPIFFE** (Workload API), and the **SSH CA** issuance servers
   are Phase 2 — placeholders in `internal/protocols/`, correctly not served.
+
+## Revocation
+
+Revoking a credential through the running binary is **real and recorded**, not a
+no-op. Transitioning an identity to *revoked* drives the served outbox handler to:
+
+- mark the issued certificate **revoked in the inventory** — via a projected
+  `certificate.revoked` event (AN-2), so the status is reconstructable from the
+  log on a `Rebuild()`, and the certificate API now returns `status` /
+  `revoked_at` / `revocation_reason` so the revocation is **visible** on the
+  served surface (a revoked cert reads `"revoked"`, not silently `"active"`); and
+- record the certificate's serial in the **revocation store** (`ca_issued_certs`)
+  that backs OCSP/CRL.
+
+This is exercised end to end in CI (issue → revoke → assert the cert reads
+revoked and the revoked serial is on record).
+
+What is **not yet served** is the *online revocation-distribution surface*: a
+mounted **OCSP responder** and **CRL endpoint**, the freshness scheduler, and the
+**CDP/AIA pointers** on issued leaves (so a relying party can discover and fetch
+revocation status automatically). Signing live OCSP/CRL needs the CA key in
+process, which trustctl deliberately keeps in the out-of-process signer (AN-4), so
+that distribution layer is built behind that boundary as dedicated work —
+**`EXC-REVOKE-01`**. Until it ships, treat trustctl revocation as authoritative in
+the product's own inventory/records but **not yet automatically published to
+external relying parties** over OCSP/CRL.
 
 ## Single sign-on (OIDC only)
 
