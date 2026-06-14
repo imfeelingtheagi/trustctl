@@ -2,7 +2,7 @@ module trustctl.io/trustctl
 
 go 1.25.0
 
-toolchain go1.25.10
+toolchain go1.25.11
 
 require (
 	github.com/cloudflare/circl v1.6.3
