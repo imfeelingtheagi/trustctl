@@ -26,7 +26,7 @@ func (f fakeCNAME) LookupCNAME(_ context.Context, name string) (string, error) {
 func TestDelegatingProviderWritesToValidationZone(t *testing.T) {
 	ctx := context.Background()
 	const domain = "example.com"
-	name := acme.DNS01RecordName(domain)               // _acme-challenge.example.com
+	name := acme.DNS01RecordName(domain) // _acme-challenge.example.com
 	const target = "abc123.validation.acme-dns.example.org"
 	base := &acme.MemoryDNSProvider{}
 	d := acme.DelegatingProvider{

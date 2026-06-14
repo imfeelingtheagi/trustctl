@@ -16,12 +16,12 @@ import (
 // message, and can be told to return an error to exercise the failure path. No socket is
 // opened and no live SMTP server is needed (the Sender seam is exactly this swap point).
 type fakeSender struct {
-	mu       sync.Mutex
-	calls    int
-	from     string
-	to       []string
-	msg      []byte
-	err      error // returned from Send when non-nil, to drive the error path
+	mu    sync.Mutex
+	calls int
+	from  string
+	to    []string
+	msg   []byte
+	err   error // returned from Send when non-nil, to drive the error path
 }
 
 func (f *fakeSender) Send(_ context.Context, from string, to []string, msg []byte) error {

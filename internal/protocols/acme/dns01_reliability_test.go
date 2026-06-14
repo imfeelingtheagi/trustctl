@@ -228,8 +228,8 @@ func TestPreflightHealthy(t *testing.T) {
 
 func TestPreflightDetectsBrokenDelegation(t *testing.T) {
 	ctx := context.Background()
-	broken := relBrokenProvider{}  // present() no-ops; the record never appears
-	empty := &MemoryDNSProvider{}  // the authoritative view never sees it
+	broken := relBrokenProvider{} // present() no-ops; the record never appears
+	empty := &MemoryDNSProvider{} // the authoritative view never sees it
 	c := &PropagationChecker{Resolvers: []Resolver{empty}, Interval: time.Second, Timeout: 3 * time.Second, sleep: noSleep}
 	if err := PreflightDNS01(ctx, broken, c, "example.com"); err == nil {
 		t.Fatal("preflight passed despite a broken DNS-01 path")

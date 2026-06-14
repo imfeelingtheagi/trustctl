@@ -121,7 +121,7 @@ func newFakeReceiver(secret string) *fakeReceiver {
 	return s
 }
 
-func (s *fakeReceiver) URL() string         { return s.srv.URL }
+func (s *fakeReceiver) URL() string          { return s.srv.URL }
 func (s *fakeReceiver) Client() *http.Client { return s.srv.Client() }
 func (s *fakeReceiver) Close()               { s.srv.Close() }
 

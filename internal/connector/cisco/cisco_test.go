@@ -180,7 +180,7 @@ func TestPasswordNeverLogged(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := cisco.New(srv.URL(), user, secret)
+	c := cisco.New(srv.URL, user, secret)
 	ops := connector.NewHTTPOps(srv.Client())
 
 	_, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(name, sampleCert, sampleKey))
@@ -192,7 +192,7 @@ func TestPasswordNeverLogged(t *testing.T) {
 	}
 	// Also assert the connector's declared reach does not embed the credential.
 	grant := c.Capabilities()
-	host, _ := strings.CutPrefix(srv.URL(), "http://")
+	host, _ := strings.CutPrefix(srv.URL, "http://")
 	if !grant.Allows(pluginhost.CapNetDial, host) {
 		t.Fatalf("net.dial must allow the management host %q", host)
 	}
