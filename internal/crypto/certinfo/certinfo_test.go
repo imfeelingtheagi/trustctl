@@ -4,8 +4,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -113,6 +115,57 @@ func TestThumbprint(t *testing.T) {
 	}
 	if _, err := Thumbprint([]byte("not a certificate")); err == nil {
 		t.Error("Thumbprint of garbage should error")
+	}
+}
+
+// TestPublicKeyJWKThumbprint verifies the RFC 7638 JWK thumbprint of the
+// certificate's public key (used by the ACME revokeCert cert-key authz path,
+// INTEROP-002): it is a stable non-empty base64url value, PEM and DER agree, and it
+// equals an independently computed thumbprint over the canonical EC JWK — so it can
+// be compared against a jose account-key thumbprint.
+func TestPublicKeyJWKThumbprint(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(7),
+		Subject:      pkix.Name{CommonName: "rev.acme.test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	fromDER, err := PublicKeyJWKThumbprint(der)
+	if err != nil {
+		t.Fatalf("PublicKeyJWKThumbprint(DER): %v", err)
+	}
+	fromPEM, err := PublicKeyJWKThumbprint(pemBytes)
+	if err != nil {
+		t.Fatalf("PublicKeyJWKThumbprint(PEM): %v", err)
+	}
+	if fromDER == "" || fromDER != fromPEM {
+		t.Fatalf("thumbprint empty or PEM/DER mismatch: der=%q pem=%q", fromDER, fromPEM)
+	}
+
+	// Independently compute the RFC 7638 EC thumbprint and compare.
+	enc := base64.RawURLEncoding.EncodeToString
+	size := (key.Curve.Params().BitSize + 7) / 8
+	xb := leftPad(key.X.Bytes(), size)
+	yb := leftPad(key.Y.Bytes(), size)
+	canonical := `{"crv":"P-256","kty":"EC","x":"` + enc(xb) + `","y":"` + enc(yb) + `"}`
+	sum := sha256.Sum256([]byte(canonical))
+	want := enc(sum[:])
+	if fromDER != want {
+		t.Errorf("thumbprint = %q, want %q (canonical EC JWK)", fromDER, want)
+	}
+
+	if _, err := PublicKeyJWKThumbprint([]byte("not a certificate")); err == nil {
+		t.Error("PublicKeyJWKThumbprint of garbage should error")
 	}
 }
 

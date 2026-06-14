@@ -173,7 +173,13 @@ func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, 
 	if o.Now != nil {
 		now = o.Now
 	}
-	if c.Exp != 0 && now().Unix() >= c.Exp {
+	// exp is mandatory: a token with no expiry is an indefinite, replayable
+	// credential. OpenID Connect Core §2 requires exp in an ID token, so reject
+	// a missing/zero exp outright rather than treating it as "never expires".
+	if c.Exp == 0 {
+		return "", nil, fmt.Errorf("token has no exp claim")
+	}
+	if now().Unix() >= c.Exp {
 		return "", nil, fmt.Errorf("token expired")
 	}
 	if c.Sub == "" {

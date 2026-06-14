@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/secret"
 	"trustctl.io/trustctl/internal/dynsecret"
 )
 
@@ -78,8 +79,20 @@ func (p *PKIProvider) Generate(_ context.Context, req dynsecret.GenerateRequest)
 	p.mu.Lock()
 	p.live[serial] = true
 	p.mu.Unlock()
-	pemCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	return dynsecret.Credential{BackendRef: serial, Secret: pemCert, Metadata: map[string]string{"cn": cn, "serial": serial}}, nil
+	// Hand the requester the certificate AND its matching leaf private key — a
+	// bare cert is unusable as a TLS identity. The key leaves the locked buffer
+	// only as a PKCS#8 PEM block in the returned Secret; the transient unsealed
+	// DER copy is zeroized immediately after encode (AN-8).
+	keyDER, err := leafKey.PKCS8()
+	if err != nil {
+		return dynsecret.Credential{}, fmt.Errorf("pkisecret: export leaf key: %w", err)
+	}
+	bundle := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	secret.Wipe(keyDER) // wipe the transient unsealed DER copy
+	bundle = append(bundle, keyPEM...)
+	secret.Wipe(keyPEM) // keyPEM bytes now live only inside bundle (the returned Secret)
+	return dynsecret.Credential{BackendRef: serial, Secret: bundle, Metadata: map[string]string{"cn": cn, "serial": serial}}, nil
 }
 
 // Revoke marks an issued certificate revoked (idempotent).

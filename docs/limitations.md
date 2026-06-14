@@ -119,10 +119,28 @@ This is a deliberate, documented trust boundary (not an accident):
   as a failure. Still outstanding: real hosted DNS providers (Route53/Cloudflare)
   and the **full cert-manager-in-kind enrollment** (which needs the ACME server
   mounted as a served, in-cluster surface), both tracked for **Epoch 8b**. The ACME
-  server is **library code, not yet mounted in the served binary**; the in-process
-  conformance suite is the cert-manager-enrollment proxy.
-- **EST**, **SCEP**, **SPIFFE** (Workload API), and the **SSH CA** issuance servers
-  are Phase 2 — placeholders in `internal/protocols/`, correctly not served.
+  server is **library code, not yet mounted in the served binary** — mounting it on
+  the served control-plane listener is tracked as **`EXC-WIRE-02`**; the in-process
+  conformance suite is the cert-manager-enrollment proxy. The directory now advertises
+  the mandatory `revokeCert` and `keyChange` resources, and the server accepts ECDSA
+  and Ed25519 account keys (not only RSA), so a stock ECDSA-default certbot/acme.sh
+  can register, revoke, and roll its key against the library server.
+- **EST** (RFC 7030), **SCEP** (RFC 8894), **CMP** (RFC 4210/6712), the **SPIFFE
+  Workload API**, and the **SSH CA** issuance servers are **implemented and tested as
+  library code — with real round-trip and fuzz tests — but are not served end-to-end
+  by the running binary** (none is mounted in `internal/api`/`internal/server`/`cmd`),
+  so a stock EST device, MDM/SCEP client, SPIFFE workload, or `ssh` host has no
+  listener to connect to in a real deployment. The EST wire framing is additionally
+  corroborated by an embedded C reference client that enrolls end to end; only ACME
+  has an external reference-implementation differential (Pebble, in CI). Mounting
+  these protocol handlers on the served control-plane listener (with auth and tenant
+  scoping) is tracked as **`EXC-WIRE-02`**.
+- **SPIFFE transport (Workload API):** the SVID *document* is spec-shaped (a single
+  `spiffe://` URI SAN, correct key usage), but the Workload API is, by definition, a
+  **gRPC service on a Unix domain socket**; trustctl exposes it today only as Go
+  methods (`FetchX509SVIDs`/`FetchJWTSVIDs`/bundle), so **no `spiffe-helper`,
+  go-spiffe, or Envoy-SDS workload can fetch an SVID** until the gRPC/UDS server is
+  wired. That served gRPC transport is part of **`EXC-WIRE-02`**.
 
 ## Revocation
 

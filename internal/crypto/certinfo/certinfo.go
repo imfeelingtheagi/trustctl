@@ -7,14 +7,17 @@ package certinfo
 import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 )
@@ -154,4 +157,80 @@ func Thumbprint(raw []byte) (string, error) {
 	}
 	sum := sha1.Sum(cert.Raw)
 	return strings.ToUpper(hex.EncodeToString(sum[:])), nil
+}
+
+// PublicKeyJWKThumbprint returns the RFC 7638 JWK thumbprint (base64url SHA-256) of
+// the certificate's public key, in the SAME canonical form the ACME account-key
+// thumbprint uses (jose.ACMEKey.Thumbprint). It lets the ACME revokeCert handler
+// authorize a revocation by the *certificate key* (RFC 8555 §7.6): the JWS's
+// embedded JWK is authorized iff its thumbprint equals this value. Supports the same
+// key families as ACME account keys (RSA, EC P-256/384/521, Ed25519); anything else
+// is an error. crypto/* stays inside this boundary (AN-3).
+func PublicKeyJWKThumbprint(raw []byte) (string, error) {
+	der := raw
+	if block, _ := pem.Decode(raw); block != nil {
+		if block.Type != "CERTIFICATE" {
+			return "", fmt.Errorf("certinfo: PEM block is %q, not CERTIFICATE", block.Type)
+		}
+		der = block.Bytes
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return "", fmt.Errorf("certinfo: parse certificate: %w", err)
+	}
+	canonical, err := canonicalJWK(cert.PublicKey)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(canonical))
+	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
+}
+
+// canonicalJWK renders the RFC 7638 canonical JWK JSON (required members only,
+// lexicographic order, no whitespace) for an RSA/ECDSA/Ed25519 public key.
+func canonicalJWK(pub any) (string, error) {
+	enc := base64.RawURLEncoding.EncodeToString
+	switch k := pub.(type) {
+	case *rsa.PublicKey:
+		eb := big.NewInt(int64(k.E)).Bytes()
+		// RFC 7638 §3.2: RSA required members are e, kty, n.
+		return fmt.Sprintf(`{"e":%q,"kty":"RSA","n":%q}`, enc(eb), enc(k.N.Bytes())), nil
+	case *ecdsa.PublicKey:
+		crv, err := ecCurveName(k)
+		if err != nil {
+			return "", err
+		}
+		size := (k.Curve.Params().BitSize + 7) / 8
+		// RFC 7638 §3.2: EC required members are crv, kty, x, y, with fixed-width
+		// coordinates (RFC 7518 §6.2.1.2).
+		return fmt.Sprintf(`{"crv":%q,"kty":"EC","x":%q,"y":%q}`,
+			crv, enc(leftPad(k.X.Bytes(), size)), enc(leftPad(k.Y.Bytes(), size))), nil
+	case ed25519.PublicKey:
+		// RFC 8037 §2: OKP thumbprint required members are crv, kty, x.
+		return fmt.Sprintf(`{"crv":"Ed25519","kty":"OKP","x":%q}`, enc(k)), nil
+	default:
+		return "", fmt.Errorf("certinfo: unsupported public key type %T for JWK thumbprint", pub)
+	}
+}
+
+func ecCurveName(k *ecdsa.PublicKey) (string, error) {
+	switch k.Curve {
+	case elliptic.P256():
+		return "P-256", nil
+	case elliptic.P384():
+		return "P-384", nil
+	case elliptic.P521():
+		return "P-521", nil
+	default:
+		return "", fmt.Errorf("certinfo: unsupported EC curve %v", k.Curve.Params().Name)
+	}
+}
+
+func leftPad(b []byte, size int) []byte {
+	if len(b) >= size {
+		return b
+	}
+	out := make([]byte, size)
+	copy(out[size-len(b):], b)
+	return out
 }

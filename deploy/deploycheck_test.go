@@ -348,6 +348,150 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 	}
 }
 
+// --- SUPPLY-001: the privileged Windows agent .exe + .msi must be code-signed
+// in the release pipeline, and the Makefile must sign when an identity is set ---
+
+// ghaWorkflow is the slice of a GitHub Actions workflow this suite inspects: the
+// jobs, each with its steps' run scripts and `if:` gates.
+type ghaWorkflow struct {
+	Jobs map[string]struct {
+		Steps []struct {
+			Name string `yaml:"name"`
+			Run  string `yaml:"run"`
+			If   string `yaml:"if"`
+		} `yaml:"steps"`
+	} `yaml:"jobs"`
+}
+
+// TestReleaseSignsTheWindowsAgent asserts the release workflow actually invokes a
+// Windows-agent code-signing path for BOTH the agent .exe and .msi, and gates the
+// release on the signature (SUPPLY-001). It drills the real release.yml (parsed as
+// YAML, not grepped loosely) and the real Makefile dist-windows recipe.
+//
+// It FAILS on the pre-fix tree — release.yml signed only the control-plane image
+// and had no agent job, so the privileged agent shipped unsigned — and PASSES once
+// the agent-windows job + the Makefile osslsigncode path are wired.
+func TestReleaseSignsTheWindowsAgent(t *testing.T) {
+	root := repoRoot(t)
+
+	// (1) release.yml must carry a job that builds + signs + checksum-publishes the
+	// Windows agent, and verifies/gates the signature.
+	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatalf("read release.yml: %v", err)
+	}
+	var wf ghaWorkflow
+	if err := yaml.Unmarshal(raw, &wf); err != nil {
+		t.Fatalf("parse release.yml: %v", err)
+	}
+
+	// Find the job whose steps build the Windows agent (it runs `make dist-windows`
+	// or builds trustctl-agent.exe). Collect that job's combined step scripts.
+	var agentJob string
+	var script strings.Builder
+	for name, job := range wf.Jobs {
+		var b strings.Builder
+		buildsAgent := false
+		for _, s := range job.Steps {
+			b.WriteString(s.Run)
+			b.WriteByte('\n')
+			r := s.Run
+			if strings.Contains(r, "dist-windows") ||
+				strings.Contains(r, "trustctl-agent.exe") ||
+				strings.Contains(r, "trustctl-agent.msi") {
+				buildsAgent = true
+			}
+		}
+		if buildsAgent {
+			agentJob = name
+			script.WriteString(b.String())
+		}
+	}
+	if agentJob == "" {
+		t.Fatal("release.yml has NO job that builds the Windows agent (.exe/.msi) — the privileged agent ships unsigned (SUPPLY-001). " +
+			"Add an agent-windows job that builds, Authenticode-signs, and publishes the agent.")
+	}
+	t.Logf("release.yml Windows-agent job: %q", agentJob)
+
+	combined := script.String()
+	// The job must invoke a real signing path for the agent. `make dist-windows`
+	// signs both artifacts when SIGN_PFX is set; an inline osslsigncode/signtool
+	// call is equally acceptable.
+	signs := strings.Contains(combined, "dist-windows") ||
+		strings.Contains(combined, "osslsigncode") ||
+		strings.Contains(combined, "signtool")
+	if !signs {
+		t.Errorf("the release Windows-agent job (%q) does not invoke a code-signing step "+
+			"(make dist-windows / osslsigncode / signtool) — SUPPLY-001 requires the agent .exe + .msi to be signed", agentJob)
+	}
+	// And it must consume a signing identity from secrets (so signing is real in
+	// CI, not merely possible locally).
+	if !strings.Contains(string(raw), "WINDOWS_CODESIGN_PFX_BASE64") {
+		t.Errorf("the release pipeline never references a Windows code-signing secret (WINDOWS_CODESIGN_PFX_BASE64) — " +
+			"SUPPLY-001 requires the signing identity to be provisioned in CI, not just supported by the Makefile")
+	}
+	// And it must VERIFY / gate the signature so a tag cannot ship unsigned.
+	if !strings.Contains(combined, "verify") {
+		t.Errorf("the release Windows-agent job (%q) builds the agent but never verifies the signature / gates on it — "+
+			"SUPPLY-001 requires the release to fail when the privileged agent is unsigned", agentJob)
+	}
+
+	// (2) The Makefile dist-windows recipe must Authenticode-sign BOTH the .exe and
+	// the .msi when SIGN_PFX is set.
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	recipe := makeTargetBody(string(mk), "dist-windows")
+	if recipe == "" {
+		t.Fatal("Makefile has no dist-windows target")
+	}
+	if !strings.Contains(recipe, `if [ -n "$$SIGN_PFX" ]`) {
+		t.Errorf("Makefile dist-windows does not gate signing on SIGN_PFX — SUPPLY-001 expects `osslsigncode` signing when SIGN_PFX is set")
+	}
+	if !strings.Contains(recipe, "osslsigncode sign") {
+		t.Errorf("Makefile dist-windows never calls `osslsigncode sign` — SUPPLY-001 requires real Authenticode signing of the agent")
+	}
+	// Both the .exe and the .msi must be signed (the audit's exact gap: the MSI was
+	// built unsigned). Count the sign invocations and the targets.
+	if !strings.Contains(recipe, "trustctl-agent.exe -out") {
+		t.Errorf("Makefile dist-windows does not sign trustctl-agent.exe (SUPPLY-001)")
+	}
+	if !strings.Contains(recipe, "trustctl-agent.msi -out") {
+		t.Errorf("Makefile dist-windows does not sign trustctl-agent.msi (SUPPLY-001: the MSI shipped unsigned)")
+	}
+	// And it must still publish the SHA-256 sums.
+	if !strings.Contains(recipe, "SHA256SUMS") {
+		t.Errorf("Makefile dist-windows does not publish SHA256SUMS (SUPPLY-001 acceptance: publish the SHA-256 sums)")
+	}
+}
+
+// makeTargetBody returns the recipe lines of the named Makefile target (the
+// tab-indented lines following "<name>:"), stopping at the next unindented line.
+func makeTargetBody(mk, target string) string {
+	lines := strings.Split(mk, "\n")
+	var body []string
+	in := false
+	for _, l := range lines {
+		if !in {
+			// Match the rule line "target: ...".
+			trimmed := strings.TrimSpace(l)
+			if strings.HasPrefix(trimmed, target+":") && !strings.HasPrefix(l, "\t") {
+				in = true
+			}
+			continue
+		}
+		// Recipe lines are tab-indented (or blank/comment continuations); a new
+		// unindented, non-blank line ends the recipe.
+		if l == "" || strings.HasPrefix(l, "\t") || strings.HasPrefix(strings.TrimSpace(l), "#") {
+			body = append(body, l)
+			continue
+		}
+		break
+	}
+	return strings.Join(body, "\n")
+}
+
 func rel(base, path string) string {
 	r, err := filepath.Rel(base, path)
 	if err != nil {

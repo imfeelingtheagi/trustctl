@@ -153,11 +153,18 @@ configure and never moves private keys off the host.
 
 On Windows the agent runs as a **Service Control Manager (SCM) service** and
 installs certificates into the Windows certificate store (CryptoAPI / CNG). Build
-the signed MSI:
+the MSI:
 
 ```bash
 make dist-windows     # cross-compiles trustctl-agent.exe and packages the MSI
 ```
+
+`make dist-windows` Authenticode-signs both the `.exe` and the `.msi` when a
+code-signing identity is provided (`SIGN_PFX`/`SIGN_PASS`); without one it builds
+them unsigned and says so. The official release pipeline (the `agent-windows` job
+in `.github/workflows/release.yml`) signs them on every version tag and **fails
+the release if either artifact is unsigned**, so the published Windows agent is
+always Authenticode-signed.
 
 Install it (elevated PowerShell):
 
@@ -168,6 +175,27 @@ msiexec /i trustctl-agent.msi /qn
 The MSI registers and starts the `trustctl-agent` service. See
 `deploy/windows/README.md` for Authenticode signing and the WiX/msitools build
 details.
+
+### Verify the agent download
+
+Before installing a downloaded agent, authenticate it. On Windows, confirm the
+Authenticode signature and inspect the signer:
+
+```powershell
+Get-AuthenticodeSignature .\trustctl-agent.msi   # Status must be 'Valid'
+```
+
+On any platform you can also verify the published checksums against the release
+asset, and (when present) the signature with `osslsigncode`:
+
+```bash
+sha256sum -c SHA256SUMS                    # the agent .exe/.msi hashes match the release
+osslsigncode verify -in trustctl-agent.msi # reports a valid Authenticode signature
+```
+
+The control-plane and agent **container** image is additionally cosign-signed;
+see "Verify a published image" above for `scripts/verify-image.sh` / `cosign
+verify`.
 
 ## Verify the install
 

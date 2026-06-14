@@ -74,6 +74,73 @@ func TestPKISecretProfileAndPolicyConstraints(t *testing.T) {
 	}
 }
 
+// TestPKISecretReturnsUsableKeypair is the GAP-004 acceptance: the issued
+// dynamic-secret credential must carry the certificate AND its matching leaf
+// private key, so the holder can actually present a TLS identity. Pre-fix the
+// Secret held only a CERTIFICATE block (the key was Destroy()'d inside Generate),
+// so this fails; post-fix the Secret is a cert+key PEM bundle whose private key
+// matches the certificate's public key (proven by a sign/verify round-trip
+// through the crypto boundary — no crypto/* import, AN-3).
+func TestPKISecretReturnsUsableKeypair(t *testing.T) {
+	caDER, caKey := ca(t)
+	prof := Profile{Name: "web", MaxTTL: 30 * time.Minute, AllowedCommonNames: map[string]bool{"app.example": true}}
+	p := NewPKIProvider(caDER, caKey, prof, nil)
+
+	cred, err := p.Generate(context.Background(), dynsecret.GenerateRequest{Role: "app.example", TTL: time.Hour})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// The Secret must contain both a CERTIFICATE and a PRIVATE KEY PEM block.
+	var certDER, keyDER []byte
+	rest := cred.Secret
+	for {
+		var blk *pem.Block
+		blk, rest = pem.Decode(rest)
+		if blk == nil {
+			break
+		}
+		switch blk.Type {
+		case "CERTIFICATE":
+			certDER = blk.Bytes
+		case "PRIVATE KEY":
+			keyDER = blk.Bytes
+		}
+	}
+	if certDER == nil {
+		t.Fatal("returned Secret has no CERTIFICATE block")
+	}
+	if keyDER == nil {
+		t.Fatal("returned Secret has no PRIVATE KEY block — the issued cert is unusable (GAP-004)")
+	}
+
+	// The private key must actually match the cert's public key: reconstruct the
+	// leaf key, sign a payload, and verify with the cert's public key.
+	leaf, err := crypto.LockedKeyFromPKCS8(keyDER)
+	if err != nil {
+		t.Fatalf("returned private key is not valid PKCS#8: %v", err)
+	}
+	defer leaf.Destroy()
+
+	payload := []byte("proof-of-possession")
+	sig, err := crypto.SignMessage(leaf, payload)
+	if err != nil {
+		t.Fatalf("sign with returned leaf key: %v", err)
+	}
+	certPub, err := crypto.PublicKeyDERFromCert(certDER)
+	if err != nil {
+		t.Fatalf("extract cert public key: %v", err)
+	}
+	if err := crypto.VerifyMessage(certPub, payload, sig); err != nil {
+		t.Fatalf("returned private key does NOT match the certificate's public key: %v", err)
+	}
+
+	// The cert must still chain to the CA (no regression of the existing promise).
+	if err := crypto.VerifyLeafSignedByCA(certDER, caDER); err != nil {
+		t.Fatalf("issued cert does not chain to CA: %v", err)
+	}
+}
+
 func TestPKIProviderConforms(t *testing.T) {
 	caDER, caKey := ca(t)
 	p := NewPKIProvider(caDER, caKey, Profile{Name: "any", MaxTTL: time.Hour}, nil)

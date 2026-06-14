@@ -2,12 +2,64 @@ package secretshare
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"trustctl.io/trustctl/internal/approval"
 	"trustctl.io/trustctl/internal/auditsink"
+	"trustctl.io/trustctl/internal/crypto"
 )
+
+// TestRedeemTokenNeverInAuditLog is the GAP-001 acceptance: the one-time-link
+// redeem token is the bearer capability that releases the secret, so it must
+// NEVER appear in any emitted audit/event record — an audit-reader who could
+// recover it would redeem the secret before the legitimate recipient. The audit
+// trail is preserved via a non-secret share_id and a non-reversible
+// SHA-256(token), and redemption must still work end-to-end.
+func TestRedeemTokenNeverInAuditLog(t *testing.T) {
+	ctx := context.Background()
+	rec := &auditsink.Recorder{}
+	s := New("t1", rec, nil)
+
+	tok, err := s.Create(ctx, []byte("the-secret"), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Redemption still works.
+	got, err := s.View(ctx, tok)
+	if err != nil || string(got) != "the-secret" {
+		t.Fatalf("view = %q (err %v); redemption must still work after the fix", got, err)
+	}
+
+	// The token must not leak into ANY audit record (create or view).
+	recs := rec.Records()
+	if len(recs) == 0 {
+		t.Fatal("expected audit records for create+view")
+	}
+	wantHash := crypto.SHA256Hex([]byte(tok))
+	sawShared, sawViewed := false, false
+	for _, r := range recs {
+		if strings.Contains(string(r.Data), tok) {
+			t.Errorf("audit %q leaks the redeem token: %s", r.Type, r.Data)
+		}
+		switch r.Type {
+		case "secret.shared":
+			sawShared = true
+		case "secret.share.viewed":
+			sawViewed = true
+		}
+		// A non-reversible reference (hash) is the only correlation allowed.
+		if r.Type == "secret.shared" || r.Type == "secret.share.viewed" {
+			if !strings.Contains(string(r.Data), wantHash) {
+				t.Errorf("audit %q does not carry the non-reversible token hash for correlation: %s", r.Type, r.Data)
+			}
+		}
+	}
+	if !sawShared || !sawViewed {
+		t.Errorf("expected both secret.shared and secret.share.viewed audit events (shared=%v viewed=%v)", sawShared, sawViewed)
+	}
+}
 
 func TestOneTimeLinkSelfDestructs(t *testing.T) {
 	ctx := context.Background()

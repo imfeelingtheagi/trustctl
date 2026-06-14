@@ -88,3 +88,66 @@ func ParseFinalizeRequest(payload []byte) ([]byte, error) {
 	}
 	return der, nil
 }
+
+// RevokeRequest is the decoded body of a revokeCert request (RFC 8555 §7.6).
+type RevokeRequest struct {
+	CertDER []byte // the DER-encoded certificate to revoke
+	Reason  int    // RFC 5280 CRLReason (0 if absent)
+}
+
+// ParseRevokeRequest decodes a revokeCert payload (RFC 8555 §7.6): a base64url
+// (DER) certificate and an optional integer reason code. Exported so it can be
+// fuzzed against the exact production path; it fails closed on a malformed body, a
+// non-base64url certificate, an empty certificate, or a negative reason code.
+func ParseRevokeRequest(payload []byte) (RevokeRequest, error) {
+	var raw struct {
+		Certificate string `json:"certificate"`
+		Reason      *int   `json:"reason"`
+	}
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return RevokeRequest{}, fmt.Errorf("acme: malformed revokeCert: %w", err)
+	}
+	der, err := base64.RawURLEncoding.DecodeString(raw.Certificate)
+	if err != nil {
+		return RevokeRequest{}, fmt.Errorf("acme: revokeCert certificate is not base64url: %w", err)
+	}
+	if len(der) == 0 {
+		return RevokeRequest{}, fmt.Errorf("acme: revokeCert certificate is empty")
+	}
+	out := RevokeRequest{CertDER: der}
+	if raw.Reason != nil {
+		if *raw.Reason < 0 {
+			return RevokeRequest{}, fmt.Errorf("acme: revokeCert reason %d is negative", *raw.Reason)
+		}
+		out.Reason = *raw.Reason
+	}
+	return out, nil
+}
+
+// KeyChangeInner is the decoded payload of the INNER JWS of a keyChange request
+// (RFC 8555 §7.3.5): the account URL whose key is rolling over and the account's
+// current (old) key as a JWK.
+type KeyChangeInner struct {
+	Account string          // the account URL
+	OldKey  json.RawMessage // the account's current key (JWK)
+}
+
+// ParseKeyChangeInner decodes the inner-JWS payload of a keyChange request.
+// Exported so it can be fuzzed against the exact production path; it fails closed on
+// a malformed body, a missing account URL, or a missing oldKey.
+func ParseKeyChangeInner(payload []byte) (KeyChangeInner, error) {
+	var raw struct {
+		Account string          `json:"account"`
+		OldKey  json.RawMessage `json:"oldKey"`
+	}
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return KeyChangeInner{}, fmt.Errorf("acme: malformed keyChange inner payload: %w", err)
+	}
+	if raw.Account == "" {
+		return KeyChangeInner{}, fmt.Errorf("acme: keyChange inner payload has no account URL")
+	}
+	if len(raw.OldKey) == 0 {
+		return KeyChangeInner{}, fmt.Errorf("acme: keyChange inner payload has no oldKey")
+	}
+	return KeyChangeInner{Account: raw.Account, OldKey: raw.OldKey}, nil
+}

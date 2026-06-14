@@ -301,6 +301,13 @@ jobs:
   windows:
     name: windows / test + MSI
     runs-on: windows-latest
+    env:
+      # Surface the code-signing secret to job-level env so it can drive the
+      # step `if:` gates below (the `secrets` context is not allowed in `if:`,
+      # and a step `if:` cannot see that step's own `env:`). Same pattern the
+      # release/image job uses for the Docker Hub mirror credentials.
+      WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+      WINDOWS_CODESIGN_PASS: ${{ secrets.WINDOWS_CODESIGN_PASS }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -336,6 +343,32 @@ jobs:
           & "$bin\candle.exe" -arch x64 -out dist\ dist\trustctl-agent.wxs
           & "$bin\light.exe" -b dist -out dist\trustctl-agent.msi dist\trustctl-agent.wixobj
           Get-ChildItem dist
+
+      # Authenticode-sign the agent .exe and .msi with signtool when the
+      # code-signing identity is configured (SUPPLY-001). The PKCS#12 is provisioned
+      # from repo secrets; when absent the artifacts stay unsigned with a warning so
+      # a fork still builds. The signature is verified before the checksums are
+      # published so SHA256SUMS covers the SIGNED bytes.
+      - name: Authenticode-sign the agent (.exe + .msi)
+        if: ${{ env.WINDOWS_CODESIGN_PFX_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+          $signtool = (Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match 'x64' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          foreach ($art in 'dist\trustctl-agent.exe', 'dist\trustctl-agent.msi') {
+            & $signtool sign /f $pfx /p $env:WINDOWS_CODESIGN_PASS /fd SHA256 `
+              /tr http://timestamp.digicert.com /td SHA256 /d 'trustctl agent' $art
+            & $signtool verify /pa $art
+          }
+          Remove-Item $pfx -Force
+
+      - name: Warn when the agent is unsigned (no signing identity configured)
+        if: ${{ env.WINDOWS_CODESIGN_PFX_BASE64 == '' }}
+        shell: pwsh
+        run: |
+          Write-Host '::warning::WINDOWS_CODESIGN_PFX_BASE64 is not set; the Windows agent .exe/.msi are UNSIGNED in this CI build. Provision the secret to Authenticode-sign them.'
 
       - name: Publish SHA-256 sums
         shell: pwsh

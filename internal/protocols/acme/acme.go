@@ -76,6 +76,23 @@ type ariWindow struct {
 	notAfter  time.Time
 }
 
+// issuedCert records what the server needs to authorize a later revokeCert
+// (RFC 8555 §7.6): which account ordered the certificate (the account-key path),
+// the leaf's public-key thumbprint (the certificate-key path), and its serial.
+type issuedCert struct {
+	accountURL string
+	keyThumb   string // RFC 7638 thumbprint of the certificate's public key
+	serial     string
+	certID     string
+}
+
+// revocation is the recorded fact that a certificate has been revoked.
+type revocation struct {
+	serial string
+	reason int
+	at     time.Time
+}
+
 // Server is the built-in ACME server. Construct it with New and mount it as an
 // http.Handler.
 type Server struct {
@@ -90,8 +107,10 @@ type Server struct {
 	authzs     map[string]*authorization
 	challenges map[string]*challenge
 	certs      map[string][]byte
-	ariWindows map[string]ariWindow // ARI: certID -> validity span (RFC 9773)
-	earlyRenew map[string]bool      // ARI: certIDs flagged for proactive renewal
+	issued     map[string]*issuedCert // by SHA-256 fingerprint (hex) of the leaf DER
+	revoked    map[string]revocation  // by SHA-256 fingerprint (hex); presence == revoked
+	ariWindows map[string]ariWindow   // ARI: certID -> validity span (RFC 9773)
+	earlyRenew map[string]bool        // ARI: certIDs flagged for proactive renewal
 	seq        int
 
 	mux *http.ServeMux
@@ -105,6 +124,7 @@ func New(ca ca.CA, validator Validator) *Server {
 		nonces: map[string]bool{}, accounts: map[string]*account{}, byKey: map[string]*account{},
 		orders: map[string]*order{}, authzs: map[string]*authorization{},
 		challenges: map[string]*challenge{}, certs: map[string][]byte{},
+		issued: map[string]*issuedCert{}, revoked: map[string]revocation{},
 		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
 	}
 	mux := http.NewServeMux()
@@ -119,6 +139,9 @@ func New(ca ca.CA, validator Validator) *Server {
 	mux.HandleFunc("POST /acme/order/{id}", s.jws(s.getOrder))
 	mux.HandleFunc("POST /acme/order/{id}/finalize", s.jws(s.finalize))
 	mux.HandleFunc("POST /acme/cert/{id}", s.jws(s.getCert))
+	// RFC 8555 §7.3.5 (account key rollover) and §7.6 (certificate revocation).
+	mux.HandleFunc("POST /acme/key-change", s.jws(s.keyChange))
+	mux.HandleFunc("POST /acme/revoke-cert", s.jws(s.revokeCert))
 	s.mux = mux
 	return s
 }
@@ -154,9 +177,14 @@ func randomToken() string {
 func (s *Server) directory(w http.ResponseWriter, r *http.Request) {
 	base := baseURL(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"newNonce":    base + "/acme/new-nonce",
-		"newAccount":  base + "/acme/new-account",
-		"newOrder":    base + "/acme/new-order",
+		"newNonce":   base + "/acme/new-nonce",
+		"newAccount": base + "/acme/new-account",
+		"newOrder":   base + "/acme/new-order",
+		// RFC 8555 §7.1.1: the directory MUST advertise keyChange, and a revokeCert
+		// resource MUST exist — without them a client cannot roll its account key
+		// (§7.3.5) or revoke a certificate (§7.6).
+		"keyChange":   base + "/acme/key-change",
+		"revokeCert":  base + "/acme/revoke-cert",
 		"renewalInfo": base + "/acme/renewal-info",
 		"meta":        map[string]any{"termsOfService": base + "/terms"},
 	})
@@ -346,7 +374,7 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMe
 	writeJSON(w, http.StatusOK, s.orderJSON(base, o, authzURLs))
 }
 
-func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, _ *account) {
+func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
 	base := baseURL(r)
 	s.mu.Lock()
 	o := s.orders[r.PathValue("id")]
@@ -382,6 +410,19 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 				s.ariWindows[certid] = ariWindow{notBefore: info.NotBefore, notAfter: info.NotAfter}
 			}
 		}
+		// Index the leaf for revokeCert (RFC 8555 §7.6): a later revocation is
+		// authorized either by this account's key or by the certificate's own key,
+		// and matched against this DER's SHA-256 fingerprint.
+		if fp := certFingerprint(block.Bytes); fp != "" {
+			ic := &issuedCert{accountURL: acct.url, serial: cert.Serial, certID: o.certID}
+			if thumb, terr := certinfo.PublicKeyJWKThumbprint(block.Bytes); terr == nil {
+				ic.keyThumb = thumb
+			}
+			if info, ierr := certinfo.Inspect(block.Bytes); ierr == nil && ic.serial == "" {
+				ic.serial = info.SerialNumber
+			}
+			s.issued[fp] = ic
+		}
 	}
 	o.status = statusValid
 	authzURLs := make([]string, 0, len(o.authzIDs))
@@ -404,6 +445,151 @@ func (s *Server) getCert(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMes
 	}
 	w.Header().Set("Content-Type", "application/pem-certificate-chain")
 	_, _ = w.Write(pem)
+}
+
+// keyChange implements account key rollover (RFC 8555 §7.3.5). The OUTER JWS is
+// kid-authenticated with the OLD account key (verified by the jws wrapper). Its
+// payload is an INNER JWS, signed by the NEW key, whose protected header carries the
+// new key as `jwk` and whose payload is {"account": <acctURL>, "oldKey": <oldKey>}.
+// The server checks possession of the new key (inner signature), that the inner
+// `account`/`oldKey` match the requesting account, and that the new key is not
+// already bound to another account, then rotates the account key.
+func (s *Server) keyChange(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
+	if acct == nil {
+		// §7.3.5: keyChange MUST be kid-authenticated by the existing account.
+		s.problem(w, r, http.StatusUnauthorized, "unauthorized", "keyChange requires an existing account (kid)")
+		return
+	}
+	inner, err := jose.ParseACMEJWS(msg.Payload)
+	if err != nil {
+		s.problem(w, r, http.StatusBadRequest, "malformed", "keyChange inner JWS: "+err.Error())
+		return
+	}
+	newKey, err := jose.ACMEKeyFromJWK(inner.Protected.JWK)
+	if err != nil {
+		s.problem(w, r, http.StatusBadRequest, "badPublicKey", "keyChange new key: "+err.Error())
+		return
+	}
+	// The inner JWS must be signed by the new key (proof of possession).
+	if err := inner.Verify(newKey); err != nil {
+		s.problem(w, r, http.StatusBadRequest, "malformed", "keyChange inner JWS not signed by the new key")
+		return
+	}
+	body, err := ParseKeyChangeInner(inner.Payload)
+	if err != nil {
+		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
+		return
+	}
+	oldKey, err := jose.ACMEKeyFromJWK(body.OldKey)
+	if err != nil {
+		s.problem(w, r, http.StatusBadRequest, "malformed", "keyChange oldKey: "+err.Error())
+		return
+	}
+	// The inner payload must name THIS account and its CURRENT key.
+	if body.Account != acct.url {
+		s.problem(w, r, http.StatusForbidden, "unauthorized", "keyChange account URL does not match the authenticated account")
+		return
+	}
+	newThumb := newKey.Thumbprint()
+	s.mu.Lock()
+	if oldKey.Thumbprint() != acct.key.Thumbprint() {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusForbidden, "unauthorized", "keyChange oldKey does not match the account's current key")
+		return
+	}
+	// The new key must not already be in use by a different account (§7.3.5: 409).
+	if other := s.byKey[newThumb]; other != nil && other.url != acct.url {
+		s.mu.Unlock()
+		w.Header().Set("Location", other.url)
+		s.problem(w, r, http.StatusConflict, "accountDoesNotExist", "the new key is already in use by another account")
+		return
+	}
+	// Rotate: re-key the thumbprint index and swap the account's verifying key.
+	delete(s.byKey, acct.key.Thumbprint())
+	acct.key = newKey
+	acct.id = newThumb
+	s.byKey[newThumb] = acct
+	url := acct.url
+	s.mu.Unlock()
+
+	w.Header().Set("Location", url)
+	writeJSON(w, http.StatusOK, map[string]any{"status": statusValid, "orders": url + "/orders"})
+}
+
+// revokeCert implements certificate revocation (RFC 8555 §7.6). The request is
+// authorized EITHER by the account that issued the certificate (kid JWS) OR by the
+// certificate's own key pair (jwk JWS whose embedded key matches the certificate).
+// On success the certificate's serial is recorded revoked; a served deployment
+// routes this to the revocation service / OCSP-CRL store (tracked as the served
+// wire-in, EXC-WIRE-02). A double revocation returns 400 alreadyRevoked.
+func (s *Server) revokeCert(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
+	req, err := ParseRevokeRequest(msg.Payload)
+	if err != nil {
+		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
+		return
+	}
+	fp := certFingerprint(req.CertDER)
+	if fp == "" {
+		s.problem(w, r, http.StatusBadRequest, "malformed", "revoke certificate does not parse")
+		return
+	}
+
+	s.mu.Lock()
+	ic := s.issued[fp]
+	if ic == nil {
+		s.mu.Unlock()
+		// §7.6: the server does not have a record of this certificate.
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such certificate")
+		return
+	}
+	if _, done := s.revoked[fp]; done {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusBadRequest, "alreadyRevoked", "certificate is already revoked")
+		return
+	}
+	authorized := false
+	switch {
+	case acct != nil:
+		// Account-key path: the account that ordered the certificate may revoke it.
+		authorized = ic.accountURL == acct.url
+	case len(msg.Protected.JWK) > 0:
+		// Certificate-key path: the embedded JWK must be the certificate's key.
+		if reqKey, kerr := jose.ACMEKeyFromJWK(msg.Protected.JWK); kerr == nil {
+			authorized = ic.keyThumb != "" && reqKey.Thumbprint() == ic.keyThumb
+		}
+	}
+	if !authorized {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusForbidden, "unauthorized", "not authorized to revoke this certificate")
+		return
+	}
+	s.revoked[fp] = revocation{serial: ic.serial, reason: req.Reason, at: time.Now()}
+	s.mu.Unlock()
+
+	// §7.6: a successful revocation responds 200 with an empty body.
+	w.WriteHeader(http.StatusOK)
+}
+
+// IsRevoked reports whether the certificate with the given SHA-256 DER fingerprint
+// (lowercase hex, as certinfo.Inspect reports it) has been revoked through this
+// server, along with its recorded serial. It lets a served deployment / test
+// confirm the revocation took effect without reaching into server internals.
+func (s *Server) IsRevoked(fingerprintHex string) (serial string, revoked bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec, ok := s.revoked[fingerprintHex]
+	return rec.serial, ok
+}
+
+// certFingerprint returns the SHA-256 fingerprint (lowercase hex) of a certificate
+// DER, computed inside the crypto boundary (AN-3 — the acme package must not import
+// crypto/*). Returns "" if the DER does not parse as a certificate.
+func certFingerprint(der []byte) string {
+	info, err := certinfo.Inspect(der)
+	if err != nil {
+		return ""
+	}
+	return info.SHA256Fingerprint
 }
 
 // renewalInfo serves ACME Renewal Information (RFC 9773) for a certificate: a

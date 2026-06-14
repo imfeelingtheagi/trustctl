@@ -471,6 +471,42 @@ func apiServesAISurface(t *testing.T) bool {
 	return false
 }
 
+// binaryServesIssuanceProtocols reports whether the served binary mounts ANY of the
+// non-ACME-DNS issuance protocol servers (EST, SCEP, CMP, SPIFFE, SSH) or the ACME
+// server itself — i.e. whether the running control plane imports an
+// internal/protocols/* package on its served path. Today none is mounted: the
+// composition (internal/api, internal/server) and cmd/trustctl reference no protocol
+// package, so every protocol is library-only (INTEROP-001/004). When EXC-WIRE-02
+// wires a protocol onto the served listener, the corresponding import appears and
+// this flips true, forcing the not-yet-served disclosure to be retired.
+//
+// It deliberately ignores the DNS-01 *solver* import path: the acme DNS solver
+// packages legitimately reference internal/protocols/acme without the ACME server
+// being served, so a substring match on "internal/protocols" alone would
+// false-positive. We match the specific server packages.
+func binaryServesIssuanceProtocols(t *testing.T) bool {
+	t.Helper()
+	protocolImports := []string{
+		`trustctl.io/trustctl/internal/protocols/acme"`,
+		`trustctl.io/trustctl/internal/protocols/est"`,
+		`trustctl.io/trustctl/internal/protocols/scep"`,
+		`trustctl.io/trustctl/internal/protocols/cmp"`,
+		`trustctl.io/trustctl/internal/protocols/spiffe"`,
+		`trustctl.io/trustctl/internal/protocols/ssh"`,
+	}
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trustctl"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			src := read(t, f)
+			for _, imp := range protocolImports {
+				if strings.Contains(src, imp) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // binaryServesReactConsole reports whether the embedded web UI is a real built
 // bundle (a hashed Vite asset) rather than the committed placeholder shell. Today
 // it is the placeholder, so the binary serves a "not built" page (SURFACE-001).
@@ -510,7 +546,9 @@ func nonTestGoFiles(t *testing.T, dir string) []string {
 // still does not wire it — or that quietly drops the disclosure — fails here.
 func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 	lim := read(t, "limitations.md")
-	low := strings.ToLower(lim)
+	// Collapse whitespace so a marker/over-claim is matched even when the Markdown
+	// source wraps it across lines (the disclosures are prose, not single tokens).
+	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
 
 	claims := []servedClaim{
 		{
@@ -547,15 +585,36 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 			},
 			codeServed: apiServesAISurface,
 		},
+		{
+			// INTEROP-001/004: the issuance protocol servers (ACME, EST, SCEP, CMP,
+			// SPIFFE Workload API, SSH CA) are library-complete and tested but not
+			// served end-to-end by the binary. A future PR that mounts a protocol on
+			// the served listener (EXC-WIRE-02) must retire this disclosure; a PR that
+			// claims a protocol is served while the binary still does not import it
+			// fails here.
+			name:              "Issuance protocols served end-to-end (ACME/EST/SCEP/CMP/SPIFFE/SSH)",
+			disclosureMarkers: []string{"not served end-to-end by the running binary", "spiffe workload api"},
+			epic:              "EXC-WIRE-02",
+			overClaims: []string{
+				"the est server is served",
+				"the scep server is served",
+				"the cmp server is served",
+				"the spiffe workload api is served",
+				"the ssh ca is served end-to-end",
+				"these protocols are served end-to-end by the running binary",
+			},
+			codeServed: binaryServesIssuanceProtocols,
+		},
 	}
 
 	for _, c := range claims {
 		served := c.codeServed(t)
 		if served {
 			// The capability is now genuinely served: the not-yet-served disclosure
-			// would itself be an (under-)claim, so it must have been retired.
-			if strings.Contains(low, "not yet served by the binary") &&
-				containsAll(low, c.disclosureMarkers) {
+			// would itself be an (under-)claim, so it must have been retired. If all of
+			// this claim's specific not-served markers are still present, the
+			// disclosure was not updated.
+			if containsAll(low, c.disclosureMarkers) {
 				t.Errorf("%s appears to be SERVED in code now, but limitations.md still discloses it as not-yet-served — update the disclosure (the wire-in epic %s closed)", c.name, c.epic)
 			}
 			continue

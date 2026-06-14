@@ -59,7 +59,9 @@ type SCEPRequest struct {
 // RSA private key, used only here. It fails closed on any malformed, unverifiable, or
 // non-RSA input — this is the SCEP parser fuzz target.
 func ParseSCEPRequest(pkiMessageDER, raCertDER, raKeyPKCS8 []byte) (*SCEPRequest, error) {
-	p7, err := pkcs7.Parse(pkiMessageDER)
+	// Untrusted input: route through safeParsePKCS7 so a malformed CMS fails
+	// closed with an error instead of panicking the decoder (FUZZ-001).
+	p7, err := safeParsePKCS7(pkiMessageDER)
 	if err != nil {
 		return nil, fmt.Errorf("scep: parse pkiMessage: %w", err)
 	}
@@ -90,7 +92,7 @@ func ParseSCEPRequest(pkiMessageDER, raCertDER, raKeyPKCS8 []byte) (*SCEPRequest
 		return nil, fmt.Errorf("scep: parse RA cert: %w", err)
 	}
 
-	env, err := pkcs7.Parse(p7.Content)
+	env, err := safeParsePKCS7(p7.Content)
 	if err != nil {
 		return nil, fmt.Errorf("scep: parse pkcsPKIEnvelope: %w", err)
 	}
@@ -200,7 +202,8 @@ func BuildSCEPRequest(csrDER, clientCertDER, clientKeyPKCS8, raCertDER []byte, t
 // envelope with the requester's key, and returns the issued certificate DER. Used by SCEP
 // clients and tests.
 func ParseSCEPResponse(replyDER, recipientCertDER, recipientKeyPKCS8 []byte) ([]byte, error) {
-	p7, err := pkcs7.Parse(replyDER)
+	// Untrusted input: route through safeParsePKCS7 (FUZZ-001).
+	p7, err := safeParsePKCS7(replyDER)
 	if err != nil {
 		return nil, fmt.Errorf("scep: parse CertRep: %w", err)
 	}
@@ -222,7 +225,7 @@ func ParseSCEPResponse(replyDER, recipientCertDER, recipientKeyPKCS8 []byte) ([]
 	if err != nil {
 		return nil, err
 	}
-	env, err := pkcs7.Parse(p7.Content)
+	env, err := safeParsePKCS7(p7.Content)
 	if err != nil {
 		return nil, fmt.Errorf("scep: parse reply envelope: %w", err)
 	}
@@ -230,7 +233,7 @@ func ParseSCEPResponse(replyDER, recipientCertDER, recipientKeyPKCS8 []byte) ([]
 	if err != nil {
 		return nil, fmt.Errorf("scep: decrypt reply: %w", err)
 	}
-	innerP7, err := pkcs7.Parse(inner)
+	innerP7, err := safeParsePKCS7(inner)
 	if err != nil || len(innerP7.Certificates) == 0 {
 		return nil, fmt.Errorf("scep: reply carried no certificate: %w", err)
 	}

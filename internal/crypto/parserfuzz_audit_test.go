@@ -11,6 +11,11 @@ import (
 // fuzzFuncRE matches a Go fuzz target declaration.
 var fuzzFuncRE = regexp.MustCompile(`(?m)^func Fuzz\w+\(`)
 
+// fuzzFuncNameRE matches a Go fuzz target declaration and captures its name, so
+// the guard can require specific decoders to stay fuzzed (not just "some target
+// in this dir").
+var fuzzFuncNameRE = regexp.MustCompile(`(?m)^func (Fuzz\w+)\(`)
+
 // TestEveryUntrustedParserIsFuzzed makes CLAUDE.md §6 ("fuzz every parser that
 // touches untrusted input") executable: it enumerates the packages that parse
 // attacker-controlled bytes and fails if any lacks at least one Go fuzz target.
@@ -34,6 +39,49 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	for dir, what := range parsers {
 		if !dirHasFuzzTarget(t, dir) {
 			t.Errorf("untrusted parser %s (%s) has no Go fuzz target — CLAUDE.md §6 requires every parser that touches untrusted input to be fuzzed", dir, what)
+		}
+	}
+
+	// The "some fuzz target lives in this dir" check above is too coarse for the
+	// CMS/PKCS7 decoder family: a single SCEP-request target satisfied it while
+	// the sibling decoders that share the same (panic-prone) smallstep/pkcs7
+	// BER decoder — and that parse UNTRUSTED bytes before any verification —
+	// were left unfuzzed (FUZZ-001/002). Require those CMS boundary targets by
+	// NAME so dropping one trips this guard, not just deleting the whole file.
+	requireFuzzFuncByName(t, ".", map[string]string{
+		"FuzzParseSCEPRequest":   "SCEP pkiMessage CMS (scep.go ParseSCEPRequest)",
+		"FuzzParseSCEPResponse":  "SCEP CertRep CMS (scep.go ParseSCEPResponse) — shares the FUZZ-001 decoder",
+		"FuzzVerifyCMSSignature": "cloud IID CMS (verify.go VerifyCMSSignature) — parses untrusted bytes pre-verification",
+	})
+}
+
+// requireFuzzFuncByName fails if any of the named Fuzz targets is missing from
+// the *_test.go files in dir. It pins the exact untrusted decoders that must
+// stay fuzzed (CLAUDE.md §6), closing the false-"all parsers fuzzed" assurance a
+// directory-level check gives when one decoder in a multi-decoder package loses
+// its harness.
+func requireFuzzFuncByName(t *testing.T, dir string, want map[string]string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read parser dir %q: %v", dir, err)
+	}
+	found := map[string]bool{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		for _, m := range fuzzFuncNameRE.FindAllStringSubmatch(string(b), -1) {
+			found[m[1]] = true
+		}
+	}
+	for name, what := range want {
+		if !found[name] {
+			t.Errorf("required fuzz target %s (%s) is missing — CLAUDE.md §6 / FUZZ-001/002 require it; do not remove it", name, what)
 		}
 	}
 }

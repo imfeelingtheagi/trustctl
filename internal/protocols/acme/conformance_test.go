@@ -276,6 +276,240 @@ func TestACMEProtocolConformsToReference(t *testing.T) {
 	runACMEProtocolConformance(t, client, []string{"x.conformance.test", "y.conformance.test"})
 }
 
+// issueOneCert drives the real x/crypto/acme client through a full HTTP-01
+// issuance against srv and returns the leaf DER. It is the shared setup for the
+// revoke/keyChange round-trips (INTEROP-002).
+func issueOneCert(t *testing.T, client *xacme.Client, cs *challengeServer, domain string) []byte {
+	t.Helper()
+	ctx := context.Background()
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
+	if err != nil {
+		t.Fatalf("new-order: %v", err)
+	}
+	for _, authzURL := range order.AuthzURLs {
+		authz, err := client.GetAuthorization(ctx, authzURL)
+		if err != nil {
+			t.Fatalf("get authorization: %v", err)
+		}
+		var chal *xacme.Challenge
+		for _, c := range authz.Challenges {
+			if c.Type == "http-01" {
+				chal = c
+			}
+		}
+		ka, err := client.HTTP01ChallengeResponse(chal.Token)
+		if err != nil {
+			t.Fatalf("http-01 response: %v", err)
+		}
+		cs.publish(chal.Token, ka)
+		if _, err := client.Accept(ctx, chal); err != nil {
+			t.Fatalf("accept challenge: %v", err)
+		}
+		if _, err := client.WaitAuthorization(ctx, authzURL); err != nil {
+			t.Fatalf("wait authorization: %v", err)
+		}
+	}
+	if order, err = client.WaitOrder(ctx, order.URI); err != nil {
+		t.Fatalf("wait order: %v", err)
+	}
+	der, _, err := client.CreateOrderCert(ctx, order.FinalizeURL, buildCSR(t, domain, []string{domain}), true)
+	if err != nil {
+		t.Fatalf("finalize/create cert: %v", err)
+	}
+	if len(der) == 0 {
+		t.Fatal("issued an empty certificate chain")
+	}
+	return der[0]
+}
+
+// TestACMEDirectoryAdvertisesRevokeAndKeyChange is the INTEROP-002 directory
+// acceptance: the ACME directory MUST advertise revokeCert (RFC 8555 §7.6) and
+// keyChange (§7.1.1) so a conformant client can revoke a certificate and roll its
+// account key. The real x/crypto/acme client surfaces these as RevokeURL and
+// KeyChangeURL via Discover(); before the fix both were absent (empty), and a
+// RevokeCert/AccountKeyRollover call had no URL to post to.
+func TestACMEDirectoryAdvertisesRevokeAndKeyChange(t *testing.T) {
+	builtin, _ := ca.NewBuiltin("ca")
+	ts := httptest.NewServer(acmesrv.New(builtin, acmesrv.DefaultValidators()))
+	t.Cleanup(ts.Close)
+	client, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := client.Discover(context.Background())
+	if err != nil {
+		t.Fatalf("discover directory: %v", err)
+	}
+	if dir.RevokeURL == "" {
+		t.Error("directory does not advertise revokeCert (RFC 8555 §7.6) — INTEROP-002")
+	}
+	if dir.KeyChangeURL == "" {
+		t.Error("directory does not advertise keyChange (RFC 8555 §7.1.1) — INTEROP-002")
+	}
+}
+
+// TestACMERevokeCertRoundTrips is the INTEROP-002 revocation acceptance: a real
+// x/crypto/acme client issues a certificate, then revokes it via the ACME
+// revokeCert endpoint (authorized by its account key, RFC 8555 §7.6), and the
+// server records the certificate as revoked. Before the fix the directory had no
+// revokeCert URL, so RevokeCert failed with "unsupported protocol scheme".
+func TestACMERevokeCertRoundTrips(t *testing.T) {
+	builtin, _ := ca.NewBuiltin("ca")
+	cs := newChallengeServer()
+	t.Cleanup(cs.Close)
+	srv := acmesrv.New(builtin, conformanceValidators(cs))
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+
+	client, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	leaf := issueOneCert(t, client, cs, "revoke.conformance.test")
+
+	fp, err := certinfo.Inspect(leaf)
+	if err != nil {
+		t.Fatalf("inspect leaf: %v", err)
+	}
+	if _, revoked := srv.IsRevoked(fp.SHA256Fingerprint); revoked {
+		t.Fatal("certificate is revoked before any revoke request")
+	}
+
+	// Account-key revocation (key=nil => use the registered account key).
+	if err := client.RevokeCert(ctx, nil, leaf, xacme.CRLReasonKeyCompromise); err != nil {
+		t.Fatalf("RevokeCert (account-key path) failed — INTEROP-002: %v", err)
+	}
+	serial, revoked := srv.IsRevoked(fp.SHA256Fingerprint)
+	if !revoked {
+		t.Fatal("the server did not record the certificate as revoked after a successful RevokeCert")
+	}
+	if serial == "" {
+		t.Error("revocation recorded an empty serial")
+	}
+
+	// A double revocation is a clean no-op for the client (the server returns
+	// alreadyRevoked, which x/crypto/acme treats as success).
+	if err := client.RevokeCert(ctx, nil, leaf, xacme.CRLReasonKeyCompromise); err != nil {
+		t.Fatalf("second RevokeCert should be a no-op, got: %v", err)
+	}
+}
+
+// TestACMERevokeRejectsUnauthorizedAccount proves revocation is AUTHORIZED, not a
+// blanket allow (RFC 8555 §7.6): a DIFFERENT account (which did not order the
+// certificate and does not hold its key) cannot revoke it — the server returns
+// unauthorized and the certificate stays valid.
+func TestACMERevokeRejectsUnauthorizedAccount(t *testing.T) {
+	builtin, _ := ca.NewBuiltin("ca")
+	cs := newChallengeServer()
+	t.Cleanup(cs.Close)
+	srv := acmesrv.New(builtin, conformanceValidators(cs))
+	ts := httptest.NewServer(srv)
+	t.Cleanup(ts.Close)
+	ctx := context.Background()
+
+	owner, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := owner.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("owner register: %v", err)
+	}
+	leaf := issueOneCert(t, owner, cs, "owned.conformance.test")
+	fp, _ := certinfo.Inspect(leaf)
+
+	// A second, unrelated account.
+	stranger, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stranger.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("stranger register: %v", err)
+	}
+	// The stranger uses its own account key (key=nil) — it did not order the cert.
+	if err := stranger.RevokeCert(ctx, nil, leaf, xacme.CRLReasonUnspecified); err == nil {
+		t.Fatal("an unrelated account was allowed to revoke a certificate it does not own (RFC 8555 §7.6 authorization bypass)")
+	}
+	if _, revoked := srv.IsRevoked(fp.SHA256Fingerprint); revoked {
+		t.Fatal("certificate was marked revoked by an unauthorized account")
+	}
+}
+
+// TestACMEKeyChangeRollsOverAccountKey is the INTEROP-002 key-rollover acceptance:
+// a real x/crypto/acme client rolls its account key via the keyChange endpoint
+// (RFC 8555 §7.3.5), and the NEW key then authenticates a subsequent
+// kid-authenticated request (a new order). Before the fix the directory had no
+// keyChange URL, so AccountKeyRollover had nowhere to post.
+func TestACMEKeyChangeRollsOverAccountKey(t *testing.T) {
+	builtin, _ := ca.NewBuiltin("ca")
+	ts := httptest.NewServer(acmesrv.New(builtin, acmesrv.DefaultValidators()))
+	t.Cleanup(ts.Close)
+
+	client, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	// A pre-rollover order proves the old key works.
+	if _, err := client.AuthorizeOrder(ctx, xacme.DomainIDs("before.rollover.test")); err != nil {
+		t.Fatalf("pre-rollover order: %v", err)
+	}
+
+	newClient, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.AccountKeyRollover(ctx, newClient.Key); err != nil {
+		t.Fatalf("AccountKeyRollover failed — INTEROP-002: %v", err)
+	}
+	// After rollover, client.Key is the new key. A kid-authenticated request (a new
+	// order) must now succeed under the rolled-over key — proving the server bound
+	// the account to the new key.
+	if _, err := client.AuthorizeOrder(ctx, xacme.DomainIDs("after.rollover.test")); err != nil {
+		t.Fatalf("order after key rollover (new key must authenticate): %v", err)
+	}
+}
+
+// TestACMEAcceptsECDSADefaultClientRegisters is the INTEROP-003 served-path
+// acceptance: a stock client using its DEFAULT ECDSA P-256 account key (the
+// certbot/acme.sh default — acmekey.NewClient generates ECDSA) registers and orders
+// against the ACME server end to end. Before the fix the server rejected the EC
+// account key at new-account with badPublicKey, so Register failed; now it succeeds
+// and the same client can drive an order.
+func TestACMEAcceptsECDSADefaultClientRegisters(t *testing.T) {
+	builtin, err := ca.NewBuiltin("ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(acmesrv.New(builtin, acmesrv.DefaultValidators()))
+	t.Cleanup(ts.Close)
+
+	// acmekey.NewClient uses a freshly generated ECDSA P-256 account key (ES256),
+	// exactly like an unmodified certbot/acme.sh.
+	client, err := acmekey.NewClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("an ECDSA-account-key client could not register (INTEROP-003): %v", err)
+	}
+	// The same ECDSA-authenticated client can drive a kid-authenticated request.
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs("ec.conformance.test"))
+	if err != nil {
+		t.Fatalf("ECDSA-account-key new-order: %v", err)
+	}
+	if len(order.AuthzURLs) != 1 {
+		t.Fatalf("order returned %d authorizations, want 1", len(order.AuthzURLs))
+	}
+}
+
 // TestACMEProtocolDifferentialVsPebble runs the IDENTICAL routine against the
 // reference ACME CA (Pebble) when PEBBLE_DIRECTORY_URL is set — the differential.
 // Skipped locally (no container runtime); runs in CI's acme-conformance job, with

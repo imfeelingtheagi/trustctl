@@ -19,6 +19,7 @@ import (
 
 type link struct {
 	secret    []byte
+	shareID   string // public, non-secret correlation id (safe to audit)
 	expiresAt time.Time
 	viewed    bool
 }
@@ -43,17 +44,28 @@ func New(tenantID string, audit auditsink.Auditor, clock func() time.Time) *Shar
 	return &Sharer{tenantID: tenantID, audit: audit, clock: clock, links: map[string]*link{}}
 }
 
-// Create stores a secret behind a single-use token that expires after ttl.
+// Create stores a secret behind a single-use token that expires after ttl. The
+// returned token is the bearer capability that redeems the secret: it travels
+// out-of-band to the recipient and is NEVER written to the audit/event log
+// (AN-8) — a random non-secret shareID plus a non-reversible SHA-256 of the
+// token are audited instead, so the trail is preserved without leaking the
+// credential.
 func (s *Sharer) Create(ctx context.Context, secret []byte, ttl time.Duration) (string, error) {
 	tb, err := crypto.RandomBytes(16)
 	if err != nil {
 		return "", err
 	}
 	token := hex.EncodeToString(tb)
+	idb, err := crypto.RandomBytes(16)
+	if err != nil {
+		return "", err
+	}
+	shareID := hex.EncodeToString(idb)
 	s.mu.Lock()
-	s.links[token] = &link{secret: append([]byte(nil), secret...), expiresAt: s.clock().Add(ttl)}
+	s.links[token] = &link{secret: append([]byte(nil), secret...), shareID: shareID, expiresAt: s.clock().Add(ttl)}
 	s.mu.Unlock()
-	_ = s.audit.Audit(ctx, "secret.shared", s.tenantID, []byte(fmt.Sprintf(`{"token":%q}`, token)))
+	_ = s.audit.Audit(ctx, "secret.shared", s.tenantID,
+		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
 	return token, nil
 }
 
@@ -72,8 +84,12 @@ func (s *Sharer) View(ctx context.Context, token string) ([]byte, error) {
 	}
 	l.viewed = true
 	secret := l.secret
+	shareID := l.shareID
 	delete(s.links, token) // self-destruct on first successful view
-	_ = s.audit.Audit(ctx, "secret.share.viewed", s.tenantID, []byte(fmt.Sprintf(`{"token":%q}`, token)))
+	// Audit the non-secret shareID and a non-reversible hash of the token — never
+	// the token itself, which is the bearer capability (AN-8).
+	_ = s.audit.Audit(ctx, "secret.share.viewed", s.tenantID,
+		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
 	return secret, nil
 }
 

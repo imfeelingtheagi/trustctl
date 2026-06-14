@@ -140,7 +140,9 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trustctl agent" \
 			-t http://timestamp.digicert.com \
 			-in $(DIST_DIR)/trustctl-agent.exe -out $(DIST_DIR)/trustctl-agent.signed.exe && \
-		mv $(DIST_DIR)/trustctl-agent.signed.exe $(DIST_DIR)/trustctl-agent.exe; \
+		mv $(DIST_DIR)/trustctl-agent.signed.exe $(DIST_DIR)/trustctl-agent.exe && \
+		echo ">> verify trustctl-agent.exe signature" && \
+		osslsigncode verify -in $(DIST_DIR)/trustctl-agent.exe; \
 	else \
 		echo ">> SIGN_PFX not set; skipping signing (set SIGN_PFX/SIGN_PASS to sign)"; \
 	fi
@@ -154,7 +156,9 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trustctl agent" \
 				-t http://timestamp.digicert.com \
 				-in $(DIST_DIR)/trustctl-agent.msi -out $(DIST_DIR)/trustctl-agent.signed.msi && \
-			mv $(DIST_DIR)/trustctl-agent.signed.msi $(DIST_DIR)/trustctl-agent.msi; \
+			mv $(DIST_DIR)/trustctl-agent.signed.msi $(DIST_DIR)/trustctl-agent.msi && \
+			echo ">> verify trustctl-agent.msi signature" && \
+			osslsigncode verify -in $(DIST_DIR)/trustctl-agent.msi; \
 		fi; \
 	else \
 		echo ">> wixl not found; skipping MSI build (install msitools, or use WiX on Windows)"; \

@@ -69,7 +69,10 @@ func PublicKeyDERFromCert(certDER []byte) ([]byte, error) {
 // that the signer chains to one of the trusted roots, then returns the signed
 // content. A document whose signer does not chain to a trusted root is rejected.
 func VerifyCMSSignature(p7DER []byte, rootsDER [][]byte) (content []byte, err error) {
-	p7, err := pkcs7.Parse(p7DER)
+	// Untrusted input (the caller-supplied cloud IID document is parsed BEFORE
+	// any trust is established): route through safeParsePKCS7 so a malformed
+	// document fails closed with an error instead of panicking (FUZZ-001).
+	p7, err := safeParsePKCS7(p7DER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CMS: %w", err)
 	}

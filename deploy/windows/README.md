@@ -12,12 +12,19 @@ make dist-windows
 ```
 
 This cross-compiles `trustctl-agent.exe` for `windows/amd64`, copies the WiX
-source, optionally Authenticode-signs the binary, builds the MSI (when a WiX
-toolchain is present), and writes a `SHA256SUMS` manifest into `dist/`.
+source, Authenticode-signs **both the binary and the MSI** when a code-signing
+identity is provided, builds the MSI (when a WiX toolchain is present), and writes
+a `SHA256SUMS` manifest into `dist/`.
 
 - **Signing.** Set `SIGN_PFX` (and `SIGN_PASS`) to a code-signing PKCS#12 to
-  Authenticode-sign the binary with `osslsigncode` (Linux/macOS) — on Windows,
-  sign with `signtool`. Without a signing identity the binary is left unsigned.
+  Authenticode-sign the `.exe` and `.msi` with `osslsigncode` (Linux/macOS) — on
+  Windows, sign with `signtool`. The target verifies each signature after signing.
+  Without a signing identity the artifacts are left unsigned (and the target says
+  so). **Release builds always sign:** the `agent-windows` job in
+  `.github/workflows/release.yml` provisions the identity from the
+  `WINDOWS_CODESIGN_PFX_BASE64` / `WINDOWS_CODESIGN_PASS` secrets and **fails the
+  release if either artifact ships unsigned**, and the `windows / test + MSI` CI
+  job signs with `signtool` when the same secret is configured.
 - **MSI.** `make dist-windows` builds the MSI with `wixl` (msitools) when
   available; on Windows use the WiX Toolset (`candle` + `light`) against
   `trustctl-agent.wxs`. Sign the resulting `.msi` the same way as the binary.
@@ -29,7 +36,9 @@ CI exercises this on two jobs: `windows cross-build` (Linux,
 `make windows-build`: `GOOS=windows go build ./... && go vet ./...`) for a fast
 guard, and `windows / test + MSI` (a real `windows-latest` runner) which runs
 the Windows agent tests — including a round-trip against the live per-user
-certificate store — and builds the MSI with the WiX Toolset.
+certificate store — builds the MSI with the WiX Toolset, and Authenticode-signs
+the `.exe`/`.msi` with `signtool` when `WINDOWS_CODESIGN_PFX_BASE64` is set. The
+`agent-windows` release job (`release.yml`) is the gate that signs on every tag.
 
 ## Install / uninstall
 
