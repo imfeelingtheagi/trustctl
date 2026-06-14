@@ -55,9 +55,9 @@ func TestEmbeddedESTClientEnrolls(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv := est.New(est.Config{
-		Enroller:   signingEnroller{caCertDER: caCertDER, caSigner: caSigner},
-		Auth:       allowAll{},
-		CAChainDER: [][]byte{caCertDER},
+		Enroller:    signingEnroller{caCertDER: caCertDER, caSigner: caSigner},
+		Auth:        allowAll{},
+		CAChainDER:  [][]byte{caCertDER},
 		ProfileName: "device",
 	})
 	ts := httptest.NewServer(srv)
