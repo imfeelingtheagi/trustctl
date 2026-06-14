@@ -111,6 +111,11 @@ func gcmOpen(key, ct, nonce, aad []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// AEAD.Open panics on a wrong-length nonce; validate first so malformed or
+	// hostile input fails closed instead of crashing the process.
+	if len(nonce) != g.NonceSize() {
+		return nil, fmt.Errorf("crypto: invalid GCM nonce length %d (want %d)", len(nonce), g.NonceSize())
+	}
 	return g.Open(nil, nonce, ct, aad)
 }
 

@@ -46,11 +46,23 @@ func (p *BackendProvider) Revoke(ctx context.Context, backendRef string) error {
 	return p.backend.Revoke(ctx, backendRef)
 }
 
-// The seven concrete providers (S17.2–S17.8). Each takes its backend client.
-func NewPostgresProvider(b Backend) *BackendProvider { return NewProvider("postgresql", b) } // S17.2
-func NewMySQLProvider(b Backend) *BackendProvider    { return NewProvider("mysql", b) }      // S17.3
-func NewMongoProvider(b Backend) *BackendProvider    { return NewProvider("mongodb", b) }    // S17.4
-func NewAWSSTSProvider(b Backend) *BackendProvider   { return NewProvider("aws-sts", b) }    // S17.5
-func NewGCPIAMProvider(b Backend) *BackendProvider   { return NewProvider("gcp-iam", b) }    // S17.6
-func NewAzureSPProvider(b Backend) *BackendProvider  { return NewProvider("azure-sp", b) }   // S17.7
-func NewRedisSSHProvider(b Backend) *BackendProvider { return NewProvider("redis-ssh", b) }  // S17.8
+// NewPostgresProvider builds the PostgreSQL dynamic-secret provider (S17.2).
+func NewPostgresProvider(b Backend) *BackendProvider { return NewProvider("postgresql", b) }
+
+// NewMySQLProvider builds the MySQL/MariaDB dynamic-secret provider (S17.3).
+func NewMySQLProvider(b Backend) *BackendProvider { return NewProvider("mysql", b) }
+
+// NewMongoProvider builds the MongoDB dynamic-secret provider (S17.4).
+func NewMongoProvider(b Backend) *BackendProvider { return NewProvider("mongodb", b) }
+
+// NewAWSSTSProvider builds the AWS IAM (STS) dynamic-secret provider (S17.5).
+func NewAWSSTSProvider(b Backend) *BackendProvider { return NewProvider("aws-sts", b) }
+
+// NewGCPIAMProvider builds the GCP IAM dynamic-secret provider (S17.6).
+func NewGCPIAMProvider(b Backend) *BackendProvider { return NewProvider("gcp-iam", b) }
+
+// NewAzureSPProvider builds the Azure service-principal dynamic-secret provider (S17.7).
+func NewAzureSPProvider(b Backend) *BackendProvider { return NewProvider("azure-sp", b) }
+
+// NewRedisSSHProvider builds the Redis / dynamic-SSH provider (S17.8).
+func NewRedisSSHProvider(b Backend) *BackendProvider { return NewProvider("redis-ssh", b) }

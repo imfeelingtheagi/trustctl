@@ -120,17 +120,39 @@ type genericSource struct {
 func (g genericSource) Name() string                                     { return g.name }
 func (g genericSource) Enumerate(ctx context.Context) ([]Finding, error) { return g.lister.List(ctx) }
 
-// Secret-store connectors (S20.1).
-func NewVaultSource(l Lister) Source             { return genericSource{"hashicorp-vault", l} }
-func NewAWSSecretsManagerSource(l Lister) Source { return genericSource{"aws-secrets-manager", l} }
-func NewAzureKeyVaultSource(l Lister) Source     { return genericSource{"azure-key-vault", l} }
-func NewGCPSecretManagerSource(l Lister) Source  { return genericSource{"gcp-secret-manager", l} }
-func NewKubernetesSecretsSource(l Lister) Source { return genericSource{"kubernetes-secrets", l} }
-func NewInfisicalSource(l Lister) Source         { return genericSource{"infisical", l} }
+// Secret-store discovery connectors (S20.1), all strictly read-only.
 
-// API key / token sources (S20.2).
-func NewAWSIAMKeySource(l Lister) Source           { return genericSource{"aws-iam-keys", l} }
-func NewGCPSAKeySource(l Lister) Source            { return genericSource{"gcp-sa-keys", l} }
-func NewAzureSPSecretSource(l Lister) Source       { return genericSource{"azure-sp-secrets", l} }
+// NewVaultSource discovers secrets in HashiCorp Vault.
+func NewVaultSource(l Lister) Source { return genericSource{"hashicorp-vault", l} }
+
+// NewAWSSecretsManagerSource discovers secrets in AWS Secrets Manager.
+func NewAWSSecretsManagerSource(l Lister) Source { return genericSource{"aws-secrets-manager", l} }
+
+// NewAzureKeyVaultSource discovers secrets in Azure Key Vault.
+func NewAzureKeyVaultSource(l Lister) Source { return genericSource{"azure-key-vault", l} }
+
+// NewGCPSecretManagerSource discovers secrets in GCP Secret Manager.
+func NewGCPSecretManagerSource(l Lister) Source { return genericSource{"gcp-secret-manager", l} }
+
+// NewKubernetesSecretsSource discovers Kubernetes Secrets.
+func NewKubernetesSecretsSource(l Lister) Source { return genericSource{"kubernetes-secrets", l} }
+
+// NewInfisicalSource discovers secrets in Infisical (migration-assessment path).
+func NewInfisicalSource(l Lister) Source { return genericSource{"infisical", l} }
+
+// API key / token discovery sources (S20.2), all strictly read-only.
+
+// NewAWSIAMKeySource discovers AWS IAM access keys.
+func NewAWSIAMKeySource(l Lister) Source { return genericSource{"aws-iam-keys", l} }
+
+// NewGCPSAKeySource discovers GCP service-account keys.
+func NewGCPSAKeySource(l Lister) Source { return genericSource{"gcp-sa-keys", l} }
+
+// NewAzureSPSecretSource discovers Azure service-principal secrets.
+func NewAzureSPSecretSource(l Lister) Source { return genericSource{"azure-sp-secrets", l} }
+
+// NewGitHubActionsSecretSource discovers GitHub Actions secrets.
 func NewGitHubActionsSecretSource(l Lister) Source { return genericSource{"github-actions-secrets", l} }
-func NewCICDStoreSource(l Lister) Source           { return genericSource{"cicd-store", l} }
+
+// NewCICDStoreSource discovers secrets in a generic CI/CD store.
+func NewCICDStoreSource(l Lister) Source { return genericSource{"cicd-store", l} }

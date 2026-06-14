@@ -112,14 +112,26 @@ func (e *Engine) Drift(key string, current []byte) bool {
 	return want != crypto.SHA256Hex(current)
 }
 
-// The seven sync targets (each takes its platform client).
-func NewKubernetesTarget(p Pusher) *Target    { return NewTarget("kubernetes", p) }
+// NewKubernetesTarget syncs secrets to Kubernetes (native / External Secrets Operator).
+func NewKubernetesTarget(p Pusher) *Target { return NewTarget("kubernetes", p) }
+
+// NewGitHubActionsTarget syncs secrets to GitHub Actions.
 func NewGitHubActionsTarget(p Pusher) *Target { return NewTarget("github-actions", p) }
-func NewGitLabCITarget(p Pusher) *Target      { return NewTarget("gitlab-ci", p) }
-func NewTerraformTarget(p Pusher) *Target     { return NewTarget("terraform", p) }
-func NewVercelTarget(p Pusher) *Target        { return NewTarget("vercel-netlify", p) }
+
+// NewGitLabCITarget syncs secrets to GitLab CI.
+func NewGitLabCITarget(p Pusher) *Target { return NewTarget("gitlab-ci", p) }
+
+// NewTerraformTarget syncs secrets to Terraform/OpenTofu.
+func NewTerraformTarget(p Pusher) *Target { return NewTarget("terraform", p) }
+
+// NewVercelTarget syncs secrets to Vercel/Netlify.
+func NewVercelTarget(p Pusher) *Target { return NewTarget("vercel-netlify", p) }
+
+// NewAWSParamStoreTarget syncs secrets to AWS Parameter Store / Secrets Manager.
 func NewAWSParamStoreTarget(p Pusher) *Target { return NewTarget("aws-parameter-store", p) }
-func NewWebhookTarget(p Pusher) *Target       { return NewTarget("webhook", p) }
+
+// NewWebhookTarget syncs secrets to a generic signed webhook.
+func NewWebhookTarget(p Pusher) *Target { return NewTarget("webhook", p) }
 
 // MemoryOutbox is an in-process durable-semantics Outbox for single-node and tests.
 type MemoryOutbox struct {
