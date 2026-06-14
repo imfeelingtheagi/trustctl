@@ -13,6 +13,7 @@ const (
 	KindResource    NodeKind = "resource"     // a place a credential is deployed to or grants access to
 	KindIssuer      NodeKind = "issuer"       // a CA or other authority that issues credentials
 	KindCryptoAsset NodeKind = "crypto-asset" // an observed cryptographic usage (CBOM, F52)
+	KindAttestation NodeKind = "attestation"  // a verified proof (hardware/cloud/platform) that justified an issuance (F30)
 )
 
 // EdgeType names a directed relationship. Direction is oriented so that impact
