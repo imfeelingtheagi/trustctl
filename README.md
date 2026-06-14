@@ -9,7 +9,10 @@
 | |_ _ __ _   _ ___| |_ ___| |_| |
 | __| '__| | | / __| __/ __| __| |
 | |_| |  | |_| \__ \ || (__| |_| |
- \__|_|   \__,_|___/\__\___|\__|_|   the keys to your infrastructure, kept in your infrastructure
+ \__|_|   \__,_|___/\__\___|\__|_|
+
+ the keys to your infrastructure,
+   kept in your infrastructure
 ```
 
 <p align="center">Self-hosted control plane for every credential that <em>isn't</em> a human —<br>
