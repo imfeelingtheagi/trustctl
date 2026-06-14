@@ -112,10 +112,10 @@ ans, _ := synth.Answer(ctx, ev)   // ans.Citations = ["graph#cert:...", ...]
 | Capability | Status today |
 |---|---|
 | Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI |
-| Semantic query layer (F75) | **Library-complete**, tested; serving mount is the integration step |
-| AI model adapter (F76) | **Library-complete**, tested; off unless a model is configured |
-| Grounded RCA / NL query (F77) | **Library-complete**, tested |
-| MCP server (F78) | **Library-complete**, tested; no HTTP/gRPC wrapper wired yet |
+| Semantic query layer (F75) | **Library-complete**, tested; serving mount is the integration step (`EXC-WIRE-04`) |
+| AI model adapter (F76) | **Library-complete**, tested; off unless a model is configured; not served by the binary (`EXC-WIRE-04`) |
+| Grounded RCA / NL query (F77) | **Library-complete**, tested; **not yet served by the binary** (`EXC-WIRE-04`) |
+| MCP server (F78) | **Library-complete**, tested; no HTTP/gRPC wrapper wired yet; **not served by the binary** (`EXC-WIRE-04`) |
 
 Other notes: the graph and query layer are built per request from the store, so very large
 tenants pay a build cost (bounded by caps). The AI features are **grounded and read-only by

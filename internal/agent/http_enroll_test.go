@@ -15,11 +15,11 @@ import (
 // agent bootstraps through the HTTP enrollment endpoint (enroll.Handler) rather
 // than an in-process enroller, and ends up with an issued certificate.
 func TestAgentBootstrapsOverHTTP(t *testing.T) {
-	authority, err := enroll.NewAuthority("cp")
+	authority, err := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := authority.IssueBootstrapToken()
+	token, err := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -131,6 +131,69 @@ func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, finge
 	return c, err
 }
 
+// IdentityTransition is one applied lifecycle change, as projected into the
+// identity_transitions read model. Seq is the appending event's stream sequence
+// (monotonic within a tenant), giving the deterministic order a replay
+// reproduces.
+type IdentityTransition struct {
+	IdentityID string
+	Seq        uint64
+	FromState  string
+	ToState    string
+	EventType  string
+	Reason     string
+	OccurredAt time.Time
+}
+
+// AppendIdentityTransitionTx projects a lifecycle transition event into the
+// identity_transitions read model on the caller's transaction (SPINE-001), so an
+// identity's History/State is a single tenant-scoped, indexed read rather than a
+// full cross-tenant log replay. Keyed by (tenant_id, identity_id, seq), so
+// replaying the same event is idempotent and a Rebuild reproduces the row exactly
+// (occurred_at comes from the event's own time, not now()). It is tenant-scoped
+// (AN-1); the projector is the sole writer (AN-2).
+func (s *Store) AppendIdentityTransitionTx(ctx context.Context, tx pgx.Tx, tenantID string, t IdentityTransition) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO identity_transitions
+		        (tenant_id, identity_id, seq, from_state, to_state, event_type, reason, occurred_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 ON CONFLICT (tenant_id, identity_id, seq) DO UPDATE
+		    SET from_state = EXCLUDED.from_state, to_state = EXCLUDED.to_state,
+		        event_type = EXCLUDED.event_type, reason = EXCLUDED.reason,
+		        occurred_at = EXCLUDED.occurred_at`,
+		tenantID, t.IdentityID, int64(t.Seq), t.FromState, t.ToState, t.EventType, t.Reason, t.OccurredAt)
+	return err
+}
+
+// ListIdentityTransitions returns an identity's lifecycle transitions in order,
+// read from the identity_transitions projection in its tenant context
+// (RLS-enforced, AN-1). The work is bounded by this identity's transition count
+// and never scans another tenant's rows (SPINE-001). The caller supplies the
+// WithTenant transaction so the read shares the tenant scope.
+func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID, identityID string) ([]IdentityTransition, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT seq, from_state, to_state, event_type, reason, occurred_at
+		   FROM identity_transitions
+		  WHERE tenant_id = $1 AND identity_id = $2
+		  ORDER BY seq`,
+		tenantID, identityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []IdentityTransition
+	for rows.Next() {
+		t := IdentityTransition{IdentityID: identityID}
+		var seq int64
+		if err := rows.Scan(&seq, &t.FromState, &t.ToState, &t.EventType, &t.Reason, &t.OccurredAt); err != nil {
+			return nil, err
+		}
+		t.Seq = uint64(seq)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // ReadModelTables are the PostgreSQL tables that are pure projections of the
 // event log (AN-2): they are truncated and re-derived from the log on Rebuild, so
 // they never need a separate backup. Any new table that is an event-sourced
@@ -139,7 +202,7 @@ func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, finge
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "tenants"}
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "tenants", "identity_transitions"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

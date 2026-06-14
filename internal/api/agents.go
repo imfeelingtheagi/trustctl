@@ -58,11 +58,12 @@ type enrollmentTokenResponse struct {
 	EnrollURL string `json:"enroll_path"`
 }
 
-// createEnrollmentToken mints a one-time agent bootstrap token (S5.1/F15) so the
-// web wizard can build the agent install command. The mint runs under an
-// idempotency key (AN-5): a retried request returns the original token rather
-// than minting a second one. When no issuer is wired, the capability is reported
-// unavailable.
+// createEnrollmentToken mints a one-time agent bootstrap token (S5.1/F15) bound to
+// the caller's tenant (WIRE-003/AN-1) so the web wizard can build the agent
+// install command. The mint runs under an idempotency key (AN-5): a retried
+// request returns the original token rather than minting a second one. The token
+// is tenant-attributed, so the certificate the agent later receives carries this
+// tenant. When no issuer is wired, the capability is reported unavailable.
 //
 //trustctl:mutation
 func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
@@ -71,8 +72,8 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
 		return
 	}
-	a.mutate(w, r, idempotencyKey, func(_ context.Context, _ string) (int, any, error) {
-		token, err := a.agentTokens.IssueBootstrapToken()
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		token, err := a.agentTokens.IssueBootstrapToken(ctx, tenantID)
 		if err != nil {
 			return 0, nil, err
 		}

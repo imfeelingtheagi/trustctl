@@ -14,6 +14,7 @@ import (
 	"trustctl.io/trustctl/internal/api"
 	"trustctl.io/trustctl/internal/audit"
 	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/logging"
 	"trustctl.io/trustctl/internal/ratelimit"
@@ -161,7 +162,19 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("audit retention: %w", err)
 	}
 
+	// The served-leaf issuance profile (PKIGOV-001): CDP/AIA/policy pointers from
+	// config are stamped on every leaf the served path mints (the SKI is always
+	// set inside the crypto boundary). DefaultProfile, when set, binds the served
+	// mint to a tenant profile and rejects out-of-profile requests (PKIGOV-002).
+	leafProfile := crypto.LeafProfile{
+		CRLDistributionPoints: cfg.CA.CRLDistributionPoints,
+		OCSPServers:           cfg.CA.OCSPServers,
+		IssuingCertificateURL: cfg.CA.IssuerURLs,
+		CertificatePolicyOIDs: cfg.CA.CertificatePolicyOIDs,
+	}
+
 	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile,
+		LeafProfile: leafProfile, DefaultProfile: cfg.CA.DefaultProfile,
 		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
 		Logger: logger, RateLimiter: rateLimiter})
 	if err != nil {
@@ -195,6 +208,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	signerDone := make(chan struct{})
 	go func() { defer close(signerDone); srv.RunSignerMonitor(sigCtx) }()
 
+	// Reclaim expired idempotency keys on a fixed cadence (SPINE-002): the served
+	// mutation path records one row per Idempotency-Key, so without reclamation the
+	// idempotency_keys table — and its backups — would grow without bound. The sweep
+	// deletes completed keys past the retention window (AN-5 still holds inside it).
+	// Stopped with the other background workers before shutdown.
+	idemCtx, stopIdemGC := context.WithCancel(ctx)
+	idemGCDone := make(chan struct{})
+	go func() { defer close(idemGCDone); srv.RunIdempotencyGC(idemCtx) }()
+
 	// stopBackground halts the background workers and waits for them to exit, so the
 	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
 	// when the event log closes.
@@ -205,6 +227,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		<-retentionDone
 		stopSigner()
 		<-signerDone
+		stopIdemGC()
+		<-idemGCDone
 	}
 
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}

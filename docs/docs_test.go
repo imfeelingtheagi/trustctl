@@ -404,6 +404,205 @@ func TestLimitationsStatementIsHonest(t *testing.T) {
 	}
 }
 
+// servedClaim describes a capability whose served-vs-library status the docs must
+// state HONESTLY, with the disclosure bound to the code so it cannot drift.
+//
+// codeServed(t) reports whether the running binary ACTUALLY serves the capability
+// today (by inspecting the served composition / wiring). The reality-bind:
+//   - while the code does NOT serve it, the disclosure markers MUST be present
+//     and a "served" claim MUST be absent (catches an over-claim);
+//   - if a future change DOES serve it (codeServed flips true), the test demands
+//     the not-yet-served disclosure be removed (catches a stale under-claim that
+//     would now itself be a lie).
+//
+// This is what makes a future over-claim of OIDC login / the React console / the
+// AI surface as "served" fail `go test ./docs/...` (SEC-001, WIRE-001,
+// SURFACE-001/002/003 — the served-vs-library honesty cluster).
+type servedClaim struct {
+	name string
+	// disclosureMarkers are lowercase phrases limitations.md must contain while the
+	// capability is not served (the honest "built/tested, not yet served" wording).
+	disclosureMarkers []string
+	// epic is the wire-in epic id limitations.md must link so the closure path is
+	// traceable (EXC-WIRE-01 for auth, EXC-WIRE-04 for the console + AI surface).
+	epic string
+	// servedClaims are phrasings that would over-claim the capability as served;
+	// none may appear in limitations.md while codeServed is false.
+	overClaims []string
+	// codeServed inspects the repo and reports whether the served binary wires the
+	// capability today.
+	codeServed func(t *testing.T) bool
+}
+
+// serverComposesAuth reports whether the served composition (internal/server)
+// wires interactive OIDC browser login via api.WithAuth. Today it does not — the
+// flow is library-complete but unserved (SEC-001/WIRE-001). When EXC-WIRE-01 wires
+// it, this flips true and the disclosure must be retired.
+func serverComposesAuth(t *testing.T) bool {
+	t.Helper()
+	for _, f := range nonTestGoFiles(t, "../internal/server") {
+		if strings.Contains(read(t, f), "WithAuth(") {
+			return true
+		}
+	}
+	return false
+}
+
+// apiServesAISurface reports whether the served API/server wires the AI surface
+// (the model adapter, RCA pipeline, or MCP server) into a served endpoint. Today
+// it does not — these are library islands (SURFACE-003). When EXC-WIRE-04 wires an
+// authenticated, tenant-scoped surface, this flips true.
+func apiServesAISurface(t *testing.T) bool {
+	t.Helper()
+	for _, dir := range []string{"../internal/api", "../internal/server"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			src := read(t, f)
+			for _, imp := range []string{
+				`trustctl.io/trustctl/internal/aimodel"`,
+				`trustctl.io/trustctl/internal/rca"`,
+				`trustctl.io/trustctl/internal/mcpserver"`,
+			} {
+				if strings.Contains(src, imp) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// binaryServesReactConsole reports whether the embedded web UI is a real built
+// bundle (a hashed Vite asset) rather than the committed placeholder shell. Today
+// it is the placeholder, so the binary serves a "not built" page (SURFACE-001).
+// When EXC-WIRE-04 embeds a real bundle, the placeholder text is gone.
+func binaryServesReactConsole(t *testing.T) bool {
+	t.Helper()
+	idx := read(t, "../internal/webui/dist/index.html")
+	// The placeholder explicitly says the UI has not been built. A real Vite build
+	// has no such text and injects a hashed module script.
+	placeholder := strings.Contains(strings.ToLower(idx), "has not been built")
+	hashedBundle := strings.Contains(idx, "assets/index-") || strings.Contains(idx, "<script")
+	return hashedBundle && !placeholder
+}
+
+// nonTestGoFiles returns the non-test .go files directly under dir.
+func nonTestGoFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.FromSlash(dir))
+	if err != nil {
+		t.Fatalf("read dir %s: %v", dir, err)
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		out = append(out, dir+"/"+e.Name())
+	}
+	return out
+}
+
+// TestServedVsLibraryStatusIsHonestAndCodeBound is the anti-vacuous-green guard for
+// the served-vs-library honesty cluster (SEC-001, WIRE-001, SURFACE-001/002/003):
+// the served-vs-library status of OIDC browser login, the React console, and the
+// AI/RCA/MCP surface in limitations.md is asserted to MATCH THE CODE, in both
+// directions. A future PR that re-claims any of these as "served" while the binary
+// still does not wire it — or that quietly drops the disclosure — fails here.
+func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
+	lim := read(t, "limitations.md")
+	low := strings.ToLower(lim)
+
+	claims := []servedClaim{
+		{
+			name:              "OIDC browser login & sessions (F13)",
+			disclosureMarkers: []string{"oidc", "/auth/login", "not yet served by the binary"},
+			epic:              "EXC-WIRE-01",
+			// Must not assert the browser login routes are served.
+			overClaims: []string{
+				"oidc sso login is served",
+				"/auth/login is served",
+				"browser login is served",
+			},
+			codeServed: serverComposesAuth,
+		},
+		{
+			name:              "React web console (F12)",
+			disclosureMarkers: []string{"react web console", "not yet served by the binary"},
+			epic:              "EXC-WIRE-04",
+			overClaims: []string{
+				"the web console is served",
+				"web ui is served",
+				"the web ui and the `trustctl-cli` drive this same served surface",
+			},
+			codeServed: binaryServesReactConsole,
+		},
+		{
+			name:              "AI / RCA / MCP surface (F76/F77/F78)",
+			disclosureMarkers: []string{"mcp server", "rca", "not yet served by the binary"},
+			epic:              "EXC-WIRE-04",
+			overClaims: []string{
+				"the mcp server is served",
+				"the rca pipeline is served",
+				"the ai surface is served",
+			},
+			codeServed: apiServesAISurface,
+		},
+	}
+
+	for _, c := range claims {
+		served := c.codeServed(t)
+		if served {
+			// The capability is now genuinely served: the not-yet-served disclosure
+			// would itself be an (under-)claim, so it must have been retired.
+			if strings.Contains(low, "not yet served by the binary") &&
+				containsAll(low, c.disclosureMarkers) {
+				t.Errorf("%s appears to be SERVED in code now, but limitations.md still discloses it as not-yet-served — update the disclosure (the wire-in epic %s closed)", c.name, c.epic)
+			}
+			continue
+		}
+		// Not served: the honest disclosure must be present, link the epic, and
+		// carry no over-claim.
+		for _, m := range c.disclosureMarkers {
+			if !strings.Contains(low, m) {
+				t.Errorf("limitations.md must disclose %s as built/tested-but-not-served (missing marker %q)", c.name, m)
+			}
+		}
+		if !strings.Contains(lim, c.epic) {
+			t.Errorf("limitations.md must link the wire-in epic %s for %s so the closure path is traceable", c.epic, c.name)
+		}
+		for _, oc := range c.overClaims {
+			if strings.Contains(low, oc) {
+				t.Errorf("limitations.md over-claims %s as served (%q) while the binary does not wire it", c.name, oc)
+			}
+		}
+	}
+
+	// Reality anchor: api.WithAuth is the seam the OIDC disclosure rests on. It must
+	// keep existing even while the server does not call it, so the
+	// not-yet-served-but-built claim is grounded in real code (fail loudly, rather
+	// than silently-stale green, if the seam is ever removed).
+	if !serverComposesAuth(t) && !apiHasWithAuthOption(t) {
+		t.Error("internal/api no longer exposes WithAuth; the OIDC served-vs-library disclosure has no code anchor — revisit this reality test")
+	}
+}
+
+// apiHasWithAuthOption reports whether internal/api still exposes the WithAuth
+// option (the OIDC/session seam the disclosure rests on).
+func apiHasWithAuthOption(t *testing.T) bool {
+	t.Helper()
+	return strings.Contains(read(t, "../internal/api/api.go"), "func WithAuth(")
+}
+
+// containsAll reports whether s contains every substring in subs.
+func containsAll(s string, subs []string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
+}
+
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
 // canonical namespace (imfeelingtheagi). The audit flagged trustctl/trustctl vs
 // imfeelingtheagi/trustctl drift; this fails if it ever returns.

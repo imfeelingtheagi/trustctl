@@ -184,3 +184,64 @@ func TestExternalModeIsConfigOnly(t *testing.T) {
 		t.Fatalf("external replay = %d events; want 1", len(got))
 	}
 }
+
+// TestSchemaVersionStampedAndReplayed is the SCHEMA-001 envelope round-trip: an
+// appended event is stamped with DefaultSchemaVersion when the producer leaves it
+// zero, an explicit version is preserved verbatim, and both come back through
+// Replay unchanged. Without the persisted "v" field the read model could not tell
+// an old payload shape from a new one on a rebuild.
+func TestSchemaVersionStampedAndReplayed(t *testing.T) {
+	log := openEmbedded(t)
+	ctx := context.Background()
+
+	// A producer that does not set a version gets the baseline (v1) on append.
+	e1, err := log.Append(ctx, events.Event{Type: "owner.created", TenantID: "t1", Data: []byte(`{}`)})
+	if err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if e1.SchemaVersion != events.DefaultSchemaVersion {
+		t.Errorf("append left version unset; SchemaVersion = %d, want %d", e1.SchemaVersion, events.DefaultSchemaVersion)
+	}
+
+	// A producer evolving an existing type's payload sets the next version; it must
+	// survive the round trip so a version-aware projector can dispatch on it.
+	e2, err := log.Append(ctx, events.Event{Type: "owner.created", TenantID: "t1", SchemaVersion: 2, Data: []byte(`{}`)})
+	if err != nil {
+		t.Fatalf("Append v2: %v", err)
+	}
+	if e2.SchemaVersion != 2 {
+		t.Errorf("explicit version not kept on append; SchemaVersion = %d, want 2", e2.SchemaVersion)
+	}
+
+	got := collect(t, log, 0)
+	if len(got) != 2 {
+		t.Fatalf("replayed %d events, want 2", len(got))
+	}
+	if got[0].SchemaVersion != events.DefaultSchemaVersion {
+		t.Errorf("replayed event 1 SchemaVersion = %d, want %d", got[0].SchemaVersion, events.DefaultSchemaVersion)
+	}
+	if got[1].SchemaVersion != 2 {
+		t.Errorf("replayed event 2 SchemaVersion = %d, want 2 (the producer's explicit version)", got[1].SchemaVersion)
+	}
+}
+
+// TestLegacyEnvelopeReadsAsDefaultVersion proves an envelope persisted before the
+// schema-version field existed (no "v" key on disk) reconstructs as
+// DefaultSchemaVersion on Replay, not version 0 — so legacy events keep being
+// treated as the baseline payload shape (SCHEMA-001 backward compatibility). A v1
+// append writes "v" omitted (omitempty), byte-identical to a legacy envelope, so
+// this pins the zero->baseline normalization the replay path performs.
+func TestLegacyEnvelopeReadsAsDefaultVersion(t *testing.T) {
+	log := openEmbedded(t)
+	ctx := context.Background()
+	if _, err := log.Append(ctx, events.Event{Type: "tenant.registered", TenantID: "t1", Data: []byte(`{"name":"x"}`)}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	got := collect(t, log, 0)
+	if len(got) != 1 {
+		t.Fatalf("replayed %d, want 1", len(got))
+	}
+	if got[0].SchemaVersion != events.DefaultSchemaVersion {
+		t.Errorf("legacy (no-v) envelope replayed as version %d, want %d", got[0].SchemaVersion, events.DefaultSchemaVersion)
+	}
+}

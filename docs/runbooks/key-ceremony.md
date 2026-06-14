@@ -31,10 +31,12 @@ The mechanism, in the hierarchy manager:
   its id.
 - `Approve(tenant, ceremonyID, custodian)` records one custodian's approval and
   returns the running approval count. Approvals are de-duplicated per custodian.
-- `CreateRoot` / `CreateIntermediate` / `Rotate` are **gated on quorum**: each calls
-  the internal `requireQuorum` check first and returns `ErrQuorumNotMet (k of m
-  approvals)` until *m* distinct custodians have approved. On success the ceremony
-  is marked complete and cannot be reused.
+- `CreateRoot` / `CreateIntermediate` / `Rotate` / `CrossSign` are **gated on
+  quorum**: each takes a `ceremonyID` and calls the internal `requireQuorum` check
+  first, returning `ErrQuorumNotMet (k of m approvals)` until *m* distinct
+  custodians have approved. On success the ceremony is marked complete and cannot
+  be reused. Cross-signing is gated because it, too, extends trust (it mints a CA
+  certificate under your signing CA).
 
 The ceremony and its approvals are tenant-scoped rows under row-level security
 (AN-1): `ca_key_ceremonies` (with the `threshold`) and `ca_ceremony_approvals`.
@@ -64,8 +66,10 @@ Rotation is the same ceremony, with `purpose = rotation`:
 
 1. Open a rotation ceremony with threshold *m* and collect *m* approvals.
 2. Run `Rotate` for the CA; it is refused until quorum.
-3. Cross-sign or chain as your hierarchy requires, distribute the new CA, and renew
-   issuance under it.
+3. If your hierarchy requires cross-signing the new CA, **open a separate
+   cross-sign ceremony** and collect its *m* approvals — `CrossSign` is refused
+   until quorum, exactly like the create/rotate operations. Then distribute the new
+   CA and renew issuance under it.
 4. Retire the old key per your policy (and per the
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).

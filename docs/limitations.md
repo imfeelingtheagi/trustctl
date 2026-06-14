@@ -33,7 +33,11 @@ out-of-process child (AN-4). What you can do end to end against the running bina
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
   and **safe schema migrations**.
 
-The web UI and the `trustctl-cli` drive this same served surface.
+The `trustctl-cli` drives this same served surface. The **React web console is not
+yet shipped in the binary** (the embedded build is a placeholder) and **interactive
+OIDC browser login is not yet wired** — both are covered under "Built and tested,
+but not yet served" below; the served console+login wiring is tracked as
+**`EXC-WIRE-01`** (auth/session) and **`EXC-WIRE-04`** (console + AI surface).
 
 ## Built and tested, but not yet served by the binary
 
@@ -54,6 +58,30 @@ remaining integration work.
   **Certificate Transparency** monitoring.
 - **Posture**: the **credential graph** (reachability, blast radius), **composite
   risk scoring**, and **drift detection**.
+- **The React web console (F12)**: the React 18 + Vite + shadcn/ui single-page app
+  exists and is tested (Vitest/axe), but the `go:embed` bundle in a clean build is a
+  hand-written placeholder, so a release artifact serves a "not built" page at `/`.
+  The console — and the first-run wizard — are **built and tested, not yet served by
+  the binary**. Wiring a real Vite bundle into the served binary is tracked as
+  **`EXC-WIRE-04`**.
+- **Interactive OIDC browser login & sessions (F13)**: the authorization-code flow,
+  id_token verification (signature/issuer/audience/nonce via the AN-3 JOSE
+  boundary), and the HMAC-signed `HttpOnly`+`Secure` session cookie are implemented
+  and tested as library code, but `api.WithAuth` is **not wired into the served
+  composition**, so `/auth/login`, `/auth/callback`, `/auth/me`, and `/auth/logout`
+  are **not served today** (only scoped API tokens authenticate the running binary).
+  This is **built and tested, not yet served by the binary**; serving it is tracked
+  as **`EXC-WIRE-01`**.
+- **The AI surface — model adapter (F76), grounded RCA / NL query (F77), and the
+  MCP server (F78)**: these are real, tested **library** code (model-agnostic
+  cloud/local adapter with a boundary redactor, grounded read-only RCA with
+  citations, a read-only tenant-scoped MCP tool server). None is mounted in the
+  served binary — there is **no served, authenticated AI/RCA/MCP endpoint today** —
+  and the default is **no model** (AI is off unless one is configured). They are
+  **built and tested, not yet served by the binary**; serving an authenticated,
+  RBAC-guarded, tenant-scoped surface is tracked as **`EXC-WIRE-04`**. The boundary
+  redactor strips key/secret material before any prompt reaches a model (AN-8), so
+  even when wired, secret material does not egress.
 
 ## Plugin isolation: first-party in-process, third-party sandboxed
 

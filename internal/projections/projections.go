@@ -3,6 +3,7 @@ package projections
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -113,12 +114,16 @@ type CertificateRevoked struct {
 	RevokedAt   time.Time `json:"revoked_at"`
 }
 
-// identityTransition decodes the orchestrator's lifecycle event payload; the
-// projector needs only the identity and the new status. (The contract is the
-// JSON, so the projector does not import the orchestrator.)
+// identityTransition decodes the orchestrator's lifecycle event payload. The
+// projector applies the new status to the identity row AND appends the full
+// transition to the identity_transitions read model (SPINE-001), so History/State
+// read an indexed, tenant-scoped projection instead of replaying the whole log.
+// (The contract is the JSON, so the projector does not import the orchestrator.)
 type identityTransition struct {
 	IdentityID string `json:"identity_id"`
+	From       string `json:"from"`
 	To         string `json:"to"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 // Projector derives PostgreSQL read models from the event stream (AN-2). The
@@ -154,11 +159,58 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 	})
 }
 
+// knownSchemaVersions records, per event type the projector decodes, the set of
+// payload-shape versions it knows how to apply (SCHEMA-001). A *known* type that
+// arrives with a version not in its set is rejected rather than decoded with the
+// wrong shape — the failure mode the version field exists to prevent on a replay
+// or rebuild. Adding a new payload shape for an existing type means adding its
+// version here together with a decoder branch that handles it.
+//
+// An event type absent from this map is not version-gated: it is either an
+// unknown type (ignored, keeping projections forward-compatible to new types) or
+// an identity.* lifecycle transition (handled by prefix below). Only types with
+// an explicit decoder are gated, because only they would mis-project silently.
+var knownSchemaVersions = map[string]map[int]bool{
+	EventOwnerCreated:        {1: true},
+	EventOwnerUpdated:        {1: true},
+	EventOwnerDeleted:        {1: true},
+	EventIssuerCreated:       {1: true},
+	EventIdentityCreated:     {1: true},
+	EventCertificateRecorded: {1: true},
+	EventCertificateRevoked:  {1: true},
+}
+
+// ErrUnknownSchemaVersion is returned by ApplyTx when a known event type carries
+// a schema version the projector does not understand (SCHEMA-001). Failing here —
+// rather than decoding the wrong shape — keeps a rebuild correct across schema
+// evolution: a forgotten projector update surfaces as a hard error on replay, not
+// a silently wrong read model.
+var ErrUnknownSchemaVersion = errors.New("projections: unknown event schema version")
+
+// schemaVersionOf normalizes the envelope version: a legacy/zero version is the
+// baseline (DefaultSchemaVersion), matching how the event log reconstructs it.
+func schemaVersionOf(e events.Event) int {
+	if e.SchemaVersion == 0 {
+		return events.DefaultSchemaVersion
+	}
+	return e.SchemaVersion
+}
+
 // ApplyTx applies a single domain event to the read model on the caller's
 // transaction. The orchestrator uses it to project a lifecycle transition in the
 // same transaction as the outbox enqueue (AN-6). Unknown event types are
-// ignored, so projections are forward-compatible.
+// ignored, so projections are forward-compatible to *new* types; a *known* type
+// carrying an unknown schema version is rejected (SCHEMA-001), so a payload-shape
+// change to an existing type cannot silently mis-project on replay/rebuild.
 func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	// Version gate (SCHEMA-001): for a type this projector decodes, the envelope's
+	// schema version must be one it knows. An unrecognized version fails closed
+	// rather than being decoded against the wrong struct.
+	if versions, gated := knownSchemaVersions[e.Type]; gated {
+		if v := schemaVersionOf(e); !versions[v] {
+			return fmt.Errorf("%w: type %q v%d (seq %d)", ErrUnknownSchemaVersion, e.Type, v, e.Sequence)
+		}
+	}
 	switch e.Type {
 	case EventOwnerCreated:
 		var pl OwnerCreated
@@ -220,13 +272,23 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		return p.store.SetCertificateRevokedTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.Reason, pl.RevokedAt)
 	default:
-		// An identity lifecycle transition (identity.issued, …) is a status change.
+		// An identity lifecycle transition (identity.issued, …) updates the
+		// identity's status AND is recorded in the identity_transitions read model
+		// so History/State are a bounded, tenant-scoped read rather than a full
+		// cross-tenant log replay (SPINE-001). Both writes share this transaction,
+		// so the projection of one transition is atomic.
 		if strings.HasPrefix(e.Type, identityPrefix) {
 			var pl identityTransition
 			if err := decode(e, &pl); err != nil {
 				return err
 			}
-			return p.store.SetIdentityStatusTx(ctx, tx, e.TenantID, pl.IdentityID, pl.To)
+			if err := p.store.SetIdentityStatusTx(ctx, tx, e.TenantID, pl.IdentityID, pl.To); err != nil {
+				return err
+			}
+			return p.store.AppendIdentityTransitionTx(ctx, tx, e.TenantID, store.IdentityTransition{
+				IdentityID: pl.IdentityID, Seq: e.Sequence, FromState: pl.From, ToState: pl.To,
+				EventType: e.Type, Reason: pl.Reason, OccurredAt: e.Time,
+			})
 		}
 		return nil
 	}

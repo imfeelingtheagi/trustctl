@@ -25,6 +25,7 @@ import (
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/jose"
 	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/idemgc"
 	"trustctl.io/trustctl/internal/observ"
 	"trustctl.io/trustctl/internal/orchestrator"
 	"trustctl.io/trustctl/internal/projections"
@@ -49,14 +50,20 @@ type Deps struct {
 	APIOptions      []api.Option         // auth/audit/etc.
 	SignTimeout     time.Duration        // per-issuance signer deadline (slow → fail closed)
 	CACommonName    string
-	CACertFile      string           // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
-	AuditSigningKey *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
-	AuditRetention  time.Duration    // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
-	AuditArchiveDir string           // cold-storage directory for signed audit archive bundles (R4.4)
-	Logger          *slog.Logger     // structured access log sink (R2.2); nil discards
-	TraceExporter   observ.Exporter  // completed-span sink (R2.2); nil is a no-op
-	Bulkhead        *bulkhead.Set    // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
-	RateLimiter     api.RateLimiter  // per-tenant rate limiter (R2.3); nil disables rate limiting
+	CACertFile      string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	LeafProfile     crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
+	DefaultProfile  string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	AuditSigningKey *jose.SigningKey   // persistent audit export key; when set, wires the audit endpoints (R2.1)
+	AuditRetention  time.Duration      // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
+	AuditArchiveDir string             // cold-storage directory for signed audit archive bundles (R4.4)
+	// IdempotencyRetention bounds how long a completed idempotency key is kept
+	// before the background GC sweep reclaims it (SPINE-002). Zero uses
+	// idemgc.DefaultRetention. AN-5 holds within the window.
+	IdempotencyRetention time.Duration
+	Logger               *slog.Logger    // structured access log sink (R2.2); nil discards
+	TraceExporter        observ.Exporter // completed-span sink (R2.2); nil is a no-op
+	Bulkhead             *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
+	RateLimiter          api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
 }
 
 // Server is the assembled control plane.
@@ -64,6 +71,7 @@ type Server struct {
 	store     *store.Store
 	log       *events.Log
 	outbox    *orchestrator.Outbox
+	idemGC    *idemgc.Sweeper // bounds idempotency_keys via the background retention sweep (SPINE-002)
 	obHandler orchestrator.Handler
 	handler   http.Handler
 
@@ -71,6 +79,12 @@ type Server struct {
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER []byte
 	signTO    time.Duration
+
+	// leafProfile is the served issuing CA's RFC 5280 / BR profile (PKIGOV-001):
+	// CDP/AIA/policy pointers and key/EKU/validity constraints stamped on every leaf
+	// the served path mints. The zero value preserves the legacy leaf shape (plus an
+	// always-present Subject Key Identifier).
+	leafProfile crypto.LeafProfile
 
 	logger    *slog.Logger
 	registry  *observ.Registry
@@ -87,6 +101,9 @@ type Server struct {
 	// Signer telemetry (SF.3): the out-of-process signer can't serve its own
 	// /metrics (AN-4), so the control plane samples its health/restarts here.
 	mSigner *observ.SignerMetrics
+
+	// Idempotency-key GC telemetry (SPINE-002): rows reclaimed by the sweep.
+	mIdemPurged *observ.Counter
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -99,11 +116,12 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		return nil, errors.New("server: store and log are required")
 	}
 	s := &Server{
-		store:     d.Store,
-		log:       d.Log,
-		signer:    d.Signer,
-		signTO:    d.SignTimeout,
-		obHandler: d.OutboxHandler,
+		store:       d.Store,
+		log:         d.Log,
+		signer:      d.Signer,
+		signTO:      d.SignTimeout,
+		obHandler:   d.OutboxHandler,
+		leafProfile: d.LeafProfile,
 	}
 	if s.signTO <= 0 {
 		s.signTO = 10 * time.Second
@@ -120,11 +138,19 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	s.outbox = orchestrator.NewOutbox(d.Store)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
 	idem := orchestrator.NewIdempotency(d.Store)
+	// Bound idempotency_keys with a background retention sweep (SPINE-002): the
+	// served mutation path records one row per Idempotency-Key, and the GC worker
+	// reclaims completed keys past the retention window so the table cannot grow
+	// without limit. AN-5 still holds within the window.
+	s.idemGC = idemgc.New(d.Store, d.IdempotencyRetention)
 
 	// Agent enrollment (F3/F15, S5.1): mint one-time bootstrap tokens and sign
-	// agents' CSRs into mTLS client certificates. Defaults are prepended so a
-	// caller's APIOptions still override them.
-	authority, err := enroll.NewAuthority("trustctl Agent Enrollment CA")
+	// agents' CSRs into mTLS client certificates. Tokens are tenant-bound at mint
+	// and redeemed single-use through the durable, tenant-scoped store (WIRE-003),
+	// so they survive restarts, redeem on any instance, and yield a
+	// tenant-attributed certificate. Defaults are prepended so a caller's APIOptions
+	// still override them.
+	authority, err := enroll.NewAuthority("trustctl Agent Enrollment CA", storeTokenStore{st: d.Store})
 	if err != nil {
 		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
 	}
@@ -168,7 +194,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	case s.obHandler != nil:
 		// keep the injected handler
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile}
 	default:
 		s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
 	}
@@ -182,6 +208,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	}
 	s.registry = observ.NewRegistry()
 	s.tracer = observ.NewTracer(d.TraceExporter)
+	// Idempotency-key GC counter (SPINE-002): completed keys the background sweep
+	// reclaims, so the table's bound is observable.
+	s.mIdemPurged = s.registry.CounterVec("trustctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
 
 	// Audit retention worker (R4.4): when a retention window and an archive
 	// directory are configured, a background worker archives audit records older
@@ -258,11 +287,13 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 		cn = "trustctl Issuing CA"
 	}
 
-	// Reuse path: persisted cert + a signer that still has the CA key.
+	// Reuse path: persisted cert + a signer that still has the CA key. Bind the
+	// reloaded key to the CA-signing purpose so the signer's persisted
+	// per-key constraint (SIGNER-002/003) is satisfied across a restart.
 	if caCertFile != "" {
 		if pemBytes, err := os.ReadFile(caCertFile); err == nil {
 			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
-				if remote, herr := c.SignerForHandle(ctx, issuingCAHandle); herr == nil {
+				if remote, herr := c.SignerForHandleWithPurpose(ctx, issuingCAHandle, signing.PurposeCASign); herr == nil {
 					s.caSigner = remote
 					s.caCertDER = blk.Bytes
 					return nil
@@ -271,8 +302,13 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 		}
 	}
 
-	// Fresh path: generate the CA key under the fixed handle, self-sign, persist.
-	remote, err := c.GenerateKeyHandle(ctx, crypto.ECDSAP256, issuingCAHandle)
+	// Fresh path: generate the CA key under the fixed handle, bound to the
+	// CA-signing purpose so the signer refuses to use it for anything else
+	// (SIGNER-002/003: a caller with socket access cannot coerce the CA key into
+	// signing SSH/code-signing/leaf-impersonating material), then self-sign and
+	// persist.
+	remote, err := c.GenerateConstrainedKeyHandle(ctx, crypto.ECDSAP256, issuingCAHandle,
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
 	if err != nil {
 		return err
 	}
@@ -345,7 +381,10 @@ func (s *Server) IssueLeaf(ctx context.Context, csrDER []byte, ttl time.Duration
 	}
 	ch := make(chan result, 1)
 	go func() {
-		der, err := crypto.SignLeafFromCSR(s.caCertDER, s.caSigner, csrDER, ttl)
+		// Sign under the served issuing profile (PKIGOV-001/002): the leaf carries
+		// the configured CDP/AIA/policy pointers + an always-present SKI, and any
+		// profile constraints (validity/EKU/DNS-suffix) are enforced before signing.
+		der, err := crypto.SignLeafFromCSRWithProfile(s.caCertDER, s.caSigner, csrDER, ttl, s.leafProfile)
 		ch <- result{der, err}
 	}()
 	select {
@@ -441,6 +480,50 @@ func (s *Server) RunRetention(ctx context.Context) {
 		case <-t.C:
 			_, _ = s.RunRetentionOnce(ctx)
 		}
+	}
+}
+
+// idemGCInterval is how often the idempotency-key GC sweep runs (SPINE-002).
+// Reclaiming expired keys is a low-urgency maintenance task and the retention
+// window is days, so an hourly cadence keeps the table bounded without pressure.
+const idemGCInterval = time.Hour
+
+// RunIdempotencyGC reclaims completed idempotency keys past the retention window
+// on a fixed cadence until ctx is cancelled (SPINE-002), keeping idempotency_keys
+// bounded for a high-volume fleet. AN-5 holds within the window. It sweeps once on
+// start so a long-running deployment reclaims promptly, then on each tick; a sweep
+// error is logged and the next tick retries (same pattern as the outbox dispatcher
+// and the audit retention worker). It is meant to run in its own goroutine.
+func (s *Server) RunIdempotencyGC(ctx context.Context) {
+	if s.idemGC == nil {
+		return
+	}
+	s.idemGCOnce(ctx)
+	t := time.NewTicker(idemGCInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.idemGCOnce(ctx)
+		}
+	}
+}
+
+// idemGCOnce runs a single idempotency-key reclamation sweep and records the
+// count. Errors are logged, not returned: the loop retries on the next tick.
+func (s *Server) idemGCOnce(ctx context.Context) {
+	n, err := s.idemGC.Sweep(ctx)
+	if err != nil {
+		s.logger.Warn("idempotency-key gc sweep failed", slog.String("error", err.Error()))
+		return
+	}
+	if n > 0 {
+		if s.mIdemPurged != nil {
+			s.mIdemPurged.Add(float64(n))
+		}
+		s.logger.Info("idempotency-key gc reclaimed expired keys", slog.Int64("reclaimed", n))
 	}
 }
 

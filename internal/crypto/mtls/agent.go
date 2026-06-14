@@ -11,7 +11,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,6 +198,95 @@ func (c *CA) SignClientCSR(csrDER []byte, ttl time.Duration) ([]byte, error) {
 	return out, nil
 }
 
+// tenantTrustDomain is the SPIFFE trust domain under which agent identities are
+// stamped with their authorizing tenant.
+const tenantTrustDomain = "trustctl"
+
+// AgentSPIFFEID is the SPIFFE ID stamped into an agent's client certificate for
+// tenant tenantID and the agent's common name cn:
+//
+//	spiffe://trustctl/tenant/<tenantID>/agent/<cn>
+//
+// The tenant segment is what lets the mTLS consumer derive the tenant from the
+// certificate itself rather than trusting a client-supplied header (WIRE-003).
+func AgentSPIFFEID(tenantID, cn string) string {
+	return (&url.URL{
+		Scheme: "spiffe",
+		Host:   tenantTrustDomain,
+		Path:   "/tenant/" + tenantID + "/agent/" + cn,
+	}).String()
+}
+
+// SignClientCSRWithTenant signs a PKCS#10 CSR as a short-lived agent client
+// certificate (ClientAuth), exactly like SignClientCSR, but ADDITIONALLY stamps
+// the authorizing tenant into the certificate as a SPIFFE URI SAN
+// (spiffe://trustctl/tenant/<tenantID>/agent/<cn>). The SAN is set by the CA from
+// the redeemed token's tenant — NOT from the CSR — so a holder of a tenant-A
+// token can never obtain a certificate attributed to tenant B even by crafting
+// the CSR. The common name still comes from the CSR's subject, but tenant
+// attribution does not (WIRE-003 / AN-1). An empty tenantID is rejected — this
+// signing path must always carry tenant attribution.
+func (c *CA) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Duration) ([]byte, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("mtls: refusing to sign agent CSR without a tenant attribution")
+	}
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse csr: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("mtls: csr signature: %w", err)
+	}
+	spiffeURI, err := url.Parse(AgentSPIFFEID(tenantID, csr.Subject.CommonName))
+	if err != nil {
+		return nil, fmt.Errorf("mtls: build tenant SPIFFE ID: %w", err)
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               csr.Subject,
+		URIs:                  []*url.URL{spiffeURI},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(ttl),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, csr.PublicKey, c.key)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: sign client csr: %w", err)
+	}
+	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	out = append(out, c.BundlePEM()...)
+	return out, nil
+}
+
+// TenantFromClientCert extracts the authorizing tenant id from an agent client
+// certificate's SPIFFE URI SAN (the one SignClientCSRWithTenant stamps). It is how
+// a future mTLS consumer derives the tenant from the presented certificate rather
+// than a client-supplied header (WIRE-003). It returns an error if no
+// spiffe://trustctl/tenant/<id>/... SAN is present.
+func TenantFromClientCert(certDER []byte) (string, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return "", fmt.Errorf("mtls: parse client cert: %w", err)
+	}
+	for _, u := range cert.URIs {
+		if u.Scheme != "spiffe" || u.Host != tenantTrustDomain {
+			continue
+		}
+		parts := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
+		if len(parts) >= 2 && parts[0] == "tenant" && parts[1] != "" {
+			return parts[1], nil
+		}
+	}
+	return "", errors.New("mtls: client certificate carries no tenant SPIFFE SAN")
+}
+
 // BundlePEM returns the CA certificate in PEM (the trust anchor an agent pins to
 // verify the control plane, and the chain root of issued client certs).
 func (c *CA) BundlePEM() []byte {
@@ -260,6 +351,36 @@ func AgentClientCredentials(src ClientCertSource, serverCAPEM []byte, serverName
 func IsCSR(der []byte) bool {
 	_, err := x509.ParseCertificateRequest(der)
 	return err == nil
+}
+
+// CSRCommonName returns the subject common name of a PKCS#10 CSR (DER) — used by
+// enrollment to check a CSR's identity against a token's allowed identity without
+// importing crypto/x509 outside the boundary (AN-3).
+func CSRCommonName(csrDER []byte) (string, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return "", fmt.Errorf("mtls: parse csr: %w", err)
+	}
+	return csr.Subject.CommonName, nil
+}
+
+// FirstCertDER returns the DER of the first CERTIFICATE block in a PEM chain — the
+// leaf the CA issued. It lets callers inspect the issued certificate (e.g. its
+// tenant SPIFFE SAN via TenantFromClientCert) without importing encoding/pem or
+// crypto/x509 themselves (AN-3).
+func FirstCertDER(chainPEM []byte) ([]byte, error) {
+	rest := chainPEM
+	for {
+		block, r := pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			return block.Bytes, nil
+		}
+		rest = r
+	}
+	return nil, errors.New("mtls: no CERTIFICATE block in PEM chain")
 }
 
 // LooksLikePrivateKey reports whether der parses as a private key — used to assert

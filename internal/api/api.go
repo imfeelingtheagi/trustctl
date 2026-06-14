@@ -23,12 +23,14 @@ import (
 
 const specPath = "/api/v1/openapi.json"
 
-// BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1). The web
-// first-run wizard (S7.3) uses it to build the agent install command; the agent
-// presents the token once to enroll. The API depends only on this minimal
-// interface so it never imports the enrollment authority's transport stack.
+// BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1) bound to the
+// authorizing tenant (WIRE-003/AN-1). The web first-run wizard (S7.3) uses it to
+// build the agent install command; the agent presents the token once to enroll,
+// and the issued certificate is attributed to tenantID. The API depends only on
+// this minimal interface so it never imports the enrollment authority's transport
+// stack.
 type BootstrapTokenIssuer interface {
-	IssueBootstrapToken() (string, error)
+	IssueBootstrapToken(ctx context.Context, tenantID string) (string, error)
 }
 
 // API is the REST surface. It holds the read store, the idempotency recorder

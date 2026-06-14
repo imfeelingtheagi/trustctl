@@ -34,6 +34,15 @@ type Info struct {
 	KeyAlgorithm      string
 	PublicKeyBits     int // key size in bits (RSA modulus, EC curve, 256 for Ed25519); 0 if unknown
 	IsCA              bool
+
+	// RFC 5280 profile fields surfaced for served-leaf conformance checks
+	// (PKIGOV-001). Empty/absent extensions yield empty slices.
+	SubjectKeyID          string   // hex of the Subject Key Identifier
+	AuthorityKeyID        string   // hex of the Authority Key Identifier
+	CRLDistributionPoints []string // CDP URLs
+	OCSPServers           []string // AIA OCSP responder URLs
+	IssuingCertificateURL []string // AIA CA-issuers URLs
+	PolicyOIDs            []string // certificatePolicies, dotted form
 }
 
 // Inspect parses a certificate (PEM or DER) and returns its inventory metadata.
@@ -73,7 +82,42 @@ func Inspect(raw []byte) (Info, error) {
 	for _, u := range cert.URIs {
 		info.URIs = append(info.URIs, u.String())
 	}
+	// RFC 5280 profile fields (PKIGOV-001): the served-leaf conformance check reads
+	// these to assert CDP/AIA/SKI/policies are present and well-formed.
+	if len(cert.SubjectKeyId) > 0 {
+		info.SubjectKeyID = hex.EncodeToString(cert.SubjectKeyId)
+	}
+	if len(cert.AuthorityKeyId) > 0 {
+		info.AuthorityKeyID = hex.EncodeToString(cert.AuthorityKeyId)
+	}
+	info.CRLDistributionPoints = append(info.CRLDistributionPoints, cert.CRLDistributionPoints...)
+	info.OCSPServers = append(info.OCSPServers, cert.OCSPServer...)
+	info.IssuingCertificateURL = append(info.IssuingCertificateURL, cert.IssuingCertificateURL...)
+	info.PolicyOIDs = policyStrings(cert)
 	return info, nil
+}
+
+// policyStrings returns the certificatePolicies OIDs in dotted form, reading the
+// Go 1.22+ parsed cert.Policies ([]x509.OID) and falling back to the deprecated
+// cert.PolicyIdentifiers, de-duplicated. (x509.CreateCertificate writes the
+// extension from either field; ParseCertificate populates Policies, and only
+// populates PolicyIdentifiers for OIDs representable as asn1.ObjectIdentifier.)
+func policyStrings(cert *x509.Certificate) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(s string) {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, oid := range cert.Policies {
+		add(oid.String())
+	}
+	for _, oid := range cert.PolicyIdentifiers {
+		add(oid.String())
+	}
+	return out
 }
 
 // publicKeyBits returns the key size in bits: the RSA modulus length, the EC

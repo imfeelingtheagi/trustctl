@@ -97,11 +97,11 @@ func newAgent(t *testing.T, en agent.Enroller, authority *enroll.Authority, serv
 // TestAgentRegistersAndEstablishesMTLS is the acceptance: the agent registers via
 // a bootstrap token and establishes mTLS with the control plane.
 func TestAgentRegistersAndEstablishesMTLS(t *testing.T) {
-	authority, err := enroll.NewAuthority("trustctl Control Plane")
+	authority, err := enroll.NewAuthority("trustctl Control Plane", enroll.NewMemoryTokenStore())
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := authority.IssueBootstrapToken()
+	token, err := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +118,8 @@ func TestAgentRegistersAndEstablishesMTLS(t *testing.T) {
 // TestKeysGeneratedLocallyNeverTransmitted: the agent generates its key on the
 // host and sends only a CSR; the private key never crosses the enrollment wire.
 func TestKeysGeneratedLocallyNeverTransmitted(t *testing.T) {
-	authority, _ := enroll.NewAuthority("cp")
-	token, _ := authority.IssueBootstrapToken()
+	authority, _ := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
+	token, _ := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
 	ce := &countingEnroller{inner: authority}
 
 	a := newAgent(t, ce, authority, "localhost", token)
@@ -144,8 +144,8 @@ func TestKeysGeneratedLocallyNeverTransmitted(t *testing.T) {
 // TestClientCertRotates is the acceptance: the agent's client certificate rotates
 // to a fresh one, and mTLS continues to work with the rotated identity.
 func TestClientCertRotates(t *testing.T) {
-	authority, _ := enroll.NewAuthority("cp")
-	token, _ := authority.IssueBootstrapToken()
+	authority, _ := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
+	token, _ := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
 	addr, stop := startCP(t, authority)
 	defer stop()
 
@@ -170,8 +170,8 @@ func TestClientCertRotates(t *testing.T) {
 // restarts, the agent reconnects using its persisted identity without
 // re-bootstrapping.
 func TestSurvivesControlPlaneRestart(t *testing.T) {
-	authority, _ := enroll.NewAuthority("cp")
-	token, _ := authority.IssueBootstrapToken()
+	authority, _ := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
+	token, _ := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
 	ce := &countingEnroller{inner: authority}
 
 	addr1, stop1 := startCP(t, authority)

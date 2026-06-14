@@ -57,30 +57,47 @@ func (c *Client) Healthy(ctx context.Context) bool {
 	return err == nil && resp.GetStatus() == signerpb.HealthResponse_STATUS_SERVING
 }
 
-// GenerateKey asks the signer to create a key and returns a RemoteSigner that
-// signs through it. The private key never leaves the signer.
+// KeyPurpose is the signer-enforceable usage class for a key (SIGNER-002/003),
+// re-exported so the control plane can constrain a key at creation and assert a
+// purpose when signing without importing the generated proto package.
+type KeyPurpose = signerpb.KeyPurpose
+
+// Re-exported KeyPurpose values.
+const (
+	PurposeUnspecified = signerpb.KeyPurpose_KEY_PURPOSE_UNSPECIFIED
+	PurposeCASign      = signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN
+	PurposeLeafTLS     = signerpb.KeyPurpose_KEY_PURPOSE_LEAF_TLS
+	PurposeSSHCert     = signerpb.KeyPurpose_KEY_PURPOSE_SSH_CERT
+	PurposeCodeSign    = signerpb.KeyPurpose_KEY_PURPOSE_CODE_SIGN
+	PurposeGeneric     = signerpb.KeyPurpose_KEY_PURPOSE_GENERIC
+)
+
+// GenerateKey asks the signer to create an unconstrained key and returns a
+// RemoteSigner that signs through it. The private key never leaves the signer.
+// Used for ephemeral/test keys; for a purpose-bound key (e.g. the issuing CA)
+// use GenerateConstrainedKeyHandle.
 func (c *Client) GenerateKey(ctx context.Context, algorithm crypto.Algorithm) (*RemoteSigner, error) {
-	resp, err := c.svc.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
-		Algorithm: algorithmToProto(algorithm),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &RemoteSigner{
-		client:    c,
-		handle:    resp.GetHandle(),
-		algorithm: algorithm,
-		public:    crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
-	}, nil
+	return c.GenerateConstrainedKeyHandle(ctx, algorithm, "", nil, PurposeGeneric)
 }
 
-// GenerateKeyHandle is GenerateKey with a caller-chosen handle. A stable handle
-// lets a persistent signer hand the same key back after a restart, so the issuing
-// CA is not silently rotated (R3.2).
+// GenerateKeyHandle is GenerateKey with a caller-chosen handle and no usage
+// constraints. A stable handle lets a persistent signer hand the same key back
+// after a restart, so the issuing CA is not silently rotated (R3.2).
 func (c *Client) GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string) (*RemoteSigner, error) {
+	return c.GenerateConstrainedKeyHandle(ctx, algorithm, handle, nil, PurposeGeneric)
+}
+
+// GenerateConstrainedKeyHandle creates a key bound to an allowed-purpose set
+// (SIGNER-002/003) under a caller-chosen handle. When allowedPurposes is
+// non-empty the signer refuses any Sign whose asserted purpose is outside the
+// set; declaredPurpose is the purpose the returned RemoteSigner asserts on every
+// Sign (it must be a member of allowedPurposes when the set is non-empty). An
+// empty allowedPurposes creates an unconstrained key (back-compat).
+func (c *Client) GenerateConstrainedKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose) (*RemoteSigner, error) {
 	resp, err := c.svc.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
-		Algorithm:   algorithmToProto(algorithm),
-		RequestedId: handle,
+		Algorithm:       algorithmToProto(algorithm),
+		RequestedId:     handle,
+		AllowedPurposes: allowedPurposes,
 	})
 	if err != nil {
 		return nil, err
@@ -90,13 +107,23 @@ func (c *Client) GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorit
 		handle:    resp.GetHandle(),
 		algorithm: algorithm,
 		public:    crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
+		purpose:   declaredPurpose,
 	}, nil
 }
 
 // SignerForHandle binds a RemoteSigner to a key the signer already holds (e.g. a
 // persisted CA key after a restart). It does not create a key; it errors if the
-// handle is unknown.
+// handle is unknown. The signer asserts PurposeGeneric; use
+// SignerForHandleWithPurpose for a purpose-bound persisted key.
 func (c *Client) SignerForHandle(ctx context.Context, handle string) (*RemoteSigner, error) {
+	return c.SignerForHandleWithPurpose(ctx, handle, PurposeGeneric)
+}
+
+// SignerForHandleWithPurpose binds a RemoteSigner to a persisted key and sets the
+// purpose it asserts on every Sign. The caller knows the key's role (e.g. a
+// reloaded issuing-CA key signs with PurposeCASign), so the signer's persisted
+// constraint is satisfied across a restart.
+func (c *Client) SignerForHandleWithPurpose(ctx context.Context, handle string, declaredPurpose KeyPurpose) (*RemoteSigner, error) {
 	resp, err := c.svc.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: handle}})
 	if err != nil {
 		return nil, err
@@ -110,15 +137,19 @@ func (c *Client) SignerForHandle(ctx context.Context, handle string) (*RemoteSig
 		handle:    &signerpb.KeyHandle{Id: handle},
 		algorithm: alg,
 		public:    crypto.PublicKey{Algorithm: alg, DER: resp.GetPublicKey()},
+		purpose:   declaredPurpose,
 	}, nil
 }
 
 // RemoteSigner is a crypto.DigestSigner backed by a key held inside the signer.
+// It carries the usage purpose it asserts on every Sign (SIGNER-002/003); the
+// signer enforces that purpose against the key's allowed set.
 type RemoteSigner struct {
 	client    *Client
 	handle    *signerpb.KeyHandle
 	algorithm crypto.Algorithm
 	public    crypto.PublicKey
+	purpose   KeyPurpose
 }
 
 // Public returns the key's public key.
@@ -127,7 +158,12 @@ func (r *RemoteSigner) Public() crypto.PublicKey { return r.public }
 // Algorithm reports the key's algorithm.
 func (r *RemoteSigner) Algorithm() crypto.Algorithm { return r.algorithm }
 
-// SignDigest signs digest by calling the signer's Sign RPC over the UDS.
+// Purpose reports the usage class this signer asserts on every Sign.
+func (r *RemoteSigner) Purpose() KeyPurpose { return r.purpose }
+
+// SignDigest signs digest by calling the signer's Sign RPC over the UDS. It
+// asserts the signer's bound purpose; if the key is purpose-constrained and the
+// purpose is not permitted, the signer refuses with FailedPrecondition.
 func (r *RemoteSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -136,6 +172,7 @@ func (r *RemoteSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byt
 		Digest:     digest,
 		Hash:       hashToProto(opts.Hash),
 		RsaPadding: paddingToProto(opts.RSAPadding),
+		Purpose:    r.purpose,
 	})
 	if err != nil {
 		return nil, err

@@ -44,10 +44,13 @@ Command groups: `owners`, `issuers`, `identities`, `certificates`, `profiles`, `
 
 ### The web UI (F12)
 
-The UI is a React 18 + Vite + shadcn/ui single-page app, **compiled into the binary** as
-an embedded filesystem and served on the same port and TLS certificate as the API (real
-asset files served directly; deep links fall back to the SPA; `/api/*` is left to the API
-handler). No separate static server to run. *Code:* `internal/webui`, `web/`. **Served.**
+The UI is a React 18 + Vite + shadcn/ui single-page app, designed to be **compiled into
+the binary** as an embedded filesystem and served on the same port and TLS certificate as
+the API (real asset files served directly; deep links fall back to the SPA; `/api/*` is
+left to the API handler). No separate static server to run. *Code:* `internal/webui`,
+`web/`. **Library / not yet served** — the SPA is built and tested (Vitest/axe), but a
+clean build embeds a placeholder, so the running binary does not yet serve the console;
+wiring a real Vite bundle is **`EXC-WIRE-04`**. See [Current limitations](../limitations.md).
 
 ### OIDC single sign-on (F13)
 
@@ -58,8 +61,11 @@ The authorization-code flow uses random `state` (CSRF protection) and a mandator
 trustctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
 session resolves to an [RBAC](policy-and-governance.md) principal, so a browser login
 authorizes API calls. CI/CD instead uses API tokens (`tt_`-prefixed, only the SHA-256 hash
-stored). *Code:* `internal/auth`, `internal/api/auth.go`. **Served** at `/auth/login`,
-`/auth/callback`, `/auth/me`, `/auth/logout`.
+stored). *Code:* `internal/auth`, `internal/api/auth.go`. **Library / not yet served** —
+the flow is implemented and tested, but `api.WithAuth` is not wired into the served
+composition, so `/auth/login`, `/auth/callback`, `/auth/me`, and `/auth/logout` are **not
+served by the running binary today** (API tokens are the served auth path); serving the
+browser login is **`EXC-WIRE-01`**. See [Current limitations](../limitations.md).
 
 ### Single-binary distribution (F14)
 
@@ -119,8 +125,11 @@ trustctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
 TRUSTCTL_POSTGRES_MODE=bundled TRUSTCTL_NATS_MODE=embedded ./trustctl
 ```
 
-Browser users hit `/` for the UI and sign in via `/auth/login`. See
-[Install](../install.md) and [Configuration](../configuration.md) for production setup.
+The web console and browser `/auth/login` are built and tested but **not yet served by
+the binary** (`EXC-WIRE-04` / `EXC-WIRE-01`); today you drive the running binary through
+the REST API and the CLI with scoped API tokens. See
+[Current limitations](../limitations.md), [Install](../install.md), and
+[Configuration](../configuration.md) for production setup.
 
 ## Pitfalls & limits
 

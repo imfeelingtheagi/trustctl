@@ -205,6 +205,27 @@ const (
 // the CA stable across restarts (R3.2 — no silent rotation).
 type CA struct {
 	CertFile string `json:"cert_file"`
+
+	// Served-leaf issuance profile (PKIGOV-001). These RFC 5280 / CA-Browser-Forum
+	// pointers are stamped on every leaf the served binary mints so relying parties
+	// can locate revocation status and build the chain. They are operator-supplied
+	// because the URLs are deployment-specific; the Subject Key Identifier is always
+	// set regardless. Point CRLDistributionPoints/OCSPServers at the operator's
+	// own CDP/OCSP responders (live OCSP/CRL serving is the EXC-REVOKE-01 epic).
+	CRLDistributionPoints []string `json:"crl_distribution_points,omitempty"`
+	OCSPServers           []string `json:"ocsp_servers,omitempty"`
+	IssuerURLs            []string `json:"issuer_urls,omitempty"`
+	// CertificatePolicyOIDs are placed in the certificatePolicies extension. The
+	// default is a single private-enterprise policy OID identifying trustctl
+	// issuance; override it with your CP/CPS policy OID(s).
+	CertificatePolicyOIDs []string `json:"certificate_policy_oids,omitempty"`
+
+	// DefaultProfile is the certificate-profile name applied to the served mint
+	// (PKIGOV-002). When set and the named profile resolves for the tenant, the
+	// served issuance is validated against it (validity/EKU/key/DNS-suffix) and an
+	// out-of-profile request is rejected with an issuance.profile_evaluated deny
+	// event. Empty means no served-side profile binding (the prior behavior).
+	DefaultProfile string `json:"default_profile,omitempty"`
 }
 
 // Default returns the built-in configuration: a self-contained single-node
@@ -235,8 +256,16 @@ func Default() *Config {
 		// The signer runs as a supervised child by default (single binary); its
 		// keys are sealed under the data directory so a restart preserves the CA.
 		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys"},
-		// The issuing CA certificate persists so it is stable across restarts.
-		CA: CA{CertFile: "data/ca/issuing-ca.crt"},
+		// The issuing CA certificate persists so it is stable across restarts. A
+		// baseline certificatePolicies OID is set so every served leaf carries a
+		// policy (RFC 5280 / BR-thin, PKIGOV-001); CDP/AIA URLs are left empty for the
+		// operator to point at their own CDP/OCSP responders. The OID is a private
+		// arc under the OID Repository's example/private space — override it with your
+		// CP/CPS policy OID.
+		CA: CA{
+			CertFile:              "data/ca/issuing-ca.crt",
+			CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
+		},
 	}
 }
 

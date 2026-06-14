@@ -122,7 +122,14 @@ lives upstream and around it:
 - Rate limiting, anomaly detection, and the AN-2 audit trail.
 - Per-key constraints the signer *can* enforce cheaply: a key may be created with
   an allowed-algorithm set and usage flags, and the signer refuses operations
-  outside them. This limits, but does not eliminate, abuse.
+  outside them. This limits, but does not eliminate, abuse. **Implemented
+  (SIGNER-002/003):** `GenerateKey` accepts `allowed_purposes` (and optional
+  `allowed_hashes`); `Sign` carries the asserted `purpose`; the signer refuses a
+  mismatch with `FAILED_PRECONDITION`. The constraints are sealed with the key, so
+  they survive a restart. The served control plane creates the issuing-CA key
+  bound to `CA_SIGN`, so a caller that reaches the socket and holds the well-known
+  `issuing-ca` handle still cannot coerce it into signing an SSH/code-signing/
+  arbitrary-purpose artifact.
 
 What the signer guarantees is narrower and absolute: **the private key bytes
 never leave the process**, even under a full control-plane compromise. Raising
@@ -177,6 +184,14 @@ front to the AN-3 boundary.
 - Maximum concurrent in-flight requests and a bounded queue (AN-7); excess is
   rejected fast with `RESOURCE_EXHAUSTED`.
 - A per-RPC deadline; work past the deadline is abandoned.
+
+**Implemented (SIGNER-001):** the serving path caps concurrent HTTP/2 streams
+(`MaxConcurrentStreams`) and adds a fixed-size in-flight semaphore over the
+expensive RPCs (`Sign`, `GenerateKey`) via a unary interceptor; the excess is
+rejected immediately with `RESOURCE_EXHAUSTED` (never queued unboundedly), and an
+RPC with no caller deadline is given one. Cheap RPCs (`Health`, `GetPublicKey`,
+`DestroyKey`) are deliberately not gated, so a sign/keygen flood cannot starve a
+liveness probe. The bound is tunable via `ServeOptions.MaxInflight`.
 
 ### 5.5 Error model and idempotency
 

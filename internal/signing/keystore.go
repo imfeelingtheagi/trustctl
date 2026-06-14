@@ -10,6 +10,7 @@ import (
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/seal"
 	"trustctl.io/trustctl/internal/crypto/secret"
+	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
 // KeyStore persists signer keys to a directory, each sealed at rest with a KEK
@@ -33,16 +34,104 @@ func (ks *KeyStore) path(stem string) string {
 	return filepath.Join(ks.dir, stem+keyFileExt)
 }
 
-// Save seals the key's PKCS#8 material (bound to the handle as AAD) and writes it
-// 0600. The unsealed key copy lives only for the moment of sealing, then is wiped.
-func (ks *KeyStore) Save(handle string, ls *crypto.LockedSigner) error {
+// metaMagic prefixes a sealed plaintext that carries a usage-constraint header
+// (SIGNER-002/003) in front of the PKCS#8 DER. A sealed plaintext WITHOUT this
+// prefix is a legacy bare-DER key written before constraints existed, and loads
+// as unconstrained — so an existing keystore keeps working across the upgrade.
+var metaMagic = []byte("CSKM")
+
+const metaVersion = 1
+
+// encodeConstraintMeta frames the usage constraints into a deterministic,
+// non-secret header: magic | version | nPurposes | purposes... | nHashes |
+// hashes... . Enum values are bounded small (<256), so each fits in one byte.
+func encodeConstraintMeta(kc keyConstraints) []byte {
+	purposes := kc.purposeList()
+	hashes := kc.hashList()
+	out := make([]byte, 0, len(metaMagic)+3+len(purposes)+len(hashes))
+	out = append(out, metaMagic...)
+	out = append(out, metaVersion)
+	out = append(out, byte(len(purposes)))
+	for _, p := range purposes {
+		out = append(out, byte(p))
+	}
+	out = append(out, byte(len(hashes)))
+	for _, h := range hashes {
+		out = append(out, byte(h))
+	}
+	return out
+}
+
+// decodeConstraintMeta parses a framed plaintext. It returns the constraints and
+// the remaining DER bytes (a sub-slice of plaintext). A plaintext without the
+// magic prefix is a legacy bare-DER key: unconstrained, DER == plaintext.
+func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
+	if len(plaintext) < len(metaMagic) || string(plaintext[:len(metaMagic)]) != string(metaMagic) {
+		return keyConstraints{}, plaintext, nil // legacy bare DER
+	}
+	off := len(metaMagic)
+	if off >= len(plaintext) {
+		return keyConstraints{}, nil, errors.New("signing: truncated key metadata (version)")
+	}
+	if plaintext[off] != metaVersion {
+		return keyConstraints{}, nil, fmt.Errorf("signing: unsupported key metadata version %d", plaintext[off])
+	}
+	off++
+	readList := func() ([]byte, error) {
+		if off >= len(plaintext) {
+			return nil, errors.New("signing: truncated key metadata (count)")
+		}
+		n := int(plaintext[off])
+		off++
+		if off+n > len(plaintext) {
+			return nil, errors.New("signing: truncated key metadata (values)")
+		}
+		vals := plaintext[off : off+n]
+		off += n
+		return vals, nil
+	}
+	pvals, err := readList()
+	if err != nil {
+		return keyConstraints{}, nil, err
+	}
+	hvals, err := readList()
+	if err != nil {
+		return keyConstraints{}, nil, err
+	}
+	kc := keyConstraints{}
+	if len(pvals) > 0 {
+		kc.purposes = make(map[signerpb.KeyPurpose]bool, len(pvals))
+		for _, v := range pvals {
+			kc.purposes[signerpb.KeyPurpose(v)] = true
+		}
+	}
+	if len(hvals) > 0 {
+		kc.hashes = make(map[signerpb.Hash]bool, len(hvals))
+		for _, v := range hvals {
+			kc.hashes[signerpb.Hash(v)] = true
+		}
+	}
+	return kc, plaintext[off:], nil
+}
+
+// Save seals the key's PKCS#8 material plus its usage-constraint header (bound to
+// the handle as AAD) and writes it 0600. The unsealed key copy lives only for the
+// moment of sealing, then is wiped (AN-8).
+func (ks *KeyStore) Save(handle string, ls *crypto.LockedSigner, constraints keyConstraints) error {
 	stem := sanitizeHandle(handle)
 	der, err := ls.PKCS8()
 	if err != nil {
 		return err
 	}
 	defer secret.Wipe(der)
-	sealed, err := seal.Seal(ks.wrapper, der, []byte(stem))
+	// Frame: metadata header || DER. The header is non-secret, but it shares the
+	// plaintext buffer with the key, so the whole buffer is wiped after sealing.
+	meta := encodeConstraintMeta(constraints)
+	plaintext := make([]byte, 0, len(meta)+len(der))
+	plaintext = append(plaintext, meta...)
+	plaintext = append(plaintext, der...)
+	defer secret.Wipe(plaintext)
+	sealed, err := seal.Seal(ks.wrapper, plaintext, []byte(stem))
 	if err != nil {
 		return err
 	}
@@ -52,10 +141,11 @@ func (ks *KeyStore) Save(handle string, ls *crypto.LockedSigner) error {
 	return os.WriteFile(ks.path(stem), sealed, 0o600)
 }
 
-// Load reads and unseals every persisted key into a handle->LockedSigner map. A
-// missing directory is an empty store (first boot), not an error.
-func (ks *KeyStore) Load() (map[string]*crypto.LockedSigner, error) {
-	out := map[string]*crypto.LockedSigner{}
+// Load reads and unseals every persisted key into a handle->heldKey map (key
+// material plus restored usage constraints). A missing directory is an empty
+// store (first boot), not an error.
+func (ks *KeyStore) Load() (map[string]*heldKey, error) {
+	out := map[string]*heldKey{}
 	entries, err := os.ReadDir(ks.dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return out, nil
@@ -73,16 +163,21 @@ func (ks *KeyStore) Load() (map[string]*crypto.LockedSigner, error) {
 		if err != nil {
 			return nil, err
 		}
-		der, err := seal.Open(ks.wrapper, sealed, []byte(stem))
+		plaintext, err := seal.Open(ks.wrapper, sealed, []byte(stem))
 		if err != nil {
 			return nil, fmt.Errorf("signing: open sealed key %q: %w", stem, err)
 		}
+		constraints, der, err := decodeConstraintMeta(plaintext)
+		if err != nil {
+			secret.Wipe(plaintext)
+			return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
+		}
 		ls, err := crypto.LockedKeyFromPKCS8(der)
-		secret.Wipe(der)
+		secret.Wipe(plaintext)
 		if err != nil {
 			return nil, fmt.Errorf("signing: load key %q: %w", stem, err)
 		}
-		out[stem] = ls
+		out[stem] = &heldKey{signer: ls, constraints: constraints}
 	}
 	return out, nil
 }

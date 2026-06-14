@@ -62,6 +62,23 @@ enum RSAPadding {
   RSA_PADDING_PSS = 2;
 }
 
+// KeyPurpose is a coarse, signer-enforceable usage class for a key (design
+// §4.5). A key may be created with an allowed-purpose set; Sign then carries the
+// purpose the caller asserts the signature is for, and the signer refuses any
+// Sign whose purpose is outside the key's set (FAILED_PRECONDITION). This is the
+// one cheap defense-in-depth the signer can enforce against an abused control
+// plane: a key minted for, say, leaf TLS cannot be coerced into signing a CA
+// cross-sign or an SSH/code-signing certificate. It bounds, but does not
+// eliminate, key abuse (which is fully addressed only by HSMs/dual control).
+enum KeyPurpose {
+  KEY_PURPOSE_UNSPECIFIED = 0; // no purpose asserted; rejected by a constrained key
+  KEY_PURPOSE_CA_SIGN = 1;     // sign CA/intermediate/leaf X.509 certificates
+  KEY_PURPOSE_LEAF_TLS = 2;    // sign leaf TLS certificates only
+  KEY_PURPOSE_SSH_CERT = 3;    // sign SSH certificates
+  KEY_PURPOSE_CODE_SIGN = 4;   // produce code-signing signatures
+  KEY_PURPOSE_GENERIC = 5;     // unclassified signing (e.g. test/CSR self-sign)
+}
+
 // KeyHandle is an opaque, unguessable reference to a private key held by the
 // signer. The control plane stores the handle and the public key; it never sees
 // the private key bytes.
@@ -74,6 +91,15 @@ message GenerateKeyRequest {
   // Optional caller-chosen handle id for idempotent creation; empty means the
   // signer assigns one.
   string requested_id = 2;
+  // allowed_purposes constrains what the key may sign (design §4.5). When
+  // non-empty, the signer refuses any Sign whose asserted purpose is not in this
+  // set. An empty set means unconstrained (back-compat with pre-constraint
+  // callers); the control plane sets a tight set for CA-class keys.
+  repeated KeyPurpose allowed_purposes = 3;
+  // allowed_hashes optionally constrains which digest algorithms the key may
+  // sign. When non-empty, a Sign with a hash outside the set is refused. Empty
+  // means any supported hash is allowed.
+  repeated Hash allowed_hashes = 4;
 }
 
 message GenerateKeyResponse {
@@ -102,6 +128,12 @@ message SignRequest {
   // hash identifies the algorithm that produced digest (needed for RSA).
   Hash hash = 3;
   RSAPadding rsa_padding = 4;
+  // purpose is the usage class the caller asserts this signature is for. If the
+  // key was created with a non-empty allowed_purposes set, the signer enforces
+  // purpose membership and refuses a mismatch with FAILED_PRECONDITION (design
+  // §4.5/§5.5). For an unconstrained key it is advisory and may be left
+  // UNSPECIFIED.
+  KeyPurpose purpose = 5;
 }
 
 message SignResponse {

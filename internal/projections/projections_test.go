@@ -81,8 +81,8 @@ func newStore(t *testing.T) *store.Store {
 	// read model and the orchestrator's state/outbox tables between tests.
 	if _, err := s.Pool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
-		          owners, issuers, identities, deployment_targets,
-		          agents, policy_bindings, attestations, api_tokens, certificates,
+		          owners, issuers, identities, identity_transitions, deployment_targets,
+		          agents, agent_bootstrap_tokens, policy_bindings, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, credentials, certificate_profiles
 		 RESTART IDENTITY CASCADE`); err != nil {

@@ -15,6 +15,10 @@ import (
 // Recovering crashed in-flight operations is the outbox's job (AN-6, S2.5);
 // within a single live process the claim transaction serializes retries so this
 // is not observed.
+//
+// The idempotency_keys table this records into is bounded by a background
+// retention sweep (internal/idemgc, SPINE-002), so it cannot grow without limit;
+// AN-5 still holds within the retention window.
 var ErrInProgress = errors.New("orchestrator: idempotent operation already in progress")
 
 // Idempotency records every mutation under its Idempotency-Key (AN-5) so a

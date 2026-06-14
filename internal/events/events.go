@@ -23,6 +23,14 @@ const (
 	readyTimeout = 10 * time.Second
 )
 
+// DefaultSchemaVersion is the schema version stamped on every appended event
+// whose producer does not set one explicitly, and the version assumed for a
+// legacy stored event that predates the field (SCHEMA-001). It is the baseline
+// (v1) payload shape for each event type; bump the producer's SchemaVersion when
+// an existing type's payload shape changes so a version-aware projector can tell
+// old events from new ones on replay rather than silently mis-projecting them.
+const DefaultSchemaVersion = 1
+
 // Event is the immutable envelope appended to the AN-2 event log. The event log
 // is the source of truth; both the relational read state and the audit trail
 // are projections of these events.
@@ -34,17 +42,28 @@ type Event struct {
 	Data     []byte    // opaque domain payload
 	Sequence uint64    // stream sequence; assigned on Append and set on Replay
 	Actor    *Actor    // who performed the mutation (R2.1); nil for system/background events
+
+	// SchemaVersion is the payload-shape version of this event's Type (SCHEMA-001,
+	// AN-2). It is assigned DefaultSchemaVersion on Append when left zero, and is
+	// reconstructed on Replay (a legacy event with no stored version reads back as
+	// DefaultSchemaVersion). A projector dispatches on (Type, SchemaVersion) so a
+	// payload-shape change to an existing type cannot silently mis-project on a
+	// rebuild — the new shape carries a new version and old events keep theirs.
+	SchemaVersion int
 }
 
 // storedEvent is the on-disk JSON envelope (the stream sequence is supplied by
-// JetStream and is not stored in the payload).
+// JetStream and is not stored in the payload). The schema version is "v"; it is
+// omitted for v1 so legacy envelopes (which never carried it) decode to the same
+// bytes and read back as DefaultSchemaVersion (SCHEMA-001).
 type storedEvent struct {
-	ID       string    `json:"id"`
-	Type     string    `json:"type"`
-	TenantID string    `json:"tenant_id"`
-	Time     time.Time `json:"time"`
-	Data     []byte    `json:"data,omitempty"`
-	Actor    *Actor    `json:"actor,omitempty"`
+	ID            string    `json:"id"`
+	Type          string    `json:"type"`
+	TenantID      string    `json:"tenant_id"`
+	Time          time.Time `json:"time"`
+	SchemaVersion int       `json:"v,omitempty"`
+	Data          []byte    `json:"data,omitempty"`
+	Actor         *Actor    `json:"actor,omitempty"`
 }
 
 // Log is the append-only event log on NATS JetStream (AN-2). In embedded mode it
@@ -139,6 +158,12 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	if e.ID == "" {
 		e.ID = nuid.Next()
 	}
+	// Stamp the payload-shape version (SCHEMA-001). A producer that does not set one
+	// gets DefaultSchemaVersion (v1); a producer evolving an existing type's payload
+	// sets the next version explicitly so the projector can dispatch on it.
+	if e.SchemaVersion == 0 {
+		e.SchemaVersion = DefaultSchemaVersion
+	}
 	// Attribute the event to the authenticated caller carried in ctx (R2.1),
 	// unless the caller set the actor explicitly. A background/system append with
 	// no actor in context stays unattributed.
@@ -149,7 +174,8 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 		}
 	}
 	payload, err := json.Marshal(storedEvent{
-		ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time, Data: e.Data, Actor: e.Actor,
+		ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time,
+		SchemaVersion: e.SchemaVersion, Data: e.Data, Actor: e.Actor,
 	})
 	if err != nil {
 		return Event{}, err
@@ -185,8 +211,16 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 		if err := json.Unmarshal(raw.Data, &s); err != nil {
 			return fmt.Errorf("events: decode seq %d: %w", seq, err)
 		}
+		// A legacy envelope predating the schema-version field (or a v1 envelope that
+		// omits it) reads back as DefaultSchemaVersion, so replay treats it as the
+		// baseline payload shape rather than version 0 (SCHEMA-001).
+		ver := s.SchemaVersion
+		if ver == 0 {
+			ver = DefaultSchemaVersion
+		}
 		if err := fn(Event{
-			ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time, Data: s.Data, Sequence: raw.Sequence, Actor: s.Actor,
+			ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time,
+			SchemaVersion: ver, Data: s.Data, Sequence: raw.Sequence, Actor: s.Actor,
 		}); err != nil {
 			return err
 		}

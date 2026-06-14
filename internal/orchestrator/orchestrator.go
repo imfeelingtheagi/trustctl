@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,9 +11,6 @@ import (
 	"trustctl.io/trustctl/internal/projections"
 	"trustctl.io/trustctl/internal/store"
 )
-
-// eventPrefix marks the lifecycle events the orchestrator emits and replays.
-const eventPrefix = "identity."
 
 // Orchestrator is the command (write) side of the event-sourced spine. It drives
 // an identity through its lifecycle state machine and records every served
@@ -83,42 +79,50 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 	})
 }
 
-// State returns an identity's current lifecycle state, reconstructed from the
-// event log. An identity with no lifecycle events is StateRequested.
+// State returns an identity's current lifecycle state. It reads the last
+// projected transition for the identity in its tenant context — a single
+// indexed, tenant-scoped query (SPINE-001), not a scan of the cross-tenant event
+// log. The transitions are a projection of the log (AN-2), which stays the source
+// of truth (a Rebuild re-derives them). An identity with no transitions is
+// StateRequested.
 func (o *Orchestrator) State(ctx context.Context, tenantID, identityID string) (State, error) {
 	hist, err := o.History(ctx, tenantID, identityID)
 	if err != nil {
 		return "", err
 	}
 	state := StateRequested
-	for _, t := range hist {
-		state = t.To
+	if n := len(hist); n > 0 {
+		state = hist[n-1].To
 	}
 	return state, nil
 }
 
-// History returns an identity's transitions in order, reconstructed from the
-// event log (AN-2: the log is the source of truth).
+// History returns an identity's transitions in order, read from the
+// identity_transitions projection in the identity's tenant context (SPINE-001).
+// The work is bounded by this identity's transition count and confined to its
+// tenant by row-level security (AN-1) — it never scans another tenant's events,
+// and its cost does not grow with the total log size. The transitions are a
+// projection of the event log, which remains the source of truth (AN-2): a
+// projection Rebuild re-derives them from the log.
 func (o *Orchestrator) History(ctx context.Context, tenantID, identityID string) ([]Transition, error) {
-	var hist []Transition
-	err := o.log.Replay(ctx, 0, func(e events.Event) error {
-		if e.TenantID != tenantID || !strings.HasPrefix(e.Type, eventPrefix) {
-			return nil
+	var rows []store.IdentityTransition
+	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		got, err := o.store.ListIdentityTransitions(ctx, tx, tenantID, identityID)
+		if err != nil {
+			return err
 		}
-		var p transitionPayload
-		if err := json.Unmarshal(e.Data, &p); err != nil {
-			return fmt.Errorf("orchestrator: decode event %s: %w", e.ID, err)
-		}
-		if p.IdentityID != identityID {
-			return nil
-		}
-		hist = append(hist, Transition{
-			From: p.From, To: p.To, Event: e.Type, Reason: p.Reason, Sequence: e.Sequence, At: e.Time,
-		})
+		rows = got
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("orchestrator: load identity %s history: %w", identityID, err)
+	}
+	hist := make([]Transition, 0, len(rows))
+	for _, r := range rows {
+		hist = append(hist, Transition{
+			From: State(r.FromState), To: State(r.ToState), Event: r.EventType,
+			Reason: r.Reason, Sequence: r.Seq, At: r.OccurredAt,
+		})
 	}
 	return hist, nil
 }

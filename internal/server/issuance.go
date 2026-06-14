@@ -12,7 +12,9 @@ import (
 
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/profile"
 	"trustctl.io/trustctl/internal/store"
 )
 
@@ -54,6 +56,15 @@ type issuanceDispatcher struct {
 	orch  *orchestrator.Orchestrator
 	idem  *orchestrator.Idempotency
 	store *store.Store
+
+	// log is the event log used to emit the profile-gated issuance decision
+	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
+	// audit emit but the deny still rejects.
+	log *events.Log
+	// defaultProfile is the certificate-profile name enforced on the served mint
+	// when it resolves for the tenant (PKIGOV-002). Empty means no served-side
+	// profile binding, preserving the prior behavior.
+	defaultProfile string
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,
@@ -108,6 +119,14 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, err
 		}
+		// Enforce the certificate-profile model on the served mint (PKIGOV-002):
+		// when a default profile is configured and resolves for the tenant, validate
+		// this request against it BEFORE signing and emit the allow/deny decision as
+		// an issuance.profile_evaluated event. A violation rejects (fail closed) so an
+		// out-of-profile certificate is never minted on the served path.
+		if err := d.enforceProfile(ctx, m.TenantID, csrDER, []string{cn}, leafTTL); err != nil {
+			return nil, err
+		}
 		leafPEM, err := d.issue(ctx, csrDER, leafTTL)
 		if err != nil {
 			return nil, err
@@ -139,6 +158,77 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		}
 		return []byte(info.SHA256Fingerprint), nil
 	})
+	return err
+}
+
+// enforceProfile applies the served-side certificate-profile model to a mint
+// (PKIGOV-002). When no default profile is configured it is a no-op (the prior
+// served behavior). When a default profile is configured AND resolves for the
+// tenant, it inspects the CSR through the crypto boundary (AN-3), validates the
+// request against the active profile version, emits the allow/deny decision as an
+// issuance.profile_evaluated event (AN-2), and returns a non-nil error on a
+// violation so the mint is rejected before any signature. A configured-but-
+// unresolved profile fails closed: the platform must not silently mint outside a
+// declared governance model.
+func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration) error {
+	if d.defaultProfile == "" {
+		return nil
+	}
+	rec, err := d.store.GetActiveProfile(ctx, tenantID, d.defaultProfile)
+	if err != nil {
+		if store.IsNotFound(err) {
+			// Configured profile does not resolve: deny (fail closed) and record it.
+			msg := fmt.Sprintf("served default profile %q not found", d.defaultProfile)
+			if aerr := d.auditProfileDecision(ctx, tenantID, 0, "deny", msg); aerr != nil {
+				return aerr
+			}
+			return fmt.Errorf("server: %s (fail closed)", msg)
+		}
+		return err
+	}
+	var prof profile.CertificateProfile
+	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
+		return fmt.Errorf("server: decode profile %q: %w", d.defaultProfile, err)
+	}
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", "unparseable CSR"); aerr != nil {
+			return aerr
+		}
+		return fmt.Errorf("server: profile %q: unparseable CSR: %w", d.defaultProfile, err)
+	}
+	preq := profile.Request{
+		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits,
+		TTL: ttl, DNSNames: dnsNames, Protocol: "api",
+	}
+	if verr := prof.Validate(preq); verr != nil {
+		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", verr.Error()); aerr != nil {
+			return aerr
+		}
+		return verr
+	}
+	return d.auditProfileDecision(ctx, tenantID, rec.Version, "allow", "")
+}
+
+// auditProfileDecision emits the served profile-gated decision as an AN-2 event,
+// mirroring the IssuanceService's issuance.profile_evaluated record so the served
+// and library paths produce the same audit shape. A nil log is a no-op, but the
+// deny (the returned error in enforceProfile) still rejects the mint.
+func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID string, version int, decision, reason string) error {
+	if d.log == nil {
+		return nil
+	}
+	payload, err := json.Marshal(struct {
+		Profile  string `json:"profile"`
+		Version  int    `json:"version"`
+		Decision string `json:"decision"`
+		Reason   string `json:"reason,omitempty"`
+		Protocol string `json:"protocol,omitempty"`
+	}{d.defaultProfile, version, decision, reason, "api"})
+	if err != nil {
+		return err
+	}
+	_, err = d.log.Append(ctx, events.Event{Type: "issuance.profile_evaluated", TenantID: tenantID, Data: payload})
 	return err
 }
 

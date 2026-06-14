@@ -2,6 +2,7 @@ package projections_test
 
 import (
 	"context"
+	"encoding/pem"
 	"errors"
 	"testing"
 	"time"
@@ -158,6 +159,78 @@ func TestCARotationCompletes(t *testing.T) {
 	if old.Status != "superseded" {
 		t.Errorf("old CA status = %q, want superseded", old.Status)
 	}
+}
+
+// TestCrossSignRequiresQuorum is the PKIGOV-003 acceptance: cross-signing is gated
+// by the m-of-n key ceremony, like CreateRoot / CreateIntermediate / Rotate.
+// Cross-signing below the threshold is refused with ErrQuorumNotMet; once the
+// threshold is met it succeeds and produces a cross-certificate carrying the
+// target CA's subject and public key. Before the fix CrossSign had no quorum gate,
+// so a single caller could unilaterally extend trust — contradicting the docs.
+func TestCrossSignRequiresQuorum(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	m := hierarchy.NewManager(s, openLog(t))
+
+	// Two independent roots: one is our signing CA, the other is the foreign CA we
+	// will cross-sign.
+	signer, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root:signer", 1, 1),
+		hierarchy.CASpec{CommonName: "Signer Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatalf("CreateRoot signer: %v", err)
+	}
+	foreign, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root:foreign", 1, 1),
+		hierarchy.CASpec{CommonName: "Foreign Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatalf("CreateRoot foreign: %v", err)
+	}
+	foreignDER := firstCertDER(t, foreign.CertificatePEM)
+
+	// Below quorum: a 3-of-n cross-sign ceremony with only 2 approvals is refused.
+	short := quorum(t, m, tenantA, "cross-sign", 3, 2)
+	if _, err := m.CrossSign(ctx, tenantA, short, signer.ID, foreignDER); !errors.Is(err, hierarchy.ErrQuorumNotMet) {
+		t.Fatalf("CrossSign below quorum err = %v, want ErrQuorumNotMet", err)
+	}
+
+	// The third approval reaches quorum; the cross-sign now succeeds.
+	if _, err := m.Approve(ctx, tenantA, short, "carol"); err != nil {
+		t.Fatal(err)
+	}
+	crossPEM, err := m.CrossSign(ctx, tenantA, short, signer.ID, foreignDER)
+	if err != nil {
+		t.Fatalf("CrossSign with quorum: %v", err)
+	}
+	info, err := certinfo.Inspect(crossPEM)
+	if err != nil {
+		t.Fatalf("inspect cross-cert: %v", err)
+	}
+	// The cross-certificate carries the foreign CA's subject (re-signed under ours).
+	if info.Subject == "" || info.Subject != foreignSubject(t, foreignDER) {
+		t.Errorf("cross-cert subject = %q, want the foreign CA subject", info.Subject)
+	}
+	if !info.IsCA {
+		t.Error("a cross-certificate must be a CA certificate")
+	}
+}
+
+// firstCertDER decodes the first PEM CERTIFICATE block (the CA's own cert) to DER.
+func firstCertDER(t *testing.T, chainPEM string) []byte {
+	t.Helper()
+	blk, _ := pem.Decode([]byte(chainPEM))
+	if blk == nil {
+		t.Fatal("CA CertificatePEM has no PEM block")
+	}
+	return blk.Bytes
+}
+
+// foreignSubject inspects a CA cert (DER) and returns its subject for comparison.
+func foreignSubject(t *testing.T, der []byte) string {
+	t.Helper()
+	info, err := certinfo.Inspect(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info.Subject
 }
 
 // TestCAHierarchyTenantIsolation is the AN-1 acceptance for the new tables: a CA

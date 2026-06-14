@@ -201,9 +201,18 @@ func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string)
 	return rec, nil
 }
 
-// CrossSign issues a cross-certificate for another CA's certificate (PEM),
-// signed by caID.
-func (m *Manager) CrossSign(ctx context.Context, tenantID, caID string, otherCertDER []byte) ([]byte, error) {
+// CrossSign issues a cross-certificate for another CA's certificate (DER), signed
+// by caID. Cross-signing extends trust — it mints a CA certificate under your
+// signing CA — so it is gated by an m-of-n key ceremony exactly like CreateRoot /
+// CreateIntermediate / Rotate (PKIGOV-003): it is refused with ErrQuorumNotMet
+// until ceremonyID reaches its threshold, then the ceremony is marked complete and
+// an approver-attributed ca.cross_signed event records the ceremony id. This stops
+// a single operator (or a compromised in-process caller) from unilaterally
+// extending trust where a CA auditor expects custodian quorum.
+func (m *Manager) CrossSign(ctx context.Context, tenantID, ceremonyID, caID string, otherCertDER []byte) ([]byte, error) {
+	if err := m.requireQuorum(ctx, tenantID, ceremonyID); err != nil {
+		return nil, err
+	}
 	ca, err := m.get(caID)
 	if err != nil {
 		return nil, err
@@ -212,7 +221,10 @@ func (m *Manager) CrossSign(ctx context.Context, tenantID, caID string, otherCer
 	if err != nil {
 		return nil, fmt.Errorf("hierarchy: cross-sign: %w", err)
 	}
-	if err := m.emit(ctx, tenantID, "ca.cross_signed", map[string]any{"ca_id": caID}); err != nil {
+	if err := m.store.CompleteKeyCeremony(ctx, tenantID, ceremonyID); err != nil {
+		return nil, err
+	}
+	if err := m.emit(ctx, tenantID, "ca.cross_signed", map[string]any{"ca_id": caID, "ceremony_id": ceremonyID}); err != nil {
 		return nil, err
 	}
 	return cross, nil

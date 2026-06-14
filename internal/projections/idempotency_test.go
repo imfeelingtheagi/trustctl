@@ -2,13 +2,18 @@ package projections_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"trustctl.io/trustctl/internal/app"
 	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/idemgc"
 	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/store"
 )
 
 // TestIdempotencyReplayReturnsCached is the AN-5 acceptance: replaying a key
@@ -124,5 +129,143 @@ func TestRegisterTenantIdempotent(t *testing.T) {
 	}
 	if len(tenants) != 1 || tenants[0].TenantID != tenantA {
 		t.Fatalf("read model = %v, want a single Acme tenant", tenants)
+	}
+}
+
+// TestIdempotencyPurgeBoundsTable is the SPINE-002 acceptance: the background
+// sweep reclaims completed idempotency keys older than the retention window so the
+// table cannot grow without bound, while keys still inside the window (and any
+// in-flight/pending claim) are preserved — so AN-5 still holds within the window.
+// Pre-fix there was no DELETE/TTL anywhere, so this would never reclaim a row.
+func TestIdempotencyPurgeBoundsTable(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	idem := orchestrator.NewIdempotency(s)
+	sweeper := idemgc.New(s, 7*24*time.Hour)
+
+	old := time.Now().UTC().Add(-30 * 24 * time.Hour)
+	recent := time.Now().UTC()
+	seedKey := func(key string, completedAt time.Time) {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO idempotency_keys (tenant_id, key, status, result, completed_at)
+			 VALUES ($1, $2, 'completed', $3, $4)`,
+			tenantA, key, []byte("result-"+key), completedAt); err != nil {
+			t.Fatalf("seed key %s: %v", key, err)
+		}
+	}
+	for i := 0; i < 20; i++ {
+		seedKey(fmt.Sprintf("recent-%d", i), recent)
+		seedKey(fmt.Sprintf("old-%d", i), old)
+	}
+	// A pending (in-flight) key has a NULL completed_at and must never be purged.
+	if _, err := s.Pool().Exec(ctx,
+		`INSERT INTO idempotency_keys (tenant_id, key, status) VALUES ($1, 'pending-key', 'pending')`,
+		tenantA); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := sweeper.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before != 41 {
+		t.Fatalf("seeded %d keys, want 41", before)
+	}
+
+	// A 7-day retention expires the 30-day-old keys; recent + pending survive.
+	reclaimed, err := sweeper.Sweep(ctx)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if reclaimed != 20 {
+		t.Fatalf("reclaimed %d rows, want 20 (the old keys)", reclaimed)
+	}
+	after, err := sweeper.Count(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after != 21 {
+		t.Fatalf("after sweep %d keys, want 21 (20 recent + 1 pending) — table must be bounded", after)
+	}
+
+	// AN-5 within the window: a retry of a still-young key returns its cached result
+	// without re-executing the operation.
+	got, err := idem.Do(ctx, tenantA, "recent-0", func(context.Context) ([]byte, error) {
+		t.Fatal("operation ran for a cached key — AN-5 broken within the retention window")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("Do(recent-0): %v", err)
+	}
+	if string(got) != "result-recent-0" {
+		t.Fatalf("cached result = %q, want result-recent-0", got)
+	}
+
+	// The sweep is idempotent: a second pass reclaims nothing (the bound holds).
+	r2, err := sweeper.Sweep(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2 != 0 {
+		t.Fatalf("second sweep reclaimed %d, want 0", r2)
+	}
+}
+
+// TestIdempotencyPurgeIndexUsed asserts the sweep's predicate uses the partial
+// completed_at index (SPINE-002) rather than a sequential scan, so reclamation
+// stays cheap as the table grows. The table is dominated by young keys with a
+// small eligible old tail — the steady state under retention, and exactly when the
+// index is the cheaper path.
+func TestIdempotencyPurgeIndexUsed(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	young := time.Now().UTC()
+	old := time.Now().UTC().Add(-30 * 24 * time.Hour)
+	for i := 0; i < 2000; i++ {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO idempotency_keys (tenant_id, key, status, completed_at)
+			 VALUES ($1, $2, 'completed', $3)`,
+			tenantA, fmt.Sprintf("young-%d", i), young); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 10; i++ {
+		if _, err := s.Pool().Exec(ctx,
+			`INSERT INTO idempotency_keys (tenant_id, key, status, completed_at)
+			 VALUES ($1, $2, 'completed', $3)`,
+			tenantA, fmt.Sprintf("old-%d", i), old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Pool().Exec(ctx, "ANALYZE idempotency_keys"); err != nil {
+		t.Fatal(err)
+	}
+
+	cutoff := time.Now().UTC().Add(-7 * 24 * time.Hour)
+	rows, err := s.Pool().Query(ctx,
+		`EXPLAIN SELECT 1 FROM idempotency_keys WHERE completed_at IS NOT NULL AND completed_at < $1`, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan += line + "\n"
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "idempotency_keys_completed_at_idx") {
+		t.Fatalf("purge predicate did not use the completed_at index; plan:\n%s", plan)
 	}
 }

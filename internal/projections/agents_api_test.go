@@ -14,13 +14,18 @@ import (
 	"trustctl.io/trustctl/internal/store"
 )
 
-// stubTokenIssuer is a fake agent BootstrapTokenIssuer. It records how many
-// times it minted a token so the test can prove idempotent replay does not mint
-// a second one.
-type stubTokenIssuer struct{ calls int }
+// stubTokenIssuer is a fake agent BootstrapTokenIssuer. It records how many times
+// it minted a token (so the test can prove idempotent replay does not mint a
+// second one) and the tenant each mint was attributed to (so the test can prove
+// the served handler passes the caller's tenant through — WIRE-003/AN-1).
+type stubTokenIssuer struct {
+	calls   int
+	tenants []string
+}
 
-func (s *stubTokenIssuer) IssueBootstrapToken() (string, error) {
+func (s *stubTokenIssuer) IssueBootstrapToken(_ context.Context, tenantID string) (string, error) {
 	s.calls++
+	s.tenants = append(s.tenants, tenantID)
 	return "bootstrap-token-fixed", nil
 }
 
@@ -131,6 +136,12 @@ func TestCreateEnrollmentTokenMintsOnce(t *testing.T) {
 	}
 	if issuer.calls != 1 {
 		t.Errorf("issuer minted %d times, want exactly 1 (idempotent replay)", issuer.calls)
+	}
+	// The served handler attributed the mint to the caller's tenant (WIRE-003/AN-1):
+	// the bearer token (mintToken) is scoped to tenantA, so that is the tenant the
+	// bootstrap token — and the agent certificate it later yields — is bound to.
+	if len(issuer.tenants) != 1 || issuer.tenants[0] != tenantA {
+		t.Errorf("enrollment token minted for tenant(s) %v, want exactly [%s]", issuer.tenants, tenantA)
 	}
 }
 
