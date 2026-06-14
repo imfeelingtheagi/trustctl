@@ -1,7 +1,159 @@
-# Platform & API
+# Platform & API — how you drive trustctl, and how it runs
 
-> **This page is being written.** It will explain, the trustctl way (what, why, and
-> how — for both a newcomer and an expert): the REST API, CLI, web UI, OIDC single sign-on, single-binary distribution, encrypted transport, multi-tenant topology, and federation.
->
-> Start with the [feature index](../features.md) and the [glossary](../glossary.md)
-> while these pages are completed.
+## What it is
+
+This page covers the "platform plumbing" — the surfaces you use to operate trustctl and
+the properties of how it runs: the **REST API**, the **CLI**, the **web UI**, **OIDC
+single sign-on**, **single-binary distribution**, **encrypted transport**, **multi-tenant
+topology**, and **federation**. These aren't glamorous features, but they're what make
+trustctl usable, secure, and operable in a real organization.
+
+The mental model: if the [feature pages](../features.md) are the appliances, this is the
+wiring, the breaker box, the front door lock, and the meter — the infrastructure that lets
+everything else run safely on shared premises.
+
+## Why it exists
+
+A control plane is only as good as how you interact with it and how safely it runs. You
+need a programmable API for automation, a CLI for scripts and CI, a UI for humans, SSO so
+people log in with existing accounts, encrypted channels so nothing is sniffable, hard
+tenant isolation so customers can't see each other, and a distribution simple enough to
+actually deploy. These are the table-stakes properties an enterprise checks before it
+trusts a platform with its credentials.
+
+## How it works
+
+### The REST API (F10)
+
+The API is **data-driven**: every route is declared once in a single registry that
+simultaneously generates the served `http.ServeMux`, the **OpenAPI 3.1** document (served
+at `/api/v1/openapi.json`), and the CLI command table — so the spec, the server, and the
+CLI can't drift apart. Errors are RFC 7807 `application/problem+json`. Every mutation
+requires an [`Idempotency-Key`](../glossary.md) (**AN-5**) recorded in PostgreSQL so a
+retry returns the original result. Tenant comes from the authenticated principal
+(**AN-1**), pagination uses opaque cursors, and over-budget callers get `429` with
+`Retry-After`. *Code:* `internal/api` (`routes()`, `guard`, `mutate`). **Served.**
+
+### The CLI (F11)
+
+`trustctl-cli` is the API's twin: every command is a row in a table that maps
+`trustctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
+with the API and carries no bespoke logic. It auto-supplies idempotency keys on mutations.
+Command groups: `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
+`graph`, `risk`, `agents`. *Code:* `internal/cli`, `cmd/trustctl-cli`. **Served (binary).**
+
+### The web UI (F12)
+
+The UI is a React 18 + Vite + shadcn/ui single-page app, **compiled into the binary** as
+an embedded filesystem and served on the same port and TLS certificate as the API (real
+asset files served directly; deep links fall back to the SPA; `/api/*` is left to the API
+handler). No separate static server to run. *Code:* `internal/webui`, `web/`. **Served.**
+
+### OIDC single sign-on (F13)
+
+People log in through **OIDC** (OpenID Connect) against any standards-compliant provider.
+The authorization-code flow uses random `state` (CSRF protection) and a mandatory `nonce`
+(replay protection); the returned id_token is verified — signature (via JWKS through
+`internal/crypto/jose`, **AN-3**), issuer, audience, expiry, nonce — and on success
+trustctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
+session resolves to an [RBAC](policy-and-governance.md) principal, so a browser login
+authorizes API calls. CI/CD instead uses API tokens (`tt_`-prefixed, only the SHA-256 hash
+stored). *Code:* `internal/auth`, `internal/api/auth.go`. **Served** at `/auth/login`,
+`/auth/callback`, `/auth/me`, `/auth/logout`.
+
+### Single-binary distribution (F14)
+
+For evaluation, the one `trustctl` binary **embeds and supervises its own datastores**:
+a bundled PostgreSQL (downloaded once, checksum-pinned, run on loopback) and an embedded,
+file-backed NATS JetStream — zero external dependencies to try it. Even bundled, Postgres
+runs under the non-superuser `trustctl_app` role so row-level security still applies
+(**AN-1** isn't relaxed for eval). The [signing service](../design/signing-service.md) is
+*always* a separate supervised child process, never in-process (**AN-4**). For production,
+flip Postgres/NATS to external. *Code:* `cmd/trustctl`, `internal/server`, `internal/dist`.
+**Served (binary).**
+
+### Encrypted control-plane transport (F15)
+
+Every channel is encrypted. The signing service is reached only over a **Unix domain
+socket with `SO_PEERCRED`** peer-uid authentication (a 0600 socket; a different uid is
+rejected) — it has no HTTP server and no SQL driver (**AN-4**), and at startup it disables
+core dumps and ptrace (**AN-8**). The REST API/UI is served over **TLS** (self-signed by
+default for instant start, operator cert in production, TLS 1.3, AEAD-only). Agents connect
+over **[mTLS](../glossary.md)** with short-lived, auto-rotated client certificates. All
+TLS/x509 code lives only in `internal/crypto/mtls` (**AN-3**). *Code:* `internal/signing`,
+`internal/crypto/mtls`, `internal/server/serve.go`. **Served.**
+
+> Note: the implemented signer channel is a peer-authenticated UDS; cross-node mTLS for
+> the signer is a documented future item, not the live local transport.
+
+### Multi-tenant topology (F40)
+
+Isolation between tenants is enforced **by PostgreSQL itself**, not by application code
+(**AN-1**). Every table carries a `tenant_id` and has [row-level security](../glossary.md)
+that denies all rows when the tenant context is unset (fail-closed). `WithTenant` drops to
+the non-superuser role and sets the tenant for the transaction, so every query is confined
+automatically — and a custom build linter *fails the build* if any repository query omits
+the tenant filter. A single-company deployment simply runs one tenant. *Code:*
+`internal/store` (`WithTenant`, RLS migrations), `tools/trustctllint/tenantfilter`.
+
+### Federation (F41)
+
+Cross-cluster / multi-region **federation** — replicating the event log across regions,
+placing credentials by residency, and replicating audit across regions — is **planned, not
+yet built**. There is no federation code in the platform today; the design is scoped for a
+future sprint (S21.2), and when built it will rest on the same `tenant_id` (**AN-1**) and
+event-log-replication (**AN-2**) foundations. We document it here, honestly, as roadmap
+rather than a shipped capability. See [Current limitations](../limitations.md).
+
+## Use it
+
+```sh
+# the API spec (no auth needed) — point your tooling at it
+curl -s https://trustctl.example.com/api/v1/openapi.json
+
+# drive it from the CLI
+trustctl-cli certificates list --limit 50
+trustctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
+
+# one-binary evaluation: bundled datastores, supervised signer
+TRUSTCTL_POSTGRES_MODE=bundled TRUSTCTL_NATS_MODE=embedded ./trustctl
+```
+
+Browser users hit `/` for the UI and sign in via `/auth/login`. See
+[Install](../install.md) and [Configuration](../configuration.md) for production setup.
+
+## Pitfalls & limits
+
+- **Federation (F41) is roadmap, not shipped** — don't design a multi-region topology
+  around it yet.
+- **TLS defaults to self-signed** for instant start; set an operator cert
+  (`TRUSTCTL_SERVER_TLS_MODE=file`) for production, and never use `disabled` outside local
+  dev.
+- **Bundled datastores are for evaluation**; run external PostgreSQL and NATS in
+  production.
+- **The signer is a separate process by design** — don't try to collapse it in; that
+  isolation (AN-4) is a security boundary.
+
+## Reference
+
+- **API:** OpenAPI 3.1 at `GET /api/v1/openapi.json`; RFC 7807 errors; `Idempotency-Key`
+  on mutations; cursor pagination; `429` + `Retry-After`.
+- **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
+  `graph`, `risk`, `agents`.
+- **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC); API tokens
+  prefixed `tt_`. Config: `TRUSTCTL_OIDC_ISSUER`, `TRUSTCTL_OIDC_CLIENT_ID`,
+  `TRUSTCTL_OIDC_REDIRECT_URI`.
+- **Run modes:** `TRUSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRUSTCTL_NATS_MODE`
+  (`embedded`/`external`), `TRUSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
+- **Federation (F41):** planned (S21.2), not implemented.
+
+## See also
+
+[Policy & governance](policy-and-governance.md) (RBAC + audit) ·
+[Install](../install.md) · [Configuration](../configuration.md) ·
+[Signing-service design](../design/signing-service.md) ·
+[Current limitations](../limitations.md) ·
+glossary: [idempotency](../glossary.md), [mTLS](../glossary.md),
+[RLS](../glossary.md), [multi-tenancy](../glossary.md)
+
+**Covers:** F10, F11, F12, F13, F14, F15, F40, F41
