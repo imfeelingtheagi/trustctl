@@ -69,6 +69,31 @@ func OpenEnvelope(kek []byte, env Envelope, aad []byte) ([]byte, error) {
 	return pt, nil
 }
 
+// AESGCMSeal encrypts plaintext with a 32-byte key and returns nonce||ciphertext.
+// It backs the encryption-as-a-service (transit) named-key operations (S18.1).
+func AESGCMSeal(key, plaintext, aad []byte) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, fmt.Errorf("crypto: transit key must be 32 bytes")
+	}
+	ct, nonce, err := gcmSeal(key, plaintext, aad)
+	if err != nil {
+		return nil, err
+	}
+	return append(nonce, ct...), nil
+}
+
+// AESGCMOpen decrypts nonce||ciphertext produced by AESGCMSeal.
+func AESGCMOpen(key, data, aad []byte) ([]byte, error) {
+	g, err := newGCM(key)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) < g.NonceSize() {
+		return nil, fmt.Errorf("crypto: transit ciphertext too short")
+	}
+	return gcmOpen(key, data[g.NonceSize():], data[:g.NonceSize()], aad)
+}
+
 func gcmSeal(key, plaintext, aad []byte) (ct, nonce []byte, err error) {
 	g, err := newGCM(key)
 	if err != nil {
