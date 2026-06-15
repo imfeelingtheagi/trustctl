@@ -2,6 +2,7 @@ package projections_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,8 +28,12 @@ func TestTailWorkerProjectsOutOfBandEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var lag float64
-	worker := projections.NewTailWorker(log, proj, func(l float64) { lag = l }, 50*time.Millisecond)
+	// The lag sampler runs on its own goroutine (sampleLagLoop); count invocations
+	// atomically so the read at the end of the test does not race the write from that
+	// goroutine. The lag VALUE is timing-dependent and not asserted — only that the
+	// gauge is actually sampled (SPINE-009).
+	var sampled atomic.Uint64
+	worker := projections.NewTailWorker(log, proj, func(float64) { sampled.Add(1) }, 50*time.Millisecond)
 	runErr := make(chan error, 1)
 	go func() { runErr <- worker.Run(ctx) }()
 
@@ -72,7 +77,16 @@ func TestTailWorkerProjectsOutOfBandEvent(t *testing.T) {
 	if worker.Applied() == 0 {
 		t.Error("worker Applied() is 0; the tailing worker did not advance its cursor")
 	}
-	_ = lag // the sampler callback is exercised by the lag loop; value is timing-dependent
+	// The lag gauge must actually be sampled (SPINE-009): the lag loop invokes the
+	// sampler on its own 50ms cadence. Wait (bounded) for at least one invocation so
+	// the assertion can't flake, then confirm the gauge is wired.
+	sampledDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(sampledDeadline) && sampled.Load() == 0 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if sampled.Load() == 0 {
+		t.Error("lag sampler was never invoked; the SPINE-009 projection-lag gauge is not wired")
+	}
 
 	cancel()
 	// Run returns the context error on shutdown — not a real failure.

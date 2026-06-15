@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
@@ -76,6 +77,21 @@ type Log struct {
 	nc     *nats.Conn
 	js     jetstream.JetStream
 	stream jetstream.Stream
+	// infoMu serializes stream.Info() calls. The JetStream client caches the result
+	// in the shared stream handle without locking, so two concurrent Info() callers
+	// race on that cache (data race in (*stream).Info). LastSequence is now called
+	// from a background lag sampler (SPINE-009) concurrently with API/health callers,
+	// so every Info() on the shared handle goes through this lock.
+	infoMu sync.Mutex
+}
+
+// streamInfo fetches fresh stream info under infoMu so concurrent callers do not race
+// on the JetStream client's internal info cache. Holding the lock across the (fast)
+// JetStream round-trip is fine: the only contention is the periodic lag sampler.
+func (l *Log) streamInfo(ctx context.Context) (*jetstream.StreamInfo, error) {
+	l.infoMu.Lock()
+	defer l.infoMu.Unlock()
+	return l.stream.Info(ctx)
 }
 
 // Open opens the event log according to cfg and ensures the event stream exists.
@@ -268,7 +284,7 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 	if from == 0 {
 		from = 1
 	}
-	info, err := l.stream.Info(ctx)
+	info, err := l.streamInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("events: stream info: %w", err)
 	}
@@ -322,7 +338,7 @@ func (l *Log) Ping(ctx context.Context) error {
 		return errors.New("events: nats connection is down")
 	}
 	if l.stream != nil {
-		if _, err := l.stream.Info(ctx); err != nil {
+		if _, err := l.streamInfo(ctx); err != nil {
 			return fmt.Errorf("events: jetstream unreachable: %w", err)
 		}
 	}
@@ -333,7 +349,7 @@ func (l *Log) Ping(ctx context.Context) error {
 // factor (SPINE-004). It is exported so a config test can assert the stream is
 // created replicated in external mode and single-replica in embedded mode.
 func (l *Log) StreamReplicas(ctx context.Context) (int, error) {
-	info, err := l.stream.Info(ctx)
+	info, err := l.streamInfo(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("events: stream info: %w", err)
 	}
@@ -344,7 +360,7 @@ func (l *Log) StreamReplicas(ctx context.Context) (int, error) {
 // empty). The tailing projection worker uses it to compute projection lag — the gap
 // between the log's head and the last sequence the read model has applied (SPINE-009).
 func (l *Log) LastSequence(ctx context.Context) (uint64, error) {
-	info, err := l.stream.Info(ctx)
+	info, err := l.streamInfo(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("events: stream info: %w", err)
 	}
