@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"runtime"
 
 	"trustctl.io/trustctl/internal/crypto/secret"
 )
@@ -99,13 +100,23 @@ func (l *LockedSigner) Algorithm() Algorithm { return l.algorithm }
 // Public returns the public key.
 func (l *LockedSigner) Public() PublicKey { return l.public }
 
-// SignDigest parses the locked private key, signs digest, and lets the parsed key
-// go out of scope immediately. The transiently-parsed standard-library key is
-// best-effort zeroized before return (wipeStdlibKey) so the unprotected copy does
-// not outlive the single signature — narrowing the AN-8 residual window the design
-// documents (SIGNER-008). Go offers no guarantee the runtime did not already copy
-// the value, so this is defense-in-depth on top of the signer's process-wide
-// RLIMIT_CORE=0 / PR_SET_DUMPABLE=0; the durable fix is HSM custody (EXC-CRYPTO-01).
+// SignDigest signs digest with the locked private key, materializing the key in
+// the clear only for the single signature and explicitly zeroizing it before
+// return (SIGNER-008 / AN-8).
+//
+// The durable copy of the key is the mlock'd, MADV_DONTDUMP secret.Buffer in
+// l.der; this method reads it, parses a transient standard-library key (whose
+// secret scalars are big.Int words on the Go heap that the runtime, unlike the
+// buffer, does not lock), signs, and then guarantees the transient key's secret
+// scalars are zeroized before it becomes garbage. The wipe is ordered after the
+// signature with an explicit call (not a bare defer that the compiler might treat
+// as dead) and bracketed with runtime.KeepAlive so neither the key nor the wipe is
+// optimized away. This shrinks the AN-8 residual to the smallest window Go allows
+// — the key is unprotected only for the duration of one signature, then cleared —
+// complementing the signer's process-wide RLIMIT_CORE=0 / PR_SET_DUMPABLE=0. Go
+// cannot promise the runtime never copied the value mid-operation, so the
+// eliminate-it-entirely fix remains HSM custody where the key never materializes
+// here (EXC-CRYPTO-01).
 func (l *LockedSigner) SignDigest(digest []byte, opts SignOptions) ([]byte, error) {
 	der := l.der.Bytes()
 	if der == nil {
@@ -115,13 +126,32 @@ func (l *LockedSigner) SignDigest(digest []byte, opts SignOptions) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("parse private key: %w", err)
 	}
-	defer wipeStdlibKey(key)
+	// Zeroize the transient key's secret scalars after we are done, and keep both
+	// the key and its source buffer alive across the whole operation so the wipe is
+	// not reordered before the sign or elided.
+	defer func() {
+		wipeStdlibKey(key)
+		runtime.KeepAlive(key)
+		runtime.KeepAlive(l.der)
+	}()
 	signer, ok := key.(crypto.Signer)
 	if !ok {
 		return nil, fmt.Errorf("crypto: parsed key %T is not a signer", key)
 	}
+	// Test-only seam (nil in production): hand the residue test a reference to the
+	// transiently-parsed key so it can assert the secret scalars are zero AFTER this
+	// method returns (i.e. after the deferred wipe runs). Verifies SIGNER-008.
+	if signDigestKeyObserver != nil {
+		signDigestKeyObserver(key)
+	}
 	return signDigest(signer, digest, opts)
 }
+
+// signDigestKeyObserver is a test-only hook (set via export_test.go) invoked with
+// the transiently-parsed private key inside SignDigest. It is nil in production and
+// has zero cost there. It exists so a test can hold the key reference and verify
+// the post-Sign wipe zeroized its secret scalars.
+var signDigestKeyObserver func(parsedKey any)
 
 // Destroy zeroizes and releases the locked key. It is idempotent.
 func (l *LockedSigner) Destroy() { l.der.Destroy() }

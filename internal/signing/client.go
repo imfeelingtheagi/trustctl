@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/mtls"
@@ -147,6 +148,51 @@ func (c *Client) GenerateConstrainedKeyHandle(ctx context.Context, algorithm cry
 	}, nil
 }
 
+// GenerateDualControlKeyHandle creates a DUAL-CONTROL key (RED-003): a key the
+// signer refuses to use unless every Sign carries a valid authorization token over
+// the exact signing tuple. It is the strongest signer-side bound for crown-jewel
+// classes (CA/code-signing) — socket access plus the handle plus the right purpose
+// is no longer sufficient to forge, because the on-socket caller also needs the
+// out-of-band approver secret. The returned RemoteSigner carries `authorizer` (the
+// Authorize side) so it can mint the per-Sign token; in a true dual-control
+// deployment the Authorize secret is held by an approval authority and the
+// returned signer is bound only after approval. The dual-control opt-in travels as
+// gRPC metadata (the wire proto is frozen); the signer must have been built with
+// the matching verify-only authorizer or this call is refused.
+func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose, authorizer *crypto.SignAuthorizer) (*RemoteSigner, error) {
+	mdCtx := metadata.AppendToOutgoingContext(ctx, mdRequireAuth, "1")
+	resp, err := c.svc.GenerateKey(mdCtx, &signerpb.GenerateKeyRequest{
+		Algorithm:       algorithmToProto(algorithm),
+		RequestedId:     handle,
+		AllowedPurposes: allowedPurposes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &RemoteSigner{
+		client:     c,
+		handle:     resp.GetHandle(),
+		algorithm:  algorithm,
+		public:     crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
+		purpose:    declaredPurpose,
+		authorizer: authorizer,
+	}, nil
+}
+
+// SignerForDualControlHandle binds a RemoteSigner to an already-held dual-control
+// key and supplies the authorizer that mints the per-Sign token. It is the restart
+// / multi-replica analogue of GenerateDualControlKeyHandle: the key already exists
+// (persisted, requireAuth sealed in), and the approval authority supplies the
+// Authorize secret so the bound signer can produce valid tokens.
+func (c *Client) SignerForDualControlHandle(ctx context.Context, handle string, declaredPurpose KeyPurpose, authorizer *crypto.SignAuthorizer) (*RemoteSigner, error) {
+	rs, err := c.SignerForHandleWithPurpose(ctx, handle, declaredPurpose)
+	if err != nil {
+		return nil, err
+	}
+	rs.authorizer = authorizer
+	return rs, nil
+}
+
 // SignerForHandle binds a RemoteSigner to a key the signer already holds (e.g. a
 // persisted CA key after a restart). It does not create a key; it errors if the
 // handle is unknown. The signer asserts PurposeGeneric; use
@@ -186,6 +232,10 @@ type RemoteSigner struct {
 	algorithm crypto.Algorithm
 	public    crypto.PublicKey
 	purpose   KeyPurpose
+	// authorizer, when non-nil, mints the dual-control authorization token attached
+	// to every Sign (RED-003). It is set only for a dual-control key; for a normal
+	// key it is nil and no token is sent.
+	authorizer *crypto.SignAuthorizer
 }
 
 // Public returns the key's public key.
@@ -203,13 +253,27 @@ func (r *RemoteSigner) Purpose() KeyPurpose { return r.purpose }
 func (r *RemoteSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := r.client.svc.Sign(ctx, &signerpb.SignRequest{
+	req := &signerpb.SignRequest{
 		Handle:     r.handle,
 		Digest:     digest,
 		Hash:       hashToProto(opts.Hash),
 		RsaPadding: paddingToProto(opts.RSAPadding),
 		Purpose:    r.purpose,
-	})
+	}
+	// For a dual-control key, mint and attach the authorization token over the exact
+	// signing tuple as gRPC metadata (RED-003). The token commits to this digest, so
+	// the signer will only sign this specific object. The tuple is derived from the
+	// SAME wire values the request carries (round-tripped through the proto mapping)
+	// so the client's minted intent and the server's verified intent are byte-equal
+	// even when opts left a field at its zero value (e.g. empty RSAPadding -> PKCS1v15).
+	if r.authorizer != nil {
+		token, err := r.authorizer.Authorize(intentFor(req))
+		if err != nil {
+			return nil, fmt.Errorf("mint sign authorization: %w", err)
+		}
+		ctx = metadata.AppendToOutgoingContext(ctx, mdSignAuthToken, string(token))
+	}
+	resp, err := r.client.svc.Sign(ctx, req)
 	if err != nil {
 		return nil, err
 	}

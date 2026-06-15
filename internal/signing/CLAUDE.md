@@ -25,6 +25,17 @@ canonical architecture rules live in the root `CLAUDE.md`.
   (`SO_PEERCRED` on Linux). Do not relax the socket mode or skip the peer check.
 - **Never sign attacker-chosen material unbounded.** Sign only well-formed, policy-gated
   requests; the control plane is the policy/RA gate, the signer is the custody boundary.
+  Two cheap signer-side bounds are enforced here and must not be weakened: **per-key
+  purpose/algorithm constraints** (`constraints.go`, SIGNER-002/003 — a key minted for one
+  purpose refuses a Sign for another, sealed with the key, restored across restart) and
+  **dual-control intent attestation for crown-jewel keys** (`attestation.go`, RED-003 — a
+  key marked `requireAuth` refuses every Sign that does not carry a valid authorization
+  token over the *exact* signing tuple, including the digest, minted by an approval
+  authority holding a secret the on-socket caller does not). The token is bound to the
+  digest, so it cannot be replayed onto different bytes; a signer with no authorizer fails
+  closed on a dual-control key. The dual-control opt-in and the per-Sign token travel as
+  gRPC **metadata** (the wire proto is frozen — do not add fields), and the MAC routes
+  through `internal/crypto.SignAuthorizer` (AN-3), key in mlock'd memory (AN-8).
 
 ## Crypto routing
 

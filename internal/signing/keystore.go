@@ -40,15 +40,23 @@ func (ks *KeyStore) path(stem string) string {
 // as unconstrained — so an existing keystore keeps working across the upgrade.
 var metaMagic = []byte("CSKM")
 
-const metaVersion = 1
+// metaVersion is the current sealed-constraint header version. v1 framed only
+// purposes+hashes; v2 appends a one-byte flags field (bit 0 = dual-control /
+// requireAuth, RED-003). A v1 file still decodes (requireAuth defaults false), so
+// an existing keystore keeps working across the upgrade.
+const metaVersion = 2
+
+// flagRequireAuth is bit 0 of the v2 flags byte: the key is dual-control.
+const flagRequireAuth = 1 << 0
 
 // encodeConstraintMeta frames the usage constraints into a deterministic,
 // non-secret header: magic | version | nPurposes | purposes... | nHashes |
-// hashes... . Enum values are bounded small (<256), so each fits in one byte.
+// hashes... | flags . Enum values are bounded small (<256), so each fits in one
+// byte. The trailing flags byte is the v2 addition (dual-control).
 func encodeConstraintMeta(kc keyConstraints) []byte {
 	purposes := kc.purposeList()
 	hashes := kc.hashList()
-	out := make([]byte, 0, len(metaMagic)+3+len(purposes)+len(hashes))
+	out := make([]byte, 0, len(metaMagic)+4+len(purposes)+len(hashes))
 	out = append(out, metaMagic...)
 	out = append(out, metaVersion)
 	out = append(out, byte(len(purposes)))
@@ -59,12 +67,18 @@ func encodeConstraintMeta(kc keyConstraints) []byte {
 	for _, h := range hashes {
 		out = append(out, byte(h))
 	}
+	var flags byte
+	if kc.requireAuth {
+		flags |= flagRequireAuth
+	}
+	out = append(out, flags)
 	return out
 }
 
 // decodeConstraintMeta parses a framed plaintext. It returns the constraints and
 // the remaining DER bytes (a sub-slice of plaintext). A plaintext without the
-// magic prefix is a legacy bare-DER key: unconstrained, DER == plaintext.
+// magic prefix is a legacy bare-DER key: unconstrained, DER == plaintext. Both
+// header versions are accepted; v1 has no flags byte (requireAuth=false).
 func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
 	if len(plaintext) < len(metaMagic) || string(plaintext[:len(metaMagic)]) != string(metaMagic) {
 		return keyConstraints{}, plaintext, nil // legacy bare DER
@@ -73,8 +87,9 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
 	if off >= len(plaintext) {
 		return keyConstraints{}, nil, errors.New("signing: truncated key metadata (version)")
 	}
-	if plaintext[off] != metaVersion {
-		return keyConstraints{}, nil, fmt.Errorf("signing: unsupported key metadata version %d", plaintext[off])
+	ver := plaintext[off]
+	if ver != 1 && ver != metaVersion {
+		return keyConstraints{}, nil, fmt.Errorf("signing: unsupported key metadata version %d", ver)
 	}
 	off++
 	readList := func() ([]byte, error) {
@@ -110,6 +125,14 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
 		for _, v := range hvals {
 			kc.hashes[signerpb.Hash(v)] = true
 		}
+	}
+	// v2 appends a single flags byte before the DER; v1 has none.
+	if ver >= 2 {
+		if off >= len(plaintext) {
+			return keyConstraints{}, nil, errors.New("signing: truncated key metadata (flags)")
+		}
+		kc.requireAuth = plaintext[off]&flagRequireAuth != 0
+		off++
 	}
 	return kc, plaintext[off:], nil
 }

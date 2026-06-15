@@ -20,6 +20,16 @@ type keyConstraints struct {
 	purposes map[signerpb.KeyPurpose]bool
 	// hashes is the allowed Hash set. Empty = any supported hash allowed.
 	hashes map[signerpb.Hash]bool
+	// requireAuth marks the key DUAL-CONTROL (RED-003): the signer refuses every
+	// Sign against it unless the request carries a valid independent authorization
+	// token (an HMAC over the exact signing tuple under a secret the signer holds
+	// but the on-socket caller does not). It is the cheap signer-side defense that
+	// makes "socket access + handle + correct purpose => forge anything" no longer
+	// hold for the crown-jewel key classes (CA/code-signing): an attacker on the
+	// socket also needs the out-of-band approver secret, and the token commits to
+	// the digest so it cannot be replayed onto different bytes. Purpose/hash
+	// constraints still apply in addition. Default false = back-compat.
+	requireAuth bool
 }
 
 // constraintsFromGenerate builds the constraint set declared on a GenerateKey
@@ -55,7 +65,7 @@ func constraintsFromGenerate(req *signerpb.GenerateKeyRequest) (keyConstraints, 
 // constrained reports whether any limit is set; an unconstrained key skips the
 // purpose check entirely (back-compat).
 func (kc keyConstraints) constrained() bool {
-	return len(kc.purposes) > 0 || len(kc.hashes) > 0
+	return len(kc.purposes) > 0 || len(kc.hashes) > 0 || kc.requireAuth
 }
 
 // check enforces the constraints against a Sign request. A violation returns

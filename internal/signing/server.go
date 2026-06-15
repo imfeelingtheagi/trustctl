@@ -32,6 +32,14 @@ type Server struct {
 	serving bool
 	store   *KeyStore // optional sealed persistence; nil = in-memory only
 
+	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
+	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
+	// (RED-003). It is a VERIFY-only authorizer: the signer can check a token but
+	// not mint one (minting is the approval authority's job, holding the secret the
+	// signer holds too but the on-socket caller does not). nil = dual-control keys
+	// cannot be created or used (the signer fails closed on them).
+	authorizer *crypto.SignAuthorizer
+
 	// signGate, when non-nil, is called inside Sign while it holds its in-flight
 	// bulkhead slot. It is a test-only seam (set via export_test.go) used to make
 	// the served saturation test deterministic; it is nil in production and has
@@ -39,10 +47,28 @@ type Server struct {
 	signGate func()
 }
 
+// ServerOption configures a signing Server at construction.
+type ServerOption func(*Server)
+
+// WithAuthorizer installs the dual-control sign-intent verifier (RED-003). A
+// server built with one can create and honor DUAL-CONTROL keys: keys that refuse
+// every Sign unless the request carries a valid authorization token over the exact
+// signing tuple. The authorizer should be VERIFY-only (the secret is shared with
+// the out-of-band approval authority, never derivable from socket access). Without
+// it, dual-control keys cannot be created or used and the signer fails closed on
+// any it loads.
+func WithAuthorizer(a *crypto.SignAuthorizer) ServerOption {
+	return func(s *Server) { s.authorizer = a }
+}
+
 // NewServer returns a ready in-memory signing server (keys do not survive a
 // restart).
-func NewServer() *Server {
-	return &Server{keys: make(map[string]*heldKey), serving: true}
+func NewServer(opts ...ServerOption) *Server {
+	s := &Server{keys: make(map[string]*heldKey), serving: true}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // NewPersistentServer returns a signing server backed by a sealed key store: it
@@ -50,19 +76,23 @@ func NewServer() *Server {
 // rather than silently rotating it, R3.2) and seals new keys as they are
 // generated. Usage constraints are sealed with the key and restored too, so a
 // CA-class key stays purpose-bound across a restart.
-func NewPersistentServer(store *KeyStore) (*Server, error) {
+func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error) {
 	keys, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
-	return &Server{keys: keys, serving: true, store: store}, nil
+	s := &Server{keys: keys, serving: true, store: store}
+	for _, o := range opts {
+		o(s)
+	}
+	return s, nil
 }
 
 // GenerateKey creates a new key inside the signer and returns its handle and
 // public key. Any usage constraints on the request (allowed_purposes /
 // allowed_hashes, SIGNER-002/003) are bound to the key and enforced on every
 // subsequent Sign.
-func (s *Server) GenerateKey(_ context.Context, req *signerpb.GenerateKeyRequest) (*signerpb.GenerateKeyResponse, error) {
+func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyRequest) (*signerpb.GenerateKeyResponse, error) {
 	alg, err := algorithmFromProto(req.GetAlgorithm())
 	if err != nil {
 		return nil, err
@@ -70,6 +100,17 @@ func (s *Server) GenerateKey(_ context.Context, req *signerpb.GenerateKeyRequest
 	constraints, err := constraintsFromGenerate(req)
 	if err != nil {
 		return nil, err
+	}
+	// Dual-control opt-in travels as metadata (the wire proto is frozen). A key may
+	// only be marked dual-control if this signer has an authorizer to enforce it;
+	// otherwise the key would be permanently unusable (every Sign would fail
+	// closed). Refuse the request rather than mint a bricked key (RED-003).
+	if requireAuthFromGenerateMD(ctx) {
+		if s.authorizer == nil {
+			return nil, status.Error(codes.FailedPrecondition,
+				"dual-control key requested but this signer has no authorizer configured")
+		}
+		constraints.requireAuth = true
 	}
 	ls, err := crypto.GenerateLockedKey(alg)
 	if err != nil {
@@ -132,8 +173,12 @@ func (s *Server) GetPublicKey(_ context.Context, req *signerpb.GetPublicKeyReque
 // Sign signs a pre-computed digest with the keyed handle. If the key was created
 // with usage constraints (SIGNER-002/003), the request's asserted purpose and
 // hash must satisfy them or the signature is refused with FAILED_PRECONDITION —
-// so socket access alone cannot coerce a key into signing outside its mandate.
-func (s *Server) Sign(_ context.Context, req *signerpb.SignRequest) (*signerpb.SignResponse, error) {
+// so socket access alone cannot coerce a key into signing outside its mandate. If
+// the key is dual-control (RED-003), the request must additionally carry a valid
+// authorization token (in metadata) over the exact signing tuple, or the signature
+// is refused with PERMISSION_DENIED — so socket access cannot coerce a crown-jewel
+// key into signing arbitrary, un-attested bytes.
+func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb.SignResponse, error) {
 	if err := validateSignRequest(req); err != nil {
 		return nil, err
 	}
@@ -143,6 +188,15 @@ func (s *Server) Sign(_ context.Context, req *signerpb.SignRequest) (*signerpb.S
 	}
 	if err := held.constraints.check(req); err != nil {
 		return nil, err
+	}
+	// Dual-control gate (RED-003): a key marked requireAuth refuses every Sign that
+	// does not carry a valid authorization token over the exact signing tuple, so
+	// socket access alone cannot coerce a crown-jewel key into signing arbitrary
+	// bytes. Enforced AFTER the purpose/hash constraints (both must pass).
+	if held.constraints.requireAuth {
+		if err := s.enforceDualControl(ctx, req); err != nil {
+			return nil, err
+		}
 	}
 	if s.signGate != nil {
 		s.signGate() // test-only: hold the in-flight slot (nil in production)

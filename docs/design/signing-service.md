@@ -130,11 +130,31 @@ lives upstream and around it:
   bound to `CA_SIGN`, so a caller that reaches the socket and holds the well-known
   `issuing-ca` handle still cannot coerce it into signing an SSH/code-signing/
   arbitrary-purpose artifact.
+- **Per-Sign intent attestation / dual-control for crown-jewel keys**
+  (**Implemented, RED-003**): purpose constraints bound *which key class* a caller
+  may use, but a digest-blind `Sign` still let a socket-reaching caller have a
+  `CA_SIGN` key sign `sha256(<arbitrary attacker TBS>)`. A key may now be created
+  **dual-control**: the signer refuses every `Sign` against it unless the request
+  carries a valid authorization token — an HMAC over the *exact* signing tuple
+  (handle, purpose, hash, padding, and the digest itself) minted by an approval
+  authority that holds a secret the on-socket caller does not (the signer holds
+  only the verify side). Because the token commits to the digest it authorizes one
+  specific to-be-signed object and cannot be replayed onto different bytes, and
+  because the approver secret is never exposed on the socket, a control-plane/socket
+  compromise can no longer coerce a dual-control key into forging arbitrary trust.
+  The dual-control opt-in and the per-`Sign` token travel as gRPC metadata (the
+  wire proto is frozen); the flag is sealed with the key and re-enforced across a
+  restart; the authorizer (`internal/crypto.SignAuthorizer`) lives behind the AN-3
+  boundary with its secret in mlock'd memory (AN-8). A signer with no authorizer
+  fails closed on a dual-control key.
 
 What the signer guarantees is narrower and absolute: **the private key bytes
-never leave the process**, even under a full control-plane compromise. Raising
-the bar further (so even the signer cannot be made to sign arbitrary data) is the
-job of HSMs (S8.1) and offline ceremonies (S8.17).
+never leave the process**, even under a full control-plane compromise. For a
+dual-control key the signer additionally **will not sign without an independent
+authorization bound to the exact digest**, so the digest-blind forge surface is
+closed for those classes. Raising the bar all the way (so even a co-located
+attacker holding both the socket and the approver secret cannot sign offline) is
+the job of HSMs (S8.1) and offline ceremonies (S8.17).
 
 ### 4.6 Out of scope
 
@@ -242,6 +262,18 @@ At the **process** level (delivered in S1.4):
 - Keys are zeroized promptly: ephemeral keys immediately after use; long-lived CA
   keys on `DestroyKey` and on shutdown. Raw key bytes are **never** written to
   disk; key-at-rest (envelope encryption / KMS) is an S1.4/S8.1 concern.
+- **Transiently-parsed signing key zeroized after each `Sign`**
+  (**Implemented, SIGNER-008**): the durable key lives only in the mlock'd
+  `secret.Buffer`. To produce a signature the standard library must materialize a
+  parsed `*rsa`/`*ecdsa.PrivateKey` whose secret scalars are `big.Int` words on the
+  Go heap (which Go cannot mlock). `internal/crypto.LockedSigner.SignDigest` now
+  zeroizes those scalars (D, and for RSA the prime factors and CRT precomputed
+  values) immediately after the single signature, ordered after the sign and kept
+  from being elided with `runtime.KeepAlive`, so the unprotected copy does not
+  outlive the operation. A residue test asserts the scalars are zero after the call
+  returns. This shrinks the AN-8 window to the smallest Go allows; eliminating the
+  in-clear materialization entirely (so the key never leaves hardware) remains the
+  job of HSM/KMS custody (S8.1).
 
 ## 7. Dependency budget
 
