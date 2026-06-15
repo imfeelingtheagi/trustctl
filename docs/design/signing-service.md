@@ -273,8 +273,13 @@ shipped binary's closure and code, not merely this document's wording.
 
 ## 8. Fuzzing plan
 
-Every parser that touches untrusted input is fuzzed, wired for OSS-Fuzz, with the
-seed corpus exercised under `make test` (Go native fuzzing, `FuzzXxx`).
+Every parser that touches untrusted input is fuzzed (Go native fuzzing,
+`FuzzXxx`), with a committed seed corpus under `testdata/fuzz` exercised under
+`make test`. Continuous fuzzing runs in CI today via a per-PR/nightly Go-native
+smoke job (`make fuzz-smoke` in `.github/workflows/ci.yml`) that replays the
+committed corpus and fuzzes each target on a budget. A ready ClusterFuzzLite /
+OSS-Fuzz config (`.clusterfuzzlite/`) auto-discovers and builds every target as a
+libFuzzer binary; enabling the *hosted* runner is tracked as `EXC-FUZZ-01`.
 
 - **Request decode + validation.** Protobuf decoding is `google.golang.org/protobuf`'s
   responsibility, but our **validation** of decoded requests (algorithm/hash
@@ -285,7 +290,8 @@ seed corpus exercised under `make test` (Go native fuzzing, `FuzzXxx`).
 - **Any DER/CSR parsing** the signer performs (if S1.4 routes CSR parsing through
   the signer) is fuzzed; such parsing otherwise lives behind `internal/crypto`.
 - Targets live alongside the signer code in `internal/signing`; CI runs the seed
-  corpus, and OSS-Fuzz runs continuous fuzzing.
+  corpus on every change and fuzzes each target on a budget (the fuzz-smoke job
+  and ClusterFuzzLite), with a longer nightly batch.
 
 ## 9. Failure modes and degraded operation
 

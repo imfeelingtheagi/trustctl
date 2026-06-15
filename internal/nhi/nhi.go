@@ -162,5 +162,5 @@ func (m *Manager) sync(idt Identity) {
 }
 
 func (m *Manager) audit(ctx context.Context, event, id, state string) {
-	_ = m.cfg.Audit.Audit(ctx, event, m.cfg.TenantID, []byte(fmt.Sprintf(`{"id":%q,"state":%q}`, id, state)))
+	_ = auditsink.Emit(ctx, m.cfg.Audit, nil, event, m.cfg.TenantID, []byte(fmt.Sprintf(`{"id":%q,"state":%q}`, id, state)))
 }

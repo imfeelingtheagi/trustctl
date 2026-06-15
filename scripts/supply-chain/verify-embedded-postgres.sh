@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 #
-# Verify the provenance of the PostgreSQL binary that the embedded-postgres test
+# Verify the provenance of the PostgreSQL binary that the embedded-postgres
 # dependency downloads at runtime, then scan it. That binary comes from Maven
 # Central (NOT the Go module proxy), so it is outside go.sum and needs its own
-# pin + scan before any redistribution that bundles it.
+# COMMITTED pin + scan. It is run both by the integration tests AND by the served
+# single-node/eval path (internal/server/startBundledPostgres), so the pin is a
+# HARD gate here and is enforced again at runtime (SUPPLY-003).
 #
-# Trust-on-first-use: if the manifest has no pinned SHA-256 yet, this prints the
-# observed hash for a maintainer to pin and commit. Once pinned, every run
-# verifies it and fails on any change. Requires network access (Maven Central).
+# The committed pin is per-arch (deploy/supply-chain/embedded-postgres.json
+# archives[]). This script verifies the jar for the requested arch against
+# jar_sha256, and the inner .txz against txz_sha256 (the artifact the runtime
+# verifies). A missing pin is a HARD FAILURE now — no trust-on-first-use fallback,
+# because the pin has been completed. Requires network access (Maven Central).
+#
+#   ARCH=linux-amd64 ./verify-embedded-postgres.sh   # default
+#   ARCH=linux-arm64v8 ./verify-embedded-postgres.sh
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,36 +22,61 @@ repo="$(cd "$here/../.." && pwd)"
 manifest="$repo/deploy/supply-chain/embedded-postgres.json"
 workdir="$repo/.supply-chain/embedded-postgres"
 
-for tool in jq curl sha256sum; do
+for tool in jq curl sha256sum unzip; do
   command -v "$tool" >/dev/null 2>&1 || { echo "::error::$tool is required" >&2; exit 1; }
 done
 
-url="$(jq -r '.source.urlTemplate' "$manifest")"
-want="$(jq -r '.checksum.sha256 // ""' "$manifest")"
 ver="$(jq -r '.postgresVersion' "$manifest")"
+arch="${ARCH:-linux-amd64}"
+
+# Pull the per-arch pins + jar URL from the committed manifest.
+entry="$(jq -c --arg a "$arch" '.archives[] | select(.arch == $a)' "$manifest")"
+if [ -z "$entry" ] || [ "$entry" = "null" ]; then
+  echo "::error::no committed provenance pin for arch ${arch} in ${manifest} (SUPPLY-003)" >&2
+  echo "    known arches: $(jq -r '.archives[].arch' "$manifest" | paste -sd, -)" >&2
+  exit 1
+fi
+url="$(printf '%s' "$entry" | jq -r '.jarUrl')"
+wantJar="$(printf '%s' "$entry" | jq -r '.jar_sha256 // ""')"
+wantTxz="$(printf '%s' "$entry" | jq -r '.txz_sha256 // ""')"
+
+if [ -z "$wantJar" ] || [ -z "$wantTxz" ]; then
+  echo "::error::embedded-postgres ${arch} pin is empty in the manifest — the provenance gate is a no-op (SUPPLY-003)" >&2
+  exit 1
+fi
 
 mkdir -p "$workdir"
-jar="$workdir/embedded-postgres-${ver}.jar"
+jar="$workdir/embedded-postgres-${arch}-${ver}.jar"
 
-echo ">> downloading PostgreSQL ${ver} binary: ${url}"
+echo ">> downloading PostgreSQL ${ver} (${arch}) binary: ${url}"
 curl -fsSL "$url" -o "$jar"
 
-got="$(sha256sum "$jar" | awk '{print $1}')"
-echo ">> sha256(${ver}) = ${got}"
-
-if [ -z "$want" ]; then
-  echo "::notice::no pinned checksum yet for embedded-postgres ${ver} (trust-on-first-use)."
-  echo "    ACTION: set .checksum.sha256 in deploy/supply-chain/embedded-postgres.json to:"
-  echo "        ${got}"
-  echo "    then commit it so every future run is verified."
-elif [ "$got" != "$want" ]; then
-  echo "::error::embedded-postgres ${ver} checksum mismatch — refusing to proceed" >&2
-  echo "    expected ${want}" >&2
-  echo "    got      ${got}" >&2
+gotJar="$(sha256sum "$jar" | awk '{print $1}')"
+echo ">> sha256(jar ${arch} ${ver}) = ${gotJar}"
+if [ "$gotJar" != "$wantJar" ]; then
+  echo "::error::embedded-postgres ${arch} ${ver} JAR checksum mismatch — refusing to proceed" >&2
+  echo "    expected ${wantJar}" >&2
+  echo "    got      ${gotJar}" >&2
   exit 1
-else
-  echo ">> checksum verified against the pinned manifest"
 fi
+echo ">> jar checksum verified against the committed manifest"
+
+# Verify the inner .txz too — that is the artifact the runtime caches and checks.
+( cd "$workdir" && unzip -oq "$jar" )
+innerTxz="$(find "$workdir" -name '*.txz' -print | head -1)"
+if [ -z "$innerTxz" ]; then
+  echo "::error::could not find the inner .txz inside the jar for ${arch}" >&2
+  exit 1
+fi
+gotTxz="$(sha256sum "$innerTxz" | awk '{print $1}')"
+echo ">> sha256(.txz ${arch}) = ${gotTxz}"
+if [ "$gotTxz" != "$wantTxz" ]; then
+  echo "::error::embedded-postgres ${arch} ${ver} .txz checksum mismatch — the runtime pin would reject this binary" >&2
+  echo "    expected ${wantTxz}" >&2
+  echo "    got      ${gotTxz}" >&2
+  exit 1
+fi
+echo ">> inner .txz checksum verified against the committed runtime pin"
 
 echo ">> extracting for vulnerability scan"
 ( cd "$workdir" && unzip -oq "$jar" )

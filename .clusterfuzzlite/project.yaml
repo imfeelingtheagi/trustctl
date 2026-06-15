@@ -1,0 +1,23 @@
+# ClusterFuzzLite project configuration (FUZZ-003).
+#
+# ClusterFuzzLite is the CI-native member of the OSS-Fuzz family: it builds the
+# repository's Go native fuzz targets (FuzzXxx) as libFuzzer binaries and runs
+# them — on pull requests (short, diff-aware) and on a schedule (longer batch) —
+# growing and replaying a corpus so a new crasher is caught continuously rather
+# than by chance.
+#
+# These files (project.yaml + Dockerfile + build.sh) are the standard, ready
+# ClusterFuzzLite/OSS-Fuzz onboarding artifacts: build.sh auto-discovers every
+# FuzzXxx under ./internal and compiles it, so onboarding is a config-only step.
+# Enabling the hosted ClusterFuzzLite GitHub Action (whose action ref must be
+# SHA-pinned at onboarding, per the supply-chain gate) is tracked as EXC-FUZZ-01.
+#
+# The layer that RUNS in CI today, without any external dependency, is the
+# Go-native fuzz-smoke job in .github/workflows/ci.yml (`make fuzz-smoke`): it
+# replays the committed seed corpus (testdata/fuzz) and fuzzes each target on a
+# per-PR/nightly budget.
+language: go
+fuzzing_engines:
+  - libfuzzer
+sanitizers:
+  - address

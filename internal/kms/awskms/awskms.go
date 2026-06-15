@@ -44,17 +44,31 @@ type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+// defaultOpTimeout bounds a single KMS network operation when the caller does not
+// supply its own deadline. It exists so an interface-forced context.Background()
+// (a Sign/GenerateKey reached through the context-less crypto.Signer interface)
+// cannot hang a worker goroutine forever on a wedged KMS endpoint, defeating AN-7
+// backpressure for the slowest possible operation — a remote crypto call
+// (CODE-002). A caller that threads its own deadline via the ContextSigner path
+// overrides this entirely.
+const defaultOpTimeout = 30 * time.Second
+
 // Backend is an AWS KMS crypto.Backend.
 type Backend struct {
-	region   string
-	endpoint string
-	host     string
-	creds    Credentials
-	doer     HTTPDoer
-	now      func() time.Time
+	region    string
+	endpoint  string
+	host      string
+	creds     Credentials
+	doer      HTTPDoer
+	now       func() time.Time
+	opTimeout time.Duration
 }
 
-var _ crypto.Backend = (*Backend)(nil)
+var (
+	_ crypto.Backend             = (*Backend)(nil)
+	_ crypto.ContextKeyGenerator = (*Backend)(nil)
+	_ crypto.ContextSigner       = (*kmsSigner)(nil)
+)
 
 // Option configures a Backend.
 type Option func(*Backend)
@@ -65,14 +79,36 @@ func WithEndpoint(endpoint string) Option { return func(b *Backend) { b.setEndpo
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option { return func(b *Backend) { b.doer = d } }
 
+// WithOpTimeout sets the per-operation timeout applied when a Sign/GenerateKey is
+// reached through the context-less crypto.Signer/KeyGenerator interface (CODE-002).
+// A non-positive value disables the floor (the call then blocks until the doer
+// returns). It does not affect calls made through the ContextSigner path, where
+// the caller's own deadline governs.
+func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeout = d } }
+
 // New returns an AWS KMS backend for region, signing with creds.
 func New(region string, creds Credentials, opts ...Option) *Backend {
-	b := &Backend{region: region, creds: creds, doer: http.DefaultClient, now: time.Now}
+	b := &Backend{region: region, creds: creds, doer: http.DefaultClient, now: time.Now, opTimeout: defaultOpTimeout}
 	b.setEndpoint(fmt.Sprintf("https://kms.%s.amazonaws.com", region))
 	for _, o := range opts {
 		o(b)
 	}
 	return b
+}
+
+// opContext derives the context a single network operation runs under when the
+// caller did not provide one. When the caller threads a real context (the
+// ContextSigner path), that context already carries any deadline and is used
+// as-is; this is only the fallback for the interface-forced background context.
+func (b *Backend) opContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if b.opTimeout <= 0 {
+		return ctx, func() {}
+	}
+	// Only impose the floor when the caller has not already set a deadline.
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, b.opTimeout)
 }
 
 func (b *Backend) setEndpoint(endpoint string) {
@@ -86,12 +122,22 @@ func (b *Backend) setEndpoint(endpoint string) {
 func (b *Backend) Name() string { return "aws-kms" }
 
 // GenerateKey creates an asymmetric signing key in KMS and returns a Signer for it.
+// It is the context-less crypto.KeyGenerator entry point; it applies the backend's
+// per-operation timeout floor so a wedged KMS cannot hang the caller (CODE-002).
+// Callers holding a context should prefer GenerateKeyContext.
 func (b *Backend) GenerateKey(alg crypto.Algorithm) (crypto.Signer, error) {
+	return b.GenerateKeyContext(context.Background(), alg)
+}
+
+// GenerateKeyContext is the context-bearing key generation (crypto.ContextKeyGenerator):
+// the caller's context bounds and can cancel every KMS round-trip the generation makes.
+func (b *Backend) GenerateKeyContext(ctx context.Context, alg crypto.Algorithm) (crypto.Signer, error) {
 	spec, err := keySpec(alg)
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
+	ctx, cancel := b.opContext(ctx)
+	defer cancel()
 	var created struct {
 		KeyMetadata struct{ KeyId string }
 	}
@@ -130,7 +176,16 @@ type kmsSigner struct {
 func (s *kmsSigner) Public() crypto.PublicKey    { return s.pub }
 func (s *kmsSigner) Algorithm() crypto.Algorithm { return s.alg }
 
+// Sign is the context-less crypto.Signer entry point; it applies the backend's
+// per-operation timeout floor so a wedged KMS cannot hang the caller (CODE-002).
+// Callers holding a context should prefer SignContext.
 func (s *kmsSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error) {
+	return s.SignContext(context.Background(), message, opts)
+}
+
+// SignContext is the context-bearing signing operation (crypto.ContextSigner): the
+// caller's context bounds and can cancel the remote KMS Sign call.
+func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto.SignOptions) ([]byte, error) {
 	digest, err := crypto.Digest(hashOf(opts), message)
 	if err != nil {
 		return nil, err
@@ -139,6 +194,8 @@ func (s *kmsSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := s.b.opContext(ctx)
+	defer cancel()
 	var out struct{ Signature string }
 	req := map[string]string{
 		"KeyId":            s.keyID,
@@ -146,7 +203,7 @@ func (s *kmsSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error
 		"MessageType":      "DIGEST",
 		"SigningAlgorithm": sa,
 	}
-	if err := s.b.call(context.Background(), "TrentService.Sign", req, &out); err != nil {
+	if err := s.b.call(ctx, "TrentService.Sign", req, &out); err != nil {
 		return nil, fmt.Errorf("aws-kms: sign: %w", err)
 	}
 	sig, err := base64.StdEncoding.DecodeString(out.Signature)

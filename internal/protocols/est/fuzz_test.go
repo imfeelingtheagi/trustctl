@@ -7,7 +7,9 @@ import (
 
 // FuzzParseEnrollBody hardens the EST wire parser: no input — random bytes, near-
 // base64, base64 of garbage — may crash it; it must always return cleanly (a CSR
-// or an error), never panic. Wired for OSS-Fuzz alongside the other parsers.
+// or an error), never panic. It runs in the CI fuzz-smoke job and the
+// ClusterFuzzLite continuous-fuzzing config (.clusterfuzzlite/) alongside the
+// other parsers, with a committed seed corpus under testdata/fuzz (FUZZ-003).
 func FuzzParseEnrollBody(f *testing.F) {
 	f.Add([]byte(""))
 	f.Add([]byte("MIIB"))             // truncated base64

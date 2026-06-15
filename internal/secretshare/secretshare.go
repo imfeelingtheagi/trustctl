@@ -64,7 +64,7 @@ func (s *Sharer) Create(ctx context.Context, secret []byte, ttl time.Duration) (
 	s.mu.Lock()
 	s.links[token] = &link{secret: append([]byte(nil), secret...), shareID: shareID, expiresAt: s.clock().Add(ttl)}
 	s.mu.Unlock()
-	_ = s.audit.Audit(ctx, "secret.shared", s.tenantID,
+	_ = auditsink.Emit(ctx, s.audit, nil, "secret.shared", s.tenantID,
 		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
 	return token, nil
 }
@@ -88,7 +88,7 @@ func (s *Sharer) View(ctx context.Context, token string) ([]byte, error) {
 	delete(s.links, token) // self-destruct on first successful view
 	// Audit the non-secret shareID and a non-reversible hash of the token — never
 	// the token itself, which is the bearer capability (AN-8).
-	_ = s.audit.Audit(ctx, "secret.share.viewed", s.tenantID,
+	_ = auditsink.Emit(ctx, s.audit, nil, "secret.share.viewed", s.tenantID,
 		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
 	return secret, nil
 }

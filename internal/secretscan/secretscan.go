@@ -96,7 +96,7 @@ func (i *Ingestor) Ingest(ctx context.Context, findings []Finding, drive bool) (
 			ID: id, Kind: graph.KindCredential, Name: f.CredentialRef,
 			Attrs: map[string]string{"tenant_id": i.tenantID, "provenance": f.Scanner, "rule": f.RuleID, "file": f.File, "exposed": "true"},
 		})
-		_ = i.audit.Audit(ctx, "secretscan.finding", i.tenantID,
+		_ = auditsink.Emit(ctx, i.audit, nil, "secretscan.finding", i.tenantID,
 			[]byte(fmt.Sprintf(`{"scanner":%q,"rule":%q,"file":%q,"ref":%q}`, f.Scanner, f.RuleID, f.File, f.CredentialRef)))
 		if drive && i.trigger != nil {
 			if err := i.trigger(ctx, f.CredentialRef); err != nil {

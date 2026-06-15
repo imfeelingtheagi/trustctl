@@ -112,7 +112,7 @@ func (b *Broker) Issue(ctx context.Context, req IssueRequest) (AgentIdentity, er
 		return AgentIdentity{}, fmt.Errorf("broker: policy: %w", err)
 	}
 	if !dec.Allow {
-		_ = b.cfg.Audit.Audit(ctx, "agent.identity.refused", b.cfg.TenantID,
+		_ = auditsink.Emit(ctx, b.cfg.Audit, nil, "agent.identity.refused", b.cfg.TenantID,
 			[]byte(fmt.Sprintf(`{"agent_id":%q,"reason":%q}`, req.AgentID, dec.Reason)))
 		return AgentIdentity{}, fmt.Errorf("broker: policy denied agent %q: %s", req.AgentID, dec.Reason)
 	}
@@ -132,7 +132,7 @@ func (b *Broker) Issue(ctx context.Context, req IssueRequest) (AgentIdentity, er
 		Attrs: map[string]string{"tenant_id": b.cfg.TenantID},
 	})
 	b.cfg.Graph.AddEdge(graph.Edge{From: nodeID, To: res.CredentialID, Type: graph.EdgeOwns})
-	_ = b.cfg.Audit.Audit(ctx, "agent.identity.issued", b.cfg.TenantID,
+	_ = auditsink.Emit(ctx, b.cfg.Audit, nil, "agent.identity.issued", b.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"agent_id":%q,"credential_id":%q,"subject":%q}`, req.AgentID, res.CredentialID, res.Subject)))
 	return AgentIdentity{
 		AgentID: req.AgentID, NodeID: nodeID, Subject: res.Subject,

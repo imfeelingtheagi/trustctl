@@ -93,7 +93,7 @@ func (v *Verifier) Verify(ctx context.Context, method string, payload []byte) (A
 	}
 	att, err := a.Attest(ctx, payload)
 	if err != nil {
-		_ = v.audit.Audit(ctx, "attestation.rejected", v.tenantID,
+		_ = auditsink.Emit(ctx, v.audit, nil, "attestation.rejected", v.tenantID,
 			[]byte(fmt.Sprintf(`{"method":%q,"error":%q}`, method, err.Error())))
 		return Attestation{}, fmt.Errorf("attest: %s verification failed: %w", method, err)
 	}
@@ -110,7 +110,7 @@ func (v *Verifier) Verify(ctx context.Context, method string, payload []byte) (A
 		v.graph.AddNode(graph.Node{ID: att.ID, Kind: graph.KindAttestation, Name: method + ":" + att.Subject, Attrs: attrs})
 	}
 	data, _ := json.Marshal(att)
-	_ = v.audit.Audit(ctx, "attestation.verified", v.tenantID, data)
+	_ = auditsink.Emit(ctx, v.audit, nil, "attestation.verified", v.tenantID, data)
 	return att, nil
 }
 

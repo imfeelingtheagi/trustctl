@@ -82,9 +82,15 @@ suite actually compiles and runs it against a real EST server. A bootstrap token
 checked-and-deleted atomically, so it works exactly once.
 
 *Code:* `internal/agent/enroll` (`Authority`, `IssueBootstrapToken`, `EnrollBootstrap`,
-`EnrollRenewal`), `internal/agent/httpenroll.go`, `clients/embedded/`. **Status:** the
-bootstrap and renewal endpoints (`POST /enroll/bootstrap`, `POST /enroll/renewal`) **are
-mounted and served** by the running control plane.
+`EnrollRenewal`), `internal/agent/httpenroll.go`, `clients/embedded/`. **Status (DOCS-001):**
+the running control plane mounts **only `POST /enroll/bootstrap`** (see
+`internal/api/api.go`). Renewal is **library-complete but not yet mounted**:
+`EnrollRenewal` and a `POST /enroll/renewal` handler exist in `internal/agent/enroll`,
+but the served API does not register that route, so a request to `/enroll/renewal`
+against the running binary returns **404** today. This matches the served route set in
+[discovery-and-inventory.md](discovery-and-inventory.md). Mounting renewal (and the
+agent mTLS channel it pairs with) onto the served listener is tracked as
+**`EXC-WIRE-02`**; until then, the served enrollment path is bootstrap-only.
 
 ### Intune / MDM enrollment (F56)
 
@@ -130,7 +136,8 @@ Be precise about what's mounted in the running server today:
 
 | Surface | Status |
 |---|---|
-| Embedded bootstrap/renewal (`/enroll/...`, F54) | **Served** by the control plane |
+| Embedded bootstrap (`POST /enroll/bootstrap`, F54) | **Served** by the control plane |
+| Embedded renewal (`POST /enroll/renewal`, F54) | **Library-complete, not yet mounted** — 404 on the running binary; tracked as `EXC-WIRE-02` |
 | EST server (F22) | **Library-complete**, tested (incl. differential tests); not yet mounted |
 | SCEP server (F23) | **Library-complete**, tested; not yet mounted |
 | CMP server (F55) | **Library-complete**, tested; not yet mounted |
@@ -148,7 +155,8 @@ depends on the challenge gate (F56) since the protocol itself is weakly authenti
   `/simplereenroll`, `GET /.well-known/est/csrattrs` (RFC 7030).
 - **SCEP:** `/scep?operation=GetCACaps|GetCACert|PKIOperation` (RFC 8894).
 - **CMP:** `POST /cmp` (RFC 4210 / RFC 6712).
-- **Embedded:** `POST /enroll/bootstrap`, `POST /enroll/renewal` (served).
+- **Embedded:** `POST /enroll/bootstrap` (served). `POST /enroll/renewal` is
+  library-complete but **not yet mounted** (404 on the running binary; `EXC-WIRE-02`).
 - **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`.
 - **EST authoring guide:** [Device enrollment (EST)](../guides/est-enrollment.md).
 

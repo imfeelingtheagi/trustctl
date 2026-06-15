@@ -252,7 +252,7 @@ func (s *Server) matched(selectors []string) []RegistrationEntry {
 }
 
 func (s *Server) recordIssued(ctx context.Context, kind, spiffeID string) {
-	_ = s.cfg.Audit.Audit(ctx, "spiffe.svid.issued", s.cfg.TenantID,
+	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "spiffe.svid.issued", s.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"type":%q,"spiffe_id":%q}`, kind, spiffeID)))
 	if s.cfg.Graph != nil {
 		s.cfg.Graph.AddNode(graph.Node{

@@ -14,7 +14,10 @@ updates:
     commit-message:
       prefix: "deps(go)"
 
-  # GitHub Actions used by the workflows.
+  # GitHub Actions used by the workflows. Every third-party action is pinned by a
+  # 40-hex commit SHA (SUPPLY-002, enforced by scripts/ci/check-actions-pinned.sh);
+  # Dependabot bumps those SHA pins in place (and updates the `# vX.Y.Z` comment),
+  # so the pins stay current without ever reverting to a mutable tag.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

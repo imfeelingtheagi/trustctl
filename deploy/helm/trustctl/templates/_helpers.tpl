@@ -45,8 +45,27 @@ app.kubernetes.io/component: control-plane
 {{- end -}}
 {{- end -}}
 
+{{/*
+Resolve the control-plane image reference (OPS-003).
+
+The release pipeline (.github/workflows/release.yml) tags every image `vX.Y.Z`
+(from `git describe`) plus `:latest`. Chart.AppVersion follows Helm's
+leading-`v`-stripped convention, so when the operator does not override
+image.tag we form the tag as `v<appVersion>` — which is exactly a tag the
+pipeline publishes — rather than a bare `<appVersion>` that was never pushed and
+would ImagePullBackOff. An explicit image.tag (e.g. a digest or a specific
+`vX.Y.Z`/`latest`) is honored verbatim.
+*/}}
+{{- define "trustctl.imageTag" -}}
+{{- if .Values.image.tag -}}
+{{- .Values.image.tag -}}
+{{- else -}}
+{{- printf "v%s" .Chart.AppVersion -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "trustctl.image" -}}
-{{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
+{{- printf "%s:%s" .Values.image.repository (include "trustctl.imageTag" .) -}}
 {{- end -}}
 
 {{/*

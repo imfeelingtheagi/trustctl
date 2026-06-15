@@ -8,10 +8,41 @@ import (
 
 	"trustctl.io/trustctl/internal/backup"
 	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/projections"
 	"trustctl.io/trustctl/internal/store"
 )
+
+// backupIntegrityLabel domain-separates the derived backup HMAC key from any other
+// use of the audit signing-key material.
+const backupIntegrityLabel = "trustctl/backup-integrity/v1"
+
+// backupIntegrityKey derives the HMAC integrity key for the event-log backup
+// (OPS-006) from the deployment's audit export signing key, so a valid keyed
+// backup is bound to THIS deployment and a tamperer cannot forge the trailer's
+// MAC without the key. It returns nil (a checksum-only, still-tamper-evident
+// backup) when no audit signing key is configured, so the backup CLI keeps
+// working on a minimal config. Derivation routes through the crypto boundary
+// (HMAC-SHA256, AN-3); the signer is never involved (AN-4). It reads only the
+// already-at-rest PEM bytes — it does not import a private key into a long-lived
+// in-memory signer.
+func backupIntegrityKey(cfg *config.Config) ([]byte, error) {
+	path := cfg.Audit.SigningKeyFile
+	if path == "" {
+		return nil, nil
+	}
+	pem, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// No persisted audit key yet (e.g. a never-started fresh deployment):
+			// fall back to a checksum-only backup rather than failing the CLI.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read audit signing key for backup integrity: %w", err)
+	}
+	return crypto.HMACSHA256(pem, []byte(backupIntegrityLabel)), nil
+}
 
 // RunBackup writes a portable backup of the event log (the AN-2 source of truth)
 // to path and returns the number of events backed up. It requires an external
@@ -27,13 +58,21 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 	}
 	defer func() { _ = log.Close() }()
 
+	key, err := backupIntegrityKey(cfg)
+	if err != nil {
+		return 0, err
+	}
+
 	f, err := os.Create(path)
 	if err != nil {
 		return 0, fmt.Errorf("create backup file: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
-	n, err := backup.WriteLog(ctx, log, f)
+	// The stream carries a SHA-256 integrity trailer always, and an HMAC bound to
+	// this deployment's audit key when one is configured (OPS-006), so a tampered
+	// or truncated backup is rejected on restore.
+	n, err := backup.WriteLogWithKey(ctx, log, f, key)
 	if err != nil {
 		return n, err
 	}
@@ -75,7 +114,16 @@ func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, erro
 	}
 	defer func() { _ = log.Close() }()
 
-	n, err := backup.RestoreLog(ctx, log, f)
+	// Verify integrity before appending anything (OPS-006). The SHA-256 trailer is
+	// always enforced; when this recovery host already holds the deployment's audit
+	// signing key we additionally require the backup's HMAC to verify under it.
+	// (On a bare recovery host without the key yet, the checksum still guards
+	// against truncation/bit-flips so a corrupt artifact is rejected.)
+	key, err := backupIntegrityKey(cfg)
+	if err != nil {
+		return 0, err
+	}
+	n, err := backup.RestoreLogWithKey(ctx, log, f, key)
 	if err != nil {
 		return n, err
 	}

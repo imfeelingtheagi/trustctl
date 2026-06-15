@@ -60,7 +60,7 @@ func New(tenantID string, auth Authenticator, audit auditsink.Auditor) *Server {
 func (s *Server) authClient(ctx context.Context, op string, clientCertDER []byte) (string, error) {
 	id, ok := s.auth.Authenticate(clientCertDER)
 	if !ok {
-		_ = s.audit.Audit(ctx, "kmip.unauthenticated", s.tenantID, []byte(fmt.Sprintf(`{"op":%q}`, op)))
+		_ = auditsink.Emit(ctx, s.audit, nil, "kmip.unauthenticated", s.tenantID, []byte(fmt.Sprintf(`{"op":%q}`, op)))
 		return "", fmt.Errorf("kmip: client certificate not authenticated")
 	}
 	return id, nil
@@ -92,7 +92,7 @@ func (s *Server) register(ctx context.Context, algorithm string, key []byte) str
 	s.n++
 	id := fmt.Sprintf("kmip-%d", s.n)
 	s.objects[id] = &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1, key: key}
-	_ = s.audit.Audit(ctx, "kmip.object.created", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"alg":%q}`, id, algorithm)))
+	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.created", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"alg":%q}`, id, algorithm)))
 	return id
 }
 
@@ -141,7 +141,7 @@ func (s *Server) ReKey(ctx context.Context, clientCertDER []byte, id string) (in
 	key, _ := crypto.RandomBytes(32)
 	obj.key = key
 	obj.Version++
-	_ = s.audit.Audit(ctx, "kmip.object.rekeyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"version":%d}`, id, obj.Version)))
+	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.rekeyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"version":%d}`, id, obj.Version)))
 	return obj.Version, nil
 }
 
@@ -166,7 +166,7 @@ func (s *Server) Destroy(ctx context.Context, clientCertDER []byte, id string) e
 	}
 	obj.key = nil
 	obj.State = StateDestroyed
-	_ = s.audit.Audit(ctx, "kmip.object.destroyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q}`, id)))
+	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.destroyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q}`, id)))
 	return nil
 }
 
@@ -181,6 +181,6 @@ func (s *Server) transition(ctx context.Context, clientCertDER []byte, op, id st
 		return fmt.Errorf("kmip: object %q not found", id)
 	}
 	obj.State = to
-	_ = s.audit.Audit(ctx, "kmip.object."+op, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"state":%q}`, id, to)))
+	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object."+op, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"state":%q}`, id, to)))
 	return nil
 }

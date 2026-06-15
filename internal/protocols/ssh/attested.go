@@ -93,7 +93,7 @@ func (i *AttestedUserCertIssuer) Issue(ctx context.Context, req AttestedRequest)
 	if err := i.cfg.Verifier.Bind(ctx, att, credID); err != nil {
 		return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: bind attestation: %w", err)
 	}
-	_ = i.cfg.Audit.Audit(ctx, "ssh.attested_cert.issued", i.cfg.TenantID,
+	_ = auditsink.Emit(ctx, i.cfg.Audit, nil, "ssh.attested_cert.issued", i.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"key_id":%q,"serial":%d,"method":%q,"subject":%q}`, keyID, iss.Serial, att.Method, att.Subject)))
 	return iss, att, nil
 }

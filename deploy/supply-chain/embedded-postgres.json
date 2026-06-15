@@ -1,29 +1,47 @@
 {
-  "_comment": "Provenance + scan policy for the PostgreSQL binary that the embedded-postgres TEST dependency downloads at runtime. It lives OUTSIDE go.sum (Maven Central, not the Go module proxy), so it needs its own pin + scan. See deploy/supply-chain/README.md and docs/supply-chain.md.",
+  "_comment": "Provenance + scan policy for the PostgreSQL binary that the embedded-postgres dependency downloads at runtime. It lives OUTSIDE go.sum (Maven Central, not the Go module proxy), so it needs its own COMMITTED pin + scan. This binary is used both by the integration tests AND by the served single-node/eval path (internal/server/startBundledPostgres), so the pin is enforced at runtime (SUPPLY-003), not just in CI. See deploy/supply-chain/README.md and docs/supply-chain.md.",
   "module": "github.com/fergusstrange/embedded-postgres",
   "moduleVersion": "v1.29.0",
   "postgresVersion": "16.4.0",
-  "pinnedBy": "internal/projections/projections_test.go (embeddedpostgres.V16)",
+  "pinnedBy": "internal/server/bundled_pg_pins.go (runtime enforcement) + internal/projections/projections_test.go (embeddedpostgres.V16)",
+  "runtimeEnforced": true,
   "shippedInReleaseImage": false,
   "source": {
     "registry": "Maven Central",
     "group": "io.zonky.test.postgres",
-    "artifact": "embedded-postgres-binaries-linux-amd64",
+    "artifact": "embedded-postgres-binaries-linux-<arch>",
     "version": "16.4.0",
     "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.4.0/embedded-postgres-binaries-linux-amd64-16.4.0.jar"
   },
   "checksum": {
     "algorithm": "sha256",
-    "sha256": "",
-    "policy": "trust-on-first-use: scripts/supply-chain/verify-embedded-postgres.sh prints the SHA-256 on first run; a maintainer pins it here and commits, after which every CI run verifies it and fails the build if it ever changes for the pinned version."
+    "sha256": "14a5cf546aee7d327a2f5b46be6c571f2f724a2b485c270d46f3e44a1ac3df18",
+    "subject": "linux-amd64 jar (the production single-node/eval default)",
+    "policy": "committed pin (TOFU completed): scripts/supply-chain/verify-embedded-postgres.sh verifies the downloaded jar against this value on every CI run and FAILS the build on any change; internal/server/startBundledPostgres verifies the cached .txz against archives[].txz_sha256 below before starting PostgreSQL, so a tampered or MITM'd binary is refused at runtime (SUPPLY-003)."
   },
+  "archives": [
+    {
+      "arch": "linux-amd64",
+      "jar_sha256": "14a5cf546aee7d327a2f5b46be6c571f2f724a2b485c270d46f3e44a1ac3df18",
+      "txz_sha256": "d24cafae863e1ba9502bdc27942661391748ce60345725e7a15429be637fc8b6",
+      "txz_name": "postgres-linux-x86_64.txz",
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.4.0/embedded-postgres-binaries-linux-amd64-16.4.0.jar"
+    },
+    {
+      "arch": "linux-arm64v8",
+      "jar_sha256": "5a281952dd35191be97809ce657d6cb1a7b42a8d8ca6195125dd368d47eb8c42",
+      "txz_sha256": "5b8a4b595f847ef11d47c51f40de713ff0ef335aa86f668677470d43c681f47b",
+      "txz_name": "postgres-linux-arm_64.txz",
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-arm64v8/16.4.0/embedded-postgres-binaries-linux-arm64v8-16.4.0.jar"
+    }
+  ],
   "scan": {
     "tool": "trivy",
     "scope": "extracted PostgreSQL binaries (rootfs)",
     "severity": "HIGH,CRITICAL",
     "ignoreUnfixed": true,
-    "policy": "advisory/report-only: this binary is integration-test only and not shipped, and a transitive OS-package CVE in a prebuilt PostgreSQL binary is fixable only by bumping the pinned version upstream, so findings are recorded rather than blocking. The hard gate is the checksum-change check.",
+    "policy": "advisory/report-only: a transitive OS-package CVE in a prebuilt PostgreSQL binary is fixable only by bumping the pinned version upstream, so findings are recorded rather than blocking. The hard gate is the checksum-change check (above) and the runtime provenance check (SUPPLY-003).",
     "lastResult": "pending first CI run on a network-enabled runner"
   },
-  "notes": "PostgreSQL 16.4 is a supported release. This dependency is integration-test only and is NOT bundled in the shipped distroless image (which carries only the Go binaries). It must be scanned before any redistribution that bundles it."
+  "notes": "PostgreSQL 16.4 is a supported release. The jar and the inner .txz hashes above were captured from Maven Central and cross-checked against the library's same-origin .sha256 sidecar. The .txz is the artifact the embedded-postgres library caches and extracts; the runtime verifies the cached .txz against txz_sha256 before starting PostgreSQL. This dependency is NOT bundled in the shipped distroless image (which carries only the Go binaries); it is fetched on first run of the bundled single-node/eval path."
 }

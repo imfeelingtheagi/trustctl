@@ -85,5 +85,5 @@ func (e *Engine) Rotate(ctx context.Context, key, oldRef string) (Report, error)
 }
 
 func (e *Engine) emit(ctx context.Context, event, key, phase string) {
-	_ = e.audit.Audit(ctx, event, e.tenantID, []byte(fmt.Sprintf(`{"key":%q,"phase":%q}`, key, phase)))
+	_ = auditsink.Emit(ctx, e.audit, nil, event, e.tenantID, []byte(fmt.Sprintf(`{"key":%q,"phase":%q}`, key, phase)))
 }

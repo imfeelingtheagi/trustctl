@@ -917,6 +917,198 @@ func TestSSHTrustRewriteDisclosedAsLibraryOnly(t *testing.T) {
 	}
 }
 
+// pluginHostVerifiesSignatures reports whether internal/pluginhost's Load path
+// performs any signature / provenance / trusted-key check before instantiating a
+// .wasm module. Today it does not (SUPPLY-004): Load goes straight to
+// InstantiateWithConfig. When a future change adds a cosign/Ed25519/hash gate, one
+// of these markers appears in the host source and this flips true, forcing the
+// not-yet-verified disclosure to be retired.
+func pluginHostVerifiesSignatures(t *testing.T) bool {
+	t.Helper()
+	files, err := filepath.Glob(filepath.FromSlash("../internal/pluginhost/*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		low := strings.ToLower(read(t, f))
+		// A real provenance gate would reference one of these in the load path.
+		for _, marker := range []string{"cosign", "ed25519.verify", "verifysignature", "trustedkey", "trusted_key", "loadverified"} {
+			if strings.Contains(low, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestPluginHostProvenanceDisclosedAsAbsent is the reality-bound disclosure for
+// SUPPLY-004: the WASM plugin host loads .wasm bytes with NO signature/provenance
+// verification. While the host source contains no signature/trusted-key check,
+// limitations.md must disclose the absent gate and link EXC-WIRE-05; if a future
+// change adds verification, the stale "no verification" disclosure must be retired.
+// The reality anchor (Host.Load instantiating raw bytes) must keep existing so the
+// disclosure is grounded in real code.
+func TestPluginHostProvenanceDisclosedAsAbsent(t *testing.T) {
+	host := read(t, "../internal/pluginhost/host.go")
+	// Reality anchor: Load still instantiates the supplied bytes directly.
+	if !strings.Contains(host, "InstantiateWithConfig(ctx, wasm") {
+		t.Fatal("internal/pluginhost/host.go no longer instantiates raw wasm bytes in Load; revisit this reality test (SUPPLY-004)")
+	}
+
+	lim := read(t, "limitations.md")
+	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
+
+	if pluginHostVerifiesSignatures(t) {
+		// Verification has landed: the not-yet-verified disclosure would be a stale
+		// under-claim and must have been retired.
+		if strings.Contains(low, "without any signature") || strings.Contains(low, "no plugin signature/provenance verification") {
+			t.Error("the plugin host appears to verify signatures now, but limitations.md still discloses provenance verification as absent — update the disclosure (EXC-WIRE-05 closed)")
+		}
+		return
+	}
+
+	// Not verified: limitations.md must disclose the absent gate, cite SUPPLY-004,
+	// and link the wire-in epic.
+	for _, m := range []string{"supply-004", "signature", "provenance"} {
+		if !strings.Contains(low, m) {
+			t.Errorf("limitations.md must disclose the absent plugin signature/provenance gate (missing marker %q) (SUPPLY-004)", m)
+		}
+	}
+	if !strings.Contains(lim, "EXC-WIRE-05") {
+		t.Error("limitations.md must link the wire-in epic EXC-WIRE-05 for plugin provenance verification (SUPPLY-004)")
+	}
+	// Over-claim guard: do not claim the host verifies plugin signatures today.
+	for _, oc := range []string{"plugins are signature-verified", "the host verifies plugin signatures", "signed plugins are verified"} {
+		if strings.Contains(low, oc) {
+			t.Errorf("limitations.md over-claims plugin signature verification (%q) while the host performs none (SUPPLY-004)", oc)
+		}
+	}
+}
+
+// serverMountsAgentGRPCListener reports whether the served composition mounts an
+// agent-facing gRPC listener (the steady-state agent<->control-plane channel).
+// Today it does not (OPS-005/WIRE-004): the only served grpc.Server is the signer's
+// UDS, and internal/server registers no agent RPC service. When a future change
+// mounts an agent gRPC gateway, one of these markers appears and this flips true.
+func serverMountsAgentGRPCListener(t *testing.T) bool {
+	t.Helper()
+	for _, f := range nonTestGoFiles(t, "../internal/server") {
+		src := read(t, f)
+		// An agent gRPC gateway would register an agent service and/or import the
+		// agent transport's server side into the served composition.
+		for _, marker := range []string{"RegisterAgentServer", "RegisterEnrollServer", "agent/transport", "AgentServiceServer"} {
+			if strings.Contains(src, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestAgentSteadyStateChannelDisclosedAsUnexposed is the reality-bound disclosure
+// for OPS-005: the advertised steady-state agent<->control-plane mTLS gRPC channel
+// (the manifests point agents at :9443) has no served control-plane listener/Service.
+// While the served binary mounts no agent gRPC listener, limitations.md must disclose
+// the gap, cite OPS-005, and link EXC-WIRE-02; if a future change serves it, the stale
+// disclosure must be retired. The manifest fact (daemonset :9443) and the control-plane
+// Service exposing only the API port anchor the disclosure in real artifacts.
+func TestAgentSteadyStateChannelDisclosedAsUnexposed(t *testing.T) {
+	// Reality anchor (manifest): the daemonset advertises the :9443 agent server, but
+	// the control-plane Service template exposes only the API port.
+	ds := read(t, "../deploy/kubernetes/daemonset.yaml")
+	if !strings.Contains(ds, "9443") {
+		t.Fatal("daemonset.yaml no longer advertises the :9443 agent server; revisit this reality test (OPS-005)")
+	}
+	svc := read(t, "../deploy/helm/trustctl/templates/service.yaml")
+	if strings.Contains(svc, "9443") {
+		// A control-plane Service now exposes the agent port — the gap may be closing.
+		t.Log("control-plane service.yaml now references 9443; verify the agent gateway is actually served (OPS-005)")
+	}
+
+	lim := read(t, "limitations.md")
+	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
+
+	if serverMountsAgentGRPCListener(t) {
+		if strings.Contains(low, "no agent grpc listener is mounted") {
+			t.Error("an agent gRPC listener appears to be served now, but limitations.md still discloses it as unmounted — update the disclosure (EXC-WIRE-02 closed)")
+		}
+		return
+	}
+
+	for _, m := range []string{"ops-005", "no agent grpc listener is mounted", "9443"} {
+		if !strings.Contains(low, m) {
+			t.Errorf("limitations.md must disclose the unexposed agent steady-state channel (missing marker %q) (OPS-005)", m)
+		}
+	}
+	if !strings.Contains(lim, "EXC-WIRE-02") {
+		t.Error("limitations.md must link the wire-in epic EXC-WIRE-02 for the agent steady-state channel (OPS-005)")
+	}
+}
+
+// binaryServesPluginHost reports whether the served binary (internal/api,
+// internal/server, cmd/trustctl) imports the WASM plugin host on its served path.
+// Today nothing does (ARCH-007): the host and the CA/connector plugins are
+// library-only, so the running control plane cannot load a third-party plugin.
+// When a future change wires the host into the served binary (EXC-WIRE-05), the
+// import appears and this flips true, forcing the not-yet-served disclosure to be
+// retired.
+func binaryServesPluginHost(t *testing.T) bool {
+	t.Helper()
+	const imp = `trustctl.io/trustctl/internal/pluginhost"`
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trustctl"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			if strings.Contains(read(t, f), imp) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestPluginHostDisclosedAsLibraryOnly is the reality-bound disclosure for
+// ARCH-007: the WASM plugin host and the CA/connector plugins are built and tested
+// but not wired into the served binary, so advertised plugin extensibility
+// (CA-via-plugin, connector-via-plugin) is not production capability. While the
+// served binary does not import internal/pluginhost, limitations.md must disclose
+// this and link EXC-WIRE-05; if a future change serves it, the stale disclosure
+// must be retired. The host package must still exist, anchoring the disclosure in
+// real code.
+func TestPluginHostDisclosedAsLibraryOnly(t *testing.T) {
+	if _, err := os.Stat(filepath.FromSlash("../internal/pluginhost/host.go")); err != nil {
+		t.Fatalf("internal/pluginhost no longer exists; revisit this reality test (ARCH-007)")
+	}
+	lim := read(t, "limitations.md")
+	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
+
+	if binaryServesPluginHost(t) {
+		// Now genuinely served: the not-yet-served disclosure would be a stale
+		// under-claim and must have been retired.
+		if strings.Contains(low, "plugin extensibility is library-only") {
+			t.Error("the plugin host appears to be SERVED now, but limitations.md still discloses plugin extensibility as library-only — update the disclosure (EXC-WIRE-05 closed)")
+		}
+		return
+	}
+
+	// Not served: the honest disclosure must be present, cite the finding, and link the epic.
+	for _, m := range []string{"plugin extensibility is library-only", "cannot load a third-party plugin", "arch-007"} {
+		if !strings.Contains(low, m) {
+			t.Errorf("limitations.md must disclose the library-only plugin host (missing marker %q)", m)
+		}
+	}
+	if !strings.Contains(lim, "EXC-WIRE-05") {
+		t.Error("limitations.md must link the wire-in epic EXC-WIRE-05 for the plugin host (ARCH-007)")
+	}
+	// Over-claim guard: do not claim plugin extensibility is served/production.
+	for _, oc := range []string{"plugin extensibility is served", "ca-via-plugin is served", "connector-via-plugin is served"} {
+		if strings.Contains(low, oc) {
+			t.Errorf("limitations.md over-claims plugin extensibility as served (%q) while the binary does not import the host", oc)
+		}
+	}
+}
+
 // repoHasFIPSBuildTarget reports whether the repository defines any FIPS-validated
 // build path — a boringcrypto build target, a GOEXPERIMENT=boringcrypto invocation,
 // or a //go:build boringcrypto-tagged file. Today none exists (PKIGOV-007): the
@@ -990,6 +1182,60 @@ func TestProtocolDocsNoLongerClaimPlaceholders(t *testing.T) {
 	// The protocols grouping doc must now name CMP (the finding noted it was absent).
 	if !strings.Contains(strings.ToLower(read(t, "../internal/protocols/doc.go")), "cmp") {
 		t.Error("internal/protocols/doc.go does not mention CMP; INTEROP-008 wants it listed with the other protocols")
+	}
+}
+
+// TestContinuousFuzzingIsRealNotOverclaimed is the reality-bound guard for
+// FUZZ-003: the "wired for OSS-Fuzz / continuous fuzzing" claim must match what
+// exists. The signer design doc must NOT assert the hosted OSS-Fuzz project runs
+// continuous fuzzing today (the over-claim), and the concrete continuous-fuzzing
+// mechanism it points at must EXIST in the repo: a CI fuzz step, a ClusterFuzzLite
+// config, and a committed seed corpus. If the hosted project is later onboarded
+// (EXC-FUZZ-01), the doc can be updated; until then a re-introduced over-claim or
+// a removed mechanism fails here.
+func TestContinuousFuzzingIsRealNotOverclaimed(t *testing.T) {
+	design := strings.ToLower(read(t, "design/signing-service.md"))
+
+	// The specific over-claim the audit flagged: that OSS-Fuzz (the hosted project)
+	// runs continuous fuzzing now. The honest wording references ClusterFuzzLite /
+	// the CI fuzz job and tracks hosted onboarding as an epic.
+	if strings.Contains(design, "oss-fuzz runs continuous fuzzing") {
+		t.Error("signing-service.md still claims the hosted OSS-Fuzz project runs continuous fuzzing (FUZZ-003 over-claim); describe the ClusterFuzzLite/CI mechanism and track hosted onboarding as EXC-FUZZ-01")
+	}
+	if strings.Contains(design, "wired for oss-fuzz") {
+		t.Error("signing-service.md still says 'wired for OSS-Fuzz' (FUZZ-003 over-claim); state what actually runs")
+	}
+
+	// The mechanisms the honest claim rests on must exist (code-bound). The
+	// verifiable, running layer is the Go-native fuzz-smoke CI job; the
+	// .clusterfuzzlite/ config is the OSS-Fuzz-family onboarding artifact
+	// (EXC-FUZZ-01 wires the hosted runner once a maintainer can pin its action).
+	for _, f := range []string{
+		"../.clusterfuzzlite/project.yaml",
+		"../.clusterfuzzlite/Dockerfile",
+		"../.clusterfuzzlite/build.sh",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(f)); err != nil {
+			t.Errorf("the OSS-Fuzz-readiness ClusterFuzzLite config the docs rest on is missing: %s (FUZZ-003)", f)
+		}
+	}
+
+	// The per-PR/nightly Go-native smoke job and its make target must exist — this
+	// is the continuous-fuzzing layer that actually RUNS in CI today.
+	if !strings.Contains(read(t, "../Makefile"), "fuzz-smoke:") {
+		t.Error("Makefile no longer defines the fuzz-smoke target (FUZZ-003)")
+	}
+	ci := strings.ToLower(read(t, "../.github/workflows/ci.yml"))
+	if !strings.Contains(ci, "fuzz-smoke") {
+		t.Error(".github/workflows/ci.yml no longer runs the fuzz-smoke step (FUZZ-003)")
+	}
+
+	// A committed seed corpus must exist (the regression net the finding required:
+	// "no committed corpus"). At minimum the CMS-family crashers are committed.
+	matches, _ := filepath.Glob(filepath.FromSlash("../internal/*/testdata/fuzz/*/*"))
+	deep, _ := filepath.Glob(filepath.FromSlash("../internal/*/*/testdata/fuzz/*/*"))
+	if len(matches)+len(deep) == 0 {
+		t.Error("no committed fuzz seed corpus found under internal/**/testdata/fuzz (FUZZ-003)")
 	}
 }
 

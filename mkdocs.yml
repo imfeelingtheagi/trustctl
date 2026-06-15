@@ -70,6 +70,7 @@ nav:
       - Product threat model: security/threat-model.md
       - Vulnerability management: security/vulnerability-management.md
       - Supply chain: supply-chain.md
+      - Branch protection & required checks: branch-protection.md
       - Signing service design: design/signing-service.md
       - Semantic query layer design: design/semantic-query-layer.md
   - Authoring guides:

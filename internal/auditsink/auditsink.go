@@ -11,13 +11,62 @@ package auditsink
 
 import (
 	"context"
+	"log/slog"
 	"sync"
+	"sync/atomic"
 )
 
 // Auditor records an audited event. eventType is a dotted name
 // (e.g. "spiffe.svid.issued"); tenantID scopes it (AN-1); data is a JSON payload.
 type Auditor interface {
 	Audit(ctx context.Context, eventType, tenantID string, data []byte) error
+}
+
+// droppedEvents counts audit/event-emit writes that failed and were NOT
+// propagated to the caller — i.e. an AN-2 source-of-truth/audit event that the
+// event log could not accept (NATS down, backpressure, marshal error) while the
+// local side-effect already happened. A non-zero value is a lost-event integrity
+// signal an operator must alarm on (CODE-001). It is process-wide and is surfaced
+// as a metric by the control plane.
+var droppedEvents atomic.Int64
+
+// DroppedEvents returns the running count of dropped audit/event-emit writes
+// (CODE-001). The control plane exports it as a gauge/counter; a test asserts it
+// increments when an emit is dropped rather than silently swallowed.
+func DroppedEvents() int64 { return droppedEvents.Load() }
+
+// Emit records an audited event through a, and — crucially — does NOT silently
+// discard a failed write the way a bare `_ = a.Audit(...)` does (CODE-001). On
+// failure it increments the process-wide dropped-event counter and logs at WARN
+// (when logger is non-nil) so a lost AN-2 source-of-truth/audit record is visible
+// to operators. It returns the underlying error so a caller on a critical path
+// can additionally fail closed; telemetry-grade callers may ignore the return,
+// having already accounted for the drop via the counter+log.
+//
+// This is the sanctioned idiom for an after-the-fact emit (the local state change
+// already committed): use Emit, never `_ = a.Audit(...)`. For an emit that IS the
+// state of record (no local read model survives without it), propagate the error
+// to the caller and fail the mutation.
+func Emit(ctx context.Context, a Auditor, logger *slog.Logger, eventType, tenantID string, data []byte) error {
+	if a == nil {
+		return nil
+	}
+	err := a.Audit(ctx, eventType, tenantID, data)
+	if err != nil {
+		droppedEvents.Add(1)
+		if logger == nil {
+			logger = slog.Default()
+		}
+		// The payload is deliberately NOT logged — it may carry sensitive material
+		// (e.g. an encrypted secret envelope); only the type/tenant and the error
+		// are recorded.
+		logger.WarnContext(ctx, "audit event dropped: event-log append failed",
+			slog.String("event_type", eventType),
+			slog.String("tenant_id", tenantID),
+			slog.String("error", err.Error()),
+		)
+	}
+	return err
 }
 
 // Nop discards events. A safe default when no auditor is wired.

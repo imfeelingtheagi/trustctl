@@ -4,6 +4,7 @@ Topology:
   - control plane + an isolated signer sidecar (UDS-only, no network surface) in one pod
   - external PostgreSQL ({{ .Values.postgres.mode }}) and NATS ({{ .Values.nats.mode }})
   - TLS mode: {{ .Values.tls.mode }}
+  - image: {{ include "trustctl.image" . }}{{ if not .Values.image.tag }} (default tag v{{ .Chart.AppVersion }}; override image.tag for a pinned vX.Y.Z or @sha256 digest){{ end }}
 
 Reach the API/UI (in-cluster):
 

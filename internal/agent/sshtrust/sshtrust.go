@@ -142,7 +142,7 @@ func (a *Applier) restore(path string, backup []byte, existed bool) {
 }
 
 func (a *Applier) auditEv(ctx context.Context, event, detail string) {
-	_ = a.audit.Audit(ctx, event, a.tenantID, []byte(fmt.Sprintf(`{"detail":%q}`, detail)))
+	_ = auditsink.Emit(ctx, a.audit, nil, event, a.tenantID, []byte(fmt.Sprintf(`{"detail":%q}`, detail)))
 }
 
 func appendLine(content, line string) string {

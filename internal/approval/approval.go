@@ -257,7 +257,7 @@ func approveCount(req Request) int {
 }
 
 func (m *Manager) audit(ctx context.Context, event, data string) {
-	_ = m.cfg.Audit.Audit(ctx, event, m.cfg.TenantID, []byte(data))
+	_ = auditsink.Emit(ctx, m.cfg.Audit, nil, event, m.cfg.TenantID, []byte(data))
 }
 
 // MemoryStore is an in-memory Store for single-node deployments and tests.

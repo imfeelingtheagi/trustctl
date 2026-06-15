@@ -1,5 +1,7 @@
 package crypto
 
+import "context"
+
 // Algorithm identifies a key and signature algorithm.
 type Algorithm string
 
@@ -83,6 +85,64 @@ type Signer interface {
 // changes.
 type KeyGenerator interface {
 	GenerateKey(algorithm Algorithm) (Signer, error)
+}
+
+// ContextSigner is a Signer whose signing operation accepts a context.Context, so
+// a caller can cancel or deadline-bound the operation (CODE-002). It exists for
+// backends whose Sign is a remote network call — a cloud KMS or a networked HSM —
+// where a hung endpoint would otherwise block the calling goroutine indefinitely,
+// defeating AN-7 backpressure for the slowest possible operation (a remote crypto
+// call). The CPU-bound software signer does not implement it (it genuinely needs
+// no context); callers detect support with a type assertion or use SignContext.
+type ContextSigner interface {
+	Signer
+	// SignContext hashes message per opts and returns the signature, honoring
+	// the context's cancellation/deadline. Backends that reach the network MUST
+	// propagate ctx into the request so a caller deadline bounds the call.
+	SignContext(ctx context.Context, message []byte, opts SignOptions) (signature []byte, err error)
+}
+
+// ContextKeyGenerator is a KeyGenerator whose key creation accepts a
+// context.Context (CODE-002). Like ContextSigner it exists for backends that
+// reach the network during key generation (a cloud KMS CreateKey/GetPublicKey
+// round-trip), so the caller can cancel or deadline-bound them.
+type ContextKeyGenerator interface {
+	KeyGenerator
+	// GenerateKeyContext creates a key, honoring the context's
+	// cancellation/deadline. Network backends MUST propagate ctx into every
+	// request the generation makes.
+	GenerateKeyContext(ctx context.Context, algorithm Algorithm) (Signer, error)
+}
+
+// SignContext signs message with s, threading ctx when s supports it
+// (ContextSigner) and falling back to the context-less Sign otherwise. It is the
+// canonical way to drive a signer when the caller holds a context: a remote KMS
+// signer gets a real, cancelable, deadline-bound call; the CPU-bound software
+// signer is unaffected. The context is honored only as far as the concrete
+// backend propagates it — for the in-process software signer there is no I/O to
+// cancel, so it returns its (immediate) result.
+func SignContext(ctx context.Context, s Signer, message []byte, opts SignOptions) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if cs, ok := s.(ContextSigner); ok {
+		return cs.SignContext(ctx, message, opts)
+	}
+	return s.Sign(message, opts)
+}
+
+// GenerateKeyContext creates a key with g, threading ctx when g supports it
+// (ContextKeyGenerator) and falling back to the context-less GenerateKey
+// otherwise. A networked backend (cloud KMS) gets a cancelable, deadline-bound
+// generation; the software backend is unaffected.
+func GenerateKeyContext(ctx context.Context, g KeyGenerator, algorithm Algorithm) (Signer, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if cg, ok := g.(ContextKeyGenerator); ok {
+		return cg.GenerateKeyContext(ctx, algorithm)
+	}
+	return g.GenerateKey(algorithm)
 }
 
 // DigestSigner signs a pre-computed digest. This is the canonical signing

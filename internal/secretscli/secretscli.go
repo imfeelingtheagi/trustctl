@@ -40,14 +40,14 @@ func New(tenantID string, client Client, audit auditsink.Auditor) *CLI {
 // Fetch retrieves a secret (audited).
 func (c *CLI) Fetch(ctx context.Context, path string) ([]byte, error) {
 	v, err := c.client.Fetch(ctx, path)
-	_ = c.audit.Audit(ctx, "secretscli.fetch", c.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path)))
+	_ = auditsink.Emit(ctx, c.audit, nil, "secretscli.fetch", c.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path)))
 	return v, err
 }
 
 // Set writes a secret (audited).
 func (c *CLI) Set(ctx context.Context, path string, value []byte) error {
 	err := c.client.Set(ctx, path, value)
-	_ = c.audit.Audit(ctx, "secretscli.set", c.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path)))
+	_ = auditsink.Emit(ctx, c.audit, nil, "secretscli.set", c.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path)))
 	return err
 }
 
@@ -68,6 +68,6 @@ func (c *CLI) Inject(ctx context.Context, secrets map[string]string, argv []stri
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	sort.Strings(names)
-	_ = c.audit.Audit(ctx, "secretscli.inject", c.tenantID, []byte(fmt.Sprintf(`{"vars":[%q]}`, strings.Join(names, `","`))))
+	_ = auditsink.Emit(ctx, c.audit, nil, "secretscli.inject", c.tenantID, []byte(fmt.Sprintf(`{"vars":[%q]}`, strings.Join(names, `","`))))
 	return out, err
 }

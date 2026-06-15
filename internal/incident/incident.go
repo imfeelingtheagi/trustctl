@@ -187,5 +187,5 @@ func (w *Workflow) stepFailed(ctx context.Context, cred, step string, err error)
 
 func (w *Workflow) audit(ctx context.Context, event string, data map[string]any) {
 	b, _ := json.Marshal(data)
-	_ = w.cfg.Audit.Audit(ctx, event, w.cfg.TenantID, b)
+	_ = auditsink.Emit(ctx, w.cfg.Audit, nil, event, w.cfg.TenantID, b)
 }

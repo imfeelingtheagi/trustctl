@@ -101,11 +101,11 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
-	_ = a.audit.Audit(r.Context(), "secret.access", a.tenantID,
+	_ = auditsink.Emit(r.Context(), a.audit, nil, "secret.access", a.tenantID,
 		[]byte(fmt.Sprintf(`{"principal":%q,"path":%q,"action":%q,"decision":"allow"}`, principal, path, action)))
 }
 
 func (a *APIServer) deny(r *http.Request, reason string) {
-	_ = a.audit.Audit(r.Context(), "secret.access.denied", a.tenantID,
+	_ = auditsink.Emit(r.Context(), a.audit, nil, "secret.access.denied", a.tenantID,
 		[]byte(fmt.Sprintf(`{"principal":%q,"path":%q,"reason":%q}`, r.Header.Get("X-Principal"), r.URL.Path, reason)))
 }

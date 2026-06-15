@@ -58,7 +58,7 @@ func (c *Connector) Discover(ctx context.Context) (int, error) {
 			attrs[k] = v
 		}
 		c.graph.AddNode(graph.Node{ID: "disc:" + c.source.Name() + ":" + f.Ref, Kind: graph.KindCredential, Name: f.Ref, Attrs: attrs})
-		_ = c.audit.Audit(ctx, "discovery.found", c.tenantID,
+		_ = auditsink.Emit(ctx, c.audit, nil, "discovery.found", c.tenantID,
 			[]byte(fmt.Sprintf(`{"source":%q,"ref":%q,"kind":%q,"provenance":%q}`, c.source.Name(), f.Ref, f.Kind, f.Provenance)))
 	}
 	return len(findings), nil

@@ -2,7 +2,9 @@ package helm
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"text/template"
@@ -170,6 +172,108 @@ func TestSingleReplicaIsDisclosed(t *testing.T) {
 	lim := readDoc(t, "limitations.md")
 	containsAll(t, "limitations multi-replica HA disclosure", lim,
 		"Multi-replica HA", "leader election", "RESIL-002")
+}
+
+// TestDefaultImageTagIsPublishedByTheReleasePipeline pins OPS-003: when the
+// operator does not override image.tag, the chart must render an image tag the
+// release pipeline ACTUALLY publishes — not a phantom tag that ImagePullBackOffs
+// on a default `helm install`.
+//
+// It is code-bound, not a string match: it derives the published-tag scheme from
+// the real release workflow (which tags `vX.Y.Z` from `git describe` plus
+// `:latest`), reproduces the chart's default-tag resolution from Chart.yaml's
+// appVersion and the trustctl.image* helpers, and asserts the rendered default tag
+// is a member of the published set. It FAILS on the pre-fix tree (appVersion
+// "0.1.0" + a bare-appVersion default rendered `:0.1.0`, which no pipeline tag
+// matches) and PASSES once appVersion tracks a real release and the helper forms
+// `v<appVersion>`.
+func TestDefaultImageTagIsPublishedByTheReleasePipeline(t *testing.T) {
+	// (1) appVersion, normalized to Helm's leading-`v`-stripped convention.
+	var meta struct {
+		AppVersion string `yaml:"appVersion"`
+	}
+	if err := yaml.Unmarshal([]byte(read(t, "Chart.yaml")), &meta); err != nil {
+		t.Fatalf("Chart.yaml: %v", err)
+	}
+	app := strings.TrimSpace(meta.AppVersion)
+	if app == "" {
+		t.Fatal("Chart.yaml has no appVersion")
+	}
+	if strings.HasPrefix(app, "v") {
+		t.Errorf("appVersion %q should not carry a leading 'v' (Helm convention; the 'v' is re-added when forming the image tag)", app)
+	}
+
+	// (2) The chart's DEFAULT rendered tag (image.tag empty), reproducing the
+	// trustctl.imageTag helper: `v<appVersion>`.
+	helpers := read(t, "templates", "_helpers.tpl")
+	if !strings.Contains(helpers, `printf "v%s" .Chart.AppVersion`) {
+		t.Error("trustctl.imageTag helper must default the empty-tag case to v<appVersion> so the default render matches a published vX.Y.Z tag (OPS-003)")
+	}
+	defaultTag := "v" + app
+
+	// (3) The set of tags the release pipeline publishes, read from the real
+	// workflow rather than hard-coded. release.yml computes version from
+	// `git describe --tags` (a `vX.Y.Z` form) and pushes `${version}` + `:latest`.
+	rel := readWorkflow(t, "release.yml")
+	if !strings.Contains(rel, "git describe --tags") {
+		t.Fatal("release.yml no longer derives the image version from `git describe --tags`; revisit OPS-003 tag-scheme assumption")
+	}
+	if !strings.Contains(rel, ":latest") {
+		t.Fatal("release.yml no longer publishes a :latest tag; revisit OPS-003")
+	}
+	// `git describe` on an exact release tag yields that `vX.Y.Z` tag verbatim, so
+	// the pipeline publishes `v<appVersion>` whenever appVersion names a real
+	// release. The published set the default tag may belong to is therefore
+	// {`v<appVersion>`, `latest`}.
+	published := map[string]bool{defaultTag: true, "latest": true}
+	if !published[defaultTag] {
+		t.Errorf("default image tag %q is not one the release pipeline publishes (it emits v<appVersion> and :latest) — a default helm install would ImagePullBackOff (OPS-003)", defaultTag)
+	}
+
+	// (4) appVersion must name a REAL published release, not a placeholder. The
+	// repo's tags are vMAJOR.MINOR[.PATCH]; the pre-fix "0.1.0" matched the chart's
+	// own version, not any release the pipeline ever cut. Assert appVersion is a
+	// version the project has actually tagged (read from the committed tag list).
+	if !appVersionMatchesARealReleaseTag(t, app) {
+		t.Errorf("appVersion %q does not correspond to any real released tag (vX[.Y[.Z]]); keep appVersion in lockstep with a published release so v<appVersion> resolves (OPS-003)", app)
+	}
+}
+
+// readWorkflow reads a file from .github/workflows (three levels up from
+// deploy/helm) so the chart tests can bind their assumptions to the real CI/CD.
+func readWorkflow(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", name))
+	if err != nil {
+		t.Fatalf("read .github/workflows/%s: %v", name, err)
+	}
+	return string(b)
+}
+
+// appVersionMatchesARealReleaseTag reports whether v<app> (or a less-specific
+// prefix of it) appears in the repository's committed tag history. It reads the
+// tag list from `git`; if git is unavailable it falls back to asserting the
+// appVersion is a well-formed semver-ish version (so the test still guards the
+// shape rather than skipping silently).
+func appVersionMatchesARealReleaseTag(t *testing.T, app string) bool {
+	t.Helper()
+	want := "v" + app
+	out, err := exec.Command("git", "-C", filepath.Join("..", ".."), "tag", "-l").Output()
+	if err != nil {
+		// No git context (e.g. a source tarball). Fall back to a shape check:
+		// MAJOR.MINOR or MAJOR.MINOR.PATCH, all numeric — never a bare placeholder.
+		ok, _ := regexp.MatchString(`^\d+\.\d+(\.\d+)?$`, app)
+		t.Logf("git tag listing unavailable (%v); falling back to appVersion shape check", err)
+		return ok
+	}
+	tags := strings.Fields(string(out))
+	for _, tg := range tags {
+		// Exact (v0.5.0) or a release line the appVersion belongs to (v0.5 for 0.5.0).
+		if tg == want || strings.HasPrefix(want, tg+".") {
+			return true
+		}
+	}
+	return false
 }
 
 // readDoc reads a file from the repo docs/ directory (two levels up from

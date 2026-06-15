@@ -127,7 +127,7 @@ func (a *Authority) Timestamp(ctx context.Context, hashedMessage []byte) (Token,
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: build timestamp token: %w", err)
 	}
-	_ = a.cfg.Audit.Audit(ctx, "tsa.timestamp.issued", a.cfg.TenantID,
+	_ = auditsink.Emit(ctx, a.cfg.Audit, nil, "tsa.timestamp.issued", a.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"serial":%d,"gen_time":%q}`, serial, info.GenTime.Format(time.RFC3339))))
 	return Token{Info: info, Signature: sig, TSACertDER: a.cfg.TSACertDER, DER: der}, nil
 }

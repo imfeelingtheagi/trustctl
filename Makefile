@@ -91,6 +91,29 @@ coverage-critical: ## Enforce the per-package coverage floor on security-critica
 cover: test ## Alias for `make test`; writes cover.out and prints per-function coverage
 	@$(GO) tool cover -func=$(COVERPROFILE).nogen | tail -1
 
+# Per-target fuzz budget for the smoke run (FUZZ-003). Short enough for a per-PR
+# CI gate; the nightly job overrides it (e.g. FUZZ_SMOKE_TIME=120s) for depth.
+FUZZ_SMOKE_TIME ?= 10s
+
+.PHONY: fuzz-smoke
+fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed seed corpus (FUZZ-003)
+	@echo ">> fuzz-smoke (each FuzzXxx for $(FUZZ_SMOKE_TIME); committed seeds replayed first)"
+	@set -euo pipefail; \
+	fail=0; \
+	while read -r pkg fn; do \
+		echo ">> $$pkg $$fn"; \
+		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) || fail=1; \
+	done < <( \
+		grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal | while read -r f; do \
+			pkg="./$$(dirname "$$f")"; \
+			grep -oE '^func (Fuzz[A-Za-z0-9_]+)\(' "$$f" | sed -E 's/^func //; s/\(//' | while read -r fn; do \
+				echo "$$pkg $$fn"; \
+			done; \
+		done | sort -u \
+	); \
+	if [ "$$fail" -ne 0 ]; then echo "FAIL: a fuzz target crashed (see above)"; exit 1; fi; \
+	echo ">> fuzz-smoke: all targets clean"
+
 .PHONY: lint
 lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if installed)
 	@echo ">> gofmt"
@@ -114,6 +137,9 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 	else \
 		echo ">> actionlint not installed; skipping (install with: make tools)"; \
 	fi
+	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
+	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null
+	@bash scripts/ci/check-actions-pinned.sh .
 
 .PHONY: run
 run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version)

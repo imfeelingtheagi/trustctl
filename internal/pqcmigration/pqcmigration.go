@@ -149,5 +149,5 @@ func (o *Orchestrator) markMigrated(assetID string, target crypto.Algorithm) {
 }
 
 func (o *Orchestrator) audit(ctx context.Context, event, data string) {
-	_ = o.cfg.Audit.Audit(ctx, event, o.cfg.TenantID, []byte(data))
+	_ = auditsink.Emit(ctx, o.cfg.Audit, nil, event, o.cfg.TenantID, []byte(data))
 }

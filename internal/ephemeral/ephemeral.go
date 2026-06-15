@@ -142,7 +142,7 @@ func (i *Issuer) Issue(ctx context.Context, req Request) (Result, error) {
 				return nil, fmt.Errorf("ephemeral: bind attestation: %w", err)
 			}
 			res := Result{CertDER: certDER, CredentialID: credID, Subject: att.Subject, NotAfter: notAfter, Attestation: att}
-			_ = i.cfg.Audit.Audit(ctx, "ephemeral.issued", i.cfg.TenantID,
+			_ = auditsink.Emit(ctx, i.cfg.Audit, nil, "ephemeral.issued", i.cfg.TenantID,
 				[]byte(fmt.Sprintf(`{"subject":%q,"method":%q,"ttl_seconds":%d,"not_after":%q}`,
 					att.Subject, att.Method, int(ttl.Seconds()), notAfter.Format(time.RFC3339))))
 			return json.Marshal(res)

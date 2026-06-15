@@ -243,7 +243,7 @@ func (e *Engine) RunRevocations(ctx context.Context) (int, error) {
 }
 
 func (e *Engine) audit(ctx context.Context, event string, l Lease) {
-	_ = e.cfg.Audit.Audit(ctx, event, e.cfg.TenantID,
+	_ = auditsink.Emit(ctx, e.cfg.Audit, nil, event, e.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"lease":%q,"provider":%q,"role":%q,"backend_ref":%q,"state":%q}`, l.ID, l.Provider, l.Role, l.BackendRef, l.State)))
 }
 

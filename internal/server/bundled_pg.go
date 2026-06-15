@@ -35,15 +35,29 @@ func bundledPort(cfg config.Postgres) int {
 // ROLE), so row-level security still applies (AN-1) exactly as in external mode.
 //
 // Evaluation state persists under cfg.DataDir/db so it survives restarts; the
-// pinned Postgres binary is cached (re-downloadable, checksum-pinned) in a shared
-// path. Bundled mode is the ONLY path that fetches that binary on first run;
-// external mode never downloads anything.
+// pinned Postgres binary is cached in a shared path. Provenance is ENFORCED
+// (SUPPLY-003): before starting, a cached binary archive is verified against the
+// committed per-arch SHA-256 pin (independent of Maven's same-origin sidecar), and
+// a mismatch refuses to start; on a cold cache the freshly-downloaded archive is
+// verified before the database is trusted. Bundled mode is the ONLY path that
+// fetches that binary on first run; external mode never downloads anything.
 func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, err error) {
 	dataDir := cfg.DataDir
 	if dataDir == "" {
 		dataDir = "data/postgres"
 	}
 	port := bundledPort(cfg)
+	binariesPath := filepath.Join(os.TempDir(), "trustctl-pg-bin")
+
+	// Provenance, phase 1 (warm cache): if the PostgreSQL archive is already
+	// cached, verify it against the committed pin BEFORE starting anything, so a
+	// tampered cached binary never executes (SUPPLY-003). A cold cache returns
+	// (false, nil) and is gated by phase 2 after the download.
+	archive := bundledPGCacheArchive(binariesPath)
+	if _, verr := verifyBundledPostgresArchive(archive); verr != nil {
+		return "", nil, verr
+	}
+
 	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.V16).
 		Port(uint32(port)).
@@ -51,12 +65,29 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 		RuntimePath(filepath.Join(dataDir, "rt")).
 		// Cache the pinned binary outside the data dir so it is not re-downloaded on
 		// every fresh eval; the same path the integration tests use.
-		BinariesPath(filepath.Join(os.TempDir(), "trustctl-pg-bin")).
+		BinariesPath(binariesPath).
+		// Co-locate the downloaded `.txz` archive with the binaries (the library
+		// otherwise caches it under ~/.embedded-postgres-go), so the provenance check
+		// (SUPPLY-003) verifies the archive in a path we control deterministically.
+		CachePath(binariesPath).
 		Logger(io.Discard).
 		StartTimeout(90 * time.Second))
 	if err := db.Start(); err != nil {
 		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRUSTCTL_POSTGRES_PORT to a free port, or use TRUSTCTL_POSTGRES_MODE=external)", port, err)
 	}
+
+	// Provenance, phase 2 (cold cache just downloaded): a cold Start writes the
+	// `.txz` into BinariesPath as it extracts, so verify it now against the committed
+	// pin; if it does not match (a Maven/MITM that defeated the same-origin sidecar),
+	// stop the database and fail closed (SUPPLY-003). A warm cache that was already
+	// extracted by a prior (verified) run keeps only the extracted bin/ and no
+	// archive — verifyBundledPostgresArchive returns (false, nil) for that absent
+	// case, which phase 1 already covered, so we do not require the archive to exist.
+	if _, verr := verifyBundledPostgresArchive(archive); verr != nil {
+		_ = db.Stop()
+		return "", nil, verr
+	}
+
 	dsn = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
 	return dsn, db.Stop, nil
 }

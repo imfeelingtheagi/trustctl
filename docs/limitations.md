@@ -74,6 +74,16 @@ remaining integration work.
   The console — and the first-run wizard — are **built and tested, not yet served by
   the binary**. Wiring a real Vite bundle into the served binary is tracked as
   **`EXC-WIRE-04`**.
+  - **No generated FE↔BE contract yet (SURFACE-005).** The frontend currently
+    hand-duplicates the API types (`web/src/lib/api.ts`) rather than generating a
+    client from `/api/v1/openapi.json`, so a server field change can silently
+    desync the SPA — the audit caught one such drift (`certificate.status`), now
+    aligned on both sides. As an interim guard, a **contract-drift test**
+    (`internal/api` `TestCertificateContractFEMatchesBE`) fails CI if the FE
+    `Certificate` type references a field the served OpenAPI `Certificate` schema
+    does not define. Adopting a **generated** OpenAPI client (openapi-typescript /
+    orval) with a CI regenerate-and-diff gate — the structural fix — is tracked as
+    **`EXC-WIRE-04`**.
 - **Interactive OIDC browser login & sessions (F13)**: the authorization-code flow,
   id_token verification (signature/issuer/audience/nonce via the AN-3 JOSE
   boundary), and the HMAC-signed `HttpOnly`+`Secure` session cookie are implemented
@@ -161,6 +171,28 @@ This is a deliberate, documented trust boundary (not an accident):
   pool or signer handle; and a deliberately misbehaving plugin is **proven
   contained** by test. Migrating the first-party integrations onto it is future
   work. See the [plugin trust model](security/threat-model.md).
+- **Plugin extensibility is library-only — not served by the binary yet
+  (ARCH-007).** The WASM plugin host and the `plugins/ca` / `plugins/connectors`
+  modules are **built and tested, not yet served by the binary**: nothing under
+  `internal/server`, `internal/api`, or `cmd` imports `internal/pluginhost`, so the
+  **running control plane cannot load a third-party plugin** — advertised
+  **CA-via-plugin** and **connector-via-plugin** extensibility is not production
+  capability today. The shipped first-party integrations run as trusted in-process
+  Go (see above), not through the host. Wiring the plugin host into the served
+  binary with enforced capability grants is tracked as **`EXC-WIRE-05`**.
+- **No plugin signature/provenance verification yet (SUPPLY-004).** `Host.Load`
+  instantiates the supplied `.wasm` bytes **without any signature, content-hash, or
+  trusted-key check** — there is no cosign/Ed25519 verification step before a module
+  runs. The exposure is **bounded today** because the load path is **library-only and
+  unwired** (`Host.Load` has **zero non-test callers** in the served binary; the
+  shipped first-party connectors run as trusted in-process Go via `NewGrant()`, not
+  through the WASM host), and the wazero sandbox is real, tested defense-in-depth
+  (the host holds no DB pool or signer handle). But the host's stated purpose is
+  loading code the core team did not write, so before any **served** plugin surface
+  is wired, `Load` must require a detached signature over the `.wasm` verified
+  against an operator-configured trusted-key set and pin by content hash (keeping the
+  sandbox as defense-in-depth). Adding that signature/provenance gate alongside
+  wiring the served plugin surface is tracked as **`EXC-WIRE-05`**.
 
 ## Protocols
 
@@ -191,17 +223,53 @@ This is a deliberate, documented trust boundary (not an accident):
   library code — with real round-trip and fuzz tests — but are not served end-to-end
   by the running binary** (none is mounted in `internal/api`/`internal/server`/`cmd`),
   so a stock EST device, MDM/SCEP client, SPIFFE workload, or `ssh` host has no
-  listener to connect to in a real deployment. The EST wire framing is additionally
-  corroborated by an embedded C reference client that enrolls end to end; only ACME
-  has an external reference-implementation differential (Pebble, in CI). Mounting
-  these protocol handlers on the served control-plane listener (with auth and tenant
-  scoping) is tracked as **`EXC-WIRE-02`**.
+  listener to connect to in a real deployment. Mounting these protocol handlers on
+  the served control-plane listener (with auth and tenant scoping) is tracked as
+  **`EXC-WIRE-02`**.
+  - **Reference-implementation differentials (TEST-002).** Two protocols are
+    cross-checked against an *independent* implementation, not just our own parser:
+    **ACME** runs a differential against **Pebble** (the reference test ACME CA) as a
+    dedicated CI job, and **EST** runs a differential against the **OpenSSL** `pkcs7`
+    parser/verifier on every `make test` (so `/cacerts` and `/simpleenroll` output is
+    validated by code we did not write). The EST wire framing is *additionally*
+    corroborated by an embedded C reference client that enrolls end to end. What is
+    **not yet wired**: the **libest** `estclient` differential is opt-in/local only
+    (it runs when an operator sets `EST_LIBEST`; no workflow ships the binary), and
+    there is **no SPIFFE Workload-API differential** against a known-good
+    implementation (go-spiffe/SPIRE) yet — both reference cross-checks are tracked
+    with the served-transport work under **`EXC-WIRE-02`**. SCEP, CMP, and the SSH CA
+    are covered by round-trip + fuzz tests but have no external-reference differential
+    today.
 - **SPIFFE transport (Workload API):** the SVID *document* is spec-shaped (a single
   `spiffe://` URI SAN, correct key usage), but the Workload API is, by definition, a
   **gRPC service on a Unix domain socket**; trustctl exposes it today only as Go
   methods (`FetchX509SVIDs`/`FetchJWTSVIDs`/bundle), so **no `spiffe-helper`,
   go-spiffe, or Envoy-SDS workload can fetch an SVID** until the gRPC/UDS server is
   wired. That served gRPC transport is part of **`EXC-WIRE-02`**.
+- **Agent ↔ control-plane mTLS gRPC channel (WIRE-004 / OPS-005):** the in-network
+  agent's mutual-TLS gRPC transport (`internal/agent/transport`,
+  `internal/crypto/mtls`) is built and tested, but it is **library-only and not yet
+  served by the binary**: the transport registers **only the standard health
+  service** — there are no agent RPCs yet — and **no agent gRPC listener is mounted**
+  in `internal/server` (the only served `grpc.Server` is the signer's UDS). So
+  although the served `POST /enroll/bootstrap` route mints an **agent mTLS** client
+  certificate, there is **no served channel for that agent to connect to** in a real
+  deployment. The shipped fleet manifests reflect this gap, not a served port:
+  `deploy/kubernetes/daemonset.yaml` points agents at `trustctl.trustctl.svc:9443`
+  and the Windows MSI uses `--server …:9443`, but the **control-plane Service exposes
+  only the API port `8443`** — there is **no control-plane Service/NetworkPolicy on
+  `9443`** (the only `:9443` in the chart belongs to the *isolated signer* topology,
+  which is itself not-yet-implemented — see "Multi-replica HA"). So the advertised
+  steady-state agent channel (fleet rotation push, drift reporting) is **not
+  exposed by the shipped artifacts** (OPS-005). Additionally, the agent CA is
+  **in-process and regenerated per boot** today (a deliberate, self-disclosed
+  stand-in at `internal/crypto/mtls` — see AN-4): until its key is custodied by the
+  signer, an agent's **pinned CA would change on every control-plane restart**.
+  Storage multi-tenancy still confines everything (AN-1), so this is a
+  **served-vs-library / availability gap, not a tenant leak**. Mounting the agent
+  gRPC listener (with the agent RPCs, a control-plane Service + NetworkPolicy on the
+  agent port, signer-custodied CA, and cert-derived tenant) is tracked as
+  **`EXC-WIRE-02`**.
 
 ## Revocation
 

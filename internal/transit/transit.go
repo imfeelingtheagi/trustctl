@@ -192,7 +192,7 @@ func (k *Keyring) Verify(_ context.Context, message, sig, pubDER []byte) error {
 }
 
 func (k *Keyring) event(ctx context.Context, ev, name string) {
-	_ = k.audit.Audit(ctx, ev, k.tenantID, []byte(fmt.Sprintf(`{"key":%q}`, name)))
+	_ = auditsink.Emit(ctx, k.audit, nil, ev, k.tenantID, []byte(fmt.Sprintf(`{"key":%q}`, name)))
 }
 
 func parseCT(s string) (int, []byte, error) {

@@ -1,0 +1,49 @@
+# CODEOWNERS — required reviewers for trustctl (TEST-006)
+#
+# GitHub requests a review from the listed owner(s) on any PR that touches a
+# matching path, and — when "Require review from Code Owners" is enabled in branch
+# protection (see docs/branch-protection.md) — a PR cannot merge without their
+# approval. The last matching pattern wins, so the security-critical blocks at the
+# bottom override the catch-all above.
+#
+# This file is the in-repo, reviewable record of *who must sign off on what*. The
+# audit (TEST-006) flagged that ownership of the root-of-trust paths was not
+# codified; codifying it here makes the gate provable from the artifact, and
+# docs/codeowners_test.go asserts every security-critical path below stays covered.
+#
+# Owner handle: @imfeelingtheagi is the canonical maintainer namespace (the same one
+# used for the module path, container images, and clone URLs). Replace it with a
+# GitHub team (e.g. @imfeelingtheagi/security) once an org/team exists; the coverage
+# test only requires that each critical path resolves to a non-empty owner.
+
+# Default owner for everything not matched more specifically below.
+*                               @imfeelingtheagi
+
+# --- Security-critical: the root of trust (TEST-006) ------------------------
+# A compromise of any of these is, per CLAUDE.md, "the company is over." They get
+# explicit, mandatory ownership so no change lands without a security review.
+
+# AN-3 — the sole cryptography boundary. Nothing else may import crypto/*.
+/internal/crypto/                @imfeelingtheagi
+
+# AN-4 — the isolated signing service (private-key operations) and its gRPC wire
+# contract (internal/signing/proto — the boundary to the most sensitive process).
+/internal/signing/               @imfeelingtheagi
+/internal/signing/proto/         @imfeelingtheagi
+/cmd/trustctl-signer/            @imfeelingtheagi
+
+# AN-1 — multi-tenant storage, RLS policies, and migrations.
+/internal/store/                 @imfeelingtheagi
+
+# The architecture linter that enforces AN-1/AN-3/AN-5/AN-8 in CI — weakening it
+# silently weakens every guardrail, so it is owned alongside the crypto/signer/store.
+/tools/trustctllint/             @imfeelingtheagi
+
+# --- Security & supply-chain process surfaces -------------------------------
+# CI/release pipelines, the security policy, and the disclosure docs gate what ships
+# and how, so they carry explicit ownership too.
+/.github/                        @imfeelingtheagi
+/.github/workflows/              @imfeelingtheagi
+/.github/CODEOWNERS              @imfeelingtheagi
+/SECURITY.md                     @imfeelingtheagi
+/deploy/                         @imfeelingtheagi

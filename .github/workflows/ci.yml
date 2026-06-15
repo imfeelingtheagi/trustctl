@@ -1,10 +1,15 @@
 name: CI
 
 # Build, test, and lint the module on every pull request and on pushes to main.
+# The nightly schedule drives the deeper fuzz budget (FUZZ-003); per-PR runs use a
+# short smoke budget so the regression net is exercised on every change.
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # 03:17 UTC daily — the longer nightly fuzz pass.
+    - cron: "17 3 * * *"
 
 # Least-privilege token: CI only needs to read the repository.
 permissions:
@@ -21,12 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # full history so `git describe` can stamp the version
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           check-latest: true
@@ -58,6 +63,35 @@ jobs:
           bash scripts/ci/check-base-pinned_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
 
+  # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
+  # that touches untrusted input" (CLAUDE.md §6) is only a safety net if it RUNS:
+  # this job replays each target's committed seed corpus (under testdata/fuzz, so a
+  # known crasher like FUZZ-001's 0x30 0x84 fails fast) and then fuzzes each target
+  # for a short budget. The schedule trigger raises the budget for a deeper nightly
+  # pass. A new crasher fails CI here instead of shipping.
+  fuzz:
+    name: fuzz (smoke per-PR, deeper nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      # The in-repo coverage guard (TestEveryUntrustedParserIsFuzzed) fails if any
+      # untrusted-input parser lacks a fuzz target, keeping the denominator honest.
+      - name: Coverage guard (every untrusted parser is fuzzed)
+        run: go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1
+
+      # Short budget per target on a PR; a longer budget on the nightly schedule.
+      - name: Fuzz smoke (all targets; committed seeds first)
+        run: make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}
+
   web:
     name: web ui (typecheck / test / build)
     runs-on: ubuntu-latest
@@ -66,10 +100,10 @@ jobs:
         working-directory: web
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -98,10 +132,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
@@ -119,10 +153,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
@@ -136,15 +170,23 @@ jobs:
       - name: Lint workflows
         run: actionlint -color
 
+      # Every THIRD-PARTY action must be pinned by an immutable commit SHA, not a
+      # mutable tag (SUPPLY-002). The self-test proves the guard catches a
+      # floating-tag regression; the guard itself fails CI if any workflow drifts.
+      - name: Verify third-party actions are SHA-pinned (not floating tags)
+        run: |
+          bash scripts/ci/check-actions-pinned_selftest.sh
+          bash scripts/ci/check-actions-pinned.sh .
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           check-latest: true
@@ -165,10 +207,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
@@ -179,7 +221,7 @@ jobs:
         run: make sbom
 
       - name: Upload module SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sbom-module-cyclonedx
           path: sbom.module.cyclonedx.json
@@ -197,10 +239,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.4
 
@@ -212,7 +254,7 @@ jobs:
             --set nats.url='nats://nats:4222' --set kek.generate=true
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
@@ -233,14 +275,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # Full history so `buf breaking --against '.git#branch=main'` can resolve
           # the baseline contract to diff against.
           fetch-depth: 0
 
       - name: Install buf (pinned)
-        uses: bufbuild/buf-action@v1
+        uses: bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff # v1.4.0
         with:
           version: 1.47.2
           setup_only: true
@@ -274,10 +316,10 @@ jobs:
           - 15000:15000
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
@@ -308,10 +350,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           check-latest: true
@@ -336,10 +378,10 @@ jobs:
       WINDOWS_CODESIGN_PASS: ${{ secrets.WINDOWS_CODESIGN_PASS }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           check-latest: true
@@ -404,7 +446,7 @@ jobs:
             Tee-Object -FilePath dist\SHA256SUMS
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: trustctl-agent-windows
           path: |
@@ -417,17 +459,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           check-latest: true
           cache: true
 
       - name: Create kind cluster
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           cluster_name: trustctl-e2e
 

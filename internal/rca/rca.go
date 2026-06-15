@@ -71,7 +71,7 @@ func (p *Pipeline) Gather(ctx context.Context, tenantID, subject, question strin
 			})
 		}
 	}
-	_ = p.audit.Audit(ctx, "rca.evidence.gathered", tenantID, []byte(`{"subject":"`+subject+`","items":`+itoa(len(ev.Items))+`}`))
+	_ = auditsink.Emit(ctx, p.audit, nil, "rca.evidence.gathered", tenantID, []byte(`{"subject":"`+subject+`","items":`+itoa(len(ev.Items))+`}`))
 	return ev, nil
 }
 

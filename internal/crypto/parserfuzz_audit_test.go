@@ -27,14 +27,18 @@ var fuzzFuncNameRE = regexp.MustCompile(`(?m)^func (Fuzz\w+)\(`)
 // test's working directory.
 func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	parsers := map[string]string{
-		".":                 "PKCS#10 CSR (VerifyCertificateRequest)",
-		"certinfo":          "X.509 certificate (Inspect)",
-		"ctlog":             "CT-log RFC 6962 (ParseSTH / ParseEntries)",
-		"sshkeys":           "SSH keys (authorized_keys / known_hosts / .pub)",
-		"jose":              "JOSE / ACME JWS",
-		"../protocols/acme": "ACME new-order / finalize",
-		"../protocols/ari":  "ARI CertID",
-		"../signing":        "signer SignRequest (protobuf)",
+		".":                   "PKCS#10 CSR (VerifyCertificateRequest)",
+		"certinfo":            "X.509 certificate (Inspect)",
+		"ctlog":               "CT-log RFC 6962 (ParseSTH / ParseEntries)",
+		"sshkeys":             "SSH keys (authorized_keys / known_hosts / .pub)",
+		"jose":                "JOSE / ACME JWS",
+		"../protocols/acme":   "ACME new-order / finalize",
+		"../protocols/ari":    "ARI CertID",
+		"../protocols/est":    "EST enroll body (base64 PKCS#10)",
+		"../signing":          "signer SignRequest (protobuf)",
+		"../secretscan":       "scanner-report ingest (untrusted JSON)",
+		"../attest/awsiid":    "AWS IID attester Attest (untrusted CMS pre-verification)",
+		"../attest/azureimds": "Azure IMDS attester Attest (untrusted CMS pre-verification)",
 	}
 	for dir, what := range parsers {
 		if !dirHasFuzzTarget(t, dir) {
@@ -52,6 +56,19 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"FuzzParseSCEPRequest":   "SCEP pkiMessage CMS (scep.go ParseSCEPRequest)",
 		"FuzzParseSCEPResponse":  "SCEP CertRep CMS (scep.go ParseSCEPResponse) — shares the FUZZ-001 decoder",
 		"FuzzVerifyCMSSignature": "cloud IID CMS (verify.go VerifyCMSSignature) — parses untrusted bytes pre-verification",
+	})
+
+	// The cloud instance-identity attesters parse the same untrusted CMS family at
+	// their pre-verification entry point (Attest). VerifyCMSSignature is fuzzed at
+	// the boundary above; require the end-to-end attester harnesses too so the JSON
+	// document decode + selector extraction that runs on a verified-but-attacker-
+	// shaped document is covered, and so dropping one attester's harness trips this
+	// guard (FUZZ-002).
+	requireFuzzFuncByName(t, "../attest/awsiid", map[string]string{
+		"FuzzAWSIIDAttest": "AWS IID attester Attest (awsiid.go) — untrusted CMS document pre-verification",
+	})
+	requireFuzzFuncByName(t, "../attest/azureimds", map[string]string{
+		"FuzzAzureIMDSAttest": "Azure IMDS attester Attest (azureimds.go) — untrusted CMS document pre-verification",
 	})
 }
 

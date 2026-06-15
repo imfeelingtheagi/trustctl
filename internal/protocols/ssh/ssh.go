@@ -151,7 +151,7 @@ func (ca *CA) issue(ctx context.Context, profile Profile, req IssueRequest, cert
 		if certType == crypto.SSHHostCert {
 			kind = "host"
 		}
-		_ = ca.cfg.Audit.Audit(ctx, "ssh.cert.issued", ca.cfg.TenantID,
+		_ = auditsink.Emit(ctx, ca.cfg.Audit, nil, "ssh.cert.issued", ca.cfg.TenantID,
 			[]byte(fmt.Sprintf(`{"type":%q,"key_id":%q,"serial":%d,"principals":%d,"profile":%q}`,
 				kind, req.KeyID, serial, len(req.Principals), profile.Name)))
 		return nil

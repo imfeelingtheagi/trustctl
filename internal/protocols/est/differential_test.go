@@ -61,12 +61,17 @@ func TestESTDifferentialVsOpenSSL(t *testing.T) {
 // EST_LIBEST points at an estclient binary. Unlike the previous stub, when the
 // binary IS present it runs a real /cacerts fetch against a live server and
 // asserts estclient succeeds — it can no longer pass without exercising the
-// client. When libest is absent it SKIPs honestly (the OpenSSL differential above
-// still provides a real, non-skipped external reference).
+// client. When libest is absent it SKIPs honestly: the OpenSSL differential above
+// is the real, non-skipped external reference that runs in every `make test` (and
+// thus in CI), so the EST surface always has an independent cross-check; libest is
+// an *additional* reference that runs only when an operator provides the binary.
+// (TEST-002: no workflow ships a libest estclient today, so this path is
+// opt-in/local, not a wired CI job — limitations.md discloses that, and the SPIFFE
+// reference differential, as outstanding work under EXC-WIRE-02.)
 func TestESTDifferentialVsLibest(t *testing.T) {
 	bin := os.Getenv("EST_LIBEST")
 	if bin == "" {
-		t.Skip("EST_LIBEST not set; libest differential runs on the CI backstop (OpenSSL differential covers the unit run)")
+		t.Skip("EST_LIBEST not set; libest is an opt-in extra reference (the OpenSSL differential above is the real, non-skipped cross-check that runs in make test/CI)")
 	}
 	if _, err := exec.LookPath(bin); err != nil {
 		t.Fatalf("EST_LIBEST=%q not executable: %v", bin, err)

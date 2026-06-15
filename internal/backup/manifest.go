@@ -32,6 +32,7 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 // PostgreSQL dump in the backup set.
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
+	"agent_bootstrap_tokens",
 	"agents",
 	"attestations",
 	"audit_checkpoints",

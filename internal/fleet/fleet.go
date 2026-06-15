@@ -191,7 +191,7 @@ func (f *Fleet) ReissueFleet(ctx context.Context, issuerID, runID string) (Repor
 }
 
 func (f *Fleet) audit(ctx context.Context, event, data string) {
-	_ = f.cfg.Audit.Audit(ctx, event, f.cfg.TenantID, []byte(data))
+	_ = auditsink.Emit(ctx, f.cfg.Audit, nil, event, f.cfg.TenantID, []byte(data))
 }
 
 // MemoryProgress is an in-memory ProgressStore for single-node runs and tests.

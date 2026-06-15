@@ -76,7 +76,7 @@ func (e *Engine) Sync(ctx context.Context, key string, value []byte) error {
 	if err := e.outbox.Enqueue(ctx, SyncItem{ID: id, Key: key, Target: e.target.Name(), Value: value}); err != nil {
 		return err
 	}
-	_ = e.audit.Audit(ctx, "secret.sync.enqueued", e.tenantID, []byte(fmt.Sprintf(`{"key":%q,"target":%q}`, key, e.target.Name())))
+	_ = auditsink.Emit(ctx, e.audit, nil, "secret.sync.enqueued", e.tenantID, []byte(fmt.Sprintf(`{"key":%q,"target":%q}`, key, e.target.Name())))
 	return nil
 }
 
@@ -95,7 +95,7 @@ func (e *Engine) RunDeliveries(ctx context.Context) (int, error) {
 		if err := e.outbox.Done(ctx, it.ID); err != nil {
 			return done, err
 		}
-		_ = e.audit.Audit(ctx, "secret.sync.delivered", e.tenantID, []byte(fmt.Sprintf(`{"key":%q,"target":%q}`, it.Key, it.Target)))
+		_ = auditsink.Emit(ctx, e.audit, nil, "secret.sync.delivered", e.tenantID, []byte(fmt.Sprintf(`{"key":%q,"target":%q}`, it.Key, it.Target)))
 		done++
 	}
 	return done, nil

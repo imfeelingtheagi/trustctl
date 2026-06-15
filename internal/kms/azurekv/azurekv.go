@@ -24,12 +24,18 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"trustctl.io/trustctl/internal/crypto"
 )
 
 // apiVersion is the Key Vault data-plane REST API version exercised here.
 const apiVersion = "7.4"
+
+// defaultOpTimeout bounds a single Key Vault network operation when the caller
+// does not supply its own deadline, so an interface-forced context.Background()
+// cannot hang a worker on a wedged vault (CODE-002).
+const defaultOpTimeout = 30 * time.Second
 
 // Credentials carry the AAD access (bearer) token used to authenticate requests. The token
 // is supplied by the caller (no OAuth flow is performed here); it is opaque and never logged.
@@ -44,14 +50,19 @@ type HTTPDoer interface {
 
 // Backend is an Azure Key Vault (keys) crypto.Backend.
 type Backend struct {
-	vaultURL string
-	endpoint string
-	creds    Credentials
-	doer     HTTPDoer
-	n        int
+	vaultURL  string
+	endpoint  string
+	creds     Credentials
+	doer      HTTPDoer
+	n         int
+	opTimeout time.Duration
 }
 
-var _ crypto.Backend = (*Backend)(nil)
+var (
+	_ crypto.Backend             = (*Backend)(nil)
+	_ crypto.ContextKeyGenerator = (*Backend)(nil)
+	_ crypto.ContextSigner       = (*kvSigner)(nil)
+)
 
 // Option configures a Backend.
 type Option func(*Backend)
@@ -65,13 +76,20 @@ func WithEndpoint(endpoint string) Option {
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option { return func(b *Backend) { b.doer = d } }
 
+// WithOpTimeout sets the per-operation timeout applied when a Sign/GenerateKey is
+// reached through the context-less crypto interface (CODE-002). A non-positive
+// value disables the floor; it does not affect calls made through the
+// ContextSigner path, where the caller's deadline governs.
+func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeout = d } }
+
 // New returns an Azure Key Vault backend for vaultURL (e.g. https://my-vault.vault.azure.net),
 // authenticating with creds.
 func New(vaultURL string, creds Credentials, opts ...Option) *Backend {
 	b := &Backend{
-		vaultURL: strings.TrimRight(vaultURL, "/"),
-		creds:    creds,
-		doer:     http.DefaultClient,
+		vaultURL:  strings.TrimRight(vaultURL, "/"),
+		creds:     creds,
+		doer:      http.DefaultClient,
+		opTimeout: defaultOpTimeout,
 	}
 	b.endpoint = b.vaultURL
 	for _, o := range opts {
@@ -80,18 +98,41 @@ func New(vaultURL string, creds Credentials, opts ...Option) *Backend {
 	return b
 }
 
+// opContext derives the context a single network operation runs under when the
+// caller did not provide a deadline (the interface-forced background path); a
+// caller-supplied deadline (the ContextSigner path) is left untouched.
+func (b *Backend) opContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if b.opTimeout <= 0 {
+		return ctx, func() {}
+	}
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, b.opTimeout)
+}
+
 // Name identifies the backend.
 func (b *Backend) Name() string { return "azure-key-vault" }
 
 // GenerateKey creates an asymmetric signing key in the vault and returns a Signer for it.
+// It is the context-less entry point; it applies the backend's per-operation timeout
+// floor so a wedged vault cannot hang the caller (CODE-002). Callers holding a context
+// should prefer GenerateKeyContext.
 func (b *Backend) GenerateKey(alg crypto.Algorithm) (crypto.Signer, error) {
+	return b.GenerateKeyContext(context.Background(), alg)
+}
+
+// GenerateKeyContext is the context-bearing key generation (crypto.ContextKeyGenerator):
+// the caller's context bounds and can cancel every vault round-trip the generation makes.
+func (b *Backend) GenerateKeyContext(ctx context.Context, alg crypto.Algorithm) (crypto.Signer, error) {
 	body, err := createBody(alg)
 	if err != nil {
 		return nil, err
 	}
 	b.n++
 	name := fmt.Sprintf("trustctl-key-%d", b.n)
-	ctx := context.Background()
+	ctx, cancel := b.opContext(ctx)
+	defer cancel()
 	// The create response models both the key identifier and (per the package note) the
 	// base64-std DER SubjectPublicKeyInfo the double provides.
 	var created struct {
@@ -144,7 +185,16 @@ type kvSigner struct {
 func (s *kvSigner) Public() crypto.PublicKey    { return s.pub }
 func (s *kvSigner) Algorithm() crypto.Algorithm { return s.alg }
 
+// Sign is the context-less entry point; it applies the backend's per-operation
+// timeout floor so a wedged vault cannot hang the caller (CODE-002). Callers
+// holding a context should prefer SignContext.
 func (s *kvSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error) {
+	return s.SignContext(context.Background(), message, opts)
+}
+
+// SignContext is the context-bearing signing operation (crypto.ContextSigner): the
+// caller's context bounds and can cancel the remote Key Vault /sign call.
+func (s *kvSigner) SignContext(ctx context.Context, message []byte, opts crypto.SignOptions) ([]byte, error) {
 	digest, err := crypto.Digest(hashOf(opts), message)
 	if err != nil {
 		return nil, err
@@ -161,11 +211,13 @@ func (s *kvSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := s.b.opContext(ctx)
+	defer cancel()
 	var out struct {
 		Value string `json:"value"`
 	}
 	path := keyPath(s.name, s.version) + "/sign"
-	if err := s.b.call(context.Background(), http.MethodPost, path, body, &out); err != nil {
+	if err := s.b.call(ctx, http.MethodPost, path, body, &out); err != nil {
 		return nil, fmt.Errorf("azure-key-vault: sign: %w", err)
 	}
 	sig, err := base64.RawURLEncoding.DecodeString(out.Value)

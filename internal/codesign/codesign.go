@@ -81,7 +81,7 @@ func (s *Service) Sign(ctx context.Context, req SignRequest) (Signature, error) 
 	digestHex := fmt.Sprintf("%x", req.Digest)
 	if s.cfg.Gate != nil {
 		if ok, reason := s.cfg.Gate.MaySign(ctx, s.cfg.TenantID, req.Principal, req.KeyID, digestHex); !ok {
-			_ = s.cfg.Audit.Audit(ctx, "codesign.refused", s.cfg.TenantID,
+			_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.refused", s.cfg.TenantID,
 				[]byte(fmt.Sprintf(`{"principal":%q,"key":%q,"reason":%q}`, req.Principal, req.KeyID, reason)))
 			return Signature{}, fmt.Errorf("codesign: %s not permitted to sign with %s: %s", req.Principal, req.KeyID, reason)
 		}
@@ -95,7 +95,7 @@ func (s *Service) Sign(ctx context.Context, req SignRequest) (Signature, error) 
 		return Signature{}, fmt.Errorf("codesign: sign: %w", err)
 	}
 	pub := signer.Public()
-	_ = s.cfg.Audit.Audit(ctx, "codesign.signed", s.cfg.TenantID,
+	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.signed", s.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"principal":%q,"key":%q,"artifact_type":%q,"digest":%q}`, req.Principal, req.KeyID, req.ArtifactType, digestHex)))
 	return Signature{Algorithm: string(pub.Algorithm), Value: value, PublicKeyDER: pub.DER, KeyID: req.KeyID, ArtifactType: req.ArtifactType}, nil
 }
@@ -140,7 +140,7 @@ func (s *Service) SignKeyless(ctx context.Context, req KeylessRequest) (KeylessS
 		return KeylessSignature{}, fmt.Errorf("codesign: keyless sign: %w", err)
 	}
 	pub := req.Ephemeral.Public()
-	_ = s.cfg.Audit.Audit(ctx, "codesign.keyless.signed", s.cfg.TenantID,
+	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.signed", s.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"principal":%q,"fulcio_san":%q,"fulcio_issuer":%q,"artifact_type":%q}`, req.Principal, req.FulcioSAN, req.FulcioIssuer, req.ArtifactType)))
 	return KeylessSignature{
 		Algorithm: string(pub.Algorithm), Value: value, PublicKeyDER: pub.DER,

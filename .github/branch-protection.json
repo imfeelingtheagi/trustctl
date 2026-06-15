@@ -1,0 +1,34 @@
+{
+  "_comment": "Branch-protection / required-checks for main, codified in-repo (TEST-006). This is the source of truth a repo admin applies; it makes the gate provable from the artifact instead of an invisible server-side setting. Code ownership of the root-of-trust paths (internal/crypto, internal/signing[/proto], internal/store, tools/trustctllint) is in .github/CODEOWNERS. Apply with: gh api -X PUT repos/imfeelingtheagi/trustctl/branches/main/protection --input .github/branch-protection.json (or import into Terraform's github_branch_protection). docs/branch-protection.md explains each field and how to apply/verify it. docs/branch_protection_test.go asserts this file stays in sync with the CI job names so a renamed check cannot silently drop out of the required set.",
+  "required_status_checks": {
+    "strict": true,
+    "contexts": [
+      "build / test / lint",
+      "web ui (typecheck / test / build)",
+      "docs site (mkdocs build --strict)",
+      "actionlint (workflow lint)",
+      "govulncheck",
+      "supply-chain (SBOM + binary SCA)",
+      "helm (lint + render + schema)",
+      "proto (buf lint + breaking-change gate)",
+      "acme conformance (Pebble differential)",
+      "windows cross-build",
+      "windows / test + MSI",
+      "kubernetes / kind e2e",
+      "secret scan (gitleaks)",
+      "container image scan (Trivy)"
+    ]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "require_code_owner_reviews": true,
+    "dismiss_stale_reviews": true,
+    "require_last_push_approval": true
+  },
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true,
+  "restrictions": null
+}

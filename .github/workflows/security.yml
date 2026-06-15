@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # scan full history, not just the tip
 
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Resolve the distroless runtime base by digest (pin, not tag)
         id: base
@@ -90,3 +90,12 @@ jobs:
 
       - name: Verify the production image base is digest-pinned (not a floating tag)
         run: bash scripts/ci/check-base-pinned.sh
+
+      # Supply-chain pin policy, part two: every third-party GitHub Action is
+      # pinned by an immutable commit SHA, never a mutable tag (SUPPLY-002). The
+      # release pipeline holds packages:write + id-token:write, so a repointed
+      # action tag is an OIDC-token / image-push risk.
+      - name: Verify third-party actions are SHA-pinned (not floating tags)
+        run: |
+          bash scripts/ci/check-actions-pinned_selftest.sh
+          bash scripts/ci/check-actions-pinned.sh .

@@ -119,7 +119,7 @@ func (s *Server) HasWriteTool() bool { return false }
 // rate-limited and audited. Retrieved data is grounded and inert.
 func (s *Server) Call(ctx context.Context, caller, tenantID, tool, subject string) (ToolResult, error) {
 	if tenantID != s.tenantID { // SF.7 scoping by construction
-		_ = s.audit.Audit(ctx, "mcp.tool.denied", s.tenantID, []byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"reason":"out-of-scope"}`, caller, tool)))
+		_ = auditsink.Emit(ctx, s.audit, nil, "mcp.tool.denied", s.tenantID, []byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"reason":"out-of-scope"}`, caller, tool)))
 		return ToolResult{}, ErrOutOfScope
 	}
 	q, ok := s.tools[tool]
@@ -127,7 +127,7 @@ func (s *Server) Call(ctx context.Context, caller, tenantID, tool, subject strin
 		return ToolResult{}, fmt.Errorf("mcpserver: unknown or non-read-only tool %q", tool)
 	}
 	if !s.rate.Allow(caller + "|" + tool) {
-		_ = s.audit.Audit(ctx, "mcp.tool.ratelimited", s.tenantID, []byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, caller, tool)))
+		_ = auditsink.Emit(ctx, s.audit, nil, "mcp.tool.ratelimited", s.tenantID, []byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, caller, tool)))
 		return ToolResult{}, ErrRateLimited
 	}
 	ev, err := s.pipeline.Gather(ctx, tenantID, subject, q+" "+subject)
@@ -138,7 +138,7 @@ func (s *Server) Call(ctx context.Context, caller, tenantID, tool, subject strin
 	if err != nil {
 		return ToolResult{}, err
 	}
-	_ = s.audit.Audit(ctx, "mcp.tool.call", s.tenantID,
+	_ = auditsink.Emit(ctx, s.audit, nil, "mcp.tool.call", s.tenantID,
 		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"scope":%q,"citations":%d,"outcome":"ok"}`, caller, tool, tenantID, len(ans.Citations))))
 	return ToolResult{Tool: tool, Citations: ans.Citations, Text: ans.Text}, nil
 }

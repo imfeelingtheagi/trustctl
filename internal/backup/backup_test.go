@@ -111,3 +111,132 @@ func TestRestoreRejectsBadHeader(t *testing.T) {
 		t.Fatal("restore must reject a stream with no valid backup header")
 	}
 }
+
+// makeBackup writes a small backup (optionally keyed) and returns its bytes.
+func makeBackup(t *testing.T, key []byte) []byte {
+	t.Helper()
+	ctx := context.Background()
+	src := openLog(t)
+	appendEvent(t, src, ctx, "owner.created", `{"name":"payments"}`)
+	appendEvent(t, src, ctx, "certificate.recorded", `{"serial":"01"}`)
+	appendEvent(t, src, ctx, "identity.issued", `{"id":"abc"}`)
+	var buf bytes.Buffer
+	if _, err := backup.WriteLogWithKey(ctx, src, &buf, key); err != nil {
+		t.Fatalf("WriteLogWithKey: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// TestRestoreRejectsTamperedBackup is the OPS-006 acceptance: a single flipped
+// byte anywhere in a record makes --restore (RestoreLog) fail closed with an
+// integrity error, while the untouched backup restores cleanly. It FAILS on the
+// pre-fix tree, which validated only format+version and never hashed the bytes.
+func TestRestoreRejectsTamperedBackup(t *testing.T) {
+	good := makeBackup(t, nil)
+
+	// (1) The pristine backup restores its three events.
+	{
+		dst := openLog(t)
+		n, err := backup.RestoreLog(context.Background(), dst, bytes.NewReader(good))
+		if err != nil {
+			t.Fatalf("pristine backup must restore: %v", err)
+		}
+		if n != 3 {
+			t.Fatalf("restored %d events, want 3", n)
+		}
+	}
+
+	// (2) Flip a byte inside the serial of the second record ("01" -> "02"); the
+	// SHA-256 over the stream no longer matches the trailer, so restore must reject
+	// it WITHOUT appending anything.
+	tampered := bytes.Replace(good, []byte(`"serial":"01"`), []byte(`"serial":"02"`), 1)
+	if bytes.Equal(tampered, good) {
+		t.Fatal("test setup: expected to mutate the serial in the backup bytes")
+	}
+	dst := openLog(t)
+	n, err := backup.RestoreLog(context.Background(), dst, bytes.NewReader(tampered))
+	if err == nil {
+		t.Fatal("restore must REJECT a bit-flipped backup (OPS-006)")
+	}
+	if !strings.Contains(err.Error(), "integrity") {
+		t.Errorf("rejection should be an integrity error, got: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("a tampered backup must not append any events, appended %d", n)
+	}
+	// The target log is untouched: nothing was restored.
+	if got := collect(t, dst); len(got) != 0 {
+		t.Errorf("target log should be empty after a rejected restore, has %d events", len(got))
+	}
+}
+
+// TestRestoreRejectsTruncatedBackup: a stream cut short (lost trailer, or a
+// dropped record) is rejected fail-closed.
+func TestRestoreRejectsTruncatedBackup(t *testing.T) {
+	good := makeBackup(t, nil)
+
+	// Drop the final line (the integrity trailer).
+	lines := bytes.Split(bytes.TrimRight(good, "\n"), []byte("\n"))
+	if len(lines) < 3 {
+		t.Fatalf("unexpected backup shape: %d lines", len(lines))
+	}
+	noTrailer := append(bytes.Join(lines[:len(lines)-1], []byte("\n")), '\n')
+
+	dst := openLog(t)
+	if _, err := backup.RestoreLog(context.Background(), dst, bytes.NewReader(noTrailer)); err == nil {
+		t.Fatal("restore must reject a backup with no integrity trailer (truncated)")
+	}
+
+	// Drop a data record (the trailer's record count no longer matches, AND the
+	// hash no longer matches).
+	dropped := bytes.Join(append([][]byte{lines[0], lines[2]}, lines[3:]...), []byte("\n"))
+	dropped = append(dropped, '\n')
+	dst2 := openLog(t)
+	if _, err := backup.RestoreLog(context.Background(), dst2, bytes.NewReader(dropped)); err == nil {
+		t.Fatal("restore must reject a backup with a removed record (OPS-006)")
+	}
+}
+
+// TestKeyedBackupRequiresValidMAC: a keyed (HMAC) backup verifies only under the
+// right key — restoring under the wrong key, or with no key when the caller
+// requires one, fails; the matching key restores.
+func TestKeyedBackupRequiresValidMAC(t *testing.T) {
+	ctx := context.Background()
+	key := []byte("deployment-integrity-key-32-bytes!")
+	keyed := makeBackup(t, key)
+
+	// Right key: restores.
+	{
+		dst := openLog(t)
+		n, err := backup.RestoreLogWithKey(ctx, dst, bytes.NewReader(keyed), key)
+		if err != nil {
+			t.Fatalf("keyed backup must restore under the right key: %v", err)
+		}
+		if n != 3 {
+			t.Fatalf("restored %d events, want 3", n)
+		}
+	}
+
+	// Wrong key: the SHA-256 still matches (untampered), but the MAC must not
+	// verify, so restore is rejected fail-closed.
+	{
+		dst := openLog(t)
+		_, err := backup.RestoreLogWithKey(ctx, dst, bytes.NewReader(keyed), []byte("a-different-wrong-integrity-key!!"))
+		if err == nil {
+			t.Fatal("keyed backup must be rejected under the wrong integrity key")
+		}
+		if !strings.Contains(err.Error(), "integrity") {
+			t.Errorf("wrong-key rejection should be an integrity error, got: %v", err)
+		}
+	}
+
+	// A caller that requires a key but is handed a checksum-only (keyless) backup
+	// must reject it (a downgrade attempt).
+	{
+		keyless := makeBackup(t, nil)
+		dst := openLog(t)
+		if _, err := backup.RestoreLogWithKey(ctx, dst, bytes.NewReader(keyless), key); err == nil {
+			t.Fatal("a key-requiring restore must reject a backup that carries no HMAC")
+		}
+	}
+}

@@ -40,8 +40,19 @@ trustctl --backup=/backups/trustctl-events-$(date +%F).jsonl
 
 The backup is **newline-delimited JSON** — a self-describing, versioned header
 followed by one record per event (id, type, tenant, time, data, and the recorded
-actor). It is portable and inspectable, and it captures the complete envelope so
-the recovered audit trail is intact.
+actor), and a final **integrity trailer**. It is portable and inspectable, and it
+captures the complete envelope so the recovered audit trail is intact.
+
+**Integrity (OPS-006).** The trailer carries a **SHA-256** over the entire stream
+(header + every record), so a bit-flip, a truncation, or a removed record is
+detected — `--restore` recomputes the hash and **refuses a tampered or corrupt
+backup, fail-closed**, before appending a single event. When the deployment has a
+persisted audit signing key (`TRUSTCTL_AUDIT_SIGNING_KEY_FILE`), the trailer also
+carries an **HMAC-SHA256** derived from that key, binding the backup to this
+deployment so an attacker who can rewrite the file cannot forge a matching
+trailer. All hashing/MAC routes through the `internal/crypto` boundary (AN-3); the
+signer is not involved (AN-4). Keep the audit key with your backups so a keyed
+backup verifies on the recovery host.
 
 ## Restoring
 

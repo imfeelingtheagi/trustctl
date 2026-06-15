@@ -84,7 +84,7 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 	}
 	principal, scopes, err := meth.Authenticate(ctx, credential)
 	if err != nil {
-		_ = m.cfg.Audit.Audit(ctx, "auth.rejected", m.cfg.TenantID, []byte(fmt.Sprintf(`{"method":%q}`, method)))
+		_ = auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.rejected", m.cfg.TenantID, []byte(fmt.Sprintf(`{"method":%q}`, method)))
 		return Session{}, fmt.Errorf("authmethod: %s authentication failed: %w", method, err)
 	}
 	idb, _ := crypto.RandomBytes(16)
@@ -93,7 +93,7 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 		ID: hex.EncodeToString(idb), TenantID: m.cfg.TenantID, Principal: principal,
 		Method: method, Scopes: scopes, IssuedAt: now, ExpiresAt: now.Add(m.cfg.TTL),
 	}
-	_ = m.cfg.Audit.Audit(ctx, "auth.session.issued", m.cfg.TenantID,
+	_ = auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.session.issued", m.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"method":%q,"principal":%q,"scopes":%d}`, method, principal, len(scopes))))
 	return sess, nil
 }

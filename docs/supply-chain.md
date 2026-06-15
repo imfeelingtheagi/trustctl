@@ -61,21 +61,33 @@ $ npm audit --omit=dev
 found 0 vulnerabilities   (300 production dependencies)
 ```
 
-### embedded-postgres binary — checksum-pin + Trivy
+### embedded-postgres binary — committed checksum pin (CI **and** runtime) + Trivy
 
-The `embedded-postgres` test dependency downloads a real **PostgreSQL 16.4.0**
-binary from **Maven Central** at runtime — outside `go.sum`. It is pinned and
-scanned:
+The `embedded-postgres` dependency downloads a real **PostgreSQL 16.4.0** binary
+from **Maven Central** at runtime — outside `go.sum`. It is used both by the
+integration tests **and by the served single-node/eval path**
+(`internal/server/startBundledPostgres`), so its provenance is **committed and
+enforced at runtime**, not merely scanned in CI (SUPPLY-003):
 
 - `deploy/supply-chain/embedded-postgres.json` records the exact version, Maven
-  coordinates, source URL, and the checksum/scan policy.
-- `internal/projections/projections_test.go` pins `embeddedpostgres.V16`, so the
-  scanned binary is the binary the tests actually run.
+  coordinates, source URLs, and a **committed per-arch SHA-256 pin** for both the
+  Maven `jar` and the inner `.txz` archive the library caches and extracts. The pin
+  is **populated** (the trust-on-first-use bootstrap is complete), so the gate is a
+  hard fail, not a no-op.
+- `internal/server/bundled_pg_pins.go` carries the same per-arch `.txz` pins that
+  the **served binary enforces at runtime**: before starting bundled PostgreSQL,
+  `startBundledPostgres` verifies the cached `.txz` against the committed pin and
+  **refuses to start a tampered or MITM'd binary**, fail-closed. This is independent
+  of the library's same-origin `.sha256` sidecar, so a Maven/MITM compromise serving
+  a matching jar+sidecar is still caught. `TestRuntimePinsMatchManifest` asserts the
+  Go pins and the JSON manifest never drift.
 - `scripts/supply-chain/verify-embedded-postgres.sh` (CI `supply-chain` job)
-  checksum-pins it (trust-on-first-use: fail the build if it ever changes) and
-  **Trivy-scans** the extracted binaries for HIGH/CRITICAL issues.
+  verifies the downloaded jar **and** its inner `.txz` against the committed pins
+  (failing the build on any change) and **Trivy-scans** the extracted binaries for
+  HIGH/CRITICAL issues.
 
-This binary is integration-test only; it is **not** bundled in the shipped image.
+This binary is **not** bundled in the shipped distroless image (which carries only
+the Go binaries); it is fetched on first run of the bundled single-node/eval path.
 
 ## SBOMs
 
@@ -111,8 +123,14 @@ so a regression cannot merge. Each gate *fails the build*, not merely reports:
   critical package cannot hide behind the aggregate average.
 
 The architecture linter (`trustctllint`) and the workflow linter (`actionlint`) remain
-required. Marking all of these as **required status checks** on the default branch is a
-one-time repository setting (branch protection), done by a repo admin.
+required. The full set of **required status checks**, plus enforce-admins, linear
+history, and code-owner review, is now **codified in the repository** — see
+[Branch protection & required checks](branch-protection.md) for the exact list and
+[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/branch-protection.json)
+for the machine-applicable form (a repo admin applies it once; a reality-test keeps
+the required-check list in sync with the CI job names). Code ownership of the
+root-of-trust paths is codified in
+[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/CODEOWNERS).
 
 ## Run it yourself
 

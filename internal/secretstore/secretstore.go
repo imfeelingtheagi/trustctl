@@ -81,17 +81,31 @@ func (s *Store) Put(ctx context.Context, path string, value []byte, idempotencyK
 		return 0, err
 	}
 	next := len(s.versions[path]) + 1
+	// The version-written event is the AN-2 source of truth — version history
+	// reconstructs from the log, so a write that cannot be recorded MUST fail
+	// closed rather than silently leave a local version with no event behind it
+	// (CODE-001). Emit before mutating the in-memory map and idempotency record so
+	// a dropped event leaves no orphaned local state.
+	if err := s.emitWrite(ctx, path, next, env); err != nil {
+		return 0, fmt.Errorf("secrets: record write event: %w", err)
+	}
 	s.versions[path] = append(s.versions[path], rev{Version: next, Env: env, CreatedAt: s.clock().UTC()})
 	if idempotencyKey != "" {
 		s.idem[idempotencyKey] = next
 	}
-	s.emitWrite(ctx, path, next, env)
 	return next, nil
 }
 
-func (s *Store) emitWrite(ctx context.Context, path string, version int, env crypto.Envelope) {
-	payload, _ := json.Marshal(writeEvent{Path: path, Version: version, Envelope: env})
-	_ = s.audit.Audit(ctx, EventVersionWritten, s.tenantID, payload)
+// emitWrite records the version-written event (the AN-2 source of truth for the
+// secret's history) and RETURNS the append error instead of discarding it
+// (CODE-001): a lost write event would make the version unrebuildable from the
+// log, so Put fails closed on a dropped event.
+func (s *Store) emitWrite(ctx context.Context, path string, version int, env crypto.Envelope) error {
+	payload, err := json.Marshal(writeEvent{Path: path, Version: version, Envelope: env})
+	if err != nil {
+		return err
+	}
+	return s.audit.Audit(ctx, EventVersionWritten, s.tenantID, payload)
 }
 
 // EventVersionWritten is the event type emitted for each secret write.
@@ -165,8 +179,12 @@ func (s *Store) Delete(ctx context.Context, path string) error {
 		return fmt.Errorf("secrets: %q not found", path)
 	}
 	next := len(s.versions[path]) + 1
+	// The delete tombstone is event-sourced (AN-2); fail closed if it cannot be
+	// recorded rather than soft-deleting locally with no event (CODE-001).
+	if err := s.audit.Audit(ctx, "secret.deleted", s.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path))); err != nil {
+		return fmt.Errorf("secrets: record delete event: %w", err)
+	}
 	s.versions[path] = append(s.versions[path], rev{Version: next, Deleted: true, CreatedAt: s.clock().UTC()})
-	_ = s.audit.Audit(ctx, "secret.deleted", s.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path)))
 	return nil
 }
 
@@ -174,8 +192,13 @@ func (s *Store) Delete(ctx context.Context, path string) error {
 func (s *Store) Purge(ctx context.Context, path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Record the purge (AN-2 source of truth) BEFORE destroying local state, and
+	// fail closed if it cannot be recorded — a hard delete with no event behind it
+	// is an unrebuildable, unauditable removal (CODE-001).
+	if err := s.audit.Audit(ctx, "secret.purged", s.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path))); err != nil {
+		return fmt.Errorf("secrets: record purge event: %w", err)
+	}
 	delete(s.versions, path)
-	_ = s.audit.Audit(ctx, "secret.purged", s.tenantID, []byte(fmt.Sprintf(`{"path":%q}`, path)))
 	return nil
 }
 
