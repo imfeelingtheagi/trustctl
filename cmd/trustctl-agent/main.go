@@ -41,12 +41,44 @@ func main() {
 	cmGroup := flag.String("cert-manager-group", "trustctl.io", "cert-manager issuerRef group")
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles")
+	// Privileged SSH-trust rewrite (SIGNER-004) — DEFAULT OFF. A one-shot op that
+	// adds the SSH CA to this host's TrustedUserCAKeys (additive; never removes
+	// existing trust), validated with `sshd -t`, reloaded, and auto-rolled-back on
+	// failure. Gated behind --ssh-trust-confirm because weakening sshd trust is a
+	// lockout-class mutation (CLAUDE.md §8).
+	sshTrustAddCA := flag.Bool("ssh-trust-add-ca", false, "ADD the SSH CA to this host's trust (default off; additive, with rollback). Requires --ssh-trust-confirm")
+	sshTrustConfirm := flag.Bool("ssh-trust-confirm", false, "explicit confirmation required to rewrite SSH CA trust")
+	sshTrustCAKey := flag.String("ssh-trust-ca-key", "", "path to the SSH CA public key (OpenSSH authorized-key line) to trust")
+	sshTrustTenant := flag.String("ssh-trust-tenant", "", "tenant the SSH-trust change is audited under (AN-1)")
+	sshTrustConfig := flag.String("ssh-trust-sshd-config", "/etc/ssh/sshd_config", "path to sshd_config")
+	sshTrustKeysFile := flag.String("ssh-trust-keys-file", "/etc/ssh/trusted_user_ca_keys", "path to TrustedUserCAKeys")
+	sshTrustReloadCmd := flag.String("ssh-trust-reload-cmd", "", "command to reload sshd after a validated config change (e.g. \"systemctl reload sshd\"); required for --ssh-trust-add-ca")
+	sshTrustValidateCmd := flag.String("ssh-trust-validate-cmd", "sshd -t", "command that validates sshd config before reload")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(buildinfo.String("trustctl-agent"))
 		return
 	}
+
+	// Privileged SSH-trust rewrite (SIGNER-004): a self-contained, default-off,
+	// explicitly-confirmed one-shot op that does NOT need the enroll/connection
+	// settings, so it runs (and exits) before the steady-state agent loop. With the
+	// flag off this is a no-op and the agent proceeds normally.
+	sshCtx, sshStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	if handled, err := runSSHTrustAddCA(sshCtx, sshTrustOptions{
+		addCA: *sshTrustAddCA, confirm: *sshTrustConfirm, caKeyPath: *sshTrustCAKey,
+		tenantID: *sshTrustTenant, sshdConfig: *sshTrustConfig, trustedKeys: *sshTrustKeysFile,
+		reloadCmd: *sshTrustReloadCmd, validateCmd: *sshTrustValidateCmd,
+	}); handled {
+		sshStop()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trustctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	sshStop()
 
 	o := agentOptions{
 		enrollURL: *enrollURL, token: *token, caBundle: *caBundle,

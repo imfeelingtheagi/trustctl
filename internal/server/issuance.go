@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trustctl.io/trustctl/internal/connector"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/certinfo"
 	"trustctl.io/trustctl/internal/events"
@@ -65,18 +66,27 @@ type issuanceDispatcher struct {
 	// when it resolves for the tenant (PKIGOV-002). Empty means no served-side
 	// profile binding, preserving the prior behavior.
 	defaultProfile string
+	// plugins is the served WASM-plugin surface (ARCH-007). When non-nil, a
+	// connector.deploy whose connector names a loaded, provenance-verified plugin
+	// (SUPPLY-004) is pushed through the capability sandbox; otherwise the entry is
+	// acknowledged unrouted as before. Tenant-scoped (AN-1) and event-sourced
+	// (AN-2); the plugin holds no store/signer handle.
+	plugins *PluginManager
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,
-// revokes on a revocation.publish trigger, and acknowledges every other
-// destination (e.g. connector.deploy) so an as-yet unrouted entry does not
-// accumulate retries; routing those is a follow-up.
+// revokes on a revocation.publish trigger, pushes a connector.deploy through a
+// served WASM connector plugin when one owns the named connector (ARCH-007), and
+// acknowledges every other destination so an as-yet unrouted entry does not
+// accumulate retries; routing the remaining first-party connectors is a follow-up.
 func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message) error {
 	switch m.Destination {
 	case "ca.issue":
 		return d.handleIssue(ctx, m)
 	case "revocation.publish":
 		return d.handleRevoke(ctx, m)
+	case "connector.deploy":
+		return d.handleDeploy(ctx, m)
 	default:
 		return nil
 	}
@@ -287,6 +297,42 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 			}
 		}
 		return []byte(fmt.Sprintf("revoked:%d", len(certs))), nil
+	})
+	return err
+}
+
+// handleDeploy processes a connector.deploy outbox entry (the side effect of an
+// issued→deployed lifecycle transition). When a served WASM connector plugin is
+// configured and owns the named connector (ARCH-007), the deployment is pushed
+// through the capability sandbox; the plugin runs in its own wazero runtime with
+// no store/signer handle, and an operation outside its grant fails the deploy. It
+// is idempotent on the outbox key (AN-5) so a redelivery does not re-run the
+// plugin, tenant-scoped (AN-1), and event-sourced (AN-2 — the plugin outcome is
+// recorded by the manager). When no plugin owns the connector the entry is
+// acknowledged unrouted, exactly as before, so first-party in-process connectors
+// (still routed elsewhere) and not-yet-wired targets do not dead-letter.
+func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Message) error {
+	if d.plugins == nil {
+		return nil // no served plugin surface: ack unrouted (prior behavior)
+	}
+	var p connector.DeployPayload
+	if err := json.Unmarshal(m.Payload, &p); err != nil {
+		return fmt.Errorf("server: decode connector.deploy payload: %w", err)
+	}
+	if p.Connector == "" || !d.plugins.Has(p.Connector) {
+		return nil // not a plugin-owned connector: ack unrouted
+	}
+	// Idempotent on the outbox key (AN-5 ↔ AN-6): a redelivery returns the recorded
+	// result without invoking the plugin again.
+	_, err := d.idem.Do(ctx, m.TenantID, "deploy:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+		handled, derr := d.plugins.Deploy(ctx, m.TenantID, p)
+		if derr != nil {
+			return nil, derr
+		}
+		if !handled {
+			return []byte("unrouted"), nil
+		}
+		return []byte("deployed:" + p.Connector), nil
 	})
 	return err
 }

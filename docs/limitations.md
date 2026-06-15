@@ -62,14 +62,17 @@ remaining integration work.
   **Certificate Transparency** monitoring.
 - **SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator,
   `internal/agent/sshtrust`)**: the applier that installs a trusted SSH CA and
-  rolls it back on failure is **fully built and well tested, but not linked into
-  any binary** (SIGNER-004) — `cmd/trustctl-agent` does not import it, so the agent
-  reads SSH trust (inventory, above) but does **not** rewrite a host's trust today.
-  This is deliberately gated: weakening `sshd`/`authorized_keys` trust is a
-  high-blast-radius mutation, so wiring it behind a default-off operator opt-in
-  (with the signer-issued host/user certs and rollback) is tracked as
-  **`EXC-WIRE-05`**. Until then the served/library split is: SSH trust is
-  *discovered*, not *mutated*.
+  rolls it back on failure is now **wired into `cmd/trustctl-agent`** behind a
+  **default-off operator opt-in** (`--ssh-trust-add-ca`) that additionally requires
+  **explicit confirmation** (`--ssh-trust-confirm`) before it will rewrite trust
+  (SIGNER-004, EXC-WIRE-05). The op is **additive** (it never removes existing
+  trust), validates the new config with `sshd -t`, reloads, and **auto-rolls-back**
+  to the last-known-good on any failure — so a bad rewrite cannot lock operators
+  out. Because weakening `sshd`/`authorized_keys` trust is a high-blast-radius
+  mutation, the feature stays off unless the operator turns it on and confirms;
+  with the flag off the agent only *discovers* SSH trust (inventory, above), it
+  does not *mutate* it. Trust *removal* still requires its own explicit confirmation
+  (the safe default, SIGNER-007).
 - **Posture**: the **credential graph** (reachability, blast radius), **composite
   risk scoring**, and **drift detection**.
 - **The React web console (F12)**: the React 18 + Vite + shadcn/ui single-page app
@@ -212,28 +215,29 @@ This is a deliberate, documented trust boundary (not an accident):
   pool or signer handle; and a deliberately misbehaving plugin is **proven
   contained** by test. Migrating the first-party integrations onto it is future
   work. See the [plugin trust model](security/threat-model.md).
-- **Plugin extensibility is library-only — not served by the binary yet
-  (ARCH-007).** The WASM plugin host and the `plugins/ca` / `plugins/connectors`
-  modules are **built and tested, not yet served by the binary**: nothing under
-  `internal/server`, `internal/api`, or `cmd` imports `internal/pluginhost`, so the
-  **running control plane cannot load a third-party plugin** — advertised
-  **CA-via-plugin** and **connector-via-plugin** extensibility is not production
-  capability today. The shipped first-party integrations run as trusted in-process
-  Go (see above), not through the host. Wiring the plugin host into the served
-  binary with enforced capability grants is tracked as **`EXC-WIRE-05`**.
-- **No plugin signature/provenance verification yet (SUPPLY-004).** `Host.Load`
-  instantiates the supplied `.wasm` bytes **without any signature, content-hash, or
-  trusted-key check** — there is no cosign/Ed25519 verification step before a module
-  runs. The exposure is **bounded today** because the load path is **library-only and
-  unwired** (`Host.Load` has **zero non-test callers** in the served binary; the
-  shipped first-party connectors run as trusted in-process Go via `NewGrant()`, not
-  through the WASM host), and the wazero sandbox is real, tested defense-in-depth
-  (the host holds no DB pool or signer handle). But the host's stated purpose is
-  loading code the core team did not write, so before any **served** plugin surface
-  is wired, `Load` must require a detached signature over the `.wasm` verified
-  against an operator-configured trusted-key set and pin by content hash (keeping the
-  sandbox as defense-in-depth). Adding that signature/provenance gate alongside
-  wiring the served plugin surface is tracked as **`EXC-WIRE-05`**.
+- **Plugin extensibility is now served by the binary (ARCH-007, EXC-WIRE-05).**
+  The WASM plugin host is **wired into the served control plane**: `internal/server`
+  imports `internal/pluginhost`, and when `plugins.enabled` the running binary loads
+  operator-supplied **connector plugins** from `plugins.dir` and routes a served
+  `connector.deploy` through the plugin's **capability sandbox** (the same
+  `pluginhost.Grant` model the connector SDK uses) — tenant-scoped (AN-1),
+  event-sourced (AN-2), on the plugin bulkhead (AN-7). The plugin runs in its own
+  wazero runtime with **no DB pool or signer handle**, an operation outside its
+  grant is denied at runtime (and fails the deploy), and the surface is **off by
+  default** (a `connector.deploy` is acknowledged unrouted unless plugins are
+  enabled). The shipped first-party CA/connector integrations still run as trusted
+  in-process Go (see above); migrating them onto the host, and serving a **CA-via-
+  plugin** issuance path, remain follow-ups.
+- **Served plugins are signature/provenance-verified (SUPPLY-004, EXC-WIRE-05).**
+  The served loader admits a `.wasm` module **only after** its detached **Ed25519
+  signature** verifies (through the `internal/crypto` boundary, AN-3) against the
+  operator-configured **trusted-key set** (`plugins.trusted_key_files`), with an
+  optional **content-digest pin** (`plugins.pinned_digests`). An **unsigned**,
+  **wrong-key**, **byte-tampered**, or **unpinned** module is **refused** and the
+  binary **fails closed at startup** — it never instantiates an unverified plugin.
+  The raw `Host.Load` (which `InstantiateWithConfig(ctx, wasm, …)` calls) remains
+  for the in-process/conformance path; the served surface uses `LoadVerified`, which
+  runs the provenance gate first and keeps the wazero sandbox as defense-in-depth.
 
 ## Protocols
 

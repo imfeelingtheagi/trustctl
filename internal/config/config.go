@@ -72,6 +72,38 @@ type Config struct {
 	CA        CA        `json:"ca"`
 	Protocols Protocols `json:"protocols"`
 	Auth      Auth      `json:"auth"`
+	Plugins   Plugins   `json:"plugins"`
+}
+
+// Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
+// ARCH-007/SUPPLY-004): the running control plane loads operator-supplied
+// connector plugins from a directory and runs them capability-sandboxed through
+// the wazero plugin host. It is OFF by default (Enabled=false): a connector.deploy
+// is acknowledged unrouted, exactly as before. When Enabled, a plugin is admitted
+// ONLY after its detached Ed25519 signature verifies against TrustedKeyFiles
+// (SUPPLY-004); an unsigned, wrong-key, tampered, or unpinned module makes the
+// binary fail closed at startup — it never serves an unverified plugin.
+type Plugins struct {
+	// Enabled turns on the served plugin surface. Off by default.
+	Enabled bool `json:"enabled,omitempty"`
+	// Dir is the directory scanned for `<name>.wasm` + detached `<name>.wasm.sig`
+	// pairs. Required when Enabled.
+	Dir string `json:"dir,omitempty"`
+	// TrustedKeyFiles are paths to PEM Ed25519 public keys that admit a signed
+	// module (SUPPLY-004). At least one is required when Enabled.
+	TrustedKeyFiles []string `json:"trusted_key_files,omitempty"`
+	// PinnedDigests optionally restricts admitted modules to an exact-content
+	// allowlist (lowercase-hex SHA-256 of the `.wasm`).
+	PinnedDigests []string `json:"pinned_digests,omitempty"`
+	// Capabilities are the capability names every loaded connector plugin runs
+	// under (a subset of fs.read, fs.write, net.dial, process.exec). Empty grants
+	// nothing privileged — operators widen it deliberately. A plugin can never
+	// exceed this grant at runtime.
+	Capabilities []string `json:"capabilities,omitempty"`
+	// PathPrefixes constrains fs.read / fs.write to resources under these prefixes
+	// (defense-in-depth alongside the capability grant). Empty means the granted
+	// filesystem capability is unconstrained by prefix.
+	PathPrefixes []string `json:"path_prefixes,omitempty"`
 }
 
 // Auth configures interactive authentication for the served control plane. Today
@@ -639,6 +671,15 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_AUTH_OIDC_DEFAULT_TENANT", &c.Auth.OIDC.DefaultTenant)
 	setBool(getenv, "TRUSTCTL_AUTH_OIDC_ALLOW_DEFAULT_TENANT", &c.Auth.OIDC.AllowDefaultTenant)
 	setCSV(getenv, "TRUSTCTL_AUTH_OIDC_DEFAULT_ROLES", &c.Auth.OIDC.DefaultRoles)
+	// Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004). Off by default;
+	// when enabled the binary loads + provenance-verifies connector plugins from the
+	// directory against the trusted keys, failing closed on an unverified module.
+	setBool(getenv, "TRUSTCTL_PLUGINS_ENABLED", &c.Plugins.Enabled)
+	setString(getenv, "TRUSTCTL_PLUGINS_DIR", &c.Plugins.Dir)
+	setCSV(getenv, "TRUSTCTL_PLUGINS_TRUSTED_KEY_FILES", &c.Plugins.TrustedKeyFiles)
+	setCSV(getenv, "TRUSTCTL_PLUGINS_PINNED_DIGESTS", &c.Plugins.PinnedDigests)
+	setCSV(getenv, "TRUSTCTL_PLUGINS_CAPABILITIES", &c.Plugins.Capabilities)
+	setCSV(getenv, "TRUSTCTL_PLUGINS_PATH_PREFIXES", &c.Plugins.PathPrefixes)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -812,7 +853,36 @@ func (c *Config) Validate() error {
 	if c.Auth.OIDC.Enabled {
 		errs = append(errs, c.Auth.OIDC.validate()...)
 	}
+	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
+	// name a directory and at least one trusted key, so the binary never serves an
+	// unverifiable plugin path (fail closed). When disabled the block is ignored.
+	if c.Plugins.Enabled {
+		errs = append(errs, c.Plugins.validate()...)
+	}
 	return errors.Join(errs...)
+}
+
+// validate reports the configuration problems of an enabled plugin surface. It is
+// the fail-closed gate (SUPPLY-004): with no directory there is nothing to load,
+// and with no trusted key a module could not be provenance-verified — both are
+// hard startup errors rather than a silently unverified plugin path. Unknown
+// capability names are rejected so a typo cannot silently grant nothing (or, in a
+// future vocabulary, the wrong thing).
+func (p Plugins) validate() []error {
+	var errs []error
+	if strings.TrimSpace(p.Dir) == "" {
+		errs = append(errs, errors.New("plugins.dir is required when plugins.enabled is true"))
+	}
+	if len(p.TrustedKeyFiles) == 0 {
+		errs = append(errs, errors.New("plugins.trusted_key_files requires at least one Ed25519 public key when plugins.enabled is true (SUPPLY-004: a plugin must be provenance-verified)"))
+	}
+	known := map[string]bool{"fs.read": true, "fs.write": true, "net.dial": true, "process.exec": true}
+	for _, c := range p.Capabilities {
+		if !known[strings.TrimSpace(c)] {
+			errs = append(errs, fmt.Errorf("plugins.capabilities entry %q is not a known capability (want fs.read, fs.write, net.dial, or process.exec)", c))
+		}
+	}
+	return errs
 }
 
 // isLoopbackHost reports whether host is a loopback hostname/IP (127.0.0.0/8, ::1,

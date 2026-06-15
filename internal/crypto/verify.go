@@ -3,11 +3,13 @@ package crypto
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"time"
 
@@ -38,6 +40,77 @@ func VerifyMessage(pubDER, msg, sig []byte) error {
 	default:
 		return fmt.Errorf("crypto: unsupported public key type %T", pub)
 	}
+}
+
+// VerifyEd25519 verifies a detached Ed25519 signature over the exact bytes of
+// msg against the public key in pubDER (PKIX). Ed25519 signs the message
+// directly (no caller pre-hash), which is what a plugin-provenance signature
+// over a `.wasm` artifact uses. It is a boundary helper so the plugin host (and
+// any other caller) verifies a signed artifact without importing crypto/ed25519
+// itself (AN-3). It fails closed: a non-Ed25519 key, a malformed key, or a bad
+// signature all return a non-nil error.
+func VerifyEd25519(pubDER, msg, sig []byte) error {
+	pub, err := x509.ParsePKIXPublicKey(pubDER)
+	if err != nil {
+		return fmt.Errorf("crypto: parse Ed25519 public key: %w", err)
+	}
+	pk, ok := pub.(ed25519.PublicKey)
+	if !ok {
+		return fmt.Errorf("crypto: not an Ed25519 public key (got %T)", pub)
+	}
+	if len(sig) != ed25519.SignatureSize {
+		return fmt.Errorf("crypto: Ed25519 signature has wrong length %d (want %d)", len(sig), ed25519.SignatureSize)
+	}
+	if !ed25519.Verify(pk, msg, sig) {
+		return fmt.Errorf("crypto: Ed25519 signature verification failed")
+	}
+	return nil
+}
+
+// ParseEd25519PublicKeyPEM decodes a PEM-wrapped PKIX Ed25519 public key and
+// returns its DER (the form VerifyEd25519 expects). Operators configure plugin
+// trust as PEM public keys; this turns one into the boundary's DER without the
+// caller importing crypto/x509 or encoding/pem (AN-3). It rejects anything that
+// is not exactly one Ed25519 public key.
+func ParseEd25519PublicKeyPEM(pemBytes []byte) (pubDER []byte, err error) {
+	blk, _ := pem.Decode(pemBytes)
+	if blk == nil {
+		return nil, fmt.Errorf("crypto: no PEM block in Ed25519 public key")
+	}
+	pub, err := x509.ParsePKIXPublicKey(blk.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse Ed25519 public key: %w", err)
+	}
+	if _, ok := pub.(ed25519.PublicKey); !ok {
+		return nil, fmt.Errorf("crypto: PEM key is not Ed25519 (got %T)", pub)
+	}
+	return blk.Bytes, nil
+}
+
+// GenerateEd25519KeyPair generates an Ed25519 key pair and returns the public
+// key as PKIX/DER (the form ParseEd25519PublicKeyPEM/VerifyEd25519 consume once
+// PEM-wrapped) and a closure that produces a detached Ed25519 signature over a
+// message. It exists so signing tooling — and the plugin-provenance tests —
+// produce/verify signed artifacts entirely inside the crypto boundary (AN-3),
+// never importing crypto/ed25519 elsewhere. The private key stays captured in
+// the closure and is not returned.
+func GenerateEd25519KeyPair() (pubDER []byte, sign func(msg []byte) []byte, err error) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: generate Ed25519 key: %w", err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: marshal Ed25519 public key: %w", err)
+	}
+	return der, func(msg []byte) []byte { return ed25519.Sign(priv, msg) }, nil
+}
+
+// MarshalPublicKeyPEM wraps a PKIX/DER public key in a PEM "PUBLIC KEY" block,
+// the textual form operators paste into a trust policy. It keeps encoding/pem
+// out of callers (AN-3).
+func MarshalPublicKeyPEM(pubDER []byte) []byte {
+	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER})
 }
 
 // SignMessage signs a SHA-256 digest of msg with signer and returns a signature

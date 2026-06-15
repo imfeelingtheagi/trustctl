@@ -108,6 +108,16 @@ type Deps struct {
 	// ProtocolTenant is the platform default tenant a protocol binds when its own
 	// TenantID is unset. Run passes the configured default tenant.
 	ProtocolTenant string
+
+	// Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
+	// ARCH-007/SUPPLY-004): the directory of operator-supplied connector plugins, the
+	// trusted Ed25519 keys that admit a signed module, optional content-digest pins,
+	// and the capability grant they run under. The zero value leaves the surface OFF
+	// (a connector.deploy is acknowledged unrouted, as before). When configured, Build
+	// loads and PROVENANCE-VERIFIES every plugin at startup — an unsigned, wrong-key,
+	// tampered, or unpinned module makes Build fail closed, so the binary never serves
+	// an unverified plugin. Run fills this from config.Plugins.
+	Plugins PluginConfig
 	// ACMEValidators overrides the ACME domain-validation validators. Production
 	// leaves it nil → the served ACME server uses acme.DefaultValidators() (real,
 	// SSRF-guarded HTTP-01/DNS-01/TLS-ALPN-01, fail closed). It exists so the
@@ -177,6 +187,14 @@ type Server struct {
 	// the served path mints. The zero value preserves the legacy leaf shape (plus an
 	// always-present Subject Key Identifier).
 	leafProfile crypto.LeafProfile
+
+	// plugins is the served WASM-plugin surface (ARCH-007/SUPPLY-004): operator-
+	// supplied connector plugins loaded from a directory, each only after its
+	// detached signature verifies against the configured trust policy, and run
+	// capability-sandboxed on the plugin host's bounded pool (AN-7). It is nil when
+	// the plugin surface is not configured (the prior behavior — a connector.deploy
+	// is acknowledged unrouted). Wired into the issuance dispatcher's deploy path.
+	plugins *PluginManager
 
 	logger    *slog.Logger
 	registry  *observ.Registry
@@ -363,18 +381,39 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		}
 	}
 
+	// 3a-pre) Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004). When
+	// configured, load and PROVENANCE-VERIFY the operator's connector plugins now, so
+	// a verified plugin is ready before the dispatcher routes a connector.deploy to
+	// it. An unsigned/wrong-key/tampered/unpinned module makes this fail closed — the
+	// binary will not serve an unverified plugin. With no plugin config this is nil
+	// and the deploy path keeps acknowledging unrouted, exactly as before.
+	plugins, perr := NewPluginManager(ctx, d.Plugins, d.Log)
+	if perr != nil {
+		return nil, fmt.Errorf("server: load plugins: %w", perr)
+	}
+	s.plugins = plugins
+
 	// 3a) Outbox handler. An explicit Deps.OutboxHandler wins (tests, custom
 	// dispatchers). Otherwise, when an issuing CA is provisioned, the real
 	// issuance dispatcher mints a certificate for a requested→issued transition
 	// and records it in inventory; with no CA, issuance is unavailable so the
 	// handler acknowledges (the entry cannot be served and must not dead-letter).
+	// The verified plugin surface (above) is wired onto the dispatcher's
+	// connector.deploy path either way.
 	switch {
 	case s.obHandler != nil:
 		// keep the injected handler
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, plugins: s.plugins}
 	default:
-		s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
+		// No issuing CA: issuance is unavailable, but a served connector.deploy can
+		// still be routed to a verified plugin (deployment is not signer-gated). Use
+		// the dispatcher with a nil issue path so the plugin deploy seam stays live.
+		if s.plugins != nil {
+			s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, store: d.Store, log: d.Log, plugins: s.plugins}
+		} else {
+			s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
+		}
 	}
 
 	// 3b) Served revocation surface (EXC-REVOKE-01): when an issuing CA is
@@ -1045,6 +1084,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if err := s.Drain(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("drain outbox: %w", err))
+	}
+	// Release the WASM plugin runtimes and their bounded pool (ARCH-007).
+	if s.plugins != nil {
+		if err := s.plugins.Close(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("close plugins: %w", err))
+		}
 	}
 	if s.log != nil {
 		if err := s.log.Close(); err != nil {

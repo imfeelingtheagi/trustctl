@@ -71,6 +71,11 @@ func (p *Plugin) Stats() Snapshot {
 	return Snapshot{Writes: atomic.LoadInt64(&p.stats.writes), Denied: atomic.LoadInt64(&p.stats.denied)}
 }
 
+// HasExport reports whether the plugin exports a function named fn. The served
+// connector path uses it to pick the plugin's entrypoint (a connector plugin may
+// export "deploy"; every conformant plugin exports "run").
+func (p *Plugin) HasExport(fn string) bool { return p.mod.ExportedFunction(fn) != nil }
+
 // Close releases the plugin's runtime.
 func (p *Plugin) Close(ctx context.Context) error { return p.runtime.Close(ctx) }
 

@@ -17,6 +17,7 @@ import (
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/logging"
+	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/ratelimit"
 	"trustctl.io/trustctl/internal/secrets"
 	"trustctl.io/trustctl/internal/signing"
@@ -173,6 +174,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		CertificatePolicyOIDs: cfg.CA.CertificatePolicyOIDs,
 	}
 
+	// Resolve the served plugin surface (EXC-WIRE-05): read the trusted-key PEM files
+	// and assemble the capability grant from config, so an unreadable key fails closed
+	// here rather than at first deploy. Disabled config yields the zero PluginConfig
+	// (the surface stays off).
+	pluginCfg, err := buildPluginConfig(cfg.Plugins)
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return fmt.Errorf("plugins: %w", err)
+	}
+
 	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile,
 		LeafProfile: leafProfile, DefaultProfile: cfg.CA.DefaultProfile,
 		// EXC-WIRE-03: wire the served policy / RA-separation / dual-control gate onto
@@ -199,6 +211,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		// not mint into a blank tenant — AN-1). They are served only when an issuing CA
 		// is provisioned.
 		Protocols: cfg.Protocols,
+		// Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when
+		// plugins.enabled, the running binary loads operator-supplied connector plugins
+		// from plugins.dir and PROVENANCE-VERIFIES each against the trusted Ed25519 keys
+		// before it will instantiate one — an unsigned/wrong-key/tampered/unpinned module
+		// makes Build fail closed. A verified plugin is then run capability-sandboxed on
+		// the served connector.deploy path. Disabled (the default) leaves the deploy path
+		// acknowledging unrouted, as before. buildPluginConfig reads the key files now so
+		// a missing/garbled key fails closed at startup, not first deploy.
+		Plugins: pluginCfg,
 		// Served OIDC browser login + session + per-user → tenant mapping (EXC-WIRE-01):
 		// when auth.oidc.enabled, the running binary serves /auth/login, /auth/callback,
 		// /auth/me, /auth/logout and a session cookie authorizes API calls under the same
@@ -371,4 +392,58 @@ func openDatastore(pg config.Postgres, logger *slog.Logger) (dsn string, stop fu
 	default:
 		return "", nil, fmt.Errorf("server: invalid postgres.mode %q (want %q or %q)", pg.Mode, config.PostgresExternal, config.PostgresBundled)
 	}
+}
+
+// buildPluginConfig turns the operator's config.Plugins block into a server
+// PluginConfig (EXC-WIRE-05; ARCH-007/SUPPLY-004): it reads each trusted Ed25519
+// public-key PEM file and assembles the capability grant the loaded connector
+// plugins run under. Disabled config yields the zero PluginConfig, leaving the
+// served plugin surface off. It fails closed on an unreadable key file, so a
+// misconfigured trust set is a startup error rather than a silently-unverified
+// plugin path; the per-key PEM parse itself happens inside the plugin host when
+// the trust policy is built.
+func buildPluginConfig(p config.Plugins) (PluginConfig, error) {
+	if !p.Enabled {
+		return PluginConfig{}, nil
+	}
+	var keys [][]byte
+	for _, f := range p.TrustedKeyFiles {
+		pem, err := os.ReadFile(f)
+		if err != nil {
+			return PluginConfig{}, fmt.Errorf("read trusted plugin key %q: %w", f, err)
+		}
+		keys = append(keys, pem)
+	}
+	grant := pluginhost.NewGrant(toCapabilities(p.Capabilities)...)
+	for _, prefix := range p.PathPrefixes {
+		// Constrain both filesystem capabilities to the configured prefixes
+		// (defense-in-depth; ignored for a capability that is not granted).
+		grant = grant.WithPathPrefix(pluginhost.CapFSRead, prefix).WithPathPrefix(pluginhost.CapFSWrite, prefix)
+	}
+	return PluginConfig{
+		Dir:              p.Dir,
+		TrustedKeyPEMs:   keys,
+		PinnedDigestsHex: p.PinnedDigests,
+		Grant:            grant,
+	}, nil
+}
+
+// toCapabilities maps configured capability names to the plugin host's typed
+// capabilities. Unknown names are dropped here (config.Validate already rejects
+// them, so this never silently widens a grant).
+func toCapabilities(names []string) []pluginhost.Capability {
+	out := make([]pluginhost.Capability, 0, len(names))
+	for _, n := range names {
+		switch n {
+		case "fs.read":
+			out = append(out, pluginhost.CapFSRead)
+		case "fs.write":
+			out = append(out, pluginhost.CapFSWrite)
+		case "net.dial":
+			out = append(out, pluginhost.CapNetDial)
+		case "process.exec":
+			out = append(out, "process.exec") // connector.CapExec value
+		}
+	}
+	return out
 }
