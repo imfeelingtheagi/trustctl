@@ -34,6 +34,12 @@ Q=(curl -s -k -o /dev/null -w '%{http_code}')
 say()  { printf '\n>> %s\n' "$*"; }
 fail() { printf '::error::compose-e2e: %s\n' "$*"; exit 1; }
 
+# Every mutating POST must carry an Idempotency-Key — the served API rejects a mutation
+# without one (AN-5). post <idempotency-key> <path> <json-body>. AUTH is resolved at
+# call time (set after the bootstrap-token step).
+IDEM_BASE="e2e-$(cat /proc/sys/kernel/random/uuid)"
+post() { "${CURL[@]}" "${AUTH[@]}" -H "Idempotency-Key: $1" -H "Content-Type: application/json" -XPOST "$BASE_URL$2" -d "$3"; }
+
 say "1. control plane is serving (/readyz)"
 code=$("${Q[@]}" "$BASE_URL/readyz" || true)
 [ "$code" = "200" ] || fail "/readyz returned '$code' (control plane not serving on $BASE_URL)"
@@ -55,29 +61,38 @@ code=$("${Q[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners" || true)
 [ "$code" = "200" ] || fail "bootstrapped GET /api/v1/owners returned '$code', want 200"
 
 say "3. event-sourced mutation round-trips (create owner -> read back)"
-OWNER=$("${CURL[@]}" "${AUTH[@]}" -XPOST "$BASE_URL/api/v1/owners" -d '{"name":"e2e","kind":"team"}' | jq -r .id)
+OWNER=$(post "${IDEM_BASE}-owner" /api/v1/owners '{"kind":"workload","name":"e2e"}' | jq -r .id)
 [ -n "$OWNER" ] && [ "$OWNER" != "null" ] || fail "owner create returned no id"
 "${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners/$OWNER" >/dev/null || fail "could not read back the created owner $OWNER"
 
 say "4. served issuance lifecycle: issue -> idempotent retry -> revoke"
-ISSUER=$("${CURL[@]}" "${AUTH[@]}" -XPOST "$BASE_URL/api/v1/issuers" -d '{"name":"e2e-ca","kind":"internal"}' | jq -r .id)
-IDENT=$("${CURL[@]}" "${AUTH[@]}" -XPOST "$BASE_URL/api/v1/identities" \
-          -d "{\"owner_id\":\"$OWNER\",\"issuer_id\":\"$ISSUER\",\"subject\":\"e2e.example\",\"kind\":\"x509\"}" | jq -r .id)
+# Request bodies match the API schema (ground truth: internal/projections/
+# issuance_e2e_test.go): owner kind=workload, issuer kind=x509_ca WITH a chain, and an
+# identity kind=x509_certificate whose name becomes the issued leaf's subject/CN.
+ISSUER=$(post "${IDEM_BASE}-issuer" /api/v1/issuers \
+          '{"kind":"x509_ca","name":"e2e-ca","chain":["-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"]}' | jq -r .id)
+[ -n "$ISSUER" ] && [ "$ISSUER" != "null" ] || fail "issuer create returned no id"
+IDENT=$(post "${IDEM_BASE}-identity" /api/v1/identities \
+          "{\"kind\":\"x509_certificate\",\"name\":\"e2e.example\",\"owner_id\":\"$OWNER\",\"issuer_id\":\"$ISSUER\"}" | jq -r .id)
 [ -n "$IDENT" ] && [ "$IDENT" != "null" ] || fail "identity create returned no id"
-IDEM="e2e-$(date +%s)-$RANDOM"
-issue() { "${CURL[@]}" "${AUTH[@]}" -H "Idempotency-Key: $IDEM" -XPOST \
-            "$BASE_URL/api/v1/identities/$IDENT/transitions" -d '{"to":"issued"}'; }
+# Stable key across the two issue() calls so the retry is the SAME operation (AN-5).
+IDEM="${IDEM_BASE}-issue"
+issue() { post "$IDEM" "/api/v1/identities/$IDENT/transitions" '{"to":"issued"}'; }
+certs() { "${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" | jq '[.items[]? | select((.subject // "") | contains("e2e.example"))] | length'; }
 issue >/dev/null || fail "transition->issued failed"
-# inventory now holds exactly one cert for this identity; a retried transition with the
-# same Idempotency-Key must NOT mint a second one (AN-5).
-n1=$("${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" | jq '[.items[]? | select(.subject=="e2e.example")] | length')
+# Issuance is ASYNC in the deployed stack: the transition enqueues an outbox entry that a
+# background worker mints from (the in-binary tests Drain synchronously instead). Poll
+# for the minted cert to appear in inventory.
+n1=0
+for _ in $(seq 1 30); do n1=$(certs); [ "${n1:-0}" -ge 1 ] && break; sleep 1; done
+[ "${n1:-0}" -ge 1 ] || fail "no certificate minted for the identity within SLA (got '$n1')"
+# A retried transition with the SAME Idempotency-Key must NOT mint a second one (AN-5).
 issue >/dev/null || fail "idempotent retry of transition->issued failed"
-n2=$("${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" | jq '[.items[]? | select(.subject=="e2e.example")] | length')
-[ "${n1:-0}" -ge 1 ] || fail "no certificate minted for the identity (got $n1)"
+sleep 3   # allow any (erroneous) second mint to surface before re-counting
+n2=$(certs)
 [ "$n1" = "$n2" ] || fail "AN-5 VIOLATED: retry with same Idempotency-Key minted another credential ($n1 -> $n2)"
 say "   idempotent issuance holds: $n1 == $n2 cert(s)"
-"${CURL[@]}" "${AUTH[@]}" -XPOST "$BASE_URL/api/v1/identities/$IDENT/transitions" \
-  -d '{"to":"revoked","reason":"e2e"}' >/dev/null || fail "transition->revoked failed"
+post "${IDEM_BASE}-revoke" "/api/v1/identities/$IDENT/transitions" '{"to":"revoked"}' >/dev/null || fail "transition->revoked failed"
 
 say "5. served PKI surfaces are mounted: ACME directory + OCSP responder + EST cacerts"
 "${CURL[@]}" "$BASE_URL/directory" | jq -e '.newOrder and .revokeCert' >/dev/null || fail "served ACME /directory missing newOrder/revokeCert"
