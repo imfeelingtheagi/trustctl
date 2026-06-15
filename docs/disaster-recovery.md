@@ -89,49 +89,62 @@ they depend on how often you back up and how fast your datastores restore.
   for thousands of events; minutes for very large logs). Plan an RTO that covers
   provisioning + datastore restore + rebuild + a smoke test.
 
-## High availability and the single-replica control plane
+## High availability (multi-replica by default)
 
-The default Helm chart runs **one** control-plane replica with a `Recreate` rollout
-(`deploy/helm/trustctl/values.yaml` `replicaCount: 1`). This is a **deliberate
-topology, not an oversight**, and it is a known availability trade-off (RESIL-002):
+The default Helm chart runs the control plane **multi-replica** (`replicaCount: 2`)
+with a no-downtime `RollingUpdate` (`maxUnavailable: 0`), a PodDisruptionBudget
+(`minAvailable: 1`), and pod anti-affinity (RESIL-002 / EXC-RESIL-01). A node failure
+or a config rollout no longer takes issuance/validation offline. Three mechanisms make
+running more than one control-plane replica **safe**:
 
-- **Why single-replica today.** The control plane co-locates the signing service as
-  a locked-down sidecar reachable only over a shared in-memory Unix domain socket
-  (AN-4), and the signer seals its CA key in a **per-pod** key store. Running a
-  second replica would mean a second, independent signer with a different sealed key
-  store — not the same CA. True horizontal scaling therefore needs the signer to run
-  as its own pod reached over **mTLS gRPC** (the `signer.mode: isolated` topology),
-  and **that cross-node transport is not built yet** (the `trustctl-signer` binary is
-  UDS-only; see `docs/limitations.md` "Multi-replica HA"). Selecting
-  `signer.mode=isolated` **fails the Helm render** with guidance rather than shipping
-  a crash-looping signer pod (OPS-001).
-- **What this means for availability.** Out of the box, a node failure or any config
-  rollout takes issuance/validation **offline until the pod reschedules** (`Recreate`
-  guarantees a brief downtime window on every deploy). The **datastores** (external
-  PostgreSQL + replicated NATS) are where durability lives, so this is an
-  *availability* gap, not a *data-loss* one — the event log (source of truth) and the
-  read model survive a control-plane restart, and a rebuilt pod re-derives state from
-  the log.
-- **Recovery posture (leader-election note).** Until the isolated-signer transport
-  lands, the supported HA story is **fast failover of a single active replica**, not
-  active/active: run the pod under a Deployment so Kubernetes reschedules it on node
-  loss, keep the datastores externally replicated, and keep `Recreate` so two
-  control planes never run two independent signers against the same datastore at
-  once. When the isolated topology ships, the plan is `replicaCount >= 2` with a
-  shared isolated signer, `RollingUpdate maxUnavailable: 0`, a non-zero
-  PodDisruptionBudget, and pod anti-affinity — with **leader election** gating the
-  background workers (the outbox dispatcher, audit-retention, idempotency/outbox GC,
-  and the projection tailer) so only one replica runs them while all replicas serve
-  reads. The **boot projection catch-up** is already safe to run on every replica:
-  it takes a PostgreSQL advisory lock (`ProjectionAdvisoryLockKey`, the same
-  mechanism migrations use) so concurrent replica boots serialize their catch-up
-  into the read model rather than racing, and each resumes from the shared
-  projection checkpoint (RESIL-004 / SPINE-007). The remaining active/active gap —
-  continuous **leader election** so exactly one replica runs the *continuous*
-  background workers — is tracked under EXC-RESIL-01.
+- **Leader election for the continuous workers (RESIL-004).** A single leader (via
+  leader election) — exactly one replica —
+  the **leader** — runs the workers that mutate shared state on a continuous cadence:
+  the outbox dispatcher, the audit-retention worker, the idempotency/outbox GC sweeps,
+  the projection tailer, the CRL freshness scheduler, and the read-model snapshot
+  worker. Leadership is a PostgreSQL **session-scoped advisory lock**
+  (`store.LeaderAdvisoryLockKey`, "ctllea"): the leader holds it for as long as its
+  connection lives, and PostgreSQL **releases it automatically** if the leader crashes
+  or partitions, so a follower acquires it on its next campaign (failover) with no
+  lease timer to tune. Every replica serves reads regardless. Toggle with
+  `ha.leaderElection` (on by default; harmless on a single replica, which always wins
+  the lock). The **boot projection catch-up** is independently safe on every replica:
+  it takes the projection advisory lock (`ProjectionAdvisoryLockKey`, like migrations)
+  so concurrent boots serialize and each resumes from the shared projection checkpoint
+  (SPINE-007).
+- **A shared signer key store so every replica is the same CA.** The control plane
+  still co-locates the signing service as a locked-down sidecar reachable only over a
+  shared in-memory Unix domain socket (AN-4) — the supported topology, **not** the
+  not-yet-built isolated-mTLS one. For HA the signer key store and the control-plane
+  data dir default to **ReadWriteMany** (`persistence.signerKeysAccessMode` /
+  `persistence.controlPlaneAccessMode`), so every pod's sidecar signer loads the SAME
+  sealed issuing-CA key and every replica serves the same CA cert and verifies the
+  same audit chain. First-boot CA provisioning is serialized by an advisory lock
+  (`CAProvisionAdvisoryLockKey`) so exactly one replica generates the key; a follower
+  signer that started first reloads it from the shared store on demand (reload-on-miss)
+  rather than reporting it missing. Run an RWX-capable StorageClass (NFS/EFS/Filestore/
+  Azure Files); set both back to `ReadWriteOnce` for a single-replica eval.
+- **Constant-time boot via snapshots (SPINE-007).** The leader periodically writes a
+  per-tenant read-model snapshot at the current projection checkpoint
+  (`ha.snapshotInterval`, default ~5m). On a cold boot / DR restore the read model is
+  rehydrated from the latest snapshot and only the **tail** after it is replayed, so
+  startup is `O(events-since-snapshot)`, not a full-log replay. The event log remains
+  the source of truth (AN-2): a snapshot is reproducible by a full `Rebuild`, and a
+  corrupt or missing snapshot falls back to a full replay automatically.
 
-This gap is disclosed in the chart (`values.yaml` comments) and in
-`docs/limitations.md`, which is what keeps the severity at Medium rather than High.
+Durability still lives in the **datastores** (external PostgreSQL + replicated NATS):
+the event log is the source of truth and a rebuilt pod re-derives state from it, so a
+control-plane failure is an availability event, not a data-loss one.
+
+**The still-deferred piece — isolated signer (SIGNER-005).** A single signer pod
+serving all replicas over **mTLS gRPC** (`signer.mode: isolated`) is a future topology
+(the `trustctl-signer` binary is UDS-only today, so selecting it **fails the Helm
+render** with guidance rather than shipping a crash-looping pod, OPS-001). It is not
+required for the HA above — the shared-keystore sidecar model already gives a single,
+consistent CA across replicas — but it would let the signer scale independently of the
+control plane. For a single-replica eval set `replicaCount: 1` and the access modes to
+`ReadWriteOnce`; the PDB is then irrelevant (disable it, since a `minAvailable: 1` PDB
+would block a single-replica node drain).
 
 ## DR runbook
 

@@ -477,6 +477,129 @@ func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 	})
 }
 
+// Snapshot persists a per-tenant read-model snapshot at the current projection
+// checkpoint (SPINE-007 / EXC-SCALE-01), so a later cold boot or DR restore can
+// rehydrate from it and replay only the tail. It captures each tenant's read-model
+// rows and stamps them with the global offset the read model has applied
+// (ProjectionCheckpoint), then bounds catch-up at boot to O(events-since-snapshot)
+// instead of O(lifetime events).
+//
+// The snapshot is purely an optimization (AN-2): the log stays the source of truth,
+// a snapshot is reproducible by Rebuild from sequence 0, and a corrupt/missing one is
+// ignored on boot in favor of a full replay. Snapshot takes the projection advisory
+// lock so it cannot race a concurrent catch-up on a multi-replica deployment — the
+// checkpoint and the captured rows are read consistently (RESIL-004), and only the
+// leader runs the periodic snapshot worker anyway.
+//
+// Per-tenant capture is tenant-scoped under RLS (AN-1): WriteTenantSnapshot runs in
+// the tenant's RLS context, so a tenant's snapshot can only ever hold that tenant's
+// rows. It returns the number of tenants snapshotted.
+func (p *Projector) Snapshot(ctx context.Context) (int, error) {
+	var n int
+	err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		covered, err := p.store.ProjectionCheckpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("projections: read checkpoint for snapshot: %w", err)
+		}
+		tenants, err := p.store.ListTenants(ctx)
+		if err != nil {
+			return fmt.Errorf("projections: list tenants for snapshot: %w", err)
+		}
+		for _, t := range tenants {
+			if err := p.store.WriteTenantSnapshot(ctx, t.TenantID, covered); err != nil {
+				return err
+			}
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+// RestoreFromSnapshot rehydrates the read model from the latest snapshots and then
+// replays ONLY the events after the offset the snapshots cover (SPINE-007 /
+// EXC-SCALE-01), so boot/restore is O(events-since-snapshot) rather than a full-log
+// replay. It reports whether it handled the boot (restored == true): when no
+// known-format snapshot exists it returns (false, nil) so the caller falls through to
+// the existing checkpoint catch-up.
+//
+// The log remains the source of truth (AN-2): the restore-then-tail-replay runs in
+// ONE owner-role transaction (atomic, like Rebuild — a crash mid-restore rolls back
+// to the prior read model), and the replayed tail is applied with the SAME projection
+// logic a rebuild uses. If the snapshot is corrupt or the restore fails for any
+// reason, it FALLS BACK to a full Rebuild from sequence 0 (the log is truth) and
+// still returns restored == true, so a bad snapshot can never leave the read model
+// wrong — at worst it costs a one-time full replay. It takes the projection advisory
+// lock so concurrent replica boots serialize (RESIL-004).
+func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (restored bool, err error) {
+	var handled bool
+	lockErr := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		from, err := p.store.LatestSnapshotOffset(ctx)
+		if errors.Is(err, store.ErrNoSnapshot) {
+			return nil // no snapshot — caller does the normal checkpoint catch-up
+		}
+		if err != nil {
+			return err
+		}
+		// Only restore when the snapshot knows MORE than the current projection
+		// checkpoint — i.e. the snapshot's covered offset is ahead of the watermark. That
+		// is the DR/cold-start case: the read model and its checkpoint were lost (a fresh
+		// PostgreSQL) but the snapshot survived, so the checkpoint reads 0 (or behind) and
+		// the snapshot is the fast way back. On a WARM boot the checkpoint is at or ahead
+		// of the snapshot, so we skip the (wasteful) truncate+reload and let the caller's
+		// checkpoint catch-up replay just the short tail. This keeps the snapshot a pure
+		// accelerator: it never penalizes a healthy restart, and the log stays truth.
+		checkpoint, err := p.store.ProjectionCheckpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("projections: read checkpoint for snapshot restore: %w", err)
+		}
+		if from <= checkpoint {
+			return nil // checkpoint already covers the snapshot — normal catch-up suffices
+		}
+		handled = true
+		// Atomic restore + tail replay in one transaction. RestoreSnapshotsTx truncates
+		// the read model and reloads every tenant's snapshot rows; we then set the
+		// checkpoint to the snapshot offset and replay the tail after it, advancing the
+		// checkpoint to the new head — all committing or rolling back together.
+		txErr := p.store.RestoreReadModelTx(ctx, func(tx pgx.Tx) error {
+			if _, rerr := p.store.RestoreSnapshotsTx(ctx, tx); rerr != nil {
+				return rerr
+			}
+			if serr := p.store.SetProjectionCheckpointTx(ctx, tx, from); serr != nil {
+				return serr
+			}
+			var last uint64
+			if rerr := log.Replay(ctx, from+1, func(e events.Event) error {
+				if aerr := p.applyForRebuild(ctx, tx, e); aerr != nil {
+					return aerr
+				}
+				last = e.Sequence
+				return nil
+			}); rerr != nil {
+				return rerr
+			}
+			if last > from {
+				if serr := p.store.SetProjectionCheckpointTx(ctx, tx, last); serr != nil {
+					return serr
+				}
+			}
+			return nil
+		})
+		if txErr != nil {
+			// The snapshot path failed (e.g. a corrupt payload). The log is the source of
+			// truth, so fall back to a full rebuild from sequence 0 rather than serving a
+			// partially-restored read model. Rebuild is itself atomic and resets the
+			// checkpoint; we keep handled == true so the caller does not double-catch-up.
+			return p.Rebuild(ctx, log)
+		}
+		return nil
+	})
+	if lockErr != nil {
+		return handled, lockErr
+	}
+	return handled, nil
+}
+
 // applyForRebuild applies one event to the read model on the rebuild's single
 // transaction (RESIL-003). It mirrors Apply's dispatch but shares one tx instead of
 // opening a per-event transaction, so the whole rebuild commits or rolls back as a

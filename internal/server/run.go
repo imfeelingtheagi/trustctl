@@ -16,6 +16,7 @@ import (
 	"trustctl.io/trustctl/internal/config"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/events"
+	"trustctl.io/trustctl/internal/leader"
 	"trustctl.io/trustctl/internal/logging"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/ratelimit"
@@ -236,69 +237,121 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	logger.Info("control plane assembled",
 		slog.String("addr", cfg.Server.Addr), slog.String("tls_mode", cfg.Server.TLS.Mode))
 
-	// Run the outbox dispatcher continuously (AN-6): external effects — issuance,
-	// notifications — happen while the process is live, not only at shutdown
-	// (closing the audit's "drains only at shutdown" finding). It stops before the
-	// final drain so the two never race on the same entries.
-	dispCtx, stopDispatcher := context.WithCancel(ctx)
-	dispatcherDone := make(chan struct{})
-	go func() { defer close(dispatcherDone); srv.RunDispatcher(dispCtx) }()
+	// Resolve the read-model snapshot cadence (SPINE-007 / EXC-SCALE-01) before
+	// starting the leader-only workers; a malformed value was rejected by Validate.
+	snapshotInterval, err := cfg.HA.SnapshotIntervalDuration()
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return fmt.Errorf("ha snapshot interval: %w", err)
+	}
+	srv.SetSnapshotInterval(snapshotInterval)
 
-	// Run the audit retention worker on its own cadence (R4.4): it archives records
-	// past the window to signed cold-storage bundles and prunes them from the hot
-	// log, so Audit.Retention/ArchiveDir do real work rather than nothing. A no-op
-	// when not configured. Stopped alongside the dispatcher before shutdown.
-	retCtx, stopRetention := context.WithCancel(ctx)
-	retentionDone := make(chan struct{})
-	go func() { defer close(retentionDone); srv.RunRetention(retCtx) }()
+	// ---- Leader-only continuous workers (RESIL-004 / EXC-RESIL-01) ----
+	//
+	// These workers MUTATE shared state (the read model, the outbox, the hot log, the
+	// CRL, the read-model snapshots) on a continuous cadence. On a multi-replica
+	// deployment they must run on exactly ONE replica or N replicas would double-apply
+	// — the projector tailer in particular has no other coordination once it is past
+	// the boot catch-up's advisory lock. leaderWork starts them together under a
+	// leadership-scoped context and stops+waits for them when that context is cancelled
+	// (leadership lost or shutdown), so a follower can take over cleanly. The set:
+	//   - the outbox dispatcher (AN-6): external effects happen while live, not only at
+	//     shutdown. (Its own claims are FOR UPDATE SKIP LOCKED, but only the leader runs
+	//     the sweep so a saturated pool on one replica cannot duplicate work.)
+	//   - the audit retention worker (R4.4): archive-then-prune the hot log.
+	//   - the idempotency-key GC (SPINE-002) and the outbox delivered-row purge
+	//     (SPINE-003): keep those tables (and their backups) bounded.
+	//   - the projection tailer (SPINE-009): apply out-of-band events + the lag gauge.
+	//   - the CRL freshness scheduler (EXC-REVOKE-01): keep the served CRL fresh.
+	//   - the read-model snapshot worker (SPINE-007): periodic snapshots for fast boot.
+	leaderWork := func(workCtx context.Context) {
+		dispCtx, stopDispatcher := context.WithCancel(workCtx)
+		dispatcherDone := make(chan struct{})
+		go func() { defer close(dispatcherDone); srv.RunDispatcher(dispCtx) }()
 
-	// Sample the out-of-process signer's health/restarts into the metrics registry
-	// on a fixed cadence (SF.3). A no-op when no signer is configured; stopped with
-	// the other background workers before shutdown.
+		retCtx, stopRetention := context.WithCancel(workCtx)
+		retentionDone := make(chan struct{})
+		go func() { defer close(retentionDone); srv.RunRetention(retCtx) }()
+
+		idemCtx, stopIdemGC := context.WithCancel(workCtx)
+		idemGCDone := make(chan struct{})
+		go func() { defer close(idemGCDone); srv.RunIdempotencyGC(idemCtx) }()
+
+		outboxGCCtx, stopOutboxGC := context.WithCancel(workCtx)
+		outboxGCDone := make(chan struct{})
+		go func() { defer close(outboxGCDone); srv.RunOutboxGC(outboxGCCtx) }()
+
+		tailCtx, stopTail := context.WithCancel(workCtx)
+		tailDone := make(chan struct{})
+		go func() { defer close(tailDone); srv.RunProjectionTail(tailCtx) }()
+
+		crlCtx, stopCRL := context.WithCancel(workCtx)
+		crlDone := make(chan struct{})
+		go func() { defer close(crlDone); srv.RunCRLScheduler(crlCtx) }()
+
+		snapCtx, stopSnap := context.WithCancel(workCtx)
+		snapDone := make(chan struct{})
+		go func() { defer close(snapDone); srv.RunSnapshotWorker(snapCtx) }()
+
+		<-workCtx.Done()
+		// Stop the dispatcher first so the rest of the drain/teardown never races it on
+		// an outbox row, then the others; wait for each so leadership is fully quiesced
+		// before this replica relinquishes the lock (no two leaders' workers overlap).
+		stopDispatcher()
+		<-dispatcherDone
+		stopRetention()
+		<-retentionDone
+		stopIdemGC()
+		<-idemGCDone
+		stopOutboxGC()
+		<-outboxGCDone
+		stopTail()
+		<-tailDone
+		stopCRL()
+		<-crlDone
+		stopSnap()
+		<-snapDone
+	}
+
+	// Start the leader-only workers, gated by leadership when leader election is on
+	// (the default). With it on, the leader.Elector campaigns for the PostgreSQL
+	// advisory-lock leadership and runs leaderWork only while this replica is the
+	// leader, stepping down (and stopping the workers) on lock loss so a follower takes
+	// over — so >1 replica is safe (RESIL-004). With it off (an operator running
+	// exactly one replica who wants to skip the lock), leaderWork runs unconditionally,
+	// preserving the prior single-replica behavior.
+	leaderCtx, stopLeader := context.WithCancel(ctx)
+	leaderDone := make(chan struct{})
+	if cfg.HA.LeaderElectionEnabled() {
+		campaign, cerr := cfg.HA.LeaderCampaignIntervalDuration()
+		if cerr != nil { // already validated; defensive
+			stopLeader()
+			_ = log.Close()
+			st.Close()
+			return fmt.Errorf("ha leader campaign interval: %w", cerr)
+		}
+		elector := leader.New(st, leaderWork, leader.WithLogger(logger), leader.WithInterval(campaign))
+		go func() { defer close(leaderDone); elector.Run(leaderCtx) }()
+		logger.Info("leader election enabled; continuous background workers run on the elected leader only (RESIL-004)")
+	} else {
+		go func() { defer close(leaderDone); leaderWork(leaderCtx) }()
+		logger.Info("leader election disabled; running continuous background workers on this single replica")
+	}
+
+	// Sample the out-of-process signer's health/restarts into the metrics registry on
+	// a fixed cadence (SF.3). This is LOCAL telemetry — each replica supervises its own
+	// signer — so it runs on every replica, not just the leader.
 	sigCtx, stopSigner := context.WithCancel(ctx)
 	signerDone := make(chan struct{})
 	go func() { defer close(signerDone); srv.RunSignerMonitor(sigCtx) }()
 
-	// Reclaim expired idempotency keys on a fixed cadence (SPINE-002): the served
-	// mutation path records one row per Idempotency-Key, so without reclamation the
-	// idempotency_keys table — and its backups — would grow without bound. The sweep
-	// deletes completed keys past the retention window (AN-5 still holds inside it).
-	// Stopped with the other background workers before shutdown.
-	idemCtx, stopIdemGC := context.WithCancel(ctx)
-	idemGCDone := make(chan struct{})
-	go func() { defer close(idemGCDone); srv.RunIdempotencyGC(idemCtx) }()
-
-	// Reclaim delivered outbox rows on a fixed cadence (SPINE-003): every external
-	// effect writes one outbox row that is marked delivered but never removed, so
-	// without reclamation the outbox table — and its backups — would grow without
-	// bound. The purge deletes delivered rows past the retention window; pending/
-	// failed rows are untouched, so at-least-once delivery (AN-6) is preserved.
-	// Stopped before the final drain so it never races the dispatcher on a row.
-	outboxGCCtx, stopOutboxGC := context.WithCancel(ctx)
-	outboxGCDone := make(chan struct{})
-	go func() { defer close(outboxGCDone); srv.RunOutboxGC(outboxGCCtx) }()
-
-	// Tail the event stream with a durable consumer (SPINE-009): events appended out
-	// of band (not via the inline orchestrator projection) are applied promptly, and
-	// the projection-lag gauge tracks how far the read model is behind the log head so
-	// a stuck/divergent projection is observable. Stopped before the final drain.
-	tailCtx, stopTail := context.WithCancel(ctx)
-	tailDone := make(chan struct{})
-	go func() { defer close(tailDone); srv.RunProjectionTail(tailCtx) }()
-
-	// Regenerate served CRLs on a freshness cadence (EXC-REVOKE-01): each tenant's
-	// CRL is regenerated ahead of its nextUpdate (and a first one is generated on
-	// demand) so the CRL the CDP serves is never stale. CRLs are signed through the
-	// out-of-process signer (AN-4); a no-op when no issuing CA is provisioned.
-	// Stopped before the final drain with the other background workers.
-	crlCtx, stopCRL := context.WithCancel(ctx)
-	crlDone := make(chan struct{})
-	go func() { defer close(crlDone); srv.RunCRLScheduler(crlCtx) }()
-
 	// Serve the SPIFFE Workload API over its UDS (EXC-WIRE-02 / INTEROP-004): a stock
 	// go-spiffe / spiffe-helper / Envoy SDS client dials the socket to FetchX509SVID,
-	// signed through the out-of-process signer (AN-4). A no-op unless protocols.spiffe
-	// is enabled and an issuing CA is provisioned. Stopped with the other workers.
+	// signed through the out-of-process signer (AN-4). Issuance is per-replica (each
+	// replica has its own signer client), so this runs on every replica that serves
+	// protocols, not only the leader. A no-op unless protocols.spiffe is enabled and an
+	// issuing CA is provisioned. Stopped with the other workers.
 	spiffeCtx, stopSPIFFE := context.WithCancel(ctx)
 	spiffeDone := make(chan struct{})
 	go func() { defer close(spiffeDone); srv.RunSPIFFE(spiffeCtx) }()
@@ -308,22 +361,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	// stopBackground halts the background workers and waits for them to exit, so the
 	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
-	// when the event log closes.
+	// when the event log closes. Stopping the leader first quiesces the leader-only
+	// workers (incl. the dispatcher) and releases the leadership lock before the drain.
 	stopBackground := func() {
-		stopDispatcher()
-		<-dispatcherDone
-		stopRetention()
-		<-retentionDone
+		stopLeader()
+		<-leaderDone
 		stopSigner()
 		<-signerDone
-		stopIdemGC()
-		<-idemGCDone
-		stopOutboxGC()
-		<-outboxGCDone
-		stopTail()
-		<-tailDone
-		stopCRL()
-		<-crlDone
 		stopSPIFFE()
 		<-spiffeDone
 	}

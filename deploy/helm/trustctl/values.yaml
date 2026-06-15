@@ -12,20 +12,38 @@ image:
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
-# Single control-plane replica BY DESIGN (RESIL-002): the issuing CA key is held
-# by the co-located signer sidecar with a PER-POD sealed key store, so a second
-# replica would be a second, independent signer — not the same CA. True horizontal
-# scaling needs the signer as its own pod reached over mTLS (signer.mode: isolated),
-# which is not built yet (S15.1). Consequence: a node failure or any config rollout
-# takes issuance/validation offline until the pod reschedules, and the Recreate
-# strategy below guarantees a brief downtime window on every deploy. This is an
-# AVAILABILITY trade-off, not data loss — durability lives in the external,
-# replicated datastores; a rebuilt pod re-derives state from the event log. The
-# supported HA posture today is fast failover of this single active replica (keep it
-# under a Deployment, keep Postgres/NATS replicated). See docs/disaster-recovery.md
-# "High availability" and docs/limitations.md "Multi-replica HA" for the
-# active/active plan (leader election + isolated signer, RESIL-004 / EXC-RESIL-01).
-replicaCount: 1
+# Multi-replica HA by default (RESIL-002 / EXC-RESIL-01): the control plane runs
+# with redundancy so a node failure or a config rollout does not take issuance/
+# validation offline. Safety with >1 replica rests on three mechanisms that ship
+# enabled:
+#   1. leader election (RESIL-004): exactly ONE replica runs the continuous
+#      background workers (projector tailer, outbox dispatcher, GC sweeps, CRL
+#      scheduler, audit retention, read-model snapshots) via a PostgreSQL advisory
+#      lock, so N replicas never double-apply; the lock frees automatically on crash
+#      so a follower takes over (failover). Every replica serves reads.
+#   2. A SHARED signer key store (persistence.signerKeysAccessMode: ReadWriteMany):
+#      every pod's locked-down signer sidecar (AN-4, UDS-only — NOT the unbuilt
+#      isolated-mTLS topology) loads the SAME sealed issuing-CA key, so all replicas
+#      are the same CA. First-boot provisioning is serialized by an advisory lock so
+#      exactly one replica generates the key; the rest reuse it (signer reload-on-miss
+#      reads it from the shared store).
+#   3. A RollingUpdate strategy with maxUnavailable: 0 + a PodDisruptionBudget +
+#      pod anti-affinity (below), so deploys and node drains keep a replica serving.
+# Durability still lives in the external, replicated datastores; the event log is the
+# source of truth and a rebuilt pod re-derives state from it (and from a snapshot for
+# a fast cold start, SPINE-007). Set replicaCount: 1 for a minimal single-node eval.
+# See docs/disaster-recovery.md "High availability" and docs/limitations.md.
+replicaCount: 2
+
+# Rollout strategy for the control-plane Deployment (RESIL-002). RollingUpdate with
+# maxUnavailable: 0 keeps the full replica count serving THROUGHOUT a deploy (a new
+# pod must go Ready before an old one is removed) — no downtime window, unlike the old
+# Recreate. maxSurge adds one extra pod during the roll. Set type: Recreate only if
+# you deliberately accept a downtime window (e.g. a single-replica eval).
+updateStrategy:
+  type: RollingUpdate
+  maxUnavailable: 0
+  maxSurge: 1
 
 nameOverride: ""
 fullnameOverride: ""
@@ -77,10 +95,24 @@ kek:
 # The control plane persists the issuing CA cert + audit signing key under /data;
 # the signer persists its sealed CA key store. Both need stable storage so a
 # restart preserves the issuing CA (R3.2) and the audit chain (R2.1).
+#
+# For multi-replica HA (replicaCount >= 2) BOTH volumes default to ReadWriteMany so
+# all replicas SHARE the issuing CA: the signer key store (sealed CA key, AN-8) and
+# the control-plane data dir (public CA cert + the audit signing key) are the same
+# across pods, so every replica is the same CA and verifies the same audit chain. Use
+# an RWX-capable StorageClass (e.g. an NFS/EFS/Filestore/Azure Files class); set both
+# back to ReadWriteOnce only when you run a single replica. The sealed key never
+# leaves the signer's locked-down container (AN-4); RWX shares only the SEALED bytes
+# at rest, openable solely with the deployment KEK.
 persistence:
   enabled: true
   storageClass: ""
-  accessMode: ReadWriteOnce
+  # Access mode for the control-plane data PVC (CA cert + audit signing key). RWX so
+  # every HA replica reads the same CA cert + audit key. ReadWriteOnce for one replica.
+  controlPlaneAccessMode: ReadWriteMany
+  # Access mode for the signer key-store PVC (the sealed CA key). RWX so every pod's
+  # signer sidecar loads the SAME sealed CA key (RESIL-002). ReadWriteOnce for one replica.
+  signerKeysAccessMode: ReadWriteMany
   controlPlaneSize: 1Gi
   signerKeysSize: 1Gi
 
@@ -131,31 +163,64 @@ resources:
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []
-affinity: {}
 
-# PodDisruptionBudget. Disabled by default (OPS-009): the chart runs a SINGLE
-# control-plane replica today (the isolated-signer mTLS transport for multi-replica
-# HA is not yet implemented — RESIL-002), and a PDB is only meaningful with >1
-# replica. The old default (enabled with minAvailable: 0) was a no-op — minAvailable
-# 0 never blocks an eviction — so it gave the appearance of disruption protection
-# without any. Enable this with minAvailable: 1 only once you run replicaCount >= 2
-# behind the shared isolated signer + leader election (RESIL-004 / EXC-RESIL-01).
+# Pod anti-affinity (RESIL-002): with the multi-replica default, spread control-plane
+# pods across nodes so a single node failure cannot take ALL replicas down at once.
+# It is a PREFERRED (soft) rule so the chart still schedules on a single-node cluster
+# or an eval (replicaCount: 1) rather than leaving pods Pending — override with a
+# required rule for a hard guarantee. Set affinity: {} to disable.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: trustctl
+              app.kubernetes.io/component: control-plane
+
+# PodDisruptionBudget (RESIL-002 / RESIL-007): ENABLED by default now that the chart
+# runs multi-replica, with minAvailable: 1 — a REAL guarantee that a voluntary
+# disruption (node drain, cluster upgrade) keeps at least one control-plane pod
+# serving. (minAvailable: 0 would be a no-op that never blocks an eviction, so it is
+# rejected.) If you run replicaCount: 1, disable this — a PDB cannot protect a single
+# replica from a node drain, and a minAvailable: 1 PDB would BLOCK the drain entirely.
 podDisruptionBudget:
-  enabled: false
+  enabled: true
   minAvailable: 1
 
-# --- S15.1: signer topology + external KMS -----------------------------------
+# Multi-replica HA behavior (RESIL-002 / RESIL-004 / SPINE-007). These map to the
+# binary's TRUSTCTL_HA_* config. Leader election is ON by default: it is what makes
+# >1 replica safe (only the leader runs the continuous background workers), and it is
+# harmless on a single replica (that replica always wins the lock). Disable it ONLY if
+# you run exactly one replica and want to skip the advisory lock.
+ha:
+  leaderElection: true
+  # How often a follower re-attempts leadership and the leader re-checks the lock.
+  # Empty uses the binary default (~3s). Shorter = faster failover, more probes.
+  leaderCampaignInterval: ""
+  # How often the leader writes a read-model snapshot so a cold boot / DR restore is
+  # O(events-since-snapshot) instead of a full-log replay (SPINE-007). Empty uses the
+  # binary default (~5m); "0" disables periodic snapshots (boot then full catch-up).
+  snapshotInterval: ""
+
+# --- Signer topology + external KMS ------------------------------------------
 # Signer deployment mode:
-#   "sidecar"  (default, SUPPORTED) — co-locates the signer with a single
+#   "sidecar"  (default, SUPPORTED) — co-locates a locked-down signer with EACH
 #              control-plane replica, reachable only over a shared in-memory UDS
-#              (AN-4). This is the tested, shippable topology.
+#              (AN-4). This is the tested, shippable topology, and it now supports
+#              MULTI-REPLICA HA: with a shared signer key store (RWX,
+#              persistence.signerKeysAccessMode) every replica's sidecar loads the
+#              SAME sealed issuing-CA key, so all replicas are the same CA. signer.replicas
+#              is unused in this mode (one sidecar per control-plane pod).
 #   "isolated" (NOT YET IMPLEMENTED) — would run the signer as its OWN
-#              network-policy-isolated pod reached over an mTLS gRPC channel,
-#              enabling control-plane horizontal scaling. The cross-node mTLS
-#              transport this needs is not built yet (the trustctl-signer binary
-#              is UDS-only; see docs/limitations.md "Multi-replica HA"), so
-#              selecting it FAILS the render with guidance rather than shipping a
-#              crash-looping signer pod (OPS-001). Leave this at "sidecar".
+#              network-policy-isolated pod reached over an mTLS gRPC channel. The
+#              cross-node mTLS transport this needs is not built yet (the
+#              trustctl-signer binary is UDS-only; see docs/limitations.md
+#              "Multi-replica HA" and SIGNER-005), so selecting it FAILS the render
+#              with guidance rather than shipping a crash-looping signer pod (OPS-001).
+#              Leave this at "sidecar" — it is the supported HA topology.
 signer:
   mode: sidecar
   replicas: 1

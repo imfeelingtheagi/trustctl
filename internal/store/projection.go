@@ -266,6 +266,27 @@ func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 	return tx.Commit(ctx)
 }
 
+// RestoreReadModelTx runs apply inside ONE owner-role transaction, for the atomic
+// snapshot-restore boot path (SPINE-007): apply both rehydrates the read model from
+// the latest snapshots (RestoreSnapshotsTx, which TRUNCATEs and reloads) AND replays
+// the tail after the covered offset, so the whole restore-then-catch-up commits or
+// rolls back as a unit. A crash mid-restore leaves the prior read model intact rather
+// than a half-loaded inventory the API might answer from. It runs as the connecting
+// (owner) role like RebuildReadModelTx — it must TRUNCATE and write every tenant —
+// and apply carries tenant_id explicitly on every write, so AN-1 holds with RLS
+// bypassed for this trusted system operation.
+func (s *Store) RestoreReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := apply(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // SetTenantGUCTx sets the trustctl.tenant_id session variable on tx (LOCAL to the
 // transaction) so tenant-scoped projection logic sees the right tenant during an
 // atomic rebuild (RESIL-003). Unlike WithTenant it does NOT switch to the RLS role:

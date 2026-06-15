@@ -24,3 +24,13 @@ data:
   TRUSTCTL_SECRETS_KEK_FILE: "/etc/trustctl/kek/kek.bin"
   TRUSTCTL_CA_CERT_FILE: "/data/ca/issuing-ca.crt"
   TRUSTCTL_AUDIT_SIGNING_KEY_FILE: "/data/audit/audit-signing.key"
+  # Multi-replica HA (RESIL-002 / RESIL-004 / SPINE-007): leader election gates the
+  # continuous background workers to one replica; snapshots make a cold boot / DR
+  # restore O(events-since-snapshot). Safe on a single replica too.
+  TRUSTCTL_HA_LEADER_ELECTION: {{ .Values.ha.leaderElection | quote }}
+  {{- with .Values.ha.leaderCampaignInterval }}
+  TRUSTCTL_HA_LEADER_CAMPAIGN_INTERVAL: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ha.snapshotInterval }}
+  TRUSTCTL_HA_SNAPSHOT_INTERVAL: {{ . | quote }}
+  {{- end }}

@@ -73,6 +73,86 @@ type Config struct {
 	Protocols Protocols `json:"protocols"`
 	Auth      Auth      `json:"auth"`
 	Plugins   Plugins   `json:"plugins"`
+	HA        HA        `json:"ha"`
+}
+
+// HA configures the multi-replica high-availability behavior of the control plane
+// (RESIL-002 / RESIL-004 / EXC-RESIL-01). It is SAFE on every deployment: with the
+// default values a single replica behaves exactly as before. When >1 control-plane
+// replica runs against one PostgreSQL + NATS, leader election ensures only ONE replica
+// runs the continuous background workers (the projector tailer, outbox dispatcher,
+// GC sweeps, CRL scheduler, audit-retention, snapshot worker) while every replica
+// serves reads — so N replicas never double-apply (RESIL-004). Snapshots make a cold
+// boot / DR restore O(events-since-snapshot) rather than a full-log replay (SPINE-007).
+type HA struct {
+	// LeaderElection gates the continuous background workers behind a PostgreSQL
+	// session-scoped advisory lock so exactly one replica runs them at a time
+	// (RESIL-004). It defaults ON: it is correct and cheap on a single replica (that
+	// replica simply always wins the lock), and it is REQUIRED for multi-replica
+	// safety. Disabling it on a multi-replica deployment reintroduces the
+	// double-projection hazard, so leave it on unless you run exactly one replica and
+	// want to skip the lock. The leader frees the lock automatically on crash, so a
+	// follower takes over (failover) with no lease tuning.
+	LeaderElection *bool `json:"leader_election,omitempty"`
+	// LeaderCampaignInterval is how often a follower retries to acquire leadership and
+	// how often the leader re-checks it still holds the lock (a Go duration, e.g. "3s").
+	// Empty uses the package default (leader.DefaultCampaignInterval). Shorter gives
+	// faster failover at the cost of more try-lock probes.
+	LeaderCampaignInterval string `json:"leader_campaign_interval,omitempty"`
+	// SnapshotInterval is how often the leader persists a read-model snapshot at the
+	// current projection checkpoint (SPINE-007 / EXC-SCALE-01), so a later cold boot /
+	// DR restore rehydrates from it and replays only the tail. A Go duration (e.g.
+	// "5m"); empty uses DefaultSnapshotInterval. Set "0" to disable periodic snapshots
+	// entirely (boot then always does a full checkpoint catch-up; the log stays truth).
+	SnapshotInterval string `json:"snapshot_interval,omitempty"`
+}
+
+// DefaultSnapshotInterval is how often the leader writes a read-model snapshot when
+// HA.SnapshotInterval is unset (SPINE-007). Five minutes keeps the per-snapshot work
+// modest while bounding a cold boot / DR restore to at most ~five minutes of tail
+// replay, regardless of how large the lifetime event log is.
+const DefaultSnapshotInterval = 5 * time.Minute
+
+// LeaderElectionEnabled reports whether leader election is on, defaulting to ON when
+// unset (RESIL-004): the pointer lets an operator explicitly turn it off (a
+// single-replica deployment that wants to skip the lock) while a nil/unset value is
+// the safe multi-replica default.
+func (h HA) LeaderElectionEnabled() bool {
+	return h.LeaderElection == nil || *h.LeaderElection
+}
+
+// SnapshotIntervalDuration parses HA.SnapshotInterval (SPINE-007). Empty uses
+// DefaultSnapshotInterval; "0" (or any non-positive duration) disables periodic
+// snapshots and returns a zero duration. A malformed value is an error.
+func (h HA) SnapshotIntervalDuration() (time.Duration, error) {
+	if h.SnapshotInterval == "" {
+		return DefaultSnapshotInterval, nil
+	}
+	d, err := time.ParseDuration(h.SnapshotInterval)
+	if err != nil {
+		return 0, fmt.Errorf("ha.snapshot_interval %q: %w", h.SnapshotInterval, err)
+	}
+	if d < 0 {
+		return 0, nil
+	}
+	return d, nil
+}
+
+// LeaderCampaignIntervalDuration parses HA.LeaderCampaignInterval (RESIL-004). Empty
+// returns a zero duration so the caller applies the package default; a malformed or
+// non-positive value is an error (a zero/negative campaign interval would busy-loop).
+func (h HA) LeaderCampaignIntervalDuration() (time.Duration, error) {
+	if h.LeaderCampaignInterval == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(h.LeaderCampaignInterval)
+	if err != nil {
+		return 0, fmt.Errorf("ha.leader_campaign_interval %q: %w", h.LeaderCampaignInterval, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("ha.leader_campaign_interval must be positive, got %q", h.LeaderCampaignInterval)
+	}
+	return d, nil
 }
 
 // Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
@@ -680,6 +760,13 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setCSV(getenv, "TRUSTCTL_PLUGINS_PINNED_DIGESTS", &c.Plugins.PinnedDigests)
 	setCSV(getenv, "TRUSTCTL_PLUGINS_CAPABILITIES", &c.Plugins.Capabilities)
 	setCSV(getenv, "TRUSTCTL_PLUGINS_PATH_PREFIXES", &c.Plugins.PathPrefixes)
+	// Multi-replica HA (RESIL-002 / RESIL-004 / SPINE-007). Leader election defaults
+	// ON (safe on a single replica, required for multi-replica); an operator can turn
+	// it off explicitly. Snapshot/campaign intervals tune the SPINE-007 accelerator and
+	// failover cadence.
+	setBoolPtr(getenv, "TRUSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
+	setString(getenv, "TRUSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
+	setString(getenv, "TRUSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -694,6 +781,18 @@ func setBool(getenv func(string) string, key string, dst *bool) {
 	if v := getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			*dst = b
+		}
+	}
+}
+
+// setBoolPtr overlays a boolean environment variable onto a *bool, allocating the
+// pointer on first set (RESIL-004 leader-election toggle). A nil/unset pointer means
+// "use the default"; an explicit env value materializes it to true or false. A
+// malformed value is ignored (the prior value stands), like setBool.
+func setBoolPtr(getenv func(string) string, key string, dst **bool) {
+	if v := getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			*dst = &b
 		}
 	}
 }
@@ -858,6 +957,15 @@ func (c *Config) Validate() error {
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.
 	if c.Plugins.Enabled {
 		errs = append(errs, c.Plugins.validate()...)
+	}
+	// Multi-replica HA (RESIL-004 / SPINE-007): the durations must parse, so a typo in
+	// the snapshot or campaign cadence fails fast at startup rather than silently
+	// falling back to a default or busy-looping.
+	if _, err := c.HA.SnapshotIntervalDuration(); err != nil {
+		errs = append(errs, err)
+	}
+	if _, err := c.HA.LeaderCampaignIntervalDuration(); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

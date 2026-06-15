@@ -81,6 +81,56 @@ func TestSignerPersistsKeysAcrossRestart(t *testing.T) {
 	}
 }
 
+// TestSignerReloadsHandleFromSharedStoreOnMiss is the RESIL-002 multi-replica
+// enabler: two signers (modeling two control-plane replicas' sidecars) share ONE
+// sealed key store. Signer B starts BEFORE the issuing-CA key exists, so its in-memory
+// map is empty. Signer A then generates + seals the CA key to the shared store. B,
+// which never had the key in memory, must RELOAD it from the shared store on the next
+// lookup (GetPublicKey/Sign) rather than reporting it missing — so every replica
+// converges on the same CA without a restart. This keeps AN-4 intact (the signer only
+// touches its own key store; no new surface).
+func TestSignerReloadsHandleFromSharedStoreOnMiss(t *testing.T) {
+	dir := t.TempDir() // the SHARED sealed key store
+	kek := testKEK(t)
+	ctx := context.Background()
+
+	// B boots first over the empty shared store: it has no keys yet.
+	sB, err := signing.NewPersistentServer(signing.NewKeyStore(dir, kek))
+	if err != nil {
+		t.Fatalf("NewPersistentServer B: %v", err)
+	}
+	// Sanity: B does not have the handle before it is created.
+	if _, err := sB.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: "issuing-ca"}}); err == nil {
+		t.Fatal("B unexpectedly has the issuing-ca handle before any key was generated")
+	}
+
+	// A boots over the same store and generates + seals the CA key.
+	sA, err := signing.NewPersistentServer(signing.NewKeyStore(dir, kek))
+	if err != nil {
+		t.Fatalf("NewPersistentServer A: %v", err)
+	}
+	pubA := genCA(t, sA)
+
+	// B must now RELOAD the key from the shared store on the next lookup, returning the
+	// SAME public key A generated — proving reload-on-miss converges the replicas.
+	gotB, err := sB.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: "issuing-ca"}})
+	if err != nil {
+		t.Fatalf("B GetPublicKey after A sealed the key (reload-on-miss must load it): %v", err)
+	}
+	if !bytes.Equal(gotB.GetPublicKey(), pubA) {
+		t.Fatal("B reloaded a DIFFERENT key than A sealed — replicas would disagree on the CA (RESIL-002)")
+	}
+	// And B can sign with the reloaded key.
+	sig, err := sB.Sign(ctx, &signerpb.SignRequest{
+		Handle: &signerpb.KeyHandle{Id: "issuing-ca"},
+		Digest: make([]byte, 32),
+		Hash:   signerpb.Hash_HASH_SHA256,
+	})
+	if err != nil || len(sig.GetSignature()) == 0 {
+		t.Fatalf("B cannot sign with the reloaded shared CA key: %v", err)
+	}
+}
+
 // TestSignerKeyBackupRestore: the sealed key store is the CA-key backup. Copying
 // it into a fresh location restores a working signer that signs with the same key.
 func TestSignerKeyBackupRestore(t *testing.T) {

@@ -547,19 +547,23 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
 
 - **A Kubernetes Operator.** A CRD-driven operator is planned (S15.1); today the
   Helm chart is the supported control-plane install.
-- **Multi-replica HA.** The signer holds the CA key with a per-pod sealed key
-  store and a UDS-only transport, so horizontal scaling needs a separate signer
-  pod reached over **mTLS** — that network transport is not yet implemented, so the
-  chart runs **one** control-plane replica with a `Recreate` rollout (RESIL-002). A
-  node failure or a config rollout takes issuance/validation offline until the pod
-  reschedules; the datastores (external Postgres + replicated NATS) hold durability,
-  so this is an availability gap, not data loss. The supported HA posture today is
-  **fast failover of a single active replica** (run it under a Deployment, keep the
-  datastores replicated). When the isolated-signer transport lands, active/active
-  needs `replicaCount >= 2` behind a shared isolated signer **plus leader election**
-  gating the background workers (outbox dispatcher, audit retention,
-  idempotency/outbox GC, projection tailer) so only one replica runs them — tracked
-  under RESIL-004 / EXC-RESIL-01. See
+- **Multi-replica HA.** The chart now runs the control plane **multi-replica by
+  default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
+  pod anti-affinity), and running >1 replica is **safe** (RESIL-002 / RESIL-004 /
+  EXC-RESIL-01): **leader election** (a PostgreSQL session-scoped advisory lock) gates
+  the continuous background workers — the outbox dispatcher, audit retention,
+  idempotency/outbox GC, the projection tailer, the CRL scheduler, and the read-model
+  snapshot worker — to exactly one replica so they never double-apply, with automatic
+  failover to a follower on leader loss; all replicas serve reads. A **shared signer
+  key store** (`persistence.signerKeysAccessMode: ReadWriteMany`) means every pod's
+  locked-down sidecar signer (AN-4, UDS-only) loads the SAME sealed issuing-CA key, so
+  all replicas are the same CA (first-boot provisioning is serialized by an advisory
+  lock). The one piece still deferred is the **isolated signer** (`signer.mode:
+  isolated`): a single signer pod serving all replicas over **mTLS gRPC**, which would
+  let the signer scale independently. That cross-node transport is not yet implemented
+  (the `trustctl-signer` binary is UDS-only), so selecting it **fails the Helm render**
+  with guidance rather than shipping a crash-looping pod (OPS-001 / SIGNER-005); it is
+  not required for the HA above. See
   [disaster recovery → High availability](disaster-recovery.md). (The agent,
   separately, runs as a DaemonSet across all nodes.)
 

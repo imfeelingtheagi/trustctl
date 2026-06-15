@@ -11,11 +11,20 @@ metadata:
   labels:
     {{- include "trustctl.labels" . | nindent 4 }}
 spec:
-  # Single replica by design (see values.yaml / chart README): the issuing CA key
-  # is held by the co-located signer with a per-pod sealed key store.
+  # Multi-replica HA by default (RESIL-002): redundancy + a RollingUpdate that keeps
+  # the full replica count serving across a deploy (maxUnavailable: 0). Safety with
+  # >1 replica comes from leader election (only the leader runs the continuous
+  # background workers, RESIL-004) and a SHARED signer key store (every sidecar signer
+  # loads the same sealed CA key). See values.yaml. updateStrategy.type: Recreate is
+  # available for a single-replica eval that accepts a downtime window.
   replicas: {{ .Values.replicaCount }}
   strategy:
-    type: Recreate
+    type: {{ .Values.updateStrategy.type }}
+    {{- if eq .Values.updateStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.updateStrategy.maxUnavailable }}
+      maxSurge: {{ .Values.updateStrategy.maxSurge }}
+    {{- end }}
   selector:
     matchLabels:
       {{- include "trustctl.selectorLabels" . | nindent 6 }}
@@ -182,7 +191,9 @@ metadata:
   labels:
     {{- include "trustctl.labels" . | nindent 4 }}
 spec:
-  accessModes: [{{ .Values.persistence.accessMode | quote }}]
+  # RWX by default so every HA replica shares the CA cert + audit signing key
+  # (RESIL-002); ReadWriteOnce for a single-replica eval.
+  accessModes: [{{ .Values.persistence.controlPlaneAccessMode | quote }}]
   {{- with .Values.persistence.storageClass }}
   storageClassName: {{ . | quote }}
   {{- end }}
@@ -197,7 +208,9 @@ metadata:
   labels:
     {{- include "trustctl.labels" . | nindent 4 }}
 spec:
-  accessModes: [{{ .Values.persistence.accessMode | quote }}]
+  # RWX by default so every replica's signer sidecar loads the SAME sealed CA key
+  # (RESIL-002); ReadWriteOnce for a single-replica eval.
+  accessModes: [{{ .Values.persistence.signerKeysAccessMode | quote }}]
   {{- with .Values.persistence.storageClass }}
   storageClassName: {{ . | quote }}
   {{- end }}

@@ -175,9 +175,10 @@ func TestNetworkPolicyIngressIsScopedNotNamespaceWide(t *testing.T) {
 
 // TestPodDisruptionBudgetIsNotANoOp pins OPS-009: the PDB must not ship enabled
 // with minAvailable: 0 (which never blocks an eviction — a no-op that looks like
-// disruption protection but is not). Today the chart runs a single replica, so the
-// honest default is a disabled PDB with minAvailable: 1 reserved for the
-// multi-replica future.
+// disruption protection but is not). The chart now runs multi-replica by default
+// (RESIL-002), so the PDB ships ENABLED with minAvailable: 1 — a real guarantee; this
+// test asserts it is never the no-op (enabled + minAvailable: 0) form and that
+// minAvailable is always >= 1.
 func TestPodDisruptionBudgetIsNotANoOp(t *testing.T) {
 	values := read(t, "values.yaml")
 	var v struct {
@@ -253,46 +254,155 @@ func TestPodDisruptionBudgetRendersRealGuaranteeWhenEnabled(t *testing.T) {
 	}
 }
 
-// TestSingleReplicaIsDisclosed pins RESIL-002: the default chart is a single-replica
-// control plane with a Recreate rollout (a deliberate SPOF, because the signer's CA
-// key is in a per-pod sealed store), and that availability trade-off is HONESTLY
-// DISCLOSED in the chart values and the docs. The test asserts both the structural
-// facts (so they cannot silently change) and the disclosure (so the binary/chart
-// never over-claims HA it does not have). It is not a security check that passes on a
-// substring — it asserts the actual default values AND that the leader-election/HA
-// plan is documented.
-func TestSingleReplicaIsDisclosed(t *testing.T) {
+// TestMultiReplicaHAIsTheDefault pins RESIL-002 / EXC-RESIL-01: the default chart is
+// now MULTI-REPLICA with a no-downtime rollout, NOT the old single-replica Recreate
+// SPOF. It asserts the actual default VALUES (so the topology cannot silently
+// regress) AND renders the deployment template so the structural HA facts are proven
+// in the artifact, not grepped (anti-vacuous-green: OPS-008). The HA safety
+// mechanisms it checks: >=2 replicas, RollingUpdate with maxUnavailable 0, a SHARED
+// (RWX) signer key store + control-plane data so every replica is the same CA, leader
+// election ON (the binary gates the continuous workers to one replica), and the docs
+// still describe the design. It FAILS on the pre-fix tree (replicaCount 1 / Recreate /
+// RWO / PDB off).
+func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 	values := read(t, "values.yaml")
 	var v struct {
-		ReplicaCount int `yaml:"replicaCount"`
+		ReplicaCount   int `yaml:"replicaCount"`
+		UpdateStrategy struct {
+			Type           string `yaml:"type"`
+			MaxUnavailable int    `yaml:"maxUnavailable"`
+		} `yaml:"updateStrategy"`
+		Persistence struct {
+			ControlPlaneAccessMode string `yaml:"controlPlaneAccessMode"`
+			SignerKeysAccessMode   string `yaml:"signerKeysAccessMode"`
+		} `yaml:"persistence"`
+		PDB struct {
+			Enabled      bool `yaml:"enabled"`
+			MinAvailable int  `yaml:"minAvailable"`
+		} `yaml:"podDisruptionBudget"`
+		HA struct {
+			LeaderElection bool `yaml:"leaderElection"`
+		} `yaml:"ha"`
 	}
 	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
 		t.Fatalf("values.yaml is not valid YAML: %v", err)
 	}
-	// The structural fact: the default is exactly one replica.
-	if v.ReplicaCount != 1 {
-		t.Errorf("default replicaCount = %d, want 1 (the documented single-replica topology)", v.ReplicaCount)
+	// Structural HA defaults.
+	if v.ReplicaCount < 2 {
+		t.Errorf("default replicaCount = %d, want >= 2 (HA, not a single-replica SPOF) (RESIL-002)", v.ReplicaCount)
 	}
-	// The deployment renders that replica count and a Recreate rollout (downtime on
-	// deploy is a known, disclosed trade-off — not RollingUpdate).
-	dep := read(t, "templates", "deployment.yaml")
-	containsAll(t, "deployment single-replica topology", dep,
-		"replicas: {{ .Values.replicaCount }}", "type: Recreate")
+	if v.UpdateStrategy.Type != "RollingUpdate" {
+		t.Errorf("default updateStrategy.type = %q, want RollingUpdate (not the downtime-prone Recreate) (RESIL-002)", v.UpdateStrategy.Type)
+	}
+	if v.UpdateStrategy.MaxUnavailable != 0 {
+		t.Errorf("default updateStrategy.maxUnavailable = %d, want 0 so a deploy never drops below the replica count (RESIL-002)", v.UpdateStrategy.MaxUnavailable)
+	}
+	// The CA + audit + signer key stores must be SHARED (RWX) so every replica is the
+	// same CA and verifies the same audit chain (RESIL-002).
+	if v.Persistence.SignerKeysAccessMode != "ReadWriteMany" {
+		t.Errorf("persistence.signerKeysAccessMode = %q, want ReadWriteMany so every replica's signer loads the same sealed CA key (RESIL-002)", v.Persistence.SignerKeysAccessMode)
+	}
+	if v.Persistence.ControlPlaneAccessMode != "ReadWriteMany" {
+		t.Errorf("persistence.controlPlaneAccessMode = %q, want ReadWriteMany so every replica shares the CA cert + audit key (RESIL-002)", v.Persistence.ControlPlaneAccessMode)
+	}
+	// The PDB is a real guarantee and ON by default (multi-replica), and leader
+	// election ships ON (what makes >1 replica safe, RESIL-004).
+	if !v.PDB.Enabled || v.PDB.MinAvailable < 1 {
+		t.Errorf("podDisruptionBudget must default enabled with minAvailable >= 1 for the multi-replica default (RESIL-002/007); got enabled=%v minAvailable=%d", v.PDB.Enabled, v.PDB.MinAvailable)
+	}
+	if !v.HA.LeaderElection {
+		t.Error("ha.leaderElection must default true: it is what makes >1 replica safe (only the leader runs the continuous workers) (RESIL-004)")
+	}
 
-	// The disclosure: the values file and the DR/limitations docs must explain the
-	// trade-off and the active/active plan (leader election + isolated signer), so an
-	// operator is never surprised by the SPOF. These assertions fail if the disclosure
-	// is dropped or the topology changes without updating the docs (RESIL-002).
-	containsAll(t, "values.yaml single-replica disclosure", values,
-		"RESIL-002", "availability", "leader election")
+	// Render the deployment template with the default-shaped HA values and assert the
+	// strategy + anti-affinity render in the ARTIFACT (not just the values), and that
+	// the persistence access modes flow into the PVCs.
+	dep := renderDeployment(t, map[string]any{
+		"replicaCount": 2,
+		"updateStrategy": map[string]any{
+			"type": "RollingUpdate", "maxUnavailable": 0, "maxSurge": 1,
+		},
+		"persistence": map[string]any{
+			"enabled": true, "controlPlaneAccessMode": "ReadWriteMany",
+			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",
+			"storageClass": "",
+		},
+		"affinity": map[string]any{"podAntiAffinity": map[string]any{}},
+		"tls":      map[string]any{"mode": "internal", "existingSecret": ""},
+		"server":   map[string]any{"addr": ":8443"},
+		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trustctl", "tag": ""},
+		"postgres": map[string]any{"existingSecret": "", "existingSecretKey": "dsn"},
+		"kek":      map[string]any{"existingSecret": ""},
+		"resources": map[string]any{
+			"signer": map[string]any{}, "controlPlane": map[string]any{},
+		},
+		"podAnnotations":   map[string]any{},
+		"imagePullSecrets": []any{},
+		"nodeSelector":     map[string]any{},
+		"tolerations":      []any{},
+	})
+	// The rendered strategy must be RollingUpdate maxUnavailable: 0 (the no-downtime
+	// rollout), and the affinity block must render (the anti-affinity values flow into
+	// an `affinity:` stanza — its inner YAML is produced by toYaml, stubbed here, so we
+	// assert the stanza renders and pin the anti-affinity content in values.yaml below).
+	containsAll(t, "rendered HA deployment strategy", dep,
+		"type: RollingUpdate", "maxUnavailable: 0")
+	if !strings.Contains(dep, "affinity:") {
+		t.Errorf("rendered deployment must render an affinity stanza (pod anti-affinity, RESIL-002), got:\n%s", dep)
+	}
+	if !strings.Contains(dep, "ReadWriteMany") {
+		t.Errorf("rendered deployment PVCs must use the RWX access mode for shared HA storage (RESIL-002), got:\n%s", dep)
+	}
+	// The default anti-affinity is declared in values.yaml (its inner content is
+	// rendered by toYaml at install time); assert it is present so it cannot be dropped.
+	if !strings.Contains(values, "podAntiAffinity") {
+		t.Error("values.yaml must default an affinity.podAntiAffinity rule so HA replicas spread across nodes (RESIL-002)")
+	}
 
+	// The design is still documented (so an operator understands the leader-election +
+	// shared-keystore model and the isolated-signer note); these fail if the docs drop
+	// the explanation (RESIL-002 / RESIL-004).
+	containsAll(t, "values.yaml HA disclosure", values, "RESIL-002", "leader election")
 	dr := readDoc(t, "disaster-recovery.md")
 	containsAll(t, "disaster-recovery HA disclosure", dr,
-		"High availability", "single-replica", "leader election", "RESIL-002")
-
+		"High availability", "leader election", "RESIL-002")
 	lim := readDoc(t, "limitations.md")
 	containsAll(t, "limitations multi-replica HA disclosure", lim,
 		"Multi-replica HA", "leader election", "RESIL-002")
+}
+
+// renderDeployment renders templates/deployment.yaml with the given Values map,
+// stubbing the Helm/Sprig builtins the template uses so the structural HA facts can be
+// asserted against the real rendered artifact (OPS-008: drill the artifact, not the
+// raw template text). It is a best-effort local render — `helm template` does the full
+// render in CI — so unknown keys resolve to empty rather than failing.
+func renderDeployment(t *testing.T, values map[string]any) string {
+	t.Helper()
+	body := read(t, "templates", "deployment.yaml")
+	funcs := template.FuncMap{
+		"include":   func(args ...any) any { return "trustctl" },
+		"nindent":   func(args ...any) any { return "" },
+		"indent":    func(args ...any) any { return "" },
+		"toYaml":    func(args ...any) any { return "" },
+		"sha256sum": func(args ...any) any { return "deadbeef" },
+		"printf":    func(format string, a ...any) any { return "" },
+		"required":  func(_ string, v any) any { return v },
+		"quote":     func(a any) any { return a },
+	}
+	tmpl, err := template.New("deployment.yaml").Funcs(funcs).Option("missingkey=zero").Parse(body)
+	if err != nil {
+		t.Fatalf("parse deployment.yaml: %v", err)
+	}
+	var sb strings.Builder
+	data := map[string]any{
+		"Values":  values,
+		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
+	}
+	if err := tmpl.Execute(&sb, data); err != nil {
+		t.Fatalf("render deployment.yaml: %v", err)
+	}
+	return sb.String()
 }
 
 // TestDefaultImageTagIsPublishedByTheReleasePipeline pins OPS-003: when the
