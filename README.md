@@ -310,6 +310,7 @@ scripts/    # developer & release scripts
 | Troubleshooting | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
 | Authoring guides | [connectors](docs/guides/connector-authoring.md) · [plugins](docs/guides/plugin-authoring.md) · [profiles](docs/guides/profile-authoring.md) · [EST](docs/guides/est-enrollment.md) |
 | Design & security | [signing service](docs/design/signing-service.md) · [threat model](docs/security/threat-model.md) |
+| Release history / changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Vulnerability disclosure | [`SECURITY.md`](SECURITY.md) |
 
 ## Roadmap

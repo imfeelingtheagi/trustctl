@@ -49,10 +49,11 @@ remaining integration work.
 - **CA integrations** (9 under `internal/ca/`) and the **private CA hierarchy**
   (root/intermediate, cross-sign, rotation, and the m-of-n key ceremony — see the
   [key-ceremony runbook](runbooks/key-ceremony.md)).
-- **Deployment connectors** (~10–11 under `internal/connector/`: nginx, Apache,
-  IIS, HAProxy, F5, AWS ACM, Azure Key Vault, GCP Certificate Manager, NetScaler,
-  Java keystore, plus Kubernetes). The lifecycle's `connector.deploy` step is
-  acknowledged by the outbox but not yet routed to these in the served path.
+- **Deployment connectors** (**13** under `internal/connector/`: nginx, Apache,
+  IIS, HAProxy, F5, NetScaler, plus the network-appliance set Cisco, FortiGate, and
+  Palo Alto, plus AWS ACM, Azure Key Vault, GCP Certificate Manager, and Java
+  keystore — plus the Kubernetes destination). The lifecycle's `connector.deploy`
+  step is acknowledged by the outbox but not yet routed to these in the served path.
 - **Discovery**: network/filesystem scans, SSH key & trust inventory, agentless
   cloud-certificate enumeration, the **CBOM** with post-quantum posture, and
   **Certificate Transparency** monitoring.
@@ -84,6 +85,14 @@ remaining integration work.
     does not define. Adopting a **generated** OpenAPI client (openapi-typescript /
     orval) with a CI regenerate-and-diff gate — the structural fix — is tracked as
     **`EXC-WIRE-04`**.
+  - **Console UX hardening (SURFACE-007).** A **destructive-transition confirmation**
+    (revoke/retire now require an explicit, credential-named confirm dialog) and
+    **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"
+    hint) have landed and are tested (`web/src/lib/api.test.ts`,
+    `web/src/__tests__/lifecycle.test.tsx`). Still outstanding in the SPA:
+    **cursor-based pagination** (the client reads only `.items` and ignores
+    `next_cursor`) and **list virtualization** for large tables; both are tracked
+    with the console wiring under **`EXC-WIRE-04`**.
 - **Interactive OIDC browser login & sessions (F13)**: the authorization-code flow,
   id_token verification (signature/issuer/audience/nonce via the AN-3 JOSE
   boundary), and the HMAC-signed `HttpOnly`+`Secure` session cookie are implemented
@@ -240,6 +249,23 @@ This is a deliberate, documented trust boundary (not an accident):
     with the served-transport work under **`EXC-WIRE-02`**. SCEP, CMP, and the SSH CA
     are covered by round-trip + fuzz tests but have no external-reference differential
     today.
+  - **SSH KRL distribution format (INTEROP-009).** The SSH CA's key-revocation list is
+    now emitted in the **OpenSSH binary KRL format** (`KRL.DistributeKRL`), the artifact
+    `sshd`'s `RevokedKeys` and `ssh-keygen -Q -f` consume — verified end-to-end by a test
+    that has stock `ssh-keygen` report a revoked certificate as revoked using trustctl's
+    KRL (and a non-revoked one as valid). The legacy JSON `Snapshot` (`Distribute`) is
+    retained for programmatic callers. The SSH CA itself is still library-only (mounting
+    it is **`EXC-WIRE-02`**), so this is the revocation *artifact*, not yet a served
+    distribution endpoint.
+  - **Public-CA profile linter (PKIGOV-009).** Issued certificates are checked by an
+    in-tree **structural RFC 5280 / CA-Browser-Forum profile linter**
+    (`internal/ca/profilelint`) in the issuance test suite — version, serial bounds,
+    validity ordering/length, basicConstraints, key usage, SAN presence, SKI/AKI
+    presence, weak-signature and minimum-key-strength checks — and the suite is **red on
+    a deliberately-broken profile**. What is **not yet wired** is an *external* public-CA
+    linter (**zlint**/**certlint**) as a dedicated CI gate over a sample of every emitted
+    profile; standing that up (vendoring/pinning the tool and running it on issued
+    fixtures) is tracked as **`EXC-GATE-01`**.
 - **SPIFFE transport (Workload API):** the SVID *document* is spec-shaped (a single
   `spiffe://` URI SAN, correct key usage), but the Workload API is, by definition, a
   **gRPC service on a Unix domain socket**; trustctl exposes it today only as Go
@@ -319,6 +345,27 @@ flow are still future work — the key-encryption key is a local file by default
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
+
+**In-memory custody of the reference-path CA keys (CRYPTO-005 / SIGNER-008).** The
+library-tier private-CA hierarchy (`internal/crypto/ca`) now holds its live ECDSA
+signing keys in **locked secret buffers** (mlock + `MADV_DONTDUMP`, AN-8) rather than
+as a bare `*ecdsa.PrivateKey` on the Go heap for the lifetime of the in-process CA;
+the key is reconstructed only for the instant of each signature and the transiently
+parsed copy is best-effort zeroized afterward (the same hardening applied to the
+signer's `LockedSigner`, SIGNER-008). This narrows — but, given Go's runtime, does
+not eliminate — the window in which an unprotected key sits in dumpable heap; it is
+complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`. The durable fix,
+**HSM/signer custody so the CA key never materializes in the control-plane address
+space at all**, is tracked as **`EXC-CRYPTO-01`**.
+
+**Signer UDS peer-uid is Linux-only (WIRE-009 / SIGNER-006).** The signing service's
+Unix-domain-socket listener authenticates the connecting process's uid via
+`SO_PEERCRED`, which exists only on **Linux** — the supported production target
+(Docker/Helm). On non-Linux hosts the peer-uid layer is unavailable and the access
+control is the `0700` socket directory + `0600` socket alone; the listener accepts a
+connection whose uid it cannot determine. This is defense-in-depth, not the primary
+control, and the rejection path is now covered by tests so a regression that breaks
+the uid comparison is caught in CI.
 
 ## Post-quantum cryptography (issuance algorithms)
 

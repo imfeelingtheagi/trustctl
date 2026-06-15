@@ -19,6 +19,31 @@
 
 static int sh(const char *cmd) { return system(cmd); }
 
+/*
+ * safe_path_arg validates an operator-supplied string (the workdir, the parsed
+ * host) before it is interpolated into a shell command run via system() (FUZZ-005).
+ * The commands below build openssl invocations by string interpolation; a workdir
+ * or host containing shell metacharacters ($ ` ; | & < > ( ) newline, quotes, glob,
+ * whitespace, ...) would let those characters break out of the intended argument
+ * and inject commands. Rather than attempt to quote/escape (error-prone), we reject
+ * any argument that is not drawn from a conservative allow-list of path/host-safe
+ * characters: ASCII letters, digits, and the set [-._/:@]. This is strict enough to
+ * cover real workdirs (e.g. /tmp/enroll, ./out) and hostnames (host, 1.2.3.4, with
+ * an optional :port handled separately) while making shell injection impossible.
+ * Returns 1 if s is safe, 0 otherwise. An empty string is rejected.
+ */
+static int safe_path_arg(const char *s) {
+	if (s == NULL || s[0] == '\0') return 0;
+	for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+		unsigned char c = *p;
+		int ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		         (c >= '0' && c <= '9') ||
+		         c == '-' || c == '.' || c == '_' || c == '/' || c == ':' || c == '@';
+		if (!ok) return 0;
+	}
+	return 1;
+}
+
 int main(int argc, char **argv) {
 	if (argc < 3) {
 		fprintf(stderr, "usage: %s <base-url> <workdir>\n", argv[0]);
@@ -27,6 +52,16 @@ int main(int argc, char **argv) {
 	const char *base = argv[1];
 	const char *wd = argv[2];
 	char cmd[4096], path[2048];
+
+	/*
+	 * Reject a workdir containing anything but path-safe characters before it is
+	 * interpolated into a system() command line (FUZZ-005). Without this, a workdir
+	 * like "/tmp/x; rm -rf ~" would inject a second command into every openssl call.
+	 */
+	if (!safe_path_arg(wd)) {
+		fprintf(stderr, "est: refusing unsafe workdir %s (allowed: letters, digits, -._/:@)\n", wd);
+		return 2;
+	}
 
 	/* 1. Generate the device key and a PKCS#10 (DER) with openssl. */
 	snprintf(cmd, sizeof cmd,
@@ -53,6 +88,21 @@ int main(int argc, char **argv) {
 	if (sscanf(base, "http://%255[^:/]:%d", host, &port) < 1 &&
 	    sscanf(base, "http://%255[^:/]", host) < 1) {
 		fprintf(stderr, "est: unsupported URL %s\n", base);
+		return 1;
+	}
+	/*
+	 * Validate the parsed host (defense in depth): it is interpolated into the HTTP
+	 * request line/Host header below, and a host containing CR/LF or other control
+	 * characters could split the request. The same path-safe allow-list rejects all
+	 * of those (FUZZ-005). The numeric port is parsed by sscanf as an int and bounds-
+	 * checked next, so it cannot carry injection.
+	 */
+	if (!safe_path_arg(host)) {
+		fprintf(stderr, "est: refusing unsafe host %s\n", host);
+		return 1;
+	}
+	if (port < 1 || port > 65535) {
+		fprintf(stderr, "est: port %d out of range\n", port);
 		return 1;
 	}
 
@@ -83,16 +133,41 @@ int main(int argc, char **argv) {
 		host, n, body);
 	if (write(fd, req, (size_t)reqlen) != reqlen) { fprintf(stderr, "est: write failed\n"); close(fd); return 1; }
 
-	/* 6. Read the whole response. */
+	/*
+	 * 6. Read the whole response into a fixed buffer.
+	 *
+	 * The buffer caps the certs-only PKCS#7 chain this reference client accepts at
+	 * ~64 KiB (RESP_CAP below) — ample for a leaf + a normal CA chain. The bug this
+	 * guards against (CODE-003): if the response is LARGER than the buffer, a naive
+	 * loop fills the buffer, stops, and then base64-decodes a TRUNCATED PKCS#7 — which
+	 * `openssl pkcs7` may parse into a corrupt/partial cert.pem, or silently accept a
+	 * truncated chain. So we treat "buffer full with more bytes still pending" as a
+	 * hard ERROR ("response too large") and exit non-zero WITHOUT writing cert.pem,
+	 * rather than decode a truncated chain. We detect the overflow by leaving one byte
+	 * of headroom: if the read fills the buffer up to that last byte, one more byte is
+	 * still available on the socket, so the response exceeded the cap.
+	 */
 	char resp[65536];
+	const size_t RESP_CAP = sizeof resp - 1; /* reserve 1 byte for the NUL terminator */
 	size_t total = 0;
 	ssize_t r;
-	while ((r = read(fd, resp + total, sizeof resp - 1 - total)) > 0) {
+	int truncated = 0;
+	while (total < RESP_CAP && (r = read(fd, resp + total, RESP_CAP - total)) > 0) {
 		total += (size_t)r;
-		if (total >= sizeof resp - 1) break;
+	}
+	if (total >= RESP_CAP) {
+		/* The buffer is full. If even one more byte is readable, the response was
+		 * larger than the cap and what we hold is truncated — fail closed. */
+		char extra;
+		if (read(fd, &extra, 1) > 0) truncated = 1;
 	}
 	close(fd);
 	resp[total] = 0;
+
+	if (truncated) {
+		fprintf(stderr, "est: response too large (> %zu bytes); refusing to decode a truncated certificate chain\n", RESP_CAP);
+		return 1;
+	}
 
 	if (strncmp(resp, "HTTP/1.0 200", 12) != 0 && strncmp(resp, "HTTP/1.1 200", 12) != 0) {
 		fprintf(stderr, "est: enrollment rejected: %.48s\n", resp);

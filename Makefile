@@ -79,8 +79,11 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	awk -v t="$$total" -v m=$(COVERAGE_MIN) 'BEGIN { if (t+0 < m+0) exit 1 }' || \
 		{ echo "FAIL: coverage $$total% is below the required $(COVERAGE_MIN)%"; exit 1; }
 	@echo ">> internal/server assembled-lifecycle coverage (merged via -coverpkg; exercised by the cross-package e2e, not in-package):"
-	@$(GO) tool cover -func=$(COVERPROFILE).nogen | awk '$$1 ~ /\/internal\/server\/server\.go:/ && $$2 ~ /^($(SERVER_LIFECYCLE_FUNCS))$$/ { printf "   %-10s %s\n", $$2, $$3 }'
-	@$(GO) tool cover -func=$(COVERPROFILE).nogen | awk -v m=$(SERVER_FUNC_COVERAGE_MIN) '$$1 ~ /\/internal\/server\/server\.go:/ && $$2 ~ /^($(SERVER_LIFECYCLE_FUNCS))$$/ { seen++; cov=$$3; sub(/%$$/,"",cov); if (cov+0 < m+0) { bad++; printf "FAIL: internal/server %s coverage %s is below the required %d%% (assembled fail-closed/drain branches regressed, or were measured in-package only)\n", $$2, $$3, m } } END { if (seen+0 < 4) { printf "FAIL: expected 4 assembled-lifecycle functions in the merged profile, saw %d (did the cross-package e2e run under -coverpkg=./...?)\n", seen+0; exit 1 } if (bad) exit 1 }'
+	@# The lifecycle floor is a self-tested script (TEST-007), not inline awk, so the
+	@# gate-of-the-gate is itself covered (scripts/ci/coverage-server-lifecycle_selftest.sh).
+	@$(GO) tool cover -func=$(COVERPROFILE).nogen | \
+		SERVER_LIFECYCLE_FUNCS='$(SERVER_LIFECYCLE_FUNCS)' SERVER_FUNC_COVERAGE_MIN=$(SERVER_FUNC_COVERAGE_MIN) \
+		bash scripts/ci/coverage-server-lifecycle.sh
 	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
 
 .PHONY: coverage-critical
@@ -114,6 +117,12 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 	if [ "$$fail" -ne 0 ]; then echo "FAIL: a fuzz target crashed (see above)"; exit 1; fi; \
 	echo ">> fuzz-smoke: all targets clean"
 
+.PHONY: chaos
+chaos: ## Run the fault-injection / chaos suite over the embedded spine (RESIL-005)
+	@echo ">> chaos: fault injection over embedded PostgreSQL + in-process NATS (build tag: chaos)"
+	$(GO) test -tags=chaos -race -count=1 -run '^TestChaos' ./internal/orchestrator/...
+	@echo ">> chaos: all fault-injection scenarios held the safe failure direction"
+
 .PHONY: lint
 lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if installed)
 	@echo ">> gofmt"
@@ -127,15 +136,32 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 	$(GO) vet ./...
 	@echo ">> trustctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
 	$(GO) run ./tools/trustctllint ./...
+	@# golangci-lint carries errcheck/staticcheck/unused — a real part of the gate.
+	@# When it is missing we must NOT pass silently (CODE-005): in strict mode
+	@# (LINT_STRICT=1, which CI sets after `make tools`) its absence is a hard error
+	@# so the gate cannot go green without actually running it; otherwise we print a
+	@# LOUD, impossible-to-miss SKIPPED banner so a local run is never mistaken for a
+	@# full lint.
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		echo ">> golangci-lint"; golangci-lint run ./...; \
+	elif [ "$${LINT_STRICT:-0}" = "1" ]; then \
+		echo "FAIL: golangci-lint is not installed but LINT_STRICT=1 (errcheck/staticcheck/unused would be skipped). Run 'make tools'." >&2; \
+		exit 1; \
 	else \
-		echo ">> golangci-lint not installed; skipping (install with: make tools)"; \
+		echo "!! ============================================================"; \
+		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \
+		echo "!! errcheck / staticcheck / unused did NOT run; this is a PARTIAL"; \
+		echo "!! lint. Install it with 'make tools' (CI runs it and sets"; \
+		echo "!! LINT_STRICT=1 so the gate cannot pass without it)."; \
+		echo "!! ============================================================"; \
 	fi
 	@if command -v actionlint >/dev/null 2>&1; then \
 		echo ">> actionlint (GitHub Actions workflows)"; actionlint; \
+	elif [ "$${LINT_STRICT:-0}" = "1" ]; then \
+		echo "FAIL: actionlint is not installed but LINT_STRICT=1 (workflow lint would be skipped). Run 'make tools'." >&2; \
+		exit 1; \
 	else \
-		echo ">> actionlint not installed; skipping (install with: make tools)"; \
+		echo "!! WARNING: actionlint NOT installed — SKIPPING workflow lint (install with: make tools)"; \
 	fi
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null

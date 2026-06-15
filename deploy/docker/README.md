@@ -20,6 +20,17 @@ The control plane is wired to Postgres and NATS through the **external** datasto
 configuration (`TRUSTCTL_POSTGRES_MODE=external`, `TRUSTCTL_NATS_MODE=external`),
 so the eval stack exercises the same code path a production deployment uses.
 
+> **Not for production (OPS-007).** The Compose stack bakes a static Postgres
+> password (`trustctl`/`trustctl`) and connects with `sslmode=disable` so it comes
+> up with zero setup — convenient for a throwaway eval, unacceptable for a real
+> deployment (public credentials, cleartext traffic). For production, deploy the
+> **Helm chart** (`deploy/helm/trustctl`), which sources the Postgres DSN and the
+> KEK from a **Kubernetes Secret** and requires `sslmode=require`; see
+> [Current limitations](../../docs/limitations.md) and the chart's `values.yaml`.
+> To harden this Compose stack, set a generated password
+> (`openssl rand -hex 24` into `deploy/docker/.env`) and switch the DSN to
+> `sslmode=require` with the server's CA mounted.
+
 ## Point at your own external datastores
 
 The bundled `postgres`/`nats` services are a convenience. To run trustctl against

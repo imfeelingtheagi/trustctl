@@ -138,9 +138,16 @@ func rsaACMEKey(n, e string) (*ACMEKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("jose: jwk exponent: %w", err)
 	}
+	// Enforce the same modulus-size/exponent bounds the JWKS path uses (FUZZ-006), so
+	// an ACME client cannot register an absurd account key (giant modulus → CPU sink,
+	// or an oversized exponent that truncates via int()).
+	pub, err := rsaPublicFromJWK(nb, eb)
+	if err != nil {
+		return nil, err
+	}
 	return &ACMEKey{
 		kind:   keyRSA,
-		rsaPub: &rsa.PublicKey{N: new(big.Int).SetBytes(nb), E: int(new(big.Int).SetBytes(eb).Int64())},
+		rsaPub: pub,
 		// RFC 7638 §3.2: RSA required members are e, kty, n (lexicographic order).
 		thumbInput: fmt.Sprintf(`{"e":%q,"kty":"RSA","n":%q}`, e, n),
 	}, nil

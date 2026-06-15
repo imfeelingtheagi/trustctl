@@ -12,6 +12,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -131,17 +132,76 @@ func runAgent(ctx context.Context, o agentOptions) error {
 
 	ticker := time.NewTicker(o.rotateEvery)
 	defer ticker.Stop()
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Println("trustctl-agent: shutting down")
 			return nil
 		case <-ticker.C:
-			if err := a.Rotate(ctx); err != nil {
-				fmt.Fprintln(os.Stderr, "trustctl-agent: rotation failed:", err)
-				continue
-			}
-			fmt.Printf("trustctl-agent: rotated client certificate (serial %s)\n", a.CertificateSerial())
+			// Rotate with jittered exponential backoff on failure (RESIL-006): a
+			// control-plane outage during the refresh window must not be a single
+			// missed attempt that then waits a full rotate-every interval — the agent
+			// retries promptly with backoff until it succeeds, the deadline (the next
+			// regular tick) passes, or shutdown. The jitter spreads a fleet's
+			// reconnects so a recovering control plane is not stampeded (no thundering
+			// herd). The existing certificate stays valid until expiry and the identity
+			// survives restart, so a sub-window outage is harmless.
+			rotateWithBackoff(ctx, a, o.rotateEvery, rng)
 		}
 	}
+}
+
+// rotateBackoffBase / Max bound the agent's retry schedule on a failed rotation
+// (RESIL-006). The delay grows exponentially from the base, is capped at Max, and
+// has full jitter applied, so retries are prompt but spread across a fleet.
+const (
+	rotateBackoffBase = 1 * time.Second
+	rotateBackoffMax  = 60 * time.Second
+)
+
+// rotateWithBackoff attempts a.Rotate, and on failure keeps retrying with full-
+// jitter exponential backoff until it succeeds, the budget elapses (so the next
+// regular rotation tick takes over), or ctx is cancelled (RESIL-006). The budget is
+// the regular rotation interval, so a persistent outage falls back to the normal
+// cadence rather than spinning forever on a tight loop.
+func rotateWithBackoff(ctx context.Context, a *agent.Agent, budget time.Duration, rng *rand.Rand) {
+	deadline := time.Now().Add(budget)
+	for attempt := 0; ; attempt++ {
+		if err := a.Rotate(ctx); err == nil {
+			fmt.Printf("trustctl-agent: rotated client certificate (serial %s)\n", a.CertificateSerial())
+			return
+		} else {
+			fmt.Fprintln(os.Stderr, "trustctl-agent: rotation failed:", err)
+		}
+		delay := rotateBackoff(attempt, rng)
+		if time.Now().Add(delay).After(deadline) {
+			// The next regular tick is sooner than the next backoff retry — let the
+			// ticker drive the next attempt instead of overshooting the cadence.
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+	}
+}
+
+// rotateBackoff returns the delay before retry attempt n (0-based): an exponential
+// backoff base*2^n capped at Max, with full jitter (a uniform value in (0, capped]).
+// Full jitter is the AWS-recommended schedule for de-correlating a fleet's retries.
+// It never returns a non-positive duration, so a recovering agent cannot spin.
+func rotateBackoff(attempt int, rng *rand.Rand) time.Duration {
+	d := rotateBackoffBase
+	for i := 0; i < attempt && d < rotateBackoffMax; i++ {
+		d *= 2
+	}
+	if d > rotateBackoffMax {
+		d = rotateBackoffMax
+	}
+	// Full jitter in (0, d]: a uniform pick, clamped to at least 1ns so it is strictly
+	// positive and the loop always makes progress.
+	jittered := time.Duration(rng.Int63n(int64(d))) + 1
+	return jittered
 }

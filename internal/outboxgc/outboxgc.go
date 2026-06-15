@@ -70,7 +70,7 @@ func (w *Sweeper) Retention() time.Duration { return w.retention }
 // concurrently and is idempotent: a second call right after reclaims nothing.
 func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 	cutoff := time.Now().UTC().Add(-w.retention)
-	tag, err := w.store.Pool().Exec(ctx,
+	tag, err := w.store.SystemPool().Exec(ctx,
 		`DELETE FROM outbox
 		  WHERE status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < $1`, cutoff)
 	if err != nil {
@@ -84,7 +84,7 @@ func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 // operational introspection; like Sweep it is a system operation on the pool.
 func (w *Sweeper) Count(ctx context.Context) (int64, error) {
 	var n int64
-	if err := w.store.Pool().QueryRow(ctx, "SELECT count(*) FROM outbox").Scan(&n); err != nil {
+	if err := w.store.SystemPool().QueryRow(ctx, "SELECT count(*) FROM outbox").Scan(&n); err != nil {
 		return 0, fmt.Errorf("outboxgc: count: %w", err)
 	}
 	return n, nil

@@ -38,8 +38,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/netsec"
 	"trustctl.io/trustctl/internal/notify"
 )
 
@@ -77,11 +79,18 @@ func WithHTTPClient(d HTTPDoer) Option {
 // New returns a webhook channel that POSTs alerts to url, signing each body with secret
 // (the HMAC key). The secret is retained by reference; callers that zero their key
 // material (AN-8) must not zero it while the channel is in use.
+//
+// The endpoint URL is operator/tenant-supplied, so the default HTTP client is the
+// SSRF-safe one (netsec.SafeClient): it refuses to connect to a non-public resolved
+// address (loopback, RFC-1918, the cloud-metadata service, etc.), so a webhook
+// configured to point at an internal address fails closed rather than coercing the
+// control plane into an internal request (SEC-008). A caller may override the client
+// with WithHTTPClient (tests inject a double).
 func New(url string, secret []byte, opts ...Option) *Channel {
 	c := &Channel{
 		url:    url,
 		secret: secret,
-		doer:   http.DefaultClient,
+		doer:   netsec.SafeClient(10 * time.Second),
 	}
 	for _, o := range opts {
 		o(c)

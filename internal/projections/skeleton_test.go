@@ -56,3 +56,53 @@ func TestWalkingSkeleton(t *testing.T) {
 		t.Errorf("GetTenant = %+v, want the Acme tenant", got)
 	}
 }
+
+// TestRegisterTenantProjectsOnlyAppendedEvent is the SPINE-008 regression: the
+// bootstrap command (now wired into the served RunTokenCreate on-ramp) must
+// project ONLY the event it just appended, not replay the whole log inside its
+// idempotency transaction. The old shape (proj.Project) re-applied every prior
+// event on every call — an O(total-log) write-path footgun.
+//
+// We prove the new behavior by pre-seeding the log with other-tenant
+// tenant.registered events that the read model has NOT yet caught up to, then
+// running RegisterTenant. If RegisterTenant did a full replay, those pre-seeded
+// tenants would land in the read model as a side effect; with proj.Apply on the
+// single appended event, they stay un-projected. The test must FAIL pre-fix (the
+// pre-seeded tenants appear) and PASS post-fix.
+func TestRegisterTenantProjectsOnlyAppendedEvent(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+
+	// Pre-seed the log with events for OTHER tenants, appended out of band (not
+	// projected). These are exactly what a full replay would sweep into the read
+	// model.
+	seeded := []string{
+		"33333333-3333-3333-3333-333333333333",
+		"44444444-4444-4444-4444-444444444444",
+		"55555555-5555-5555-5555-555555555555",
+	}
+	for _, tid := range seeded {
+		if _, err := log.Append(ctx, events.Event{
+			Type: "tenant.registered", TenantID: tid, Data: tenantRegistered("seeded-" + tid),
+		}); err != nil {
+			t.Fatalf("seed append: %v", err)
+		}
+	}
+
+	svc := app.New(log, s)
+	defer svc.Close()
+	const id = tenantA
+	if err := svc.RegisterTenant(ctx, id, "Acme", "spine008-key"); err != nil {
+		t.Fatalf("RegisterTenant: %v", err)
+	}
+
+	tenants, err := s.ListTenants(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tenants) != 1 || tenants[0].TenantID != id {
+		t.Fatalf("RegisterTenant projected %d tenants %v; want exactly the one it appended (no full-log replay) — SPINE-008",
+			len(tenants), tenants)
+	}
+}

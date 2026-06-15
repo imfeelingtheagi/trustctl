@@ -94,6 +94,12 @@ func NewPKIProvider(caCertDER []byte, caSigner crypto.DigestSigner, profile Prof
 // Name implements dynsecret.Provider.
 func (p *PKIProvider) Name() string { return "pki" }
 
+// TenantID returns the tenant this provider is scoped to (set via
+// WithRevocationSink). Issuance and revocation records are attributed to it on the
+// revocation pipeline so a serial, its OCSP/CRL status, and its ca.certificate.*
+// events are tenant-bound (AN-1); empty for a bare single-tenant embed.
+func (p *PKIProvider) TenantID() string { return p.tenantID }
+
 // Generate issues a short-lived certificate. The requested common name is carried
 // in the lease Role (the "secret name"); the profile and policy gate it.
 func (p *PKIProvider) Generate(ctx context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {

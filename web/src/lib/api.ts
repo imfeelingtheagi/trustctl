@@ -12,12 +12,36 @@ export class UnauthorizedError extends Error {
 export class ApiError extends Error {
   status: number;
   body: string;
-  constructor(status: number, body: string) {
-    super(`request failed (${status})`);
+  /** retryAfterSeconds is set for a 429 when the server sends Retry-After, so the UI
+   * can surface a concrete "try again in N seconds" hint instead of a bare failure
+   * (SURFACE-007; the server emits Retry-After on rate-limit at api.go). */
+  retryAfterSeconds?: number;
+  constructor(status: number, body: string, retryAfterSeconds?: number) {
+    super(
+      status === 429
+        ? `rate limited (429)${retryAfterSeconds != null ? ` — retry in ${retryAfterSeconds}s` : ""}`
+        : `request failed (${status})`,
+    );
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+  /** isRateLimited is a convenience for the UI's special-case path. */
+  get isRateLimited(): boolean {
+    return this.status === 429;
+  }
+}
+
+/** parseRetryAfter reads a Retry-After header (RFC 7231: either delta-seconds or an
+ * HTTP-date) into seconds, or undefined when absent/unparseable. */
+function parseRetryAfter(h: string | null): number | undefined {
+  if (!h) return undefined;
+  const secs = Number(h);
+  if (Number.isFinite(secs)) return Math.max(0, Math.round(secs));
+  const when = Date.parse(h);
+  if (!Number.isNaN(when)) return Math.max(0, Math.round((when - Date.now()) / 1000));
+  return undefined;
 }
 
 export interface Me {
@@ -86,6 +110,11 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (res.status === 401) throw new UnauthorizedError();
+  if (res.status === 429) {
+    // Rate limited: surface Retry-After so the UI can show a concrete retry hint
+    // (SURFACE-007). The server emits Retry-After on its per-tenant bulkhead/limit.
+    throw new ApiError(429, await res.text(), parseRetryAfter(res.headers.get("Retry-After")));
+  }
   if (!res.ok) throw new ApiError(res.status, await res.text());
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

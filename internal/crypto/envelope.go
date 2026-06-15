@@ -5,6 +5,8 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"fmt"
+
+	"trustctl.io/trustctl/internal/crypto/secret"
 )
 
 // Envelope is an envelope-encrypted secret: the plaintext is encrypted under a
@@ -39,7 +41,7 @@ func SealEnvelope(kek, plaintext, aad []byte) (Envelope, error) {
 	if _, err := rand.Read(dek); err != nil {
 		return Envelope{}, err
 	}
-	defer zero(dek)
+	defer secret.Wipe(dek)
 	ct, nonce, err := gcmSeal(dek, plaintext, aad)
 	if err != nil {
 		return Envelope{}, err
@@ -61,7 +63,7 @@ func OpenEnvelope(kek []byte, env Envelope, aad []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("crypto: unwrap DEK: %w", err)
 	}
-	defer zero(dek)
+	defer secret.Wipe(dek)
 	pt, err := gcmOpen(dek, env.Ciphertext, env.Nonce, aad)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: decrypt secret: %w", err)
@@ -94,6 +96,10 @@ func AESGCMOpen(key, data, aad []byte) ([]byte, error) {
 	return gcmOpen(key, data[g.NonceSize():], data[:g.NonceSize()], aad)
 }
 
+// (the per-secret DEK is wiped via secret.Wipe, which adds runtime.KeepAlive so
+// the compiler cannot elide the zeroing — CRYPTO-006. The earlier local zero()
+// loop lacked that barrier.)
+
 func gcmSeal(key, plaintext, aad []byte) (ct, nonce []byte, err error) {
 	g, err := newGCM(key)
 	if err != nil {
@@ -125,10 +131,4 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 		return nil, fmt.Errorf("crypto: aes cipher: %w", err)
 	}
 	return cipher.NewGCM(block)
-}
-
-func zero(b []byte) {
-	for i := range b {
-		b[i] = 0
-	}
 }

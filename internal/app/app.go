@@ -51,10 +51,18 @@ func (s *Service) Submit(subsystem string, task func()) error {
 // It is safe to call more than once.
 func (s *Service) Close() { s.bulk.Close() }
 
-// RegisterTenant emits a tenant.registered event and projects it into the read
-// model, then returns. The projection is driven synchronously here so the
-// walking skeleton is deterministic; a real deployment runs projections as a
-// background worker off the same stream.
+// RegisterTenant emits a tenant.registered event and projects THAT ONE event into
+// the read model, then returns. The projection is driven synchronously here so the
+// command is deterministic (a fresh read sees the tenant immediately); a real
+// deployment also runs the tailing projection worker off the same stream.
+//
+// It projects only the just-appended event via proj.Apply (SPINE-008), not a full
+// log replay (proj.Project): the previous shape re-applied the WHOLE log inside the
+// idempotency transaction on every call, so the bootstrap's cost grew with the
+// lifetime event count — an O(total-log) write-path anti-pattern. Apply is the same
+// projector logic a rebuild uses (an idempotent upsert), so live state and a
+// replayed state still agree, and the read model stays a pure projection of the log
+// (AN-2). This mirrors orchestrator.emit, which projects the single appended event.
 //
 // The whole command runs under idempotencyKey (AN-5): a replay with the same key
 // returns the original result without emitting a second event, and concurrent
@@ -69,14 +77,15 @@ func (s *Service) RegisterTenant(ctx context.Context, tenantID, name, idempotenc
 		if err != nil {
 			return nil, err
 		}
-		if _, err := s.log.Append(ctx, events.Event{
+		ev, err := s.log.Append(ctx, events.Event{
 			Type:     "tenant.registered",
 			TenantID: tenantID,
 			Data:     data,
-		}); err != nil {
+		})
+		if err != nil {
 			return nil, err
 		}
-		if err := s.proj.Project(ctx, s.log); err != nil {
+		if err := s.proj.Apply(ctx, ev); err != nil {
 			return nil, err
 		}
 		return data, nil

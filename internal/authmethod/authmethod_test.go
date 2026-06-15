@@ -3,6 +3,8 @@ package authmethod
 import (
 	"context"
 	"encoding/hex"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,23 +14,70 @@ import (
 
 func TestTokenMethodLoginAndReject(t *testing.T) {
 	secret := []byte("s3cret")
-	mac := hex.EncodeToString(crypto.HMACSHA256(secret, []byte("app1")))
+	tm := TokenMethod{Secret: secret, Scopes: map[string][]string{"app1": {"read:db"}}}
+	tok, err := tm.Issue("app1", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
 	rec := &auditsink.Recorder{}
-	m, _ := New(Config{TenantID: "t1", Audit: rec, Methods: []Method{
-		TokenMethod{Secret: secret, Scopes: map[string][]string{"app1": {"read:db"}}},
-	}})
-	sess, err := m.Login(context.Background(), "token", []byte("app1."+mac))
+	m, _ := New(Config{TenantID: "t1", Audit: rec, Methods: []Method{tm}})
+	sess, err := m.Login(context.Background(), "token", []byte(tok))
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
 	if sess.TenantID != "t1" || sess.Principal != "app1" || len(sess.Scopes) != 1 {
 		t.Errorf("session = %+v", sess)
 	}
-	if _, err := m.Login(context.Background(), "token", []byte("app1.deadbeef")); err == nil {
+	if _, err := m.Login(context.Background(), "token", []byte("app1.0.deadbeef")); err == nil {
 		t.Error("invalid token MAC accepted")
 	}
 	if rec.Count("auth.rejected") != 1 || rec.Count("auth.session.issued") != 1 {
 		t.Error("auth events not audited as expected")
+	}
+}
+
+// TestTokenMethodExpiry is the GAP-008 acceptance: a token's expiry is bound into
+// its MAC, so (1) a token presented after its expiry is rejected; (2) tampering the
+// expiry to extend it fails the MAC check; (3) the legacy unbounded two-field form
+// (no expiry) is rejected by default and accepted only when AllowUnexpiring is set.
+func TestTokenMethodExpiry(t *testing.T) {
+	secret := []byte("s3cret")
+	tm := TokenMethod{Secret: secret, Scopes: map[string][]string{"app1": {"read:db"}}}
+
+	// 1) Expired token -> rejected.
+	expired, _ := tm.Issue("app1", time.Now().Add(-time.Minute))
+	if _, _, err := tm.Authenticate(context.Background(), []byte(expired)); err == nil {
+		t.Error("expired token accepted (captured static token would grant indefinite access)")
+	}
+
+	// 2) Tampered expiry (extend lifetime, keep old MAC) -> rejected by the MAC.
+	tok, _ := tm.Issue("app1", time.Now().Add(time.Minute))
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		t.Fatalf("unexpected token shape %q", tok)
+	}
+	tampered := parts[0] + "." + strconv.FormatInt(time.Now().Add(100*time.Hour).Unix(), 10) + "." + parts[2]
+	if _, _, err := tm.Authenticate(context.Background(), []byte(tampered)); err == nil {
+		t.Error("tampered-expiry token accepted (expiry not bound into the MAC)")
+	}
+
+	// 3) Legacy unbounded form rejected by default, accepted only with opt-in.
+	legacyMAC := hex.EncodeToString(crypto.HMACSHA256(secret, []byte("app1")))
+	legacy := "app1." + legacyMAC
+	if _, _, err := tm.Authenticate(context.Background(), []byte(legacy)); err == nil {
+		t.Error("unexpiring legacy token accepted by default")
+	}
+	tmLegacy := TokenMethod{Secret: secret, Scopes: tm.Scopes, AllowUnexpiring: true}
+	if p, _, err := tmLegacy.Authenticate(context.Background(), []byte(legacy)); err != nil || p != "app1" {
+		t.Errorf("legacy token rejected with AllowUnexpiring set: p=%q err=%v", p, err)
+	}
+
+	// 4) Fault-injected expiry comparison still rejects a far-future-issued-but-now-
+	//    expired token via an overridden clock.
+	future := TokenMethod{Secret: secret, Scopes: tm.Scopes, Clock: func() time.Time { return time.Now().Add(10 * time.Hour) }}
+	short, _ := tm.Issue("app1", time.Now().Add(time.Hour))
+	if _, _, err := future.Authenticate(context.Background(), []byte(short)); err == nil {
+		t.Error("token accepted under a clock past its expiry")
 	}
 }
 

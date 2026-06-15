@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"net"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -15,6 +16,36 @@ import (
 	"trustctl.io/trustctl/internal/agent/transport"
 	"trustctl.io/trustctl/internal/crypto/mtls"
 )
+
+// authorityEnroller adapts a server-side *enroll.Authority to the client-side
+// agent.Enroller interface for these tests. EnrollBootstrap maps straight through.
+// EnrollRenewal must supply the caller's VERIFIED peer chain — in production the mTLS
+// transport does this and the handler reads r.TLS.VerifiedChains (WIRE-006). Here the
+// adapter stands in for that transport by reading the agent's currently-persisted
+// client certificate from certPath and presenting its leaf as the peer chain, so a
+// rotation authenticates exactly as it would over mTLS. When certPath is empty (a
+// bootstrap-only test that never renews) renewal gets no peer cert and the authority
+// fails it closed — the intended hardened behavior.
+type authorityEnroller struct {
+	authority *enroll.Authority
+	certPath  string // the agent's persisted cert chain (PEM); read at renewal to form the peer chain
+}
+
+func (a authorityEnroller) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
+	return a.authority.EnrollBootstrap(ctx, token, csrDER)
+}
+
+func (a authorityEnroller) EnrollRenewal(ctx context.Context, csrDER []byte) ([]byte, error) {
+	var peer [][]byte
+	if a.certPath != "" {
+		if pem, err := os.ReadFile(a.certPath); err == nil {
+			if der, err := mtls.FirstCertDER(pem); err == nil {
+				peer = [][]byte{der}
+			}
+		}
+	}
+	return a.authority.EnrollRenewal(ctx, peer, csrDER)
+}
 
 // countingEnroller wraps an Enroller and counts bootstrap calls, and captures the
 // last CSR submitted, so tests can assert what crossed the wire.
@@ -108,7 +139,7 @@ func TestAgentRegistersAndEstablishesMTLS(t *testing.T) {
 	addr, stop := startCP(t, authority)
 	defer stop()
 
-	a := newAgent(t, authority, authority, "localhost", token)
+	a := newAgent(t, authorityEnroller{authority: authority}, authority, "localhost", token)
 	if err := a.Bootstrap(context.Background()); err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
@@ -120,7 +151,7 @@ func TestAgentRegistersAndEstablishesMTLS(t *testing.T) {
 func TestKeysGeneratedLocallyNeverTransmitted(t *testing.T) {
 	authority, _ := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
 	token, _ := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
-	ce := &countingEnroller{inner: authority}
+	ce := &countingEnroller{inner: authorityEnroller{authority: authority}}
 
 	a := newAgent(t, ce, authority, "localhost", token)
 	if err := a.Bootstrap(context.Background()); err != nil {
@@ -142,14 +173,23 @@ func TestKeysGeneratedLocallyNeverTransmitted(t *testing.T) {
 }
 
 // TestClientCertRotates is the acceptance: the agent's client certificate rotates
-// to a fresh one, and mTLS continues to work with the rotated identity.
+// to a fresh one, and mTLS continues to work with the rotated identity. The
+// adapter presents the agent's current persisted cert as the verified peer chain at
+// renewal, mirroring the production mTLS path the hardened EnrollRenewal requires
+// (WIRE-006).
 func TestClientCertRotates(t *testing.T) {
 	authority, _ := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
 	token, _ := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
 	addr, stop := startCP(t, authority)
 	defer stop()
 
-	a := newAgent(t, authority, authority, "localhost", token)
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "agent.crt")
+	a := agent.New(agent.Config{
+		CommonName: "agent-1", BootstrapToken: token,
+		KeyPath: filepath.Join(dir, "agent.key"), CertPath: certPath,
+		ServerName: "localhost", ServerCAPEM: authority.CABundlePEM(), RefreshBefore: time.Hour,
+	}, authorityEnroller{authority: authority, certPath: certPath})
 	if err := a.Bootstrap(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +212,7 @@ func TestClientCertRotates(t *testing.T) {
 func TestSurvivesControlPlaneRestart(t *testing.T) {
 	authority, _ := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
 	token, _ := authority.IssueBootstrapToken(context.Background(), "11111111-1111-1111-1111-111111111111", "")
-	ce := &countingEnroller{inner: authority}
+	ce := &countingEnroller{inner: authorityEnroller{authority: authority}}
 
 	addr1, stop1 := startCP(t, authority)
 	dir := t.TempDir()

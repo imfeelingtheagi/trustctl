@@ -24,6 +24,9 @@ jobs:
   build-test-lint:
     name: build / test / lint
     runs-on: ubuntu-latest
+    # Per-job timeout so a hung embedded-PG/NATS/signer integration job fails fast
+    # instead of burning the 6-hour GitHub default (TEST-004).
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -51,8 +54,11 @@ jobs:
       - name: Install lint tooling
         run: make tools
 
+      # LINT_STRICT=1 makes `make lint` HARD-FAIL if golangci-lint/actionlint are
+      # absent rather than silently skipping them (CODE-005) — since `make tools`
+      # just installed them, this proves the full lint actually ran in CI.
       - name: Lint
-        run: make lint
+        run: make lint LINT_STRICT=1
 
       # Verify the CI gates' own logic (the critical-package coverage evaluator
       # and the base-image digest-pinning guard) so a regression in a gate is
@@ -60,6 +66,7 @@ jobs:
       - name: Gate self-tests
         run: |
           bash scripts/ci/coverage-critical_selftest.sh
+          bash scripts/ci/coverage-server-lifecycle_selftest.sh
           bash scripts/ci/check-base-pinned_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
 
@@ -72,6 +79,7 @@ jobs:
   fuzz:
     name: fuzz (smoke per-PR, deeper nightly)
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004 (nightly raises the fuzz budget)
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -95,6 +103,7 @@ jobs:
   web:
     name: web ui (typecheck / test / build)
     runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
     defaults:
       run:
         working-directory: web
@@ -130,6 +139,7 @@ jobs:
   docs:
     name: docs site (mkdocs build --strict)
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -151,6 +161,7 @@ jobs:
   actionlint:
     name: actionlint (workflow lint)
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -181,6 +192,7 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -205,6 +217,7 @@ jobs:
   supply-chain:
     name: supply-chain (SBOM + binary SCA)
     runs-on: ubuntu-latest
+    timeout-minutes: 25 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -237,6 +250,7 @@ jobs:
   helm:
     name: helm (lint + render + schema)
     runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -273,6 +287,7 @@ jobs:
   proto:
     name: proto (buf lint + breaking-change gate)
     runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -299,6 +314,7 @@ jobs:
   acme-conformance:
     name: acme conformance (Pebble differential)
     runs-on: ubuntu-latest
+    timeout-minutes: 25 # TEST-004 (spins up the Pebble service)
     services:
       # Pebble is the reference test ACME CA. The same RFC 8555 protocol-
       # conformance routine that runs against trustctl in the unit suite runs here
@@ -348,6 +364,7 @@ jobs:
   windows-build:
     name: windows cross-build
     runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -369,6 +386,7 @@ jobs:
   windows:
     name: windows / test + MSI
     runs-on: windows-latest
+    timeout-minutes: 40 # TEST-004 (native Windows build + WiX MSI is slow)
     env:
       # Surface the code-signing secret to job-level env so it can drive the
       # step `if:` gates below (the `secrets` context is not allowed in `if:`,
@@ -457,6 +475,7 @@ jobs:
   kubernetes:
     name: kubernetes / kind e2e
     runs-on: ubuntu-latest
+    timeout-minutes: 40 # TEST-004 (provisions a kind cluster + cert-manager CRDs)
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

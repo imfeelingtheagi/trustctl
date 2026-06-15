@@ -15,7 +15,11 @@ const (
 	dekSize   = 32 // AES-256 data-encryption key
 	kekSize   = 32 // AES-256 key-encryption key
 	nonceSize = 12 // AES-GCM standard nonce
-	version   = 1  // sealed-container format version
+	// version1 is the only sealed-container format version written today. Open
+	// dispatches on the stored version byte (SCHEMA-005), so a future version2 is a
+	// new openV2 branch + a writer behind a feature flag, not an edit to the v1
+	// decode path.
+	version1 = 1
 )
 
 // magic identifies the sealed-container format (trustctl seal, v1).
@@ -138,7 +142,7 @@ func Seal(w KeyWrapper, plaintext, aad []byte) ([]byte, error) {
 	// magic | version | wrappedLen(2) | wrapped | nonce | ciphertext
 	out := make([]byte, 0, len(magic)+1+2+len(wrapped)+len(nonce)+len(ct))
 	out = append(out, magic...)
-	out = append(out, version)
+	out = append(out, version1)
 	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped)))
 	out = append(out, wrapped...)
 	out = append(out, nonce...)
@@ -146,30 +150,50 @@ func Seal(w KeyWrapper, plaintext, aad []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Open reverses Seal: it unwraps the DEK with the KEK and decrypts, verifying
-// aad. Any failure returns ErrDecrypt, which never contains the plaintext.
+// Open reverses Seal. It reads the format magic and the version byte, then
+// DISPATCHES to the reader for that version (SCHEMA-005) — rather than hard-
+// rejecting anything that is not the single current version. A truly unknown
+// version is still rejected with ErrFormat, but adding a future v2 layout means
+// adding an openV2 branch here, and a deployed reader that already knows v2 can
+// read a v2 blob written by a peer during a rolling upgrade. Any decrypt failure
+// returns ErrDecrypt, which never contains the plaintext.
 func Open(w KeyWrapper, sealed, aad []byte) ([]byte, error) {
-	if len(sealed) < len(magic)+1+2 {
+	if len(sealed) < len(magic)+1 {
 		return nil, ErrFormat
 	}
 	if subtle.ConstantTimeCompare(sealed[:len(magic)], magic) != 1 {
 		return nil, ErrFormat
 	}
-	off := len(magic)
-	if sealed[off] != version {
+	ver := sealed[len(magic)]
+	body := sealed[len(magic)+1:]
+	switch ver {
+	case version1:
+		return openV1(w, body, aad)
+	default:
+		// A version the reader does not understand: fail closed rather than guess a
+		// layout. A newer writer's blob can only be read once this binary learns that
+		// version (a new openVN branch).
 		return nil, ErrFormat
 	}
-	off++
-	wlen := int(binary.BigEndian.Uint16(sealed[off:]))
+}
+
+// openV1 decrypts a v1 sealed body (everything after magic|version):
+// wrappedLen(2) | wrapped | nonce | ciphertext. It is the layout Seal writes today.
+func openV1(w KeyWrapper, body, aad []byte) ([]byte, error) {
+	if len(body) < 2 {
+		return nil, ErrFormat
+	}
+	off := 0
+	wlen := int(binary.BigEndian.Uint16(body[off:]))
 	off += 2
-	if len(sealed) < off+wlen+nonceSize {
+	if len(body) < off+wlen+nonceSize {
 		return nil, ErrFormat
 	}
-	wrapped := sealed[off : off+wlen]
+	wrapped := body[off : off+wlen]
 	off += wlen
-	nonce := sealed[off : off+nonceSize]
+	nonce := body[off : off+nonceSize]
 	off += nonceSize
-	ct := sealed[off:]
+	ct := body[off:]
 
 	dek, err := w.UnwrapDEK(wrapped)
 	if err != nil {

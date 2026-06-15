@@ -372,6 +372,14 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 			a.writeProblem(w, problemUnauthorized())
 			return
 		}
+		// CSRF defense for the cookie-session path (SEC-007): a session-authenticated
+		// mutating request must carry a matching double-submit token. enforceCSRF is a
+		// no-op for bearer-token callers (CSRF-immune), safe methods, and non-session
+		// requests, so it only constrains the browser-cookie path; it writes 403 and
+		// returns false when the token is missing/mismatched.
+		if !a.enforceCSRF(w, r) {
+			return
+		}
 		target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
 		if !principal.Can(perm, target) {
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))

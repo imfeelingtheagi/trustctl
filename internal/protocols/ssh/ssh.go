@@ -11,8 +11,11 @@
 package ssh
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -225,4 +228,103 @@ func (k *KRL) Distribute() Snapshot {
 		s.KeyIDs = append(s.KeyIDs, id)
 	}
 	return s
+}
+
+// OpenSSH KRL binary-format constants (from OpenSSH PROTOCOL.krl). The artifact
+// produced by DistributeKRL is exactly what sshd's RevokedKeys directive and
+// `ssh-keygen -Q -f` consume (INTEROP-009): a JSON snapshot cannot be loaded by
+// stock OpenSSH, so SSH-cert revocation never reaches hosts without this encoding.
+const (
+	krlMagic         = "SSHKRL\n\x00" // 8-byte file magic
+	krlFormatVersion = 1
+
+	krlSectionCertificates = 1 // top-level section: revocations by issuing CA
+
+	krlSectionCertSerialList = 0x20 // cert sub-section: explicit uint64 serial list
+	krlSectionCertKeyID      = 3    // cert sub-section: list of revoked key-id strings
+)
+
+// DistributeKRL returns the KRL in the OpenSSH binary KRL format (PROTOCOL.krl), the
+// artifact sshd's RevokedKeys consumes and `ssh-keygen -Qf <krl>` reads. krlVersion
+// is the monotonic KRL version number a host uses to reject an older KRL; pass a
+// counter that increases each time the revocation set changes.
+//
+// The revocations are emitted under the "wildcard" CA (an empty ca_key string), so
+// they apply to certificates from any issuing CA — matching this KRL's CA-agnostic
+// serial/key-id model. Serials are written as an explicit serial list and key IDs as
+// a key-id list; both sub-sections are omitted when empty.
+func (k *KRL) DistributeKRL(krlVersion uint64) []byte {
+	k.mu.Lock()
+	serials := make([]uint64, 0, len(k.serials))
+	for s := range k.serials {
+		serials = append(serials, s)
+	}
+	keyIDs := make([]string, 0, len(k.keyIDs))
+	for id := range k.keyIDs {
+		keyIDs = append(keyIDs, id)
+	}
+	k.mu.Unlock()
+	// Deterministic output (stable across runs) so the artifact is reproducible and
+	// testable.
+	sort.Slice(serials, func(i, j int) bool { return serials[i] < serials[j] })
+	sort.Strings(keyIDs)
+
+	// Build the KRL_SECTION_CERTIFICATES payload: ca_key(empty=wildcard), reserved,
+	// then the cert sub-sections.
+	var cert bytes.Buffer
+	sshWriteString(&cert, nil) // ca_key = "" → applies to any CA (wildcard)
+	sshWriteString(&cert, nil) // reserved
+
+	if len(serials) > 0 {
+		var serialList bytes.Buffer
+		for _, s := range serials {
+			sshWriteUint64(&serialList, s)
+		}
+		cert.WriteByte(krlSectionCertSerialList)
+		sshWriteString(&cert, serialList.Bytes())
+	}
+	if len(keyIDs) > 0 {
+		var keyIDList bytes.Buffer
+		for _, id := range keyIDs {
+			sshWriteString(&keyIDList, []byte(id))
+		}
+		cert.WriteByte(krlSectionCertKeyID)
+		sshWriteString(&cert, keyIDList.Bytes())
+	}
+
+	// Assemble the full KRL: magic, header, then the one certificates section.
+	var out bytes.Buffer
+	out.WriteString(krlMagic)
+	sshWriteUint32(&out, krlFormatVersion)
+	sshWriteUint64(&out, krlVersion)
+	sshWriteUint64(&out, 0)                          // generated_date (0 = unspecified)
+	sshWriteUint64(&out, 0)                          // flags
+	sshWriteString(&out, nil)                        // reserved
+	sshWriteString(&out, []byte("trustctl SSH KRL")) // comment
+
+	out.WriteByte(krlSectionCertificates)
+	sshWriteString(&out, cert.Bytes())
+
+	return out.Bytes()
+}
+
+// SSH wire-format primitives (RFC 4251 §5): uint32/uint64 are big-endian; a string
+// is a uint32 length followed by that many bytes. These encode the KRL framing and
+// are pure serialization (no crypto), so they live here beside the KRL, not behind
+// the crypto boundary.
+func sshWriteUint32(b *bytes.Buffer, v uint32) {
+	var p [4]byte
+	binary.BigEndian.PutUint32(p[:], v)
+	b.Write(p[:])
+}
+
+func sshWriteUint64(b *bytes.Buffer, v uint64) {
+	var p [8]byte
+	binary.BigEndian.PutUint64(p[:], v)
+	b.Write(p[:])
+}
+
+func sshWriteString(b *bytes.Buffer, s []byte) {
+	sshWriteUint32(b, uint32(len(s)))
+	b.Write(s)
 }

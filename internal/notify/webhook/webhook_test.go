@@ -44,6 +44,28 @@ func TestWebhookConforms(t *testing.T) {
 	}
 }
 
+// TestWebhookSSRFFailsClosed is the SEC-008 acceptance: a webhook configured to an
+// internal/metadata address fails closed. The channel is built WITHOUT a client
+// override, so it uses the default SSRF-safe client (netsec.SafeClient); a delivery
+// to the cloud-metadata service (and to a loopback/RFC-1918 address) is refused
+// before any request is made, so an operator/tenant-supplied URL cannot coerce the
+// control plane into an internal request.
+func TestWebhookSSRFFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	alert := notify.Alert{Kind: notify.KindCertificateExpiry, TenantID: "t1", Subject: "cn=x"}
+	for _, target := range []string{
+		"http://169.254.169.254/latest/meta-data/", // cloud metadata service
+		"http://127.0.0.1:9999/hook",               // loopback
+		"http://10.0.0.5/hook",                     // RFC-1918 private
+	} {
+		// No WithHTTPClient override -> the real default SSRF-safe client is used.
+		c := webhook.New(target, []byte(testSecret))
+		if err := c.Notify(ctx, alert); err == nil {
+			t.Errorf("webhook delivery to %s was not blocked; the SSRF guard must fail closed (SEC-008)", target)
+		}
+	}
+}
+
 // TestSignatureVerified is the heart of S10.7: a channel holding the receiver's key is
 // accepted (its HMAC over the body matches the header), and a channel holding the wrong
 // key is rejected with 401 (its signature does not match), so the body really is

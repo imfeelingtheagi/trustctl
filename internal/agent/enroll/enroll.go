@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -149,13 +150,36 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token string, csrDER []
 	return a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, mtls.ClientCertTTL)
 }
 
-// EnrollRenewal signs a rotation CSR into a fresh client certificate chain. In
-// production this endpoint is reached over the agent's existing mTLS connection,
-// so the agent is already authenticated by its current certificate, and the tenant
-// it should retain is carried by that certificate's SPIFFE SAN (WIRE-003): the
-// renewal preserves it rather than trusting the new CSR.
-func (a *Authority) EnrollRenewal(_ context.Context, csrDER []byte) ([]byte, error) {
-	return a.ca.SignClientCSR(csrDER, mtls.ClientCertTTL)
+// ErrUnauthenticatedRenewal is returned when a renewal arrives without a verified
+// client certificate to authenticate the caller. Renewal mints a fresh client
+// certificate, so an unauthenticated renewal would be an open cert-minting
+// endpoint; the gate is enforced in code here, not by deployment topology
+// (WIRE-006).
+var ErrUnauthenticatedRenewal = errors.New("enroll: renewal requires a verified client certificate")
+
+// EnrollRenewal signs a rotation CSR into a fresh client certificate chain. The
+// caller MUST already be authenticated by its current mTLS client certificate:
+// peerCertsDER is the verified peer chain (leaf first), as produced by the TLS
+// stack's VerifiedChains. The renewed certificate is bound to the SAME tenant the
+// existing certificate carries in its SPIFFE SAN (WIRE-003/AN-1) — never the
+// (attacker-chosen) CSR subject — so a renewal cannot change tenant or escalate.
+//
+// This authentication is enforced in code, not by the deployment's TLS topology:
+// the earlier version signed ANY CSR with no caller check, relying on a comment
+// that "the deployment's mutual-TLS server" gated it — a control that did not exist
+// in code (WIRE-006). A renewal with no verified peer certificate is now rejected
+// with ErrUnauthenticatedRenewal regardless of how the handler is mounted.
+func (a *Authority) EnrollRenewal(_ context.Context, peerCertsDER [][]byte, csrDER []byte) ([]byte, error) {
+	if len(peerCertsDER) == 0 || len(peerCertsDER[0]) == 0 {
+		return nil, ErrUnauthenticatedRenewal
+	}
+	tenantID, err := mtls.TenantFromClientCert(peerCertsDER[0])
+	if err != nil {
+		// A verified client cert that carries no tenant SPIFFE SAN is not an agent
+		// identity this CA issued; refuse rather than mint an unattributed cert.
+		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
+	}
+	return a.ca.SignClientCSRWithTenant(csrDER, tenantID, mtls.ClientCertTTL)
 }
 
 // CABundlePEM is the CA certificate (PEM) an agent trusts to verify the control

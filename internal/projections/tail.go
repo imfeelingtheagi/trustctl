@@ -74,6 +74,14 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		if err := w.proj.Apply(ctx, e); err != nil {
 			return err
 		}
+		// Advance the projection checkpoint as the tail applies out-of-band events
+		// (SPINE-007), so the boot catch-up watermark stays current and a restart
+		// resumes from the tail's position rather than re-replaying. A failure to
+		// advance is non-fatal: the watermark is an optimization, not a correctness
+		// boundary (Apply is an idempotent upsert), so we keep tailing.
+		if err := w.proj.AdvanceCheckpoint(ctx, e.Sequence); err != nil {
+			return err
+		}
 		w.applied.Store(e.Sequence)
 		return nil
 	})

@@ -1,12 +1,13 @@
 // Command trustctl is the trustctl control-plane binary.
 //
-// In single-node mode it will also supervise the isolated signing service as a
-// child process (AN-4); that wiring, along with the API, event spine, and
-// stores, arrives in the binary-assembly sprint. Today the binary boots, reports
-// its version via --version, resolves and validates its configuration (including
-// the bundled-vs-external Postgres/NATS switches used by the container image and
-// Compose stack, S7.4), prints it with --check-config, and shuts down cleanly on
-// SIGINT/SIGTERM.
+// It assembles and serves the control plane via server.Run (internal/server):
+// the event spine, projections, orchestrator, and REST API, with the isolated
+// signing service supervised as a separate out-of-process child in single-node
+// mode (AN-4). It reports its version via --version, resolves and validates its
+// configuration — including the bundled-vs-external Postgres/NATS switches used by
+// the container image and Compose stack (S7.4) — prints it with --check-config,
+// exposes the operational flags (--migrate / --migrate-status, --backup /
+// --restore, --health-check), and shuts down cleanly on SIGINT/SIGTERM.
 package main
 
 import (

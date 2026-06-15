@@ -132,6 +132,127 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 	}
 }
 
+// TestNetworkPolicyIngressIsScopedNotNamespaceWide pins OPS-009: the default
+// ingress source must be the SCOPED ingress controller, not a namespace-wide
+// `podSelector: {}` that admits every co-tenant pod to the API port. The template
+// must gate the namespace-wide opt-in behind networkPolicy.ingress.sameNamespace,
+// and that opt-in must default to false in values.yaml — so a `helm install` with
+// defaults does not silently expose the API to the whole namespace.
+func TestNetworkPolicyIngressIsScopedNotNamespaceWide(t *testing.T) {
+	np := read(t, "templates", "networkpolicy.yaml")
+	// The default ingress peer is the ingress controller (namespace + pod label).
+	containsAll(t, "ingress is scoped to the ingress controller", np,
+		"ingressController", "namespaceSelector", "podSelector")
+	// The namespace-wide bare `podSelector: {}` may only appear under the
+	// sameNamespace opt-in guard — never as an unconditional default source.
+	if strings.Contains(np, "podSelector: {}") && !strings.Contains(np, ".Values.networkPolicy.ingress.sameNamespace") &&
+		!strings.Contains(np, "$sameNS") {
+		t.Error("networkpolicy.yaml uses a namespace-wide `podSelector: {}` ingress source that is not gated behind networkPolicy.ingress.sameNamespace (OPS-009)")
+	}
+
+	// values.yaml defaults the namespace-wide opt-in OFF.
+	values := read(t, "values.yaml")
+	var v struct {
+		NetworkPolicy struct {
+			Ingress struct {
+				SameNamespace     bool `yaml:"sameNamespace"`
+				IngressController struct {
+					Enabled bool `yaml:"enabled"`
+				} `yaml:"ingressController"`
+			} `yaml:"ingress"`
+		} `yaml:"networkPolicy"`
+	}
+	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
+		t.Fatalf("values.yaml is not valid YAML: %v", err)
+	}
+	if v.NetworkPolicy.Ingress.SameNamespace {
+		t.Error("networkPolicy.ingress.sameNamespace must default to false so the API is not namespace-wide by default (OPS-009)")
+	}
+	if !v.NetworkPolicy.Ingress.IngressController.Enabled {
+		t.Error("networkPolicy.ingress.ingressController should default to enabled so a default install still admits the ingress controller (OPS-009)")
+	}
+}
+
+// TestPodDisruptionBudgetIsNotANoOp pins OPS-009: the PDB must not ship enabled
+// with minAvailable: 0 (which never blocks an eviction — a no-op that looks like
+// disruption protection but is not). Today the chart runs a single replica, so the
+// honest default is a disabled PDB with minAvailable: 1 reserved for the
+// multi-replica future.
+func TestPodDisruptionBudgetIsNotANoOp(t *testing.T) {
+	values := read(t, "values.yaml")
+	var v struct {
+		PDB struct {
+			Enabled      bool `yaml:"enabled"`
+			MinAvailable int  `yaml:"minAvailable"`
+		} `yaml:"podDisruptionBudget"`
+	}
+	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
+		t.Fatalf("values.yaml is not valid YAML: %v", err)
+	}
+	if v.PDB.Enabled && v.PDB.MinAvailable == 0 {
+		t.Error("podDisruptionBudget is enabled with minAvailable: 0 — a no-op that never blocks eviction; disable it (single replica) or set minAvailable >= 1 (OPS-009)")
+	}
+	// RESIL-007: the default minAvailable reserved for the multi-replica future must
+	// be a REAL guarantee (>= 1), not 0 — so when an operator enables the PDB behind
+	// replicaCount >= 2 it actually blocks an all-pods eviction.
+	if v.PDB.MinAvailable < 1 {
+		t.Errorf("podDisruptionBudget.minAvailable = %d, want >= 1 so enabling the PDB (multi-replica) gives a real availability guarantee (RESIL-007)", v.PDB.MinAvailable)
+	}
+}
+
+// TestPodDisruptionBudgetRendersRealGuaranteeWhenEnabled is the RESIL-007
+// acceptance, drilling the RENDERED artifact rather than grepping values: when the
+// PDB is enabled (the multi-replica HA preset an operator turns on behind
+// replicaCount >= 2 and the isolated signer + leader election, EXC-RESIL-01), the
+// pdb.yaml template must render a PodDisruptionBudget carrying minAvailable: 1 — a
+// real guarantee that K8s will keep one control-plane pod up across a voluntary
+// disruption (node drain). When the PDB is disabled (today's honest single-replica
+// default) the template renders NOTHING (no over-claimed protection). A real
+// `helm template -f` does the full render in CI; here we render the template with
+// the documented HA values so the structural guarantee is pinned locally too.
+func TestPodDisruptionBudgetRendersRealGuaranteeWhenEnabled(t *testing.T) {
+	body := read(t, "templates", "pdb.yaml")
+	funcs := template.FuncMap{
+		"include": func(args ...any) any { return "trustctl" },
+		"nindent": func(args ...any) any { return "" },
+	}
+	tmpl, err := template.New("pdb.yaml").Funcs(funcs).Option("missingkey=zero").Parse(body)
+	if err != nil {
+		t.Fatalf("parse pdb.yaml: %v", err)
+	}
+
+	render := func(enabled bool, minAvail int) string {
+		var sb strings.Builder
+		vals := map[string]any{
+			"Values": map[string]any{
+				"podDisruptionBudget": map[string]any{
+					"enabled":      enabled,
+					"minAvailable": minAvail,
+				},
+			},
+		}
+		if err := tmpl.Execute(&sb, vals); err != nil {
+			t.Fatalf("render pdb.yaml (enabled=%v): %v", enabled, err)
+		}
+		return sb.String()
+	}
+
+	// HA preset enabled: renders a real PDB with minAvailable: 1.
+	enabled := render(true, 1)
+	if !strings.Contains(enabled, "kind: PodDisruptionBudget") {
+		t.Fatalf("enabled PDB did not render a PodDisruptionBudget:\n%s", enabled)
+	}
+	if !strings.Contains(enabled, "minAvailable: 1") {
+		t.Errorf("enabled PDB must render minAvailable: 1 (a real guarantee), got:\n%s", enabled)
+	}
+
+	// Single-replica default (disabled): renders no PDB at all — no false protection.
+	disabled := render(false, 1)
+	if strings.Contains(disabled, "kind: PodDisruptionBudget") {
+		t.Errorf("disabled PDB should render nothing, got:\n%s", disabled)
+	}
+}
+
 // TestSingleReplicaIsDisclosed pins RESIL-002: the default chart is a single-replica
 // control plane with a Recreate rollout (a deliberate SPOF, because the signer's CA
 // key is in a per-pod sealed store), and that availability trade-off is HONESTLY

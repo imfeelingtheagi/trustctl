@@ -88,7 +88,24 @@ persistence:
 # NATS, and DNS out. The signer has no listener at all, so it is unreachable.
 networkPolicy:
   enabled: true
-  # Namespaces allowed to reach the API port. Empty = same namespace only.
+  # Who may reach the API/UI port (8443). The default is the ingress controller
+  # ONLY — NOT every pod in the namespace (OPS-009). Each block below is additive;
+  # leave them empty/false to admit nothing and rely on the ingress controller.
+  ingress:
+    # Admit the ingress controller by namespace + pod label. Defaults match the
+    # ingress-nginx convention; override for your controller (Traefik, HAProxy,
+    # cloud LB controller, …). Set namespaceLabels/podLabels to {} to disable.
+    ingressController:
+      enabled: true
+      namespaceLabels:
+        kubernetes.io/metadata.name: ingress-nginx
+      podLabels:
+        app.kubernetes.io/name: ingress-nginx
+    # Explicit opt-in to admit ALL pods in trustctl's own namespace. Off by
+    # default: the old behavior (podSelector {}) exposed the API to every
+    # co-tenant pod, which the "open only what is needed" policy should not do.
+    sameNamespace: false
+  # Additional namespaces allowed to reach the API port (by metadata.name).
   allowedIngressNamespaces: []
   postgres:
     port: 5432
@@ -116,9 +133,16 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# PodDisruptionBudget. Disabled by default (OPS-009): the chart runs a SINGLE
+# control-plane replica today (the isolated-signer mTLS transport for multi-replica
+# HA is not yet implemented — RESIL-002), and a PDB is only meaningful with >1
+# replica. The old default (enabled with minAvailable: 0) was a no-op — minAvailable
+# 0 never blocks an eviction — so it gave the appearance of disruption protection
+# without any. Enable this with minAvailable: 1 only once you run replicaCount >= 2
+# behind the shared isolated signer + leader election (RESIL-004 / EXC-RESIL-01).
 podDisruptionBudget:
-  enabled: true
-  minAvailable: 0
+  enabled: false
+  minAvailable: 1
 
 # --- S15.1: signer topology + external KMS -----------------------------------
 # Signer deployment mode:

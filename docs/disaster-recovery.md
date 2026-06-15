@@ -122,7 +122,13 @@ topology, not an oversight**, and it is a known availability trade-off (RESIL-00
   PodDisruptionBudget, and pod anti-affinity — with **leader election** gating the
   background workers (the outbox dispatcher, audit-retention, idempotency/outbox GC,
   and the projection tailer) so only one replica runs them while all replicas serve
-  reads. Multi-replica projector safety is tracked under RESIL-004 / EXC-RESIL-01.
+  reads. The **boot projection catch-up** is already safe to run on every replica:
+  it takes a PostgreSQL advisory lock (`ProjectionAdvisoryLockKey`, the same
+  mechanism migrations use) so concurrent replica boots serialize their catch-up
+  into the read model rather than racing, and each resumes from the shared
+  projection checkpoint (RESIL-004 / SPINE-007). The remaining active/active gap —
+  continuous **leader election** so exactly one replica runs the *continuous*
+  background workers — is tracked under EXC-RESIL-01.
 
 This gap is disclosed in the chart (`values.yaml` comments) and in
 `docs/limitations.md`, which is what keeps the severity at Medium rather than High.

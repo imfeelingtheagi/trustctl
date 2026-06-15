@@ -40,6 +40,8 @@ we'll triage accordingly), and theoretical issues without a practical impact.
 trustctl is pre-1.0 and under active development. Security fixes target the
 **latest `main`**; there are no long-term support branches yet. Once releases are
 tagged, this section will list the supported versions and their support windows.
+Notable changes — including security and hardening work — are recorded in the
+[CHANGELOG](CHANGELOG.md), so a fix can be tracked against the patch SLA below.
 
 ## Triage, patch SLA & advisories
 

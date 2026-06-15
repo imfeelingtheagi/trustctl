@@ -88,6 +88,14 @@ func newStore(t *testing.T) *store.Store {
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
+	// The projection checkpoint (SPINE-007) is a single-row, system table the
+	// shared database persists across tests; reset its watermark to 0 so each test
+	// starts from a clean catch-up position (TRUNCATE would drop the seeded row, so
+	// reset the value instead).
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("reset projection checkpoint: %v", err)
+	}
 	t.Cleanup(func() { s.Close() })
 	return s
 }

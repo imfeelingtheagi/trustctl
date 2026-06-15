@@ -71,6 +71,16 @@ kubectl -n trustctl rollout status deploy/trustctl
 kubectl -n trustctl port-forward svc/trustctl 8443:8443   # https://localhost:8443 (-k)
 ```
 
+The release pipeline also publishes the **packaged chart as a cosign-signed OCI
+artifact** to GHCR (SUPPLY-007), so you can verify the chart's provenance before
+installing — the same keyless-OIDC identity that signs the image:
+
+```bash
+cosign verify ghcr.io/imfeelingtheagi/trustctl/charts/trustctl:<chart-version> \
+  --certificate-identity-regexp '^https://github.com/.*/trustctl/.github/workflows/release.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 See [`deploy/helm/trustctl/README.md`](https://github.com/imfeelingtheagi/trustctl/tree/main/deploy/helm/trustctl)
 for the full values reference. A Kubernetes **Operator** and multi-replica HA (a
 fully separate signer pod over mTLS) are **planned for S15.1** — see

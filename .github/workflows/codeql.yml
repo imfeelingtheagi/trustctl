@@ -26,6 +26,7 @@ jobs:
   analyze:
     name: analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004 (CodeQL DB build + extended query suite)
     strategy:
       fail-fast: false
       matrix:

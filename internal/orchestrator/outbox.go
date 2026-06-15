@@ -111,6 +111,29 @@ func (o *Outbox) Enqueue(ctx context.Context, tx pgx.Tx, e Entry) (int64, error)
 	return id, nil
 }
 
+// EnqueueIfAbsent records an outbox entry on the caller's transaction ONLY if no
+// entry with the same (tenant_id, idempotency_key) already exists, and reports
+// whether it inserted (SPINE-011). It is the idempotent enqueue the reconciliation
+// pass uses to heal a side effect that an append-then-project crash never recorded:
+// the inline Transition path enqueues with IdempotencyKey = the lifecycle event's
+// globally-unique ID, so an event whose effect already landed is left untouched,
+// and one whose effect was lost is enqueued exactly once. The conditional insert is
+// atomic within the caller's transaction, so two concurrent reconcilers cannot both
+// insert the same key. It runs under the tenant's RLS context, like Enqueue.
+func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inserted bool, err error) {
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
+		 SELECT $1, $2, $3, $4
+		 WHERE NOT EXISTS (
+		     SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $4
+		 )`,
+		e.TenantID, e.Destination, e.Payload, e.IdempotencyKey)
+	if err != nil {
+		return false, fmt.Errorf("orchestrator: enqueue-if-absent outbox: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 // Dispatch performs all entries that are due now, one per transaction, and
 // returns how many it attempted. A Handler failure is not a Dispatch error: it is
 // recorded on the row (attempts, last_error, next_attempt_at) for a later retry,
@@ -144,7 +167,7 @@ func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
 // process dies mid-delivery the transaction rolls back and the entry stays
 // pending, to be redelivered (at-least-once).
 func (o *Outbox) dispatchOne(ctx context.Context, h Handler, cutoff time.Time) (id int64, claimed bool, err error) {
-	tx, err := o.store.Pool().Begin(ctx)
+	tx, err := o.store.SystemPool().Begin(ctx)
 	if err != nil {
 		return 0, false, err
 	}

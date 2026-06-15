@@ -96,12 +96,19 @@ func ServerCertFromFiles(certFile, keyFile string) (*ServerCert, error) {
 	return &ServerCert{cert: cert, TrustPEM: chainPEM}, nil
 }
 
-// ServeHTTPS serves srv over ln using this server certificate, with a modern TLS
-// floor (TLS 1.2+). It blocks like (*http.Server).ServeTLS and returns its error.
+// ServeHTTPS serves srv over ln using this server certificate. The control-plane /
+// operator surface pins a TLS 1.3 floor — matching the agent transport's pinned
+// TLS 1.3 (mtls.go) rather than the old TLS 1.2 default — so a credential control
+// plane never negotiates a legacy version or a non-AEAD cipher (WIRE-008). TLS 1.3
+// negotiates only AEAD suites by protocol, so an explicit CipherSuites allowlist is
+// unnecessary at this floor; CurvePreferences pins modern, constant-time curves.
+// HSTS is emitted by the server's security-headers middleware over TLS (SEC-003),
+// not here. It blocks like (*http.Server).ServeTLS and returns its error.
 func (s *ServerCert) ServeHTTPS(srv *http.Server, ln net.Listener) error {
 	srv.TLSConfig = &tls.Config{
-		Certificates: []tls.Certificate{s.cert},
-		MinVersion:   tls.VersionTLS12,
+		Certificates:     []tls.Certificate{s.cert},
+		MinVersion:       tls.VersionTLS13,
+		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
 	}
 	return srv.ServeTLS(ln, "", "")
 }

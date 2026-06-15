@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/crypto"
 )
 
@@ -230,8 +231,10 @@ func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto
 }
 
 // call performs an authenticated Cloud KMS JSON request and decodes the JSON response. A
-// nil in sends no body. Non-2xx responses fail closed with the (token-free) status and a
-// bounded snippet of the body.
+// nil in sends no body. The provider-specific parts (URL, the Bearer auth header) stay
+// here; the shared round-trip — bounded read, non-2xx normalisation, JSON decode — is
+// internal/cloudhttp (CODE-006). The per-op timeout is already applied by the caller via
+// withTimeout(ctx) (CODE-002), so the context carries the deadline and we pass 0 here.
 func (b *Backend) call(ctx context.Context, method, path string, in any, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -250,19 +253,10 @@ func (b *Backend) call(ctx context.Context, method, path string, in any, out any
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+b.creds.BearerToken)
-	resp, err := b.doer.Do(req)
-	if err != nil {
-		return err
+	if err := cloudhttp.JSON(b.doer, req, out, 0); err != nil {
+		return fmt.Errorf("gcp-kms: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
-	}
-	if out == nil {
-		return nil
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
+	return nil
 }
 
 // newKeyID derives a Cloud KMS-acceptable crypto-key id (letters, digits, hyphens,

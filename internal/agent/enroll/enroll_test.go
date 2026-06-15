@@ -66,6 +66,57 @@ func TestBootstrapTokenIsTenantAttributed(t *testing.T) {
 	}
 }
 
+// TestEnrollRenewalRequiresVerifiedClientCert is the WIRE-006 acceptance: renewal
+// rejects a caller with no verified client certificate (the gate is in code, not
+// deployment topology), and when a verified client cert IS presented, the renewed
+// certificate is bound to the SAME tenant that cert carries — never the CSR's
+// chosen identity.
+func TestEnrollRenewalRequiresVerifiedClientCert(t *testing.T) {
+	a, err := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	// No verified peer certificate -> rejected (the latent open-cert-mint is closed).
+	if _, err := a.EnrollRenewal(ctx, nil, newCSR(t, "agent")); !errors.Is(err, enroll.ErrUnauthenticatedRenewal) {
+		t.Fatalf("renewal without a client cert = %v, want ErrUnauthenticatedRenewal", err)
+	}
+	if _, err := a.EnrollRenewal(ctx, [][]byte{{}}, newCSR(t, "agent")); !errors.Is(err, enroll.ErrUnauthenticatedRenewal) {
+		t.Fatalf("renewal with an empty cert = %v, want ErrUnauthenticatedRenewal", err)
+	}
+
+	// A verified client cert that carries no tenant SPIFFE SAN is refused too.
+	if _, err := a.EnrollRenewal(ctx, [][]byte{[]byte("not-a-cert")}, newCSR(t, "agent")); !errors.Is(err, enroll.ErrUnauthenticatedRenewal) {
+		t.Fatalf("renewal with a non-tenant cert = %v, want ErrUnauthenticatedRenewal", err)
+	}
+
+	// Establish a current identity under tenantA via bootstrap, then renew presenting
+	// that cert as the verified peer: the renewed cert must keep tenantA, even though
+	// the renewal CSR names an attacker-chosen common name.
+	tok, err := a.IssueBootstrapToken(ctx, tenantA, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := a.EnrollBootstrap(ctx, tok, newCSR(t, "agent-01"))
+	if err != nil {
+		t.Fatalf("EnrollBootstrap: %v", err)
+	}
+	peerLeaf := leafDER(t, current)
+
+	renewed, err := a.EnrollRenewal(ctx, [][]byte{peerLeaf}, newCSR(t, "attacker-renamed"))
+	if err != nil {
+		t.Fatalf("authenticated renewal failed: %v", err)
+	}
+	got, err := mtls.TenantFromClientCert(leafDER(t, renewed))
+	if err != nil {
+		t.Fatalf("TenantFromClientCert: %v", err)
+	}
+	if got != tenantA {
+		t.Errorf("renewed cert carries tenant %q, want %q (renewal must preserve the caller's tenant)", got, tenantA)
+	}
+}
+
 // TestBootstrapTokenIsSingleUse: a token redeemed once is rejected on every later
 // attempt (single-use) — proving a replayed token cannot mint a second
 // certificate. This is the in-memory analogue of the cross-instance/cross-restart

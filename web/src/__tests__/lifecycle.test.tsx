@@ -3,6 +3,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Identities } from "@/pages/Identities";
+// The real ApiError class (the vi.mock below spreads the real module and only
+// replaces `api`), used to simulate a 429 with a Retry-After hint (SURFACE-007).
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -61,14 +64,51 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything()));
   });
 
-  it("revokes an identity from the UI", async () => {
+  it("revokes an identity only after the user confirms (SURFACE-007)", async () => {
     apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "to-revoke", state: "deployed" }]);
     const user = userEvent.setup();
     renderIdentities();
 
     const row = (await screen.findByText("to-revoke")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /revoke/i }));
+    // Clicking Revoke must NOT immediately call the destructive transition — it opens
+    // a confirmation dialog that names the credential.
+    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    // The dialog names the credential (it appears in both the heading and the body).
+    expect(within(dialog).getAllByText(/to-revoke/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole("heading")).toHaveTextContent(/revoke.*to-revoke/i);
+
+    // Confirming runs the revoke.
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", expect.anything()));
+  });
+
+  it("cancelling the confirmation does not revoke (SURFACE-007)", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "keep-me", state: "deployed" }]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("keep-me")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("surfaces a 429 rate-limit with a Retry-After hint (SURFACE-007)", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "svc", state: "requested" }]);
+    apiMock.transitionIdentity.mockReset().mockRejectedValue(new ApiError(429, "rate limited", 12));
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("svc")).closest("tr")!;
+    // Issue is non-destructive, so it runs without confirmation and hits the 429.
+    await user.click(within(row).getByRole("button", { name: /issue/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/rate limited/i);
+    expect(alert).toHaveTextContent(/12s/);
   });
 
   it("creates (issues) a new identity from the page", async () => {

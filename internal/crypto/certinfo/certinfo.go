@@ -46,6 +46,14 @@ type Info struct {
 	OCSPServers           []string // AIA OCSP responder URLs
 	IssuingCertificateURL []string // AIA CA-issuers URLs
 	PolicyOIDs            []string // certificatePolicies, dotted form
+
+	// Structural profile fields for the RFC 5280 profile linter (PKIGOV-009), kept
+	// inside the crypto boundary so the linter never imports crypto/x509.
+	Version            int    // certificate version (3 for v3)
+	SignatureAlgorithm string // e.g. "SHA256-RSA", "ECDSA-SHA256"
+	KeyUsageSet        bool   // whether a keyUsage extension is present (non-zero)
+	KeyUsageCertSign   bool   // keyCertSign bit
+	BasicConstraints   bool   // whether basicConstraints is present/valid
 }
 
 // Inspect parses a certificate (PEM or DER) and returns its inventory metadata.
@@ -97,6 +105,12 @@ func Inspect(raw []byte) (Info, error) {
 	info.OCSPServers = append(info.OCSPServers, cert.OCSPServer...)
 	info.IssuingCertificateURL = append(info.IssuingCertificateURL, cert.IssuingCertificateURL...)
 	info.PolicyOIDs = policyStrings(cert)
+	// Structural fields for the RFC 5280 profile linter (PKIGOV-009).
+	info.Version = cert.Version
+	info.SignatureAlgorithm = cert.SignatureAlgorithm.String()
+	info.KeyUsageSet = cert.KeyUsage != 0
+	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
+	info.BasicConstraints = cert.BasicConstraintsValid
 	return info, nil
 }
 

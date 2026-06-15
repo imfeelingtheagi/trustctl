@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/crypto"
 )
 
@@ -228,7 +229,10 @@ func (s *kvSigner) SignContext(ctx context.Context, message []byte, opts crypto.
 }
 
 // call performs a bearer-authenticated Key Vault REST request and decodes the JSON response.
-// The api-version query parameter is appended to every request.
+// The api-version query parameter is appended to every request. The provider-specific
+// parts (URL + api-version, the Bearer/Accept headers) stay here; the shared round-trip —
+// bounded read, non-2xx normalisation, JSON decode — is internal/cloudhttp (CODE-006). The
+// per-op timeout is already applied by the caller via withTimeout(ctx) (CODE-002).
 func (b *Backend) call(ctx context.Context, method, path string, body []byte, out any) error {
 	u := b.endpoint + path + "?api-version=" + apiVersion
 	var rdr io.Reader
@@ -245,19 +249,10 @@ func (b *Backend) call(ctx context.Context, method, path string, body []byte, ou
 	req.Header.Set("Accept", "application/json")
 	// Bearer auth: the AAD access token authenticates every request.
 	req.Header.Set("Authorization", "Bearer "+b.creds.BearerToken)
-	resp, err := b.doer.Do(req)
-	if err != nil {
-		return err
+	if err := cloudhttp.JSON(b.doer, req, out, 0); err != nil {
+		return fmt.Errorf("azure-key-vault: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
-	}
-	if out == nil {
-		return nil
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
+	return nil
 }
 
 // keyPath returns the data-plane path for a specific key version, or the unversioned key path

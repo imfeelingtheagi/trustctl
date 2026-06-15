@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -66,7 +67,12 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 			return err
 		}
 		if dest, ok := sideEffectFor(from, to); ok {
-			if _, err := o.outbox.Enqueue(ctx, tx, Entry{
+			// Enqueue the side effect keyed by the lifecycle event's globally-unique
+			// ID, idempotently (SPINE-011): if a prior attempt for this exact event
+			// already enqueued the effect, EnqueueIfAbsent is a no-op, so the inline
+			// path and the boot reconciliation pass (ReconcileOutbox) can never both
+			// enqueue the same transition's effect.
+			if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 				TenantID:       tenantID,
 				Destination:    dest,
 				IdempotencyKey: ev.ID,
@@ -77,6 +83,72 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 		}
 		return nil
 	})
+}
+
+// ReconcileOutbox heals the narrow crash window between an event append and the
+// transaction that projects it and enqueues its side effect (SPINE-011). Transition
+// appends the lifecycle event first (durable, the source of truth — AN-2), then in a
+// SEPARATE transaction projects the status change and enqueues the outbox effect
+// (AN-6). If the process dies in that gap, the event survives but the effect was
+// never enqueued — a transition recorded but never acted on.
+//
+// This pass makes the side effect log-derivable: it replays the lifecycle
+// transition events from the log and, for each transition that carries a side
+// effect, enqueues that effect idempotently keyed by the event's ID
+// (EnqueueIfAbsent). An effect that already landed (the common case) is left
+// untouched; one lost to a crash is re-created exactly once. It is meant to run on
+// boot (after the projection catch-up) and is safe to run repeatedly. It returns
+// how many missing effects it healed.
+//
+// It does not re-drive the projection itself — that is the projector's job (the boot
+// catch-up and the tailing worker), and a re-driven transition is in any case
+// rejected by the state machine. This pass is strictly about the AN-6 side-effect
+// durability edge.
+func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (int, error) {
+	healed := 0
+	err := log.Replay(ctx, 0, func(ev events.Event) error {
+		// Only lifecycle transition events carry a state-machine side effect; skip
+		// everything else (domain CRUD events, tenant events, certificate events).
+		if !isLifecycleTransition(ev.Type) {
+			return nil
+		}
+		var pl transitionPayload
+		if err := json.Unmarshal(ev.Data, &pl); err != nil {
+			// A malformed transition payload is a producer bug; surface it rather than
+			// silently skipping (the same stance the projector takes).
+			return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+		}
+		dest, ok := sideEffectFor(pl.From, pl.To)
+		if !ok {
+			return nil // a transition with no external effect — nothing to reconcile
+		}
+		return o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+			inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+				TenantID:       ev.TenantID,
+				Destination:    dest,
+				IdempotencyKey: ev.ID,
+				Payload:        ev.Data,
+			})
+			if err != nil {
+				return err
+			}
+			if inserted {
+				healed++
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)
+	}
+	return healed, nil
+}
+
+// isLifecycleTransition reports whether an event type is an identity lifecycle
+// transition (identity.issued, identity.deployed, …). identity.created is the one
+// identity.* event that is not a transition, so it is excluded.
+func isLifecycleTransition(eventType string) bool {
+	return strings.HasPrefix(eventType, "identity.") && eventType != "identity.created"
 }
 
 // State returns an identity's current lifecycle state. It reads the last

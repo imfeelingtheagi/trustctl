@@ -23,9 +23,18 @@ type enrollResponse struct {
 }
 
 // Handler serves the enrollment endpoints over HTTP: POST /enroll/bootstrap
-// (token + CSR) and POST /enroll/renewal (CSR). It is the transport an agent's
-// HTTPEnroller talks to. Renewal is mTLS-gated in production (the agent presents
-// its current certificate); that gating is the deployment's mutual-TLS server.
+// (token + CSR) and POST /enroll/renewal (CSR).
+//
+// Renewal authentication is enforced IN CODE, not by deployment topology: the
+// handler passes the TLS stack's verified peer chain to EnrollRenewal, which
+// refuses unless the caller presented a verified client certificate carrying a
+// tenant SPIFFE SAN, and binds the renewed certificate to that same tenant
+// (WIRE-006). If this handler is mounted over plain TLS with no client-cert
+// verification, r.TLS.VerifiedChains is empty and every renewal is rejected — so a
+// misconfiguration fails closed rather than exposing an unauthenticated
+// cert-minting endpoint. (The served API does not mount renewal today; it 404s —
+// DOCS-001. This handler is library-complete and safe to serve once the verified
+// mTLS listener is wired, EXC-WIRE-02.)
 func Handler(a *Authority) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /enroll/bootstrap", func(w http.ResponseWriter, r *http.Request) {
@@ -41,10 +50,23 @@ func Handler(a *Authority) http.Handler {
 		if !ok {
 			return
 		}
-		chain, err := a.EnrollRenewal(r.Context(), csr)
+		chain, err := a.EnrollRenewal(r.Context(), verifiedPeerCertsDER(r), csr)
 		respond(w, chain, err)
 	})
 	return mux
+}
+
+// verifiedPeerCertsDER extracts the DER of the verified client-certificate chain
+// (leaf first) from the request's TLS state. It returns nil when there is no TLS
+// or no verified chain — i.e. when the caller was not authenticated by a client
+// certificate — so EnrollRenewal fails closed. Only VerifiedChains (not the raw
+// PeerCertificates) is used, so an unverified/attacker-supplied cert is ignored.
+func verifiedPeerCertsDER(r *http.Request) [][]byte {
+	if r.TLS == nil || len(r.TLS.VerifiedChains) == 0 || len(r.TLS.VerifiedChains[0]) == 0 {
+		return nil
+	}
+	leaf := r.TLS.VerifiedChains[0][0]
+	return [][]byte{leaf.Raw}
 }
 
 func decode(w http.ResponseWriter, r *http.Request) (enrollRequest, []byte, bool) {

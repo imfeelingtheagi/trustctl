@@ -1,6 +1,8 @@
 package mtls_test
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net"
@@ -72,6 +74,63 @@ func TestServeHTTPSEncryptsAndRefusesPlaintext(t *testing.T) {
 		if strings.Contains(presp.Header.Get("Set-Cookie"), "trustctl_session") {
 			t.Error("session cookie was delivered over a plaintext request")
 		}
+	}
+}
+
+// TestServeHTTPSRefusesTLS12 is the WIRE-008 acceptance: the operator HTTPS surface
+// pins a TLS 1.3 floor, so a client that caps at TLS 1.2 is refused, while a TLS
+// 1.3 client connects and negotiates exactly 1.3. The pre-fix server set MinVersion
+// TLS 1.2, which a 1.2-only client could negotiate.
+func TestServeHTTPSRefusesTLS12(t *testing.T) {
+	sc, err := mtls.SelfSignedServerCert([]string{"127.0.0.1"}, time.Hour)
+	if err != nil {
+		t.Fatalf("SelfSignedServerCert: %v", err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })}
+	go func() { _ = sc.ServeHTTPS(srv, ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	addr := ln.Addr().String()
+
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(sc.TrustPEM) {
+		t.Fatal("could not load TrustPEM")
+	}
+
+	// TLS 1.3 client: succeeds and must negotiate 1.3.
+	ok13 := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS13},
+	}}
+	var resp *http.Response
+	for i := 0; i < 50; i++ {
+		resp, err = ok13.Get("https://" + addr + "/healthz")
+		if err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("TLS 1.3 client never connected: %v", err)
+	}
+	if resp.TLS == nil || resp.TLS.Version != tls.VersionTLS13 {
+		got := uint16(0)
+		if resp.TLS != nil {
+			got = resp.TLS.Version
+		}
+		t.Errorf("negotiated TLS version = 0x%04x, want TLS 1.3 (0x%04x)", got, tls.VersionTLS13)
+	}
+	_ = resp.Body.Close()
+
+	// TLS 1.2-max client: must be refused (handshake fails) since the floor is 1.3.
+	only12 := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12},
+	}}
+	if r, err := only12.Get("https://" + addr + "/healthz"); err == nil {
+		_ = r.Body.Close()
+		t.Errorf("TLS 1.2 client was accepted (status %d); the operator floor must be TLS 1.3 (WIRE-008)", r.StatusCode)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"trustctl.io/trustctl/internal/approval"
 	"trustctl.io/trustctl/internal/auditsink"
 	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/secret"
 )
 
 type link struct {
@@ -79,18 +80,41 @@ func (s *Sharer) View(ctx context.Context, token string) ([]byte, error) {
 		return nil, fmt.Errorf("secretshare: link not found or already consumed")
 	}
 	if l.viewed || s.clock().After(l.expiresAt) {
+		// Self-destruct on expiry/re-view: zeroize the stored bytes before handing the
+		// backing array to the GC (AN-8). A link that expires unviewed must not leave
+		// its secret lingering in freed heap.
+		secret.Wipe(l.secret)
+		l.secret = nil
 		delete(s.links, token)
 		return nil, fmt.Errorf("secretshare: link expired or already viewed")
 	}
 	l.viewed = true
-	secret := l.secret
+	// Move the secret out of the link and return it to the caller. The caller now
+	// owns the only copy; the link's reference is cleared and the entry deleted, so
+	// nothing in this package retains the bytes (AN-8).
+	out := l.secret
+	l.secret = nil
 	shareID := l.shareID
 	delete(s.links, token) // self-destruct on first successful view
 	// Audit the non-secret shareID and a non-reversible hash of the token — never
 	// the token itself, which is the bearer capability (AN-8).
 	_ = auditsink.Emit(ctx, s.audit, nil, "secret.share.viewed", s.tenantID,
 		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
-	return secret, nil
+	return out, nil
+}
+
+// Destroy zeroizes and removes every still-pending shared secret. It is for clean
+// shutdown / eviction: any link that was created but never viewed has its secret
+// bytes wiped before the backing arrays reach the GC (AN-8), closing the window in
+// which an un-redeemed secret lingers in freed heap.
+func (s *Sharer) Destroy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for token, l := range s.links {
+		secret.Wipe(l.secret)
+		l.secret = nil
+		delete(s.links, token)
+	}
 }
 
 // changeIssuer adapts an apply func to approval.Issuer.

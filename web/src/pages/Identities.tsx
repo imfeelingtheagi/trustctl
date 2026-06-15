@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, identityState, type Identity } from "@/lib/api";
+import { api, ApiError, identityState, type Identity } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -7,6 +7,24 @@ import { EmptyState } from "@/components/EmptyState";
 interface Action {
   label: string;
   to: string;
+}
+
+/** isDestructive reports whether a target state is a destructive transition that must
+ * be confirmed before it runs — revoke permanently invalidates the credential, and
+ * retire discards it (SURFACE-007). */
+function isDestructive(to: string): boolean {
+  return to === "revoked" || to === "retired";
+}
+
+/** errorMessage renders an action error, special-casing a 429 so the user sees a
+ * concrete retry hint (Retry-After) instead of a bare failure (SURFACE-007). */
+function errorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.isRateLimited) {
+    return err.retryAfterSeconds != null
+      ? `Rate limited — please retry in ${err.retryAfterSeconds}s.`
+      : "Rate limited — please retry shortly.";
+  }
+  return `Action failed: ${String(err)}`;
 }
 
 /** actionsFor returns the lifecycle actions valid from a state — the UI mirror
@@ -40,6 +58,9 @@ export function Identities() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  // A destructive transition awaiting explicit confirmation (SURFACE-007). null
+  // means no confirmation is pending.
+  const [pending, setPending] = useState<{ id: string; name: string; to: string; label: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -61,10 +82,21 @@ export function Identities() {
       await api.transitionIdentity(id, to, `${to} via UI`);
       await load();
     } catch (err) {
-      setError(`Action failed: ${String(err)}`);
+      setError(errorMessage(err));
     } finally {
       setBusyId(null);
     }
+  }
+
+  /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
+   * which is first parked in `pending` so the user must confirm it in a dialog that
+   * names the credential (SURFACE-007). */
+  function request(id: string, name: string, to: string, label: string) {
+    if (isDestructive(to)) {
+      setPending({ id, name, to, label });
+      return;
+    }
+    void act(id, to);
   }
 
   return (
@@ -91,6 +123,44 @@ export function Identities() {
         <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
           {error}
         </p>
+      )}
+
+      {pending && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="confirm-title"
+          aria-describedby="confirm-desc"
+          className="mb-4 rounded-md border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950"
+        >
+          <h2 id="confirm-title" className="text-sm font-semibold text-red-700 dark:text-red-300">
+            {pending.label} “{pending.name}”?
+          </h2>
+          <p id="confirm-desc" className="mt-1 text-sm text-red-700 dark:text-red-300">
+            {pending.to === "revoked"
+              ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
+              : `Retiring “${pending.name}” discards the credential record. This cannot be undone.`}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-red-400 text-red-700 hover:bg-red-100 dark:text-red-300"
+              disabled={busyId === pending.id}
+              onClick={() => {
+                const p = pending;
+                setPending(null);
+                void act(p.id, p.to);
+              }}
+            >
+              {`Yes, ${pending.label.toLowerCase()}`}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setPending(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
       )}
 
       {!items && <p role="status">Loading identities…</p>}
@@ -131,9 +201,9 @@ export function Identities() {
                           key={a.to}
                           type="button"
                           size="sm"
-                          variant={a.label === "Revoke" ? "outline" : "default"}
+                          variant={isDestructive(a.to) ? "outline" : "default"}
                           disabled={busyId === i.id}
-                          onClick={() => void act(i.id, a.to)}
+                          onClick={() => request(i.id, i.name, a.to, a.label)}
                         >
                           {a.label}
                         </Button>

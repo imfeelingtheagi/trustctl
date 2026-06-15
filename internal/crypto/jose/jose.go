@@ -60,6 +60,47 @@ func verifyRS256(pub *rsa.PublicKey, signingInput, sig string) error {
 
 // ---- JWK Set --------------------------------------------------------------
 
+const (
+	// minRSABits / maxRSABits bound an accepted RSA modulus (FUZZ-006). Below the
+	// minimum a key is too weak to trust; above the maximum a (possibly attacker-
+	// supplied) modulus turns every verification into an unbounded big-int CPU sink.
+	minRSABits = 2048
+	maxRSABits = 8192
+	// maxRSAExponent caps the public exponent. RSA public exponents are small (3,
+	// 17, 65537); an oversized e is nonsensical and, decoded via Int64()/int, could
+	// silently overflow. We require 3 <= e <= maxRSAExponent and e odd.
+	maxRSAExponent = 1 << 31
+	// maxJWKSKeys caps how many keys a single JWKS document may declare (FUZZ-006):
+	// a huge document otherwise drives allocation straight off attacker-controlled
+	// input. A real OIDC jwks_uri carries a handful of keys.
+	maxJWKSKeys = 32
+)
+
+// rsaPublicFromJWK builds and validates an RSA public key from the raw big-endian
+// modulus (nb) and exponent (eb) bytes of a JWK, enforcing the modulus-size and
+// exponent-sanity bounds (FUZZ-006). It is the single chokepoint both the JWKS and
+// the ACME-account-key paths use, so neither can construct an out-of-bounds key.
+func rsaPublicFromJWK(nb, eb []byte) (*rsa.PublicKey, error) {
+	n := new(big.Int).SetBytes(nb)
+	if n.Sign() <= 0 {
+		return nil, errors.New("jose: RSA jwk modulus is zero")
+	}
+	if bits := n.BitLen(); bits < minRSABits || bits > maxRSABits {
+		return nil, fmt.Errorf("jose: RSA jwk modulus is %d bits, outside the accepted %d–%d range", bits, minRSABits, maxRSABits)
+	}
+	e := new(big.Int).SetBytes(eb)
+	// Reject an exponent that does not fit our sane cap before narrowing to int, so
+	// Int64()/int() can never truncate an oversized value into a small one.
+	if e.Sign() <= 0 || e.Cmp(big.NewInt(maxRSAExponent)) > 0 {
+		return nil, fmt.Errorf("jose: RSA jwk exponent out of range (want 3..%d)", maxRSAExponent)
+	}
+	ei := int(e.Int64())
+	if ei < 3 || ei%2 == 0 {
+		return nil, fmt.Errorf("jose: RSA jwk exponent %d invalid (must be odd and >= 3)", ei)
+	}
+	return &rsa.PublicKey{N: n, E: ei}, nil
+}
+
 // JWKSet is a set of public keys keyed by "kid", used to verify JWTs.
 type JWKSet struct {
 	keys map[string]*rsa.PublicKey
@@ -83,6 +124,11 @@ func ParseJWKSet(doc []byte) (*JWKSet, error) {
 	if err := json.Unmarshal(doc, &set); err != nil {
 		return nil, fmt.Errorf("jose: parse jwks: %w", err)
 	}
+	// Cap the declared key count before iterating so a huge document cannot drive
+	// unbounded work/allocation off attacker-controlled input (FUZZ-006).
+	if len(set.Keys) > maxJWKSKeys {
+		return nil, fmt.Errorf("jose: jwks declares %d keys, exceeds the %d-key cap", len(set.Keys), maxJWKSKeys)
+	}
 	out := &JWKSet{keys: make(map[string]*rsa.PublicKey, len(set.Keys))}
 	for _, k := range set.Keys {
 		if k.Kty != "RSA" {
@@ -96,10 +142,11 @@ func ParseJWKSet(doc []byte) (*JWKSet, error) {
 		if err != nil {
 			return nil, fmt.Errorf("jose: jwk %q exponent: %w", k.Kid, err)
 		}
-		out.keys[k.Kid] = &rsa.PublicKey{
-			N: new(big.Int).SetBytes(nb),
-			E: int(new(big.Int).SetBytes(eb).Int64()),
+		pub, err := rsaPublicFromJWK(nb, eb)
+		if err != nil {
+			return nil, fmt.Errorf("jose: jwk %q: %w", k.Kid, err)
 		}
+		out.keys[k.Kid] = pub
 	}
 	if len(out.keys) == 0 {
 		return nil, errors.New("jose: jwks contains no usable RSA keys")

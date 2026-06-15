@@ -34,17 +34,25 @@ type CASpec struct {
 
 // CA is a certificate authority in a hierarchy: its certificate, signing key,
 // chain to the root, and policy. It signs intermediates and end-entity
-// certificates and enforces its constraints.
+// certificates and enforces its constraints. The signing key is held in a locked
+// secret buffer (mlock + MADV_DONTDUMP, AN-8) and reconstructed only for the
+// instant of each signature (CRYPTO-005); the full HSM/signer custody is
+// EXC-CRYPTO-01.
 type CA struct {
 	cert     *x509.Certificate
 	der      []byte
-	key      *ecdsa.PrivateKey
+	key      *lockedKey
 	chainDER [][]byte // this cert first, then ancestors up to the root
 
 	permittedDNS []string
 	maxPathLen   int // remaining sub-CA depth; <0 means unset
 	ekus         []x509.ExtKeyUsage
 }
+
+// Destroy zeroizes and releases this CA's locked signing key. It is idempotent.
+// Callers that retire a CA (or a Manager dropping a CA from memory) should call
+// it so the key material does not linger (AN-8).
+func (c *CA) Destroy() { c.key.destroy() }
 
 const (
 	defaultRootTTL = 10 * 365 * 24 * time.Hour
@@ -61,12 +69,20 @@ func NewRoot(spec CASpec) (*CA, error) {
 	if ttl <= 0 {
 		ttl = defaultRootTTL
 	}
-	der, cert, err := signCACert(spec.CommonName, spec.PermittedDNSDomains, spec.MaxPathLen, spec.EKUs, ttl, nil, nil, &key.PublicKey, key)
+	// Self-signed: the new key signs its own certificate. Wrap it in a locked
+	// buffer first, then sign through the buffer so the unprotected key is parsed
+	// only for the signature (AN-8 / CRYPTO-005).
+	locked, err := newLockedKey(key)
 	if err != nil {
 		return nil, err
 	}
+	der, cert, err := signCACert(spec.CommonName, spec.PermittedDNSDomains, spec.MaxPathLen, spec.EKUs, ttl, nil, locked, locked.public())
+	if err != nil {
+		locked.destroy()
+		return nil, err
+	}
 	return &CA{
-		cert: cert, der: der, key: key, chainDER: [][]byte{der},
+		cert: cert, der: der, key: locked, chainDER: [][]byte{der},
 		permittedDNS: spec.PermittedDNSDomains, maxPathLen: spec.MaxPathLen, ekus: ekusFromStrings(spec.EKUs),
 	}, nil
 }
@@ -98,12 +114,19 @@ func (c *CA) CreateIntermediate(spec CASpec) (*CA, error) {
 	if ttl <= 0 {
 		ttl = defaultCATTL
 	}
-	der, cert, err := signCACert(spec.CommonName, permitted, childPathLen, ekus, ttl, c.cert, c.key, &key.PublicKey, key)
+	locked, err := newLockedKey(key)
 	if err != nil {
 		return nil, err
 	}
+	// Signed by the parent (c): the parent's locked key signs the child's cert over
+	// the child's public key.
+	der, cert, err := signCACert(spec.CommonName, permitted, childPathLen, ekus, ttl, c.cert, c.key, locked.public())
+	if err != nil {
+		locked.destroy()
+		return nil, err
+	}
 	return &CA{
-		cert: cert, der: der, key: key, chainDER: append([][]byte{der}, c.chainDER...),
+		cert: cert, der: der, key: locked, chainDER: append([][]byte{der}, c.chainDER...),
 		permittedDNS: permitted, maxPathLen: childPathLen, ekus: ekusFromStrings(ekus),
 	}, nil
 }
@@ -149,8 +172,12 @@ func (c *CA) IssueLeaf(csrDER []byte, ttl time.Duration) (Issued, error) {
 		ExtKeyUsage:           eku,
 		BasicConstraintsValid: true,
 	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, csr.PublicKey, c.key)
-	if err != nil {
+	var leafDER []byte
+	if err := c.key.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		leafDER, e = x509.CreateCertificate(rand.Reader, tmpl, c.cert, csr.PublicKey, priv)
+		return e
+	}); err != nil {
 		return Issued{}, fmt.Errorf("ca: sign certificate: %w", err)
 	}
 	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
@@ -216,8 +243,12 @@ func (c *CA) CrossSign(otherCertDER []byte) ([]byte, error) {
 		tmpl.MaxPathLen = pathLen
 		tmpl.MaxPathLenZero = pathLen == 0
 	}
-	crossDER, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, other.PublicKey, c.key)
-	if err != nil {
+	var crossDER []byte
+	if err := c.key.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		crossDER, e = x509.CreateCertificate(rand.Reader, tmpl, c.cert, other.PublicKey, priv)
+		return e
+	}); err != nil {
 		return nil, fmt.Errorf("ca: cross-sign: %w", err)
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crossDER}), nil
@@ -298,10 +329,12 @@ func (c *CA) MaxPathLen() int { return c.maxPathLen }
 // PermittedDNSDomains returns the CA's permitted DNS name constraints.
 func (c *CA) PermittedDNSDomains() []string { return c.permittedDNS }
 
-// signCACert builds and signs a CA certificate. When parent/parentKey are nil it
-// is self-signed (a root); otherwise it is signed by the parent (an intermediate
-// or cross-cert).
-func signCACert(commonName string, permitted []string, maxPathLen int, ekus []string, ttl time.Duration, parent *x509.Certificate, parentKey *ecdsa.PrivateKey, pub *ecdsa.PublicKey, selfKey *ecdsa.PrivateKey) ([]byte, *x509.Certificate, error) {
+// signCACert builds and signs a CA certificate. When parent is nil it is
+// self-signed (a root) and the signing key is the new CA's own (passed as
+// signerKey); otherwise it is signed by the parent (an intermediate) whose locked
+// signing key is signerKey. The private key is reconstructed from its locked
+// buffer only for the instant of CreateCertificate (AN-8 / CRYPTO-005).
+func signCACert(commonName string, permitted []string, maxPathLen int, ekus []string, ttl time.Duration, parent *x509.Certificate, signerKey *lockedKey, pub *ecdsa.PublicKey) ([]byte, *x509.Certificate, error) {
 	serial, err := randomSerial()
 	if err != nil {
 		return nil, nil, err
@@ -325,12 +358,16 @@ func signCACert(commonName string, permitted []string, maxPathLen int, ekus []st
 	if e := ekusFromStrings(ekus); len(e) > 0 {
 		tmpl.ExtKeyUsage = e
 	}
-	signer, signerKey := parent, parentKey
-	if signer == nil { // self-signed root
-		signer, signerKey = tmpl, selfKey
+	issuer := parent
+	if issuer == nil { // self-signed root: the template is its own issuer
+		issuer = tmpl
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, signer, pub, signerKey)
-	if err != nil {
+	var der []byte
+	if err := signerKey.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		der, e = x509.CreateCertificate(rand.Reader, tmpl, issuer, pub, priv)
+		return e
+	}); err != nil {
 		return nil, nil, fmt.Errorf("ca: create CA certificate: %w", err)
 	}
 	cert, err := x509.ParseCertificate(der)

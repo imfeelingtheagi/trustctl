@@ -10,6 +10,7 @@ import (
 	_ "crypto/sha512" // register SHA-384 and SHA-512
 	"crypto/x509"
 	"fmt"
+	"math/big"
 )
 
 // SoftwareBackend generates and uses keys with the Go standard library. It is
@@ -97,6 +98,45 @@ func Digest(h Hash, data []byte) ([]byte, error) {
 		return nil, err
 	}
 	return hasher.Sum(nil), nil
+}
+
+// wipeStdlibKey best-effort zeroizes the secret scalars of a transiently-parsed
+// standard-library private key (SIGNER-008). For ECDSA that is D; for RSA it is D
+// and the prime factors / CRT values. It cannot reach copies the runtime may have
+// made (Go gives no such guarantee), so it is defense-in-depth that shrinks the
+// window in which the unprotected key sits in dumpable heap, complementing the
+// signer's process-wide core-dump suppression. The durable fix is HSM custody so
+// the key never materializes here at all (EXC-CRYPTO-01).
+func wipeStdlibKey(key any) {
+	switch k := key.(type) {
+	case *ecdsa.PrivateKey:
+		if k != nil {
+			zeroBigInt(k.D)
+		}
+	case *rsa.PrivateKey:
+		if k == nil {
+			return
+		}
+		zeroBigInt(k.D)
+		for i := range k.Primes {
+			zeroBigInt(k.Primes[i])
+		}
+		zeroBigInt(k.Precomputed.Dp)
+		zeroBigInt(k.Precomputed.Dq)
+		zeroBigInt(k.Precomputed.Qinv)
+	}
+}
+
+// zeroBigInt clears the words backing a *big.Int and sets it to zero.
+func zeroBigInt(n *big.Int) {
+	if n == nil {
+		return
+	}
+	w := n.Bits()
+	for i := range w {
+		w[i] = 0
+	}
+	n.SetInt64(0)
 }
 
 // signDigest signs a pre-computed digest with a standard-library private key.

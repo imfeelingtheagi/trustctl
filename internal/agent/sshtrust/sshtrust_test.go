@@ -45,9 +45,10 @@ const cfgPath = "/etc/ssh/sshd_config"
 
 func newApplier(t *testing.T, fs *memFS, rl Reloader, rec auditsink.Auditor) *Applier {
 	t.Helper()
+	// Deliberately do NOT set AllowUnconfirmedRemoval: the safe default (zero value
+	// false) must require confirmation to remove trust (SIGNER-007).
 	a, err := New("t1", Config{
 		FS: fs, Reloader: rl, SSHDConfigPath: cfgPath, TrustedUserCAKeysPath: trustPath,
-		RequireConfirmationToRemoveTrust: true,
 	}, rec)
 	if err != nil {
 		t.Fatal(err)
@@ -169,5 +170,52 @@ func TestRemoveTrustRequiresConfirmation(t *testing.T) {
 	}
 	if strings.Contains(string(fs.files[trustPath]), caLine) {
 		t.Error("trust line not removed after confirmation")
+	}
+}
+
+// TestZeroValueConfigRequiresConfirmation is the SIGNER-007 acceptance: a
+// default-constructed Config (no AllowUnconfirmedRemoval) must reject an
+// unconfirmed removal. This pins the safe default — the pre-fix code gated on
+// RequireConfirmationToRemoveTrust whose zero value (false) let an unconfirmed
+// removal through, contradicting the project's trust-removal rule.
+func TestZeroValueConfigRequiresConfirmation(t *testing.T) {
+	fs := newMemFS()
+	fs.files[trustPath] = []byte(caLine + "\n")
+	fs.files[cfgPath] = []byte("Port 22\n")
+	// A zero-value Config except for the required wiring; AllowUnconfirmedRemoval is
+	// its zero value (false).
+	a, err := New("t1", Config{
+		FS: fs, Reloader: &fakeReloader{}, SSHDConfigPath: cfgPath, TrustedUserCAKeysPath: trustPath,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.RemoveCATrust(context.Background(), []byte(caLine), false); err == nil {
+		t.Fatal("zero-value Config removed trust without confirmation (SIGNER-007 regression)")
+	}
+	if !strings.Contains(string(fs.files[trustPath]), caLine) {
+		t.Error("trust line removed despite the safe default requiring confirmation")
+	}
+}
+
+// TestAllowUnconfirmedRemovalOptOut confirms the explicit opt-out still works: a
+// Config that deliberately sets AllowUnconfirmedRemoval=true may remove without
+// confirm, for automated teardowns that supply confirmation out of band.
+func TestAllowUnconfirmedRemovalOptOut(t *testing.T) {
+	fs := newMemFS()
+	fs.files[trustPath] = []byte(caLine + "\n")
+	fs.files[cfgPath] = []byte("Port 22\n")
+	a, err := New("t1", Config{
+		FS: fs, Reloader: &fakeReloader{}, SSHDConfigPath: cfgPath, TrustedUserCAKeysPath: trustPath,
+		AllowUnconfirmedRemoval: true,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.RemoveCATrust(context.Background(), []byte(caLine), false); err != nil {
+		t.Fatalf("opt-out removal failed: %v", err)
+	}
+	if strings.Contains(string(fs.files[trustPath]), caLine) {
+		t.Error("trust line not removed under the explicit opt-out")
 	}
 }

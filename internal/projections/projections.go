@@ -361,11 +361,80 @@ func decode(e events.Event, v any) error {
 }
 
 // Project replays the log from the beginning and applies every event to the read
-// model.
+// model. It does NOT consult the projection checkpoint, so it always re-applies
+// from sequence 0; ProjectCatchUp is the bounded boot path. Project remains for
+// tests and for an explicit "apply everything from scratch" caller.
 func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 	return log.Replay(ctx, 0, func(e events.Event) error {
 		return p.Apply(ctx, e)
 	})
+}
+
+// ProjectCatchUp brings the read model up to the head of the log by replaying
+// ONLY the events after the persisted projection checkpoint — the high-water mark
+// of the last sequence already applied (SPINE-007). The relational read model
+// survives a restart in PostgreSQL, so on a warm boot there is nothing (or only a
+// short tail) to re-apply; cold start no longer grows linearly with the lifetime
+// event count.
+//
+// It advances the checkpoint as it applies (every checkpointEvery events and once
+// at the end), so a crash mid-catch-up resumes from roughly where it stopped on
+// the next boot. Applying an event is an idempotent upsert (Apply), so re-applying
+// the last partially-checkpointed batch after a crash is harmless — the watermark
+// is an optimization for WHERE to resume, never a correctness boundary. The log
+// stays the source of truth (AN-2); an explicit Rebuild still re-derives from
+// sequence 0 and resets the checkpoint.
+func (p *Projector) ProjectCatchUp(ctx context.Context, log *events.Log) error {
+	// Serialize the catch-up across replicas under the projection advisory lock
+	// (RESIL-004): N replicas booting at once each run this, and without
+	// coordination they would replay into the same read-model tables concurrently.
+	// The lock makes the second replica wait, then resume from the advanced
+	// checkpoint with little or nothing left to apply, so a non-idempotent apply
+	// ordering cannot interleave between two projectors.
+	return p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		from, err := p.store.ProjectionCheckpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("projections: read checkpoint: %w", err)
+		}
+		var last uint64
+		sinceCheckpoint := 0
+		if err := log.Replay(ctx, from+1, func(e events.Event) error {
+			if err := p.Apply(ctx, e); err != nil {
+				return err
+			}
+			last = e.Sequence
+			sinceCheckpoint++
+			if sinceCheckpoint >= checkpointEvery {
+				if err := p.store.AdvanceProjectionCheckpoint(ctx, last); err != nil {
+					return err
+				}
+				sinceCheckpoint = 0
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if last > 0 {
+			if err := p.store.AdvanceProjectionCheckpoint(ctx, last); err != nil {
+				return fmt.Errorf("projections: advance checkpoint: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// checkpointEvery is how many events ProjectCatchUp applies between watermark
+// advances. A batch keeps the per-event write amplification low while bounding how
+// much a crash forces a re-replay on the next boot.
+const checkpointEvery = 256
+
+// AdvanceCheckpoint moves the projection high-water mark forward to seq (SPINE-007).
+// The tailing projection worker calls it after applying an out-of-band event so the
+// boot catch-up watermark tracks the tail's position. The advance is monotonic
+// (it never rewinds), so it is safe to call with sequences that may already be
+// below the current watermark.
+func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
+	return p.store.AdvanceProjectionCheckpoint(ctx, seq)
 }
 
 // Rebuild discards the event-sourced read model and re-derives it from the whole
@@ -381,9 +450,30 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
 	return p.store.RebuildReadModelTx(ctx, func(tx pgx.Tx) error {
-		return log.Replay(ctx, 0, func(e events.Event) error {
-			return p.applyForRebuild(ctx, tx, e)
-		})
+		// A full rebuild re-derives from sequence 0, so the projection checkpoint
+		// (SPINE-007) is reset to 0 in the SAME transaction as the truncate+replay.
+		// This keeps the watermark consistent with the rebuilt read model: a crash
+		// mid-rebuild rolls back both, and after a successful rebuild the next boot's
+		// ProjectCatchUp resumes from the rebuilt head (advanced below).
+		if err := p.store.ResetProjectionCheckpointTx(ctx, tx); err != nil {
+			return err
+		}
+		var last uint64
+		if err := log.Replay(ctx, 0, func(e events.Event) error {
+			if err := p.applyForRebuild(ctx, tx, e); err != nil {
+				return err
+			}
+			last = e.Sequence
+			return nil
+		}); err != nil {
+			return err
+		}
+		if last > 0 {
+			if err := p.store.SetProjectionCheckpointTx(ctx, tx, last); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

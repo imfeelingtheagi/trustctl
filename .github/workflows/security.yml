@@ -24,18 +24,35 @@ jobs:
   gitleaks:
     name: secret scan (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0 # scan full history, not just the tip
 
-      - name: Install gitleaks (pinned)
+      - name: Install gitleaks (pinned + checksum-verified)
+        env:
+          # SHA-256 of gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz from the
+          # upstream-published gitleaks_${GITLEAKS_VERSION}_checksums.txt. Bumping
+          # GITLEAKS_VERSION requires updating this pin (Dependabot can't, so the
+          # version+hash move together in review). A download that does not match
+          # this exact digest fails the job — we never tar/install unverified bytes
+          # (SUPPLY-006).
+          GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
         run: |
           set -euo pipefail
-          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -fsSL "$url" -o /tmp/gitleaks.tgz
-          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -fsSL "${base}/${file}" -o "/tmp/${file}"
+          # 1) Hard pin: the tarball must match the digest baked above.
+          echo "${GITLEAKS_SHA256}  /tmp/${file}" | sha256sum -c -
+          # 2) Defense-in-depth: that digest must also be the one upstream published
+          #    for this exact file in the release's checksums manifest.
+          curl -fsSL "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o /tmp/gitleaks_checksums.txt
+          grep -E "^${GITLEAKS_SHA256}  ${file}\$" /tmp/gitleaks_checksums.txt \
+            || { echo "::error::pinned GITLEAKS_SHA256 is not the digest upstream published for ${file}"; exit 1; }
+          tar -xzf "/tmp/${file}" -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
 
@@ -48,6 +65,7 @@ jobs:
   image-scan:
     name: container image scan (Trivy)
     runs-on: ubuntu-latest
+    timeout-minutes: 25 # TEST-004 (builds the image, then Trivy-scans it)
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -68,12 +86,19 @@ jobs:
             -f deploy/docker/Dockerfile \
             -t trustctl:ci-scan .
 
-      - name: Install Trivy (pinned)
+      - name: Install Trivy (pinned + checksum-verified)
         run: |
           set -euo pipefail
-          url="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          curl -fsSL "$url" -o /tmp/trivy.tgz
-          tar -xzf /tmp/trivy.tgz -C /tmp trivy
+          file="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          curl -fsSL "${base}/${file}" -o "/tmp/${file}"
+          # Verify the downloaded tarball against the digest upstream published for
+          # this exact release (trivy_<ver>_checksums.txt), pinned by version. A
+          # corrupted or swapped download fails `sha256sum -c` and the job stops —
+          # we never tar/install unverified bytes (SUPPLY-006).
+          curl -fsSL "${base}/trivy_${TRIVY_VERSION}_checksums.txt" -o /tmp/trivy_checksums.txt
+          ( cd /tmp && grep " ${file}\$" trivy_checksums.txt | sha256sum -c - )
+          tar -xzf "/tmp/${file}" -C /tmp trivy
           sudo install -m 0755 /tmp/trivy /usr/local/bin/trivy
           trivy --version
 

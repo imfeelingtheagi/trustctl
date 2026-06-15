@@ -107,14 +107,33 @@ func (s *Service) Verify(sig Signature, digest []byte) error {
 
 // KeylessRequest is a Sigstore/Fulcio-style keyless signing request: a short-lived
 // key signs, bound to a verified OIDC identity (the identity Fulcio would certify).
+//
+// Identity is the VERIFIED attestation (produced by attest.Verifier.Verify), and it
+// is authoritative: SignKeyless derives the signed identity's SAN and issuer from it
+// and refuses to honor a caller-supplied FulcioSAN/FulcioIssuer that contradicts it
+// (PKIGOV-011). FulcioSAN/FulcioIssuer are therefore optional assertions checked
+// against the attestation, not the source of truth.
 type KeylessRequest struct {
 	Principal    string
-	Identity     attest.Attestation // the verified OIDC identity
-	FulcioSAN    string
-	FulcioIssuer string
+	Identity     attest.Attestation  // the verified OIDC identity (authoritative)
+	FulcioSAN    string              // optional; must equal the attestation subject if set
+	FulcioIssuer string              // optional; must equal the attestation's issuer if set
 	Ephemeral    crypto.DigestSigner // short-lived key (Fulcio would certify it)
 	ArtifactType string
 	Digest       []byte
+}
+
+// attestationIssuer derives the OIDC issuer the keyless identity is bound to from a
+// verified attestation: an explicit "oidc_issuer"/"issuer" verified claim wins,
+// otherwise the attestation method (e.g. "github_oidc") names the proof source.
+func attestationIssuer(att attest.Attestation) string {
+	if iss := att.Claims["oidc_issuer"]; iss != "" {
+		return iss
+	}
+	if iss := att.Claims["issuer"]; iss != "" {
+		return iss
+	}
+	return att.Method
 }
 
 // KeylessSignature is a keyless signature bound to a Fulcio identity.
@@ -127,24 +146,47 @@ type KeylessSignature struct {
 	ArtifactType string
 }
 
-// SignKeyless signs keylessly, binding the signature to the verified OIDC identity.
+// SignKeyless signs keylessly, binding the signature to the VERIFIED OIDC identity.
+//
+// The signed identity (SAN + issuer) is DERIVED from the verified attestation
+// (req.Identity), not taken from caller-supplied strings (PKIGOV-011): a request
+// must carry a populated, verified attestation (a non-empty Subject and a non-zero
+// VerifiedAt — what attest.Verifier.Verify stamps). The Fulcio SAN is the
+// attestation's verified Subject and the issuer is derived from it; a caller that
+// also passes FulcioSAN/FulcioIssuer must pass values that MATCH the attestation, or
+// the request is rejected — so a caller can no longer attach an arbitrary SAN.
 func (s *Service) SignKeyless(ctx context.Context, req KeylessRequest) (KeylessSignature, error) {
 	if len(req.Digest) == 0 || req.Ephemeral == nil {
 		return KeylessSignature{}, fmt.Errorf("codesign: keyless request needs a digest and an ephemeral key")
 	}
-	if req.FulcioSAN == "" {
-		return KeylessSignature{}, fmt.Errorf("codesign: keyless signing requires a verified Fulcio identity (SAN)")
+	// The attestation is the source of the identity; it must be a verified one.
+	if req.Identity.Subject == "" || req.Identity.VerifiedAt.IsZero() {
+		return KeylessSignature{}, fmt.Errorf("codesign: keyless signing requires a verified identity attestation (Subject + VerifiedAt)")
 	}
+	san := req.Identity.Subject
+	issuer := attestationIssuer(req.Identity)
+
+	// A caller may assert the SAN/issuer it expects, but it must agree with the
+	// verified attestation — it cannot override it with an arbitrary value.
+	if req.FulcioSAN != "" && req.FulcioSAN != san {
+		_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.refused", s.cfg.TenantID,
+			[]byte(fmt.Sprintf(`{"principal":%q,"reason":"san_mismatch","claimed_san":%q,"verified_san":%q}`, req.Principal, req.FulcioSAN, san)))
+		return KeylessSignature{}, fmt.Errorf("codesign: keyless SAN %q does not match the verified attestation subject %q", req.FulcioSAN, san)
+	}
+	if req.FulcioIssuer != "" && req.FulcioIssuer != issuer {
+		return KeylessSignature{}, fmt.Errorf("codesign: keyless issuer %q does not match the verified attestation issuer %q", req.FulcioIssuer, issuer)
+	}
+
 	value, err := crypto.SignMessage(req.Ephemeral, req.Digest)
 	if err != nil {
 		return KeylessSignature{}, fmt.Errorf("codesign: keyless sign: %w", err)
 	}
 	pub := req.Ephemeral.Public()
 	_ = auditsink.Emit(ctx, s.cfg.Audit, nil, "codesign.keyless.signed", s.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"principal":%q,"fulcio_san":%q,"fulcio_issuer":%q,"artifact_type":%q}`, req.Principal, req.FulcioSAN, req.FulcioIssuer, req.ArtifactType)))
+		[]byte(fmt.Sprintf(`{"principal":%q,"fulcio_san":%q,"fulcio_issuer":%q,"artifact_type":%q}`, req.Principal, san, issuer, req.ArtifactType)))
 	return KeylessSignature{
 		Algorithm: string(pub.Algorithm), Value: value, PublicKeyDER: pub.DER,
-		FulcioSAN: req.FulcioSAN, FulcioIssuer: req.FulcioIssuer, ArtifactType: req.ArtifactType,
+		FulcioSAN: san, FulcioIssuer: issuer, ArtifactType: req.ArtifactType,
 	}, nil
 }
 

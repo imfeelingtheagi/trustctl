@@ -112,13 +112,68 @@ backup**, not a down-migration:
 This is why the backup gate exists: the backup taken before an upgrade **is** the
 rollback path.
 
+## Online-safe migrations on populated tables (expand–contract)
+
+Every migration shipped to date creates each index *in the same migration as its
+own empty table*, so it takes no meaningful lock — the table has no rows and no
+other session is using it. The first migration that must add an index or a column
+to a **large, already-populated** table, or change a live column's type, is
+different: done naively it takes an `ACCESS EXCLUSIVE` lock for the duration of a
+full table rewrite/scan, which stalls every reader and writer of that table — an
+outage on a system of record. Use the patterns below, and the migration-safety
+guard (a CI test over the embedded SQL, `internal/store` `TestMigrationsAreOnlineSafe`)
+will keep you honest: a lock-heavy statement against an existing table must either
+use the online-safe form or carry a one-line `-- online-safe: <reason>` justification
+on the statement.
+
+**Add an index → `CREATE INDEX CONCURRENTLY`.** It builds without blocking writes.
+It cannot run inside a transaction, so the migration that uses it must be a
+**no-transaction migration** (it manages its own statement boundaries) and must be
+written to be re-runnable, because a failed `CONCURRENTLY` build leaves an
+`INVALID` index that the next run must `DROP ... IF EXISTS` and rebuild:
+
+```sql
+-- online-safe: CONCURRENTLY builds without an ACCESS EXCLUSIVE lock; no-tx migration.
+DROP INDEX IF EXISTS certificates_expiry_idx;
+CREATE INDEX CONCURRENTLY certificates_expiry_idx ON certificates (not_after);
+```
+
+**Add a NOT NULL column → add nullable, backfill, then constrain with `NOT VALID`
++ `VALIDATE`.** Adding `NOT NULL` directly (without a constant default) rewrites
+the table under a long lock. Instead add the column nullable, backfill in batches,
+add a `CHECK (col IS NOT NULL) NOT VALID` (a cheap metadata-only lock), then
+`VALIDATE CONSTRAINT` (which scans under a weak `SHARE UPDATE EXCLUSIVE` lock that
+does not block writes):
+
+```sql
+-- 0040: add nullable + backfill (batched in app code or a follow-up).
+ALTER TABLE owners ADD COLUMN IF NOT EXISTS region text;
+-- 0041:
+-- online-safe: NOT VALID adds the constraint without scanning; VALIDATE scans under
+-- a weak lock that does not block writes.
+ALTER TABLE owners ADD CONSTRAINT owners_region_not_null CHECK (region IS NOT NULL) NOT VALID;
+ALTER TABLE owners VALIDATE CONSTRAINT owners_region_not_null;
+```
+
+**Rename or retype a live column → expand–contract, never in place.** A rename or
+`ALTER COLUMN ... TYPE` breaks in-flight queries and rewrites the table. Instead:
+**expand** (add the new column/shape and have the app dual-write), **migrate**
+(backfill), then **contract** (drop the old column) in a *later* release once no
+running version reads it. Each step is its own additive, forward-only migration.
+
+Because trustctl is forward-only, there is no down-migration to undo a bad online
+change — the [pre-migration backup](#forward-only-policy-and-its-safeguard) is the
+only rollback, so rehearse the pattern against a populated copy first.
+
 ## Adding a migration (for contributors)
 
 Add a new numbered file under `internal/store/migrations/` (next integer prefix);
 never edit or renumber an already-shipped migration, since deployments track
 applied versions by number. Keep migrations additive and non-destructive so the
-forward-only policy stays low-risk. Any new persistent table is tenant-scoped with
-row-level security (AN-1) and joins the backup set
+forward-only policy stays low-risk; for a change to a populated table, follow the
+[online-safe patterns above](#online-safe-migrations-on-populated-tables-expandcontract)
+so it does not take a long `ACCESS EXCLUSIVE` lock. Any new persistent table is
+tenant-scoped with row-level security (AN-1) and joins the backup set
 ([Backup & disaster recovery](disaster-recovery.md)).
 
 See [Configuration → Datastores](configuration.md#datastores) for the Postgres

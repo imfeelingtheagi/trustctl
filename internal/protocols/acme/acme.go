@@ -39,9 +39,22 @@ const (
 )
 
 type account struct {
-	id  string // thumbprint
-	url string
-	key *jose.ACMEKey
+	id      string // thumbprint
+	url     string
+	key     *jose.ACMEKey
+	contact []string // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
+	status  string   // "valid" (the only state this server tracks)
+}
+
+// DirectoryMeta is the optional metadata block the ACME directory advertises
+// (RFC 8555 §7.1.1 "meta"). All fields are optional; a zero DirectoryMeta yields the
+// minimal directory. ExternalAccountRequired, when true, also makes the server
+// reject a newAccount that carries no externalAccountBinding (§7.3.4).
+type DirectoryMeta struct {
+	TermsOfService          string   // URL of the current terms of service
+	Website                 string   // URL of a human-readable CA website
+	CAAIdentities           []string // hostnames the CA recognises in CAA records
+	ExternalAccountRequired bool     // require an externalAccountBinding on newAccount
 }
 
 type challenge struct {
@@ -99,6 +112,8 @@ type Server struct {
 	ca        ca.CA
 	validator Validator
 
+	meta DirectoryMeta
+
 	mu         sync.Mutex
 	nonces     map[string]bool
 	accounts   map[string]*account // by URL
@@ -146,6 +161,15 @@ func New(ca ca.CA, validator Validator) *Server {
 	return s
 }
 
+// WithDirectoryMeta sets the directory meta block (RFC 8555 §7.1.1) the server
+// advertises and, if ExternalAccountRequired is set, enables the §7.3.4
+// external-account-binding requirement on newAccount. It returns s for chaining and
+// is safe to call once immediately after New, before serving.
+func (s *Server) WithDirectoryMeta(m DirectoryMeta) *Server {
+	s.meta = m
+	return s
+}
+
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
@@ -186,8 +210,31 @@ func (s *Server) directory(w http.ResponseWriter, r *http.Request) {
 		"keyChange":   base + "/acme/key-change",
 		"revokeCert":  base + "/acme/revoke-cert",
 		"renewalInfo": base + "/acme/renewal-info",
-		"meta":        map[string]any{"termsOfService": base + "/terms"},
+		"meta":        s.directoryMeta(base),
 	})
+}
+
+// directoryMeta renders the RFC 8555 §7.1.1 "meta" object from the configured
+// DirectoryMeta. termsOfService defaults to <base>/terms when unset so existing
+// clients still see a ToS URL; the richer fields (website, caaIdentities,
+// externalAccountRequired) appear only when configured.
+func (s *Server) directoryMeta(base string) map[string]any {
+	meta := map[string]any{}
+	if s.meta.TermsOfService != "" {
+		meta["termsOfService"] = s.meta.TermsOfService
+	} else {
+		meta["termsOfService"] = base + "/terms"
+	}
+	if s.meta.Website != "" {
+		meta["website"] = s.meta.Website
+	}
+	if len(s.meta.CAAIdentities) > 0 {
+		meta["caaIdentities"] = s.meta.CAAIdentities
+	}
+	if s.meta.ExternalAccountRequired {
+		meta["externalAccountRequired"] = true
+	}
+	return meta
 }
 
 func (s *Server) newNonce(w http.ResponseWriter, _ *http.Request) {
@@ -262,25 +309,78 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 	}
 }
 
+// newAccountRequest is the RFC 8555 §7.3 new-account request payload.
+type newAccountRequest struct {
+	Contact                []string        `json:"contact"`
+	TermsOfServiceAgreed   bool            `json:"termsOfServiceAgreed"`
+	OnlyReturnExisting     bool            `json:"onlyReturnExisting"`
+	ExternalAccountBinding json.RawMessage `json:"externalAccountBinding"`
+}
+
 func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, _ *account) {
 	key, err := jose.ACMEKeyFromJWK(msg.Protected.JWK)
 	if err != nil {
 		s.problem(w, r, http.StatusBadRequest, "badPublicKey", err.Error())
 		return
 	}
+
+	// The payload is optional (an empty body is a bare registration), but when
+	// present it must be well-formed JSON.
+	var req newAccountRequest
+	if len(msg.Payload) > 0 {
+		if err := json.Unmarshal(msg.Payload, &req); err != nil {
+			s.problem(w, r, http.StatusBadRequest, "malformed", "cannot parse new-account request")
+			return
+		}
+	}
+
 	thumb := key.Thumbprint()
 	s.mu.Lock()
 	acct := s.byKey[thumb]
-	if acct == nil {
-		acct = &account{id: thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key}
+	existed := acct != nil
+
+	// RFC 8555 §7.3.1: onlyReturnExisting asks the server to look up an existing
+	// account WITHOUT creating one; if none exists it MUST return 400
+	// accountDoesNotExist.
+	if !existed && req.OnlyReturnExisting {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusBadRequest, "accountDoesNotExist", "no account exists for this key")
+		return
+	}
+
+	if !existed {
+		// RFC 8555 §7.3.4: when the CA requires external account binding, a
+		// newAccount that creates an account MUST carry an externalAccountBinding.
+		if s.meta.ExternalAccountRequired && len(req.ExternalAccountBinding) == 0 {
+			s.mu.Unlock()
+			s.problem(w, r, http.StatusBadRequest, "externalAccountRequired", "this CA requires an external account binding")
+			return
+		}
+		acct = &account{
+			id: thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key,
+			contact: req.Contact, status: statusValid,
+		}
 		s.byKey[thumb] = acct
 		s.accounts[acct.url] = acct
+	} else if len(req.Contact) > 0 {
+		// Update contact on a returning registration (§7.3.2 allows contact update).
+		acct.contact = req.Contact
 	}
 	url := acct.url
+	contact := append([]string(nil), acct.contact...)
 	s.mu.Unlock()
 
+	// A returning account is 200 OK; a freshly created one is 201 Created (§7.3.1).
+	code := http.StatusCreated
+	if existed {
+		code = http.StatusOK
+	}
 	w.Header().Set("Location", url)
-	writeJSON(w, http.StatusCreated, map[string]any{"status": statusValid, "orders": url + "/orders"})
+	body := map[string]any{"status": statusValid, "orders": url + "/orders"}
+	if len(contact) > 0 {
+		body["contact"] = contact
+	}
+	writeJSON(w, code, body)
 }
 
 func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {

@@ -12,6 +12,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"trustctl.io/trustctl/internal/auditsink"
@@ -87,7 +89,13 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 		_ = auditsink.Emit(ctx, m.cfg.Audit, nil, "auth.rejected", m.cfg.TenantID, []byte(fmt.Sprintf(`{"method":%q}`, method)))
 		return Session{}, fmt.Errorf("authmethod: %s authentication failed: %w", method, err)
 	}
-	idb, _ := crypto.RandomBytes(16)
+	// Fail closed on an RNG failure: a discarded error would leave idb as 16 zero
+	// bytes and mint an all-zero, guessable, non-unique session ID. Propagate it
+	// instead so no session is issued (GAP-008).
+	idb, err := crypto.RandomBytes(16)
+	if err != nil {
+		return Session{}, fmt.Errorf("authmethod: generate session id: %w", err)
+	}
 	now := m.cfg.Clock()
 	sess := Session{
 		ID: hex.EncodeToString(idb), TenantID: m.cfg.TenantID, Principal: principal,
@@ -98,40 +106,99 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 	return sess, nil
 }
 
-// TokenMethod authenticates a bearer token of the form "<principal>.<hexHMAC>",
-// where the MAC is HMAC-SHA256(secret, principal) (computed via the crypto
-// boundary). Scopes are looked up per principal.
+// TokenMethod authenticates a bearer token whose canonical form is
+// "<principal>.<expUnix>.<hexHMAC>", where the MAC is
+// HMAC-SHA256(secret, principal+"."+expUnix) computed via the crypto boundary, and
+// expUnix is the token's expiry as a Unix-seconds integer. Binding the expiry into
+// the MAC means a captured token stops working at expUnix and the expiry cannot be
+// tampered without the secret (GAP-008). Scopes are looked up per principal.
+//
+// The legacy two-field form "<principal>.<hexHMAC>" (MAC over the principal alone)
+// has no expiry and is therefore an indefinite, replayable credential; it is
+// rejected unless AllowUnexpiring is set, so the default is fail-closed against
+// never-expiring tokens.
 type TokenMethod struct {
 	Secret []byte
 	Scopes map[string][]string
+	// AllowUnexpiring, when true, accepts the legacy two-field form with no expiry.
+	// Leave it false (the default) so every accepted token is expiry-bound.
+	AllowUnexpiring bool
+	// Clock overrides the expiry comparison clock (tests); nil selects time.Now.
+	Clock func() time.Time
 }
 
 // Name implements Method.
 func (TokenMethod) Name() string { return "token" }
 
+// Issue mints a canonical, expiry-bound token for principal valid until expiresAt.
+// The returned string is "<principal>.<expUnix>.<hexHMAC>"; presenting it after
+// expiresAt is rejected by Authenticate. principal must not contain a '.' (it is
+// the MAC-covered field separator).
+func (t TokenMethod) Issue(principal string, expiresAt time.Time) (string, error) {
+	if principal == "" || strings.ContainsRune(principal, '.') {
+		return "", fmt.Errorf("authmethod: token principal must be non-empty and contain no '.'")
+	}
+	exp := strconv.FormatInt(expiresAt.Unix(), 10)
+	mac := crypto.HMACSHA256(t.Secret, []byte(principal+"."+exp))
+	return principal + "." + exp + "." + hex.EncodeToString(mac), nil
+}
+
 // Authenticate implements Method.
 func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
 	s := string(credential)
-	dot := -1
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == '.' {
-			dot = i
-			break
+	parts := strings.Split(s, ".")
+	switch len(parts) {
+	case 3:
+		// Canonical expiry-bound form: principal.expUnix.hexHMAC.
+		principal, expStr, macHex := parts[0], parts[1], parts[2]
+		if principal == "" || expStr == "" {
+			return "", nil, fmt.Errorf("malformed token")
 		}
-	}
-	if dot <= 0 {
+		exp, err := strconv.ParseInt(expStr, 10, 64)
+		if err != nil {
+			return "", nil, fmt.Errorf("malformed token expiry")
+		}
+		mac, err := hex.DecodeString(macHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("malformed token MAC")
+		}
+		// Verify the MAC over principal+"."+expStr BEFORE trusting the expiry, so a
+		// tampered expiry fails the constant-time MAC check rather than extending the
+		// token's life.
+		want := crypto.HMACSHA256(t.Secret, []byte(principal+"."+expStr))
+		if !crypto.ConstantTimeEqual(mac, want) {
+			return "", nil, fmt.Errorf("invalid token")
+		}
+		now := time.Now
+		if t.Clock != nil {
+			now = t.Clock
+		}
+		if !now().Before(time.Unix(exp, 0)) {
+			return "", nil, fmt.Errorf("token expired")
+		}
+		return principal, t.Scopes[principal], nil
+	case 2:
+		// Legacy unbounded form: principal.hexHMAC (MAC over the principal only). It
+		// never expires, so accept it only when the operator has opted in.
+		if !t.AllowUnexpiring {
+			return "", nil, fmt.Errorf("unexpiring token rejected (set AllowUnexpiring to accept the legacy form)")
+		}
+		principal, macHex := parts[0], parts[1]
+		if principal == "" {
+			return "", nil, fmt.Errorf("malformed token")
+		}
+		mac, err := hex.DecodeString(macHex)
+		if err != nil {
+			return "", nil, fmt.Errorf("malformed token MAC")
+		}
+		want := crypto.HMACSHA256(t.Secret, []byte(principal))
+		if !crypto.ConstantTimeEqual(mac, want) {
+			return "", nil, fmt.Errorf("invalid token")
+		}
+		return principal, t.Scopes[principal], nil
+	default:
 		return "", nil, fmt.Errorf("malformed token")
 	}
-	principal, macHex := s[:dot], s[dot+1:]
-	mac, err := hex.DecodeString(macHex)
-	if err != nil {
-		return "", nil, fmt.Errorf("malformed token MAC")
-	}
-	want := crypto.HMACSHA256(t.Secret, []byte(principal))
-	if !crypto.ConstantTimeEqual(mac, want) {
-		return "", nil, fmt.Errorf("invalid token")
-	}
-	return principal, t.Scopes[principal], nil
 }
 
 // OIDCMethod authenticates an OIDC/JWT credential against a JWKS (reusing the

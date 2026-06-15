@@ -1,0 +1,128 @@
+package signing
+
+import (
+	"net"
+	"testing"
+	"time"
+)
+
+// fakeListener feeds pre-made conns to Accept so the peer-uid gate can be exercised
+// without a real Unix socket.
+type fakeListener struct {
+	conns chan net.Conn
+}
+
+func (f *fakeListener) Accept() (net.Conn, error) { return <-f.conns, nil }
+func (f *fakeListener) Close() error              { return nil }
+func (f *fakeListener) Addr() net.Addr            { return dummyAddr{} }
+
+type dummyAddr struct{}
+
+func (dummyAddr) Network() string { return "fake" }
+func (dummyAddr) String() string  { return "fake" }
+
+// closeSpyConn wraps a net.Conn to record whether it was closed (i.e. rejected).
+type closeSpyConn struct {
+	net.Conn
+	closed chan struct{}
+}
+
+func (c *closeSpyConn) Close() error {
+	select {
+	case <-c.closed:
+	default:
+		close(c.closed)
+	}
+	return c.Conn.Close()
+}
+
+// TestPeerAuthListenerRejectsMismatchedUID is the SIGNER-006 acceptance: a peer
+// whose resolved uid does not match the allowed uid is closed by the listener and
+// never returned to Accept's caller (so it never reaches a signer handler). The
+// rejection branch was previously untested. A second, matching connection lets
+// Accept make progress, so we can assert both that the mismatched conn was closed
+// and that only the matching one is returned.
+func TestPeerAuthListenerRejectsMismatchedUID(t *testing.T) {
+	fl := &fakeListener{conns: make(chan net.Conn, 2)}
+
+	server, client := net.Pipe()
+	defer client.Close()
+	spy := &closeSpyConn{Conn: server, closed: make(chan struct{})}
+
+	matching, mclient := net.Pipe()
+	defer mclient.Close()
+	defer matching.Close()
+
+	// First conn (the spy) resolves to a non-matching uid; the second matches.
+	uids := map[net.Conn]int{spy: 1234, matching: 1000}
+	l := &peerAuthListener{
+		Listener:   fl,
+		allowedUID: 1000,
+		peerUID:    func(c net.Conn) (int, bool) { return uids[c], true },
+	}
+
+	fl.conns <- spy      // mismatched uid -> must be closed, skipped
+	fl.conns <- matching // matching uid -> returned
+
+	got, err := l.Accept()
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	if got != matching {
+		t.Fatal("Accept returned the wrong connection; the mismatched-uid conn must be skipped")
+	}
+	select {
+	case <-spy.closed:
+		// Good: the mismatched-uid connection was closed (rejected).
+	case <-time.After(2 * time.Second):
+		t.Fatal("mismatched-uid connection was not closed by the listener (SIGNER-006)")
+	}
+}
+
+// TestPeerAuthListenerAcceptsMatchingUID confirms the allow path: a matching uid is
+// returned to the caller unclosed.
+func TestPeerAuthListenerAcceptsMatchingUID(t *testing.T) {
+	fl := &fakeListener{conns: make(chan net.Conn, 1)}
+	l := &peerAuthListener{
+		Listener:   fl,
+		allowedUID: 1000,
+		peerUID:    func(net.Conn) (int, bool) { return 1000, true },
+	}
+	server, client := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	fl.conns <- server
+
+	got, err := l.Accept()
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	if got != server {
+		t.Fatal("Accept did not return the matching-uid connection")
+	}
+}
+
+// TestPeerAuthListenerAcceptsWhenUIDUndeterminable documents the WIRE-009 fallback:
+// when peerUID returns ok=false (the non-Linux case), the connection is accepted —
+// filesystem permissions remain the access control. This pins the documented
+// behavior so a change to it is deliberate.
+func TestPeerAuthListenerAcceptsWhenUIDUndeterminable(t *testing.T) {
+	fl := &fakeListener{conns: make(chan net.Conn, 1)}
+	l := &peerAuthListener{
+		Listener:   fl,
+		allowedUID: 1000,
+		peerUID:    func(net.Conn) (int, bool) { return 0, false }, // undeterminable (non-Linux)
+	}
+	server, client := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	fl.conns <- server
+
+	got, err := l.Accept()
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	if got != server {
+		t.Fatal("Accept should accept when the peer uid is undeterminable (WIRE-009 fallback)")
+	}
+}

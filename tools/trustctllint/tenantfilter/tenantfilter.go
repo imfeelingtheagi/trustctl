@@ -538,7 +538,15 @@ func stripSQLComments(s string) string {
 // tenant_id (e.g. the migration ledger). This is the sanctioned escape hatch —
 // a fix to the rule itself, not a per-line ignore — and is extended only here,
 // with a test fixture.
-var systemTables = []string{"schema_migrations"}
+var systemTables = []string{
+	"schema_migrations",
+	// projection_checkpoint is the single-row global read-model high-water mark
+	// (SPINE-007): the event-stream sequence is global and monotonic, so the
+	// watermark is one number for the whole deployment, not per tenant. It is
+	// owned by the system role and never read under a tenant RLS context, like
+	// schema_migrations.
+	"projection_checkpoint",
+}
 
 // referencesSystemTable reports whether a query targets a known system table.
 func referencesSystemTable(s string) bool {

@@ -7,14 +7,36 @@
 # exactly the code path you use when pointing trustctl at your own managed
 # Postgres/NATS. To do that, override TRUSTCTL_POSTGRES_DSN and TRUSTCTL_NATS_URL
 # (and drop the bundled postgres/nats services).
+#
+# ============================================================================
+#  NOT FOR PRODUCTION — EVALUATION ONLY (OPS-007).
+#  This file bakes a STATIC Postgres user/password (trustctl/trustctl) and
+#  connects with sslmode=disable so the stack comes up with zero setup. Both are
+#  fine for a throwaway local eval and unacceptable in production:
+#    * the DB credentials are public and identical for every reader of this repo;
+#    * sslmode=disable sends the DSN's password and all query traffic in the clear.
+#  For a real deployment use the Helm chart (deploy/helm/trustctl), which sources
+#  the Postgres DSN and the KEK from a Kubernetes Secret (kek.generate=true mints
+#  a random KEK; helm-lint requires sslmode=require). To harden THIS compose
+#  stack instead, set a generated password and require TLS, e.g.:
+#    printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > deploy/docker/.env
+#  then reference ${POSTGRES_PASSWORD} below and switch the DSN to sslmode=require
+#  with the server's CA mounted. See docs/limitations.md / the Helm Secret path.
+# ============================================================================
 
 name: trustctl
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # Pinned by digest, not a floating tag, so the eval stack is reproducible and
+    # cannot silently inherit a changed/ vulnerable image (SUPPLY-008). Dependabot's
+    # docker updater (directory /deploy/docker) bumps this in place. Tag for humans:
+    # postgres:16-alpine.
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     environment:
       POSTGRES_DB: trustctl
+      # EVAL-ONLY static credentials (OPS-007): public and identical for everyone.
+      # Never reuse these in production — see the banner at the top of this file.
       POSTGRES_USER: trustctl
       POSTGRES_PASSWORD: trustctl
     volumes:
@@ -26,7 +48,8 @@ services:
       retries: 20
 
   nats:
-    image: nats:2.10-alpine
+    # Digest-pinned (SUPPLY-008); tag for humans: nats:2.10-alpine.
+    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
     # JetStream is the event spine (AN-2), file-backed under /data.
     command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
     volumes:
@@ -71,6 +94,11 @@ services:
       TRUSTCTL_SERVER_ADDR: ":8443"
       # External-datastore configuration (the tested external path).
       TRUSTCTL_POSTGRES_MODE: external
+      # EVAL ONLY — do not reuse these credentials or sslmode=disable in production
+      # (OPS-007). The static trustctl:trustctl password is public, and
+      # sslmode=disable sends it (and all traffic) in the clear. Production should
+      # source the DSN from a Secret and use sslmode=require with the server's CA —
+      # the Helm chart (deploy/helm/trustctl) does exactly this. See the file banner.
       TRUSTCTL_POSTGRES_DSN: "postgres://trustctl:trustctl@postgres:5432/trustctl?sslmode=disable"
       TRUSTCTL_NATS_MODE: external
       TRUSTCTL_NATS_URL: "nats://nats:4222"

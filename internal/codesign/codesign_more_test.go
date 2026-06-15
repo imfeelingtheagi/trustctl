@@ -37,7 +37,9 @@ func TestCodesignKeylessValidation(t *testing.T) {
 	if _, err := svc.SignKeyless(ctx, KeylessRequest{Ephemeral: eph, FulcioSAN: "san", Digest: nil}); err == nil {
 		t.Error("empty digest accepted")
 	}
-	if _, err := svc.SignKeyless(ctx, KeylessRequest{Ephemeral: eph, Digest: crypto.SHA256Sum([]byte("x"))}); err == nil {
-		t.Error("missing Fulcio SAN accepted")
+	// PKIGOV-011: a keyless request with NO verified attestation (no Subject /
+	// VerifiedAt) must be rejected — the identity cannot be caller-asserted.
+	if _, err := svc.SignKeyless(ctx, KeylessRequest{Ephemeral: eph, FulcioSAN: "san", Digest: crypto.SHA256Sum([]byte("x"))}); err == nil {
+		t.Error("keyless signing accepted with no verified attestation (identity must be verified)")
 	}
 }

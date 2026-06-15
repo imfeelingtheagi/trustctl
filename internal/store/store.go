@@ -56,9 +56,22 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 // Close releases the connection pool.
 func (s *Store) Close() { s.pool.Close() }
 
-// Pool exposes the underlying pool for system (cross-tenant, RLS-bypassing)
-// operations such as migrations and projection writes.
-func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+// SystemPool exposes the underlying connection pool for SYSTEM operations only:
+// cross-tenant, RLS-BYPASSING work such as migrations, projection writes, and the
+// outbox/idempotency sweepers. Queries run through this pool are NOT confined by
+// row-level security (the pool connects as the table owner), so a tenant-scoped
+// query must NEVER use it — use WithTenant instead, which assumes the RLS role and
+// sets the tenant GUC. The name is deliberately explicit (TENANT-005): a reader or
+// reviewer can grep for SystemPool to find every RLS-bypassing access site and
+// confirm each is a legitimate system path, not a leaked tenant query.
+func (s *Store) SystemPool() *pgxpool.Pool { return s.pool }
+
+// Pool is a deprecated alias for SystemPool, retained for existing call sites
+// (mostly test setup that is itself system-scoped). New code must call SystemPool
+// so the RLS-bypassing intent is explicit at the call site (TENANT-005).
+//
+// Deprecated: use SystemPool.
+func (s *Store) Pool() *pgxpool.Pool { return s.SystemPool() }
 
 // WithTenant runs fn in a transaction scoped to tenantID: it assumes the RLS
 // role and sets the trustctl.tenant_id session variable, so row-level security

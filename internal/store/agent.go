@@ -25,7 +25,7 @@ func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
 			 VALUES ($1, $2, $3, $4, $5, $6)
-			 ON CONFLICT (id) DO UPDATE
+			 ON CONFLICT (tenant_id, id) DO UPDATE
 			    SET name = EXCLUDED.name, status = EXCLUDED.status,
 			        version = EXCLUDED.version, last_seen_at = EXCLUDED.last_seen_at`,
 			a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)

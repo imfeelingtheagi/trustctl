@@ -39,6 +39,7 @@ jobs:
   test:
     name: re-run test suite (gate the release)
     runs-on: ubuntu-latest
+    timeout-minutes: 40 # TEST-004
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -64,6 +65,7 @@ jobs:
   image:
     name: build / sign / publish
     runs-on: ubuntu-latest
+    timeout-minutes: 40 # TEST-004 (multi-arch build + sign + SBOM)
     # Do not build/sign/publish off an untested ref (TEST-005): block on the suite.
     needs: test
     env:
@@ -218,6 +220,7 @@ jobs:
   agent-windows:
     name: agent / windows sign + publish
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # TEST-004
     # Do not build/sign/publish the privileged agent off an untested ref (TEST-005).
     needs: test
     env:
@@ -286,3 +289,70 @@ jobs:
             dist/trustctl-agent.exe
             dist/trustctl-agent.msi
             dist/SHA256SUMS
+
+  # Package the control-plane Helm chart and SIGN it so an operator can verify the
+  # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
+  # We push the packaged chart as an OCI artifact to GHCR and cosign-sign it keyless
+  # (the same OIDC identity that signs the image), so `cosign verify` validates the
+  # chart with the documented identity regexp. Gated on the test suite like every
+  # other publishing job (never ship off an untested ref, TEST-005).
+  helm-chart:
+    name: helm chart / package + sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    needs: test
+    env:
+      CHART_OCI: oci://ghcr.io/${{ github.repository }}/charts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package the chart
+        id: pkg
+        run: |
+          set -euo pipefail
+          helm package deploy/helm/trustctl --destination dist
+          tgz="$(ls dist/trustctl-*.tgz)"
+          echo "tgz=${tgz}" >> "$GITHUB_OUTPUT"
+          # Publish the chart's SHA-256 alongside it (a fork without GHCR push can
+          # still verify the artifact bytes against this digest).
+          ( cd dist && sha256sum "$(basename "$tgz")" > "$(basename "$tgz").sha256" )
+
+      - name: Push the chart to GHCR (OCI) and cosign-sign it (keyless)
+        env:
+          COSIGN_YES: "true"
+          HELM_EXPERIMENTAL_OCI: "1"
+        run: |
+          set -euo pipefail
+          push_out="$(helm push '${{ steps.pkg.outputs.tgz }}' "${CHART_OCI}" 2>&1)"
+          echo "${push_out}"
+          # helm push prints the pushed Digest; sign the chart by that digest so the
+          # signature is bound to the exact bytes (cosign verify <ref> validates it).
+          digest="$(echo "${push_out}" | awk '/Digest:/ {print $2}')"
+          repo="${CHART_OCI#oci://}/trustctl"
+          cosign sign "${repo}@${digest}"
+
+      - name: Upload packaged chart as a release artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trustctl-helm-chart
+          path: |
+            dist/trustctl-*.tgz
+            dist/trustctl-*.tgz.sha256

@@ -21,12 +21,18 @@ import (
 	"time"
 )
 
-// Authority is a self-signed X.509 certificate authority.
+// Authority is a self-signed X.509 certificate authority. Its signing key is held
+// in a locked secret buffer (mlock + MADV_DONTDUMP, AN-8) and reconstructed only
+// for the instant of each signature (CRYPTO-005); the full HSM/signer custody is
+// EXC-CRYPTO-01.
 type Authority struct {
 	cert *x509.Certificate
 	der  []byte
-	key  *ecdsa.PrivateKey
+	key  *lockedKey
 }
+
+// Destroy zeroizes and releases the Authority's locked signing key. Idempotent.
+func (a *Authority) Destroy() { a.key.destroy() }
 
 // Issued is the crypto-free result of issuing a certificate: the leaf followed by
 // the issuing CA certificate, PEM-encoded, plus the leaf's serial and expiry.
@@ -57,15 +63,25 @@ func NewAuthority(commonName string) (*Authority, error) {
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	locked, err := newLockedKey(key)
 	if err != nil {
+		return nil, err
+	}
+	var der []byte
+	if err := locked.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		der, e = x509.CreateCertificate(rand.Reader, tmpl, tmpl, locked.public(), priv)
+		return e
+	}); err != nil {
+		locked.destroy()
 		return nil, err
 	}
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
+		locked.destroy()
 		return nil, err
 	}
-	return &Authority{cert: cert, der: der, key: key}, nil
+	return &Authority{cert: cert, der: der, key: locked}, nil
 }
 
 // CertificatePEM returns the CA certificate in PEM form.
@@ -103,8 +119,12 @@ func (a *Authority) IssueFromCSR(csrDER []byte, ttl time.Duration) (Issued, erro
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, tmpl, a.cert, csr.PublicKey, a.key)
-	if err != nil {
+	var leafDER []byte
+	if err := a.key.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		leafDER, e = x509.CreateCertificate(rand.Reader, tmpl, a.cert, csr.PublicKey, priv)
+		return e
+	}); err != nil {
 		return Issued{}, fmt.Errorf("ca: sign certificate: %w", err)
 	}
 	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})

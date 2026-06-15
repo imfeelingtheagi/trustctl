@@ -1,6 +1,7 @@
 package ca
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
 	"fmt"
@@ -67,7 +68,15 @@ func (c *CA) SignOCSP(status, serialHex string, thisUpdate, nextUpdate, revokedA
 		tmpl.RevokedAt = revokedAt.UTC()
 		tmpl.RevocationReason = reason
 	}
-	return ocsp.CreateResponse(c.cert, c.cert, tmpl, c.key)
+	var out []byte
+	if err := c.key.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		out, e = ocsp.CreateResponse(c.cert, c.cert, tmpl, priv)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // CreateCRL builds and signs a CRL listing the revoked serials, numbered number
@@ -91,7 +100,15 @@ func (c *CA) CreateCRL(revoked []RevokedSerial, number int64, thisUpdate, nextUp
 		NextUpdate:                nextUpdate.UTC(),
 		RevokedCertificateEntries: entries,
 	}
-	return x509.CreateRevocationList(rand.Reader, tmpl, c.cert, c.key)
+	var out []byte
+	if err := c.key.sign(func(priv *ecdsa.PrivateKey) error {
+		var e error
+		out, e = x509.CreateRevocationList(rand.Reader, tmpl, c.cert, priv)
+		return e
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // BuildOCSPRequest builds an OCSP request (DER) for a leaf certificate under its

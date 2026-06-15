@@ -93,6 +93,59 @@ func TestExpiredLinkReturnsNothing(t *testing.T) {
 	}
 }
 
+// TestExpiredLinkZeroizesSecret is the GAP-007 acceptance: when a link expires and
+// is reaped on View, the stored secret bytes are zeroized before the backing array
+// is handed to the GC (AN-8), not merely delete()d from the map. Pre-fix the expiry
+// path only delete()d the entry, leaving the bytes intact in freed heap.
+func TestExpiredLinkZeroizesSecret(t *testing.T) {
+	now := time.Now()
+	clock := func() time.Time { return now }
+	s := New("t1", nil, clock)
+	tok, _ := s.Create(context.Background(), []byte("zero-me-secret"), time.Minute)
+
+	// Capture the link's backing array (white-box, same package).
+	s.mu.Lock()
+	backing := s.links[tok].secret
+	s.mu.Unlock()
+	if allZero(backing) {
+		t.Fatal("stored secret was already zero before expiry (test setup wrong)")
+	}
+
+	now = now.Add(2 * time.Minute) // past expiry
+	if _, err := s.View(context.Background(), tok); err == nil {
+		t.Fatal("expired link returned a secret")
+	}
+	if !allZero(backing) {
+		t.Errorf("expired link did not zeroize its stored secret: %v", backing)
+	}
+}
+
+// TestDestroyZeroizesPendingSecrets is the GAP-007 acceptance for shutdown/eviction:
+// Destroy zeroizes every still-pending (un-viewed) shared secret.
+func TestDestroyZeroizesPendingSecrets(t *testing.T) {
+	s := New("t1", nil, nil)
+	tok, _ := s.Create(context.Background(), []byte("pending-secret"), time.Hour)
+	s.mu.Lock()
+	backing := s.links[tok].secret
+	s.mu.Unlock()
+	s.Destroy()
+	if len(s.links) != 0 {
+		t.Error("Destroy did not clear links")
+	}
+	if !allZero(backing) {
+		t.Errorf("Destroy did not zeroize pending secret: %v", backing)
+	}
+}
+
+func allZero(b []byte) bool {
+	for _, x := range b {
+		if x != 0 {
+			return false
+		}
+	}
+	return len(b) > 0
+}
+
 func TestSecretChangeRequiresApproval(t *testing.T) {
 	ctx := context.Background()
 	applied := false

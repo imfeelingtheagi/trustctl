@@ -54,8 +54,13 @@ func (l *LockedSigner) Algorithm() Algorithm { return l.algorithm }
 // Public returns the public key.
 func (l *LockedSigner) Public() PublicKey { return l.public }
 
-// SignDigest parses the locked private key, signs digest, and lets the parsed
-// key go out of scope immediately.
+// SignDigest parses the locked private key, signs digest, and lets the parsed key
+// go out of scope immediately. The transiently-parsed standard-library key is
+// best-effort zeroized before return (wipeStdlibKey) so the unprotected copy does
+// not outlive the single signature — narrowing the AN-8 residual window the design
+// documents (SIGNER-008). Go offers no guarantee the runtime did not already copy
+// the value, so this is defense-in-depth on top of the signer's process-wide
+// RLIMIT_CORE=0 / PR_SET_DUMPABLE=0; the durable fix is HSM custody (EXC-CRYPTO-01).
 func (l *LockedSigner) SignDigest(digest []byte, opts SignOptions) ([]byte, error) {
 	der := l.der.Bytes()
 	if der == nil {
@@ -65,6 +70,7 @@ func (l *LockedSigner) SignDigest(digest []byte, opts SignOptions) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("parse private key: %w", err)
 	}
+	defer wipeStdlibKey(key)
 	signer, ok := key.(crypto.Signer)
 	if !ok {
 		return nil, fmt.Errorf("crypto: parsed key %T is not a signer", key)

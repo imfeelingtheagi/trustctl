@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"trustctl.io/trustctl/internal/attest"
 	"trustctl.io/trustctl/internal/auditsink"
@@ -72,10 +73,18 @@ func TestCodesignKeylessFulcioBound(t *testing.T) {
 	defer eph.Destroy()
 	svc, _ := New(Config{TenantID: "t1", Keys: keyMap{m: map[string]crypto.DigestSigner{}}})
 	digest := crypto.SHA256Sum([]byte("image-manifest"))
+	// The verified attestation is authoritative: its Subject is the SAN and its
+	// oidc_issuer claim is the issuer (PKIGOV-011). The caller may echo them, but
+	// they must match the attestation.
+	san := "https://github.com/acme/x/.github/workflows/release.yml@refs/heads/main"
 	sig, err := svc.SignKeyless(context.Background(), KeylessRequest{
-		Principal:    "ci",
-		Identity:     attest.Attestation{Method: "github_oidc", Subject: "repo:acme/x:ref:refs/heads/main"},
-		FulcioSAN:    "https://github.com/acme/x/.github/workflows/release.yml@refs/heads/main",
+		Principal: "ci",
+		Identity: attest.Attestation{
+			Method: "github_oidc", Subject: san,
+			Claims:     map[string]string{"oidc_issuer": "https://token.actions.githubusercontent.com"},
+			VerifiedAt: time.Now(),
+		},
+		FulcioSAN:    san,
 		FulcioIssuer: "https://token.actions.githubusercontent.com",
 		Ephemeral:    eph, ArtifactType: "oci-image", Digest: digest,
 	})
@@ -85,7 +94,60 @@ func TestCodesignKeylessFulcioBound(t *testing.T) {
 	if err := svc.VerifyKeyless(sig, digest); err != nil {
 		t.Fatalf("keyless verify: %v", err)
 	}
-	if sig.FulcioSAN == "" || sig.FulcioIssuer == "" {
-		t.Error("keyless signature not bound to a Fulcio identity")
+	// The signature is bound to the ATTESTATION's identity, not a caller-asserted one.
+	if sig.FulcioSAN != san {
+		t.Errorf("keyless SAN = %q, want the verified attestation subject %q", sig.FulcioSAN, san)
+	}
+	if sig.FulcioIssuer != "https://token.actions.githubusercontent.com" {
+		t.Errorf("keyless issuer = %q, want the verified attestation issuer", sig.FulcioIssuer)
+	}
+}
+
+// TestCodesignKeylessRejectsForgedSAN is the PKIGOV-011 acceptance: SignKeyless must
+// reject a request whose caller-supplied FulcioSAN does NOT match the verified
+// attestation subject — a caller cannot attach an arbitrary SAN to a keyless
+// signature. Pre-fix SignKeyless ignored req.Identity entirely and trusted
+// FulcioSAN, so an attacker-chosen SAN was honored. The refusal is audited.
+func TestCodesignKeylessRejectsForgedSAN(t *testing.T) {
+	eph, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer eph.Destroy()
+	rec := &auditsink.Recorder{}
+	svc, _ := New(Config{TenantID: "t1", Keys: keyMap{m: map[string]crypto.DigestSigner{}}, Audit: rec})
+	digest := crypto.SHA256Sum([]byte("artifact"))
+
+	// The attestation verifies identity "repo:acme/real", but the caller claims a
+	// SAN for a DIFFERENT repo. The mismatch must be rejected.
+	_, err := svc.SignKeyless(context.Background(), KeylessRequest{
+		Principal: "ci",
+		Identity: attest.Attestation{
+			Method: "github_oidc", Subject: "repo:acme/real:ref:refs/heads/main",
+			VerifiedAt: time.Now(),
+		},
+		FulcioSAN: "repo:attacker/forged:ref:refs/heads/main",
+		Ephemeral: eph, ArtifactType: "blob", Digest: digest,
+	})
+	if err == nil {
+		t.Fatal("SignKeyless accepted a FulcioSAN that does not match the verified attestation (PKIGOV-011)")
+	}
+	if rec.Count("codesign.keyless.refused") != 1 {
+		t.Errorf("keyless SAN-mismatch refusal not audited (got %d)", rec.Count("codesign.keyless.refused"))
+	}
+
+	// With the SAN omitted (deriving it from the attestation) the SAME request
+	// succeeds and binds to the VERIFIED subject — proving the attestation, not the
+	// caller, is authoritative.
+	sig, err := svc.SignKeyless(context.Background(), KeylessRequest{
+		Principal: "ci",
+		Identity: attest.Attestation{
+			Method: "github_oidc", Subject: "repo:acme/real:ref:refs/heads/main",
+			VerifiedAt: time.Now(),
+		},
+		Ephemeral: eph, ArtifactType: "blob", Digest: digest,
+	})
+	if err != nil {
+		t.Fatalf("SignKeyless with attestation-derived SAN failed: %v", err)
+	}
+	if sig.FulcioSAN != "repo:acme/real:ref:refs/heads/main" {
+		t.Errorf("keyless SAN = %q, want the verified subject", sig.FulcioSAN)
 	}
 }

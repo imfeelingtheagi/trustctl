@@ -148,9 +148,13 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	}
 
 	// 1) Read model catches up from the event log (AN-2): the relational state is
-	// a projection, so we replay before serving reads.
+	// a projection, so we replay before serving reads. The catch-up resumes from the
+	// persisted projection checkpoint (SPINE-007) and replays only the tail after it,
+	// so a warm restart does not re-apply the whole log — cold start no longer grows
+	// with the lifetime event count. A fresh database has an empty checkpoint, so the
+	// first boot still applies everything; an explicit Rebuild re-derives from zero.
 	proj := projections.New(d.Store)
-	if err := proj.Project(ctx, d.Log); err != nil {
+	if err := proj.ProjectCatchUp(ctx, d.Log); err != nil {
 		return nil, fmt.Errorf("server: project event log: %w", err)
 	}
 
@@ -158,6 +162,21 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	s.outbox = orchestrator.NewOutbox(d.Store)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
 	idem := orchestrator.NewIdempotency(d.Store)
+
+	// Heal the append-then-project crash window (SPINE-011): Transition appends a
+	// lifecycle event (durable, AN-2) and then, in a separate transaction, projects
+	// it and enqueues its outbox side effect (AN-6). A crash in that gap leaves the
+	// event but not the effect. On boot we reconcile: re-derive any missing side
+	// effect from the log and enqueue it idempotently (keyed by event ID), so a
+	// recorded transition that was never acted on is recovered before the dispatcher
+	// starts. Effects that already landed are left untouched. This is cheap and safe
+	// to run every boot.
+	if healed, err := orch.ReconcileOutbox(ctx, d.Log); err != nil {
+		return nil, fmt.Errorf("server: reconcile outbox side effects: %w", err)
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled outbox side effects missed by an append-then-project crash",
+			slog.Int("healed", healed))
+	}
 	// Bound idempotency_keys with a background retention sweep (SPINE-002): the
 	// served mutation path records one row per Idempotency-Key, and the GC worker
 	// reclaims completed keys past the retention window so the table cannot grow
@@ -263,7 +282,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	}
 
 	checks := []observ.Check{
-		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.Pool().Ping(ctx) }},
+		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.SystemPool().Ping(ctx) }},
 		{Name: "nats", Probe: func(ctx context.Context) error { return d.Log.Ping(ctx) }},
 	}
 	if d.Signer != nil {

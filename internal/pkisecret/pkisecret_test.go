@@ -141,6 +141,80 @@ func TestPKISecretReturnsUsableKeypair(t *testing.T) {
 	}
 }
 
+// tenantTaggingSink records the (tenant, serial) pairs it is asked to record/
+// revoke, so a test can prove that each provider attributes its records to its own
+// tenant (AN-1 / GAP-009).
+type tenantTaggingSink struct {
+	issued  map[string]string // serial -> tenant
+	revoked map[string]string // serial -> tenant
+}
+
+func newTenantTaggingSink() *tenantTaggingSink {
+	return &tenantTaggingSink{issued: map[string]string{}, revoked: map[string]string{}}
+}
+
+func (s *tenantTaggingSink) RecordIssued(_ context.Context, tenantID, _, serial string) error {
+	s.issued[serial] = tenantID
+	return nil
+}
+
+func (s *tenantTaggingSink) Revoke(_ context.Context, tenantID, _, serial string, _ int) error {
+	s.revoked[serial] = tenantID
+	return nil
+}
+
+// TestPKIProviderTenantAttribution is the GAP-009 acceptance: a PKIProvider carries
+// its tenant and attributes every issuance/revocation record on the revocation
+// pipeline to THAT tenant, so tenant A's serial/OCSP-CRL/audit records are never
+// recorded under tenant B (AN-1). Two providers for different tenants must tag
+// their records with their own tenant id.
+func TestPKIProviderTenantAttribution(t *testing.T) {
+	caDER, caKey := ca(t)
+	ctx := context.Background()
+
+	sinkA := newTenantTaggingSink()
+	sinkB := newTenantTaggingSink()
+	pA := NewPKIProvider(caDER, caKey, Profile{Name: "web", MaxTTL: time.Hour}, nil,
+		WithRevocationSink("tenant-A", "ca-A", sinkA))
+	pB := NewPKIProvider(caDER, caKey, Profile{Name: "web", MaxTTL: time.Hour}, nil,
+		WithRevocationSink("tenant-B", "ca-B", sinkB))
+
+	if pA.TenantID() != "tenant-A" || pB.TenantID() != "tenant-B" {
+		t.Fatalf("tenant ids = %q / %q", pA.TenantID(), pB.TenantID())
+	}
+
+	credA, err := pA.Generate(ctx, dynsecret.GenerateRequest{Role: "a.example", TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credB, err := pB.Generate(ctx, dynsecret.GenerateRequest{Role: "b.example", TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Each issuance is attributed to its own tenant — never cross-recorded.
+	if sinkA.issued[credA.BackendRef] != "tenant-A" {
+		t.Errorf("tenant A serial recorded under %q, want tenant-A", sinkA.issued[credA.BackendRef])
+	}
+	if _, crossed := sinkA.issued[credB.BackendRef]; crossed {
+		t.Error("tenant B serial leaked into tenant A's records (AN-1 violation)")
+	}
+	if sinkB.issued[credB.BackendRef] != "tenant-B" {
+		t.Errorf("tenant B serial recorded under %q, want tenant-B", sinkB.issued[credB.BackendRef])
+	}
+
+	// Revocation is likewise tenant-attributed.
+	if err := pA.Revoke(ctx, credA.BackendRef); err != nil {
+		t.Fatal(err)
+	}
+	if sinkA.revoked[credA.BackendRef] != "tenant-A" {
+		t.Errorf("tenant A revocation recorded under %q, want tenant-A", sinkA.revoked[credA.BackendRef])
+	}
+	if _, crossed := sinkB.revoked[credA.BackendRef]; crossed {
+		t.Error("tenant A revocation leaked into tenant B's records (AN-1 violation)")
+	}
+}
+
 func TestPKIProviderConforms(t *testing.T) {
 	caDER, caKey := ca(t)
 	p := NewPKIProvider(caDER, caKey, Profile{Name: "any", MaxTTL: time.Hour}, nil)

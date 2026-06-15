@@ -91,11 +91,30 @@ func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, t
 // explicit custodian argument for the library/test path. The store enforces
 // PKIGOV-006: a named (non-empty) custodian, and opener != approver. A self-
 // approval by the opener is rejected with store.ErrSelfApproval.
+//
+// PKIGOV-010: the individual approval act is also emitted as a ca.ceremony.approved
+// event on the AN-2 log (custodian, ceremony, count, time), so the four-eyes trail
+// is part of the signed, hash-chained, offline-verifiable audit-evidence bundle —
+// not only a row in the ca_key_ceremonies read table. The event is emitted only
+// after the store records the approval; if the store rejects it (self-approval,
+// anonymous custodian), no event is written. A best-effort emit failure does not
+// roll back the recorded approval but is returned so the caller sees it.
 func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian string) (int, error) {
 	if a, ok := events.ActorFromContext(ctx); ok && a.Subject != "" {
 		custodian = a.Subject
 	}
-	return m.store.ApproveKeyCeremony(ctx, tenantID, ceremonyID, custodian)
+	count, err := m.store.ApproveKeyCeremony(ctx, tenantID, ceremonyID, custodian)
+	if err != nil {
+		return count, err
+	}
+	if emitErr := m.emit(ctx, tenantID, "ca.ceremony.approved", map[string]any{
+		"ceremony_id": ceremonyID,
+		"custodian":   custodian,
+		"approvals":   count,
+	}); emitErr != nil {
+		return count, fmt.Errorf("hierarchy: record ceremony approval event: %w", emitErr)
+	}
+	return count, nil
 }
 
 // CreateRoot creates a self-signed root CA, gated by ceremonyID reaching quorum.

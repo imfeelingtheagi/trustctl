@@ -40,7 +40,12 @@ type Config struct {
 	Reloader              Reloader
 	SSHDConfigPath        string
 	TrustedUserCAKeysPath string
-	// RequireConfirmationToRemoveTrust enforces the design rule that existing
-	// trust is never removed without explicit confirmation.
-	RequireConfirmationToRemoveTrust bool
+	// AllowUnconfirmedRemoval opts OUT of the design's lockout protection: when
+	// false (the zero value, and the safe default), RemoveCATrust refuses to remove
+	// trust unless the caller passes confirm=true. The default is fail-closed because
+	// removing SSH CA trust is a lockout-class operation — a default-constructed
+	// Config must never allow an unconfirmed removal (SIGNER-007). Only an operator
+	// that deliberately sets this true (e.g. an automated teardown that supplies its
+	// own confirmation out of band) bypasses the in-code confirmation gate.
+	AllowUnconfirmedRemoval bool
 }

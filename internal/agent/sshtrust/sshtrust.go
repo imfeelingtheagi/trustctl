@@ -78,9 +78,13 @@ func (a *Applier) AddCATrust(ctx context.Context, caPublicKey []byte) (changed b
 }
 
 // RemoveCATrust removes a CA trust line, but only with explicit confirmation: the
-// design forbids removing existing trust as an implicit side effect.
+// design forbids removing existing trust as an implicit side effect. Confirmation
+// is required by DEFAULT — a zero-value Config (AllowUnconfirmedRemoval=false)
+// rejects RemoveCATrust(..., false), so forgetting the flag fails closed rather
+// than silently removing trust and risking lockout (SIGNER-007). Only a Config that
+// deliberately sets AllowUnconfirmedRemoval=true may bypass the confirmation.
 func (a *Applier) RemoveCATrust(ctx context.Context, caPublicKey []byte, confirm bool) error {
-	if a.cfg.RequireConfirmationToRemoveTrust && !confirm {
+	if !a.cfg.AllowUnconfirmedRemoval && !confirm {
 		return fmt.Errorf("sshtrust: refusing to remove trust without explicit confirmation")
 	}
 	trustBak, trustExisted := a.read(a.cfg.TrustedUserCAKeysPath)

@@ -41,9 +41,13 @@ works for anything — a 4 KB manifest or a 4 GB image. Two modes:
   (`codesign.signed`, **AN-2**).
 - **Keyless signing (Sigstore/Fulcio style).** Instead of a long-lived key, the caller
   presents a verified [attestation](workload-identity.md) (e.g. a CI job's OIDC identity)
-  and a fresh ephemeral key. trustctl signs with the ephemeral key and records the
-  identity (the Fulcio SAN/issuer) so a verifier can replay it. The attestation *is* the
-  authorization — there's no standing key to steal.
+  and a fresh ephemeral key. trustctl signs with the ephemeral key and binds the
+  signature to the **verified** identity: the Fulcio SAN and issuer are **derived from
+  the attestation** (its verified subject and issuer), not taken from caller-supplied
+  strings — a request whose claimed SAN/issuer contradicts the attestation is refused
+  (`codesign.keyless.refused`), and a request with no verified attestation is rejected
+  outright (PKIGOV-011). The attestation *is* the authorization — there's no standing
+  key to steal, and a caller cannot attach an arbitrary identity to a signature.
 
 Verification (`Verify`, `VerifyKeyless`) also routes through `internal/crypto`. The
 service is tenant-scoped (**AN-1**) and keeps digests/signatures as `[]byte` (**AN-8**).
@@ -93,14 +97,25 @@ timestamp falls inside the signing certificate's lifetime.
   tested, but are **not yet wired** into the running control plane (no API route or CLI
   command). Treat them as built, pending an exposed surface — see
   [Current limitations](../limitations.md).
-- **Wire formats are pragmatic today.** The TSA encodes `TSTInfo` as signed JSON and the
-  code-signing output is trustctl's own structure; the RFC 3161 CMS wire encoding and
-  full Sigstore bundle interop are documented follow-ups. If you need byte-level interop
-  with external TSA/cosign verifiers, confirm the encoding first.
+- **TSA wire format is real RFC 3161 CMS (INTEROP-005); code-signing bundle is still
+  pragmatic.** The TSA now emits a real **RFC 3161 `TimeStampToken`** — a CMS `SignedData`
+  over a DER `TSTInfo` with `eContentType id-ct-TSTInfo`, in `Token.DER` with content
+  type `application/timestamp-reply` — so a stock verifier (`openssl ts -verify`, a
+  DSS/ESS validator) can parse it; it is no longer a bespoke JSON manifest (the JSON
+  struct fields remain only for the in-process LTV/message-imprint checks). The
+  **code-signing** output, by contrast, is still trustctl's own structure: full **Sigstore
+  bundle** interop is a documented follow-up, so if you need byte-level interop with an
+  external cosign verifier, confirm that encoding first.
 - **Keys belong in the signer.** Use HSM/KMS-backed keys (see
   [Issuance & CAs](issuance-and-cas.md)) so signing keys never live in a build agent.
 - **Keyless still needs a real attestation** — it's only as strong as the OIDC identity
-  you verify.
+  you verify, and that identity is now **enforced**: `SignKeyless` derives the signed
+  SAN/issuer from the verified attestation and refuses a request that supplies a
+  conflicting SAN/issuer or carries no verified attestation (PKIGOV-011). Wiring the
+  full Sigstore/Fulcio certificate-issuance flow (a short-lived Fulcio cert over the
+  ephemeral key, Rekor transparency-log inclusion) behind a served, RBAC-gated surface
+  is tracked with the code-signing wire-in work; the in-process binding above is what
+  the library enforces today.
 
 ## Reference
 

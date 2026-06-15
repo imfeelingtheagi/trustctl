@@ -56,6 +56,11 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"FuzzParseSCEPRequest":   "SCEP pkiMessage CMS (scep.go ParseSCEPRequest)",
 		"FuzzParseSCEPResponse":  "SCEP CertRep CMS (scep.go ParseSCEPResponse) — shares the FUZZ-001 decoder",
 		"FuzzVerifyCMSSignature": "cloud IID CMS (verify.go VerifyCMSSignature) — parses untrusted bytes pre-verification",
+		// CMP (RFC 4210) PKIMessage parsing is another untrusted-ASN.1 boundary
+		// (cmp.go ParseCMPRequest) that shares the CMS/PKCS7 decoder family. Pin it by
+		// name so the SCEP/CMP/EST denominator the guard claims to police is complete
+		// and dropping the CMP harness trips this guard (FUZZ-004).
+		"FuzzParseCMPRequest": "CMP PKIMessage (cmp.go ParseCMPRequest) — untrusted ASN.1 enrollment envelope",
 	})
 
 	// The cloud instance-identity attesters parse the same untrusted CMS family at
