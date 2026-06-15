@@ -56,6 +56,7 @@ type Manager struct {
 	issuance *ca.IssuanceService
 	outbox   *orchestrator.Outbox
 	idem     *orchestrator.Idempotency
+	orch     *orchestrator.Orchestrator
 	log      *events.Log
 	cfg      Config
 	keyAlg   crypto.Algorithm
@@ -63,10 +64,16 @@ type Manager struct {
 }
 
 // NewManager wires a lifecycle Manager over the store, issuance service, outbox,
-// idempotency, and event log.
+// idempotency, and event log. It builds an Orchestrator over the same rails so its
+// inventory transitions (successor recorded, predecessor superseded, revoked) are
+// event-sourced and projected — the read model is written only by the projector
+// (AN-2), so a Rebuild() reconstructs them rather than losing a direct write
+// (CORRECT-002).
 func NewManager(s *store.Store, issuance *ca.IssuanceService, ob *orchestrator.Outbox, idem *orchestrator.Idempotency, log *events.Log, cfg Config) *Manager {
 	return &Manager{
-		store: s, issuance: issuance, outbox: ob, idem: idem, log: log, cfg: cfg,
+		store: s, issuance: issuance, outbox: ob, idem: idem,
+		orch: orchestrator.NewOrchestrator(log, s, ob),
+		log:  log, cfg: cfg,
 		keyAlg: crypto.ECDSAP256,
 		now:    time.Now,
 	}
@@ -131,30 +138,27 @@ func (m *Manager) renew(ctx context.Context, tenantID string, old store.Certific
 	}
 
 	now := m.now()
-	var newID string
-	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		id, err := m.store.InsertSuccessorCertificateTx(ctx, tx, successor, old.ID)
-		if err != nil {
-			return err
-		}
-		newID = id
-		return m.store.SupersedeCertificateTx(ctx, tx, tenantID, old.ID, now)
-	}); err != nil {
-		return store.Certificate{}, err
+	// Record the successor and retire the predecessor through event-sourced
+	// commands (CORRECT-002): the read model is written only by the projector
+	// (AN-2), so both the successor row (with its replaces_id link) and the
+	// predecessor's superseded status are reconstructable from the log on a
+	// Rebuild() — not lost direct UPDATEs as before.
+	recorded, err := m.orch.RecordSuccessorCertificate(ctx, tenantID, successor, old.ID)
+	if err != nil {
+		return store.Certificate{}, fmt.Errorf("lifecycle: record successor: %w", err)
+	}
+	if err := m.orch.SupersedeCertificate(ctx, tenantID, old.Fingerprint, old.Serial, info.SerialNumber, now); err != nil {
+		return store.Certificate{}, fmt.Errorf("lifecycle: supersede predecessor: %w", err)
 	}
 
 	if err := m.emit(ctx, tenantID, eventType, map[string]any{
-		"certificate_id": old.ID, "successor_id": newID,
+		"certificate_id": old.ID, "successor_id": recorded.ID,
 		"old_serial": old.Serial, "new_serial": info.SerialNumber,
 	}); err != nil {
 		return store.Certificate{}, err
 	}
 
-	successor.ID = newID
-	successor.Status = statusActive
-	replaces := old.ID
-	successor.ReplacesID = &replaces
-	return successor, nil
+	return recorded, nil
 }
 
 // Revoke marks a certificate revoked and enqueues a revocation.publish intent on
@@ -175,10 +179,11 @@ func (m *Manager) Revoke(ctx context.Context, tenantID, certID, reason, idempote
 		if err != nil {
 			return nil, err
 		}
+		// Enqueue the revocation.publish side effect on the outbox (AN-6) so the
+		// revocation propagates downstream. The enqueue runs in its own tenant-scoped
+		// transaction; exactly-once is guaranteed by the surrounding idempotency
+		// wrapper (AN-5).
 		if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			if err := m.store.RevokeCertificateTx(ctx, tx, tenantID, certID, reason, now); err != nil {
-				return err
-			}
 			_, err := m.outbox.Enqueue(ctx, tx, orchestrator.Entry{
 				TenantID: tenantID, Destination: destinationRevoke, IdempotencyKey: key, Payload: payload,
 			})
@@ -186,9 +191,12 @@ func (m *Manager) Revoke(ctx context.Context, tenantID, certID, reason, idempote
 		}); err != nil {
 			return nil, err
 		}
-		if err := m.emit(ctx, tenantID, "certificate.revoked", map[string]any{
-			"certificate_id": certID, "serial": old.Serial, "reason": reason,
-		}); err != nil {
+		// Flip the inventory status through a projected certificate.revoked event
+		// (CORRECT-002): the read model is written only by the projector (AN-2), so
+		// the revoked status survives a Rebuild() rather than being a lost direct
+		// UPDATE. Keyed by fingerprint, the projection is idempotent, so a redelivery
+		// re-applies the same revoked state harmlessly.
+		if err := m.orch.RevokeCertificate(ctx, tenantID, old.Fingerprint, old.Serial, reason, now); err != nil {
 			return nil, err
 		}
 		return []byte("revoked"), nil

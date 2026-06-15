@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
@@ -86,7 +87,7 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 	)
 	switch cfg.Mode {
 	case config.NATSEmbedded:
-		srv, nc, err = openEmbedded(cfg.StoreDir)
+		srv, nc, err = openEmbedded(cfg)
 	case config.NATSExternal:
 		if cfg.URL == "" {
 			return nil, errors.New("events: external nats requires a url")
@@ -104,12 +105,18 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: jetstream: %w", err)
 	}
-	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:        streamName,
-		Subjects:    []string{subjectFilter},
-		Storage:     jetstream.FileStorage,
-		AllowDirect: true, // fast GetMsg-by-sequence for replay
-	})
+	scfg := streamConfig(cfg)
+	stream, err := js.CreateOrUpdateStream(ctx, scfg)
+	// SPINE-004: the configured replication factor (default 3 in external mode) is
+	// what an HA cluster wants, but a single, non-clustered NATS server rejects
+	// Replicas>1. Rather than fail to start against a single-node external server,
+	// fall back to one replica — the log still works; it just isn't replicated until
+	// the cluster has the nodes. Embedded mode is already Replicas:1, so this only
+	// affects an under-provisioned external target.
+	if err != nil && scfg.Replicas > 1 && isNonClusteredReplicaErr(err) {
+		scfg.Replicas = 1
+		stream, err = js.CreateOrUpdateStream(ctx, scfg)
+	}
 	if err != nil {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: ensure stream: %w", err)
@@ -117,15 +124,73 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 	return &Log{srv: srv, nc: nc, js: js, stream: stream}, nil
 }
 
-func openEmbedded(storeDir string) (*natsserver.Server, *nats.Conn, error) {
-	if storeDir == "" {
+// jsErrCodeStreamReplicasNotSupported is JetStream's error_code for "replicas > 1
+// not supported in non-clustered mode" (10074). The nats.go release pinned here
+// does not export a named constant for it, so it is defined locally.
+const jsErrCodeStreamReplicasNotSupported jetstream.ErrorCode = 10074
+
+// isNonClusteredReplicaErr reports whether err is JetStream's rejection of a
+// replicated stream on a non-clustered server, so Open can fall back to a single
+// replica instead of refusing to start (SPINE-004).
+func isNonClusteredReplicaErr(err error) bool {
+	var apiErr *jetstream.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode == jsErrCodeStreamReplicasNotSupported
+	}
+	// Fallback to a substring match if the typed error is not surfaced.
+	return strings.Contains(err.Error(), "not supported in non-clustered mode")
+}
+
+// streamConfig builds the source-of-truth event stream's JetStream config from
+// cfg, resolving the replication factor (SPINE-004): embedded single-node always
+// runs with one replica (there is only one server); external (clustered) mode uses
+// the configured Replicas, defaulting to config.DefaultExternalReplicas so a single
+// NATS node loss neither loses an acked event nor takes the log offline. The log
+// itself is intentionally NOT retention-capped here — it is the source of truth, and
+// the only path that shrinks it is the signed archive-then-prune retention worker
+// (Audit.Retention/ArchiveDir), so an operator opts into bounding it rather than the
+// stream silently dropping events.
+func streamConfig(cfg config.NATS) jetstream.StreamConfig {
+	replicas := 1 // embedded is single-node; one replica is the only valid value
+	if cfg.Mode == config.NATSExternal {
+		replicas = cfg.Replicas
+		if replicas <= 0 {
+			replicas = config.DefaultExternalReplicas
+		}
+	}
+	return jetstream.StreamConfig{
+		Name:        streamName,
+		Subjects:    []string{subjectFilter},
+		Storage:     jetstream.FileStorage,
+		Replicas:    replicas,
+		AllowDirect: true, // fast GetMsg-by-sequence for replay
+	}
+}
+
+func openEmbedded(cfg config.NATS) (*natsserver.Server, *nats.Conn, error) {
+	if cfg.StoreDir == "" {
 		return nil, nil, errors.New("events: embedded nats requires a store dir")
 	}
+	// Bound the single-node durability window (RESIL-001). nats-server defaults the
+	// JetStream file-store fsync cadence to ~2 minutes, so an ACK is otherwise a
+	// page-cache write that a power loss can drop. trustctl tightens it to a short
+	// default (config.DefaultEmbeddedSyncInterval), and SyncAlways forces an fsync on
+	// every append for a near-zero RPO at a throughput cost. These options only apply
+	// to the embedded server; an external cluster manages its own durability.
+	syncInterval, err := cfg.SyncIntervalDuration()
+	if err != nil {
+		return nil, nil, fmt.Errorf("events: embedded sync interval: %w", err)
+	}
+	if syncInterval <= 0 {
+		syncInterval = config.DefaultEmbeddedSyncInterval
+	}
 	srv, err := natsserver.NewServer(&natsserver.Options{
-		ServerName: "trustctl-events",
-		JetStream:  true,
-		StoreDir:   storeDir,
-		DontListen: true, // in-process only; no network listener
+		ServerName:   "trustctl-events",
+		JetStream:    true,
+		StoreDir:     cfg.StoreDir,
+		DontListen:   true, // in-process only; no network listener
+		SyncInterval: syncInterval,
+		SyncAlways:   cfg.SyncAlways,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("events: embedded server: %w", err)
@@ -143,8 +208,16 @@ func openEmbedded(storeDir string) (*natsserver.Server, *nats.Conn, error) {
 	return srv, nc, nil
 }
 
-// Append writes e to the log and returns it with Time, ID, and Sequence set. The
-// event is durably persisted before Append returns.
+// Append writes e to the log and returns it with Time, ID, and Sequence set.
+//
+// Durability (RESIL-001): Append returns after JetStream ACKs the publish, which
+// guarantees the event is committed to the stream (and, in a replicated external
+// cluster with Replicas>1, to a quorum of nodes). On the embedded single-node,
+// file-backed store an ACK is a write to the OS page cache that is fsync'd on the
+// configured cadence (config.NATS.SyncInterval, defaulting to a tight ~1s, or every
+// append when config.NATS.SyncAlways is set) — so the single-node RPO for events not
+// yet backed up is at most that interval. Production should run an external
+// replicated cluster, where the quorum ACK makes the loss window effectively zero.
 func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	if e.Type == "" {
 		return Event{}, errors.New("events: event type is required")
@@ -254,6 +327,115 @@ func (l *Log) Ping(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// StreamReplicas returns the source-of-truth event stream's configured replication
+// factor (SPINE-004). It is exported so a config test can assert the stream is
+// created replicated in external mode and single-replica in embedded mode.
+func (l *Log) StreamReplicas(ctx context.Context) (int, error) {
+	info, err := l.stream.Info(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("events: stream info: %w", err)
+	}
+	return info.Config.Replicas, nil
+}
+
+// LastSequence returns the highest sequence currently in the event stream (0 when
+// empty). The tailing projection worker uses it to compute projection lag — the gap
+// between the log's head and the last sequence the read model has applied (SPINE-009).
+func (l *Log) LastSequence(ctx context.Context) (uint64, error) {
+	info, err := l.stream.Info(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("events: stream info: %w", err)
+	}
+	return info.State.LastSeq, nil
+}
+
+// decodeStored converts a stored JetStream message at seq into an Event, applying
+// the legacy/zero schema-version normalization (SCHEMA-001).
+func decodeStored(data []byte, seq uint64) (Event, error) {
+	var s storedEvent
+	if err := json.Unmarshal(data, &s); err != nil {
+		return Event{}, fmt.Errorf("events: decode seq %d: %w", seq, err)
+	}
+	ver := s.SchemaVersion
+	if ver == 0 {
+		ver = DefaultSchemaVersion
+	}
+	return Event{
+		ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time,
+		SchemaVersion: ver, Data: s.Data, Sequence: seq, Actor: s.Actor,
+	}, nil
+}
+
+// tailConsumerName is the durable name of the projection-tailing consumer
+// (SPINE-009). A fixed name makes the consumer durable: its acked position (the
+// cursor) is stored on the server and survives a control-plane restart, so the
+// tailer resumes from the last applied event rather than replaying from the start.
+const tailConsumerName = "trustctl_projector"
+
+// Tail creates (or resumes) the durable projection consumer over the event stream
+// and invokes fn for each event in order, advancing the durable cursor only after fn
+// returns nil (SPINE-009). It blocks until ctx is cancelled. Because the cursor is
+// server-side and durable, an event appended out of band (not by the in-process
+// orchestrator) is projected promptly without a restart, and a restart resumes from
+// the last applied sequence instead of re-replaying the whole log.
+//
+// It uses a pull consumer drained in small batches: fn applies the event, and only a
+// success acks it (advancing the cursor); a failure leaves the event unacked so the
+// next fetch retries it rather than silently skipping — the read model never diverges
+// past a poison event without an operator signal (the lag metric stops advancing).
+func (l *Log) Tail(ctx context.Context, fn func(Event) error) error {
+	cons, err := l.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		Durable:       tailConsumerName,
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		DeliverPolicy: jetstream.DeliverAllPolicy, // first start: from the beginning; later: resumes from the durable cursor
+		FilterSubject: subjectFilter,
+		MaxAckPending: 1, // strict in-order application: one unacked event at a time
+	})
+	if err != nil {
+		return fmt.Errorf("events: create tail consumer: %w", err)
+	}
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		batch, err := cons.Fetch(64, jetstream.FetchMaxWait(250*time.Millisecond))
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("events: tail fetch: %w", err)
+		}
+		for msg := range batch.Messages() {
+			md, mderr := msg.Metadata()
+			if mderr != nil {
+				_ = msg.Nak()
+				return fmt.Errorf("events: tail metadata: %w", mderr)
+			}
+			ev, derr := decodeStored(msg.Data(), md.Sequence.Stream)
+			if derr != nil {
+				_ = msg.Nak()
+				return derr
+			}
+			if aerr := fn(ev); aerr != nil {
+				// Leave the event unacked so the cursor does not advance past a failure;
+				// the next fetch retries it. The caller's lag metric will plateau, which is
+				// the operator signal that the projection is stuck (SPINE-009/SPINE-011).
+				_ = msg.Nak()
+				return fmt.Errorf("events: tail apply seq %d: %w", ev.Sequence, aerr)
+			}
+			if ackErr := msg.Ack(); ackErr != nil {
+				return fmt.Errorf("events: tail ack seq %d: %w", ev.Sequence, ackErr)
+			}
+		}
+		if berr := batch.Error(); berr != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("events: tail batch: %w", berr)
+		}
+	}
 }
 
 // Close closes the connection and, in embedded mode, shuts the server down.

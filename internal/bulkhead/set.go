@@ -9,6 +9,12 @@ const (
 	SubsystemProjections = "projections"
 	SubsystemOutbox      = "outbox"
 	SubsystemSigning     = "signing"
+	// SubsystemQuery is the bounded pool for heavy, per-request O(inventory) read
+	// families — the credential-graph and risk-scoring endpoints (SPINE-005). Routing
+	// them to their own pool keeps a burst of expensive graph/risk builds from
+	// occupying the API workers and starving cheap CRUD (and /auth, /enroll) on the
+	// shared SubsystemAPI pool (AN-7 fairness within the served surface).
+	SubsystemQuery = "query"
 )
 
 // Set is a collection of named, isolated pools — one per subsystem. Submitting to
@@ -35,6 +41,11 @@ func Default() *Set {
 		Config{Name: SubsystemProjections, Workers: 2, Queue: 128},
 		Config{Name: SubsystemOutbox, Workers: 4, Queue: 256},
 		Config{Name: SubsystemSigning, Workers: 4, Queue: 64},
+		// The heavy read pool (SPINE-005) is sized smaller than the CRUD pool: it caps
+		// how many concurrent O(inventory) graph/risk builds run, so they shed fast
+		// under load instead of monopolizing capacity — while the cheap CRUD pool stays
+		// free. A modest queue absorbs short bursts.
+		Config{Name: SubsystemQuery, Workers: 4, Queue: 64},
 	)
 }
 

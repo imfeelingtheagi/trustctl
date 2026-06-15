@@ -141,24 +141,59 @@ func (s *Store) ListActiveIssuedCertificatesForIdentity(ctx context.Context, ten
 	return out, err
 }
 
-// ListCertificatesPage returns up to limit certificates with id greater than
-// afterID (keyset pagination; pass ZeroUUID for the first page). When
-// expiringBefore is non-nil, only certificates whose not_after is before it are
-// returned.
-func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID string, limit int, expiringBefore *time.Time) ([]Certificate, error) {
+// ListCertificatesPage returns up to limit certificates using keyset pagination
+// (SPINE-006). The cursor is (afterNotAfter, afterID); pass ZeroUUID/nil for the
+// first page.
+//
+// When expiringBefore is non-nil it returns only certificates whose not_after is
+// before it, ordered by (not_after, id) and keyset on that pair, so the query rides
+// the (tenant_id, not_after, id) expiry index (migration 0022) instead of scanning
+// the primary key and discarding non-matching rows. When expiringBefore is nil it
+// returns all certificates ordered by id, keyset on id alone (the plain page rides
+// the primary key). Tenant-scoped under RLS (AN-1).
+func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID string, afterNotAfter *time.Time, limit int, expiringBefore *time.Time) ([]Certificate, error) {
+	const cols = `id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
+	        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+	        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at`
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
-			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
-			   FROM certificates
-			  WHERE tenant_id = $1 AND id > $2
-			    AND ($3::timestamptz IS NULL OR not_after < $3)
-			  ORDER BY id LIMIT $4`,
-			tenantID, afterID, expiringBefore, limit)
-		if err != nil {
-			return err
+		var rows pgx.Rows
+		var qerr error
+		switch {
+		case expiringBefore != nil && afterNotAfter != nil:
+			// Expiry-ordered keyset (subsequent pages): walk (not_after, id) in order so
+			// the composite expiry index (tenant_id, not_after, id) serves both the
+			// filter and the ordering. The row-value comparison (not_after, id) >
+			// (afterNotAfter, afterID) is the keyset. not_after is nullable, but a NULL
+			// never satisfies "< expiringBefore", so only non-NULL rows are returned and
+			// the comparison is well-defined.
+			rows, qerr = tx.Query(ctx,
+				`SELECT `+cols+`
+				   FROM certificates
+				  WHERE tenant_id = $1 AND not_after < $2
+				    AND (not_after, id) > ($3, $4)
+				  ORDER BY not_after, id LIMIT $5`,
+				tenantID, *expiringBefore, *afterNotAfter, afterID, limit)
+		case expiringBefore != nil:
+			// Expiry-ordered first page: no keyset lower bound yet, just the filter,
+			// ordered by (not_after, id) so it rides the same composite index.
+			rows, qerr = tx.Query(ctx,
+				`SELECT `+cols+`
+				   FROM certificates
+				  WHERE tenant_id = $1 AND not_after < $2
+				  ORDER BY not_after, id LIMIT $3`,
+				tenantID, *expiringBefore, limit)
+		default:
+			// Plain page: keyset on id alone, riding the primary key.
+			rows, qerr = tx.Query(ctx,
+				`SELECT `+cols+`
+				   FROM certificates
+				  WHERE tenant_id = $1 AND id > $2
+				  ORDER BY id LIMIT $3`,
+				tenantID, afterID, limit)
+		}
+		if qerr != nil {
+			return qerr
 		}
 		defer rows.Close()
 		for rows.Next() {

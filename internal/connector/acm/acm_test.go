@@ -30,7 +30,7 @@ func keyPEM() []byte {
 }
 
 func creds() acm.Credentials {
-	return acm.Credentials{AccessKeyID: accessKey, SecretAccessKey: secretKey}
+	return acm.Credentials{AccessKeyID: accessKey, SecretAccessKey: []byte(secretKey)}
 }
 
 // Deploy imports the renewed certificate and key into the target ARN over a
@@ -88,7 +88,7 @@ func TestDeployFailsOnBadCredentials(t *testing.T) {
 	srv := acmtest.New(accessKey, secretKey)
 	defer srv.Close()
 
-	c := acm.New(region, acm.Credentials{AccessKeyID: accessKey, SecretAccessKey: "wrong-secret"}, acm.WithEndpoint(srv.URL()))
+	c := acm.New(region, acm.Credentials{AccessKeyID: accessKey, SecretAccessKey: []byte("wrong-secret")}, acm.WithEndpoint(srv.URL()))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(targetARN, leafPEM(), keyPEM())); err == nil {
 		t.Fatal("expected deploy to fail on a bad signature, got nil")

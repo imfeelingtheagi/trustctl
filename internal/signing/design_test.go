@@ -2,6 +2,7 @@ package signing_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -69,6 +70,81 @@ func TestDependencyBudgetIsExplicit(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(doc), "forbidden") {
 		t.Error("dependency budget must explicitly list forbidden dependencies")
+	}
+}
+
+// TestSignerDependencyClosure asserts AN-4 against the SHIPPED binary's actual
+// dependency closure, not the design doc's wording (ARCH-006). It runs
+// `go list -deps ./cmd/trustctl-signer` and requires that no SQL stack
+// (database/sql, the pgx driver) and no message-bus client (NATS) is linked in.
+//
+// It does NOT assert net/http is absent: gRPC's HTTP/2 transport
+// (golang.org/x/net/http2) transitively imports net/http, so the package is
+// legitimately in the graph. What AN-4 forbids is standing up an HTTP *server* —
+// asserted separately by TestSignerHasNoHTTPServerCall — not the package
+// appearing transitively.
+func TestSignerDependencyClosure(t *testing.T) {
+	repoRoot := filepath.Join(sourceDir(t), "..", "..")
+	cmd := exec.Command("go", "list", "-deps", "./cmd/trustctl-signer")
+	cmd.Dir = repoRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go list -deps ./cmd/trustctl-signer: %v\n%s", err, out)
+	}
+	deps := string(out)
+	forbidden := []string{
+		"database/sql",         // no SQL stdlib
+		"github.com/jackc/pgx", // no Postgres driver
+		"github.com/nats-io",   // no NATS / message bus
+	}
+	for _, f := range forbidden {
+		for _, line := range strings.Split(deps, "\n") {
+			if strings.TrimSpace(line) == f || strings.HasPrefix(strings.TrimSpace(line), f+"/") {
+				t.Errorf("signer dependency closure must not contain %q (AN-4); found %q", f, strings.TrimSpace(line))
+			}
+		}
+	}
+}
+
+// TestSignerHasNoHTTPServerCall asserts the signer source starts no HTTP server
+// (AN-4): no http.Serve / http.ListenAndServe / (*http.Server).ListenAndServe.
+// This is the precise property the design doc claims; checking the source (not
+// the doc text) closes the ARCH-006 false-comfort gap.
+func TestSignerHasNoHTTPServerCall(t *testing.T) {
+	roots := []string{
+		filepath.Join(sourceDir(t)), // internal/signing
+		filepath.Join(sourceDir(t), "..", "..", "cmd", "trustctl-signer"),
+	}
+	needles := []string{
+		"http.Serve(",
+		"http.ListenAndServe(",
+		"http.ListenAndServeTLS(",
+		".ListenAndServe(",
+		".ListenAndServeTLS(",
+	}
+	for _, root := range roots {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return rerr
+			}
+			src := string(data)
+			for _, n := range needles {
+				if strings.Contains(src, n) {
+					t.Errorf("signer must start no HTTP server (AN-4): %s contains %q", path, n)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
 	}
 }
 

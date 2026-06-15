@@ -98,7 +98,7 @@ func ownerNames(t *testing.T, st *store.Store, tenant string) []string {
 
 func certFingerprints(t *testing.T, st *store.Store, tenant string) []string {
 	t.Helper()
-	certs, err := st.ListCertificatesPage(context.Background(), tenant, store.ZeroUUID, 1000, nil)
+	certs, err := st.ListCertificatesPage(context.Background(), tenant, store.ZeroUUID, nil, 1000, nil)
 	if err != nil {
 		t.Fatalf("ListCertificatesPage: %v", err)
 	}

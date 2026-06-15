@@ -176,7 +176,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile,
 		LeafProfile: leafProfile, DefaultProfile: cfg.CA.DefaultProfile,
 		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
-		Logger: logger, RateLimiter: rateLimiter})
+		Logger: logger, RateLimiter: rateLimiter,
+		// Web hardening (SEC-003/WIRE-005): emit HSTS only when the control plane is
+		// served over TLS (internal or file mode), and apply the operator's CORS
+		// allow-list (empty = same-origin only).
+		SecurityHeaders: SecurityHeaders{
+			TLS:            cfg.Server.TLS.Mode != config.TLSDisabled,
+			AllowedOrigins: cfg.Server.CORSAllowedOrigins,
+		}})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
@@ -217,6 +224,24 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	idemGCDone := make(chan struct{})
 	go func() { defer close(idemGCDone); srv.RunIdempotencyGC(idemCtx) }()
 
+	// Reclaim delivered outbox rows on a fixed cadence (SPINE-003): every external
+	// effect writes one outbox row that is marked delivered but never removed, so
+	// without reclamation the outbox table — and its backups — would grow without
+	// bound. The purge deletes delivered rows past the retention window; pending/
+	// failed rows are untouched, so at-least-once delivery (AN-6) is preserved.
+	// Stopped before the final drain so it never races the dispatcher on a row.
+	outboxGCCtx, stopOutboxGC := context.WithCancel(ctx)
+	outboxGCDone := make(chan struct{})
+	go func() { defer close(outboxGCDone); srv.RunOutboxGC(outboxGCCtx) }()
+
+	// Tail the event stream with a durable consumer (SPINE-009): events appended out
+	// of band (not via the inline orchestrator projection) are applied promptly, and
+	// the projection-lag gauge tracks how far the read model is behind the log head so
+	// a stuck/divergent projection is observable. Stopped before the final drain.
+	tailCtx, stopTail := context.WithCancel(ctx)
+	tailDone := make(chan struct{})
+	go func() { defer close(tailDone); srv.RunProjectionTail(tailCtx) }()
+
 	// stopBackground halts the background workers and waits for them to exit, so the
 	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
 	// when the event log closes.
@@ -229,6 +254,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		<-signerDone
 		stopIdemGC()
 		<-idemGCDone
+		stopOutboxGC()
+		<-outboxGCDone
+		stopTail()
+		<-tailDone
 	}
 
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}

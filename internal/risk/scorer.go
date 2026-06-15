@@ -40,7 +40,7 @@ func ScoreInventory(ctx context.Context, st *store.Store, tenantID string) ([]Cr
 	var out []CredentialRisk
 	after := store.ZeroUUID
 	for {
-		page, err := st.ListCertificatesPage(ctx, tenantID, after, pageSize, nil)
+		page, err := st.ListCertificatesPage(ctx, tenantID, after, nil, pageSize, nil)
 		if err != nil {
 			return nil, err
 		}

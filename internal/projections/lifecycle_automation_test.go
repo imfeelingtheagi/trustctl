@@ -9,9 +9,11 @@ import (
 	"trustctl.io/trustctl/internal/ca"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/lifecycle"
 	"trustctl.io/trustctl/internal/notify"
 	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/projections"
 	"trustctl.io/trustctl/internal/store"
 )
 
@@ -33,6 +35,15 @@ func lifecycleCSR(t *testing.T, cn string) []byte {
 // newLifecycleManager wires a Manager over the built-in CA and the real spine.
 func newLifecycleManager(t *testing.T, s *store.Store, cfg lifecycle.Config) (*lifecycle.Manager, *ca.IssuanceService) {
 	t.Helper()
+	m, svc, _ := newLifecycleManagerWithLog(t, s, cfg)
+	return m, svc
+}
+
+// newLifecycleManagerWithLog is newLifecycleManager but also returns the shared
+// event log, so an event-sourcing test can Rebuild the read model from the very
+// log the Manager appended to (CORRECT-002).
+func newLifecycleManagerWithLog(t *testing.T, s *store.Store, cfg lifecycle.Config) (*lifecycle.Manager, *ca.IssuanceService, *events.Log) {
+	t.Helper()
 	builtin, err := ca.NewBuiltin("trustctl Built-in CA")
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +52,37 @@ func newLifecycleManager(t *testing.T, s *store.Store, cfg lifecycle.Config) (*l
 	ob := orchestrator.NewOutbox(s)
 	svc := ca.NewIssuanceService(builtin, idem, ob, s)
 	log := openLog(t)
-	return lifecycle.NewManager(s, svc, ob, idem, log, cfg), svc
+	return lifecycle.NewManager(s, svc, ob, idem, log, cfg), svc, log
+}
+
+// seedInventoryCertEventSourced issues a real certificate and inventories it
+// through the event-sourced command path (orchestrator.RecordCertificate emits a
+// certificate.recorded event and projects it), so the row is reconstructable from
+// the log on a Rebuild() — unlike seedInventoryCert, which writes the read table
+// directly. CORRECT-002 tests that Rebuild from this log preserves later status
+// transitions, so the seed itself must be event-sourced too.
+func seedInventoryCertEventSourced(t *testing.T, s *store.Store, svc *ca.IssuanceService, log *events.Log, tenantID, cn string, ttl time.Duration) store.Certificate {
+	t.Helper()
+	ctx := context.Background()
+	issued, err := svc.Issue(ctx, ca.IssueRequest{TenantID: tenantID, CSR: lifecycleCSR(t, cn), DNSNames: []string{cn}, TTL: ttl}, "seed-es:"+tenantID+":"+cn)
+	if err != nil {
+		t.Fatalf("seed Issue: %v", err)
+	}
+	info, err := certinfo.Inspect(issued.CertificatePEM)
+	if err != nil {
+		t.Fatalf("seed inspect: %v", err)
+	}
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+	nb, na := info.NotBefore, info.NotAfter
+	c, err := orch.RecordCertificate(ctx, tenantID, store.Certificate{
+		Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer,
+		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+		NotBefore: &nb, NotAfter: &na, Source: "seed",
+	})
+	if err != nil {
+		t.Fatalf("seed RecordCertificate: %v", err)
+	}
+	return c
 }
 
 // seedInventoryCert issues a real certificate with the given lifetime and
@@ -113,7 +154,7 @@ func TestCertificateAutoRenewsAtThreshold(t *testing.T) {
 
 	// A successor exists: active, links back to the old cert, distinct serial,
 	// far-future expiry.
-	all, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 100, nil)
+	all, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 100, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,5 +300,102 @@ func TestExpiryAlertsFireBeforeExpiry(t *testing.T) {
 	}
 	if c := countOutbox(t, s, tenantA, notify.DestinationExpiry); c != 1 {
 		t.Errorf("after re-run, %s entries = %d, want 1", notify.DestinationExpiry, c)
+	}
+}
+
+// TestRevokedStatusSurvivesRebuild is the CORRECT-002 acceptance: a revoked
+// certificate's status must be event-sourced, so re-deriving the read model from
+// the log (Projector.Rebuild) leaves it revoked. Before the fix the lifecycle
+// Manager UPDATE-d the read table directly and emitted a certificate.revoked event
+// the projector ignored, so Rebuild() reverted the status to active — this test
+// FAILS on the pre-fix tree.
+func TestRevokedStatusSurvivesRebuild(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	m, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+
+	cert := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "revoke-rebuild.acme.test", 720*time.Hour)
+
+	if err := m.Revoke(ctx, tenantA, cert.ID, "keyCompromise", "rev-rb-1"); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+	got, err := s.GetCertificate(ctx, tenantA, cert.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "revoked" || got.RevokedAt == nil || got.RevocationReason != "keyCompromise" {
+		t.Fatalf("after Revoke = {status:%q revoked_at:%v reason:%q}, want revoked+stamped", got.Status, got.RevokedAt, got.RevocationReason)
+	}
+
+	// Re-derive the read model from the log. If revocation were a direct read-table
+	// UPDATE (the pre-fix behavior), this would erase it; an event-sourced
+	// revocation is replayed from the log.
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	after, err := s.GetCertificateByFingerprint(ctx, tenantA, cert.Fingerprint)
+	if err != nil {
+		t.Fatalf("GetCertificateByFingerprint after rebuild: %v", err)
+	}
+	if after.Status != "revoked" {
+		t.Errorf("after Rebuild status = %q, want revoked (revocation is not event-sourced)", after.Status)
+	}
+	if after.RevocationReason != "keyCompromise" {
+		t.Errorf("after Rebuild reason = %q, want keyCompromise", after.RevocationReason)
+	}
+	if after.RevokedAt == nil {
+		t.Error("after Rebuild revoked_at is nil; the revoked timestamp was lost")
+	}
+}
+
+// TestSupersededStatusAndSuccessorLinkSurviveRebuild is the CORRECT-002 acceptance
+// for rotation/renewal: after a rotation, the predecessor is superseded and the
+// successor links back via replaces_id; both facts must be event-sourced and so
+// survive a Projector.Rebuild(). Pre-fix the predecessor's superseded status came
+// from a direct UPDATE and the certificate.rotated event had no projector case,
+// so Rebuild() reverted the predecessor to active and dropped the successor row
+// (it had been a direct insert) — this test FAILS on the pre-fix tree.
+func TestSupersededStatusAndSuccessorLinkSurviveRebuild(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	m, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+
+	old := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "rotate-rebuild.acme.test", 720*time.Hour)
+
+	fresh, err := m.Rotate(ctx, tenantA, old.ID, "rot-rb-1")
+	if err != nil {
+		t.Fatalf("Rotate: %v", err)
+	}
+	if fresh.ReplacesID == nil || *fresh.ReplacesID != old.ID {
+		t.Fatalf("successor replaces_id = %v, want %s", fresh.ReplacesID, old.ID)
+	}
+
+	// Rebuild the read model purely from the log.
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+
+	// The predecessor must still be superseded.
+	gotOld, err := s.GetCertificateByFingerprint(ctx, tenantA, old.Fingerprint)
+	if err != nil {
+		t.Fatalf("get predecessor after rebuild: %v", err)
+	}
+	if gotOld.Status != "superseded" {
+		t.Errorf("after Rebuild predecessor status = %q, want superseded", gotOld.Status)
+	}
+	if gotOld.RenewedAt == nil {
+		t.Error("after Rebuild predecessor renewed_at is nil; the supersession stamp was lost")
+	}
+
+	// The successor must still exist and still link to the predecessor.
+	gotNew, err := s.GetCertificateByFingerprint(ctx, tenantA, fresh.Fingerprint)
+	if err != nil {
+		t.Fatalf("successor missing after rebuild (not event-sourced): %v", err)
+	}
+	if gotNew.Status != "active" {
+		t.Errorf("after Rebuild successor status = %q, want active", gotNew.Status)
+	}
+	if gotNew.ReplacesID == nil || *gotNew.ReplacesID != old.ID {
+		t.Errorf("after Rebuild successor replaces_id = %v, want %s (link lost)", gotNew.ReplacesID, old.ID)
 	}
 }

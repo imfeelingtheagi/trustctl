@@ -52,7 +52,7 @@ func TestNetscanMergesDiscoveryIntoInventory(t *testing.T) {
 
 func listCerts(t *testing.T, ctx context.Context, s *store.Store) []store.Certificate {
 	t.Helper()
-	certs, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 1000, nil)
+	certs, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 1000, nil)
 	if err != nil {
 		t.Fatalf("list certificates: %v", err)
 	}

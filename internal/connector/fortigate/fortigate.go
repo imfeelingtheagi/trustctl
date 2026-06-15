@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/crypto/secret"
 	"trustctl.io/trustctl/internal/pluginhost"
 )
 
@@ -37,10 +38,14 @@ const defaultName = "trustctl"
 
 // Connector deploys certificates to a Fortinet FortiGate / FortiWeb appliance
 // over the FortiOS REST API.
+//
+// The FortiOS REST API token is a bearer credential; it is held as []byte, never
+// a string, so it can be wiped and is not freely copied by the GC (AN-8). Close
+// zeroizes it.
 type Connector struct {
 	baseURL string // FortiOS management base, e.g. https://fgt.example (no trailing slash)
 	host    string // host of baseURL, for the net.dial grant
-	token   string // FortiOS REST API token (AN-8-adjacent: never logged)
+	token   []byte // FortiOS REST API token (AN-8: []byte, never logged, wiped by Close)
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -53,10 +58,13 @@ type Option func(*Connector)
 // New returns a FortiGate/FortiWeb connector for the appliance at baseURL,
 // authenticating with the FortiOS REST API token. baseURL is the endpoint; the
 // net.dial grant host is derived from it.
-func New(baseURL, token string, opts ...Option) *Connector {
+//
+// token is taken as []byte (AN-8). The connector copies it into its own buffer so
+// the caller may wipe theirs; call Close to zeroize the connector's copy.
+func New(baseURL string, token []byte, opts ...Option) *Connector {
 	c := &Connector{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
+		token:   append([]byte(nil), token...),
 	}
 	if u, err := url.Parse(baseURL); err == nil {
 		c.host = u.Host
@@ -65,6 +73,12 @@ func New(baseURL, token string, opts ...Option) *Connector {
 		o(c)
 	}
 	return c
+}
+
+// Close zeroizes the held FortiOS API token (AN-8).
+func (c *Connector) Close() {
+	secret.Wipe(c.token)
+	c.token = nil
 }
 
 // Name identifies the connector.
@@ -92,6 +106,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("fortigate: encode request: %w", err)
 	}
+	// The marshaled body carries the private-key PEM on the wire; it is the
+	// transient edge copy (the long-lived key stays []byte in dep.KeyPEM). Wipe it
+	// after the request so the key does not linger in this buffer (AN-8).
+	defer secret.Wipe(body)
 
 	endpoint := c.baseURL + "/api/v2/cmdb/vpn.certificate/local/" + url.PathEscape(name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
@@ -99,8 +117,9 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// FortiOS REST API token, presented as a bearer credential. Never logged.
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	// FortiOS REST API token, presented as a bearer credential. Never logged. The
+	// header value is the transient edge form of the []byte token.
+	req.Header.Set("Authorization", "Bearer "+string(c.token))
 
 	resp, err := sb.Request(req)
 	if err != nil {

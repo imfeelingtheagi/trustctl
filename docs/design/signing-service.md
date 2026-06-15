@@ -251,15 +251,25 @@ anything to this list requires explicit review recorded in the PR.
 
 **Forbidden** (non-exhaustive; the intent is "nothing else")
 
-- `net/http` as a server — the signer exposes no HTTP surface.
-- `database/sql` or any database driver — the signer has no datastore.
+- An **HTTP server** — the signer exposes no HTTP surface and never calls
+  `http.Serve` / `http.ListenAndServe`. (Note: the `net/http` package may be
+  *transitively linked* by gRPC, whose HTTP/2 transport — `golang.org/x/net/http2`
+  — imports it. That is an implementation detail of the allowed gRPC dependency;
+  what is forbidden is *standing up an HTTP server*, not the package appearing in
+  the build graph. The build-time check below asserts the absence of a server, not
+  the absence of the package.)
+- `database/sql` or any database driver (e.g. `pgx`) — the signer has no
+  datastore; neither `database/sql` nor a driver is in its dependency closure.
+- NATS / any message-bus client — the signer is not on the event spine.
 - Any third-party logging library (e.g. zap, logrus) — operational logging uses
   the standard library only, and never logs secrets.
-- ORMs, web frameworks, template engines, Redis or any other datastore client,
-  and any transitive dependency pulled in by the above.
+- ORMs, web frameworks, template engines, Redis or any other datastore client.
 
-A build-time check in S1.4 asserts that no `net/http` server and no SQL driver
-are linked into the signer binary (mirroring the S1.4 acceptance criterion).
+A build-time check (`TestSignerDependencyClosure`,
+`TestSignerHasNoHTTPServerCall`) asserts that `database/sql`, the `pgx` driver,
+and NATS are absent from `go list -deps ./cmd/trustctl-signer`, and that the
+signer source starts no HTTP server (`http.Serve`/`ListenAndServe`) — checking the
+shipped binary's closure and code, not merely this document's wording.
 
 ## 8. Fuzzing plan
 

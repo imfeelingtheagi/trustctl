@@ -56,6 +56,16 @@ remaining integration work.
 - **Discovery**: network/filesystem scans, SSH key & trust inventory, agentless
   cloud-certificate enumeration, the **CBOM** with post-quantum posture, and
   **Certificate Transparency** monitoring.
+- **SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator,
+  `internal/agent/sshtrust`)**: the applier that installs a trusted SSH CA and
+  rolls it back on failure is **fully built and well tested, but not linked into
+  any binary** (SIGNER-004) — `cmd/trustctl-agent` does not import it, so the agent
+  reads SSH trust (inventory, above) but does **not** rewrite a host's trust today.
+  This is deliberately gated: weakening `sshd`/`authorized_keys` trust is a
+  high-blast-radius mutation, so wiring it behind a default-off operator opt-in
+  (with the signer-issued host/user certs and rollback) is tracked as
+  **`EXC-WIRE-05`**. Until then the served/library split is: SSH trust is
+  *discovered*, not *mutated*.
 - **Posture**: the **credential graph** (reachability, blast radius), **composite
   risk scoring**, and **drift detection**.
 - **The React web console (F12)**: the React 18 + Vite + shadcn/ui single-page app
@@ -72,6 +82,16 @@ remaining integration work.
   are **not served today** (only scoped API tokens authenticate the running binary).
   This is **built and tested, not yet served by the binary**; serving it is tracked
   as **`EXC-WIRE-01`**.
+  - **Per-user tenant mapping is not yet wired (TENANT-004).** Even when the OIDC
+    login flow is exercised, every browser user is currently mapped to a single
+    configured `DefaultTenant` at session issue (`internal/api/auth.go`) — the code
+    is honest that real per-user/per-claim tenant mapping is still to land. Storage
+    multi-tenancy (PostgreSQL RLS) is real and confines each session to its assigned
+    tenant, so this is **not a cross-tenant leak**; what is missing is the browser
+    auth path distinguishing tenants, so **multi-tenant SaaS via the UI is not served
+    end-to-end** yet. API tokens already carry a real per-token tenant. Mapping the
+    OIDC subject/claims (an org/tenant claim or an IdP-group→tenant table) to the
+    real tenant — and rejecting a no-tenant login — is tracked as **`EXC-WIRE-01`**.
 - **The AI surface — model adapter (F76), grounded RCA / NL query (F77), and the
   MCP server (F78)**: these are real, tested **library** code (model-agnostic
   cloud/local adapter with a boundary redactor, grounded read-only RCA with
@@ -82,6 +102,47 @@ remaining integration work.
   RBAC-guarded, tenant-scoped surface is tracked as **`EXC-WIRE-04`**. The boundary
   redactor strips key/secret material before any prompt reaches a model (AN-8), so
   even when wired, secret material does not egress.
+- **The secrets/identity frameworks — the workload auth-method framework
+  (`internal/authmethod`, F58), secret-sync to external stores
+  (`internal/secretsync`, F60), the application secrets SDK (`internal/secretsdk`,
+  F64), PKI-as-a-secret / dynamic certificate leasing (`internal/pkisecret`, F67),
+  and secret sharing (`internal/secretshare`, F68)**: these are real, tested
+  **library** code today. Each has **zero importers on the served path** — the
+  running binary does not mount a secrets/identity API, so there is **no served,
+  authenticated login/secrets endpoint for these five frameworks today**. They are
+  **built and tested, not yet served by the binary**; wiring them into an
+  authenticated, tenant-scoped served surface is tracked as **`EXC-WIRE-03`**.
+  Library credentials are held as `[]byte` and never logged (AN-8); sessions and
+  dynamic-secret revocations are event-sourced (AN-2); methods and providers are
+  tenant-scoped (AN-1).
+
+## Authorization policy gates: modeled and tested, not yet on a served route
+
+Two advertised authorization controls are **real, tested library code** but are
+**not yet enforced on any served route** of the running binary. They constrain the
+Go API today; they do not yet gate the served issue/deploy/revoke path. Wiring
+them onto the served mutation path is tracked as **`EXC-WIRE-03`**.
+
+- **Registration-authority (RA) separation & dual-control approval (SEC-002).** The
+  RBAC model and the approval workflow encode "a requester cannot self-issue": the
+  `ra-officer` role holds `certs:request` but not `certs:issue`, and the
+  `internal/approval` package models a request→approve→issue split with dual
+  control. But **no served route is gated on `certs:request`/`certs:issue`** today —
+  the served issuance path is an `identities:write` lifecycle transition, and the
+  `approval` package has no served importer — so the request/approve split and dual
+  control are **not enforceable end-to-end against the running binary** yet. The
+  separation is exercised in unit tests (`internal/authz`), and the operator guide
+  documents the model; serving an RA-gated request/approve/issue flow (backed by the
+  event store) is tracked as **`EXC-WIRE-03`**.
+- **OPA/Rego policy gate — default-deny on issue/deploy/revoke (SEC-005).** The
+  policy engine (`internal/policy`) is real and tested: it is default-deny,
+  fail-closed, bulkheaded (AN-7), and audited. But it is **library-only — the served
+  binary never invokes it** (`cmd/trustctl` → `internal/server`, which does not call
+  `policy.New`/`policy.Engine`/`policy.Evaluate`), so an operator **cannot enforce a
+  deployed Rego policy at runtime** against the served issue/deploy/revoke path
+  today. Deriving the policy input (action / `tenant_id` / actor) from the request +
+  principal and gating the served mutation path on a fail-closed evaluation is
+  tracked as **`EXC-WIRE-03`**.
 
 ## Plugin isolation: first-party in-process, third-party sandboxed
 
@@ -236,8 +297,18 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
 - **Multi-replica HA.** The signer holds the CA key with a per-pod sealed key
   store and a UDS-only transport, so horizontal scaling needs a separate signer
   pod reached over **mTLS** — that network transport is not yet implemented, so the
-  chart runs **one** control-plane replica. (The agent, separately, runs as a
-  DaemonSet across all nodes.)
+  chart runs **one** control-plane replica with a `Recreate` rollout (RESIL-002). A
+  node failure or a config rollout takes issuance/validation offline until the pod
+  reschedules; the datastores (external Postgres + replicated NATS) hold durability,
+  so this is an availability gap, not data loss. The supported HA posture today is
+  **fast failover of a single active replica** (run it under a Deployment, keep the
+  datastores replicated). When the isolated-signer transport lands, active/active
+  needs `replicaCount >= 2` behind a shared isolated signer **plus leader election**
+  gating the background workers (outbox dispatcher, audit retention,
+  idempotency/outbox GC, projection tailer) so only one replica runs them — tracked
+  under RESIL-004 / EXC-RESIL-01. See
+  [disaster recovery → High availability](disaster-recovery.md). (The agent,
+  separately, runs as a DaemonSet across all nodes.)
 
 ## How to read the roadmap against this
 

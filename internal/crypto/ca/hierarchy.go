@@ -161,29 +161,109 @@ func (c *CA) IssueLeaf(csrDER []byte, ttl time.Duration) (Issued, error) {
 // CrossSign issues a cross-certificate for another CA's certificate: it carries
 // that CA's subject and public key but is signed by this CA, so relying parties
 // that trust this CA also trust the cross-signed one.
+//
+// A cross-certificate is a fully privileged CA certificate, so it must not be
+// issued unconstrained (PKIGOV-004). It carries forward the target's path-length
+// basic constraint and dNSName name constraints, and additionally clamps them to
+// this signing CA's own lane: the cross-cert's permitted DNS domains are the
+// intersection with this CA's name constraints, and its sub-CA depth is the more
+// restrictive of the target's own pathLen and this CA's remaining depth. This
+// prevents a cross-signature from widening the trust the relying party already
+// extended to this CA (e.g. cross-signing a name-unconstrained or deeper CA must
+// not let it issue names or depths this CA may not).
 func (c *CA) CrossSign(otherCertDER []byte) ([]byte, error) {
 	other, err := x509.ParseCertificate(otherCertDER)
 	if err != nil {
 		return nil, fmt.Errorf("ca: parse cross-sign target: %w", err)
 	}
+	if !other.IsCA {
+		return nil, fmt.Errorf("ca: cross-sign target %q is not a CA certificate", other.Subject.CommonName)
+	}
 	serial, err := randomSerial()
 	if err != nil {
 		return nil, err
 	}
+
+	// Path length: cross-signing re-issues a peer CA at the same trust tier, so the
+	// target's own depth is carried — but clamped to this signing CA's remaining
+	// depth so the cross-cert can never grant MORE sub-CA depth than this CA itself
+	// holds. The result is the more restrictive (smaller) of the two whenever both
+	// are set; if the target is unset it is pinned to this CA's depth.
+	pathLen, hasPathLen := crossPathLen(other)
+	if c.maxPathLen >= 0 {
+		if !hasPathLen || c.maxPathLen < pathLen {
+			pathLen, hasPathLen = c.maxPathLen, true
+		}
+	}
+
+	// Name constraints: carry the target's permitted dNSName set, then intersect
+	// with this CA's own permitted set so the cross-cert can never permit a name
+	// this CA itself may not.
+	permitted := intersectDNS(other.PermittedDNSDomains, c.permittedDNS)
+
 	tmpl := &x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               other.Subject,
-		NotBefore:             other.NotBefore,
-		NotAfter:              other.NotAfter,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
+		SerialNumber:                serial,
+		Subject:                     other.Subject,
+		NotBefore:                   other.NotBefore,
+		NotAfter:                    other.NotAfter,
+		KeyUsage:                    x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid:       true,
+		IsCA:                        true,
+		PermittedDNSDomains:         permitted,
+		PermittedDNSDomainsCritical: len(permitted) > 0,
+	}
+	if hasPathLen {
+		tmpl.MaxPathLen = pathLen
+		tmpl.MaxPathLenZero = pathLen == 0
 	}
 	crossDER, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, other.PublicKey, c.key)
 	if err != nil {
 		return nil, fmt.Errorf("ca: cross-sign: %w", err)
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crossDER}), nil
+}
+
+// crossPathLen extracts the basic-constraints path-length from a parsed CA
+// certificate, distinguishing "explicitly zero" from "unset". Go's x509 sets
+// MaxPathLen=0 with MaxPathLenZero=true for an explicit zero, and leaves
+// MaxPathLen=0/MaxPathLenZero=false (or MaxPathLen<0) when the constraint is
+// absent.
+func crossPathLen(cert *x509.Certificate) (int, bool) {
+	if cert.MaxPathLen > 0 || cert.MaxPathLenZero {
+		return cert.MaxPathLen, true
+	}
+	return 0, false
+}
+
+// intersectDNS returns the dNSName name-constraint set the cross-cert may permit:
+// the target's permitted set restricted to what the signing CA itself permits. If
+// the signing CA is unconstrained, the target's set carries forward unchanged. If
+// the target is unconstrained, it is narrowed to the signing CA's set.
+func intersectDNS(target, signer []string) []string {
+	if len(signer) == 0 {
+		return append([]string(nil), target...)
+	}
+	if len(target) == 0 {
+		return append([]string(nil), signer...)
+	}
+	var out []string
+	for _, t := range target {
+		if dnsPermitted(strings.TrimPrefix(t, "."), signer) || containsFold(signer, t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// containsFold reports whether set contains v, ignoring a leading constraint dot.
+func containsFold(set []string, v string) bool {
+	v = strings.TrimPrefix(v, ".")
+	for _, s := range set {
+		if strings.TrimPrefix(s, ".") == v {
+			return true
+		}
+	}
+	return false
 }
 
 // CertificatePEM returns this CA's certificate in PEM form.

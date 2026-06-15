@@ -151,6 +151,73 @@ func TestDurabilityAcrossReopen(t *testing.T) {
 	}
 }
 
+// TestEmbeddedStreamIsSingleReplica pins SPINE-004 for the embedded path: the
+// in-process, single-node server creates the source-of-truth stream with exactly
+// one replica (more than one is invalid on a single node), and a default-config
+// embedded log still opens cleanly with the bounded fsync cadence (RESIL-001).
+func TestEmbeddedStreamIsSingleReplica(t *testing.T) {
+	ctx := context.Background()
+	// Use the full default NATS config (embedded + the tightened SyncInterval) with
+	// a temp store dir, so this also exercises the RESIL-001 default not breaking Open.
+	cfg := config.Default().NATS
+	cfg.StoreDir = t.TempDir()
+	log, err := events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Open embedded with defaults: %v", err)
+	}
+	defer func() { _ = log.Close() }()
+
+	r, err := log.StreamReplicas(ctx)
+	if err != nil {
+		t.Fatalf("StreamReplicas: %v", err)
+	}
+	if r != 1 {
+		t.Errorf("embedded stream replicas = %d, want 1", r)
+	}
+}
+
+// TestExternalReplicasFallBackOnSingleNode pins SPINE-004: the external default
+// replication factor is >1 (HA), but opening against a single, non-clustered NATS
+// server must not fail — Open falls back to one replica. On the pre-fix tree the
+// stream was always created with the implicit Replicas:1, so the *config knob* did
+// not exist; here we prove the knob is honored (default >1) AND degrades safely.
+func TestExternalReplicasFallBackOnSingleNode(t *testing.T) {
+	srv, err := natsserver.NewServer(&natsserver.Options{
+		ServerName: "ext-single", JetStream: true, StoreDir: t.TempDir(), Port: -1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go srv.Start()
+	if !srv.ReadyForConnections(10 * time.Second) {
+		t.Fatal("external server not ready")
+	}
+	defer srv.Shutdown()
+
+	ctx := context.Background()
+	// External mode with the default replication factor (3): a single-node server
+	// rejects R>1, so Open must clamp to 1 rather than fail to start.
+	cfg := config.NATS{Mode: config.NATSExternal, URL: srv.ClientURL()}
+	if config.DefaultExternalReplicas <= 1 {
+		t.Fatalf("DefaultExternalReplicas = %d, want >1 (the knob this test guards)", config.DefaultExternalReplicas)
+	}
+	log, err := events.Open(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Open external (single-node, default replicas) must fall back, got: %v", err)
+	}
+	defer func() { _ = log.Close() }()
+	if _, err := log.Append(ctx, events.Event{Type: "e", TenantID: "t1", Data: []byte("x")}); err != nil {
+		t.Fatalf("Append after fallback: %v", err)
+	}
+	r, err := log.StreamReplicas(ctx)
+	if err != nil {
+		t.Fatalf("StreamReplicas: %v", err)
+	}
+	if r != 1 {
+		t.Errorf("single-node external stream replicas = %d, want 1 after fallback", r)
+	}
+}
+
 // TestExternalModeIsConfigOnly proves switching to an external cluster is just a
 // config change: an external-mode Log connects to a URL and works identically.
 func TestExternalModeIsConfigOnly(t *testing.T) {

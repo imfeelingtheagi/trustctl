@@ -37,7 +37,7 @@ func TestNetScalerDeploysRenewedCertViaOutbox(t *testing.T) {
 	reg := connector.NewRegistry(func(string) connector.Ops {
 		return connector.NewHTTPOps(srv.Client())
 	})
-	reg.Register(netscaler.New(srv.URL(), user, pass))
+	reg.Register(netscaler.New(srv.URL(), user, []byte(pass)))
 
 	payload, err := connector.EncodeDeploy("netscaler", connector.NewDeployment(certkey, nsCert, nsKey))
 	if err != nil {

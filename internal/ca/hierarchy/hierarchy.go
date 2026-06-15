@@ -62,17 +62,39 @@ func NewManager(s *store.Store, log *events.Log) *Manager {
 	return &Manager{store: s, log: log, cas: map[string]*cryptoca.CA{}}
 }
 
-// StartCeremony begins an m-of-n key ceremony requiring threshold approvals.
+// StartCeremony begins an m-of-n key ceremony requiring threshold approvals. The
+// opener — the authenticated principal starting the ceremony — is bound from the
+// request context's actor (events.ActorFromContext) when present, so a later
+// approval can enforce opener != approver separation of duties (PKIGOV-006). When
+// no actor is in context (a background/system start), the opener is left
+// unattributed and no opener!=approver constraint is imposed.
+//
+// Note: the served REST/gRPC wiring of the key ceremony — which sets the actor
+// from the resolved principal — is the EXC-WIRE-03 epic; until then the SoD model
+// is enforced at this library boundary and exercised by tests. The custodian
+// binding to an authorized roster is part of that same served gate.
 func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, threshold int) (string, error) {
 	if threshold < 1 {
 		return "", fmt.Errorf("hierarchy: ceremony threshold must be at least 1")
 	}
-	return m.store.CreateKeyCeremony(ctx, tenantID, purpose, threshold)
+	opener := ""
+	if a, ok := events.ActorFromContext(ctx); ok {
+		opener = a.Subject
+	}
+	return m.store.CreateKeyCeremony(ctx, tenantID, purpose, opener, threshold)
 }
 
 // Approve records a custodian's approval of a ceremony and returns the resulting
-// approval count.
+// approval count. The custodian is bound from the request context's actor
+// (events.ActorFromContext) when present — so a served approval is attributed to
+// the authenticated principal, not a caller-chosen string — falling back to the
+// explicit custodian argument for the library/test path. The store enforces
+// PKIGOV-006: a named (non-empty) custodian, and opener != approver. A self-
+// approval by the opener is rejected with store.ErrSelfApproval.
 func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian string) (int, error) {
+	if a, ok := events.ActorFromContext(ctx); ok && a.Subject != "" {
+		custodian = a.Subject
+	}
 	return m.store.ApproveKeyCeremony(ctx, tenantID, ceremonyID, custodian)
 }
 

@@ -21,6 +21,7 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
+	"time"
 )
 
 const (
@@ -38,16 +39,36 @@ var (
 	oidSigECDSASHA256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}
 )
 
-// cmpHeader is the subset of PKIHeader we populate.
+// cmpHeader is the subset of PKIHeader (RFC 4210 §5.1.1) we populate. The
+// explicit context tags follow the ASN.1 module exactly: messageTime [0],
+// protectionAlg [1], senderKID [2], transactionID [4], senderNonce [5],
+// recipNonce [6], generalInfo [8]. messageTime, senderKID and generalInfo were
+// previously omitted (INTEROP-006); messageTime is REQUIRED-in-practice by
+// stock CMP servers (EJBCA/OpenSSL) and senderKID/generalInfo (the implicit-
+// confirm hint) are populated so the header is RFC-shaped, not a minimal stub.
 type cmpHeader struct {
 	Pvno          int
 	Sender        asn1.RawValue            // GeneralName
 	Recipient     asn1.RawValue            // GeneralName
+	MessageTime   time.Time                `asn1:"optional,explicit,tag:0,generalized"`
 	ProtectionAlg pkix.AlgorithmIdentifier `asn1:"optional,explicit,tag:1"`
+	SenderKID     []byte                   `asn1:"optional,explicit,tag:2"`
 	TransactionID []byte                   `asn1:"optional,explicit,tag:4"`
 	SenderNonce   []byte                   `asn1:"optional,explicit,tag:5"`
 	RecipNonce    []byte                   `asn1:"optional,explicit,tag:6"`
+	GeneralInfo   []cmpInfoTypeAndValue    `asn1:"optional,explicit,tag:8"`
 }
+
+// cmpInfoTypeAndValue is InfoTypeAndValue (RFC 4210 §5.3.19), the element type of
+// generalInfo. We carry id-it-implicitConfirm to advertise implicit confirmation,
+// the common interop hint.
+type cmpInfoTypeAndValue struct {
+	InfoType  asn1.ObjectIdentifier
+	InfoValue asn1.RawValue `asn1:"optional"`
+}
+
+// id-it-implicitConfirm (RFC 4210 §5.3.19.13): {id-it 13}.
+var oidITImplicitConfirm = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 4, 13}
 
 // cmpMessage is PKIMessage.
 type cmpMessage struct {
@@ -118,9 +139,12 @@ func BuildCMPRequest(csrDER, signerCertDER, signerKeyPKCS8, transactionID, sende
 		Pvno:          cmpPvno2021,
 		Sender:        sender,
 		Recipient:     sender,
+		MessageTime:   time.Now().UTC(),
 		ProtectionAlg: alg,
+		SenderKID:     skiOf(signerCert),
 		TransactionID: transactionID,
 		SenderNonce:   senderNonce,
+		GeneralInfo:   []cmpInfoTypeAndValue{{InfoType: oidITImplicitConfirm}},
 	}
 	prot, err := signProtectedPart(header, body, signerKeyPKCS8)
 	if err != nil {
@@ -197,10 +221,13 @@ func BuildCMPResponse(issuedCertDER, caCertDER, caKeyPKCS8 []byte, req *CMPReque
 		Pvno:          cmpPvno2021,
 		Sender:        sender,
 		Recipient:     sender,
+		MessageTime:   time.Now().UTC(),
 		ProtectionAlg: alg,
+		SenderKID:     skiOf(caCert),
 		TransactionID: req.TransactionID,
 		SenderNonce:   req.SenderNonce,
 		RecipNonce:    req.SenderNonce,
+		GeneralInfo:   []cmpInfoTypeAndValue{{InfoType: oidITImplicitConfirm}},
 	}
 	prot, err := signProtectedPart(header, body, caKeyPKCS8)
 	if err != nil {
@@ -246,6 +273,23 @@ func choiceRaw(tag int, inner []byte) asn1.RawValue {
 
 func rawCert(der []byte) asn1.RawValue {
 	return asn1.RawValue{FullBytes: der}
+}
+
+// skiOf returns the certificate's subjectKeyIdentifier for the CMP senderKID. If
+// the certificate carries an SKI extension it is used directly; otherwise the
+// SHA-256-truncated key identifier (RFC 7093 method) is derived from the public
+// key so senderKID is always populated. Returns nil only if the public key cannot
+// be marshalled (the caller then omits the optional field).
+func skiOf(cert *x509.Certificate) []byte {
+	if len(cert.SubjectKeyId) > 0 {
+		return cert.SubjectKeyId
+	}
+	pkDER, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+	if err != nil {
+		return nil
+	}
+	sum := sha256.Sum256(pkDER)
+	return sum[:20]
 }
 
 func generalNameDirectory(name pkix.Name) (asn1.RawValue, error) {

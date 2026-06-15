@@ -32,7 +32,7 @@ func (e *Engine) readOwners(ctx context.Context, tenant string, eq map[Field]str
 }
 
 func (e *Engine) readCertificates(ctx context.Context, tenant string, eq map[Field]string, add func(Row) bool) error {
-	certs, err := e.store.ListCertificatesPage(ctx, tenant, store.ZeroUUID, e.cfg.MaxRows, nil)
+	certs, err := e.store.ListCertificatesPage(ctx, tenant, store.ZeroUUID, nil, e.cfg.MaxRows, nil)
 	if err != nil {
 		return err
 	}

@@ -67,6 +67,56 @@ func TestProfileRejectsDisallowedProtocolAndDNS(t *testing.T) {
 	}
 }
 
+// TestProfileDNSSuffixMatchIsLabelBounded is the adversarial regression for
+// PKIGOV-005: the DNS-suffix name-constraint matcher must reject hosts that only
+// share a textual suffix (notexample.com / evil-example.com) while accepting the
+// suffix itself and its proper subdomains. A bare strings.HasSuffix branch fails
+// this — the rejected cases below must FAIL pre-fix and PASS post-fix.
+func TestProfileDNSSuffixMatchIsLabelBounded(t *testing.T) {
+	p := profile.CertificateProfile{
+		Name: "suffix-only", Version: 1,
+		AllowedDNSSuffixes: []string{"example.com"},
+	}
+	req := func(name string) profile.Request {
+		return profile.Request{KeyAlgorithm: "ECDSA", KeyBits: 256, Protocol: "api", DNSNames: []string{name}}
+	}
+	accept := []string{"example.com", "a.example.com", "deep.nested.example.com"}
+	reject := []string{
+		"notexample.com",       // shares the textual suffix, different registrable domain
+		"evil-example.com",     // hyphenated impostor
+		"example.com.evil.net", // suffix is a left-anchored substring, not a suffix
+		"xexample.com",         // no label boundary
+		"com",                  // shorter than the suffix
+		"",                     // empty
+	}
+	for _, name := range accept {
+		if err := p.Validate(req(name)); err != nil {
+			t.Errorf("suffix example.com should accept %q, got %v", name, err)
+		}
+	}
+	for _, name := range reject {
+		if err := p.Validate(req(name)); err == nil {
+			t.Errorf("suffix example.com must reject %q (label-boundary suffix match), but it was accepted", name)
+		}
+	}
+}
+
+// TestProfileDNSSuffixLeadingDotNormalized: a configured suffix may be written
+// with a leading dot (".example.com"); it must behave identically to the
+// dot-free form and still be label-bounded.
+func TestProfileDNSSuffixLeadingDotNormalized(t *testing.T) {
+	p := profile.CertificateProfile{Name: "dotted", Version: 1, AllowedDNSSuffixes: []string{".example.com"}}
+	req := func(name string) profile.Request {
+		return profile.Request{KeyAlgorithm: "ECDSA", KeyBits: 256, Protocol: "api", DNSNames: []string{name}}
+	}
+	if err := p.Validate(req("a.example.com")); err != nil {
+		t.Errorf(".example.com should accept a.example.com, got %v", err)
+	}
+	if err := p.Validate(req("notexample.com")); err == nil {
+		t.Error(".example.com must reject notexample.com")
+	}
+}
+
 func TestProfileJSONRoundTrip(t *testing.T) {
 	p := webProfile()
 	b, err := json.Marshal(p)

@@ -9,9 +9,19 @@ image:
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
-# Single control-plane replica BY DESIGN: the issuing CA key is held by the
-# co-located signer sidecar with a per-pod sealed key store, so horizontal
-# scaling needs a shared/separate signer reachable over mTLS — that is S15.1.
+# Single control-plane replica BY DESIGN (RESIL-002): the issuing CA key is held
+# by the co-located signer sidecar with a PER-POD sealed key store, so a second
+# replica would be a second, independent signer — not the same CA. True horizontal
+# scaling needs the signer as its own pod reached over mTLS (signer.mode: isolated),
+# which is not built yet (S15.1). Consequence: a node failure or any config rollout
+# takes issuance/validation offline until the pod reschedules, and the Recreate
+# strategy below guarantees a brief downtime window on every deploy. This is an
+# AVAILABILITY trade-off, not data loss — durability lives in the external,
+# replicated datastores; a rebuilt pod re-derives state from the event log. The
+# supported HA posture today is fast failover of this single active replica (keep it
+# under a Deployment, keep Postgres/NATS replicated). See docs/disaster-recovery.md
+# "High availability" and docs/limitations.md "Multi-replica HA" for the
+# active/active plan (leader election + isolated signer, RESIL-004 / EXC-RESIL-01).
 replicaCount: 1
 
 nameOverride: ""

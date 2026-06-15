@@ -30,9 +30,9 @@ func ejbcaCSR(t *testing.T, cn string) []byte {
 
 func config(srv *ejbcafake.Server) ejbca.Config {
 	return ejbca.Config{
-		Name: "ejbca", BaseURL: srv.URL(), Token: srv.Token(),
+		Name: "ejbca", BaseURL: srv.URL(), Token: []byte(srv.Token()),
 		CAName: "ManagementCA", CertificateProfile: "ENDUSER", EndEntityProfile: "User",
-		Username: "trustctl", Password: "enroll-secret",
+		Username: "trustctl", Password: []byte("enroll-secret"),
 	}
 }
 
@@ -101,7 +101,7 @@ func TestRejectsBadToken(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := config(srv)
-	cfg.Token = "wrong-token"
+	cfg.Token = []byte("wrong-token")
 	p := ejbca.New(cfg)
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: ejbcaCSR(t, "svc.ejbca.test"), DNSNames: []string{"svc.ejbca.test"}, TTL: 24 * time.Hour,

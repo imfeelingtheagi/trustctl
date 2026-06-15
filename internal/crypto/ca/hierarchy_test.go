@@ -139,3 +139,142 @@ func TestCrossSign(t *testing.T) {
 		t.Errorf("cross cert is not signed by Root A: %v", err)
 	}
 }
+
+// TestCrossSignCarriesConstraints is the PKIGOV-004 regression: a cross-cert is a
+// fully privileged CA cert, so the matching pathLen and name constraints must be
+// carried/clamped onto it — never left unconstrained. This FAILS pre-fix (the old
+// CrossSign emitted IsCA:true with no MaxPathLen and no PermittedDNSDomains).
+func TestCrossSignCarriesConstraints(t *testing.T) {
+	signer, err := NewRoot(CASpec{
+		CommonName:          "Cross Signer Root",
+		PermittedDNSDomains: []string{"example.com"},
+		MaxPathLen:          1, // may delegate one more level of CA
+		TTL:                 365 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Target CA: constrained to example.com, may itself sign sub-CAs (pathLen 2).
+	target, err := NewRoot(CASpec{
+		CommonName:          "Cross Target Root",
+		PermittedDNSDomains: []string{"example.com"},
+		MaxPathLen:          2,
+		TTL:                 365 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	crossPEM, err := signer.CrossSign(target.CertificateDER())
+	if err != nil {
+		t.Fatalf("CrossSign: %v", err)
+	}
+	cross := leafFromPEM(t, crossPEM)
+
+	// (1) Name constraints must be present and marked critical.
+	if len(cross.PermittedDNSDomains) == 0 {
+		t.Fatal("cross-cert carries no dNSName name constraints; an unconstrained CA was minted")
+	}
+	if !cross.PermittedDNSDomainsCritical {
+		t.Error("cross-cert name constraints are not critical")
+	}
+	foundExample := false
+	for _, d := range cross.PermittedDNSDomains {
+		if d == "example.com" {
+			foundExample = true
+		}
+	}
+	if !foundExample {
+		t.Errorf("cross-cert permitted domains %v do not include the intersected example.com", cross.PermittedDNSDomains)
+	}
+
+	// (2) Path length must be present and clamped to the signer's lane: the signer
+	// holds depth 1, so a CA it cross-signs may carry at most depth 1 — even though
+	// the target asked for depth 2.
+	if !cross.BasicConstraintsValid || !cross.IsCA {
+		t.Fatal("cross-cert is not a valid CA certificate")
+	}
+	pathLen, has := crossPathLen(cross)
+	if !has {
+		t.Fatal("cross-cert has no path-length basic constraint; it is unconstrained")
+	}
+	if pathLen != 1 {
+		t.Errorf("cross-cert pathLen = %d, want 1 (clamped to signer depth, below the target's requested 2)", pathLen)
+	}
+}
+
+// TestCrossSignRejectsUnconstrainedExpansion proves the cross-cert constrains a
+// target that was itself unconstrained: an out-of-lane SAN issued beneath the
+// cross-signed chain fails X.509 verification against the signer as trust anchor.
+func TestCrossSignRejectsUnconstrainedExpansion(t *testing.T) {
+	// Signer is constrained to example.com.
+	signer, err := NewRoot(CASpec{
+		CommonName:          "Lane Signer",
+		PermittedDNSDomains: []string{"example.com"},
+		MaxPathLen:          2,
+		TTL:                 365 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Target is UNCONSTRAINED (no name constraints) and can issue leaves directly.
+	target, err := NewRoot(CASpec{
+		CommonName: "Wide Target",
+		MaxPathLen: 0,
+		TTL:        365 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	crossPEM, err := signer.CrossSign(target.CertificateDER())
+	if err != nil {
+		t.Fatalf("CrossSign: %v", err)
+	}
+	cross := leafFromPEM(t, crossPEM)
+	// The cross-cert must have inherited the signer's example.com constraint even
+	// though the target had none.
+	if len(cross.PermittedDNSDomains) == 0 {
+		t.Fatal("cross-cert of an unconstrained target is itself unconstrained (PKIGOV-004 not fixed)")
+	}
+
+	// Issue a leaf from the target for a name OUTSIDE the signer's lane.
+	issued, err := target.IssueLeaf(leafCSR(t, "out", []string{"out.evil.test"}), 90*24*time.Hour)
+	if err != nil {
+		t.Fatalf("IssueLeaf: %v", err)
+	}
+	leaf := leafFromPEM(t, issued.CertificatePEM)
+
+	// Build a pool: trust anchor = signer; intermediate = the cross-cert (target's
+	// key, signed by signer). The out-of-lane leaf must FAIL verification because
+	// the cross-cert's name constraints forbid out.evil.test.
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(signer.CertificatePEM()) {
+		t.Fatal("add signer to roots")
+	}
+	inters := x509.NewCertPool()
+	inters.AddCert(cross)
+	if _, err := leaf.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: inters,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}); err == nil {
+		t.Error("an out-of-lane SAN verified through the cross-cert; name constraints were not enforced")
+	}
+}
+
+// TestCrossSignRejectsNonCA: cross-signing only makes sense for a CA certificate.
+func TestCrossSignRejectsNonCA(t *testing.T) {
+	signer, err := NewRoot(CASpec{CommonName: "Signer", TTL: 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := signer.IssueLeaf(leafCSR(t, "leaf", []string{"leaf.test"}), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf := leafFromPEM(t, issued.CertificatePEM)
+	if _, err := signer.CrossSign(leaf.Raw); err == nil {
+		t.Error("cross-signed a non-CA leaf certificate; want rejection")
+	}
+}

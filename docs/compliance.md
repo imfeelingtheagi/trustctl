@@ -120,5 +120,25 @@ prune) when a window and an archive directory are configured.
 framework, that FIPS-validated cryptography is in the default build, or that your
 archive storage is WORM-hardened (that is yours to provide).
 
+## FIPS-validated cryptography (not available today)
+
+trustctl has **no FIPS-validated build path today** (PKIGOV-007), so a deployment
+that *requires* FIPS 140-2/3 validated cryptography cannot be met by the current
+binary. Concretely:
+
+- There is **no `boringcrypto` / `GOEXPERIMENT=boringcrypto` / validated-module
+  build target** in the repository — the default build uses Go's standard
+  `crypto/*` (sound, but not a CMVP-validated module).
+- The post-quantum schemes (ML-DSA/ML-KEM/SLH-DSA) come from Cloudflare's CIRCL,
+  which is **not CMVP-validated** either.
+
+This is a maturity/build boundary, not a paywall. A FIPS build target (Go+BoringCrypto
+or another validated module) with a documented cryptographic boundary, plus
+BYOK/HSM lifecycle and PQC agility, is tracked as the regulated-controls epic
+**`EXC-CRYPTO-01`**. Because all cryptography enters through the single AN-3
+boundary (`internal/crypto`), swapping in a validated module is a contained change
+behind that boundary — but until `EXC-CRYPTO-01` ships, treat FIPS validation as
+**not available**.
+
 See [Configuration → Audit](configuration.md#audit) for the settings referenced
 here.

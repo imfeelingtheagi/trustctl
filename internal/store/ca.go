@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -125,7 +126,9 @@ func (s *Store) SupersedeCAAuthorityTx(ctx context.Context, tx pgx.Tx, tenantID,
 }
 
 // KeyCeremony is an m-of-n CA key-generation ceremony. Approvals is the current
-// count of distinct custodian approvals.
+// count of distinct custodian approvals. Opener is the authenticated principal
+// who started it (empty when unattributed), used to enforce opener != approver
+// separation of duties (PKIGOV-006).
 type KeyCeremony struct {
 	ID        string
 	TenantID  string
@@ -133,28 +136,56 @@ type KeyCeremony struct {
 	Threshold int
 	Status    string // pending | completed
 	Approvals int
+	Opener    string
 	CreatedAt time.Time
 }
 
-// CreateKeyCeremony starts a ceremony requiring threshold approvals, returning
-// its id.
-func (s *Store) CreateKeyCeremony(ctx context.Context, tenantID, purpose string, threshold int) (string, error) {
+// ErrSelfApproval is returned when a ceremony's opener attempts to approve their
+// own ceremony, violating opener != approver separation of duties (PKIGOV-006).
+var ErrSelfApproval = errors.New("store: ceremony opener may not approve their own ceremony (separation of duties)")
+
+// ErrAnonymousApproval is returned when a ceremony approval carries no custodian
+// identity (PKIGOV-006): a custodian must be a named, authenticated principal, not
+// an empty string.
+var ErrAnonymousApproval = errors.New("store: ceremony approval requires an authenticated custodian identity")
+
+// CreateKeyCeremony starts a ceremony requiring threshold approvals, recording the
+// opener (the authenticated principal starting it, for opener != approver SoD),
+// and returns its id.
+func (s *Store) CreateKeyCeremony(ctx context.Context, tenantID, purpose, opener string, threshold int) (string, error) {
 	var id string
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO ca_key_ceremonies (id, tenant_id, purpose, threshold)
-			 VALUES (gen_random_uuid(), $1, $2, $3)
+			`INSERT INTO ca_key_ceremonies (id, tenant_id, purpose, opener, threshold)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4)
 			 RETURNING id::text`,
-			tenantID, purpose, threshold).Scan(&id)
+			tenantID, purpose, opener, threshold).Scan(&id)
 	})
 	return id, err
 }
 
-// ApproveKeyCeremony records a custodian's approval (idempotent per custodian)
-// and returns the resulting distinct-approval count.
+// ApproveKeyCeremony records a custodian's approval (idempotent per custodian) and
+// returns the resulting distinct-approval count. It enforces PKIGOV-006: the
+// custodian must be a named identity (not empty), and the ceremony's opener may not
+// approve their own ceremony (opener != approver). Both checks run in the same
+// tenant-scoped transaction as the insert, fail closed, and never record a
+// disallowed approval.
 func (s *Store) ApproveKeyCeremony(ctx context.Context, tenantID, ceremonyID, custodian string) (int, error) {
+	if custodian == "" {
+		return 0, ErrAnonymousApproval
+	}
 	var count int
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Separation of duties: a ceremony's opener cannot also approve it.
+		var opener string
+		if err := tx.QueryRow(ctx,
+			`SELECT opener FROM ca_key_ceremonies WHERE tenant_id = $1 AND id = $2`,
+			tenantID, ceremonyID).Scan(&opener); err != nil {
+			return err
+		}
+		if opener != "" && opener == custodian {
+			return ErrSelfApproval
+		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO ca_ceremony_approvals (tenant_id, ceremony_id, custodian)
 			 VALUES ($1, $2, $3)
@@ -169,16 +200,16 @@ func (s *Store) ApproveKeyCeremony(ctx context.Context, tenantID, ceremonyID, cu
 	return count, err
 }
 
-// GetKeyCeremony loads a ceremony with its current approval count.
+// GetKeyCeremony loads a ceremony with its current approval count and opener.
 func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCeremony, error) {
 	var c KeyCeremony
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, purpose, threshold, status, created_at,
+			`SELECT id::text, tenant_id::text, purpose, threshold, status, opener, created_at,
 			        (SELECT count(*) FROM ca_ceremony_approvals a
 			          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id)
 			   FROM ca_key_ceremonies c WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.CreatedAt, &c.Approvals)
+			Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals)
 	})
 	return c, err
 }

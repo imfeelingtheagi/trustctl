@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"trustctl.io/trustctl/internal/crypto/certinfo"
@@ -125,11 +128,6 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	limit, after, err := a.pageParams(r)
-	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
-		return
-	}
 	var expiringBefore *time.Time
 	if s := r.URL.Query().Get("expiring_before"); s != "" {
 		ts, perr := time.Parse(time.RFC3339, s)
@@ -139,7 +137,29 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		}
 		expiringBefore = &ts
 	}
-	certs, err := a.store.ListCertificatesPage(r.Context(), tenantID, after, limit, expiringBefore)
+
+	limit, err := pageLimit(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	// The cursor is keyset state. For the expiring query it carries (not_after, id)
+	// so the page rides the (tenant_id, not_after, id) expiry index (SPINE-006); for
+	// the plain query it carries id alone. They are distinct cursor shapes, so a
+	// cursor from one mode is not valid in the other.
+	afterID := store.ZeroUUID
+	var afterNotAfter *time.Time
+	if c := r.URL.Query().Get("cursor"); c != "" {
+		na, id, perr := decodeCertCursor(c, expiringBefore != nil)
+		if perr != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid cursor"))
+			return
+		}
+		afterID = id
+		afterNotAfter = na
+	}
+
+	certs, err := a.store.ListCertificatesPage(r.Context(), tenantID, afterID, afterNotAfter, limit, expiringBefore)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -150,7 +170,51 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 	}
 	next := ""
 	if len(certs) == limit {
-		next = encodeCursor(certs[len(certs)-1].ID)
+		last := certs[len(certs)-1]
+		next = encodeCertCursor(last, expiringBefore != nil)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+// certCursorSep separates not_after from id in the composite expiry cursor. A
+// canonical UUID and an RFC3339Nano timestamp never contain it.
+const certCursorSep = "|"
+
+// encodeCertCursor encodes the keyset cursor for the certificate inventory page.
+// For the plain (id-ordered) page it is the row id alone (unchanged wire shape);
+// for the expiry-ordered page (SPINE-006) it is "not_after|id" so the next page can
+// keyset on (not_after, id) and ride the composite expiry index.
+func encodeCertCursor(c store.Certificate, expiring bool) string {
+	if !expiring {
+		return encodeCursor(c.ID)
+	}
+	na := ""
+	if c.NotAfter != nil {
+		na = c.NotAfter.UTC().Format(time.RFC3339Nano)
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(na + certCursorSep + c.ID))
+}
+
+// decodeCertCursor decodes the keyset cursor produced by encodeCertCursor. The
+// shape depends on whether the request is the expiry-ordered page (a composite
+// not_after+id cursor) or the plain page (an id-only cursor); a cursor minted for
+// one mode is rejected in the other so a client cannot mix them and skip rows.
+func decodeCertCursor(c string, expiring bool) (*time.Time, string, error) {
+	if !expiring {
+		id, err := decodeCursor(c)
+		return nil, id, err
+	}
+	b, err := base64.RawURLEncoding.DecodeString(c)
+	if err != nil {
+		return nil, "", err
+	}
+	naStr, id, found := strings.Cut(string(b), certCursorSep)
+	if !found || len(id) != 36 {
+		return nil, "", errors.New("cursor is not a valid expiry cursor")
+	}
+	ts, err := time.Parse(time.RFC3339Nano, naStr)
+	if err != nil {
+		return nil, "", errors.New("cursor not_after is not a valid timestamp")
+	}
+	return &ts, id, nil
 }

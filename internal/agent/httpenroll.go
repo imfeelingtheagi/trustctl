@@ -9,6 +9,9 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"trustctl.io/trustctl/internal/buildinfo"
+	"trustctl.io/trustctl/internal/protocol"
 )
 
 const maxEnrollBody = 1 << 20
@@ -57,6 +60,10 @@ func (h *HTTPEnroller) post(ctx context.Context, path string, body map[string]st
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Announce the agent's version + protocol so the control plane can record the
+	// version and make a documented compatibility decision across a rolling upgrade
+	// (SCHEMA-003).
+	protocol.SetAgentHeaders(req.Header, buildinfo.Version())
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("agent: enrollment request: %w", err)

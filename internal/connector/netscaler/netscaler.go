@@ -27,17 +27,21 @@ import (
 	"strings"
 
 	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/crypto/secret"
 	"trustctl.io/trustctl/internal/pluginhost"
 )
 
 const defaultFileLocation = "/nsconfig/ssl"
 
 // Connector deploys certificates to a Citrix ADC (NetScaler) over NITRO.
+//
+// The NITRO password is held as []byte, never a string, so it can be wiped and is
+// not freely copied by the GC (AN-8). Close zeroizes it.
 type Connector struct {
 	baseURL      string // NSIP management base, e.g. https://ns.example (no trailing slash)
 	host         string // host of baseURL, for the net.dial grant
 	user         string
-	pass         string
+	pass         []byte // NITRO password (AN-8: []byte, wiped by Close)
 	fileLocation string
 }
 
@@ -58,11 +62,14 @@ func WithFileLocation(path string) Option {
 
 // New returns a NetScaler connector for the appliance at baseURL, authenticating
 // with the NITRO credentials.
-func New(baseURL, user, pass string, opts ...Option) *Connector {
+//
+// pass is taken as []byte (AN-8). The connector copies it into its own buffer so
+// the caller may wipe theirs; call Close to zeroize the connector's copy.
+func New(baseURL, user string, pass []byte, opts ...Option) *Connector {
 	c := &Connector{
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		user:         user,
-		pass:         pass,
+		pass:         append([]byte(nil), pass...),
 		fileLocation: defaultFileLocation,
 	}
 	if u, err := url.Parse(baseURL); err == nil {
@@ -72,6 +79,12 @@ func New(baseURL, user, pass string, opts ...Option) *Connector {
 		o(c)
 	}
 	return c
+}
+
+// Close zeroizes the held NITRO password (AN-8).
+func (c *Connector) Close() {
+	secret.Wipe(c.pass)
+	c.pass = nil
 }
 
 // Name identifies the connector.
@@ -108,8 +121,11 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 }
 
 func (c *Connector) login(ctx context.Context, sb connector.Sandbox) (string, error) {
+	// The NITRO login body carries the password once on the wire; string(c.pass)
+	// is the transient edge form of the []byte secret (AN-8). The marshaled body
+	// inside call() is short-lived and not retained.
 	data, err := c.call(ctx, sb, http.MethodPost, "/nitro/v1/config/login", "", loginReq{
-		Login: credentials{Username: c.user, Password: c.pass},
+		Login: credentials{Username: c.user, Password: string(c.pass)},
 	})
 	if err != nil {
 		return "", fmt.Errorf("login: %w", err)

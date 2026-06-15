@@ -28,6 +28,7 @@ import (
 	"trustctl.io/trustctl/internal/idemgc"
 	"trustctl.io/trustctl/internal/observ"
 	"trustctl.io/trustctl/internal/orchestrator"
+	"trustctl.io/trustctl/internal/outboxgc"
 	"trustctl.io/trustctl/internal/projections"
 	"trustctl.io/trustctl/internal/signing"
 	"trustctl.io/trustctl/internal/store"
@@ -60,10 +61,20 @@ type Deps struct {
 	// before the background GC sweep reclaims it (SPINE-002). Zero uses
 	// idemgc.DefaultRetention. AN-5 holds within the window.
 	IdempotencyRetention time.Duration
-	Logger               *slog.Logger    // structured access log sink (R2.2); nil discards
-	TraceExporter        observ.Exporter // completed-span sink (R2.2); nil is a no-op
-	Bulkhead             *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
-	RateLimiter          api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
+	// OutboxRetention bounds how long a delivered outbox row is kept before the
+	// background purge sweep reclaims it (SPINE-003). Zero uses
+	// outboxgc.DefaultRetention. At-least-once delivery (AN-6) is unaffected — only
+	// already-delivered rows are reclaimed.
+	OutboxRetention time.Duration
+	Logger          *slog.Logger    // structured access log sink (R2.2); nil discards
+	TraceExporter   observ.Exporter // completed-span sink (R2.2); nil is a no-op
+	Bulkhead        *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
+	RateLimiter     api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
+	// SecurityHeaders configures the web-hardening response headers + CORS policy
+	// applied to the whole served surface (SEC-003/WIRE-005). The zero value is
+	// safe (headers on, HSTS off, same-origin-only CORS); Run sets TLS from the
+	// server's TLS mode and AllowedOrigins from config.
+	SecurityHeaders SecurityHeaders
 }
 
 // Server is the assembled control plane.
@@ -71,7 +82,8 @@ type Server struct {
 	store     *store.Store
 	log       *events.Log
 	outbox    *orchestrator.Outbox
-	idemGC    *idemgc.Sweeper // bounds idempotency_keys via the background retention sweep (SPINE-002)
+	idemGC    *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
+	outboxGC  *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler orchestrator.Handler
 	handler   http.Handler
 
@@ -104,6 +116,14 @@ type Server struct {
 
 	// Idempotency-key GC telemetry (SPINE-002): rows reclaimed by the sweep.
 	mIdemPurged *observ.Counter
+
+	// Outbox GC telemetry (SPINE-003): delivered rows reclaimed by the purge sweep.
+	mOutboxPurged *observ.Counter
+
+	// Tailing projection worker + lag gauge (SPINE-009): a durable consumer that
+	// projects events appended out of band and surfaces projection lag.
+	tailWorker *projections.TailWorker
+	mProjLag   *observ.Gauge
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -143,6 +163,12 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// reclaims completed keys past the retention window so the table cannot grow
 	// without limit. AN-5 still holds within the window.
 	s.idemGC = idemgc.New(d.Store, d.IdempotencyRetention)
+	// Bound the outbox the same way (SPINE-003): every external effect writes one
+	// outbox row, and on delivery it is marked delivered but never removed. The purge
+	// worker reclaims delivered rows past the retention window so the table — and its
+	// backups — stay bounded; pending/failed rows are never touched, so at-least-once
+	// delivery (AN-6) is unaffected.
+	s.outboxGC = outboxgc.New(d.Store, d.OutboxRetention)
 
 	// Agent enrollment (F3/F15, S5.1): mint one-time bootstrap tokens and sign
 	// agents' CSRs into mTLS client certificates. Tokens are tenant-bound at mint
@@ -211,6 +237,17 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// Idempotency-key GC counter (SPINE-002): completed keys the background sweep
 	// reclaims, so the table's bound is observable.
 	s.mIdemPurged = s.registry.CounterVec("trustctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
+	// Outbox GC counter (SPINE-003): delivered outbox rows the background purge
+	// reclaims, so the outbox table's bound is observable.
+	s.mOutboxPurged = s.registry.CounterVec("trustctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
+	// Tailing projection worker + lag gauge (SPINE-009): a durable JetStream consumer
+	// projects events appended out of band (not via the inline orchestrator path) and
+	// exports projection lag — the number of events the read model is behind the log
+	// head — so a stuck/divergent projection is observable instead of silently lagging
+	// until the next boot replay. Applying an already-projected event is an idempotent
+	// upsert, so the worker coexists with the orchestrator's inline projection.
+	s.mProjLag = s.registry.Gauge("trustctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
+	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 
 	// Audit retention worker (R4.4): when a retention window and an archive
 	// directory are configured, a background worker archives audit records older
@@ -254,6 +291,16 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		s.bulk = bulkhead.Default()
 	}
 	apiHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a)
+	// Heavy read families (the credential graph + risk scoring) run a per-request
+	// O(inventory) build, so they get their OWN bounded pool (SPINE-005 / AN-7): a
+	// burst of expensive graph/risk requests sheds on the query pool instead of
+	// occupying the API workers and starving cheap CRUD (and /auth, /enroll). The
+	// pool falls back to the api pool only if a custom Bulkhead set omits the query
+	// pool (so a partial set never drops these routes).
+	heavyHandler := apiHandler
+	if s.bulk.Pool(bulkhead.SubsystemQuery) != nil {
+		heavyHandler = bulkheadHandler(s.bulk, bulkhead.SubsystemQuery, a)
+	}
 
 	// 6) Root mux: liveness/readiness/metrics (never bulkheaded, so they answer even
 	// under API saturation), the bulkheaded API (/api + /auth + /enroll), and the
@@ -263,12 +310,23 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.readiness.Handler())
 	mux.Handle("GET /metrics", s.registry.Handler())
+	// The heavy read prefixes are registered as more-specific patterns than "/api/",
+	// so Go's ServeMux routes them to the dedicated query pool while everything else
+	// stays on the api pool (SPINE-005).
+	mux.Handle("/api/v1/graph", heavyHandler)
+	mux.Handle("/api/v1/graph/", heavyHandler)
+	mux.Handle("/api/v1/risk/", heavyHandler)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/auth/", apiHandler)
 	mux.Handle("/enroll/", apiHandler)
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
-	s.handler = mw.Handler(mux)
+	// Web hardening (SEC-003/WIRE-005): the security-headers + CORS middleware is the
+	// OUTERMOST wrapper, so CSP/HSTS/nosniff/frame-deny/Referrer-Policy and the
+	// non-wildcard CORS decision are present on every served response — the API, the
+	// auth/enroll routes, the web UI, and the always-on liveness/readiness/metrics
+	// endpoints — including error and preflight responses.
+	s.handler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(mux))
 	return s, nil
 }
 
@@ -524,6 +582,77 @@ func (s *Server) idemGCOnce(ctx context.Context) {
 			s.mIdemPurged.Add(float64(n))
 		}
 		s.logger.Info("idempotency-key gc reclaimed expired keys", slog.Int64("reclaimed", n))
+	}
+}
+
+// outboxGCInterval is how often the outbox delivered-row purge runs (SPINE-003).
+// Reclaiming delivered rows is a low-urgency maintenance task and the retention
+// window is hours-to-days, so an hourly cadence keeps the table bounded without
+// pressure (same cadence as the idempotency-key GC).
+const outboxGCInterval = time.Hour
+
+// RunOutboxGC reclaims delivered outbox rows past the retention window on a fixed
+// cadence until ctx is cancelled (SPINE-003), keeping the outbox table bounded for a
+// high-volume fleet. At-least-once delivery (AN-6) is unaffected — only already-
+// delivered rows are reclaimed. It sweeps once on start so a long-running deployment
+// reclaims promptly, then on each tick; a sweep error is logged and the next tick
+// retries (same pattern as the idempotency-key GC and the audit retention worker).
+// It is meant to run in its own goroutine.
+func (s *Server) RunOutboxGC(ctx context.Context) {
+	if s.outboxGC == nil {
+		return
+	}
+	s.outboxGCOnce(ctx)
+	t := time.NewTicker(outboxGCInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.outboxGCOnce(ctx)
+		}
+	}
+}
+
+// outboxGCOnce runs a single outbox delivered-row reclamation sweep and records the
+// count. Errors are logged, not returned: the loop retries on the next tick.
+func (s *Server) outboxGCOnce(ctx context.Context) {
+	n, err := s.outboxGC.Sweep(ctx)
+	if err != nil {
+		s.logger.Warn("outbox gc sweep failed", slog.String("error", err.Error()))
+		return
+	}
+	if n > 0 {
+		if s.mOutboxPurged != nil {
+			s.mOutboxPurged.Add(float64(n))
+		}
+		s.logger.Info("outbox gc reclaimed delivered rows", slog.Int64("reclaimed", n))
+	}
+}
+
+// RunProjectionTail runs the tailing projection worker until ctx is cancelled
+// (SPINE-009): a durable consumer that projects any event appended out of band and
+// keeps the projection-lag gauge current. A tail error (e.g. a poison event leaving
+// the durable cursor stuck) is logged and the loop re-enters after a short backoff;
+// the lag gauge plateaus, which is the operator's divergence signal. It is meant to
+// run in its own goroutine.
+func (s *Server) RunProjectionTail(ctx context.Context) {
+	if s.tailWorker == nil {
+		return
+	}
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := s.tailWorker.Run(ctx); err != nil && ctx.Err() == nil {
+			s.logger.Warn("projection tail worker stopped; retrying", slog.String("error", err.Error()))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+		}
 	}
 }
 

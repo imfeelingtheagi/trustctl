@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"trustctl.io/trustctl/internal/connector"
+	"trustctl.io/trustctl/internal/crypto/secret"
 	"trustctl.io/trustctl/internal/pluginhost"
 )
 
@@ -41,11 +42,14 @@ const importPath = "/api/certificate/import"
 
 // Connector deploys certificates to a Cisco ASA / ISE over its HTTPS management
 // API (the ISE ERS / ASA REST API), authenticating with HTTP Basic.
+//
+// The management password is held as []byte, never a string, so it can be wiped
+// and is not freely copied by the GC (AN-8). Close zeroizes it.
 type Connector struct {
 	baseURL string // management base, e.g. https://ise.example (no trailing slash)
 	host    string // host[:port] of baseURL, for the net.dial grant
 	user    string
-	pass    string
+	pass    []byte // management password (AN-8: []byte, wiped by Close)
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -56,11 +60,14 @@ type Option func(*Connector)
 // New returns a Cisco connector for the management API at baseURL, authenticating
 // with the given username and password over HTTP Basic. The grant's net.dial host
 // is derived from baseURL so the sandbox admits exactly the management endpoint.
-func New(baseURL, username, password string, opts ...Option) *Connector {
+//
+// password is taken as []byte (AN-8). The connector copies it into its own buffer
+// so the caller may wipe theirs; call Close to zeroize the connector's copy.
+func New(baseURL, username string, password []byte, opts ...Option) *Connector {
 	c := &Connector{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		user:    username,
-		pass:    password,
+		pass:    append([]byte(nil), password...),
 	}
 	if u, err := url.Parse(baseURL); err == nil {
 		c.host = u.Host
@@ -69,6 +76,12 @@ func New(baseURL, username, password string, opts ...Option) *Connector {
 		o(c)
 	}
 	return c
+}
+
+// Close zeroizes the held management password (AN-8).
+func (c *Connector) Close() {
+	secret.Wipe(c.pass)
+	c.pass = nil
 }
 
 // Name identifies the connector.
@@ -99,6 +112,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("cisco: encode request: %w", err)
 	}
+	// The marshaled body carries the private-key PEM on the wire. It is the
+	// transient edge copy (the long-lived key stays []byte in dep.KeyPEM); wipe it
+	// once the request has been sent so the key does not linger in this buffer (AN-8).
+	defer secret.Wipe(body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+importPath, bytes.NewReader(body))
 	if err != nil {
@@ -123,9 +140,17 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 // basicAuth builds the HTTP Basic Authorization header value,
 // "Basic base64(user:pass)", using encoding/base64 (not a crypto primitive, so
-// AN-3 is preserved). The credential never appears in a log or an error.
+// AN-3 is preserved). The credential never appears in a log or an error. The
+// "user:pass" form is assembled in a []byte that is wiped after encoding so the
+// password is not left in a GC-managed string (AN-8).
 func (c *Connector) basicAuth() string {
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(c.user+":"+c.pass))
+	raw := make([]byte, 0, len(c.user)+1+len(c.pass))
+	raw = append(raw, c.user...)
+	raw = append(raw, ':')
+	raw = append(raw, c.pass...)
+	enc := "Basic " + base64.StdEncoding.EncodeToString(raw)
+	secret.Wipe(raw) // the cleartext user:pass copy does not outlive this call
+	return enc
 }
 
 // importRequest is the certificate-import body for the Cisco management API. The

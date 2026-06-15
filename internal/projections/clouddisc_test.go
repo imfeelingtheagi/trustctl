@@ -129,7 +129,7 @@ func TestCloudDiscoveryReconcilesToInventoryAndGraph(t *testing.T) {
 	}
 
 	// Reconciled into the inventory.
-	certs, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 100, nil)
+	certs, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 100, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -256,3 +256,8 @@ func componentSchemas() map[string]*Schema {
 func (a *API) openapiHandler(w http.ResponseWriter, _ *http.Request) {
 	a.writeJSON(w, http.StatusOK, a.spec)
 }
+
+// Spec returns the generated OpenAPI document. It is exported so the golden-contract
+// test (SCHEMA-004) can diff the served spec against a checked-in baseline and the
+// breaking-change assertions can inspect it without going over HTTP.
+func (a *API) Spec() *Document { return a.spec }

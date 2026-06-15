@@ -113,7 +113,7 @@ func (f *fakeCisco) authOK(r *http.Request) bool {
 
 // The connector satisfies the shared connector conformance suite.
 func TestCiscoConformance(t *testing.T) {
-	c := cisco.New("https://ise.example", user, pass)
+	c := cisco.New("https://ise.example", user, []byte(pass))
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {
@@ -130,7 +130,7 @@ func TestDeploysCert(t *testing.T) {
 	srv := newFakeCisco(user, pass)
 	defer srv.Close()
 
-	c := cisco.New(srv.URL(), user, pass)
+	c := cisco.New(srv.URL(), user, []byte(pass))
 	ops := connector.NewHTTPOps(srv.Client())
 
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(name, sampleCert, sampleKey)); err != nil {
@@ -154,7 +154,7 @@ func TestBadCredentialsRejected(t *testing.T) {
 	srv := newFakeCisco(user, pass)
 	defer srv.Close()
 
-	c := cisco.New(srv.URL(), user, "wrong-password")
+	c := cisco.New(srv.URL(), user, []byte("wrong-password"))
 	ops := connector.NewHTTPOps(srv.Client())
 
 	_, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(name, sampleCert, sampleKey))
@@ -180,7 +180,7 @@ func TestPasswordNeverLogged(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := cisco.New(srv.URL, user, secret)
+	c := cisco.New(srv.URL, user, []byte(secret))
 	ops := connector.NewHTTPOps(srv.Client())
 
 	_, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(name, sampleCert, sampleKey))

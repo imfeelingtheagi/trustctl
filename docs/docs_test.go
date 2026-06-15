@@ -507,6 +507,67 @@ func binaryServesIssuanceProtocols(t *testing.T) bool {
 	return false
 }
 
+// serverComposesPolicyGate reports whether the served composition (internal/api or
+// internal/server) wires the OPA/Rego policy engine onto a served route by
+// importing internal/policy. Today it does not — the engine is library-only
+// (SEC-005). When EXC-WIRE-03 gates the served mutation path on it, the import
+// appears and this flips true, forcing the not-yet-served disclosure to be retired.
+func serverComposesPolicyGate(t *testing.T) bool {
+	t.Helper()
+	for _, dir := range []string{"../internal/api", "../internal/server"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			if strings.Contains(read(t, f), `trustctl.io/trustctl/internal/policy"`) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// serverEnforcesRASeparation reports whether a served route enforces the RA
+// request/approve/issue separation — either by importing the approval workflow
+// package into the served composition or by GATING a served route on the
+// certs:request / certs:issue permissions (the route registry binds a route to a
+// permission via `perm: authz.X`, and a handler may also call guard(authz.X, …)).
+// Today none holds (SEC-002): the served issuance path is an identities:write
+// transition and the approval package has no served importer. It deliberately
+// does NOT match a bare mention of the constant — e.g. `string(authz.CertsRequest)`
+// in the token-create command lists it as an available token SCOPE, which does not
+// gate a served route — so only a real route binding flips this true (EXC-WIRE-03).
+func serverEnforcesRASeparation(t *testing.T) bool {
+	t.Helper()
+	for _, dir := range []string{"../internal/api", "../internal/server"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			src := read(t, f)
+			if strings.Contains(src, `trustctl.io/trustctl/internal/approval"`) {
+				return true
+			}
+			// A served route GATED on an RA permission: the route-registry binding
+			// (`perm: authz.CertsIssue`) or a direct guard(authz.CertsIssue, …) call.
+			for _, perm := range []string{"CertsIssue", "CertsRequest"} {
+				if strings.Contains(src, "perm: authz."+perm) || strings.Contains(src, "guard(authz."+perm) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// binaryMapsPerUserTenant reports whether the served browser-login path maps a
+// user to a real per-user tenant rather than the single configured DefaultTenant.
+// Today it does not (TENANT-004): authCallback issues the session with
+// a.auth.DefaultTenant. When EXC-WIRE-01 derives the tenant from the OIDC
+// subject/claims at session issue, that DefaultTenant-at-issue pattern is gone and
+// this flips true, forcing the disclosure to be retired.
+func binaryMapsPerUserTenant(t *testing.T) bool {
+	t.Helper()
+	auth := read(t, "../internal/api/auth.go")
+	// The unwired state: the session is issued with the configured DefaultTenant. If
+	// that exact pattern is no longer present, per-user mapping has landed.
+	return !strings.Contains(auth, "Sessions.Issue(claims.Subject, a.auth.DefaultTenant")
+}
+
 // binaryServesReactConsole reports whether the embedded web UI is a real built
 // bundle (a hashed Vite asset) rather than the committed placeholder shell. Today
 // it is the placeholder, so the binary serves a "not built" page (SURFACE-001).
@@ -605,6 +666,53 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 			},
 			codeServed: binaryServesIssuanceProtocols,
 		},
+		{
+			// SEC-005: the OPA/Rego policy gate (default-deny on issue/deploy/revoke)
+			// is real, tested library code but the served binary never invokes it. A
+			// future PR that wires internal/policy into the served mutation path
+			// (EXC-WIRE-03) must retire this disclosure; a PR that claims it is served
+			// while the binary still does not import internal/policy fails here.
+			name:              "OPA/Rego policy gate on the served mutation path (SEC-005)",
+			disclosureMarkers: []string{"opa/rego policy gate", "the served binary never invokes it"},
+			epic:              "EXC-WIRE-03",
+			overClaims: []string{
+				"the opa policy gate is served",
+				"the rego policy gate is served",
+				"the policy engine gates the served",
+			},
+			codeServed: serverComposesPolicyGate,
+		},
+		{
+			// SEC-002: RA separation & dual-control approval are modeled and tested in
+			// the RBAC/approval libraries but enforced on no served route. A future PR
+			// that gates a served request/approve/issue flow on certs:request/certs:issue
+			// (EXC-WIRE-03) must retire this disclosure; a PR that claims RA separation is
+			// served while no served route uses it fails here.
+			name:              "RA separation & dual-control on a served route (SEC-002)",
+			disclosureMarkers: []string{"registration-authority (ra) separation", "not yet enforced on any served route"},
+			epic:              "EXC-WIRE-03",
+			overClaims: []string{
+				"ra separation is served",
+				"dual control is served",
+				"the approval workflow is served",
+			},
+			codeServed: serverEnforcesRASeparation,
+		},
+		{
+			// TENANT-004: browser/OIDC logins all map to a single DefaultTenant; per-user
+			// tenant mapping is not yet wired. A future PR that maps the OIDC subject/claims
+			// to the real tenant at session issue (EXC-WIRE-01) must retire this disclosure;
+			// a PR that claims per-user tenant mapping is served while auth.go still issues
+			// sessions with the configured DefaultTenant fails here.
+			name:              "Per-user tenant mapping for browser logins (TENANT-004)",
+			disclosureMarkers: []string{"per-user tenant mapping is not yet wired", "defaulttenant"},
+			epic:              "EXC-WIRE-01",
+			overClaims: []string{
+				"per-user tenant mapping is served",
+				"per-user tenant mapping is wired",
+			},
+			codeServed: binaryMapsPerUserTenant,
+		},
 	}
 
 	for _, c := range claims {
@@ -643,6 +751,21 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 	if !serverComposesAuth(t) && !apiHasWithAuthOption(t) {
 		t.Error("internal/api no longer exposes WithAuth; the OIDC served-vs-library disclosure has no code anchor — revisit this reality test")
 	}
+
+	// Reality anchors for the SEC-005 / SEC-002 / TENANT-004 disclosures: the library
+	// code each rests on must keep existing while it is not served, so a "built but
+	// not served" claim is grounded (fail loudly if a seam is removed, rather than a
+	// silently-stale green disclosure).
+	if !strings.Contains(read(t, "../internal/policy/policy.go"), "func (e *Engine) Evaluate(") {
+		t.Error("internal/policy no longer exposes Engine.Evaluate; the SEC-005 policy-gate disclosure has no code anchor — revisit this reality test")
+	}
+	if !strings.Contains(read(t, "../internal/authz/authz.go"), "CertsIssue") ||
+		!strings.Contains(read(t, "../internal/authz/authz.go"), "CertsRequest") {
+		t.Error("internal/authz no longer defines the certs:request/certs:issue RA-separation permissions; the SEC-002 disclosure has no code anchor — revisit this reality test")
+	}
+	if !strings.Contains(read(t, "../internal/api/auth.go"), "DefaultTenant") {
+		t.Error("internal/api/auth.go no longer references DefaultTenant; the TENANT-004 single-tenant disclosure has no code anchor — revisit this reality test")
+	}
 }
 
 // apiHasWithAuthOption reports whether internal/api still exposes the WithAuth
@@ -660,6 +783,214 @@ func containsAll(s string, subs []string) bool {
 		}
 	}
 	return true
+}
+
+// binaryServesSecretsFrameworks reports whether the served binary (internal/api,
+// internal/server, cmd/trustctl) imports ANY of the five secrets/identity
+// frameworks — the workload auth-method framework, secret-sync, the secrets SDK,
+// PKI-as-a-secret, and secret sharing. Today none is imported on the served path:
+// they are library-only (GAP-006). When a future change mounts one of these on the
+// served listener (EXC-WIRE-03), the corresponding import appears and this flips
+// true, forcing the not-yet-served disclosure to be retired.
+func binaryServesSecretsFrameworks(t *testing.T) bool {
+	t.Helper()
+	imports := []string{
+		`trustctl.io/trustctl/internal/authmethod"`,
+		`trustctl.io/trustctl/internal/secretsync"`,
+		`trustctl.io/trustctl/internal/secretsdk"`,
+		`trustctl.io/trustctl/internal/pkisecret"`,
+		`trustctl.io/trustctl/internal/secretshare"`,
+	}
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trustctl"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			src := read(t, f)
+			for _, imp := range imports {
+				if strings.Contains(src, imp) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// TestSecretsFrameworksDisclosedAsLibraryOnly is the reality-bound disclosure for
+// GAP-006: the five secrets/identity frameworks (authmethod F58, secretsync F60,
+// secretsdk F64, pkisecret F67, secretshare F68) are library-complete but not
+// served end-to-end by the binary. While the binary does not import them on the
+// served path, limitations.md must name each and link the wire-in epic; if a
+// future change serves one (the import appears) the stale not-served disclosure
+// must be retired. The package directories must also still exist, anchoring the
+// disclosure in real code.
+func TestSecretsFrameworksDisclosedAsLibraryOnly(t *testing.T) {
+	for _, pkg := range []string{"authmethod", "secretsync", "secretsdk", "pkisecret", "secretshare"} {
+		if _, err := os.Stat(filepath.FromSlash("../internal/" + pkg)); err != nil {
+			t.Fatalf("internal/%s no longer exists; revisit this reality test (GAP-006)", pkg)
+		}
+	}
+
+	lim := read(t, "limitations.md")
+	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
+
+	if binaryServesSecretsFrameworks(t) {
+		// Now genuinely served: the not-yet-served disclosure would be a stale
+		// under-claim and must have been retired.
+		if strings.Contains(low, "not yet served by the binary") && strings.Contains(low, "five frameworks") {
+			t.Error("a secrets framework appears to be SERVED now, but limitations.md still discloses the five as not-yet-served — update the disclosure (EXC-WIRE-03 closed)")
+		}
+		return
+	}
+
+	// Not served: every package and its feature id is disclosed, and the epic is linked.
+	for _, pkg := range []string{"authmethod", "secretsync", "secretsdk", "pkisecret", "secretshare"} {
+		if !strings.Contains(low, pkg) {
+			t.Errorf("limitations.md must disclose the library-only %s framework", pkg)
+		}
+	}
+	for _, fid := range []string{"F58", "F60", "F64", "F67", "F68"} {
+		if !strings.Contains(lim, fid) {
+			t.Errorf("limitations.md should cite the feature id %s in the secrets-frameworks disclosure", fid)
+		}
+	}
+	if !strings.Contains(lim, "EXC-WIRE-03") {
+		t.Error("limitations.md must link the wire-in epic EXC-WIRE-03 for the secrets/identity frameworks")
+	}
+}
+
+// agentImportsSSHTrust reports whether the agent binary or its (non-sshtrust)
+// agent packages import the privileged SSH-trust rewrite package. Today nothing
+// links it (SIGNER-004): it is library-only. When a future change wires it behind
+// an operator opt-in (EXC-WIRE-05), the import appears and this flips true, forcing
+// the not-yet-served disclosure to be retired.
+func agentImportsSSHTrust(t *testing.T) bool {
+	t.Helper()
+	const imp = `trustctl.io/trustctl/internal/agent/sshtrust"`
+	dirs := []string{"../cmd/trustctl-agent", "../internal/agent"}
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(filepath.FromSlash(dir))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+				continue
+			}
+			if strings.Contains(read(t, dir+"/"+e.Name()), imp) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestSSHTrustRewriteDisclosedAsLibraryOnly is the reality-bound disclosure for
+// SIGNER-004: the privileged SSH-trust rewrite applier (internal/agent/sshtrust)
+// is built and tested but linked into no binary. While the agent does not import
+// it, limitations.md must disclose the discover-not-mutate split and link
+// EXC-WIRE-05; if a future change wires it, the stale disclosure must be retired.
+func TestSSHTrustRewriteDisclosedAsLibraryOnly(t *testing.T) {
+	if _, err := os.Stat(filepath.FromSlash("../internal/agent/sshtrust/sshtrust.go")); err != nil {
+		t.Fatalf("internal/agent/sshtrust no longer exists; revisit this reality test (SIGNER-004)")
+	}
+	lim := read(t, "limitations.md")
+	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
+
+	if agentImportsSSHTrust(t) {
+		if strings.Contains(low, "not linked into any binary") {
+			t.Error("sshtrust appears to be WIRED now, but limitations.md still discloses it as not-linked — update the disclosure (EXC-WIRE-05 closed)")
+		}
+		return
+	}
+	for _, m := range []string{"sshtrust", "not linked into any binary", "signer-004"} {
+		if !strings.Contains(low, m) {
+			t.Errorf("limitations.md must disclose the library-only SSH-trust rewrite (missing marker %q)", m)
+		}
+	}
+	if !strings.Contains(lim, "EXC-WIRE-05") {
+		t.Error("limitations.md must link the wire-in epic EXC-WIRE-05 for the SSH-trust rewrite")
+	}
+	// Over-claim guard: do not claim the rewrite is served/active.
+	for _, oc := range []string{"ssh trust rewrite is served", "the agent rewrites a host's trust"} {
+		if strings.Contains(low, oc) {
+			t.Errorf("limitations.md over-claims the SSH-trust rewrite as active (%q) while it is unlinked", oc)
+		}
+	}
+}
+
+// repoHasFIPSBuildTarget reports whether the repository defines any FIPS-validated
+// build path — a boringcrypto build target, a GOEXPERIMENT=boringcrypto invocation,
+// or a //go:build boringcrypto-tagged file. Today none exists (PKIGOV-007): the
+// default build uses Go's standard crypto, not a CMVP-validated module. When a
+// future change adds a validated-module build target (EXC-CRYPTO-01), this flips
+// true, forcing the "no FIPS build" disclosure to be retired.
+func repoHasFIPSBuildTarget(t *testing.T) bool {
+	t.Helper()
+	for _, f := range []string{"../Makefile", "../go.mod"} {
+		b, err := os.ReadFile(filepath.FromSlash(f))
+		if err != nil {
+			continue
+		}
+		s := strings.ToLower(string(b))
+		if strings.Contains(s, "boringcrypto") || strings.Contains(s, "goexperiment=boringcrypto") {
+			return true
+		}
+	}
+	// A build-tagged FIPS source file anywhere under internal/crypto would also count.
+	matches, _ := filepath.Glob(filepath.FromSlash("../internal/crypto/*fips*.go"))
+	return len(matches) > 0
+}
+
+// TestFIPSBuildDisclosedAsUnavailable is the reality-bound disclosure for
+// PKIGOV-007: there is no FIPS-validated build path today. While the repo has no
+// boringcrypto/validated-module target, compliance.md must disclose FIPS as not
+// available and link EXC-CRYPTO-01; if a future change adds a validated build
+// target, the stale "not available" disclosure must be retired.
+func TestFIPSBuildDisclosedAsUnavailable(t *testing.T) {
+	comp := read(t, "compliance.md")
+	low := strings.ToLower(comp)
+
+	if repoHasFIPSBuildTarget(t) {
+		if strings.Contains(low, "no fips-validated build path today") {
+			t.Error("a FIPS build target appears to exist now, but compliance.md still says none does — update the disclosure (EXC-CRYPTO-01 closed)")
+		}
+		return
+	}
+	for _, m := range []string{"no fips-validated build path", "boringcrypto"} {
+		if !strings.Contains(low, m) {
+			t.Errorf("compliance.md must disclose FIPS as unavailable (missing marker %q)", m)
+		}
+	}
+	if !strings.Contains(comp, "EXC-CRYPTO-01") {
+		t.Error("compliance.md must link the regulated-controls epic EXC-CRYPTO-01 for the FIPS build")
+	}
+	if !strings.Contains(comp, "PKIGOV-007") {
+		t.Error("compliance.md should cite PKIGOV-007 in the FIPS disclosure so the finding is traceable")
+	}
+}
+
+// TestProtocolDocsNoLongerClaimPlaceholders is the reality-bound guard for
+// INTEROP-008: the EST/SCEP/CMP/SPIFFE/SSH protocol packages are complete, tested
+// implementations, so their doc.go comments must NOT call themselves placeholders
+// ("reserves the package" / "implementation begins"). A regression that re-adds a
+// placeholder line fails here, keeping the package docs honest to the code.
+func TestProtocolDocsNoLongerClaimPlaceholders(t *testing.T) {
+	stale := []string{"reserves the package", "implementation begins"}
+	for _, f := range []string{
+		"../internal/protocols/doc.go",
+		"../internal/protocols/est/doc.go",
+		"../internal/protocols/scep/doc.go",
+	} {
+		src := strings.ToLower(read(t, f))
+		for _, phrase := range stale {
+			if strings.Contains(src, phrase) {
+				t.Errorf("%s still calls a complete, tested protocol a placeholder (%q) — INTEROP-008", f, phrase)
+			}
+		}
+	}
+	// The protocols grouping doc must now name CMP (the finding noted it was absent).
+	if !strings.Contains(strings.ToLower(read(t, "../internal/protocols/doc.go")), "cmp") {
+		t.Error("internal/protocols/doc.go does not mention CMP; INTEROP-008 wants it listed with the other protocols")
+	}
 }
 
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one

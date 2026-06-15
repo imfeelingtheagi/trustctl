@@ -31,8 +31,20 @@ type Validator interface {
 
 // HTTP01Validator validates http-01 challenges by fetching the key authorization
 // from the well-known URL on the identifier's domain (RFC 8555 §8.3).
+//
+// SSRF guard (SEC-006): the challenge domain is an attacker-influenced identifier,
+// so the default client refuses to connect to a non-public resolved address
+// (loopback, link-local incl. 169.254.169.254, private, unique-local) and bounds
+// redirects, defeating a metadata/internal-endpoint fetch and DNS rebinding. An
+// explicitly injected Client is trusted and used as-is (e.g. the conformance
+// harness pointing at a loopback test server); AllowPrivateTargets opts the
+// default client out of the guard for tests that must dial loopback directly.
 type HTTP01Validator struct {
 	Client *http.Client
+	// AllowPrivateTargets disables the SSRF guard on the DEFAULT client only. It
+	// exists for tests that deliberately dial a loopback httptest server; it is
+	// false in production, where every fetch is guarded.
+	AllowPrivateTargets bool
 }
 
 // Validate performs the http-01 check.
@@ -42,7 +54,13 @@ func (v HTTP01Validator) Validate(ctx context.Context, challengeType, domain, to
 	}
 	client := v.Client
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+		// Default to the SSRF-guarded client (SEC-006). Tests that must reach loopback
+		// set AllowPrivateTargets to get an unguarded default instead.
+		if v.AllowPrivateTargets {
+			client = &http.Client{Timeout: 5 * time.Second}
+		} else {
+			client = ssrfSafeClient(5 * time.Second)
+		}
 	}
 	url := "http://" + domain + "/.well-known/acme-challenge/" + token
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

@@ -214,7 +214,7 @@ func allCertificates(ctx context.Context, st *store.Store, tenantID string) ([]s
 	var out []store.Certificate
 	after := store.ZeroUUID
 	for {
-		page, err := st.ListCertificatesPage(ctx, tenantID, after, pageSize, nil)
+		page, err := st.ListCertificatesPage(ctx, tenantID, after, nil, pageSize, nil)
 		if err != nil {
 			return nil, err
 		}

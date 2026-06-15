@@ -10,6 +10,7 @@ import (
 	"trustctl.io/trustctl/internal/ca/hierarchy"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/store"
 )
 
@@ -66,6 +67,58 @@ func TestKeyCeremonyRequiresQuorum(t *testing.T) {
 	}
 	if root.ID == "" || root.Kind != "root" || root.Status != "active" {
 		t.Fatalf("root = %+v", root)
+	}
+}
+
+// TestKeyCeremonySeparationOfDuties is the PKIGOV-006 acceptance: a ceremony's
+// opener may not approve their own ceremony (opener != approver), and an
+// approval must carry a named, authenticated custodian — not an empty/anonymous
+// string. The opener and approver identities are bound from the request context's
+// actor, so they cannot be spoofed by a caller-chosen string on the served path.
+//
+// These checks FAIL on the pre-fix tree, which recorded no opener and accepted any
+// custodian string (a single operator could open and self-approve, defeating
+// m-of-n).
+func TestKeyCeremonySeparationOfDuties(t *testing.T) {
+	s := newStore(t)
+	m := hierarchy.NewManager(s, openLog(t))
+
+	// Alice opens the ceremony (actor bound from context).
+	aliceCtx := events.ContextWithActor(context.Background(), events.Actor{Subject: "alice"})
+	id, err := m.StartCeremony(aliceCtx, tenantA, "root:SoD Root", 2)
+	if err != nil {
+		t.Fatalf("StartCeremony: %v", err)
+	}
+
+	// The opener cannot approve their own ceremony: opener == approver is rejected.
+	if _, err := m.Approve(aliceCtx, tenantA, id, "alice"); !errors.Is(err, store.ErrSelfApproval) {
+		t.Fatalf("opener self-approval err = %v, want ErrSelfApproval", err)
+	}
+	// Confirm the rejected self-approval did NOT record an approval.
+	cer, err := s.GetKeyCeremony(context.Background(), tenantA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cer.Approvals != 0 {
+		t.Fatalf("a rejected self-approval was recorded: approvals = %d, want 0", cer.Approvals)
+	}
+	if cer.Opener != "alice" {
+		t.Errorf("ceremony opener = %q, want alice (opener not bound)", cer.Opener)
+	}
+
+	// A distinct, authenticated custodian (bob) is accepted.
+	bobCtx := events.ContextWithActor(context.Background(), events.Actor{Subject: "bob"})
+	n, err := m.Approve(bobCtx, tenantA, id, "ignored-the-actor-wins")
+	if err != nil {
+		t.Fatalf("bob Approve: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("after bob's approval count = %d, want 1", n)
+	}
+
+	// An anonymous approval (no actor, empty custodian) is rejected.
+	if _, err := m.Approve(context.Background(), tenantA, id, ""); !errors.Is(err, store.ErrAnonymousApproval) {
+		t.Errorf("anonymous approval err = %v, want ErrAnonymousApproval", err)
 	}
 }
 

@@ -228,6 +228,32 @@ jobs:
             --set nats.url='nats://nats:4222' --set kek.generate=true \
             | kubeconform -strict -summary -ignore-missing-schemas
 
+  proto:
+    name: proto (buf lint + breaking-change gate)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so `buf breaking --against '.git#branch=main'` can resolve
+          # the baseline contract to diff against.
+          fetch-depth: 0
+
+      - name: Install buf (pinned)
+        uses: bufbuild/buf-action@v1
+        with:
+          version: 1.47.2
+          setup_only: true
+
+      # Lint the signer proto and fail the build on a wire-incompatible change to the
+      # control-plane↔signer gRPC contract (AN-4): a removed/renumbered field, a
+      # changed type, a removed RPC/message/enum. Additive changes pass.
+      - name: buf lint
+        run: buf lint
+
+      - name: buf breaking (against main)
+        run: buf breaking --against '.git#branch=main'
+
   acme-conformance:
     name: acme conformance (Pebble differential)
     runs-on: ubuntu-latest

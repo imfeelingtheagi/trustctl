@@ -38,11 +38,15 @@ const (
 )
 
 // Config holds the SCM connection and enrollment settings.
+//
+// Password is the SCM API secret; it is held as []byte, never a string, so it can
+// be wiped and is not freely copied by the GC (AN-8). Login/CustomerURI are
+// non-secret identifiers.
 type Config struct {
 	Name        string
 	BaseURL     string // e.g. https://cert-manager.com
 	Login       string
-	Password    string
+	Password    []byte // SCM API password (AN-8: []byte, never logged)
 	CustomerURI string
 	OrgID       int // organization/department the certificate is issued under
 	CertType    int // SCM certificate profile/type id
@@ -216,7 +220,9 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 
 func (b *backend) setAuth(r *http.Request) {
 	r.Header.Set("login", b.cfg.Login)
-	r.Header.Set("password", b.cfg.Password)
+	// string(...) is the transient edge form of the []byte password sent on the
+	// wire (AN-8); the long-lived secret stays []byte in the Config.
+	r.Header.Set("password", string(b.cfg.Password))
 	r.Header.Set("customerUri", b.cfg.CustomerURI)
 	r.Header.Set("Accept", "application/json")
 }

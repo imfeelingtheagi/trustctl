@@ -62,7 +62,7 @@ func readModelSnapshot(t *testing.T, s *store.Store) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	certs, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 1000, nil)
+	certs, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 1000, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func countReadModel(t *testing.T, s *store.Store) (nOwners, nIssuers, nIdents, n
 	o, _ := s.ListOwners(ctx, tenantA)
 	i, _ := s.ListIssuers(ctx, tenantA)
 	d, _ := s.ListIdentities(ctx, tenantA)
-	c, _ := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 1000, nil)
+	c, _ := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 1000, nil)
 	return len(o), len(i), len(d), len(c)
 }
 

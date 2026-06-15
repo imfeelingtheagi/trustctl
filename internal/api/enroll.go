@@ -5,7 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
+
+	"trustctl.io/trustctl/internal/protocol"
 )
 
 // ErrInvalidBootstrapToken is what a BootstrapEnroller returns (recognizable via
@@ -53,6 +57,18 @@ type enrollBootstrapResponse struct {
 func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 	if a.agentEnroller == nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
+		return
+	}
+	// Agent↔control-plane version negotiation (SCHEMA-003): the server always echoes
+	// the protocol version it speaks, and rejects an agent whose protocol is outside
+	// the supported window with a clear, actionable error instead of failing opaquely
+	// later. A pre-handshake agent (no header) reads as the baseline and is accepted,
+	// so the handshake is additive and does not break already-deployed agents.
+	w.Header().Set(protocol.HeaderServerProtocol, strconv.Itoa(protocol.Version))
+	if ver := protocol.ParseAgentProtocol(r.Header); !protocol.Supported(ver) {
+		a.writeError(w, errStatus(http.StatusBadRequest, fmt.Sprintf(
+			"unsupported agent protocol version %d (this control plane supports %d-%d); upgrade or downgrade the agent",
+			ver, protocol.MinSupportedVersion, protocol.MaxSupportedVersion)))
 		return
 	}
 	var req enrollBootstrapRequest

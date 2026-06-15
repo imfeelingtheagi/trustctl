@@ -109,7 +109,7 @@ func newProvider(t *testing.T, f *fakeACMEDNS, creds acmedns.Credentials) *acmed
 }
 
 func goodCreds() acmedns.Credentials {
-	return acmedns.Credentials{Username: testUser, Password: testKey}
+	return acmedns.Credentials{Username: testUser, Password: []byte(testKey)}
 }
 
 // Why not acme.ConformDNSProvider here? That harness asserts a full
@@ -189,7 +189,7 @@ func TestPresentIsIdempotent(t *testing.T) {
 func TestBadCredentialsRejected(t *testing.T) {
 	f := newFakeACMEDNS(testUser, testKey)
 	defer f.Close()
-	p := newProvider(t, f, acmedns.Credentials{Username: testUser, Password: "wrong-apikey"})
+	p := newProvider(t, f, acmedns.Credentials{Username: testUser, Password: []byte("wrong-apikey")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {
@@ -206,7 +206,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	f := newFakeACMEDNS(testUser, testKey)
 	defer f.Close()
 	const secret = "ultra-secret-acme-dns-apikey"
-	p := newProvider(t, f, acmedns.Credentials{Username: testUser, Password: secret})
+	p := newProvider(t, f, acmedns.Credentials{Username: testUser, Password: []byte(secret)})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {

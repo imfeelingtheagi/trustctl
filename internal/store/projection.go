@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -85,18 +86,22 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 	if sans == nil {
 		sans = []string{}
 	}
+	// replaces_id is carried when this certificate is the successor of a
+	// renewal/rotation (CORRECT-002); nil on a first issuance. Projecting it here
+	// keeps the predecessor link reconstructable from the log on a Rebuild().
 	_, err := tx.Exec(ctx,
 		`INSERT INTO certificates
 		        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
-		         key_algorithm, not_before, not_after, deployment_location, source, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		         key_algorithm, not_before, not_after, deployment_location, source, replaces_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 		    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 		        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
 		        not_before = EXCLUDED.not_before, not_after = EXCLUDED.not_after,
-		        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source`,
+		        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source,
+		        replaces_id = EXCLUDED.replaces_id`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
-		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, c.CreatedAt)
+		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, c.ReplacesID, c.CreatedAt)
 	return err
 }
 
@@ -113,6 +118,23 @@ func (s *Store) SetCertificateRevokedTx(ctx context.Context, tx pgx.Tx, tenantID
 		    SET status = 'revoked', revoked_at = $3, revocation_reason = $4
 		  WHERE tenant_id = $1 AND fingerprint = $2`,
 		tenantID, fingerprint, at, reason)
+	return err
+}
+
+// SetCertificateSupersededTx projects a certificate.superseded event: it retires
+// the inventoried certificate (status superseded, renewed_at stamped) on the
+// caller's transaction (CORRECT-002). Like SetCertificateRevokedTx, the status
+// change runs through the projector — the sole read-model writer (AN-2) — so it is
+// reconstructed from the log on a Rebuild() instead of being a lost direct write.
+// A revoked certificate is NOT downgraded to superseded: revocation is terminal,
+// so the guard keeps a revoke that raced a renewal authoritative. Keyed by
+// fingerprint so a replay is deterministic and idempotent.
+func (s *Store) SetCertificateSupersededTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint string, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE certificates
+		    SET status = 'superseded', renewed_at = $3
+		  WHERE tenant_id = $1 AND fingerprint = $2 AND status <> 'revoked'`,
+		tenantID, fingerprint, at)
 	return err
 }
 
@@ -213,4 +235,77 @@ func (s *Store) TruncateReadModel(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx,
 		`TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`)
 	return err
+}
+
+// RebuildReadModelTx runs an atomic read-model rebuild (RESIL-003): in ONE
+// transaction it truncates ReadModelTables, then calls apply to re-derive every row
+// from the event log. Either the whole rebuild commits or it rolls back — a crash
+// or error mid-replay leaves the prior read model fully intact rather than a
+// truncated/partial inventory the API might answer queries from.
+//
+// It runs as the connecting (owner) role, which bypasses row-level security, because
+// (a) TRUNCATE needs owner privilege and (b) a rebuild re-derives EVERY tenant's
+// rows in one pass — a deliberate cross-tenant system operation, like the projection
+// workers and the backup/restore path. AN-1 is preserved because every projection
+// write carries its tenant_id explicitly in the SQL (the read-model sinks filter/
+// insert on tenant_id), so RLS bypass here does not let a row land under the wrong
+// tenant. The session's trustctl.tenant_id GUC is set per event by the caller via
+// SetTenantGUCTx so any tenant-scoped logic still sees the right tenant.
+func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`); err != nil {
+		return err
+	}
+	if err := apply(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// SetTenantGUCTx sets the trustctl.tenant_id session variable on tx (LOCAL to the
+// transaction) so tenant-scoped projection logic sees the right tenant during an
+// atomic rebuild (RESIL-003). Unlike WithTenant it does NOT switch to the RLS role:
+// the atomic rebuild runs as the owner (it must TRUNCATE and write every tenant), so
+// only the GUC is set.
+func (s *Store) SetTenantGUCTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
+	_, err := tx.Exec(ctx, "SELECT set_config('trustctl.tenant_id', $1, true)", tenantID)
+	return err
+}
+
+// UpsertTenantTx inserts or updates a tenant row on the caller's transaction, for
+// the atomic rebuild path (RESIL-003) where the tenant projection must share the
+// rebuild's single transaction. It is a system (cross-tenant) write, like
+// UpsertTenant.
+func (s *Store) UpsertTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
+		 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, event_seq = EXCLUDED.event_seq`,
+		t.TenantID, t.Name, int64(t.EventSeq))
+	return err
+}
+
+// DeleteTenantReadModelTx deletes one tenant's rows from the event-sourced read
+// model (ReadModelTables) on the caller's transaction, for the atomic-rebuild replay
+// of a tenant.offboarded event (RESIL-003): within a rebuild, a deleted tenant must
+// not be resurrected, and the rebuild owns exactly these tables. Each DELETE carries
+// tenant_id explicitly (AN-1). It does NOT touch independent tenant tables (those are
+// not rebuilt from the log); the live OffboardTenant path handles the full erase.
+// Deletes children before the tenants row so a foreign key never blocks the erase.
+func (s *Store) DeleteTenantReadModelTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
+	if tenantID == "" {
+		return fmt.Errorf("store: DeleteTenantReadModelTx requires a tenant id (AN-1)")
+	}
+	// Order: dependents first. identity_transitions and certificates reference
+	// identities/owners; the tenants row is removed last.
+	ordered := []string{"identity_transitions", "certificates", "identities", "issuers", "owners", "tenants"}
+	for _, table := range ordered {
+		if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE tenant_id = $1", tenantID); err != nil {
+			return fmt.Errorf("store: delete read-model %s for tenant: %w", table, err)
+		}
+	}
+	return nil
 }

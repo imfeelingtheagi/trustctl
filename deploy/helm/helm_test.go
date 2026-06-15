@@ -130,6 +130,60 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 	}
 }
 
+// TestSingleReplicaIsDisclosed pins RESIL-002: the default chart is a single-replica
+// control plane with a Recreate rollout (a deliberate SPOF, because the signer's CA
+// key is in a per-pod sealed store), and that availability trade-off is HONESTLY
+// DISCLOSED in the chart values and the docs. The test asserts both the structural
+// facts (so they cannot silently change) and the disclosure (so the binary/chart
+// never over-claims HA it does not have). It is not a security check that passes on a
+// substring — it asserts the actual default values AND that the leader-election/HA
+// plan is documented.
+func TestSingleReplicaIsDisclosed(t *testing.T) {
+	values := read(t, "values.yaml")
+	var v struct {
+		ReplicaCount int `yaml:"replicaCount"`
+	}
+	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
+		t.Fatalf("values.yaml is not valid YAML: %v", err)
+	}
+	// The structural fact: the default is exactly one replica.
+	if v.ReplicaCount != 1 {
+		t.Errorf("default replicaCount = %d, want 1 (the documented single-replica topology)", v.ReplicaCount)
+	}
+	// The deployment renders that replica count and a Recreate rollout (downtime on
+	// deploy is a known, disclosed trade-off — not RollingUpdate).
+	dep := read(t, "templates", "deployment.yaml")
+	containsAll(t, "deployment single-replica topology", dep,
+		"replicas: {{ .Values.replicaCount }}", "type: Recreate")
+
+	// The disclosure: the values file and the DR/limitations docs must explain the
+	// trade-off and the active/active plan (leader election + isolated signer), so an
+	// operator is never surprised by the SPOF. These assertions fail if the disclosure
+	// is dropped or the topology changes without updating the docs (RESIL-002).
+	containsAll(t, "values.yaml single-replica disclosure", values,
+		"RESIL-002", "availability", "leader election")
+
+	dr := readDoc(t, "disaster-recovery.md")
+	containsAll(t, "disaster-recovery HA disclosure", dr,
+		"High availability", "single-replica", "leader election", "RESIL-002")
+
+	lim := readDoc(t, "limitations.md")
+	containsAll(t, "limitations multi-replica HA disclosure", lim,
+		"Multi-replica HA", "leader election", "RESIL-002")
+}
+
+// readDoc reads a file from the repo docs/ directory (two levels up from
+// deploy/helm), so the helm tests can assert the chart's availability disclosure
+// stays consistent with the published docs.
+func readDoc(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", "docs", name))
+	if err != nil {
+		t.Fatalf("read docs/%s: %v", name, err)
+	}
+	return string(b)
+}
+
 // TestTemplatesParse: every chart template is syntactically valid Go/Helm
 // templating. This catches unbalanced delimiters, bad pipelines, and missing
 // `end`s locally; `helm template` does the full render with values in CI. The

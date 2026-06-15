@@ -36,7 +36,7 @@ func TestACMDeploysRenewedCertViaOutbox(t *testing.T) {
 	reg := connector.NewRegistry(func(string) connector.Ops {
 		return connector.NewHTTPOps(srv.Client())
 	})
-	reg.Register(acm.New("us-east-1", acm.Credentials{AccessKeyID: ak, SecretAccessKey: sk}, acm.WithEndpoint(srv.URL())))
+	reg.Register(acm.New("us-east-1", acm.Credentials{AccessKeyID: ak, SecretAccessKey: []byte(sk)}, acm.WithEndpoint(srv.URL())))
 
 	payload, err := connector.EncodeDeploy("aws-acm", connector.NewDeployment(arn, acmCert, acmKey))
 	if err != nil {

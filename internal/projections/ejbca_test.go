@@ -25,9 +25,9 @@ func TestEJBCAPluginRidesIssuanceRails(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 	plugin := ejbca.New(ejbca.Config{
-		Name: "ejbca", BaseURL: srv.URL(), Token: srv.Token(),
+		Name: "ejbca", BaseURL: srv.URL(), Token: []byte(srv.Token()),
 		CAName: "ManagementCA", CertificateProfile: "ENDUSER", EndEntityProfile: "User",
-		Username: "trustctl", Password: "enroll-secret",
+		Username: "trustctl", Password: []byte("enroll-secret"),
 	})
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 

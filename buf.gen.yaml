@@ -1,0 +1,17 @@
+# buf code-generation config for the signer gRPC contract (SCHEMA-002).
+#
+# This mirrors the Makefile's protoc invocation so `buf generate` produces the same
+# *.pb.go / *_grpc.pb.go the committed code expects (paths=source_relative, output
+# rooted at the module so the files land next to the .proto). It is provided so the
+# generation step can move to buf alongside the `buf breaking` gate; the Makefile's
+# raw-protoc `generate` target remains valid.
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: .
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc/go
+    out: .
+    opt:
+      - paths=source_relative

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDefaultIsValid(t *testing.T) {
@@ -62,13 +63,16 @@ func TestEnvOverridesFile(t *testing.T) {
 
 func TestValidateRejectsBadValues(t *testing.T) {
 	cases := map[string]func(*Config){
-		"postgres mode":        func(c *Config) { c.Postgres.Mode = "weird" },
-		"external without dsn": func(c *Config) { c.Postgres.Mode = "external"; c.Postgres.DSN = "" },
-		"nats mode":            func(c *Config) { c.NATS.Mode = "weird" },
-		"external without url": func(c *Config) { c.NATS.Mode = "external"; c.NATS.URL = "" },
-		"log level":            func(c *Config) { c.Log.Level = "loud" },
-		"log format":           func(c *Config) { c.Log.Format = "binary" },
-		"empty addr":           func(c *Config) { c.Server.Addr = "" },
+		"postgres mode":          func(c *Config) { c.Postgres.Mode = "weird" },
+		"external without dsn":   func(c *Config) { c.Postgres.Mode = "external"; c.Postgres.DSN = "" },
+		"nats mode":              func(c *Config) { c.NATS.Mode = "weird" },
+		"external without url":   func(c *Config) { c.NATS.Mode = "external"; c.NATS.URL = "" },
+		"log level":              func(c *Config) { c.Log.Level = "loud" },
+		"log format":             func(c *Config) { c.Log.Format = "binary" },
+		"empty addr":             func(c *Config) { c.Server.Addr = "" },
+		"negative nats replicas": func(c *Config) { c.NATS.Replicas = -1 },
+		"too many nats replicas": func(c *Config) { c.NATS.Replicas = 6 },
+		"bad nats sync interval": func(c *Config) { c.NATS.SyncInterval = "soon" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -153,5 +157,54 @@ func TestTelemetryValidation(t *testing.T) {
 	c.Telemetry.Interval = ""
 	if err := c.Validate(); err != nil {
 		t.Errorf("disabled telemetry must not require an endpoint: %v", err)
+	}
+}
+
+// TestEmbeddedEventLogFsyncDefaultIsBounded pins RESIL-001: the default
+// (embedded) event log is configured to fsync on a tight bounded cadence, NOT
+// nats-server's ~2-minute default — so a single-node power loss bounds data loss
+// to ~1s. The pre-fix tree left SyncInterval empty (the ~2-minute default applied),
+// so this fails before the fix.
+func TestEmbeddedEventLogFsyncDefaultIsBounded(t *testing.T) {
+	d, err := Default().NATS.SyncIntervalDuration()
+	if err != nil {
+		t.Fatalf("default sync interval must parse: %v", err)
+	}
+	if d <= 0 {
+		t.Fatalf("embedded event log must have a bounded fsync cadence by default, got %v (the unbounded nats-server ~2m default)", d)
+	}
+	if d > 5*time.Second {
+		t.Errorf("default embedded fsync cadence %v is too loose for a single-node RPO target", d)
+	}
+	if DefaultEmbeddedSyncInterval <= 0 || DefaultEmbeddedSyncInterval > 5*time.Second {
+		t.Errorf("DefaultEmbeddedSyncInterval = %v, want a small positive bound", DefaultEmbeddedSyncInterval)
+	}
+}
+
+// TestEventStreamReplicasConfigurable pins SPINE-004: the event-stream replication
+// factor is a config knob, surfaced through config + env, with a non-trivial default
+// in external (clustered) mode.
+func TestEventStreamReplicasConfigurable(t *testing.T) {
+	if DefaultExternalReplicas < 3 {
+		t.Errorf("DefaultExternalReplicas = %d, want >= 3 for HA", DefaultExternalReplicas)
+	}
+	// Config knob round-trips through the env overlay.
+	env := map[string]string{
+		"TRUSTCTL_NATS_REPLICAS":      "5",
+		"TRUSTCTL_NATS_SYNC_INTERVAL": "250ms",
+		"TRUSTCTL_NATS_SYNC_ALWAYS":   "true",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.NATS.Replicas != 5 {
+		t.Errorf("NATS.Replicas = %d, want 5 from env", cfg.NATS.Replicas)
+	}
+	if cfg.NATS.SyncInterval != "250ms" {
+		t.Errorf("NATS.SyncInterval = %q, want 250ms from env", cfg.NATS.SyncInterval)
+	}
+	if !cfg.NATS.SyncAlways {
+		t.Error("NATS.SyncAlways must be settable via env")
 	}
 }

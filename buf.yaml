@@ -1,0 +1,24 @@
+# buf configuration for the signer gRPC contract (SCHEMA-002).
+#
+# The control-plane↔signer gRPC contract is the boundary to the most sensitive
+# process in the system (AN-4). An accidental breaking edit — reusing or removing a
+# field number, changing a type, renumbering an enum — compiles and passes
+# `make generate`, then breaks signer calls under version skew with no signal. The
+# `buf breaking` CI job (see .github/workflows/ci.yml) checks every proto change
+# against the contract on `main` and fails the build on a wire-incompatible edit.
+#
+# The proto is imported with `-I .` (module root) so the import path matches the
+# committed layout (internal/signing/proto/signer.proto) and the Makefile's protoc
+# invocation.
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
+  # FILE-level rules catch the wire-incompatible changes that matter for AN-4:
+  # removed/renumbered fields, changed types, removed RPCs/messages/enums. Additive
+  # changes (new fields, new RPCs) are allowed, matching the additive-only policy.

@@ -9,25 +9,40 @@ request cannot merge while any rule is violated.
 | Analyzer | Enforces | Summary |
 |----------|----------|---------|
 | `cryptoboundary` | **AN-3** | `crypto` / `crypto/*` may be imported only inside `internal/crypto` (and its subpackages). Every other package routes crypto through that boundary. |
-| `tenantfilter` | **AN-1** | SQL data-manipulation queries (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) in repository packages must reference `tenant_id`. |
-| `keymaterial` | **AN-8** | In packages handling key material, fields/params/results must not be `string` (use `[]byte`). |
-| `idempotency` | **AN-5** | Mutating handlers must accept and honor an idempotency key. |
+| `tenantfilter` | **AN-1** | SQL data-manipulation queries (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) in repository packages must **filter** on `tenant_id` — it must sit in a `WHERE` / `JOIN..ON` / `INSERT`-column / `ON CONFLICT` predicate, not merely appear in the text (comments and the `SELECT` list are stripped/ignored). |
+| `keymaterial` | **AN-8** | In packages handling key material, fields/params/results must not be **string-backed** — bare `string`, named string types, `[]string`, `map[K]string`, arrays, and pointers to any of those are all flagged (use `[]byte`). |
+| `idempotency` | **AN-5** | Mutating handlers (`//trustctl:mutation`) must thread an idempotency key into a **real dedupe sink** (`orchestrator.Idempotency.Do` or a key-accepting forwarder such as `API.mutate`) — not merely name it, log it, or accept an unused parameter. |
+| `eventsource` | **AN-2** | A served mutation handler (`//trustctl:mutation`) must not write the relational read model directly via a `store.Store` `Create`/`Update`/`Delete`/`Upsert`/`Set` method; it must emit a domain event and let a projection build the read model. |
 
-`cryptoboundary` and `tenantfilter` are the two highest-value rules and run
-fully. `keymaterial` and `idempotency` are intentionally narrow for now and
-opt-in via marker directives (below); they tighten as the key-handling, API, and
-orchestrator subsystems land.
+All five rules resolve types and SQL clauses (not substrings/source spelling), so
+a future violation cannot slip past CI by aliasing a receiver, hiding a secret
+behind a named type, mentioning `tenant_id` in a comment, or passing an
+idempotency key to a logger. `cryptoboundary`, `tenantfilter`, and `eventsource`
+run over their whole scope; `keymaterial` and `idempotency` apply to a
+fail-closed default set of packages **plus** any package/handler that opts in via
+a marker directive (below).
 
-## Marker directives (opt-in, not suppression)
+## Marker directives (opt-in extension, fail-closed defaults)
 
-Some rules apply only where a package or function opts in. Markers make a rule
-**stricter**; they never silence it.
+Some rules apply to a fail-closed **default set** of packages (so a forgotten
+marker cannot silently disable enforcement) and, in addition, wherever a package
+or function opts in with a marker. Markers make a rule apply or, in one case,
+sanction a single deliberate exemption; outside the one system-query hatch, they
+never silence a finding.
 
 - `//trustctl:repository` — marks a repository package outside `internal/store` so
-  `tenantfilter` applies to it.
+  `tenantfilter` applies to it. (The orchestrator is already covered by default.)
 - `//trustctl:keymaterial` — marks a package as key-handling so `keymaterial`
-  applies to it.
-- `//trustctl:mutation` — marks a handler function so `idempotency` applies to it.
+  applies to it. (`internal/crypto/secret` and `internal/crypto/seal` are covered
+  by default, marker or not.)
+- `//trustctl:mutation` — marks a handler function as a served mutation, so both
+  `idempotency` (AN-5) and `eventsource` (AN-2) apply to it.
+- `//trustctl:system-query` — the **only** way to exempt a real DML statement from
+  `tenantfilter`: it marks a single, deliberate cross-tenant **system** query (an
+  auth-by-secret lookup whose tenant is not yet known, a cross-tenant
+  dispatcher/sweep). It must lead the comment (`//trustctl:system-query <reason>`)
+  and sit on, or just above, the statement. This keeps every cross-tenant query
+  greppable and reviewed, rather than hidden by a missing predicate.
 
 ## Running it
 

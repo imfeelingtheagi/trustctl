@@ -134,7 +134,7 @@ func TestFortiGateConformance(t *testing.T) {
 	f := newFakeFortiOS(testToken)
 	defer f.Close()
 
-	c := fortigate.New(f.URL(), testToken)
+	c := fortigate.New(f.URL(), []byte(testToken))
 	// Conformance drives the connector through the SDK's in-memory ops, exercising
 	// name, least-privilege grant, deploy, idempotency, and denial-of-ungranted.
 	if rep := connector.Conformance(context.Background(), c); !rep.OK() {
@@ -149,7 +149,7 @@ func TestDeploysCert(t *testing.T) {
 	f := newFakeFortiOS(testToken)
 	defer f.Close()
 
-	c := fortigate.New(f.URL(), testToken)
+	c := fortigate.New(f.URL(), []byte(testToken))
 	const target = "edge-tls"
 	dep := connector.NewDeployment(target, certPEM, keyPEM)
 
@@ -188,7 +188,7 @@ func TestDeploysDefaultName(t *testing.T) {
 	f := newFakeFortiOS(testToken)
 	defer f.Close()
 
-	c := fortigate.New(f.URL(), testToken)
+	c := fortigate.New(f.URL(), []byte(testToken))
 	// Empty target => the connector's default object name "trustctl".
 	dep := connector.NewDeployment("", certPEM, keyPEM)
 	if _, err := connector.Run(context.Background(), c, connector.NewHTTPOps(f.Client()), dep); err != nil {
@@ -205,7 +205,7 @@ func TestBadTokenRejected(t *testing.T) {
 
 	// Connector configured with the wrong token: the appliance answers 401 and
 	// Deploy must surface that as an error, not a silent success.
-	c := fortigate.New(f.URL(), "wrong-token")
+	c := fortigate.New(f.URL(), []byte("wrong-token"))
 	dep := connector.NewDeployment("edge-tls", certPEM, keyPEM)
 
 	_, err := connector.Run(context.Background(), c, connector.NewHTTPOps(f.Client()), dep)
@@ -224,7 +224,7 @@ func TestTokenNeverLogged(t *testing.T) {
 	f := newFakeFortiOS(testToken)
 	defer f.Close()
 
-	c := fortigate.New(f.URL(), testToken)
+	c := fortigate.New(f.URL(), []byte(testToken))
 	dep := connector.NewDeployment("edge-tls", certPEM, keyPEM)
 	if _, err := connector.Run(context.Background(), c, connector.NewHTTPOps(f.Client()), dep); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -255,7 +255,7 @@ func TestTokenNeverLogged(t *testing.T) {
 
 	// On the error path the token must not appear in the surfaced error. Drive a
 	// failure (wrong token -> 401) and assert the error text is token-free.
-	bad := fortigate.New(f.URL(), testToken+"-but-rotated")
+	bad := fortigate.New(f.URL(), []byte(testToken+"-but-rotated"))
 	_, err := connector.Run(context.Background(), bad, connector.NewHTTPOps(f.Client()), dep)
 	if err == nil {
 		t.Fatal("expected an error from the rotated/invalid token")

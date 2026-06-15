@@ -56,7 +56,10 @@ func (f HandlerFunc) Deliver(ctx context.Context, m Message) error { return f(ct
 // Outbox implements AN-6: external calls are recorded in the same transaction as
 // the state change that triggers them (Enqueue), and a separate worker performs
 // them (Dispatch). This gives at-least-once delivery; an idempotent Handler makes
-// the net effect exactly-once.
+// the net effect exactly-once. The internal/outboxgc retention sweep bounds the
+// table by reclaiming delivered rows past a retention window (SPINE-003); it lives
+// outside this repository package because it is a deliberate cross-tenant system
+// operation, like the idempotency-key GC.
 type Outbox struct {
 	store       *store.Store
 	backoff     func(attempts int) time.Duration
@@ -150,6 +153,7 @@ func (o *Outbox) dispatchOne(ctx context.Context, h Handler, cutoff time.Time) (
 	var msg Message
 	var attempts int
 	err = tx.QueryRow(ctx,
+		//trustctl:system-query — the dispatcher drains every tenant's due entries in one pass (no tenant predicate); the claimed row's tenant_id is read back and carried in the Message. Cross-tenant by design (AN-1 exemption).
 		`SELECT id, tenant_id::text, destination, payload, idempotency_key, attempts
 		   FROM outbox
 		  WHERE status = 'pending' AND next_attempt_at <= $1

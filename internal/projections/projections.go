@@ -19,14 +19,16 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered    = "tenant.registered"
-	EventOwnerCreated        = "owner.created"
-	EventOwnerUpdated        = "owner.updated"
-	EventOwnerDeleted        = "owner.deleted"
-	EventIssuerCreated       = "issuer.created"
-	EventIdentityCreated     = "identity.created"
-	EventCertificateRecorded = "certificate.recorded"
-	EventCertificateRevoked  = "certificate.revoked"
+	EventTenantRegistered      = "tenant.registered"
+	EventTenantOffboarded      = "tenant.offboarded"
+	EventOwnerCreated          = "owner.created"
+	EventOwnerUpdated          = "owner.updated"
+	EventOwnerDeleted          = "owner.deleted"
+	EventIssuerCreated         = "issuer.created"
+	EventIdentityCreated       = "identity.created"
+	EventCertificateRecorded   = "certificate.recorded"
+	EventCertificateRevoked    = "certificate.revoked"
+	EventCertificateSuperseded = "certificate.superseded"
 
 	// identityPrefix marks the identity lifecycle events the orchestrator emits
 	// (identity.issued, identity.deployed, …). The projector applies them as a
@@ -87,6 +89,12 @@ type IdentityCreated struct {
 }
 
 // CertificateRecorded is the payload of a certificate.recorded event.
+//
+// ReplacesID is optional (omitted on a first issuance, set when this certificate
+// is the successor produced by a renewal/rotation, CORRECT-002): carrying the
+// predecessor link in the event keeps the successor's replaces_id reconstructable
+// from the log on a Rebuild(). Adding this optional field is backward-compatible —
+// older v1 events without it decode to nil — so the schema version is unchanged.
 type CertificateRecorded struct {
 	ID                 string     `json:"id"`
 	OwnerID            *string    `json:"owner_id"`
@@ -100,6 +108,7 @@ type CertificateRecorded struct {
 	NotAfter           *time.Time `json:"not_after"`
 	DeploymentLocation string     `json:"deployment_location"`
 	Source             string     `json:"source"`
+	ReplacesID         *string    `json:"replaces_id,omitempty"`
 }
 
 // CertificateRevoked is the payload of a certificate.revoked event. The
@@ -112,6 +121,20 @@ type CertificateRevoked struct {
 	Serial      string    `json:"serial"`
 	Reason      string    `json:"reason"`
 	RevokedAt   time.Time `json:"revoked_at"`
+}
+
+// CertificateSuperseded is the payload of a certificate.superseded event
+// (CORRECT-002): a certificate retired because a renewal/rotation produced a
+// successor. The inventoried certificate is keyed by fingerprint; the projector
+// sets its status to superseded and stamps renewed_at. Driving the supersession
+// through an event (rather than a direct read-table UPDATE) keeps it
+// reconstructable from the log on a Rebuild() (AN-2), exactly like the revoked
+// transition.
+type CertificateSuperseded struct {
+	Fingerprint  string    `json:"fingerprint"`
+	Serial       string    `json:"serial"`
+	SupersededBy string    `json:"superseded_by,omitempty"` // successor serial, for the audit trail
+	RenewedAt    time.Time `json:"renewed_at"`
 }
 
 // identityTransition decodes the orchestrator's lifecycle event payload. The
@@ -140,6 +163,15 @@ type tenantRegistered struct {
 	Name string `json:"name"`
 }
 
+// tenantOffboarded is the payload of a tenant.offboarded event (TENANT-002). It
+// carries no secret material — only the count of rows the command-side erase
+// removed — so a replay does not need it to reproduce state (the projector
+// re-runs the deterministic erase); it is retained for the audit trail. The
+// tenant id is the event envelope's TenantID.
+type tenantOffboarded struct {
+	RowsDeleted int `json:"rows_deleted"`
+}
+
 // Apply applies a single event to the read model in its own tenant-scoped
 // transaction. It is exported so the command side can project an event live,
 // right after appending it, using the same logic a rebuild uses.
@@ -152,6 +184,26 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 		return p.store.UpsertTenant(ctx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
 		})
+	}
+	if e.Type == EventTenantOffboarded {
+		// Validate the payload shape (the event contract) before acting; the projector
+		// does not need its fields to reproduce state, but a malformed payload signals a
+		// producer bug we want to surface rather than silently ignore.
+		var payload tenantOffboarded
+		if err := json.Unmarshal(e.Data, &payload); err != nil {
+			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+		}
+		// Tenant offboarding (TENANT-002, AN-2): the event is the source of truth, so
+		// the projector erases the tenant's rows by re-running the same RLS-scoped,
+		// fail-closed deletion the command side ran. This makes a Rebuild honest — a
+		// rebuilt read model does not resurrect a tenant whose deletion is recorded in
+		// the log. OffboardTenant is idempotent on an already-erased tenant (every
+		// per-table count is 0 and the verify pass still passes), so replaying the
+		// event after the rows are gone is a safe no-op.
+		if _, err := p.store.OffboardTenant(ctx, e.TenantID); err != nil {
+			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
+		}
+		return nil
 	}
 	// Domain entity events apply under the tenant's RLS context.
 	return p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
@@ -171,13 +223,14 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 // an identity.* lifecycle transition (handled by prefix below). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
-	EventOwnerCreated:        {1: true},
-	EventOwnerUpdated:        {1: true},
-	EventOwnerDeleted:        {1: true},
-	EventIssuerCreated:       {1: true},
-	EventIdentityCreated:     {1: true},
-	EventCertificateRecorded: {1: true},
-	EventCertificateRevoked:  {1: true},
+	EventOwnerCreated:          {1: true},
+	EventOwnerUpdated:          {1: true},
+	EventOwnerDeleted:          {1: true},
+	EventIssuerCreated:         {1: true},
+	EventIdentityCreated:       {1: true},
+	EventCertificateRecorded:   {1: true},
+	EventCertificateRevoked:    {1: true},
+	EventCertificateSuperseded: {1: true},
 }
 
 // ErrUnknownSchemaVersion is returned by ApplyTx when a known event type carries
@@ -263,7 +316,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
-			Source: pl.Source, CreatedAt: e.Time,
+			Source: pl.Source, ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
 		})
 	case EventCertificateRevoked:
 		var pl CertificateRevoked
@@ -271,6 +324,12 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		return p.store.SetCertificateRevokedTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.Reason, pl.RevokedAt)
+	case EventCertificateSuperseded:
+		var pl CertificateSuperseded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.SetCertificateSupersededTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.RenewedAt)
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model
@@ -312,9 +371,59 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 // Rebuild discards the event-sourced read model and re-derives it from the whole
 // log, reproducing the same state (AN-2). This is the disaster-recovery and
 // migration primitive: the relational state is a pure function of the log.
+//
+// It is ATOMIC (RESIL-003): the truncate and the full replay run in ONE
+// transaction, so a crash or error mid-rebuild rolls back to the prior read model
+// rather than leaving a truncated/partial inventory the API might answer queries
+// from. The transaction runs as the owner role (it must TRUNCATE and re-derive every
+// tenant); each event is applied with the tenant GUC set, and every projection write
+// carries its tenant_id explicitly, so AN-1 holds even with RLS bypassed for this
+// trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
-	if err := p.store.TruncateReadModel(ctx); err != nil {
-		return fmt.Errorf("projections: truncate: %w", err)
+	return p.store.RebuildReadModelTx(ctx, func(tx pgx.Tx) error {
+		return log.Replay(ctx, 0, func(e events.Event) error {
+			return p.applyForRebuild(ctx, tx, e)
+		})
+	})
+}
+
+// applyForRebuild applies one event to the read model on the rebuild's single
+// transaction (RESIL-003). It mirrors Apply's dispatch but shares one tx instead of
+// opening a per-event transaction, so the whole rebuild commits or rolls back as a
+// unit:
+//   - tenant.registered  -> UpsertTenantTx (the tenant projection joins the rebuild tx)
+//   - tenant.offboarded  -> delete this tenant's rows from the read-model tables on
+//     the tx, so a rebuilt read model does not resurrect a deleted tenant. Only the
+//     event-sourced read model (ReadModelTables) is in the rebuild's scope, so it does
+//     not touch independent tenant tables (api_tokens, CT config), which are not
+//     rebuilt from the log.
+//   - everything else    -> set the tenant GUC on the tx, then ApplyTx.
+func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	switch e.Type {
+	case EventTenantRegistered:
+		var payload tenantRegistered
+		if err := json.Unmarshal(e.Data, &payload); err != nil {
+			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+		}
+		return p.store.UpsertTenantTx(ctx, tx, store.Tenant{
+			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
+		})
+	case EventTenantOffboarded:
+		var payload tenantOffboarded
+		if err := json.Unmarshal(e.Data, &payload); err != nil {
+			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+		}
+		if err := p.store.SetTenantGUCTx(ctx, tx, e.TenantID); err != nil {
+			return err
+		}
+		// The rebuild owns exactly the event-sourced read model, so it erases this
+		// tenant's read-model rows here (the equivalent, within the rebuild's scope, of
+		// the live OffboardTenant) rather than re-running the full cross-table erase.
+		return p.store.DeleteTenantReadModelTx(ctx, tx, e.TenantID)
+	default:
+		if err := p.store.SetTenantGUCTx(ctx, tx, e.TenantID); err != nil {
+			return err
+		}
+		return p.ApplyTx(ctx, tx, e)
 	}
-	return p.Project(ctx, log)
 }

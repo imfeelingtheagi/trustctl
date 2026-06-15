@@ -86,9 +86,19 @@ func contains(set []string, v string) bool {
 	return false
 }
 
+// suffixAllowed reports whether dns is permitted by one of the configured
+// suffixes, matching on label boundaries only (RFC 5280 §4.2.1.10 dNSName
+// semantics). A suffix "example.com" permits exactly "example.com" and any
+// proper subdomain "<label>.example.com"; it must NOT match "notexample.com" or
+// "evil-example.com" the way a bare strings.HasSuffix would. This mirrors the
+// crypto-layer dnsPermitted matcher (PKIGOV-005 / CORRECT-004).
 func suffixAllowed(dns string, suffixes []string) bool {
 	for _, suf := range suffixes {
-		if dns == suf || strings.HasSuffix(dns, "."+strings.TrimPrefix(suf, ".")) || strings.HasSuffix(dns, suf) {
+		suf = strings.TrimPrefix(suf, ".")
+		if suf == "" {
+			continue
+		}
+		if dns == suf || strings.HasSuffix(dns, "."+suf) {
 			return true
 		}
 	}

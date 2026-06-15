@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,24 @@ const (
 	PostgresExternal = "external"
 	NATSEmbedded     = "embedded"
 	NATSExternal     = "external"
+)
+
+// Event-stream durability/replication defaults (RESIL-001 / SPINE-004).
+const (
+	// DefaultEmbeddedSyncInterval is the embedded JetStream fsync cadence trustctl
+	// applies when NATS.SyncInterval is unset (RESIL-001). nats-server's own default
+	// is ~2 minutes; trustctl tightens it to one second so a single-node power loss
+	// can lose at most ~1s of acked events instead of ~2 minutes, while avoiding the
+	// throughput cost of fsync-on-every-append (NATS.SyncAlways, opt-in). It bounds
+	// the single-node RPO for un-backed-up events; production still steers to an
+	// external replicated cluster.
+	DefaultEmbeddedSyncInterval = time.Second
+	// DefaultExternalReplicas is the JetStream replication factor for the event
+	// stream in external (clustered) mode when NATS.Replicas is unset (SPINE-004): a
+	// three-way replicated source-of-truth log survives a single NATS node loss
+	// without losing an acked event or going offline. Embedded single-node mode
+	// always runs with one replica regardless.
+	DefaultExternalReplicas = 3
 )
 
 // Control-plane TLS modes. The default is internal (TLS on with a self-signed
@@ -56,6 +75,14 @@ type Config struct {
 type Server struct {
 	Addr string `json:"addr"`
 	TLS  TLS    `json:"tls"`
+	// CORSAllowedOrigins is the explicit allow-list of browser Origins permitted to
+	// make cross-origin requests to the API (SEC-003). Empty (the default) means
+	// same-origin only: the served console and the API share an origin, so no
+	// Access-Control-Allow-Origin is emitted and a cross-origin XHR is blocked by
+	// the browser. List exact origins (scheme+host+port, e.g.
+	// "https://console.example.com") to allow a separately-hosted UI; "*" is
+	// deliberately NOT honored for a credentialed API.
+	CORSAllowedOrigins []string `json:"cors_allowed_origins,omitempty"`
 }
 
 // TLS configures the control plane's transport encryption (B4). Mode is one of
@@ -75,11 +102,49 @@ type Postgres struct {
 	Port    int    `json:"port"`     // loopback port for the bundled datastore (default 5432)
 }
 
-// NATS selects the embedded file-backed JetStream or an external cluster.
+// NATS selects the embedded file-backed JetStream or an external cluster, and
+// carries the source-of-truth event stream's durability and replication knobs
+// (RESIL-001 / SPINE-004).
 type NATS struct {
 	Mode     string `json:"mode"`      // embedded | external
 	URL      string `json:"url"`       // required when external
 	StoreDir string `json:"store_dir"` // used when embedded
+
+	// Replicas is the JetStream replication factor for the event stream — the
+	// source of truth (AN-2). In external (clustered) mode the default is 3, so a
+	// single NATS node loss neither loses an acked event nor takes the log offline
+	// (SPINE-004). It must not exceed the cluster size. In embedded single-node mode
+	// it is forced to 1 (there is only one server), so this knob is a production-
+	// cluster concern. Zero means "use the mode's default".
+	Replicas int `json:"replicas"`
+
+	// SyncInterval bounds how often the embedded, file-backed JetStream flushes the
+	// stream to stable storage (fsync), i.e. the single-node durability/RPO window
+	// (RESIL-001). nats-server defaults this to ~2 minutes, so out of the box a
+	// Publish ACK is a page-cache write and a power loss within the window can lose
+	// up to ~2 minutes of acked events from the source-of-truth log. trustctl
+	// tightens it to a short default (see DefaultEmbeddedSyncInterval); an operator
+	// may shorten it further, or set SyncAlways for fsync-on-every-append. It only
+	// affects embedded mode (an external cluster manages its own durability). A Go
+	// duration string, e.g. "1s"; empty uses the trustctl default.
+	SyncInterval string `json:"sync_interval"`
+
+	// SyncAlways makes the embedded JetStream fsync the stream on every append
+	// (O_SYNC) rather than on the interval, giving a near-zero single-node RPO at a
+	// throughput cost (RESIL-001). It only affects embedded mode. Off by default;
+	// the bounded SyncInterval already caps the loss window without the per-write
+	// fsync penalty.
+	SyncAlways bool `json:"sync_always"`
+}
+
+// SyncIntervalDuration parses the embedded JetStream fsync cadence (RESIL-001). An
+// empty value means the trustctl embedded default (DefaultEmbeddedSyncInterval)
+// and returns a zero duration with no error so the caller can apply the default.
+func (n NATS) SyncIntervalDuration() (time.Duration, error) {
+	if n.SyncInterval == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(n.SyncInterval)
 }
 
 // Log configures structured logging.
@@ -232,9 +297,14 @@ type CA struct {
 // deployment that needs no external services.
 func Default() *Config {
 	return &Config{
-		Server:    Server{Addr: ":8443", TLS: TLS{Mode: TLSInternal}},
-		Postgres:  Postgres{Mode: PostgresBundled, DataDir: "data/postgres", Port: 5432},
-		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats"},
+		Server:   Server{Addr: ":8443", TLS: TLS{Mode: TLSInternal}},
+		Postgres: Postgres{Mode: PostgresBundled, DataDir: "data/postgres", Port: 5432},
+		// The embedded event log fsyncs on a tight bounded cadence by default so a
+		// single-node power loss bounds data loss to ~1s rather than nats-server's
+		// ~2-minute default (RESIL-001). Replicas defaults to 0 here ("use the mode
+		// default"): embedded forces 1, external uses DefaultExternalReplicas (3) for
+		// HA (SPINE-004).
+		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats", SyncInterval: DefaultEmbeddedSyncInterval.String()},
 		Log:       Log{Level: "info", Format: "json"},
 		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
 		// Telemetry is OFF by default (privacy-first; decided position). The
@@ -310,6 +380,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
 	setString(getenv, "TRUSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
 	setString(getenv, "TRUSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+	setCSV(getenv, "TRUSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
 	setString(getenv, "TRUSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "TRUSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
 	setString(getenv, "TRUSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
@@ -317,6 +388,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_NATS_MODE", &c.NATS.Mode)
 	setString(getenv, "TRUSTCTL_NATS_URL", &c.NATS.URL)
 	setString(getenv, "TRUSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
+	setInt(getenv, "TRUSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
+	setString(getenv, "TRUSTCTL_NATS_SYNC_INTERVAL", &c.NATS.SyncInterval)
+	setBool(getenv, "TRUSTCTL_NATS_SYNC_ALWAYS", &c.NATS.SyncAlways)
 	setString(getenv, "TRUSTCTL_LOG_LEVEL", &c.Log.Level)
 	setString(getenv, "TRUSTCTL_LOG_FORMAT", &c.Log.Format)
 	setString(getenv, "TRUSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
@@ -351,6 +425,26 @@ func setBool(getenv func(string) string, key string, dst *bool) {
 		if b, err := strconv.ParseBool(v); err == nil {
 			*dst = b
 		}
+	}
+}
+
+// setCSV overlays a comma-separated environment variable as a string slice,
+// trimming surrounding whitespace and dropping empty entries (SEC-003 CORS
+// allow-list). A non-empty value replaces the destination; an empty/blank value
+// leaves the prior value (so the env can override but not blank out a file value).
+func setCSV(getenv func(string) string, key string, dst *[]string) {
+	v := getenv(key)
+	if v == "" {
+		return
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) > 0 {
+		*dst = out
 	}
 }
 
@@ -403,6 +497,21 @@ func (c *Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("nats.mode %q is invalid (want %q or %q)", c.NATS.Mode, NATSEmbedded, NATSExternal))
+	}
+	// Event-stream replication factor (SPINE-004): zero means "use the mode default"
+	// (embedded forces 1; external uses DefaultExternalReplicas); a negative value is
+	// nonsensical, and JetStream caps a stream at 5 replicas.
+	if c.NATS.Replicas < 0 {
+		errs = append(errs, errors.New("nats.replicas must not be negative"))
+	} else if c.NATS.Replicas > 5 {
+		errs = append(errs, fmt.Errorf("nats.replicas %d exceeds the JetStream maximum of 5", c.NATS.Replicas))
+	}
+	// Embedded fsync cadence (RESIL-001): empty means the trustctl default; when set
+	// it must be a valid, positive Go duration.
+	if d, err := c.NATS.SyncIntervalDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("nats.sync_interval %q is invalid: %w", c.NATS.SyncInterval, err))
+	} else if d < 0 {
+		errs = append(errs, errors.New("nats.sync_interval must not be negative"))
 	}
 	if !validLevel(c.Log.Level) {
 		errs = append(errs, fmt.Errorf("log.level %q is invalid (want debug, info, warn, or error)", c.Log.Level))

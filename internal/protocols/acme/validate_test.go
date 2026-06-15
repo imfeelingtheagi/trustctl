@@ -26,7 +26,9 @@ func TestHTTP01Validator(t *testing.T) {
 	t.Cleanup(ts.Close)
 	domain := strings.TrimPrefix(ts.URL, "http://") // host:port the validator will dial
 
-	v := acmesrv.HTTP01Validator{}
+	// This test deliberately dials a loopback httptest server, so it opts the
+	// default client out of the SSRF guard (SEC-006); production keeps the guard on.
+	v := acmesrv.HTTP01Validator{AllowPrivateTargets: true}
 	if err := v.Validate(context.Background(), acmesrv.ChallengeHTTP01, domain, token, keyAuth); err != nil {
 		t.Errorf("valid http-01 rejected: %v", err)
 	}

@@ -63,6 +63,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
 	backupPath := fs.String("backup", "", "back up the event log (source of truth) to FILE, then exit")
 	restorePath := fs.String("restore", "", "restore the event log from FILE, rebuild the read model, then exit")
+	rebuild := fs.Bool("rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
 	migrateStatus := fs.Bool("migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
 	migrate := fs.Bool("migrate", false, "apply pending database migrations under an advisory lock, then exit")
 	if err := fs.Parse(args); err != nil {
@@ -104,6 +105,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 			return fmt.Errorf("restore: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "restored %d events from %s and rebuilt the read model\n", n, *restorePath)
+		return nil
+	}
+	if *rebuild {
+		// Atomically re-derive the read model from the event log already present
+		// (RESIL-003): the truncate + replay run in one transaction, so an interrupted
+		// rebuild rolls back to the prior read model rather than leaving a partial
+		// inventory. This is the failed-restore / divergence recovery — it does not
+		// require an empty event store the way --restore does.
+		n, err := server.RunRebuild(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("rebuild: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "rebuilt the read model from %d events in the log\n", n)
 		return nil
 	}
 	if *migrateStatus {

@@ -32,6 +32,14 @@ type Record struct {
 	Hash     string          `json:"hash,omitempty"`
 }
 
+// ErrMissingTenant is returned by Search/Export/VerifyChain when the query has an
+// empty TenantID (TENANT-003). The audit log spans every tenant, and the
+// tenant-scoping filter only applies when TenantID is set — so an empty TenantID
+// would return the full cross-tenant log. We reject it instead, failing closed,
+// to match the storage layer's fail-closed RLS norm: a missing tenant scope is an
+// error, never "show everything".
+var ErrMissingTenant = errors.New("audit: query requires a tenant id (AN-1)")
+
 // Query selects a slice of the audit log. TenantID is required for tenant
 // isolation; the zero value of the other fields means "unbounded".
 type Query struct {
@@ -121,6 +129,14 @@ func (s *Service) searchSeed(ctx context.Context, tenantID string) (from uint64,
 // prefix and the chain is seeded from the boundary hash, so the surviving records
 // keep the exact hashes they had in the full chain.
 func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
+	// Fail closed on a missing tenant scope (TENANT-003): the audit log is
+	// cross-tenant, and matches() only filters when TenantID is set, so an empty
+	// TenantID would leak every tenant's records. Reject it — a missing scope is an
+	// error, not "all tenants". Export and VerifyChain route through here, so all
+	// three query surfaces are covered by this one check.
+	if q.TenantID == "" {
+		return nil, ErrMissingTenant
+	}
 	from, seed, err := s.searchSeed(ctx, q.TenantID)
 	if err != nil {
 		return nil, err

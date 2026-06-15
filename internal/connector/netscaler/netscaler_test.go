@@ -29,7 +29,7 @@ func TestDeployUploadsAndRebinds(t *testing.T) {
 	srv := netscalertest.New(user, pass)
 	defer srv.Close()
 
-	c := netscaler.New(srv.URL(), user, pass)
+	c := netscaler.New(srv.URL(), user, []byte(pass))
 	ops := connector.NewHTTPOps(srv.Client())
 
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certkey, sampleCert, sampleKey)); err != nil {
@@ -55,7 +55,7 @@ func TestDeployLogsInAndOut(t *testing.T) {
 	srv := netscalertest.New(user, pass)
 	defer srv.Close()
 
-	c := netscaler.New(srv.URL(), user, pass)
+	c := netscaler.New(srv.URL(), user, []byte(pass))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certkey, sampleCert, sampleKey)); err != nil {
 		t.Fatalf("deploy: %v", err)
@@ -77,7 +77,7 @@ func TestDeployFailsOnBadCredentials(t *testing.T) {
 	srv := netscalertest.New(user, pass)
 	defer srv.Close()
 
-	c := netscaler.New(srv.URL(), user, "wrong-password")
+	c := netscaler.New(srv.URL(), user, []byte("wrong-password"))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certkey, sampleCert, sampleKey)); err == nil {
 		t.Fatal("expected deploy to fail on bad credentials, got nil")
@@ -95,7 +95,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 	srv := netscalertest.New(user, pass)
 	defer srv.Close()
 
-	c := netscaler.New(srv.URL(), user, pass)
+	c := netscaler.New(srv.URL(), user, []byte(pass))
 	ops := connector.NewHTTPOps(srv.Client())
 	dep := connector.NewDeployment(certkey, sampleCert, sampleKey)
 	for i := 0; i < 2; i++ {
@@ -113,7 +113,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 // Least privilege: net.dial to the NSIP host only — no fs, no exec, no other
 // host.
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
-	c := netscaler.New("https://ns.example", user, pass)
+	c := netscaler.New("https://ns.example", user, []byte(pass))
 	grant := c.Capabilities()
 	if grant.Has(pluginhost.CapFSWrite) {
 		t.Error("NetScaler connector must not request fs.write")
@@ -135,7 +135,7 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 
 // The connector satisfies the shared connector conformance suite.
 func TestNetScalerPassesConformance(t *testing.T) {
-	c := netscaler.New("https://ns.example", user, pass)
+	c := netscaler.New("https://ns.example", user, []byte(pass))
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {

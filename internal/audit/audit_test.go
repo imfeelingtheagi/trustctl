@@ -2,6 +2,7 @@ package audit_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -128,5 +129,44 @@ func TestEvidenceBundleVerifies(t *testing.T) {
 	parts[1] = "ZXZpbA" + parts[1][6:] // corrupt the payload segment
 	if _, err := audit.VerifyBundle(strings.Join(parts, "."), svc.VerificationKeys()); err == nil {
 		t.Error("a tampered evidence bundle must not verify")
+	}
+}
+
+// TestSearchFailsClosedOnEmptyTenant is the TENANT-003 acceptance: an audit query
+// with an empty TenantID is rejected (fail closed) rather than returning the full
+// cross-tenant log. It fails on the pre-fix tree (Search returned every tenant's
+// records when TenantID was "") and passes once Search rejects the empty scope.
+// Export and VerifyChain route through Search, so they fail closed too.
+func TestSearchFailsClosedOnEmptyTenant(t *testing.T) {
+	log := openLog(t)
+	ctx := context.Background()
+	// Seed two tenants so a fail-open would visibly leak across them.
+	appendEvent(t, log, tenantA, "identity.issued")
+	appendEvent(t, log, tenantB, "identity.issued")
+	svc := newService(t, log)
+
+	recs, err := svc.Search(ctx, audit.Query{TenantID: ""})
+	if err == nil {
+		t.Fatalf("Search with empty TenantID returned %d records instead of failing closed (cross-tenant leak)", len(recs))
+	}
+	if !errors.Is(err, audit.ErrMissingTenant) {
+		t.Errorf("Search empty-tenant error = %v, want audit.ErrMissingTenant", err)
+	}
+	if recs != nil {
+		t.Errorf("Search returned %d records alongside the error; must return none", len(recs))
+	}
+
+	// Export must also fail closed on the empty scope (it runs Search).
+	if _, err := svc.Export(ctx, audit.Query{TenantID: ""}); !errors.Is(err, audit.ErrMissingTenant) {
+		t.Errorf("Export empty-tenant error = %v, want audit.ErrMissingTenant", err)
+	}
+	// VerifyChain must also fail closed on the empty scope.
+	if _, err := svc.VerifyChain(ctx, ""); !errors.Is(err, audit.ErrMissingTenant) {
+		t.Errorf("VerifyChain empty-tenant error = %v, want audit.ErrMissingTenant", err)
+	}
+
+	// Sanity: a scoped query still works (the fix didn't break the normal path).
+	if got, err := svc.Search(ctx, audit.Query{TenantID: tenantA}); err != nil || len(got) != 1 {
+		t.Errorf("scoped search after fix: got %d recs, err %v; want 1, nil", len(got), err)
 	}
 }

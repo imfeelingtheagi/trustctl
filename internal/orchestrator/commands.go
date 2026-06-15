@@ -187,3 +187,48 @@ func (o *Orchestrator) RevokeCertificate(ctx context.Context, tenantID, fingerpr
 	_, err = o.emit(ctx, projections.EventCertificateRevoked, tenantID, payload)
 	return err
 }
+
+// SupersedeCertificate records a certificate.superseded event (keyed by the
+// cert's fingerprint) and projects it, so the inventoried certificate's status
+// becomes superseded and renewed_at is stamped (CORRECT-002). The status change
+// is driven through the projector (the sole read-model writer, AN-2), so it is
+// reconstructed from the log on a Rebuild() rather than lost — the same treatment
+// as RevokeCertificate. renewedAt is supplied by the caller so a redelivery (AN-5)
+// re-applies the same time deterministically; supersededBySerial is the successor
+// serial, recorded for the audit trail.
+func (o *Orchestrator) SupersedeCertificate(ctx context.Context, tenantID, fingerprint, serial, supersededBySerial string, renewedAt time.Time) error {
+	payload, err := json.Marshal(projections.CertificateSuperseded{
+		Fingerprint: fingerprint, Serial: serial, SupersededBy: supersededBySerial, RenewedAt: renewedAt.UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventCertificateSuperseded, tenantID, payload)
+	return err
+}
+
+// RecordSuccessorCertificate records a certificate.recorded event for the
+// successor produced by a renewal/rotation, carrying its predecessor link
+// (replaces_id) in the event so the link survives a Rebuild() (CORRECT-002). It
+// returns the canonical inventoried row. This is the event-sourced replacement
+// for the former direct successor-insert write into the read table.
+func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID string, in store.Certificate, replacesID string) (store.Certificate, error) {
+	id := uuid.NewString()
+	sans := in.SANs
+	if sans == nil {
+		sans = []string{}
+	}
+	rep := replacesID
+	payload, err := json.Marshal(projections.CertificateRecorded{
+		ID: id, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
+		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
+		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ReplacesID: &rep,
+	})
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventCertificateRecorded, tenantID, payload); err != nil {
+		return store.Certificate{}, err
+	}
+	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
+}

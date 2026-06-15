@@ -55,7 +55,7 @@ func TestCertificateStoreAndQuery(t *testing.T) {
 	if c2.ID != c.ID {
 		t.Errorf("re-ingesting fingerprint fp-aaa created a new row (%s != %s)", c2.ID, c.ID)
 	}
-	list, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 100, nil)
+	list, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 100, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCertificateInventoryTenantScopedAndPaginated(t *testing.T) {
 	seen := map[string]bool{}
 	after := store.ZeroUUID
 	for pages := 0; pages < 10; pages++ {
-		page, err := s.ListCertificatesPage(ctx, tenantA, after, 2, nil)
+		page, err := s.ListCertificatesPage(ctx, tenantA, after, nil, 2, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestCertificateInventoryTenantScopedAndPaginated(t *testing.T) {
 	if len(seen) != 5 {
 		t.Errorf("paginated inventory yielded %d certs, want 5", len(seen))
 	}
-	b, err := s.ListCertificatesPage(ctx, tenantB, store.ZeroUUID, 100, nil)
+	b, err := s.ListCertificatesPage(ctx, tenantB, store.ZeroUUID, nil, 100, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestCertificateExpiringFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 	cutoff := now.Add(720 * time.Hour) // 30 days
-	page, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, 100, &cutoff)
+	page, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 100, &cutoff)
 	if err != nil {
 		t.Fatal(err)
 	}

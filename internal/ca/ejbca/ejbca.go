@@ -35,16 +35,21 @@ const (
 )
 
 // Config holds the EJBCA connection and enrollment settings.
+//
+// Token (the OAuth2 bearer) and Password (the end-entity enrollment code) are
+// secrets; they are held as []byte, never a string, so they can be wiped and are
+// not freely copied by the GC (AN-8). The profile/CA/username fields are
+// non-secret identifiers.
 type Config struct {
 	Name    string
 	BaseURL string // e.g. https://ejbca.example.com
-	Token   string // OAuth2 bearer token; empty means rely on the http.Client's mTLS client cert
+	Token   []byte // OAuth2 bearer token (AN-8: []byte); empty means rely on the http.Client's mTLS client cert
 
 	CAName             string // certificate_authority_name
 	CertificateProfile string // certificate_profile_name
 	EndEntityProfile   string // end_entity_profile_name
 	Username           string // end-entity username (defaults to the first SAN)
-	Password           string // end-entity enrollment code
+	Password           []byte // end-entity enrollment code (AN-8: []byte, never logged)
 }
 
 // backend talks the EJBCA REST API. It is the only CA-specific code; the template
@@ -94,9 +99,11 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		"end_entity_profile_name":    b.cfg.EndEntityProfile,
 		"certificate_authority_name": b.cfg.CAName,
 		"username":                   username,
-		"password":                   b.cfg.Password,
-		"include_chain":              true,
-		"response_format":            "DER",
+		// string(...) is the transient edge form of the []byte enrollment code on
+		// the wire (AN-8); the long-lived secret stays []byte in the Config.
+		"password":        string(b.cfg.Password),
+		"include_chain":   true,
+		"response_format": "DER",
 	}
 	var out struct {
 		Certificate      string   `json:"certificate"`
@@ -149,8 +156,10 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	if err != nil {
 		return err
 	}
-	if b.cfg.Token != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+b.cfg.Token)
+	if len(b.cfg.Token) != 0 {
+		// string(...) is the transient edge form of the []byte bearer token on the
+		// wire (AN-8); the long-lived secret stays []byte in the Config.
+		httpReq.Header.Set("Authorization", "Bearer "+string(b.cfg.Token))
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")

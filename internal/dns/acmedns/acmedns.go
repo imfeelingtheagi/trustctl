@@ -58,10 +58,12 @@ var _ acme.DNSProvider = (*Provider)(nil)
 
 // Credentials are an acme-dns account's authentication pair: the username and the
 // apikey ("password") returned at /register. They are opaque to this package, never
-// logged, and sealed at rest by the caller (AN-8).
+// logged, and sealed at rest by the caller (AN-8). The apikey is held as []byte,
+// never a string, so it can be wiped and is not freely copied by the GC (AN-8); the
+// username is a non-secret account label.
 type Credentials struct {
 	Username string // sent as X-Api-User
-	Password string // the apikey, sent as X-Api-Key
+	Password []byte // the apikey, sent as X-Api-Key (AN-8: []byte, never logged)
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
@@ -164,7 +166,9 @@ func (p *Provider) update(ctx context.Context, value string) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Api-User", p.creds.Username)
-	req.Header.Set("X-Api-Key", p.creds.Password)
+	// string(...) is the transient edge form of the []byte apikey on the wire
+	// (AN-8); the long-lived secret stays []byte in the Credentials.
+	req.Header.Set("X-Api-Key", string(p.creds.Password))
 
 	resp, err := p.doer.Do(req)
 	if err != nil {

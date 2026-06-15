@@ -286,12 +286,21 @@ const principalCtxKey ctxKey = iota
 // authenticated principal (placed in the context by guard) is authoritative —
 // this is what lets a bearer API token carry its own tenant; otherwise it falls
 // back to the tenant header (e.g. the public spec route has no principal).
+//
+// TENANT-003 (fail closed): once a principal is present in the context, ITS tenant
+// is authoritative and we never fall back to the client-supplied X-Tenant-ID
+// header. A principal whose tenant is empty therefore yields (",", false) — a hard
+// "no tenant", not a silent header fallback that an authenticated caller could use
+// to operate in another tenant. The header path is reachable only when there is
+// genuinely no principal (a truly public route).
 func (a *API) tenant(r *http.Request) (string, bool) {
-	if p, ok := r.Context().Value(principalCtxKey).(authz.Principal); ok && p.TenantID != "" {
-		return p.TenantID, true
+	if p, ok := r.Context().Value(principalCtxKey).(authz.Principal); ok {
+		// An authenticated principal is bound to its own tenant. Do not consult the
+		// header — an empty principal tenant fails closed instead of falling back.
+		return p.TenantID, p.TenantID != ""
 	}
 	t, err := a.tenantFn(r)
-	return t, err == nil
+	return t, err == nil && t != ""
 }
 
 // resolvePrincipal is the default, authenticated resolver: an Authorization:
@@ -531,13 +540,9 @@ func decodeJSON(r *http.Request, v any) error {
 // pageParams parses cursor-pagination query parameters, returning the page size
 // and the keyset start id.
 func (a *API) pageParams(r *http.Request) (limit int, after string, err error) {
-	limit = 20
-	if s := r.URL.Query().Get("limit"); s != "" {
-		n, e := strconv.Atoi(s)
-		if e != nil || n < 1 || n > 100 {
-			return 0, "", errors.New("limit must be an integer between 1 and 100")
-		}
-		limit = n
+	limit, err = pageLimit(r)
+	if err != nil {
+		return 0, "", err
 	}
 	after = store.ZeroUUID
 	if c := r.URL.Query().Get("cursor"); c != "" {
@@ -548,6 +553,21 @@ func (a *API) pageParams(r *http.Request) (limit int, after string, err error) {
 		after = id
 	}
 	return limit, after, nil
+}
+
+// pageLimit parses just the page-size query parameter (1-100, default 20). It is
+// shared by handlers that decode their own keyset cursor (e.g. the certificate
+// inventory's composite expiry cursor, SPINE-006).
+func pageLimit(r *http.Request) (int, error) {
+	limit := 20
+	if s := r.URL.Query().Get("limit"); s != "" {
+		n, e := strconv.Atoi(s)
+		if e != nil || n < 1 || n > 100 {
+			return 0, errors.New("limit must be an integer between 1 and 100")
+		}
+		limit = n
+	}
+	return limit, nil
 }
 
 func encodeCursor(id string) string {

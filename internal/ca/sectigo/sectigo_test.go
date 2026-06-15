@@ -31,7 +31,7 @@ func sectigoCSR(t *testing.T, cn string) []byte {
 func config(srv *sectigofake.Server) sectigo.Config {
 	return sectigo.Config{
 		Name: "sectigo", BaseURL: srv.URL(),
-		Login: srv.Login(), Password: srv.Password(), CustomerURI: srv.CustomerURI(),
+		Login: srv.Login(), Password: []byte(srv.Password()), CustomerURI: srv.CustomerURI(),
 		OrgID: 1234, CertType: 224,
 	}
 }
@@ -123,7 +123,7 @@ func TestRejectsBadCredentials(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := config(srv)
-	cfg.Password = "wrong-password"
+	cfg.Password = []byte("wrong-password")
 	p := sectigo.New(cfg)
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: sectigoCSR(t, "svc.sectigo.test"), DNSNames: []string{"svc.sectigo.test"}, TTL: 24 * time.Hour,

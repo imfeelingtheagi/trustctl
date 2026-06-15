@@ -26,7 +26,7 @@ func TestSectigoPluginRidesIssuanceRails(t *testing.T) {
 	t.Cleanup(srv.Close)
 	plugin := sectigo.New(sectigo.Config{
 		Name: "sectigo", BaseURL: srv.URL(),
-		Login: srv.Login(), Password: srv.Password(), CustomerURI: srv.CustomerURI(),
+		Login: srv.Login(), Password: []byte(srv.Password()), CustomerURI: srv.CustomerURI(),
 		OrgID: 1234, CertType: 224,
 	})
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)

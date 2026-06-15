@@ -37,6 +37,7 @@ import (
 
 	"trustctl.io/trustctl/internal/connector"
 	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/secret"
 	"trustctl.io/trustctl/internal/pluginhost"
 )
 
@@ -48,9 +49,15 @@ const (
 
 // Credentials are the AWS access credentials used to sign requests. SessionToken
 // is set for temporary (STS/role) credentials.
+//
+// SecretAccessKey is the long-lived signing secret; it is held as []byte, never a
+// string, so it can be wiped and is not freely copied by the GC (AN-8). The
+// AccessKeyID and SessionToken are non-secret identifiers (the access-key id is a
+// public handle; the session token is sent verbatim in a header), so they stay
+// strings.
 type Credentials struct {
 	AccessKeyID     string
-	SecretAccessKey string
+	SecretAccessKey []byte
 	SessionToken    string
 }
 
@@ -116,6 +123,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("acm: encode request: %w", err)
 	}
+	// reqBody carries the base64 private key on the wire — the transient edge copy
+	// (the long-lived key stays []byte in dep.KeyPEM). Wipe it after the request so
+	// the key does not linger in this buffer (AN-8).
+	defer secret.Wipe(reqBody)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/", bytes.NewReader(reqBody))
 	if err != nil {
@@ -191,7 +202,14 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 		crypto.SHA256Hex([]byte(canonicalRequest)),
 	}, "\n")
 
-	kDate := crypto.HMACSHA256([]byte("AWS4"+c.creds.SecretAccessKey), []byte(dateStamp))
+	// The SigV4 derived key starts from "AWS4"||secret. Assemble it in a []byte so
+	// the secret access key never lives in a GC-managed string (AN-8); wipe the
+	// transient seed after the first HMAC.
+	seed := make([]byte, 0, 4+len(c.creds.SecretAccessKey))
+	seed = append(seed, "AWS4"...)
+	seed = append(seed, c.creds.SecretAccessKey...)
+	kDate := crypto.HMACSHA256(seed, []byte(dateStamp))
+	secret.Wipe(seed)
 	kRegion := crypto.HMACSHA256(kDate, []byte(c.region))
 	kService := crypto.HMACSHA256(kRegion, []byte(service))
 	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
