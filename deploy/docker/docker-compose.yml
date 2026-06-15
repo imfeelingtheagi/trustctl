@@ -68,6 +68,10 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
     image: ghcr.io/imfeelingtheagi/trustctl:latest
+    # Self-heal a transient first-boot hiccup (e.g. the shared volume not yet
+    # populated). The image is distroless (no shell), so readiness is expressed by
+    # restart-until-up rather than a CMD healthcheck.
+    restart: on-failure
     entrypoint: ["/usr/local/bin/trustctl-signer"]
     command:
       - "--socket=/run/trustctl/signer.sock"
@@ -83,6 +87,11 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
     image: ghcr.io/imfeelingtheagi/trustctl:latest
+    # The control plane reads the shared KEK and dials the signer's UDS during boot;
+    # on a cold first boot the signer may not be listening within the dial window, so
+    # restart-on-failure lets the control plane retry until the signer is up (the
+    # signer creates the shared kek.bin and binds the socket first).
+    restart: on-failure
     depends_on:
       postgres:
         condition: service_healthy

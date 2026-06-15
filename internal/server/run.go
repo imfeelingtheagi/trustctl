@@ -146,7 +146,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 				return fmt.Errorf("connect external signer over mTLS at %s: %w", cfg.Signer.MTLSAddress, derr)
 			}
 		} else {
-			c, derr = signing.DialReady(ctx, cfg.Signer.Socket, 10*time.Second)
+			// 30s (not 10s): on a cold container first boot the separately-deployed
+			// signer must create the shared KEK and bind its UDS before the control
+			// plane can connect; be patient so we don't exit-then-restart on every
+			// fresh `compose up`.
+			c, derr = signing.DialReady(ctx, cfg.Signer.Socket, 30*time.Second)
 			if derr != nil {
 				_ = log.Close()
 				st.Close()

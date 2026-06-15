@@ -413,30 +413,50 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build trustctl (for the token-create bootstrap)
-        run: make build && echo "$PWD/bin" >> "$GITHUB_PATH"
+      # No host-side trustctl build: the bootstrap API token is minted INSIDE the
+      # running control-plane container (the compose Postgres has no host port), so the
+      # gate needs only docker + curl + jq + openssl, all present on the runner.
       - name: Bring up the served eval stack
         run: |
-          docker compose -f deploy/docker/docker-compose.yml up -d
-          for _ in $(seq 1 60); do
-            if curl -fsk https://localhost:8443/readyz >/dev/null 2>&1; then echo "control plane ready"; break; fi
+          # --build so we exercise THIS commit's image, not a stale pulled :latest.
+          docker compose -f deploy/docker/docker-compose.yml up -d --build
+          # Fail loud: poll /readyz and, if the control plane never serves within the
+          # budget, dump the stack logs and FAIL the job (do not silently proceed to a
+          # curl that connection-refuses). The control plane self-heals a first-boot
+          # signer/KEK race via restart:on-failure, so allow generous time.
+          ready=""
+          for _ in $(seq 1 90); do
+            if curl -fsk https://localhost:8443/readyz >/dev/null 2>&1; then ready=1; echo "control plane ready"; break; fi
             sleep 2
           done
-      - name: Issuance lifecycle e2e (issue -> idempotent retry -> revoke -> served OCSP revoked)
+          if [ -z "$ready" ]; then
+            echo "::error::control plane did not serve /readyz within the budget"
+            docker compose -f deploy/docker/docker-compose.yml ps
+            docker compose -f deploy/docker/docker-compose.yml logs --no-color --tail=300
+            exit 1
+          fi
+      - name: Issuance lifecycle e2e (issue -> idempotent retry -> revoke -> ACME/OCSP/cacerts)
         env:
           BASE_URL: https://localhost:8443
         run: bash scripts/ci/compose-e2e.sh
-      - name: PKI profile conformance (zlint on the issued leaf)
+      - name: PKI profile conformance (zlint on the served issuing CA)
         run: |
           go install github.com/zmap/zlint/v3/cmd/zlint@v3.6.0
-          # leaf.pem is produced by the e2e step above
-          if [ -f leaf.pem ]; then
-            zlint -prettyprint leaf.pem | tee zlint.out
-            # fail on any error-level lint finding (warnings are advisory)
-            if grep -q '"result": "error"' zlint.out; then echo "::error::zlint reported error-level findings"; exit 1; fi
-          else
-            echo "::error::no issued leaf to lint"; exit 1
+          # served-ca.pem is the issuing CA chain the deployment serves over EST
+          # /cacerts, written by the e2e step above. Lint it for RFC 5280 X.509
+          # well-formedness — NOT CABForum public-CA policy, which an internal eval CA
+          # is not required to meet (gating on CABF lints would false-fail a valid
+          # private CA).
+          if [ ! -s served-ca.pem ]; then echo "::error::no served CA chain to lint"; exit 1; fi
+          zlint -includeSources RFC5280 -prettyprint served-ca.pem | tee zlint.out
+          if grep -Eq '"result":[[:space:]]*"error"' zlint.out; then
+            echo "::error::zlint reported RFC5280 error-level findings on the served CA"; exit 1
           fi
+      - name: Dump compose logs on failure
+        if: failure()
+        run: |
+          docker compose -f deploy/docker/docker-compose.yml ps || true
+          docker compose -f deploy/docker/docker-compose.yml logs --no-color --tail=400 || true
       - name: Tear down
         if: always()
         run: docker compose -f deploy/docker/docker-compose.yml down -v || true
