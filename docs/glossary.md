@@ -283,3 +283,64 @@ cryptography behind one boundary (AN-3), an isolated signing process (AN-4),
 idempotency on every mutation (AN-5), an outbox for every external call (AN-6),
 bulkheads and backpressure (AN-7), and memory safety for key material (AN-8). They
 appear throughout these docs because almost every feature rests on them.
+
+### SAN (Subject Alternative Name)
+
+The field inside a certificate that lists exactly which identities it is valid for —
+DNS names like `api.example.com`, IP addresses, or a workload URI like a SPIFFE ID.
+Modern TLS matches a server to its certificate by the SAN, not the old "common
+name". When trustctl issues a cert, the names you asked for end up here.
+
+### RA (Registration Authority)
+
+The role that decides *whether* a certificate request is allowed before any key is
+signed: it vets and approves requests, and the CA only signs what the RA approved.
+Keeping the RA separate from the CA — and from the person making the request — is a
+core control, so no single actor can both ask for and mint a credential.
+
+### CAA (Certification Authority Authorization)
+
+A DNS record a domain owner publishes that names which CAs are permitted to issue
+certificates for that domain (RFC 8659). A well-behaved CA reads it and refuses to
+issue if it is not on the list — a cheap, domain-owner-controlled guardrail against
+the wrong CA issuing for your names.
+
+### ARI (ACME Renewal Information)
+
+An ACME extension (defined in a draft RFC) where the CA tells each client the ideal
+window to renew, so a large fleet renews smoothly instead of all at once — and so a
+CA that must revoke a batch early can ask clients to renew ahead of schedule. See the
+ACME page.
+
+### TSA (Time-Stamping Authority)
+
+A trusted service that cryptographically stamps "this exact data existed at this
+moment" (RFC 3161). It matters for signatures: a timestamp proves a signature was
+made while the signing key was still valid, even if the key is later revoked. trustctl
+runs one for its code-signing and audit evidence.
+
+### OIDC (OpenID Connect)
+
+A standard sign-in protocol built on top of OAuth 2.0 that lets a person log in to
+trustctl with an identity they already have at a provider (Okta, Google, Entra),
+instead of a trustctl-specific password. It is how browser logins and **SSO** work.
+
+### SSO (Single sign-on)
+
+Signing in once to your organization's identity provider and then reaching many
+applications without re-entering credentials. trustctl's browser login uses SSO via
+**OIDC**, so operators authenticate with the account they already manage centrally.
+
+### MDM (Mobile Device Management)
+
+A system that centrally configures fleets of end-user devices — laptops, phones — and
+can push certificates and policies to them (e.g. Microsoft Intune). trustctl can
+deliver device certificates through an MDM so endpoints enroll without a human at each
+machine.
+
+### JIT (Just-in-time issuance)
+
+Minting a short-lived credential only at the moment it is needed — often only after an
+approval — instead of handing out long-lived credentials in advance. Less standing
+access means a smaller window for a leaked credential to be abused. See the
+incident-and-JIT page.

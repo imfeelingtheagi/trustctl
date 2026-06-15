@@ -1,0 +1,80 @@
+# trustctl feature catalog — generated from NHI-Platform-PRD-v0.7.md
+# Columns: feature_id<TAB>title  (the docs verifier requires every id below to be documented under docs/)
+F1	Certificate inventory
+F2	Network discovery
+F3	Agent-based discovery
+F4	CA-agnostic outbound issuance
+F5	Built-in ACME server
+F6	Lifecycle automation
+F7	Deployment connectors (initial set)
+F8	RBAC
+F9	Audit log surfaces
+F10	REST API
+F11	CLI
+F12	Web UI
+F13	SSO/OIDC (free)
+F14	Single-binary distribution
+F15	Encrypted control-plane transport
+F16	Crypto-agility and PQC readiness
+F17	Certificate Transparency monitoring
+F18	Drift detection
+F19	Credential risk scoring
+F20	Plugin SDK with capability sandboxing
+F21	Credential graph
+F42	SSH credential discovery & inventory
+F46	ACME Renewal Information (ARI)
+F47	X.509 revocation infrastructure
+F48	Private/enterprise CA hierarchy management
+F49	Agentless cloud certificate discovery
+F22	EST server (RFC 7030)
+F23	SCEP server (RFC 8894)
+F24	SPIFFE Workload API
+F25	Ephemeral credential issuance
+F26	HSM integration
+F27	Additional connectors
+F28	Policy engine
+F29	Notification integrations
+F30	Workload attestation chain
+F31	Credential compromise workflow
+F32	Fleet re-issuance for CA compromise
+F33	Just-in-time issuance with approval flows
+F34	Break-glass procedures
+F43	SSH certificate authority
+F44	SSH deployment & trust configuration (agent)
+F45	Attestation-gated short-lived SSH user certs
+F50	Code-signing service
+F51	Timestamping authority (RFC 3161)
+F52	Cryptographic discovery & observability (CBOM)
+F53	Certificate profiles & registration-authority model
+F54	Embedded / IoT enrollment agent
+F55	CMP server (RFC 4210 / CMPv3)
+F56	Intune / MDM enrollment integration
+F57	PQC migration orchestration
+F61	AI-agent / NHI identity broker
+F62	Cryptographic compliance reporting & posture dashboards
+F35	Secret store discovery
+F36	API key/token inventory
+F37	Secret rotation engine
+F38	Ephemeral API key issuance
+F39	Code/CI secret scanning bridge
+F40	Multi-tenant deployment topology
+F41	Cross-cluster / multi-region federation
+F63	Native secret store
+F64	Developer secrets experience (CLI, portal, SDKs)
+F65	Dynamic secrets
+F66	Encryption-as-a-service (transit) & KMIP
+F67	PKI as a secrets engine
+F68	Secret sync / platform integrations
+F58	Platform auth-method framework
+F59	Non-human identity lifecycle management
+F60	Secret sharing & secret-change approvals
+F76	Pluggable AI model adapter
+F77	Grounded RCA & natural-language query
+F78	trustctl MCP server
+F69	DNS-01 challenge automation
+F70	DNS-provider plugin framework
+F71	CNAME delegation for validation isolation
+F72	CAA policy enforcement & management
+F73	Multi-method domain-validation policy
+F74	Automated wildcard issuance & renewal
+F75	Unified semantic query layer
