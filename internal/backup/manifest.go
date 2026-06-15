@@ -48,6 +48,8 @@ var RecoveredFromPostgresBackup = []string{
 	"ct_watched_domains",
 	"deployment_targets",
 	"idempotency_keys",
+	"issuance_approval_requests",
+	"issuance_approvals",
 	"outbox",
 	"policy_bindings",
 	"ssh_keys",
@@ -56,6 +58,10 @@ var RecoveredFromPostgresBackup = []string{
 // Ephemeral state is not required for a correct restore (it regenerates).
 var Ephemeral = []string{
 	"rate_limits",
+	// projection_checkpoint is the read-model projection watermark (SPINE-007). On
+	// restore the read model is truncated and re-derived by projections.Rebuild,
+	// which resets the checkpoint to head — so it is regenerated, never depended on.
+	"projection_checkpoint",
 }
 
 // RecoveryClass names how a table is recovered in a disaster.
