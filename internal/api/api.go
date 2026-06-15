@@ -48,6 +48,8 @@ type API struct {
 	agentTokens   BootstrapTokenIssuer
 	agentEnroller BootstrapEnroller
 	rateLimiter   RateLimiter
+	gate          MutationGate
+	approvals     ApprovalRecorder
 	mux           *http.ServeMux
 	spec          *Document
 }
@@ -69,6 +71,8 @@ type config struct {
 	agentTokens      BootstrapTokenIssuer
 	agentEnroller    BootstrapEnroller
 	rateLimiter      RateLimiter
+	gate             MutationGate
+	approvals        ApprovalRecorder
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -116,6 +120,18 @@ func WithRateLimiter(rl RateLimiter) Option {
 	return func(c *config) { c.rateLimiter = rl }
 }
 
+// WithMutationGate wires the served policy / RA-separation / dual-control gate onto
+// the mutating lifecycle path (EXC-WIRE-03). When set, a served issue/deploy/revoke
+// transition is denied unless the default-deny policy explicitly allows it, a
+// privileged issue/revoke requires the certs:issue authority (the requester scope
+// cannot self-issue), and — when dual control is enabled — a distinct-approver
+// approval must be on record. The zero gate is a permissive no-op, so an unconfigured
+// deployment keeps the prior served behavior. This closes SEC-002/SEC-005/CORRECT-003
+// (the gate was library-only) and is the served half of the RED-004 defense.
+func WithMutationGate(g MutationGate) Option {
+	return func(c *config) { c.gate = g }
+}
+
 // New builds the API over its dependencies and wires the routes. The static
 // OpenAPI document is built once from the route registry. The dependencies may
 // be nil when only the spec is needed (e.g. for documentation tooling).
@@ -125,7 +141,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -240,6 +256,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: []string{"id"}, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: []string{"id"}, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
+		{method: "POST", path: "/api/v1/identities/{id}/approvals", opID: "approveIdentityAction", summary: "Approve a pending privileged action (dual control)", handler: a.approveIdentityAction, pathParams: []string{"id"}, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},

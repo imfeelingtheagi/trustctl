@@ -170,6 +170,14 @@ func componentSchemas() map[string]*Schema {
 		"reason": str(),
 	}, "to")
 
+	approvalReq := object(map[string]*Schema{
+		"action": {Type: "string", Enum: []string{"issue", "revoke"}},
+	}, "action")
+	approval := object(map[string]*Schema{
+		"resource": str(), "action": {Type: "string", Enum: []string{"issue", "revoke"}},
+		"approver": str(), "approvals": {Type: "integer"},
+	}, "resource", "action", "approver", "approvals")
+
 	list := func(item string) *Schema {
 		return object(map[string]*Schema{
 			"items":       {Type: "array", Items: ref(item)},
@@ -249,6 +257,8 @@ func componentSchemas() map[string]*Schema {
 		"IdentityRequest":   identityReq,
 		"IdentityList":      list("Identity"),
 		"TransitionRequest": transitionReq,
+		"ApprovalRequest":   approvalReq,
+		"Approval":          approval,
 	}
 }
 

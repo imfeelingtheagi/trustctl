@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
+	"trustctl.io/trustctl/internal/authz"
 	"trustctl.io/trustctl/internal/orchestrator"
 	"trustctl.io/trustctl/internal/store"
 )
@@ -346,6 +348,21 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		var req transitionRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		// EXC-WIRE-03: enforce the served policy / RA-separation / dual-control gate
+		// BEFORE the orchestrator records the transition and enqueues the mint/revoke
+		// outbox effect. This is the seam where the authenticated principal is in
+		// context, which the RA scope split (certs:issue) and the distinct-approver
+		// check require. The gate is fail-closed; the zero gate is a no-op. Doing this
+		// inside the idempotency closure means a denial is the recorded result for the
+		// key (a replay re-denies, never silently mints — AN-5).
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		if err := a.gate.check(ctx, principal, tenantID, id, orchestrator.State(req.To)); err != nil {
+			var ge *gateError
+			if errors.As(err, &ge) {
+				return 0, nil, errStatus(ge.status, ge.detail)
+			}
+			return 0, nil, err
 		}
 		if err := a.orch.Transition(ctx, tenantID, id, orchestrator.State(req.To), req.Reason); err != nil {
 			return 0, nil, err

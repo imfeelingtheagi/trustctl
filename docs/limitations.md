@@ -135,33 +135,50 @@ remaining integration work.
   dynamic-secret revocations are event-sourced (AN-2); methods and providers are
   tenant-scoped (AN-1).
 
-## Authorization policy gates: modeled and tested, not yet on a served route
+## Authorization policy gates: served on the issue/deploy/revoke path
 
-Two advertised authorization controls are **real, tested library code** but are
-**not yet enforced on any served route** of the running binary. They constrain the
-Go API today; they do not yet gate the served issue/deploy/revoke path. Wiring
-them onto the served mutation path is tracked as **`EXC-WIRE-03`**.
+As of **`EXC-WIRE-03`** the OPA/Rego default-deny policy gate, the RA scope split,
+and dual-control approval are **enforced on the served mutating issuance path** of
+the running binary — not just in library code. They gate the served lifecycle
+transition (`POST /api/v1/identities/{id}/transitions`) for issue, deploy, and
+revoke, fail-closed, before the orchestrator records the transition or enqueues the
+mint/revoke effect. The gate is wired from `cmd/trustctl` → `internal/server`
+(`server.Build` → `api.WithMutationGate`/`api.WithApprovals`), and is tenant-scoped
+(AN-1), audited (AN-2), and runs the policy engine on its own bulkhead (AN-7).
 
-- **Registration-authority (RA) separation & dual-control approval (SEC-002).** The
-  RBAC model and the approval workflow encode "a requester cannot self-issue": the
-  `ra-officer` role holds `certs:request` but not `certs:issue`, and the
-  `internal/approval` package models a request→approve→issue split with dual
-  control. But **no served route is gated on `certs:request`/`certs:issue`** today —
-  the served issuance path is an `identities:write` lifecycle transition, and the
-  `approval` package has no served importer — so the request/approve split and dual
-  control are **not enforceable end-to-end against the running binary** yet. The
-  separation is exercised in unit tests (`internal/authz`), and the operator guide
-  documents the model; serving an RA-gated request/approve/issue flow (backed by the
-  event store) is tracked as **`EXC-WIRE-03`**.
-- **OPA/Rego policy gate — default-deny on issue/deploy/revoke (SEC-005).** The
-  policy engine (`internal/policy`) is real and tested: it is default-deny,
-  fail-closed, bulkheaded (AN-7), and audited. But it is **library-only — the served
-  binary never invokes it** (`cmd/trustctl` → `internal/server`, which does not call
-  `policy.New`/`policy.Engine`/`policy.Evaluate`), so an operator **cannot enforce a
-  deployed Rego policy at runtime** against the served issue/deploy/revoke path
-  today. Deriving the policy input (action / `tenant_id` / actor) from the request +
-  principal and gating the served mutation path on a fail-closed evaluation is
-  tracked as **`EXC-WIRE-03`**.
+- **Registration-authority (RA) separation & dual-control approval (SEC-002 — now
+  served).** The served gate enforces the RA scope split: a privileged issue/revoke
+  transition requires the `certs:issue` authority, so a `certs:request`-only
+  requester (the `ra-officer`) **cannot self-issue** on the served path. When dual
+  control is enabled (`ca.policy.require_approval`), a privileged action is denied
+  until a **distinct** approver records an approval via
+  `POST /api/v1/identities/{id}/approvals` (which itself requires `certs:issue`); a
+  **self-approval is rejected** (the requester cannot approve their own request),
+  backed by the RLS-isolated `issuance_approval_requests` / `issuance_approvals`
+  tables. This is the served half of the RED-004 "loaded gun" defense (the bootstrap
+  token already withholds `certs:issue`; the served mint now enforces the RA split +
+  dual control too). The `internal/approval` package's full request→approve→issue
+  state machine (notifications, time-bounded grants, JIT) remains the richer library
+  model; the served gate enforces the core distinct-approver / no-self-issue invariant.
+- **OPA/Rego policy gate — default-deny on issue/deploy/revoke (SEC-005 — now
+  served).** With `ca.policy.enabled` set, the served binary invokes the policy
+  engine (`internal/policy`) on every issue/deploy/revoke transition: the request is
+  **denied unless the deployed Rego policy explicitly allows it** (default-deny,
+  fail-closed). The policy input carries the action, `tenant_id`, the actor
+  (authenticated principal), and the bound profile name, so an operator can enforce a
+  real Rego document at runtime. A non-compiling policy module is a hard startup
+  error, an evaluation error denies, and a saturated policy pool sheds with a 503
+  (never an allow). The built-in base policy is default-deny, permits revocation, and
+  requires a bound certificate profile to issue/deploy (composing with PKIGOV-002).
+  Enforcement is **off by default** (`ca.policy.enabled=false`) so an in-place
+  upgrade does not silently start denying; the RA scope split is enforced for
+  privileged transitions regardless of this flag.
+
+**Served-leaf profile enforcement (CORRECT-003 / PKIGOV-002).** Independently of the
+policy flag, when a default certificate profile is bound (`ca.default_profile`) the
+served mint validates the request against the active profile version and rejects an
+out-of-profile request before signing (an `issuance.profile_evaluated` deny event) —
+so the served mint is profile-gated, not ungated.
 
 ## Plugin isolation: first-party in-process, third-party sandboxed
 
@@ -310,18 +327,37 @@ no-op. Transitioning an identity to *revoked* drives the served outbox handler t
 - record the certificate's serial in the **revocation store** (`ca_issued_certs`)
   that backs OCSP/CRL.
 
-This is exercised end to end in CI (issue → revoke → assert the cert reads
-revoked and the revoked serial is on record).
+The **online revocation-distribution surface is now served** (`EXC-REVOKE-01`):
+the running binary mounts an RFC 6960 **OCSP responder** at `/ocsp/{tenant}` (GET
+base64-in-path and POST `application/ocsp-request`) and an RFC 5280 **CRL
+endpoint** at `/crl/{tenant}`, and runs a background **freshness scheduler** that
+regenerates each tenant's CRL ahead of its `nextUpdate`. A query for a revoked
+serial returns `revoked` over OCSP and the serial appears on the CRL within the
+freshness window; a query for an issued-but-not-revoked serial returns `good`; an
+unknown serial returns a signed `unknown`. These endpoints are **public by RFC
+design** (relying parties check status without credentials) but run on the API
+bulkhead pool, so an OCSP/CRL flood sheds rather than starving the rest of the
+control plane (AN-7).
 
-What is **not yet served** is the *online revocation-distribution surface*: a
-mounted **OCSP responder** and **CRL endpoint**, the freshness scheduler, and the
-**CDP/AIA pointers** on issued leaves (so a relying party can discover and fetch
-revocation status automatically). Signing live OCSP/CRL needs the CA key in
-process, which trustctl deliberately keeps in the out-of-process signer (AN-4), so
-that distribution layer is built behind that boundary as dedicated work —
-**`EXC-REVOKE-01`**. Until it ships, treat trustctl revocation as authoritative in
-the product's own inventory/records but **not yet automatically published to
-external relying parties** over OCSP/CRL.
+OCSP responses and CRLs are **signed through the out-of-process signer** (AN-4):
+the signing op crosses the `internal/crypto` boundary (`SignOCSPResponse` /
+`CreateCRL`) using the same signer-held CA key (a purpose-bound `RemoteSigner`)
+the leaf path uses, so the CA private key **never materializes in the control
+plane** — only the digest crosses. Every query is tenant-scoped under RLS (AN-1),
+and each published CRL emits a `ca.crl.published` event (AN-2).
+
+This is exercised end to end in CI (issue → revoke → assert OCSP returns
+`revoked` (and `good` before revocation) and the CRL lists the serial within the
+freshness window, with both signatures verifying against the issuing CA, driven
+over real HTTP against the assembled binary and the real out-of-process signer).
+
+The **CDP/AIA pointers** stamped on issued leaves are operator-configured
+(`TRUSTCTL_CA_CRL_DISTRIBUTION_POINTS` / `_OCSP_SERVERS`, PKIGOV-001) because the
+externally reachable URL is deployment-specific; point them at the binary's
+`/ocsp/{tenant}` and `/crl/{tenant}` (behind your ingress) so relying parties
+discover and fetch revocation status automatically. trustctl revocation is now
+both authoritative in the product's own inventory/records **and** publishable to
+external relying parties over served OCSP/CRL.
 
 ## Single sign-on (OIDC only)
 

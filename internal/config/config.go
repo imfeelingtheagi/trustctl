@@ -275,8 +275,9 @@ type CA struct {
 	// pointers are stamped on every leaf the served binary mints so relying parties
 	// can locate revocation status and build the chain. They are operator-supplied
 	// because the URLs are deployment-specific; the Subject Key Identifier is always
-	// set regardless. Point CRLDistributionPoints/OCSPServers at the operator's
-	// own CDP/OCSP responders (live OCSP/CRL serving is the EXC-REVOKE-01 epic).
+	// set regardless. The binary now serves OCSP at /ocsp/{tenant} and a CRL at
+	// /crl/{tenant} (EXC-REVOKE-01), so point CRLDistributionPoints/OCSPServers at
+	// those routes (behind your ingress) — or at an external responder you prefer.
 	CRLDistributionPoints []string `json:"crl_distribution_points,omitempty"`
 	OCSPServers           []string `json:"ocsp_servers,omitempty"`
 	IssuerURLs            []string `json:"issuer_urls,omitempty"`
@@ -291,6 +292,33 @@ type CA struct {
 	// out-of-profile request is rejected with an issuance.profile_evaluated deny
 	// event. Empty means no served-side profile binding (the prior behavior).
 	DefaultProfile string `json:"default_profile,omitempty"`
+
+	// Policy gates the served issue/deploy/revoke path with the OPA/Rego default-deny
+	// engine, the RA scope split, and dual-control approval (EXC-WIRE-03; closes
+	// SEC-002/SEC-005/CORRECT-003, the served half of RED-004). The zero value leaves
+	// enforcement off so an upgrade does not silently start denying; turn it on per
+	// deployment.
+	Policy PolicyGate `json:"policy,omitempty"`
+}
+
+// PolicyGate configures the served authorization gate on the mutating issuance path
+// (EXC-WIRE-03). It is part of the CA config because it governs issuance/revocation.
+type PolicyGate struct {
+	// Enabled turns on the served default-deny OPA/Rego policy gate: every served
+	// issue/deploy/revoke transition is denied unless the policy explicitly allows it
+	// (fail closed). The RA scope split (a requester cannot self-issue) is always
+	// enforced for privileged transitions independent of this flag.
+	Enabled bool `json:"enabled,omitempty"`
+	// Module is the Rego policy document (its text). Empty uses the built-in
+	// default-deny base policy (permit revoke; require a bound profile to issue/deploy).
+	Module string `json:"module,omitempty"`
+	// RequireApproval turns on served dual control for privileged transitions: an
+	// issue/revoke is denied unless a DISTINCT approver has approved it via the served
+	// approval endpoint (self-approval is rejected).
+	RequireApproval bool `json:"require_approval,omitempty"`
+	// RequiredApprovals is the number of distinct approvals required when
+	// RequireApproval is on. Zero defaults to 2 (dual control).
+	RequiredApprovals int `json:"required_approvals,omitempty"`
 }
 
 // Default returns the built-in configuration: a self-contained single-node

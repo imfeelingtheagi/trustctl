@@ -132,6 +132,46 @@ func (s *Store) InsertCRL(ctx context.Context, c CRL) error {
 	})
 }
 
+// TenantsWithIssuedCerts returns the distinct tenant IDs that have at least one
+// certificate recorded under caID, so the served CRL freshness scheduler
+// regenerates a CRL only for tenants that actually have a revocation surface (it
+// does not mint empty CRLs for every registered tenant). It is a system
+// (cross-tenant) operation, the same RLS-exempt pattern ListTenants uses: it
+// enumerates which tenants exist for a shared issuing CA, not any tenant's data.
+func (s *Store) TenantsWithIssuedCerts(ctx context.Context, caID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trustctl:system-query — cross-tenant by design: enumerates which tenants have rows under a shared issuing CA so the CRL scheduler can regenerate per tenant; runs on the pool, not under RLS (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM ca_issued_certs WHERE ca_id = $1 ORDER BY tenant_id`,
+		caID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// CRLDueForRegeneration reports whether the CA's latest published CRL is missing
+// or will expire within lead (so the scheduler regenerates ahead of nextUpdate,
+// keeping the served CRL fresh). It is tenant-scoped under RLS (AN-1).
+func (s *Store) CRLDueForRegeneration(ctx context.Context, tenantID, caID string, now time.Time, lead time.Duration) (bool, error) {
+	crl, found, err := s.LatestCRL(ctx, tenantID, caID)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return true, nil
+	}
+	return !crl.NextUpdate.After(now.Add(lead)), nil
+}
+
 // LatestCRL returns the most recently published CRL for a CA and whether one
 // exists.
 func (s *Store) LatestCRL(ctx context.Context, tenantID, caID string) (CRL, bool, error) {

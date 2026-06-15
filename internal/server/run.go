@@ -175,7 +175,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile,
 		LeafProfile: leafProfile, DefaultProfile: cfg.CA.DefaultProfile,
-		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
+		// EXC-WIRE-03: wire the served policy / RA-separation / dual-control gate onto
+		// the mutating issue/deploy/revoke path from config (closes SEC-002/SEC-005/
+		// CORRECT-003; the served half of RED-004). Off by default so an upgrade does
+		// not silently start denying; the RA scope split is always enforced.
+		PolicyModule:      cfg.CA.Policy.Module,
+		EnablePolicyGate:  cfg.CA.Policy.Enabled,
+		RequireApproval:   cfg.CA.Policy.RequireApproval,
+		RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
+		AuditSigningKey:   auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
 		Logger: logger, RateLimiter: rateLimiter,
 		// Web hardening (SEC-003/WIRE-005): emit HSTS only when the control plane is
 		// served over TLS (internal or file mode), and apply the operator's CORS
@@ -242,6 +250,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	tailDone := make(chan struct{})
 	go func() { defer close(tailDone); srv.RunProjectionTail(tailCtx) }()
 
+	// Regenerate served CRLs on a freshness cadence (EXC-REVOKE-01): each tenant's
+	// CRL is regenerated ahead of its nextUpdate (and a first one is generated on
+	// demand) so the CRL the CDP serves is never stale. CRLs are signed through the
+	// out-of-process signer (AN-4); a no-op when no issuing CA is provisioned.
+	// Stopped before the final drain with the other background workers.
+	crlCtx, stopCRL := context.WithCancel(ctx)
+	crlDone := make(chan struct{})
+	go func() { defer close(crlDone); srv.RunCRLScheduler(crlCtx) }()
+
 	// stopBackground halts the background workers and waits for them to exit, so the
 	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
 	// when the event log closes.
@@ -258,6 +275,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		<-outboxGCDone
 		stopTail()
 		<-tailDone
+		stopCRL()
+		<-crlDone
 	}
 
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}

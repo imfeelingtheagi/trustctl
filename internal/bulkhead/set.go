@@ -15,6 +15,11 @@ const (
 	// occupying the API workers and starving cheap CRUD (and /auth, /enroll) on the
 	// shared SubsystemAPI pool (AN-7 fairness within the served surface).
 	SubsystemQuery = "query"
+	// SubsystemPolicy is the bounded pool the OPA/Rego policy engine evaluates on
+	// (AN-7), so a policy-evaluation storm on the served issue/deploy/revoke gate
+	// (EXC-WIRE-03) cannot starve the API workers — and a saturated policy pool sheds
+	// fast and fails closed (a shed decision is a deny) rather than blocking issuance.
+	SubsystemPolicy = "policy"
 )
 
 // Set is a collection of named, isolated pools — one per subsystem. Submitting to
@@ -46,6 +51,11 @@ func Default() *Set {
 		// under load instead of monopolizing capacity — while the cheap CRUD pool stays
 		// free. A modest queue absorbs short bursts.
 		Config{Name: SubsystemQuery, Workers: 4, Queue: 64},
+		// The policy-engine pool (EXC-WIRE-03/AN-7): served issue/deploy/revoke gate
+		// evaluations run here, isolated from the API workers, and shed fast (fail
+		// closed) when saturated. Rego evaluation is CPU-bound and short, so a few
+		// workers with a small queue suffice.
+		Config{Name: SubsystemPolicy, Workers: 4, Queue: 64},
 	)
 }
 

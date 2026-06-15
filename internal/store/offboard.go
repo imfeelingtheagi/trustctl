@@ -30,6 +30,8 @@ var TenantScopedTables = []string{
 	"identities",
 	"ca_ceremony_approvals",
 	"ca_key_ceremonies",
+	"issuance_approvals",         // EXC-WIRE-03: FK -> issuance_approval_requests
+	"issuance_approval_requests", // EXC-WIRE-03: served dual-control approval state
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
 	"owners",
 	"issuers",

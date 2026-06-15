@@ -42,6 +42,48 @@
         ],
         "type": "object"
       },
+      "Approval": {
+        "properties": {
+          "action": {
+            "enum": [
+              "issue",
+              "revoke"
+            ],
+            "type": "string"
+          },
+          "approvals": {
+            "type": "integer"
+          },
+          "approver": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "action",
+          "approver",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "ApprovalRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "issue",
+              "revoke"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
       "AuditBundle": {
         "properties": {
           "bundle": {
@@ -1338,6 +1380,65 @@
           }
         },
         "summary": "Get an identity"
+      }
+    },
+    "/api/v1/identities/{id}/approvals": {
+      "post": {
+        "operationId": "approveIdentityAction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Approve a pending privileged action (dual control)"
       }
     },
     "/api/v1/identities/{id}/transitions": {

@@ -87,7 +87,7 @@ func TestServedRevokeInvalidatesCert(t *testing.T) {
 	ts := httptest.NewServer(asm.Handler())
 	defer ts.Close()
 
-	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read")
+	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 
 	ownerID := created(t, ts, token, "/api/v1/owners", `{"kind":"workload","name":"payments"}`)
 	issuerID := created(t, ts, token, "/api/v1/issuers",
@@ -178,7 +178,7 @@ func TestServedRevokeIsIdempotent(t *testing.T) {
 	ts := httptest.NewServer(asm.Handler())
 	defer ts.Close()
 
-	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read")
+	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 	ownerID := created(t, ts, token, "/api/v1/owners", `{"kind":"workload","name":"payments"}`)
 	identityID := created(t, ts, token, "/api/v1/identities",
 		`{"kind":"x509_certificate","name":"idem.svc","owner_id":"`+ownerID+`"}`)

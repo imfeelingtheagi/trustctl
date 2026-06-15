@@ -241,11 +241,12 @@ func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID 
 // the recorded result rather than revoking again, and the store keeps the first
 // revocation time. All access is tenant-scoped under RLS (AN-1).
 //
-// Note: the served binary's CA key lives in the signer (AN-4), so signing live
-// OCSP responses and CRLs (which need the CA private key in process) is the
-// separate EXC-REVOKE-01 epic. This handler makes revocation real and recorded —
-// the certificate stops validating and the revocation is on record for the
-// responder/CRL — without holding a key in the control plane.
+// Note: the served binary's CA key lives in the signer (AN-4). This handler makes
+// revocation real and recorded — the certificate stops validating and the serial
+// is on record in ca_issued_certs — and the served OCSP responder and CRL endpoint
+// (EXC-REVOKE-01, internal/server/revocation.go) then publish that revocation to
+// relying parties, signing through the signer so the CA key never enters the
+// control plane.
 func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Message) error {
 	var p transitionTrigger
 	if err := json.Unmarshal(m.Payload, &p); err != nil {

@@ -115,10 +115,14 @@ allow { input.action == "issue"; input.profile != "" }
 ## Pitfalls & limits
 
 - **Served vs library:** RBAC (F8) is enforced and the audit log (F9) is served. The
-  policy engine (F28), notifications (F29), and compliance reporting (F62) are
-  library-complete and tested, invoked internally (e.g. the policy gate by the
-  [AI-agent broker](workload-identity.md)); a dedicated policy/notification config API is
-  the integration step — see [Current limitations](../limitations.md).
+  **policy engine (F28) and the RA/dual-control gate are now served on the issuance
+  path** (EXC-WIRE-03): with `ca.policy.enabled` the default-deny OPA/Rego gate runs
+  on every served issue/deploy/revoke transition (fail-closed), the RA scope split
+  (`certs:request` ≠ `certs:issue`) is enforced so a requester cannot self-issue, and
+  with `ca.policy.require_approval` a privileged action needs a **distinct** approver
+  (self-approval rejected). Notifications (F29) and compliance reporting (F62) remain
+  library-complete and tested; a dedicated policy/notification *authoring* config API
+  is the remaining integration step — see [Current limitations](../limitations.md).
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
 - **Compliance reporting evidences controls; it does not certify you.** It's explicit
