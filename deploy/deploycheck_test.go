@@ -2,18 +2,35 @@ package deploy_test
 
 import (
 	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
 
 // These tests are the behavioural counterpart to the static deploy/ string-match
-// suite (OPS-008). They drill the real artifacts:
+// suite (OPS-008). A green `go test ./deploy/...` used to mean only that the
+// manifests *named* certain strings; it never bound a manifest to the artifact it
+// drives. These checks close that gap by reconciling every manifest against the
+// real thing it must agree with — the binary's flag set, the workflows' built
+// images, the config loader's known keys, the chart's values.yaml, and the
+// rendered Kubernetes objects — so a manifest that drifts (a typo'd flag, an
+// unbuilt image, an env key no code reads, a value the chart never defines, a
+// structurally-broken render) FAILS the suite instead of passing it.
+//
+// Every check below is mutation-proven: it ships with a negative sub-test that
+// injects a deliberately-broken manifest fragment and asserts the check rejects
+// it, then asserts the REAL artifact passes — so the green is not vacuous.
 //
 //   - TestManifestFlagsAreDefinedByTheBinary parses the actual flag set out of
 //     each trustctl binary's --help and asserts every flag a manifest passes is
@@ -28,6 +45,23 @@ import (
 //     single multi-binary control-plane image), or is explicitly marked as a
 //     not-yet-built placeholder. This FAILS on the pre-fix tree, which referenced
 //     -agent/-signer/-operator images that no workflow builds (OPS-002).
+//
+//   - TestManifestEnvKeysAreReadByTheBinary reconciles every TRUSTCTL_* env key a
+//     manifest hands to the control-plane binary (configmap data, the deployment's
+//     direct env, the compose service environment) against the EXACT set of keys
+//     the config loader (internal/config applyEnv) actually reads — so a manifest
+//     cannot wire a phantom env contract the binary silently ignores (the OPS KMS-
+//     env class: TRUSTCTL_KMS_* that no Go code reads).
+//
+//   - TestEveryTemplateValueExistsInValuesYAML reconciles every `.Values.X`
+//     reference in the chart's templates against values.yaml (and the chart's
+//     templated env back to the loader), so a template cannot reference a value
+//     the chart never defines (which renders empty and silently misconfigures).
+//
+//   - TestRenderedManifestsAreStructurallyValid renders the chart's templates and
+//     the static manifests and asserts each resulting object carries the fields
+//     Kubernetes requires for its kind (a kubeconform-style structural gate), so a
+//     manifest that renders into an object the API server would reject FAILS here.
 
 // repoRoot returns the repository root (this package lives at <root>/deploy).
 func repoRoot(t *testing.T) string {
@@ -511,5 +545,692 @@ func keys(m map[string]bool) []string {
 	for k := range m {
 		out = append(out, k)
 	}
+	sort.Strings(out)
 	return out
+}
+
+// --- OPS-008 (3): every TRUSTCTL_* env key a manifest hands the control-plane
+// binary must be one the config loader actually reads -------------------------
+
+// loaderEnvKeys parses the config loader (internal/config/config.go) and returns
+// the EXACT set of TRUSTCTL_* keys its applyEnv method reads via the
+// set{String,Bool,BoolPtr,Int,CSV}(getenv, "KEY", …) helpers. This is the binary's
+// real env contract, derived from the AST — not a hand-maintained list — so a
+// manifest that sets a key the binary silently ignores (the phantom-env class:
+// e.g. a TRUSTCTL_KMS_* contract no Go code reads) is caught. It also recognizes
+// TRUSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs).
+func loaderEnvKeys(t *testing.T, root string) map[string]bool {
+	t.Helper()
+	src, err := os.ReadFile(filepath.Join(root, "internal", "config", "config.go"))
+	if err != nil {
+		t.Fatalf("read internal/config/config.go: %v", err)
+	}
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "config.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse config.go: %v", err)
+	}
+	keys := map[string]bool{}
+	// Load() itself reads TRUSTCTL_CONFIG_FILE before overlaying applyEnv.
+	keys["TRUSTCTL_CONFIG_FILE"] = true
+	// setterNames are the env-overlay helpers; their 2nd argument is the key string.
+	setterNames := map[string]bool{
+		"setString": true, "setBool": true, "setBoolPtr": true,
+		"setInt": true, "setCSV": true,
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := call.Fun.(*ast.Ident)
+		if !ok || !setterNames[ident.Name] || len(call.Args) < 2 {
+			return true
+		}
+		// The key is the literal 2nd argument: set*(getenv, "TRUSTCTL_…", &dst).
+		lit, ok := call.Args[1].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		val, err := strconv.Unquote(lit.Value)
+		if err == nil && strings.HasPrefix(val, "TRUSTCTL_") {
+			keys[val] = true
+		}
+		return true
+	})
+	if len(keys) < 10 {
+		t.Fatalf("parsed only %d TRUSTCTL_* keys from applyEnv (expected dozens) — the loader-key extractor is broken, not the manifests", len(keys))
+	}
+	return keys
+}
+
+// envRefRe matches a TRUSTCTL_* token anywhere on a line (manifest env keys and
+// $(VAR) substitution references both match; we separate them by context below).
+var envRefRe = regexp.MustCompile(`TRUSTCTL_[A-Z0-9_]+`)
+
+// substVarRe matches a $(VAR) Kubernetes env-substitution reference, e.g.
+// "--enroll-url=$(TRUSTCTL_ENROLL_URL)". Such a token is the NAME of a pod env var
+// interpolated into an arg string by the kubelet — it is NOT a key the binary reads
+// from its environment, so it is excluded from the config-key reconciliation.
+var substVarRe = regexp.MustCompile(`\$\((TRUSTCTL_[A-Z0-9_]+)\)`)
+
+// binaryEnvKeysInManifest returns the TRUSTCTL_* keys a manifest sets that the
+// control-plane binary is expected to READ from its environment, excluding keys
+// that exist only to be interpolated into a flag via $(VAR) (those feed a flag the
+// flags-vs-binary check already validates, and the agent never reads them as env).
+func binaryEnvKeysInManifest(body string) map[string]bool {
+	// Collect every $(VAR) substitution name; these are pod-local plumbing, not the
+	// binary's env contract.
+	subst := map[string]bool{}
+	for _, m := range substVarRe.FindAllStringSubmatch(body, -1) {
+		subst[m[1]] = true
+	}
+	out := map[string]bool{}
+	for _, line := range strings.Split(body, "\n") {
+		l := strings.TrimSpace(line)
+		if strings.HasPrefix(l, "#") {
+			continue
+		}
+		for _, k := range envRefRe.FindAllString(l, -1) {
+			// A $(VAR) reference is plumbing; the `name: TRUSTCTL_X` that DEFINES it is
+			// the value source for that plumbing — skip both so only keys the binary
+			// reads from its environment remain.
+			if subst[k] {
+				continue
+			}
+			out[k] = true
+		}
+	}
+	return out
+}
+
+// configMapDataKeys returns the TRUSTCTL_* keys a Helm configMap template declares
+// under its `data:` block — these are loaded into the control-plane pod via
+// envFrom.configMapRef and read directly by the binary, so each must be a real
+// loader key. The values may be templated; we only care about the key names.
+func configMapDataKeys(body string) map[string]bool {
+	out := map[string]bool{}
+	inData := false
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "data:" {
+			inData = true
+			continue
+		}
+		if inData {
+			// A non-indented, non-blank line that is not a comment ends the data block.
+			if line != "" && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+				inData = false
+			}
+		}
+		if !inData || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "{{") {
+			continue
+		}
+		// data entries look like `TRUSTCTL_FOO: {{ … }}` — take the key before the colon.
+		if i := strings.IndexByte(trimmed, ':'); i > 0 {
+			key := strings.TrimSpace(trimmed[:i])
+			if strings.HasPrefix(key, "TRUSTCTL_") {
+				out[key] = true
+			}
+		}
+	}
+	return out
+}
+
+func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
+	root := repoRoot(t)
+	known := loaderEnvKeys(t, root)
+
+	// Sources whose TRUSTCTL_* env the CONTROL-PLANE binary reads directly:
+	//   - the Helm configMap data (loaded via envFrom into the control-plane pod);
+	//   - the deployment's direct env: stanza on the trustctl container;
+	//   - the compose service environment.
+	type src struct {
+		rel  string
+		keys map[string]bool
+	}
+	var sources []src
+
+	cfgTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trustctl", "templates", "configmap.yaml"))
+	if err != nil {
+		t.Fatalf("read configmap.yaml: %v", err)
+	}
+	sources = append(sources, src{"helm/templates/configmap.yaml", configMapDataKeys(string(cfgTpl))})
+
+	depTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trustctl", "templates", "deployment.yaml"))
+	if err != nil {
+		t.Fatalf("read deployment.yaml: %v", err)
+	}
+	sources = append(sources, src{"helm/templates/deployment.yaml", binaryEnvKeysInManifest(string(depTpl))})
+
+	compose, err := os.ReadFile(filepath.Join(root, "deploy", "docker", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read docker-compose.yml: %v", err)
+	}
+	sources = append(sources, src{"docker/docker-compose.yml", binaryEnvKeysInManifest(string(compose))})
+
+	checked := 0
+	for _, s := range sources {
+		if len(s.keys) == 0 {
+			continue
+		}
+		for k := range s.keys {
+			checked++
+			if !known[k] {
+				t.Errorf("%s sets %s, which the control-plane config loader (internal/config applyEnv) does not read "+
+					"— the binary would silently ignore it (the phantom-env class OPS warned about, e.g. TRUSTCTL_KMS_*). "+
+					"Known keys: %v", s.rel, k, keys(known))
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("found no TRUSTCTL_* env keys to reconcile in any manifest — the extractor is broken")
+	}
+
+	// Mutation proof (negative): a manifest fragment that sets a key the loader never
+	// reads must be REJECTED, and a fragment that sets only real keys must PASS — so
+	// this check is non-vacuous.
+	t.Run("rejects_phantom_env_key", func(t *testing.T) {
+		bad := "data:\n  TRUSTCTL_KMS_PROVIDER: \"awskms\"\n  TRUSTCTL_SERVER_ADDR: \":8443\"\n"
+		var offenders []string
+		for k := range configMapDataKeys(bad) {
+			if !known[k] {
+				offenders = append(offenders, k)
+			}
+		}
+		if len(offenders) == 0 {
+			t.Fatal("the config-key check failed to flag the injected phantom TRUSTCTL_KMS_PROVIDER — it is vacuous")
+		}
+		// And a fragment of only-real keys is accepted.
+		good := "data:\n  TRUSTCTL_SERVER_ADDR: \":8443\"\n  TRUSTCTL_NATS_URL: \"nats://x\"\n"
+		for k := range configMapDataKeys(good) {
+			if !known[k] {
+				t.Errorf("the config-key check wrongly flagged the real key %s", k)
+			}
+		}
+	})
+}
+
+// --- OPS-008 (4): every .Values.X a template references must exist in values.yaml,
+// and every value the chart declares must be reachable -------------------------
+
+const chartDir = "helm/trustctl"
+
+// valuesYAMLPaths flattens values.yaml into (a) the set of dotted paths it defines
+// and (b) the subset of those paths whose value is an EMPTY map ({}), e.g.
+// `podAnnotations: {}` or `resources.signer: {}`. An empty map is a FREEFORM,
+// operator-supplied block (the chart renders it with toYaml/with), so a template may
+// dig arbitrarily deep into it; an ENUMERATED map (e.g. `service: {type, port}`) may
+// NOT — a reference to a child it does not list is a drift. Returning both sets lets
+// valuePathDefined enforce that distinction (so a typo like .Values.service.typ is
+// caught while .Values.podAnnotations.whatever is allowed).
+func valuesYAMLPaths(t *testing.T, root string) (paths, freeform map[string]bool) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(root, "deploy", chartDir, "values.yaml"))
+	if err != nil {
+		t.Fatalf("read values.yaml: %v", err)
+	}
+	var v map[string]any
+	if err := yaml.Unmarshal(raw, &v); err != nil {
+		t.Fatalf("values.yaml is not valid YAML: %v", err)
+	}
+	paths = map[string]bool{}
+	freeform = map[string]bool{}
+	var walk func(prefix string, m map[string]any)
+	walk = func(prefix string, m map[string]any) {
+		for k, val := range m {
+			p := k
+			if prefix != "" {
+				p = prefix + "." + k
+			}
+			paths[p] = true
+			if child, ok := val.(map[string]any); ok {
+				if len(child) == 0 {
+					freeform[p] = true // an empty map: operator-supplied freeform block
+				}
+				walk(p, child)
+			}
+		}
+	}
+	walk("", v)
+	return paths, freeform
+}
+
+// valueRefRe matches a `.Values.<dotted.path>` reference in a Helm template.
+var valueRefRe = regexp.MustCompile(`\.Values\.([A-Za-z_][A-Za-z0-9_.]*)`)
+
+// templateValueRefs returns the distinct `.Values.X` dotted paths a template body
+// references, stripping any trailing dot (a regex artifact) and dropping the
+// special `.Values.<empty>` non-match.
+func templateValueRefs(body string) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range valueRefRe.FindAllStringSubmatch(body, -1) {
+		p := strings.TrimRight(m[1], ".")
+		if p != "" {
+			out[p] = true
+		}
+	}
+	return out
+}
+
+// valuePathDefined reports whether a referenced `.Values.X` path is backed by
+// values.yaml. An EXACT match counts. A deeper reference (e.g.
+// `.Values.podAnnotations.foo`) counts ONLY when its longest defined prefix is a
+// FREEFORM (empty {}) map — an operator-supplied block the chart renders wholesale.
+// Digging into an ENUMERATED map (e.g. `.Values.service.typ` when service only lists
+// type/port) is a DRIFT and fails — that is the bug the looser version missed.
+func valuePathDefined(ref string, defined, freeform map[string]bool) bool {
+	if defined[ref] {
+		return true
+	}
+	segs := strings.Split(ref, ".")
+	if !defined[segs[0]] {
+		return false // typo'd top-level key
+	}
+	// Find the longest defined proper prefix.
+	for i := len(segs) - 1; i >= 1; i-- {
+		pre := strings.Join(segs[:i], ".")
+		if defined[pre] {
+			// Deeper reference is allowed only if that prefix is a freeform (empty) map.
+			return freeform[pre]
+		}
+	}
+	return false
+}
+
+func TestEveryTemplateValueExistsInValuesYAML(t *testing.T) {
+	root := repoRoot(t)
+	defined, freeform := valuesYAMLPaths(t, root)
+	if len(defined) < 10 {
+		t.Fatalf("values.yaml flattened to only %d paths — the flattener is broken, not the templates", len(defined))
+	}
+
+	tmplDir := filepath.Join(root, "deploy", chartDir, "templates")
+	entries, err := os.ReadDir(tmplDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".tpl") {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(tmplDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for ref := range templateValueRefs(string(body)) {
+			checked++
+			if !valuePathDefined(ref, defined, freeform) {
+				t.Errorf("templates/%s references .Values.%s, which values.yaml does not define "+
+					"(it renders empty and silently misconfigures the release) — OPS-008", name, ref)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("found no .Values references in any template — the extractor is broken")
+	}
+
+	// Mutation proof (negative): a template that references an undefined value — both a
+	// brand-new top-level key AND a typo'd CHILD of an enumerated map — must be
+	// REJECTED; the real templates (above) and a legit freeform-map reference must PASS.
+	t.Run("rejects_undefined_value_reference", func(t *testing.T) {
+		for _, bad := range []string{"doesNotExistAtAll", "service.typeDoesNotExist", "image.taggg"} {
+			if valuePathDefined(bad, defined, freeform) {
+				t.Errorf("the values-reconciliation check failed to flag .Values.%s — it is vacuous", bad)
+			}
+		}
+		// A real exact reference is accepted.
+		if !valuePathDefined("image.repository", defined, freeform) {
+			t.Error("the values-reconciliation check wrongly flagged the real path image.repository")
+		}
+		// A reference INTO a freeform (empty {}) map is accepted (operator-supplied).
+		var freeKey string
+		for k := range freeform {
+			freeKey = k
+			break
+		}
+		if freeKey != "" && !valuePathDefined(freeKey+".anyChildAtAll", defined, freeform) {
+			t.Errorf("the values check wrongly rejected a child of the freeform map %s", freeKey)
+		}
+	})
+}
+
+// --- OPS-008 (5): render the chart's templates and assert each rendered object is
+// structurally valid for its Kubernetes kind (a kubeconform-style gate) ---------
+
+// helmStubFuncs returns the Helm/Sprig builtins the chart templates call, stubbed
+// so a local text/template render produces structurally-real YAML. `include`
+// resolves the naming helpers to a concrete name; `toYaml` echoes nested maps as
+// indented YAML so container/volume/affinity blocks render; the rest are no-ops or
+// pass-throughs. A real `helm template` does the full render in CI — this local
+// render exists to PIN the structural facts (OPS-008: drill the artifact).
+func helmStubFuncs() template.FuncMap {
+	return template.FuncMap{
+		"include": func(name string, _ any) string {
+			// Resolve the names structural checks depend on to concrete strings.
+			switch name {
+			case "trustctl.fullname", "trustctl.name", "trustctl.serviceAccountName",
+				"trustctl.kekSecretName", "trustctl.dbSecretName":
+				return "trustctl"
+			case "trustctl.image":
+				return "ghcr.io/example/trustctl:v0.5.0"
+			case "trustctl.labels", "trustctl.selectorLabels":
+				// A single label line only. The real helpers emit an
+				// `app.kubernetes.io/component:` key, but several templates append their
+				// OWN component label (e.g. the signer Deployment), which would collide
+				// into a duplicate-map-key YAML error in this local render. Helm tolerates
+				// the override; the structural gate only cares about apiVersion/kind/spec,
+				// so we emit a non-colliding label and keep the render parseable.
+				return "app.kubernetes.io/name: trustctl"
+			case "trustctl.signer.guardMode":
+				return ""
+			}
+			return "trustctl"
+		},
+		"nindent": func(n int, s string) string {
+			pad := strings.Repeat(" ", n)
+			var b strings.Builder
+			b.WriteString("\n")
+			for i, line := range strings.Split(s, "\n") {
+				if i > 0 {
+					b.WriteString("\n")
+				}
+				b.WriteString(pad + line)
+			}
+			return b.String()
+		},
+		"indent": func(n int, s string) string { return strings.Repeat(" ", n) + s },
+		"toYaml": func(v any) string {
+			b, err := yaml.Marshal(v)
+			if err != nil {
+				return ""
+			}
+			return strings.TrimRight(string(b), "\n")
+		},
+		"quote":      func(v any) string { return strconv.Quote(toStr(v)) },
+		"sha256sum":  func(...any) string { return "deadbeefdeadbeef" },
+		"required":   func(_ string, v any) any { return v },
+		"trunc":      func(_ int, s any) any { return s },
+		"trimSuffix": func(_ string, s any) any { return s },
+		"contains":   func(_ string, _ any) bool { return false },
+		// Sprig's `default a b` returns b if non-empty else a. signer-deployment.yaml's
+		// secretName uses `… | default (printf …)`; emulate it so the render resolves.
+		"default": func(d, v any) any {
+			if toStr(v) == "" {
+				return d
+			}
+			return v
+		},
+		// NOTE: printf / eq / ne are text/template built-ins; do NOT override them here
+		// or the chart's `eq .Values.tls.mode "file"` guards would misbehave.
+	}
+}
+
+func toStr(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return strings.TrimSpace(strings.Trim(fmtSprint(v), "[]"))
+}
+
+// fmtSprint is a tiny fmt.Sprint shim kept local so the helper set stays in one
+// file; values are scalars in practice.
+func fmtSprint(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case int:
+		return strconv.Itoa(t)
+	default:
+		return ""
+	}
+}
+
+// renderChartTemplate renders one chart template with the given Values, stubbing
+// the Helm builtins. Unknown keys resolve to empty (missingkey=zero) rather than
+// failing, so the render is best-effort but structurally faithful.
+func renderChartTemplate(t *testing.T, root, name string, values map[string]any) string {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(root, "deploy", chartDir, "templates", name))
+	if err != nil {
+		t.Fatalf("read templates/%s: %v", name, err)
+	}
+	tmpl, err := template.New(name).Funcs(helmStubFuncs()).Option("missingkey=zero").Parse(string(body))
+	if err != nil {
+		t.Fatalf("parse templates/%s: %v", name, err)
+	}
+	data := map[string]any{
+		"Values":  values,
+		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
+	}
+	var sb strings.Builder
+	if err := tmpl.Execute(&sb, data); err != nil {
+		t.Fatalf("render templates/%s: %v", name, err)
+	}
+	return sb.String()
+}
+
+// k8sObject is the minimal shape every Kubernetes manifest must carry.
+type k8sObject struct {
+	APIVersion string         `yaml:"apiVersion"`
+	Kind       string         `yaml:"kind"`
+	Metadata   map[string]any `yaml:"metadata"`
+	Spec       map[string]any `yaml:"spec"`
+}
+
+// structuralViolations parses rendered YAML (possibly multi-doc) and returns the
+// count of Kubernetes objects found plus a list of the structural violations: each
+// object must carry apiVersion, kind, metadata.name, and the kind-specific required
+// fields a kubeconform / API-server admission would demand. It does NOT touch
+// *testing.T — returning the violations as data is what lets the negative sub-test
+// prove the check rejects a broken manifest WITHOUT failing the real test.
+func structuralViolations(label, rendered string) (objects int, violations []string) {
+	dec := yaml.NewDecoder(strings.NewReader(rendered))
+	for {
+		var obj k8sObject
+		if err := dec.Decode(&obj); err != nil {
+			break
+		}
+		if obj.APIVersion == "" && obj.Kind == "" && obj.Metadata == nil {
+			continue // empty doc (a fully-gated-off template)
+		}
+		objects++
+		add := func(format string, a ...any) {
+			violations = append(violations, label+": "+fmtSprintf(format, a...))
+		}
+		if obj.APIVersion == "" {
+			add("rendered object #%d is missing apiVersion (the API server would reject it)", objects)
+		}
+		if obj.Kind == "" {
+			add("rendered object #%d is missing kind", objects)
+		}
+		if name, _ := obj.Metadata["name"].(string); strings.TrimSpace(name) == "" {
+			add("rendered %s is missing metadata.name", obj.Kind)
+		}
+		switch obj.Kind {
+		case "Deployment", "DaemonSet", "StatefulSet":
+			if obj.Spec["selector"] == nil {
+				add("%s has no spec.selector (required)", obj.Kind)
+			}
+			tmpl, _ := obj.Spec["template"].(map[string]any)
+			pod, _ := tmpl["spec"].(map[string]any)
+			cs, _ := pod["containers"].([]any)
+			if len(cs) == 0 {
+				add("%s has no spec.template.spec.containers (required)", obj.Kind)
+			}
+		case "Service":
+			if obj.Spec["ports"] == nil {
+				add("Service has no spec.ports (required)")
+			}
+		case "PodDisruptionBudget":
+			if obj.Spec["selector"] == nil {
+				add("PodDisruptionBudget has no spec.selector (required)")
+			}
+		case "PersistentVolumeClaim":
+			if obj.Spec["accessModes"] == nil {
+				add("PersistentVolumeClaim has no spec.accessModes (required)")
+			}
+		}
+	}
+	return objects, violations
+}
+
+// requireStructurallyValid runs structuralViolations and reports any to t,
+// returning the object count so a caller can assert the template rendered
+// something. Used by the positive path; the negative path calls
+// structuralViolations directly.
+func requireStructurallyValid(t *testing.T, label, rendered string) int {
+	t.Helper()
+	n, viols := structuralViolations(label, rendered)
+	for _, v := range viols {
+		t.Errorf("%s — OPS-008", v)
+	}
+	return n
+}
+
+// fmtSprintf is a minimal Sprintf shim (avoids importing fmt for one call site,
+// keeping the deploy test's import set tight). It supports the %s/%d verbs the
+// structural messages use.
+func fmtSprintf(format string, a ...any) string {
+	var b strings.Builder
+	ai := 0
+	for i := 0; i < len(format); i++ {
+		if format[i] == '%' && i+1 < len(format) {
+			i++
+			if ai < len(a) {
+				switch format[i] {
+				case 'd':
+					if n, ok := a[ai].(int); ok {
+						b.WriteString(strconv.Itoa(n))
+					}
+				default:
+					b.WriteString(toStr(a[ai]))
+				}
+				ai++
+			}
+			continue
+		}
+		b.WriteByte(format[i])
+	}
+	return b.String()
+}
+
+// haValues is a realistic, default-shaped Values map for rendering the chart
+// templates structurally (the multi-replica HA defaults plus the keys the
+// templates dig into).
+func haValues() map[string]any {
+	return map[string]any{
+		"replicaCount": 2,
+		"updateStrategy": map[string]any{
+			"type": "RollingUpdate", "maxUnavailable": 0, "maxSurge": 1,
+		},
+		"image":            map[string]any{"repository": "ghcr.io/example/trustctl", "tag": "", "pullPolicy": "IfNotPresent"},
+		"imagePullSecrets": []any{},
+		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
+		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
+		"tls":              map[string]any{"mode": "internal", "existingSecret": ""},
+		"postgres":         map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
+		"nats":             map[string]any{"mode": "external", "url": ""},
+		"kek":              map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
+		"persistence": map[string]any{
+			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",
+			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",
+		},
+		"resources": map[string]any{
+			"signer": map[string]any{}, "controlPlane": map[string]any{},
+		},
+		"podAnnotations":      map[string]any{},
+		"nodeSelector":        map[string]any{},
+		"tolerations":         []any{},
+		"affinity":            map[string]any{"podAntiAffinity": map[string]any{}},
+		"podDisruptionBudget": map[string]any{"enabled": true, "minAvailable": 1},
+		"ha":                  map[string]any{"leaderElection": true, "leaderCampaignInterval": "", "snapshotInterval": ""},
+		"serviceAccount":      map[string]any{"create": true, "name": "", "annotations": map[string]any{}},
+		"signer": map[string]any{
+			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
+			"mtls": map[string]any{"serverName": "", "signerSecret": "", "controlPlaneSecret": ""},
+		},
+		"networkPolicy": map[string]any{
+			"enabled": true,
+			"ingress": map[string]any{
+				"ingressController": map[string]any{"enabled": true,
+					"namespaceLabels": map[string]any{"kubernetes.io/metadata.name": "ingress-nginx"},
+					"podLabels":       map[string]any{"app.kubernetes.io/name": "ingress-nginx"}},
+				"sameNamespace": false,
+			},
+			"allowedIngressNamespaces": []any{},
+			"postgres":                 map[string]any{"port": 5432},
+			"nats":                     map[string]any{"port": 4222},
+		},
+	}
+}
+
+func TestRenderedManifestsAreStructurallyValid(t *testing.T) {
+	root := repoRoot(t)
+
+	// (a) The chart templates that always render a control-plane object.
+	for _, name := range []string{"deployment.yaml", "service.yaml", "configmap.yaml", "pdb.yaml", "networkpolicy.yaml", "serviceaccount.yaml"} {
+		rendered := renderChartTemplate(t, root, name, haValues())
+		if requireStructurallyValid(t, "helm/"+name, rendered) == 0 && name != "networkpolicy.yaml" {
+			t.Errorf("helm/%s rendered no Kubernetes object with the default HA values — OPS-008", name)
+		}
+	}
+
+	// (b) The isolated-signer Deployment renders only when signer.mode=isolated; with
+	// the serverName supplied it must be a structurally-valid Deployment.
+	iso := haValues()
+	iso["signer"].(map[string]any)["mode"] = "isolated"
+	iso["signer"].(map[string]any)["mtls"].(map[string]any)["serverName"] = "trustctl-signer.ns.svc"
+	signerRendered := renderChartTemplate(t, root, "signer-deployment.yaml", iso)
+	if requireStructurallyValid(t, "helm/signer-deployment.yaml", signerRendered) == 0 {
+		t.Error("helm/signer-deployment.yaml rendered no Deployment in isolated mode — OPS-008")
+	}
+
+	// (c) The static (non-templated) manifests parse and validate directly.
+	for _, rel := range []string{
+		filepath.Join("kubernetes", "daemonset.yaml"),
+		filepath.Join("operator", "operator.yaml"),
+	} {
+		raw, err := os.ReadFile(filepath.Join(root, "deploy", rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		if requireStructurallyValid(t, rel, string(raw)) == 0 {
+			t.Errorf("%s contained no Kubernetes object — OPS-008", rel)
+		}
+	}
+
+	// Mutation proof (negative): structuralViolations must FLAG a manifest that renders
+	// an object missing a required field, and must NOT flag a complete one — so the
+	// structural gate is non-vacuous. (structuralViolations returns the violations as
+	// data, so the probe never has to fail the real test to observe rejection.)
+	t.Run("rejects_structurally_broken_object", func(t *testing.T) {
+		// A Deployment with no selector and no containers.
+		if _, v := structuralViolations("broken", "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: x\nspec:\n  replicas: 1\n"); len(v) == 0 {
+			t.Fatal("structuralViolations failed to flag a Deployment with no selector/containers — it is vacuous")
+		}
+		// An object with no kind.
+		if _, v := structuralViolations("nokind", "apiVersion: v1\nmetadata:\n  name: x\n"); len(v) == 0 {
+			t.Fatal("structuralViolations failed to flag an object with no kind — it is vacuous")
+		}
+		// A Service with no ports.
+		if _, v := structuralViolations("noports", "apiVersion: v1\nkind: Service\nmetadata:\n  name: x\nspec: {}\n"); len(v) == 0 {
+			t.Fatal("structuralViolations failed to flag a Service with no spec.ports — it is vacuous")
+		}
+		// A complete Service is accepted (no violations).
+		if _, v := structuralViolations("ok", "apiVersion: v1\nkind: Service\nmetadata:\n  name: x\nspec:\n  ports:\n    - port: 8443\n"); len(v) != 0 {
+			t.Errorf("structuralViolations wrongly flagged a complete Service: %v", v)
+		}
+	})
 }

@@ -100,28 +100,147 @@ func TestOperatorDocIsHonestAndCodeBound(t *testing.T) {
 	}
 }
 
+// TestOperatorManifestHasRBACAndIsolatedDeployment (OPS-008 behavioural): instead
+// of grepping operator.yaml for "kind: ServiceAccount", "runAsNonRoot: true", etc.
+// (which pass even if those tokens sit in comments or the wrong object), this parses
+// every document into a Kubernetes object and asserts the BUNDLE composition by KIND,
+// that the ClusterRole/Binding wire to the same ServiceAccount, that the API group is
+// trustctl.io, and that the Deployment's container is actually hardened (parsed
+// securityContext, not substring).
 func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 	b, err := os.ReadFile("operator.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Each YAML document must parse.
 	dec := yaml.NewDecoder(strings.NewReader(string(b)))
-	docs := 0
+	byKind := map[string][]map[string]any{}
 	for {
-		var doc any
+		var doc map[string]any
 		if err := dec.Decode(&doc); err != nil {
 			break
 		}
-		docs++
+		if len(doc) == 0 {
+			continue
+		}
+		kind, _ := doc["kind"].(string)
+		if kind == "" {
+			t.Errorf("operator.yaml has a document with no kind: %v", doc)
+			continue
+		}
+		byKind[kind] = append(byKind[kind], doc)
 	}
-	if docs < 4 {
-		t.Errorf("operator.yaml has %d documents, want >=4 (SA, ClusterRole, Binding, Deployment)", docs)
-	}
-	body := string(b)
-	for _, want := range []string{"kind: ServiceAccount", "kind: ClusterRole", "kind: ClusterRoleBinding", "kind: Deployment", "trustctl.io", "runAsNonRoot: true", "readOnlyRootFilesystem: true"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("operator.yaml missing %q", want)
+
+	// The bundle must carry the four RBAC+workload objects, parsed by kind.
+	for _, want := range []string{"ServiceAccount", "ClusterRole", "ClusterRoleBinding", "Deployment"} {
+		if len(byKind[want]) == 0 {
+			t.Errorf("operator.yaml has no %s (need SA + ClusterRole + Binding + Deployment)", want)
 		}
 	}
+	if len(byKind) == 0 {
+		t.Fatal("operator.yaml decoded into no Kubernetes objects")
+	}
+
+	// The ClusterRoleBinding must bind the ClusterRole to the ServiceAccount the bundle
+	// declares — a real wiring check, not a token search. (A binding that references a
+	// different SA name would leave the controller without permissions.)
+	if len(byKind["ServiceAccount"]) > 0 && len(byKind["ClusterRoleBinding"]) > 0 {
+		saName, _ := nestedString(byKind["ServiceAccount"][0], "metadata", "name")
+		crb := byKind["ClusterRoleBinding"][0]
+		subjects := asAnyMaps(crb["subjects"])
+		boundSA := false
+		for _, s := range subjects {
+			if k, _ := s["kind"].(string); k == "ServiceAccount" {
+				if n, _ := s["name"].(string); n == saName && saName != "" {
+					boundSA = true
+				}
+			}
+		}
+		if !boundSA {
+			t.Errorf("operator.yaml ClusterRoleBinding does not bind to the bundle's ServiceAccount %q", saName)
+		}
+		// The ClusterRole must manage the trustctl.io API group (the operator's CRD).
+		if len(byKind["ClusterRole"]) > 0 {
+			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "trustctl.io") {
+				t.Error("operator.yaml ClusterRole does not grant rules on the trustctl.io API group (its CRD)")
+			}
+		}
+	}
+
+	// The Deployment's container must be hardened — parsed securityContext fields, not
+	// a substring of "runAsNonRoot: true" anywhere in the file.
+	if len(byKind["Deployment"]) > 0 {
+		dep := byKind["Deployment"][0]
+		spec, _ := dep["spec"].(map[string]any)
+		tmpl, _ := spec["template"].(map[string]any)
+		pod, _ := tmpl["spec"].(map[string]any)
+		cs := asAnyMaps(pod["containers"])
+		if len(cs) == 0 {
+			t.Fatal("operator.yaml Deployment has no containers")
+		}
+		sc, _ := cs[0]["securityContext"].(map[string]any)
+		if sc == nil {
+			t.Error("operator.yaml Deployment container has no securityContext")
+		} else {
+			if ro, _ := sc["readOnlyRootFilesystem"].(bool); !ro {
+				t.Error("operator.yaml Deployment container is not readOnlyRootFilesystem: true")
+			}
+			// runAsNonRoot may be set at pod or container scope.
+			podSC, _ := pod["securityContext"].(map[string]any)
+			nonRoot := boolField(sc, "runAsNonRoot") || boolField(podSC, "runAsNonRoot")
+			if !nonRoot {
+				t.Error("operator.yaml Deployment does not set runAsNonRoot: true (pod or container scope)")
+			}
+		}
+	}
+}
+
+func nestedString(m map[string]any, keys ...string) (string, bool) {
+	cur := m
+	for i, k := range keys {
+		if i == len(keys)-1 {
+			s, ok := cur[k].(string)
+			return s, ok
+		}
+		next, ok := cur[k].(map[string]any)
+		if !ok {
+			return "", false
+		}
+		cur = next
+	}
+	return "", false
+}
+
+func asAnyMaps(v any) []map[string]any {
+	raw, _ := v.([]any)
+	out := make([]map[string]any, 0, len(raw))
+	for _, e := range raw {
+		if m, ok := e.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func boolField(m map[string]any, key string) bool {
+	if m == nil {
+		return false
+	}
+	b, _ := m[key].(bool)
+	return b
+}
+
+// clusterRoleCoversGroup reports whether any rule in a ClusterRole grants the given
+// API group.
+func clusterRoleCoversGroup(cr map[string]any, group string) bool {
+	rules, _ := cr["rules"].([]any)
+	for _, r := range rules {
+		rule, _ := r.(map[string]any)
+		groups, _ := rule["apiGroups"].([]any)
+		for _, g := range groups {
+			if s, _ := g.(string); s == group {
+				return true
+			}
+		}
+	}
+	return false
 }

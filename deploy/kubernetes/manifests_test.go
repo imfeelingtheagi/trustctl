@@ -3,6 +3,11 @@ package kubernetes_test
 import (
 	"bytes"
 	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -105,13 +110,102 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	if !strings.Contains(img, "/trustctl") {
 		t.Errorf("container image = %q, want the built multi-binary trustctl image", img)
 	}
-	args := command + " "
-	for _, a := range asStringSlice(c["args"]) {
-		args += a + " "
+
+	// OPS-008 behavioural: every flag the DaemonSet passes to trustctl-agent must be a
+	// flag the agent BINARY actually defines (parsed from its --help, not hard-coded),
+	// and the agent must be put into --k8s mode. The old test only substring-matched
+	// "--k8s" — it could not catch a typo'd or removed flag (the OPS-001 crash-loop
+	// class). This binds the manifest to the real binary flag set.
+	agentFlags := agentBinaryFlags(t)
+	passed := manifestFlagNames(asStringSlice(c["args"]))
+	if len(passed) == 0 {
+		t.Fatal("DaemonSet passes no flags to trustctl-agent")
 	}
-	if !strings.Contains(args, "--k8s") {
-		t.Errorf("DaemonSet does not run the agent in --k8s mode (args=%q)", args)
+	for _, fl := range passed {
+		if !agentFlags[fl] {
+			t.Errorf("DaemonSet passes --%s to trustctl-agent, which it does not define (real flags: %v) — the OPS-001 crash-loop class", fl, sortedFlagNames(agentFlags))
+		}
 	}
+	if !contains(passed, "k8s") {
+		t.Errorf("DaemonSet does not run the agent in --k8s mode (flags=%v)", passed)
+	}
+
+	// Mutation proof: an injected undefined flag is rejected; the real --k8s is accepted.
+	t.Run("rejects_undefined_agent_flag", func(t *testing.T) {
+		bad := manifestFlagNames([]string{"--k8s", "--not-a-real-agent-flag=x"})
+		flagged := false
+		for _, fl := range bad {
+			if !agentFlags[fl] {
+				flagged = true
+			}
+		}
+		if !flagged {
+			t.Fatal("the flag-vs-binary check failed to flag --not-a-real-agent-flag — it is vacuous")
+		}
+		if !agentFlags["k8s"] {
+			t.Error("the flag-vs-binary check wrongly rejected the real --k8s flag")
+		}
+	})
+}
+
+// agentBinaryFlags parses the trustctl-agent binary's real flag set from its --help
+// output (run from the repo root, two levels up from deploy/kubernetes).
+func agentBinaryFlags(t *testing.T) map[string]bool {
+	t.Helper()
+	cmd := exec.Command("go", "run", "./cmd/trustctl-agent", "--help")
+	cmd.Dir = filepath.Join("..", "..")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=readonly")
+	_ = cmd.Run()
+	re := regexp.MustCompile(`(?m)^\s+-([A-Za-z][\w-]*)`)
+	flags := map[string]bool{}
+	for _, m := range re.FindAllStringSubmatch(out.String(), -1) {
+		flags[m[1]] = true
+	}
+	if len(flags) == 0 {
+		t.Fatalf("could not parse any flags from `go run ./cmd/trustctl-agent --help`:\n%s", out.String())
+	}
+	return flags
+}
+
+// manifestFlagNames extracts long-flag names (without leading dashes, without
+// =value) from a list of arg tokens.
+func manifestFlagNames(args []string) []string {
+	var out []string
+	for _, a := range args {
+		a = strings.TrimSpace(a)
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		name := strings.TrimLeft(a, "-")
+		if i := strings.IndexByte(name, '='); i >= 0 {
+			name = name[:i]
+		}
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func contains(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+func sortedFlagNames(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func asStringSlice(v any) []string {

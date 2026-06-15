@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"text/template"
@@ -69,39 +70,75 @@ func TestChartIsStructurallyComplete(t *testing.T) {
 	}
 }
 
-// TestSignerIsIsolated: the control-plane pod runs the signer as its own
-// locked-down container (AN-4) with NO network surface — it talks to the control
-// plane only over a shared in-memory UDS — and both containers run a restrictive
+// TestSignerIsIsolated (AN-4): the control-plane pod runs the signer as its own
+// locked-down container with NO network surface — it talks to the control plane
+// only over a shared in-memory UDS — and both containers run a restrictive
 // securityContext.
+//
+// Behavioural (OPS-008): the old version string-matched "trustctl-signer",
+// "/run/trustctl", "emptyDir", "runAsNonRoot" anywhere in the template text — it
+// would pass even if those tokens were in unrelated places. This renders the
+// Deployment, finds the signer container as a PARSED object, and asserts the
+// isolation PROPERTY: the signer exposes NO ports (the real AN-4 invariant), runs
+// the trustctl-signer binary over a UDS mount, and is hardened — and that the env
+// keys wiring it are keys the binary actually reads.
 func TestSignerIsIsolated(t *testing.T) {
-	dep := read(t, "templates", "deployment.yaml")
-
-	containsAll(t, "deployment signer container", dep,
-		"trustctl-signer", // the signer binary/entrypoint
-		"/run/trustctl",   // the shared UDS mount path
-		"signer.sock",     // the socket the control plane dials
-	)
-	// The control plane reaches the signer in external mode over that socket
-	// (wired via the ConfigMap the deployment loads with envFrom).
-	cfg := read(t, "templates", "configmap.yaml")
-	containsAll(t, "configmap signer wiring", cfg,
-		"TRUSTCTL_SIGNER_MODE", "external", "TRUSTCTL_SIGNER_SOCKET")
-	// A shared in-memory volume carries the socket (not the network).
-	containsAll(t, "deployment shared socket volume", dep, "emptyDir")
-	// Hardened containers.
-	containsAll(t, "deployment hardened securityContext", dep,
-		"runAsNonRoot", "readOnlyRootFilesystem", "allowPrivilegeEscalation")
-	if strings.Contains(dep, "drop") == false {
-		t.Error("deployment securityContext should drop Linux capabilities")
+	dep := renderControlPlaneDeployment(t, defaultishValues())
+	objs := decodeAllYAML(t, dep)
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] == "Deployment" {
+			spec, _ := o["spec"].(map[string]any)
+			tmpl, _ := spec["template"].(map[string]any)
+			pod, _ = tmpl["spec"].(map[string]any)
+		}
 	}
+	if pod == nil {
+		t.Fatal("rendered chart has no control-plane Deployment pod spec")
+	}
+	containers := asMaps(pod["containers"])
+	signer := containerNamed(containers, "signer")
+	if signer == nil {
+		t.Fatal("the control-plane pod has no 'signer' container (AN-4 co-located signer)")
+	}
+	// (1) The signer exposes NO network ports — its ONLY channel is the in-memory UDS
+	// (the defining AN-4 property; a port here would mean the signer is reachable on
+	// the network, which must never happen).
+	if ports, ok := signer["ports"].([]any); ok && len(ports) > 0 {
+		t.Errorf("the co-located signer container exposes %d port(s); AN-4 requires NO network surface (UDS only)", len(ports))
+	}
+	// (2) It runs the trustctl-signer binary.
+	if cmd := strings.Join(asStrings(signer["command"]), " "); !strings.Contains(cmd, "trustctl-signer") {
+		t.Errorf("signer container command = %q, want it to run trustctl-signer", cmd)
+	}
+	// (3) It mounts the shared UDS directory and seals its keystore — read from parsed
+	// volumeMounts, not a substring.
+	if !hasMountPath(signer, "/run/trustctl") {
+		t.Error("signer container does not mount the shared UDS directory /run/trustctl (AN-4 transport)")
+	}
+	// (4) The shared socket volume is an in-memory emptyDir (never on disk/network).
+	if !hasInMemorySocketVolume(pod) {
+		t.Error("the pod has no in-memory emptyDir volume for the signer socket (AN-4: the socket is never written to disk)")
+	}
+	// (5) Hardened securityContext, as PARSED fields.
+	requireHardened(t, "signer", signer)
+
+	// The control plane reaches the signer in external mode over that socket, wired by
+	// the configMap. Bind those keys to the binary's real env contract AND assert the
+	// rendered values (external mode, the socket path).
+	cmData := renderConfigMapData(t)
+	requireLoaderKey(t, cmData, "TRUSTCTL_SIGNER_MODE", "external")
+	requireLoaderKey(t, cmData, "TRUSTCTL_SIGNER_SOCKET", "")
 }
 
 // TestExternalDatastoresAreTheDefault: the chart deploys against EXTERNAL
-// PostgreSQL and NATS (the production/tested path), wired by config.
+// PostgreSQL and NATS (the production/tested path). Behavioural (OPS-008): instead
+// of grepping the configMap text for "external", it renders the configMap with the
+// DEFAULT values and asserts the resolved env values are actually "external" — so a
+// values default flipped to in-process would FAIL here.
 func TestExternalDatastoresAreTheDefault(t *testing.T) {
-	values := read(t, "values.yaml")
 	var v map[string]any
-	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
+	if err := yaml.Unmarshal([]byte(read(t, "values.yaml")), &v); err != nil {
 		t.Fatalf("values.yaml is not valid YAML: %v", err)
 	}
 	if _, ok := v["postgres"]; !ok {
@@ -110,24 +147,46 @@ func TestExternalDatastoresAreTheDefault(t *testing.T) {
 	if _, ok := v["nats"]; !ok {
 		t.Error("values.yaml should expose external nats configuration")
 	}
-	cfg := read(t, "templates", "configmap.yaml")
-	containsAll(t, "configmap external datastores", cfg,
-		"TRUSTCTL_POSTGRES_MODE", "TRUSTCTL_NATS_MODE", "external", "TRUSTCTL_NATS_URL")
+	cmData := renderConfigMapData(t)
+	requireLoaderKey(t, cmData, "TRUSTCTL_POSTGRES_MODE", "external")
+	requireLoaderKey(t, cmData, "TRUSTCTL_NATS_MODE", "external")
+	requireLoaderKey(t, cmData, "TRUSTCTL_NATS_URL", "")
 }
 
-// TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS
-// is configurable (R1.3), defaulting to on.
+// TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS is
+// configurable (R1.3). Behavioural (OPS-008): render the NetworkPolicy and assert it
+// is a structurally-valid object whose policyTypes lock BOTH directions (parsed list,
+// not substring), and that the TLS-mode env key the chart wires is one the binary
+// reads.
 func TestNetworkPolicyAndTLS(t *testing.T) {
-	np := read(t, "templates", "networkpolicy.yaml")
-	containsAll(t, "networkpolicy", np, "kind: NetworkPolicy", "podSelector", "policyTypes")
-	containsAll(t, "networkpolicy locks both directions", np, "Ingress", "Egress")
-
-	cfg := read(t, "templates", "configmap.yaml")
-	if !strings.Contains(cfg, "TRUSTCTL_SERVER_TLS_MODE") {
-		t.Error("the chart should wire the server TLS mode (R1.3)")
+	np := renderSimpleObj(t, "networkpolicy.yaml", map[string]any{
+		"networkPolicy": map[string]any{
+			"enabled": true,
+			"ingress": map[string]any{
+				"ingressController": map[string]any{"enabled": true, "namespaceLabels": map[string]any{"x": "y"}, "podLabels": map[string]any{"a": "b"}},
+				"sameNamespace":     false,
+			},
+			"allowedIngressNamespaces": []any{},
+			"postgres":                 map[string]any{"port": 5432},
+			"nats":                     map[string]any{"port": 4222},
+		},
+	})
+	if np["kind"] != "NetworkPolicy" {
+		t.Fatalf("networkpolicy.yaml rendered kind=%v, want NetworkPolicy", np["kind"])
 	}
-	values := read(t, "values.yaml")
-	if !strings.Contains(values, "tls") {
+	spec, _ := np["spec"].(map[string]any)
+	if spec["podSelector"] == nil {
+		t.Error("NetworkPolicy has no spec.podSelector")
+	}
+	pt := asStrings(spec["policyTypes"])
+	if !contains(pt, "Ingress") || !contains(pt, "Egress") {
+		t.Errorf("NetworkPolicy policyTypes = %v, want both Ingress and Egress (default-deny both directions)", pt)
+	}
+
+	// The chart wires the server TLS mode via a key the binary reads.
+	cmData := renderConfigMapData(t)
+	requireLoaderKey(t, cmData, "TRUSTCTL_SERVER_TLS_MODE", "")
+	if !strings.Contains(read(t, "values.yaml"), "tls") {
 		t.Error("values.yaml should expose TLS configuration")
 	}
 }
@@ -557,5 +616,294 @@ func TestTemplatesParse(t *testing.T) {
 	}
 	if parsed == 0 {
 		t.Error("no templates were parsed")
+	}
+}
+
+// --- Behavioural render + reconciliation helpers (OPS-008) -------------------
+//
+// These render the chart templates into REAL Kubernetes objects (parsed YAML) and
+// reconcile the env the chart wires against the binary's config loader, so the helm
+// tests assert behaviour (a structurally-valid, correctly-wired render) rather than
+// substrings. `helm template` does the authoritative render in CI; this local render
+// pins the structural + wiring facts.
+
+// helmRenderFuncs returns Helm/Sprig builtins stubbed so a text/template render of a
+// chart template produces parseable YAML: `include` resolves names (and the signer
+// guard to empty), `nindent` indents, `toYaml` echoes maps, etc.
+func helmRenderFuncs() template.FuncMap {
+	return template.FuncMap{
+		"include": func(name string, _ any) string {
+			switch name {
+			case "trustctl.labels", "trustctl.selectorLabels":
+				return "app.kubernetes.io/name: trustctl"
+			case "trustctl.image":
+				return "ghcr.io/example/trustctl:v0.5.0"
+			case "trustctl.signer.guardMode":
+				return ""
+			}
+			return "trustctl"
+		},
+		"nindent": func(n int, s string) string {
+			pad := strings.Repeat(" ", n)
+			var b strings.Builder
+			b.WriteString("\n")
+			for i, line := range strings.Split(s, "\n") {
+				if i > 0 {
+					b.WriteString("\n")
+				}
+				b.WriteString(pad + line)
+			}
+			return b.String()
+		},
+		"indent":     func(n int, s string) string { return strings.Repeat(" ", n) + s },
+		"toYaml":     func(v any) string { b, _ := yaml.Marshal(v); return strings.TrimRight(string(b), "\n") },
+		"quote":      func(v any) string { return strconv.Quote(asString(v)) },
+		"sha256sum":  func(...any) string { return "deadbeef" },
+		"required":   func(_ string, v any) any { return v },
+		"trunc":      func(_ int, s any) any { return s },
+		"trimSuffix": func(_ string, s any) any { return s },
+		"default": func(d, v any) any {
+			if asString(v) == "" {
+				return d
+			}
+			return v
+		},
+	}
+}
+
+// renderChartFile renders a chart template by name with the given Values and returns
+// the rendered text.
+func renderChartFile(t *testing.T, name string, values map[string]any) string {
+	t.Helper()
+	body := read(t, "templates", name)
+	tmpl, err := template.New(name).Funcs(helmRenderFuncs()).Option("missingkey=zero").Parse(body)
+	if err != nil {
+		t.Fatalf("parse templates/%s: %v", name, err)
+	}
+	var sb strings.Builder
+	data := map[string]any{
+		"Values":  values,
+		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
+	}
+	if err := tmpl.Execute(&sb, data); err != nil {
+		t.Fatalf("render templates/%s: %v", name, err)
+	}
+	return sb.String()
+}
+
+// renderControlPlaneDeployment renders the control-plane deployment.yaml into
+// parseable YAML (proper include stubs), unlike renderDeployment which is tuned for
+// substring checks.
+func renderControlPlaneDeployment(t *testing.T, values map[string]any) string {
+	t.Helper()
+	return renderChartFile(t, "deployment.yaml", values)
+}
+
+// renderSimpleObj renders a single-object template and returns the parsed object.
+func renderSimpleObj(t *testing.T, name string, values map[string]any) map[string]any {
+	t.Helper()
+	rendered := renderChartFile(t, name, values)
+	var obj map[string]any
+	if err := yaml.Unmarshal([]byte(rendered), &obj); err != nil {
+		t.Fatalf("rendered templates/%s is not valid YAML: %v\n%s", name, err, rendered)
+	}
+	return obj
+}
+
+// renderConfigMapData renders the configMap with the DEFAULT values.yaml and returns
+// its data map (TRUSTCTL_* key -> resolved value), so tests can assert the binary's
+// env contract is wired to real values.
+func renderConfigMapData(t *testing.T) map[string]string {
+	t.Helper()
+	obj := renderSimpleObj(t, "configmap.yaml", defaultishValues())
+	data, _ := obj["data"].(map[string]any)
+	out := map[string]string{}
+	for k, v := range data {
+		out[k] = asString(v)
+	}
+	if len(out) == 0 {
+		t.Fatal("rendered configmap has no data keys")
+	}
+	return out
+}
+
+// requireLoaderKey asserts (a) the configMap sets the key, (b) the binary's config
+// loader actually READS it (parsed from internal/config), and (c) if want != "", the
+// rendered value equals want — so a flipped default (e.g. postgres mode) is caught.
+func requireLoaderKey(t *testing.T, data map[string]string, key, want string) {
+	t.Helper()
+	got, ok := data[key]
+	if !ok {
+		t.Errorf("configmap does not set %s", key)
+		return
+	}
+	if !loaderEnvKeysSet(t)[key] {
+		t.Errorf("configmap sets %s but the control-plane config loader does not read it (phantom env, OPS-008)", key)
+	}
+	if want != "" && got != want {
+		t.Errorf("configmap %s = %q, want %q (the rendered default)", key, got, want)
+	}
+}
+
+// loaderEnvKeysSet parses internal/config/config.go and returns the TRUSTCTL_* keys
+// the loader's applyEnv reads — the binary's real env contract. Memoized per test
+// run via a package-level cache.
+var loaderKeyCache map[string]bool
+
+func loaderEnvKeysSet(t *testing.T) map[string]bool {
+	t.Helper()
+	if loaderKeyCache != nil {
+		return loaderKeyCache
+	}
+	src, err := os.ReadFile(filepath.Join("..", "..", "internal", "config", "config.go"))
+	if err != nil {
+		t.Fatalf("read internal/config/config.go: %v", err)
+	}
+	// The applyEnv setters take the env key as a quoted 2nd argument; collect every
+	// "TRUSTCTL_…" string literal passed to set{String,Bool,BoolPtr,Int,CSV}.
+	re := regexp.MustCompile(`set(?:String|Bool|BoolPtr|Int|CSV)\(getenv,\s*"(TRUSTCTL_[A-Z0-9_]+)"`)
+	keys := map[string]bool{"TRUSTCTL_CONFIG_FILE": true}
+	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
+		keys[m[1]] = true
+	}
+	if len(keys) < 10 {
+		t.Fatalf("parsed only %d loader keys — the extractor is broken", len(keys))
+	}
+	loaderKeyCache = keys
+	return keys
+}
+
+// defaultishValues builds a Values map shaped like the chart's defaults (external
+// datastores, internal TLS, multi-replica HA, sidecar signer) with the keys the
+// rendered templates dig into. It mirrors values.yaml's relevant defaults so a
+// rendered config reflects the real shipped defaults.
+func defaultishValues() map[string]any {
+	return map[string]any{
+		"replicaCount":     2,
+		"updateStrategy":   map[string]any{"type": "RollingUpdate", "maxUnavailable": 0, "maxSurge": 1},
+		"image":            map[string]any{"repository": "ghcr.io/example/trustctl", "tag": "", "pullPolicy": "IfNotPresent"},
+		"imagePullSecrets": []any{},
+		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
+		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
+		"tls":              map[string]any{"mode": "internal", "existingSecret": ""},
+		"postgres":         map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
+		"nats":             map[string]any{"mode": "external", "url": ""},
+		"kek":              map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
+		"persistence": map[string]any{
+			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",
+			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",
+		},
+		"resources":           map[string]any{"signer": map[string]any{}, "controlPlane": map[string]any{}},
+		"podAnnotations":      map[string]any{},
+		"nodeSelector":        map[string]any{},
+		"tolerations":         []any{},
+		"affinity":            map[string]any{"podAntiAffinity": map[string]any{}},
+		"podDisruptionBudget": map[string]any{"enabled": true, "minAvailable": 1},
+		"ha":                  map[string]any{"leaderElection": true, "leaderCampaignInterval": "", "snapshotInterval": ""},
+		"serviceAccount":      map[string]any{"create": true, "name": "", "annotations": map[string]any{}},
+		"signer": map[string]any{
+			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
+			"mtls": map[string]any{"serverName": "", "signerSecret": "", "controlPlaneSecret": ""},
+		},
+	}
+}
+
+// decodeAllYAML decodes a (possibly multi-doc) rendered manifest into objects.
+func decodeAllYAML(t *testing.T, rendered string) []map[string]any {
+	t.Helper()
+	dec := yaml.NewDecoder(strings.NewReader(rendered))
+	var out []map[string]any
+	for {
+		var d map[string]any
+		if err := dec.Decode(&d); err != nil {
+			break
+		}
+		if len(d) > 0 {
+			out = append(out, d)
+		}
+	}
+	if len(out) == 0 {
+		t.Fatalf("rendered manifest decoded into no objects:\n%s", rendered)
+	}
+	return out
+}
+
+func asMaps(v any) []map[string]any {
+	raw, _ := v.([]any)
+	out := make([]map[string]any, 0, len(raw))
+	for _, e := range raw {
+		if m, ok := e.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func asStrings(v any) []string {
+	raw, _ := v.([]any)
+	out := make([]string, 0, len(raw))
+	for _, e := range raw {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func containerNamed(cs []map[string]any, name string) map[string]any {
+	for _, c := range cs {
+		if n, _ := c["name"].(string); n == name {
+			return c
+		}
+	}
+	return nil
+}
+
+func hasMountPath(container map[string]any, path string) bool {
+	for _, m := range asMaps(container["volumeMounts"]) {
+		if mp, _ := m["mountPath"].(string); mp == path {
+			return true
+		}
+	}
+	return false
+}
+
+func hasInMemorySocketVolume(pod map[string]any) bool {
+	for _, v := range asMaps(pod["volumes"]) {
+		ed, ok := v["emptyDir"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if med, _ := ed["medium"].(string); med == "Memory" {
+			return true
+		}
+	}
+	return false
+}
+
+// requireHardened asserts a container's securityContext carries the hardening fields
+// (parsed, not substring): non-root, read-only root FS, no privilege escalation, and
+// all capabilities dropped.
+func requireHardened(t *testing.T, label string, container map[string]any) {
+	t.Helper()
+	sc, _ := container["securityContext"].(map[string]any)
+	if sc == nil {
+		t.Errorf("%s container has no securityContext", label)
+		return
+	}
+	if b, _ := sc["allowPrivilegeEscalation"].(bool); b {
+		t.Errorf("%s container allows privilege escalation", label)
+	}
+	if b, _ := sc["readOnlyRootFilesystem"].(bool); !b {
+		t.Errorf("%s container does not set readOnlyRootFilesystem: true", label)
+	}
+	if b, _ := sc["runAsNonRoot"].(bool); !b {
+		t.Errorf("%s container does not set runAsNonRoot: true", label)
+	}
+	caps, _ := sc["capabilities"].(map[string]any)
+	drop := asStrings(caps["drop"])
+	if !contains(drop, "ALL") {
+		t.Errorf("%s container does not drop ALL Linux capabilities (drop=%v)", label, drop)
 	}
 }

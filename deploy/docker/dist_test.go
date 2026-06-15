@@ -1,10 +1,16 @@
 package docker
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // readArtifact reads a distribution file relative to this package directory and
@@ -37,46 +43,317 @@ func mustContainAny(t *testing.T, name, body string, wants ...string) {
 	t.Errorf("%s: expected to contain one of %v", name, wants)
 }
 
-// TestDockerfileIsMinimalAndReproducible encodes the image half of the
-// acceptance: a small (distroless/scratch) image built reproducibly (no CGO,
-// trimmed paths, pinned build id), running unprivileged, and carrying both the
-// control plane and the isolated signer (AN-4).
+// TestDockerfileIsMinimalAndReproducible encodes the image half of the acceptance:
+// a small (distroless/scratch) image built reproducibly (no CGO, trimmed paths,
+// pinned build id), running unprivileged, and carrying the control plane, the
+// isolated signer (AN-4), the agent, and the operator.
+//
+// Behavioural (OPS-008): instead of only substring-matching "./cmd/trustctl-agent",
+// this extracts every `./cmd/<bin>` the Dockerfile builds and asserts each names a
+// REAL cmd package directory on disk — so the image cannot claim to build a binary
+// that does not exist (the OPS-002 unbuilt-image class), and conversely every
+// flag-bearing binary a deploy manifest runs must be one the image builds. The
+// reproducibility of the resulting binary is proven by a real double-build in
+// reproducible_test.go.
 func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	df := readArtifact(t, "Dockerfile")
 
 	mustContainAny(t, "Dockerfile base image", df, "distroless", "scratch")
 	mustContainAll(t, "Dockerfile reproducible build flags", df,
 		"CGO_ENABLED=0", "-trimpath", "-buildid=", "-buildvcs=false")
-	// All four binaries ship in the single image: the control plane, the sacred
-	// signer process (AN-4), the in-network agent the K8s DaemonSet runs from this
-	// same image, and the Kubernetes Operator the operator Deployment runs from it
-	// the same way (OPS-002/OPS-004) — so there is no separate, un-built
-	// -agent/-operator image, and the operator image the manifests reference is one
-	// a workflow actually builds.
-	mustContainAll(t, "Dockerfile binaries", df,
-		"./cmd/trustctl", "./cmd/trustctl-signer", "./cmd/trustctl-agent", "./cmd/trustctl-operator")
-	// Unprivileged runtime.
+
+	// Extract the ./cmd/<bin> targets the Dockerfile actually builds and assert each
+	// resolves to a real package directory (cmd/<bin> with at least one .go file).
+	built := dockerfileCmdTargets(df)
+	if len(built) == 0 {
+		t.Fatal("Dockerfile builds no ./cmd/<binary> targets")
+	}
+	for _, bin := range built {
+		dir := filepath.Join("..", "..", "cmd", bin)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Errorf("Dockerfile builds ./cmd/%s, but cmd/%s does not exist (OPS-002: building a phantom binary): %v", bin, bin, err)
+			continue
+		}
+		hasGo := false
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".go") {
+				hasGo = true
+				break
+			}
+		}
+		if !hasGo {
+			t.Errorf("Dockerfile builds ./cmd/%s, but cmd/%s has no .go source", bin, bin)
+		}
+	}
+	// The four flag-bearing/runtime binaries the deploy manifests run MUST be built by
+	// the image (so there is no separate, un-built -agent/-operator/-signer image —
+	// OPS-002/OPS-004). This binds the Dockerfile to the manifests' entrypoints.
+	for _, must := range []string{"trustctl", "trustctl-signer", "trustctl-agent", "trustctl-operator"} {
+		if !containsStr(built, must) {
+			t.Errorf("Dockerfile does not build ./cmd/%s, but a deploy manifest runs it (OPS-002): the image must carry every binary the manifests reference", must)
+		}
+	}
+
+	// Unprivileged runtime + an entrypoint.
 	mustContainAny(t, "Dockerfile non-root user", df, "nonroot", "USER 65532")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
+
+	// Mutation proof: a Dockerfile line building a non-existent ./cmd/<bin> is detected
+	// by the same extractor (the cmd dir would not exist); a real one resolves.
+	t.Run("detects_phantom_cmd_target", func(t *testing.T) {
+		targets := dockerfileCmdTargets("RUN go build -o /out/x ./cmd/trustctl-does-not-exist")
+		if len(targets) != 1 || targets[0] != "trustctl-does-not-exist" {
+			t.Fatalf("extractor did not parse the phantom ./cmd target: %v", targets)
+		}
+		if _, err := os.ReadDir(filepath.Join("..", "..", "cmd", targets[0])); err == nil {
+			t.Fatal("cmd/trustctl-does-not-exist unexpectedly exists — adjust the negative probe")
+		}
+		// And the real target resolves.
+		if _, err := os.ReadDir(filepath.Join("..", "..", "cmd", "trustctl")); err != nil {
+			t.Errorf("the cmd-target check wrongly failed to resolve the real cmd/trustctl: %v", err)
+		}
+	})
+}
+
+// dockerfileCmdTargets extracts the distinct `<bin>` names from every `./cmd/<bin>`
+// reference in a Dockerfile (the build targets).
+func dockerfileCmdTargets(df string) []string {
+	re := regexp.MustCompile(`\./cmd/([A-Za-z0-9._-]+)`)
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range re.FindAllStringSubmatch(df, -1) {
+		if !seen[m[1]] {
+			seen[m[1]] = true
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+func containsStr(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// composeFile is the slice of the compose schema this suite drills.
+type composeFile struct {
+	Services map[string]struct {
+		Image       string         `yaml:"image"`
+		Entrypoint  []string       `yaml:"entrypoint"`
+		Command     yaml.Node      `yaml:"command"`
+		Environment map[string]any `yaml:"environment"`
+		DependsOn   map[string]struct {
+			Condition string `yaml:"condition"`
+		} `yaml:"depends_on"`
+		Healthcheck struct {
+			Test yaml.Node `yaml:"test"`
+		} `yaml:"healthcheck"`
+	} `yaml:"services"`
 }
 
 // TestComposeBringsUpEvaluableStack encodes the Compose half of the acceptance:
-// `docker compose up` brings up the control plane against Postgres and NATS, and
-// the control plane is wired to them as an EXTERNAL datastore configuration
-// (which is exactly the external-datastore path the acceptance asks to be
-// tested).
+// `docker compose up` brings up the control plane against Postgres and NATS, wired
+// as an EXTERNAL datastore configuration.
+//
+// Behavioural (OPS-008): the old version string-matched "postgres", "depends_on",
+// "TRUSTCTL_POSTGRES_MODE", "external" anywhere in the file — it could pass even if
+// the dependency graph was wrong or a flag was undefined. This PARSES the compose
+// file and asserts the real structure: the four services exist, NATS runs with
+// JetStream, the control plane depends on Postgres+NATS being HEALTHY, every
+// TRUSTCTL_* env it sets is read by the binary, and every command flag the signer
+// and control-plane services pass is a flag the corresponding binary DEFINES (the
+// signer/control-plane compose flags were previously unchecked entirely).
 func TestComposeBringsUpEvaluableStack(t *testing.T) {
-	c := readArtifact(t, "docker-compose.yml")
+	raw := readArtifact(t, "docker-compose.yml")
+	var cf composeFile
+	if err := yaml.Unmarshal([]byte(raw), &cf); err != nil {
+		t.Fatalf("docker-compose.yml is not valid YAML: %v", err)
+	}
 
-	mustContainAll(t, "compose services", c, "postgres", "nats", "trustctl")
-	// JetStream must be enabled for the event spine (AN-2).
-	mustContainAny(t, "compose nats jetstream", c, "-js", "--jetstream", "jetstream")
-	// The control plane points at the external datastores by environment.
-	mustContainAll(t, "compose external datastore wiring", c,
-		"TRUSTCTL_POSTGRES_MODE", "external",
-		"TRUSTCTL_POSTGRES_DSN", "TRUSTCTL_NATS_MODE", "TRUSTCTL_NATS_URL")
-	// Ordered, health-gated startup.
-	mustContainAll(t, "compose health/ordering", c, "healthcheck", "depends_on")
+	// (1) The evaluation stack must declare the four services.
+	for _, want := range []string{"postgres", "nats", "trustctl", "signer"} {
+		if _, ok := cf.Services[want]; !ok {
+			t.Errorf("docker-compose.yml has no %q service", want)
+		}
+	}
+
+	// (2) NATS must enable JetStream (the AN-2 event spine), read from the parsed
+	// command — not a substring anywhere in the file.
+	natsCmd := nodeToStrings(cf.Services["nats"].Command)
+	if !anyContains(natsCmd, "jetstream") && !anyContains(natsCmd, "-js") {
+		t.Errorf("nats service command %v does not enable JetStream (AN-2)", natsCmd)
+	}
+
+	// (3) The control plane must wait for Postgres AND NATS to be HEALTHY before
+	// starting (the ordered, health-gated startup), as parsed depends_on conditions.
+	cp := cf.Services["trustctl"]
+	for _, dep := range []string{"postgres", "nats"} {
+		d, ok := cp.DependsOn[dep]
+		if !ok {
+			t.Errorf("trustctl service does not depend_on %q", dep)
+			continue
+		}
+		if d.Condition != "service_healthy" {
+			t.Errorf("trustctl depends_on %q with condition %q, want service_healthy (health-gated startup)", dep, d.Condition)
+		}
+	}
+
+	// (4) The control plane points at the external datastores, asserted on the parsed
+	// env VALUES (mode=external), and every TRUSTCTL_* key it sets is one the binary
+	// reads (reconciled against the config loader).
+	known := composeLoaderKeys(t)
+	env := cp.Environment
+	if asEnvString(env["TRUSTCTL_POSTGRES_MODE"]) != "external" {
+		t.Errorf("trustctl TRUSTCTL_POSTGRES_MODE = %q, want external", asEnvString(env["TRUSTCTL_POSTGRES_MODE"]))
+	}
+	if asEnvString(env["TRUSTCTL_NATS_MODE"]) != "external" {
+		t.Errorf("trustctl TRUSTCTL_NATS_MODE = %q, want external", asEnvString(env["TRUSTCTL_NATS_MODE"]))
+	}
+	for k := range env {
+		if strings.HasPrefix(k, "TRUSTCTL_") && !known[k] {
+			t.Errorf("compose trustctl service sets %s, which the config loader does not read (phantom env, OPS-008)", k)
+		}
+	}
+
+	// (5) Every flag the signer + control-plane services pass must be defined by the
+	// corresponding binary (the compose flags were previously unchecked). The control
+	// plane uses --health-check in its healthcheck; the signer uses --socket/--keystore/--kek.
+	signerFlags := binaryHelpFlags(t, "trustctl-signer")
+	for _, fl := range commandFlagNames(nodeToStrings(cf.Services["signer"].Command)) {
+		if !signerFlags[fl] {
+			t.Errorf("compose signer service passes --%s, which trustctl-signer does not define (real: %v)", fl, sortedHelpKeys(signerFlags))
+		}
+	}
+	cpFlags := binaryHelpFlags(t, "trustctl")
+	for _, fl := range commandFlagNames(nodeToStrings(cp.Healthcheck.Test)) {
+		if !cpFlags[fl] {
+			t.Errorf("compose trustctl healthcheck passes --%s, which the trustctl binary does not define (real: %v)", fl, sortedHelpKeys(cpFlags))
+		}
+	}
+
+	// Mutation proof: an injected phantom env key and an undefined command flag are
+	// both rejected; the real ones pass.
+	t.Run("rejects_phantom_env_and_flag", func(t *testing.T) {
+		if known["TRUSTCTL_KMS_PROVIDER"] {
+			t.Fatal("config loader unexpectedly knows TRUSTCTL_KMS_PROVIDER — adjust the negative probe")
+		}
+		if !known["TRUSTCTL_POSTGRES_MODE"] {
+			t.Error("the loader-key check wrongly rejected the real TRUSTCTL_POSTGRES_MODE")
+		}
+		if signerFlags["totally-made-up"] {
+			t.Fatal("trustctl-signer unexpectedly defines --totally-made-up — adjust the negative probe")
+		}
+		if !signerFlags["socket"] {
+			t.Error("the flag-vs-binary check wrongly rejected the real signer --socket flag")
+		}
+	})
+}
+
+// nodeToStrings flattens a compose command/test field, which YAML may model as a
+// single string or a sequence of strings, into a string slice.
+func nodeToStrings(n yaml.Node) []string {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		// A shell-form command string: split on whitespace.
+		return strings.Fields(n.Value)
+	case yaml.SequenceNode:
+		var out []string
+		for _, c := range n.Content {
+			out = append(out, c.Value)
+		}
+		return out
+	}
+	return nil
+}
+
+func anyContains(ss []string, sub string) bool {
+	for _, s := range ss {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func asEnvString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// commandFlagNames extracts long-flag names from a command token list.
+func commandFlagNames(tokens []string) []string {
+	var out []string
+	for _, tok := range tokens {
+		tok = strings.TrimSpace(tok)
+		if !strings.HasPrefix(tok, "--") {
+			continue
+		}
+		name := strings.TrimLeft(tok, "-")
+		if i := strings.IndexByte(name, '='); i >= 0 {
+			name = name[:i]
+		}
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// binaryHelpFlags runs `go run ./cmd/<bin> --help` from the repo root (two levels up
+// from deploy/docker) and returns its real flag set.
+func binaryHelpFlags(t *testing.T, bin string) map[string]bool {
+	t.Helper()
+	cmd := exec.Command("go", "run", "./cmd/"+bin, "--help")
+	cmd.Dir = filepath.Join("..", "..")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=readonly")
+	_ = cmd.Run()
+	re := regexp.MustCompile(`(?m)^\s+-([A-Za-z][\w-]*)`)
+	flags := map[string]bool{}
+	for _, m := range re.FindAllStringSubmatch(out.String(), -1) {
+		flags[m[1]] = true
+	}
+	if len(flags) == 0 {
+		t.Fatalf("could not parse flags from `go run ./cmd/%s --help`:\n%s", bin, out.String())
+	}
+	return flags
+}
+
+// composeLoaderKeys parses internal/config/config.go for the TRUSTCTL_* keys the
+// loader reads — the binary's env contract.
+func composeLoaderKeys(t *testing.T) map[string]bool {
+	t.Helper()
+	src, err := os.ReadFile(filepath.Join("..", "..", "internal", "config", "config.go"))
+	if err != nil {
+		t.Fatalf("read internal/config/config.go: %v", err)
+	}
+	re := regexp.MustCompile(`set(?:String|Bool|BoolPtr|Int|CSV)\(getenv,\s*"(TRUSTCTL_[A-Z0-9_]+)"`)
+	keys := map[string]bool{"TRUSTCTL_CONFIG_FILE": true}
+	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
+		keys[m[1]] = true
+	}
+	if len(keys) < 10 {
+		t.Fatalf("parsed only %d loader keys — extractor broken", len(keys))
+	}
+	return keys
+}
+
+func sortedHelpKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // TestReleaseWorkflowSignsAndAttests encodes "images are cosign-signed and ship
