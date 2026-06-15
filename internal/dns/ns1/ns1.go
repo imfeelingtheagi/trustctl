@@ -24,12 +24,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
 )
@@ -132,15 +133,9 @@ func (p *Provider) PresentTXT(ctx context.Context, name, value string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := p.do(req)
-	if err != nil {
+	if err := p.do(req); err != nil {
 		return fmt.Errorf("ns1: present %s: %w", name, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		return p.apiErr(resp)
-	}
-	drain(resp.Body)
 	return nil
 }
 
@@ -153,38 +148,32 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, _ string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := p.do(req)
-	if err != nil {
+	if err := p.do(req); err != nil {
+		var ae *apiError
+		if errors.As(err, &ae) && ae.status == http.StatusNotFound {
+			return nil
+		}
 		return fmt.Errorf("ns1: cleanup %s: %w", name, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusNotFound {
-		drain(resp.Body)
-		return nil
-	}
-	if resp.StatusCode/100 != 2 {
-		return p.apiErr(resp)
-	}
-	drain(resp.Body)
 	return nil
 }
 
-// do sets the NS1 auth header on every request and dispatches it through the doer.
-func (p *Provider) do(req *http.Request) (*http.Response, error) {
+// do sets the NS1 auth header on req and runs it through the shared cloudhttp
+// round-trip (bounded read, non-2xx normalisation, drain; CODE-006). A non-2xx
+// response is translated into an *apiError so CleanupTXT's 404-is-a-no-op predicate
+// and the error text (which never carries the API key, AN-8) are unchanged. The NS1
+// records API returns no body the provider reads, so out is nil.
+func (p *Provider) do(req *http.Request) error {
 	req.Header.Set(apiKeyHeader, p.creds.APIKey)
-	return p.doer.Do(req)
+	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
+		return err
+	}
+	return nil
 }
-
-// apiErr reads a bounded slice of a non-2xx body into an *apiError. The body is the
-// service error text and never carries the API key (AN-8).
-func (p *Provider) apiErr(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-}
-
-// drain reads and discards a bounded remainder of a response body so the connection
-// can be reused.
-func drain(r io.Reader) { _, _ = io.Copy(io.Discard, io.LimitReader(r, 1<<20)) }
 
 // recordBody is the NS1 records-API request body for a TXT record. Only the answers
 // are sent; NS1 infers zone/domain/type from the request path.

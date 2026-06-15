@@ -27,13 +27,13 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
@@ -170,19 +170,32 @@ func (p *Provider) change(ctx context.Context, action, name, value string) error
 		return err
 	}
 	req.Header.Set("Content-Type", "text/xml")
-	p.signV4(req, body, p.now().UTC())
-
-	resp, err := p.doer.Do(req)
-	if err != nil {
+	// Record the XML body so the SigV4 signer hashes exactly the bytes sent, then run
+	// the shared cloudhttp round-trip (bounded read, non-2xx normalisation, drain;
+	// CODE-006). SigV4 stays here — supplied as a cloudhttp request-signer so its keyed
+	// MAC remains in this package behind the crypto boundary (AN-3). The non-2xx
+	// *StatusError is translated to the package's *apiError so isNotFound's body match
+	// (and the credential-free error text, AN-8) are unchanged. Route 53 returns an XML
+	// body the provider does not read, so out is nil.
+	req = cloudhttp.SetBody(req, body)
+	if err := cloudhttp.JSON(p.doer, req, nil, cloudhttp.WithSigner(p.sigV4Signer())); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
 		return fmt.Errorf("route53: %s %s: %w", action, name, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
+}
+
+// sigV4Signer returns the cloudhttp request-signer that stamps SigV4 onto a request
+// just before it is sent. The keyed MAC it computes routes through internal/crypto
+// (AN-3); the signing key never leaves this package.
+func (p *Provider) sigV4Signer() cloudhttp.Signer {
+	return func(req *http.Request, body []byte) error {
+		p.signV4(req, body, p.now().UTC())
+		return nil
+	}
 }
 
 // signV4 adds AWS Signature Version 4 headers to req over body. Digests and the

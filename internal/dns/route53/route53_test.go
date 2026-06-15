@@ -2,10 +2,14 @@ package route53_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/dns/route53"
 	"trustctl.io/trustctl/internal/dns/route53/r53test"
 	"trustctl.io/trustctl/internal/pluginhost"
@@ -136,4 +140,50 @@ func mustHost(t *testing.T, raw string) string {
 		t.Fatalf("parse %q: %v", raw, err)
 	}
 	return u.Host
+}
+
+// TestSignedRequestRoutesThroughCloudhttpBound proves the SIGNING provider shares the
+// same cloudhttp core (CODE-006): the SigV4 signature is still applied (the server
+// observes an Authorization header it can recover), AND the non-2xx error body the
+// provider surfaces is bounded by the SHARED cloudhttp.MaxErrorBytes — not a bespoke
+// per-provider literal. Lowering cloudhttp.MaxErrorBytes changes what route53 (a
+// signing provider) observes, because its bounded read is now central. The request is
+// still SigV4-signed via the cloudhttp request-signer seam — the keyed MAC stays in
+// the provider, behind the crypto boundary (AN-3).
+func TestSignedRequestRoutesThroughCloudhttpBound(t *testing.T) {
+	huge := strings.Repeat("E", cloudhttp.MaxErrorBytes*3)
+	var sawSigV4 bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The cloudhttp signer ran iff the request carries the SigV4 Authorization
+		// header — proving the signing seam is wired into the shared round-trip.
+		if strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 ") &&
+			r.Header.Get("X-Amz-Date") != "" {
+			sawSigV4 = true
+		}
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, huge)
+	}))
+	defer srv.Close()
+
+	p := route53.New(zoneID, goodCreds(),
+		route53.WithEndpoint(srv.URL), route53.WithHTTPClient(srv.Client()))
+
+	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
+	if err == nil {
+		t.Fatal("expected an error from the 502 upstream")
+	}
+	if !sawSigV4 {
+		t.Fatal("server saw no SigV4 Authorization header — the signer seam is not wired into cloudhttp (CODE-006)")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "502") {
+		t.Fatalf("error should carry the upstream status: %v", err)
+	}
+	bodyLen := strings.Count(msg, "E")
+	if bodyLen == 0 {
+		t.Fatal("error carried no body snippet; the shared bounded read did not run")
+	}
+	if bodyLen > cloudhttp.MaxErrorBytes {
+		t.Fatalf("error body = %d 'E's, exceeds the shared cloudhttp.MaxErrorBytes cap %d — the bound is not centrally applied to the signing provider (CODE-006)", bodyLen, cloudhttp.MaxErrorBytes)
+	}
 }

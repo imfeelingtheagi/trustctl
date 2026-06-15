@@ -39,7 +39,7 @@ func TestJSONDecodesSuccess(t *testing.T) {
 	var out struct {
 		Value string `json:"value"`
 	}
-	if err := JSON(http.DefaultClient, req, &out, 0); err != nil {
+	if err := JSON(http.DefaultClient, req, &out); err != nil {
 		t.Fatalf("JSON: %v", err)
 	}
 	if out.Value != "ok" {
@@ -54,7 +54,7 @@ func TestJSONNilOutDiscardsBody(t *testing.T) {
 	}))
 	defer srv.Close()
 	req := newReq(t, context.Background(), http.MethodDelete, srv.URL, "")
-	if err := JSON(http.DefaultClient, req, nil, 0); err != nil {
+	if err := JSON(http.DefaultClient, req, nil); err != nil {
 		t.Fatalf("JSON nil-out: %v", err)
 	}
 }
@@ -68,7 +68,7 @@ func TestJSONNon2xxIsStatusError(t *testing.T) {
 	}))
 	defer srv.Close()
 	req := newReq(t, context.Background(), http.MethodGet, srv.URL, "")
-	err := JSON(http.DefaultClient, req, nil, 0)
+	err := JSON(http.DefaultClient, req, nil)
 	var se *StatusError
 	if !errors.As(err, &se) {
 		t.Fatalf("expected *StatusError, got %v", err)
@@ -90,7 +90,7 @@ func TestJSONBoundsErrorBody(t *testing.T) {
 	}))
 	defer srv.Close()
 	req := newReq(t, context.Background(), http.MethodGet, srv.URL, "")
-	err := JSON(http.DefaultClient, req, nil, 0)
+	err := JSON(http.DefaultClient, req, nil)
 	var se *StatusError
 	if !errors.As(err, &se) {
 		t.Fatalf("expected *StatusError, got %v", err)
@@ -110,7 +110,7 @@ func TestJSONTimeoutFloorAppliesWhenNoDeadline(t *testing.T) {
 	defer srv.Close()
 	req := newReq(t, context.Background(), http.MethodGet, srv.URL, "")
 	start := time.Now()
-	err := JSON(http.DefaultClient, req, nil, 50*time.Millisecond)
+	err := JSON(http.DefaultClient, req, nil, WithTimeout(50*time.Millisecond))
 	if err == nil {
 		t.Fatal("expected a timeout error from the shared floor")
 	}
@@ -131,7 +131,7 @@ func TestJSONRespectsCallerDeadline(t *testing.T) {
 	req := newReq(t, ctx, http.MethodGet, srv.URL, "")
 	start := time.Now()
 	// A long floor must not extend the caller's short deadline.
-	if err := JSON(http.DefaultClient, req, nil, time.Hour); err == nil {
+	if err := JSON(http.DefaultClient, req, nil, WithTimeout(time.Hour)); err == nil {
 		t.Fatal("expected the caller's deadline to fire")
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
@@ -146,7 +146,64 @@ func (errDoer) Do(*http.Request) (*http.Response, error) { return nil, errors.Ne
 
 func TestJSONPropagatesTransportError(t *testing.T) {
 	req := newReq(t, context.Background(), http.MethodGet, "http://example.invalid", "")
-	if err := JSON(errDoer{}, req, nil, 0); err == nil || !strings.Contains(err.Error(), "dial fail") {
+	if err := JSON(errDoer{}, req, nil); err == nil || !strings.Contains(err.Error(), "dial fail") {
 		t.Fatalf("expected transport error to propagate, got %v", err)
 	}
 }
+
+// TestJSONSignerRunsBeforeSendOverBody proves the WithSigner seam: the signer is
+// invoked with the request and the exact body bytes (via SetBody) before the request
+// is sent, and the headers it sets reach the server. This is the AWS-SigV4 / Akamai-
+// EdgeGrid attachment point — the providers compute their keyed MAC over the body and
+// stamp an Authorization header here, sharing the bounded-read / timeout core.
+func TestJSONSignerRunsBeforeSendOverBody(t *testing.T) {
+	body := []byte(`{"k":"v"}`)
+	var gotSig string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSig = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	req := newReq(t, context.Background(), http.MethodPost, srv.URL, string(body))
+	req = SetBody(req, body)
+	signer := func(r *http.Request, b []byte) error {
+		// The signer sees exactly the bytes that will be sent.
+		if string(b) != string(body) {
+			t.Errorf("signer body = %q, want %q", b, body)
+		}
+		r.Header.Set("Authorization", "SIG over "+string(b))
+		return nil
+	}
+	if err := JSON(http.DefaultClient, req, nil, WithSigner(signer)); err != nil {
+		t.Fatalf("JSON with signer: %v", err)
+	}
+	if want := "SIG over " + string(body); gotSig != want {
+		t.Errorf("server saw Authorization %q, want %q", gotSig, want)
+	}
+}
+
+// TestJSONSignerErrorAbortsBeforeSend: a signer that fails stops the call before any
+// request reaches the doer (a credential-derivation failure must never send an
+// unauthenticated request).
+func TestJSONSignerErrorAbortsBeforeSend(t *testing.T) {
+	var sent bool
+	doer := doerFunc(func(*http.Request) (*http.Response, error) {
+		sent = true
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	})
+	req := newReq(t, context.Background(), http.MethodPost, "http://example.invalid", "{}")
+	failSign := func(*http.Request, []byte) error { return errors.New("sign failed") }
+	err := JSON(doer, req, nil, WithSigner(failSign))
+	if err == nil || !strings.Contains(err.Error(), "sign failed") {
+		t.Fatalf("expected signer error, got %v", err)
+	}
+	if sent {
+		t.Fatal("request was sent despite a signer failure")
+	}
+}
+
+// doerFunc adapts a function to the Doer seam.
+type doerFunc func(*http.Request) (*http.Response, error)
+
+func (f doerFunc) Do(r *http.Request) (*http.Response, error) { return f(r) }

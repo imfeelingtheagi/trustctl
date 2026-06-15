@@ -39,12 +39,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
 )
@@ -170,16 +171,18 @@ func (p *Provider) update(ctx context.Context, value string) error {
 	// (AN-8); the long-lived secret stays []byte in the Credentials.
 	req.Header.Set("X-Api-Key", string(p.creds.Password))
 
-	resp, err := p.doer.Do(req)
-	if err != nil {
+	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
+	// and drain (CODE-006); the non-2xx *StatusError is translated to the package's
+	// *apiError, whose text is the acme-dns error body and never carries the request
+	// credentials (AN-8). acme-dns's /update returns no body the provider reads, so
+	// out is nil.
+	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
 		return fmt.Errorf("acmedns: update %s: %w", p.subdomain, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
 }
 

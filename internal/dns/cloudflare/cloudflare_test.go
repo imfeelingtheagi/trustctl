@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/dns/cloudflare"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
@@ -107,6 +108,47 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), secret) {
 		t.Fatalf("error leaked the API token: %v", err)
+	}
+}
+
+// TestErrorBodyBoundIsCloudhttps proves the provider's non-2xx error body is bounded
+// by the SHARED cloudhttp knob, not a bespoke per-provider literal (CODE-006): the
+// upstream returns a >MaxErrorBytes error body, and the error the provider surfaces is
+// truncated to exactly cloudhttp.MaxErrorBytes. This is the "single bound change
+// reflects in a provider" acceptance — lowering cloudhttp.MaxErrorBytes changes what
+// cloudflare (and every other provider) observes, because the read is now central.
+func TestErrorBodyBoundIsCloudhttps(t *testing.T) {
+	huge := strings.Repeat("E", cloudhttp.MaxErrorBytes*3)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+testToken {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, huge)
+	}))
+	defer srv.Close()
+
+	p := cloudflare.New(zoneID, goodCreds(),
+		cloudflare.WithEndpoint(srv.URL), cloudflare.WithHTTPClient(srv.Client()))
+
+	// PresentTXT first LISTs (GET) — that is the call that hits the 502 here.
+	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
+	if err == nil {
+		t.Fatal("expected an error from the 502 upstream")
+	}
+	// The provider wraps cloudhttp's bounded body in "cloudflare: status 502: <body>".
+	// The body portion must be capped at the shared cloudhttp.MaxErrorBytes.
+	msg := err.Error()
+	if !strings.Contains(msg, "502") {
+		t.Fatalf("error should carry the upstream status: %v", err)
+	}
+	bodyLen := strings.Count(msg, "E")
+	if bodyLen > cloudhttp.MaxErrorBytes {
+		t.Fatalf("error body = %d 'E's, exceeds the shared cloudhttp.MaxErrorBytes cap %d — the bound is not centrally applied (CODE-006)", bodyLen, cloudhttp.MaxErrorBytes)
+	}
+	if bodyLen == 0 {
+		t.Fatal("error carried no body snippet; the shared bounded read did not run")
 	}
 }
 

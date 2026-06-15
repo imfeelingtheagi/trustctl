@@ -28,12 +28,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
 )
@@ -143,11 +145,10 @@ func (p *Provider) PresentTXT(ctx context.Context, name, value string) error {
 	if err != nil {
 		return fmt.Errorf("azuredns: encode record set: %w", err)
 	}
-	resp, err := p.do(ctx, http.MethodPut, name, body)
-	if err != nil {
+	if err := p.do(ctx, http.MethodPut, name, body, false); err != nil {
 		return fmt.Errorf("azuredns: present %s: %w", name, err)
 	}
-	return p.finish(resp, false)
+	return nil
 }
 
 // CleanupTXT removes the TXT record set for name with a DELETE. A 404 (the record
@@ -156,16 +157,18 @@ func (p *Provider) PresentTXT(ctx context.Context, name, value string) error {
 // deletes the record set as a whole, which for a transient _acme-challenge record is
 // the intended cleanup.
 func (p *Provider) CleanupTXT(ctx context.Context, name, value string) error {
-	resp, err := p.do(ctx, http.MethodDelete, name, nil)
-	if err != nil {
+	if err := p.do(ctx, http.MethodDelete, name, nil, true); err != nil {
 		return fmt.Errorf("azuredns: cleanup %s: %w", name, err)
 	}
-	return p.finish(resp, true)
+	return nil
 }
 
-// do builds and sends a single authorized request for the TXT record set named by
-// the FQDN name, returning the raw response for the caller to drain.
-func (p *Provider) do(ctx context.Context, method, name string, body []byte) (*http.Response, error) {
+// do builds an authorized request for the TXT record set named by the FQDN name and
+// runs it through the shared cloudhttp round-trip (bounded read, non-2xx
+// normalisation, drain; CODE-006). allow404 maps a 404 to success (the idempotent-
+// cleanup case); any other non-2xx becomes an *apiError whose text never carries the
+// bearer token (AN-8). Azure DNS returns no body the provider reads, so out is nil.
+func (p *Provider) do(ctx context.Context, method, name string, body []byte, allow404 bool) error {
 	endpoint := p.recordSetURL(name)
 	var reader io.Reader
 	if body != nil {
@@ -173,28 +176,22 @@ func (p *Provider) do(ctx context.Context, method, name string, body []byte) (*h
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+p.creds.BearerToken)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return p.doer.Do(req)
-}
-
-// finish drains and closes resp, mapping the status to an error. allow404 makes a
-// 404 a success (the idempotent-cleanup case).
-func (p *Provider) finish(resp *http.Response, allow404 bool) error {
-	defer func() { _ = resp.Body.Close() }()
-	if allow404 && resp.StatusCode == http.StatusNotFound {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-		return nil
+	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			if allow404 && se.StatusCode == http.StatusNotFound {
+				return nil
+			}
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
+		return err
 	}
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
 }
 

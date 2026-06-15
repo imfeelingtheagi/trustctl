@@ -16,13 +16,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/crypto"
 )
 
@@ -214,6 +214,14 @@ func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto
 }
 
 // call performs a signed AWS JSON 1.1 request and decodes the JSON response.
+//
+// The provider-specific parts stay here: the AWS JSON 1.1 URL/headers, and SigV4 —
+// supplied as a cloudhttp request-signer closure so the keyed MAC stays in this
+// package behind the internal/crypto boundary (AN-3) while the bounded read, non-2xx
+// normalisation, JSON decode, and timeout floor are the shared internal/cloudhttp
+// round-trip (CODE-006). The per-op timeout is already applied by the caller via
+// opContext(ctx) (CODE-002), so the context already carries the deadline and the
+// shared floor is left off here.
 func (b *Backend) call(ctx context.Context, target string, in any, out any) error {
 	body, err := json.Marshal(in)
 	if err != nil {
@@ -225,20 +233,22 @@ func (b *Backend) call(ctx context.Context, target string, in any, out any) erro
 	}
 	req.Header.Set("Content-Type", jsonType)
 	req.Header.Set("X-Amz-Target", target)
-	b.signV4(req, body, b.now().UTC())
-	resp, err := b.doer.Do(req)
-	if err != nil {
+	// Record the marshalled body so the SigV4 signer hashes exactly the bytes sent.
+	req = cloudhttp.SetBody(req, body)
+	if err := cloudhttp.JSON(b.doer, req, out, cloudhttp.WithSigner(b.sigV4Signer())); err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
-	}
-	if out == nil {
+	return nil
+}
+
+// sigV4Signer returns the cloudhttp request-signer that stamps SigV4 onto a request
+// just before it is sent. The keyed MAC it computes routes through internal/crypto
+// (AN-3); the signing key never leaves this package.
+func (b *Backend) sigV4Signer() cloudhttp.Signer {
+	return func(req *http.Request, body []byte) error {
+		b.signV4(req, body, b.now().UTC())
 		return nil
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
 }
 
 // signV4 adds AWS Signature Version 4 headers (digests/MAC via the crypto boundary, AN-3;

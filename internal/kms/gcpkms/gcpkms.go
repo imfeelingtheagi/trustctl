@@ -253,7 +253,7 @@ func (b *Backend) call(ctx context.Context, method, path string, in any, out any
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+b.creds.BearerToken)
-	if err := cloudhttp.JSON(b.doer, req, out, 0); err != nil {
+	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("gcp-kms: %w", err)
 	}
 	return nil

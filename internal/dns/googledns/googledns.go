@@ -30,11 +30,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
 )
@@ -176,16 +176,18 @@ func (p *Provider) change(ctx context.Context, body changeBody) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.creds.BearerToken)
 
-	resp, err := p.doer.Do(req)
-	if err != nil {
+	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
+	// and drain (CODE-006); the non-2xx *StatusError is translated to the package's
+	// *apiError so the is4xxContaining "already exists"/"not found" idempotency
+	// predicates (and the token-free error text, AN-8) are unchanged. Cloud DNS
+	// returns no body the provider reads, so out is nil.
+	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
 		return fmt.Errorf("googledns: change: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
 }
 

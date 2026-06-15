@@ -31,6 +31,7 @@ import (
 	"net/url"
 	"strings"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
 )
@@ -152,19 +153,18 @@ func (p *Provider) newRequest(ctx context.Context, method, name string, body io.
 	return req, nil
 }
 
-// do sends req and maps a non-2xx response to an apiError. The error text is the
-// service message and never carries the bearer token (AN-8).
+// do runs req through the shared cloudhttp round-trip (bounded read, non-2xx
+// normalisation, drain; CODE-006) and maps a non-2xx response to an *apiError so
+// CleanupTXT's 404-is-a-no-op predicate and the token-free error text (AN-8) are
+// unchanged. UltraDNS returns no body the provider reads, so out is nil.
 func (p *Provider) do(req *http.Request, action, name string) error {
-	resp, err := p.doer.Do(req)
-	if err != nil {
+	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
 		return fmt.Errorf("ultradns: %s %s: %w", action, name, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
 }
 

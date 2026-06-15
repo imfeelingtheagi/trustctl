@@ -39,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
@@ -176,12 +177,12 @@ func (p *Provider) PresentTXT(ctx context.Context, name, value string) error {
 	if err != nil {
 		return fmt.Errorf("akamai: encode record: %w", err)
 	}
-	req, err := p.newSignedRequest(ctx, http.MethodPut, name, body)
+	req, err := p.newRequest(ctx, http.MethodPut, name, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return p.do(req, "present", name)
+	return p.do(req, body, "present", name)
 }
 
 // CleanupTXT removes the TXT record set for name via a DELETE. A 404 (the record set
@@ -189,11 +190,11 @@ func (p *Provider) PresentTXT(ctx context.Context, name, value string) error {
 // leaves the zone in an inconsistent state (AN-5). value is unused: Akamai addresses
 // the record set by (zone, name, type).
 func (p *Provider) CleanupTXT(ctx context.Context, name, _ string) error {
-	req, err := p.newSignedRequest(ctx, http.MethodDelete, name, nil)
+	req, err := p.newRequest(ctx, http.MethodDelete, name, nil)
 	if err != nil {
 		return err
 	}
-	if err := p.do(req, "cleanup", name); err != nil {
+	if err := p.do(req, nil, "cleanup", name); err != nil {
 		var ae *apiError
 		if errors.As(err, &ae) && ae.status == http.StatusNotFound {
 			return nil
@@ -203,9 +204,10 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, _ string) error {
 	return nil
 }
 
-// newSignedRequest builds a request to the TXT record-set path for name and adds the
-// EdgeGrid Authorization header over body.
-func (p *Provider) newSignedRequest(ctx context.Context, method, name string, body []byte) (*http.Request, error) {
+// newRequest builds an unsigned request to the TXT record-set path for name. The
+// EdgeGrid Authorization header is attached later, just before the request is sent,
+// by the cloudhttp signer in do() (so the signature covers exactly the bytes sent).
+func (p *Provider) newRequest(ctx context.Context, method, name string, body []byte) (*http.Request, error) {
 	var rdr io.Reader
 	if body != nil {
 		rdr = bytes.NewReader(body)
@@ -215,7 +217,6 @@ func (p *Provider) newSignedRequest(ctx context.Context, method, name string, bo
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	p.signEdgeGrid(req, body, p.now().UTC(), p.nonce())
 	return req, nil
 }
 
@@ -309,19 +310,26 @@ func edgeGridSign(clientSecret, timestamp, dataToSign string) string {
 		crypto.HMACSHA256([]byte(signingKey), []byte(dataToSign)))
 }
 
-// do sends req and maps a non-2xx response to an apiError. The error text is the
-// service message and never carries the EdgeGrid credentials (AN-8).
-func (p *Provider) do(req *http.Request, action, name string) error {
-	resp, err := p.doer.Do(req)
-	if err != nil {
+// do signs req with EdgeGrid and runs it through the shared cloudhttp round-trip
+// (bounded read, non-2xx normalisation, drain; CODE-006). EdgeGrid signing stays here
+// — supplied as a cloudhttp request-signer so its keyed MAC and content digest remain
+// in this package behind the crypto boundary (AN-3) — and is applied just before the
+// request is sent, over exactly the body bytes that will be transmitted. A non-2xx
+// *StatusError is translated to the package's *apiError so CleanupTXT's 404-is-a-no-op
+// predicate and the credential-free error text (AN-8) are unchanged. Akamai returns no
+// body the provider reads, so out is nil.
+func (p *Provider) do(req *http.Request, body []byte, action, name string) error {
+	signer := func(r *http.Request, _ []byte) error {
+		p.signEdgeGrid(r, body, p.now().UTC(), p.nonce())
+		return nil
+	}
+	if err := cloudhttp.JSON(p.doer, req, nil, cloudhttp.WithSigner(signer)); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
 		return fmt.Errorf("akamai: %s %s: %w", action, name, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/kms/awskms"
 )
@@ -255,5 +256,44 @@ func TestAWSKMSBadCredentialsRejected(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "wrong") {
 		t.Fatalf("error leaked the secret: %v", err)
+	}
+}
+
+// TestSigV4SignerRoutesThroughCloudhttpBound proves awskms shares the cloudhttp core
+// (CODE-006): the request is still SigV4-signed via the cloudhttp request-signer seam
+// (the server observes the AWS4-HMAC-SHA256 Authorization header), AND the non-2xx
+// error body the backend surfaces is bounded by the SHARED cloudhttp.MaxErrorBytes —
+// not a bespoke per-backend literal. Lowering cloudhttp.MaxErrorBytes changes what
+// awskms (a SigV4 family) observes, because its bounded read is now central. The keyed
+// MAC stays in the awskms package, behind the crypto boundary (AN-3).
+func TestSigV4SignerRoutesThroughCloudhttpBound(t *testing.T) {
+	huge := strings.Repeat("E", cloudhttp.MaxErrorBytes*3)
+	var sawSigV4 bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 ") &&
+			r.Header.Get("X-Amz-Date") != "" && r.Header.Get("X-Amz-Target") != "" {
+			sawSigV4 = true
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, huge)
+	}))
+	defer srv.Close()
+
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK},
+		awskms.WithEndpoint(srv.URL), awskms.WithHTTPClient(srv.Client()))
+
+	_, err := b.GenerateKey(crypto.ECDSAP256)
+	if err == nil {
+		t.Fatal("expected an error from the 500 upstream")
+	}
+	if !sawSigV4 {
+		t.Fatal("server saw no SigV4 Authorization header — the signer seam is not wired into cloudhttp (CODE-006)")
+	}
+	bodyLen := strings.Count(err.Error(), "E")
+	if bodyLen == 0 {
+		t.Fatal("error carried no body snippet; the shared bounded read did not run")
+	}
+	if bodyLen > cloudhttp.MaxErrorBytes {
+		t.Fatalf("error body = %d 'E's, exceeds the shared cloudhttp.MaxErrorBytes cap %d — the bound is not centrally applied to awskms (CODE-006)", bodyLen, cloudhttp.MaxErrorBytes)
 	}
 }

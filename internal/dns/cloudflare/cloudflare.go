@@ -27,12 +27,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"trustctl.io/trustctl/internal/cloudhttp"
 	"trustctl.io/trustctl/internal/pluginhost"
 	"trustctl.io/trustctl/internal/protocols/acme"
 )
@@ -133,15 +135,9 @@ func (p *Provider) PresentTXT(ctx context.Context, name, value string) error {
 		return fmt.Errorf("cloudflare: encode record: %w", err)
 	}
 	path := "/zones/" + p.zoneID + "/dns_records"
-	resp, err := p.do(ctx, http.MethodPost, path, body)
-	if err != nil {
+	if err := p.do(ctx, http.MethodPost, path, body, nil); err != nil {
 		return fmt.Errorf("cloudflare: create %s: %w", name, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		return readError(resp)
-	}
-	drain(resp)
 	return nil
 }
 
@@ -155,17 +151,9 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, value string) error {
 	}
 	for _, rec := range existing {
 		path := "/zones/" + p.zoneID + "/dns_records/" + rec.ID
-		resp, err := p.do(ctx, http.MethodDelete, path, nil)
-		if err != nil {
+		if err := p.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
 			return fmt.Errorf("cloudflare: delete %s: %w", rec.ID, err)
 		}
-		if resp.StatusCode/100 != 2 {
-			err := readError(resp)
-			_ = resp.Body.Close()
-			return err
-		}
-		drain(resp)
-		_ = resp.Body.Close()
 	}
 	return nil
 }
@@ -178,50 +166,41 @@ func (p *Provider) list(ctx context.Context, name, value string) ([]txtRecord, e
 	q.Set("content", value)
 	path := "/zones/" + p.zoneID + "/dns_records?" + q.Encode()
 
-	resp, err := p.do(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("cloudflare: list %s: %w", name, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode/100 != 2 {
-		return nil, readError(resp)
-	}
 	var lr listResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&lr); err != nil {
-		return nil, fmt.Errorf("cloudflare: decode list %s: %w", name, err)
+	if err := p.do(ctx, http.MethodGet, path, nil, &lr); err != nil {
+		return nil, fmt.Errorf("cloudflare: list %s: %w", name, err)
 	}
 	return lr.Result, nil
 }
 
-// do issues an authenticated request to endpoint+path. The bearer token is attached
-// here and nowhere else; it is never written to logs or error text (AN-8).
-func (p *Provider) do(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
+// do issues an authenticated request to endpoint+path and, on a 2xx, decodes the JSON
+// response into out (out may be nil to drain it). The bearer token is attached here
+// and nowhere else; it is never written to logs or error text (AN-8). The round-trip
+// — bounded read, non-2xx normalisation, JSON decode/drain — is the shared
+// internal/cloudhttp (CODE-006); a non-2xx *StatusError is translated to the package's
+// *apiError so the "cloudflare: status N: body" contract is unchanged.
+func (p *Provider) do(ctx context.Context, method, path string, body []byte, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		rdr = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, p.endpoint+path, rdr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+p.creds.APIToken)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return p.doer.Do(req)
+	if err := cloudhttp.JSON(p.doer, req, out); err != nil {
+		var se *cloudhttp.StatusError
+		if errors.As(err, &se) {
+			return &apiError{status: se.StatusCode, body: se.Body}
+		}
+		return err
+	}
+	return nil
 }
-
-// readError turns a non-2xx response into an apiError whose text is the response body.
-// Cloudflare error bodies carry an errors array and never echo the request token, so
-// surfacing them does not leak credentials (AN-8).
-func readError(resp *http.Response) error {
-	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(msg))}
-}
-
-// drain consumes and discards a successful response body so the connection can be
-// reused.
-func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
 
 // txtRecord is a Cloudflare DNS TXT record. Content is the raw authorization value
 // (Cloudflare does not quote TXT content the way Route 53 does).

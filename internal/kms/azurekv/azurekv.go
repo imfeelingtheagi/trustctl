@@ -249,7 +249,7 @@ func (b *Backend) call(ctx context.Context, method, path string, body []byte, ou
 	req.Header.Set("Accept", "application/json")
 	// Bearer auth: the AAD access token authenticates every request.
 	req.Header.Set("Authorization", "Bearer "+b.creds.BearerToken)
-	if err := cloudhttp.JSON(b.doer, req, out, 0); err != nil {
+	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("azure-key-vault: %w", err)
 	}
 	return nil
