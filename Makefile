@@ -11,7 +11,7 @@ SHELL := /usr/bin/env bash
 
 MODULE  := trustctl.io/trustctl
 BIN_DIR := bin
-CMDS    := trustctl trustctl-signer trustctl-agent
+CMDS    := trustctl trustctl-signer trustctl-agent trustctl-operator
 
 GO          ?= go
 CGO_ENABLED ?= 0

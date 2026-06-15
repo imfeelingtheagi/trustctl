@@ -1,10 +1,22 @@
-# PLANNED — NOT YET DEPLOYABLE (S15.1, OPS-002).
-# These manifests describe a CRD-driven operator that is not implemented yet:
-# there is no cmd/trustctl-operator and no workflow builds a trustctl-operator
-# image, so the `image:` below is intentionally a placeholder and `kubectl apply`
-# of this file will ImagePullBackOff. The supported control-plane install today is
-# the Helm chart (deploy/helm/trustctl); see docs/limitations.md ("A Kubernetes
-# Operator"). This file is kept as the forward-looking RBAC/Deployment shape.
+# trustctl Kubernetes Operator — RBAC + Deployment.
+#
+# This is deployable. The operator binary (cmd/trustctl-operator) ships inside
+# the single multi-binary control-plane image the release pipeline builds
+# (deploy/docker/Dockerfile, .github/workflows/release.yml); this Deployment runs
+# it by overriding the entrypoint to /usr/local/bin/trustctl-operator — the same
+# packaging the agent DaemonSet uses (OPS-002), so there is no separate operator
+# image to build and `image:` below resolves to a real, built, signed artifact.
+#
+# What it does: it reconciles TrustctlControlPlane custom resources (crd.yaml)
+# into a managed control-plane Deployment, keeping that Deployment's replica
+# count and image matching each resource's spec, and writes the observed phase
+# back to the resource status. Scope/maturity is documented in doc.go: the
+# operator owns the Deployment's replicas+image; Services, secrets, NetworkPolicy,
+# and the isolated-signer topology remain the Helm chart's job (the chart is still
+# the richer, fully-featured control-plane install — deploy/helm/trustctl).
+#
+# NOTE: set the `image:` digest/tag to the release you are deploying. The default
+# below names the built image stream; pin a digest in production.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -15,18 +27,19 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: trustctl-operator
+# Least privilege: exactly the verbs the reconcile loop exercises today — read
+# TrustctlControlPlane resources and patch their status, and create/patch the
+# control-plane Deployment it manages. It does NOT yet manage Services, secrets,
+# or NetworkPolicies (the Helm chart does), so it is granted no access to them.
 rules:
   - apiGroups: ["trustctl.io"]
-    resources: ["trustctlcontrolplanes", "trustctlcontrolplanes/status"]
-    verbs: ["get", "list", "watch", "update", "patch"]
+    resources: ["trustctlcontrolplanes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["trustctl.io"]
+    resources: ["trustctlcontrolplanes/status"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["services", "secrets", "serviceaccounts"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -66,10 +79,12 @@ spec:
           type: RuntimeDefault
       containers:
         - name: operator
-          # PLACEHOLDER — the trustctl-operator controller and its image do not
-          # exist yet (S15.1, OPS-002). Replace with a real built image when the
-          # controller ships; until then this manifest is not deployable.
-          image: ghcr.io/imfeelingtheagi/trustctl-operator:PLANNED-not-yet-built
+          # The operator ships inside the built multi-binary control-plane image;
+          # this entrypoint override runs the trustctl-operator binary from it
+          # (deploy/docker/Dockerfile installs /usr/local/bin/trustctl-operator).
+          # Pin to an immutable @sha256 digest of a release in production.
+          image: ghcr.io/trustctl/trustctl:latest
+          command: ["/usr/local/bin/trustctl-operator"]
           args: ["--leader-elect"]
           securityContext:
             allowPrivilegeEscalation: false

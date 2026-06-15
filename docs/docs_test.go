@@ -1611,8 +1611,8 @@ func TestPluginSandboxClaimIsHonest(t *testing.T) {
 // TestKubernetesControlPlaneDeploymentIsReal cross-checks the R3.6 deployment
 // story: the install docs point at a real control-plane Helm chart (closing the
 // "Helm/Operator advertised, only agent manifests" gap), the chart exists with
-// the signer isolated, and the Kubernetes Operator is described honestly as
-// planned (S15.1) rather than advertised as shipped.
+// the signer isolated, and the Kubernetes Operator is described honestly — and
+// code-bound so the description tracks reality in BOTH directions (OPS-004).
 func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	install := read(t, "install.md")
 	// The docs install the control plane via the Helm chart.
@@ -1631,10 +1631,38 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 			t.Errorf("the chart's deployment should isolate the signer (%q)", want)
 		}
 	}
-	// The Operator is framed as planned (S15.1), not advertised as shipped now.
-	combined := strings.ToLower(install + read(t, "limitations.md"))
-	if !strings.Contains(combined, "operator") || !strings.Contains(combined, "s15.1") {
-		t.Error("docs should describe the Kubernetes Operator as planned for S15.1, not shipped")
+
+	// The Operator description must be code-bound to the controller binary
+	// (OPS-004): the docs must mention the operator and cite the S15.1 sprint, and
+	// — because the controller now exists — must NOT call it planned/not-shipped,
+	// while still steering production installs at the (richer) Helm chart so the
+	// minimal operator is not over-sold.
+	lim := strings.ToLower(read(t, "limitations.md"))
+	if !strings.Contains(lim, "operator") || !strings.Contains(lim, "s15.1") {
+		t.Error("limitations.md should describe the Kubernetes Operator and cite S15.1 (OPS-004)")
+	}
+	_, statErr := os.Stat(filepath.FromSlash("../cmd/trustctl-operator"))
+	controllerExists := statErr == nil
+	// Locate the operator bullet so the planned/shipped check looks at the operator
+	// paragraph, not an unrelated use of the word "planned" elsewhere on the page.
+	opIdx := strings.Index(lim, "kubernetes operator")
+	if opIdx >= 0 {
+		end := opIdx + 1200
+		if end > len(lim) {
+			end = len(lim)
+		}
+		opPara := lim[opIdx:end]
+		if controllerExists {
+			if strings.Contains(opPara, "planned (s15.1); today the") || strings.Contains(opPara, "not yet shipped") || strings.Contains(opPara, "is planned (s15.1);") {
+				t.Error("cmd/trustctl-operator now exists, but limitations.md still frames the operator as planned/not-shipped — update the disclosure (OPS-004)")
+			}
+			if !strings.Contains(opPara, "minimal") {
+				t.Error("the operator is minimal (replicas+image only); limitations.md should say so rather than over-sell it (OPS-004)")
+			}
+			if !strings.Contains(opPara, "helm") {
+				t.Error("limitations.md should still steer production control-plane installs at the richer Helm chart (OPS-004)")
+			}
+		}
 	}
 }
 

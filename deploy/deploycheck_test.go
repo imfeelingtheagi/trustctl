@@ -103,6 +103,8 @@ func binaryForContainer(c container) string {
 		return "trustctl-signer"
 	case strings.Contains(joined, "trustctl-agent"):
 		return "trustctl-agent"
+	case strings.Contains(joined, "trustctl-operator"):
+		return "trustctl-operator"
 	case strings.Contains(joined, "trustctl-cli"):
 		return "trustctl-cli"
 	case strings.Contains(joined, "trustctl"):
@@ -114,6 +116,8 @@ func binaryForContainer(c container) string {
 		return "trustctl-signer"
 	case strings.Contains(c.Image, "trustctl-agent"):
 		return "trustctl-agent"
+	case strings.Contains(c.Image, "trustctl-operator"):
+		return "trustctl-operator"
 	}
 	return ""
 }

@@ -569,8 +569,20 @@ the API/UI with the **signing service isolated** (its own locked-down, network-
 unreachable sidecar), external PostgreSQL and NATS as the default, a default-deny
 `NetworkPolicy`, and TLS. Two things are **deliberately deferred to S15.1**:
 
-- **A Kubernetes Operator.** A CRD-driven operator is planned (S15.1); today the
-  Helm chart is the supported control-plane install.
+- **A Kubernetes Operator.** A **minimal** CRD-driven operator ships (S15.1):
+  `cmd/trustctl-operator` (a binary that rides inside the same multi-binary
+  control-plane image and is run by `deploy/operator/operator.yaml` via an
+  entrypoint override) reconciles `TrustctlControlPlane` custom resources into a
+  managed control-plane Deployment — keeping that Deployment's **replica count and
+  image** matching each resource's `spec`, and writing the observed phase back to
+  the resource status. It is a real, level-based reconcile loop (poll, diff,
+  converge), not a stub; it speaks the Kubernetes API directly (no
+  client-go/controller-runtime). It is **deliberately minimal**: it owns the
+  Deployment's replicas+image only, and does **not** yet manage Services, secrets,
+  `NetworkPolicy`, or the isolated-signer topology. For a complete,
+  production-shaped control-plane install (isolated signer, external
+  PostgreSQL/NATS, default-deny `NetworkPolicy`, multi-replica HA) the **Helm
+  chart** (`deploy/helm/trustctl`) remains the richer, recommended path.
 - **Multi-replica HA.** The chart now runs the control plane **multi-replica by
   default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
   pod anti-affinity), and running >1 replica is **safe** (RESIL-002 / RESIL-004 /
