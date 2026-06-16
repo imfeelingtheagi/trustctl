@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -79,6 +80,7 @@ func newStore(t *testing.T) *store.Store {
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
+		          secret_store, read_model_snapshots,
 		          issuance_approval_requests, issuance_approvals
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
@@ -122,6 +124,18 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
+			`INSERT INTO secret_store (tenant_id, name, sealed)
+			 VALUES ($1,'served-api-secret',$2)`,
+			tenantID, []byte("served-ciphertext")); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO read_model_snapshots (tenant_id, covered_seq, payload)
+			 VALUES ($1,42,'{}'::jsonb)`,
+			tenantID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
 			`INSERT INTO ssh_keys (id, tenant_id, fingerprint) VALUES ($1,$2,$3)`,
 			uuid(tenantID, 5), tenantID, "ssh-"+tenantID); err != nil {
 			return err
@@ -148,7 +162,7 @@ func countTenantRows(t *testing.T, s *store.Store, tenantID string) int {
 	t.Helper()
 	ctx := context.Background()
 	total := 0
-	tables := []string{"owners", "identities", "certificates", "credentials", "ssh_keys", "api_tokens", "ca_issued_certs"}
+	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "api_tokens", "ca_issued_certs"}
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, tbl := range tables {
 			var n int
@@ -199,7 +213,7 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 		t.Errorf("attestation reports residue after erase: %v", att.Residue)
 	}
 	// Every seeded table must have a recorded delete count (the deletion proof).
-	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "ssh_keys", "api_tokens", "ca_issued_certs", "tenants"} {
+	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "api_tokens", "ca_issued_certs", "tenants"} {
 		if _, ok := att.Deleted[tbl]; !ok {
 			t.Errorf("attestation missing a delete count for %s", tbl)
 		}
@@ -251,6 +265,73 @@ func TestOffboardTenantIsIdempotent(t *testing.T) {
 	}
 	if !att.Complete || att.Total != 0 {
 		t.Errorf("re-offboard should delete 0 rows and be complete; got %+v", att)
+	}
+}
+
+func TestEveryTenantTableCoveredByOffboard(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	rows, err := s.Pool().Query(ctx, `
+		SELECT c.relname
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public'
+		  AND c.relkind = 'r'
+		  AND EXISTS (
+		      SELECT 1 FROM pg_attribute a
+		      WHERE a.attrelid = c.oid
+		        AND a.attname = 'tenant_id'
+		        AND a.attnum > 0
+		        AND NOT a.attisdropped
+		  )
+		ORDER BY c.relname`)
+	if err != nil {
+		t.Fatalf("query tenant tables: %v", err)
+	}
+	defer rows.Close()
+
+	var tenantTables []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			t.Fatalf("scan tenant table: %v", err)
+		}
+		tenantTables = append(tenantTables, table)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("tenant table rows: %v", err)
+	}
+
+	covered := make(map[string]bool, len(store.TenantScopedTables))
+	for _, table := range store.TenantScopedTables {
+		covered[table] = true
+	}
+
+	var missing []string
+	for _, table := range tenantTables {
+		if !covered[table] {
+			missing = append(missing, table)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) != 0 {
+		t.Fatalf("tenant-scoped tables missing from OffboardTenant catalog: %v", missing)
+	}
+
+	actual := make(map[string]bool, len(tenantTables))
+	for _, table := range tenantTables {
+		actual[table] = true
+	}
+	var stale []string
+	for _, table := range store.TenantScopedTables {
+		if !actual[table] {
+			stale = append(stale, table)
+		}
+	}
+	sort.Strings(stale)
+	if len(stale) != 0 {
+		t.Fatalf("OffboardTenant catalog names tables without tenant_id in the live schema: %v", stale)
 	}
 }
 
