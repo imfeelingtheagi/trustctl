@@ -160,7 +160,7 @@ The same lifecycle, for every credential type:
   composite risk scoring, drift detection, and incident workflows (compromise
   remediation, just-in-time access, break-glass).
 
-**The full catalog — all 78 capabilities, each with its own page — is the
+**The full catalog — all 78 capabilities, each mapped to its primary docs page — is the
 [feature index](docs/features.md).**
 
 ## Capabilities
@@ -178,7 +178,7 @@ number below is grounded in the repository.
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
 | **Secrets** | envelope-encrypted store, **7** dynamic-secret backends, transit + KMIP, PKI-as-a-secrets-engine, rotation, secret sync (**7** targets) |
-| **Deployment** | **13** connectors (web servers, load balancers, appliances, cloud cert stores) plus Kubernetes |
+| **Deployment** | **13** production connectors (web servers, load balancers, appliances, cloud cert stores), an example connector harness, plus Kubernetes |
 | **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM + PQC posture, CT monitoring, drift, risk scoring, the credential graph |
 | **Key protection** | **6** HSM/KMS backends (PKCS#11, TPM 2.0, YubiHSM 2, AWS/Azure/GCP KMS), the isolated signer |
 | **Crypto-agility** | classical + post-quantum (ML-DSA, ML-KEM, SLH-DSA, hybrid) behind one boundary, plus a PQC-migration orchestrator |
@@ -226,11 +226,12 @@ flowchart TB
   class signer signer
 ```
 
-Four binaries make this real: `trustctl` (the control plane, which supervises the
+Five binaries make this real: `trustctl` (the control plane, which supervises the
 signer as a child process), `trustctl-signer` (the isolated key-holder),
-`trustctl-agent` (the in-network worker), and `trustctl-cli`. Under the hood:
-**~860 Go files across 78 internal packages**, with property, differential, fuzz, and
-real-PostgreSQL/NATS integration tests, plus the architecture linter — all green in CI.
+`trustctl-agent` (the in-network worker), `trustctl-operator`, and `trustctl-cli`.
+Under the hood: **~870 Go files across the internal subsystem packages**, with
+property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
+architecture linter in CI.
 
 ## Try it
 
@@ -240,7 +241,7 @@ Requires Go 1.25+, Node 22+ (for the web UI), and Docker (for the evaluation sta
 git clone https://github.com/imfeelingtheagi/trustctl
 cd trustctl
 
-make build    # control plane, signer, agent, and CLI -> ./bin
+make build    # control plane, signer, agent, operator, and CLI -> ./bin
 make web      # build the React UI into the binary's embed
 make test     # unit + property + embedded-PostgreSQL/NATS integration tests
 make lint     # gofmt, vet, the architecture linter, and actionlint
@@ -282,10 +283,10 @@ trustctl is honest about its edges by design:
 
 ```
 cmd/        # binaries: trustctl (control plane), trustctl-signer (isolated key-holder),
-            #           trustctl-agent (in-network worker), trustctl-cli
-internal/   # 78 subsystem packages: crypto (the one crypto boundary), signing, events,
+            #           trustctl-agent (in-network worker), trustctl-operator, trustctl-cli
+internal/   # subsystem packages: crypto (the one crypto boundary), signing, events,
             #   projections, store, orchestrator, api, ca, protocols/*, secrets..., graph, query, ...
-plugins/    # WASM plugins — ca/ and connectors/ (one directory per plugin)
+plugins/    # WASM plugin category roots — ca/ and connectors/
 tools/      # trustctllint — the architecture linter that enforces AN-1..AN-8
 web/        # React 18 + Vite + shadcn/ui UI, embedded into the control-plane binary
 deploy/     # docker (compose), helm chart, kubernetes, operator, observability,

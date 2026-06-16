@@ -3,15 +3,15 @@
 # Reproducible builds: -trimpath strips local filesystem paths, CGO is disabled
 # for the shipped binaries, and version metadata is derived from git (with safe
 # fallbacks) and injected via -ldflags so that rebuilding the same commit yields
-# identical binaries. The architecture linter (tools/trustctllint) is the scope
-# of sprint S0.2 and will be wired into the `lint` target when it lands.
+# identical binaries. The architecture linter (tools/trustctllint) is part of
+# `make lint` so architecture drift fails locally and in CI.
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
 MODULE  := trustctl.io/trustctl
 BIN_DIR := bin
-CMDS    := trustctl trustctl-signer trustctl-agent trustctl-operator
+CMDS    := trustctl trustctl-signer trustctl-agent trustctl-operator trustctl-cli
 
 GO          ?= go
 CGO_ENABLED ?= 0
