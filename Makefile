@@ -163,7 +163,10 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 	@echo ">> go vet"
 	$(GO) vet ./...
 	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
-	$(GO) run ./tools/trstctllint ./...
+	@vettool=$$(mktemp "$${TMPDIR:-/tmp}/trstctllint.XXXXXX"); \
+	trap 'rm -f "$$vettool"' EXIT; \
+	$(GO) build -o "$$vettool" ./tools/trstctllint; \
+	$(GO) vet -vettool="$$vettool" ./...
 	@# golangci-lint carries errcheck/staticcheck/unused — a real part of the gate.
 	@# When it is missing we must NOT pass silently (CODE-005): in strict mode
 	@# (LINT_STRICT=1, which CI sets after `make tools`) its absence is a hard error
