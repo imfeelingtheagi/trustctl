@@ -10,11 +10,15 @@ rollback procedures.
 The schema is a sequence of numbered SQL migrations (`0001_init.sql`,
 `0002_…`, …) embedded in the binary. An applied-versions ledger,
 `schema_migrations`, records which have run. On `Migrate`, trstctl applies every
-migration not yet in the ledger, **in order**, and each migration runs **in its
-own transaction together with its ledger row** — so if a run is interrupted, the
-schema and the ledger stay consistent and the next run resumes from exactly where
-it stopped. Migrations are idempotent where they create cluster-global objects
-(for example the RLS role), so a partial run is safe to retry.
+migration not yet in the ledger, **in order**. By default each migration runs
+**in its own transaction together with its ledger row** — so if a run is
+interrupted, the schema and the ledger stay consistent and the next run resumes
+from exactly where it stopped. A migration may opt into
+`-- migrate: no-transaction` only for PostgreSQL online DDL that is forbidden
+inside a transaction, such as `CREATE INDEX CONCURRENTLY`; those files must be
+idempotent before the ledger row is written. Migrations are idempotent where they
+create cluster-global objects (for example the RLS role), so a partial run is
+safe to retry.
 
 ## Concurrent instances are safe (advisory lock)
 
@@ -135,8 +139,9 @@ written to be re-runnable, because a failed `CONCURRENTLY` build leaves an
 `INVALID` index that the next run must `DROP ... IF EXISTS` and rebuild:
 
 ```sql
+-- migrate: no-transaction
 -- online-safe: CONCURRENTLY builds without an ACCESS EXCLUSIVE lock; no-tx migration.
-DROP INDEX IF EXISTS certificates_expiry_idx;
+DROP INDEX CONCURRENTLY IF EXISTS certificates_expiry_idx;
 CREATE INDEX CONCURRENTLY certificates_expiry_idx ON certificates (not_after);
 ```
 

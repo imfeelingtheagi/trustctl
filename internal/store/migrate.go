@@ -26,11 +26,13 @@ const MigrateAdvisoryLockKey int64 = 0x63746C6D6772 // "ctlmgr"
 // schema_migrations ledger (a system, non-tenant table). It runs as the
 // connecting (privileged) role, and serializes the whole run on a session-level
 // advisory lock (MigrateAdvisoryLockKey) so two instances cannot migrate
-// concurrently. Each migration applies in its own transaction together with its
-// ledger row, so a crash mid-run leaves the schema and ledger consistent and the
-// next run resumes from where it stopped. Migrations are forward-only by policy
-// (see docs/migrations.md); recovery from a bad migration is a restore from the
-// pre-migration backup.
+// concurrently. By default, each migration applies in its own transaction together
+// with its ledger row. A migration may opt into `-- migrate: no-transaction` only
+// for idempotent online DDL that PostgreSQL forbids inside a transaction, such as
+// CREATE INDEX CONCURRENTLY; the advisory lock still serializes the run, and the
+// file must be safe to retry before the ledger row is recorded. Migrations are
+// forward-only by policy (see docs/migrations.md); recovery from a bad migration is
+// a restore from the pre-migration backup.
 func (s *Store) Migrate(ctx context.Context) error {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
@@ -87,6 +89,17 @@ func (s *Store) Migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if migrationNoTransaction(body) {
+			for _, stmt := range splitMigrationStatements(string(body)) {
+				if _, err := conn.Exec(ctx, stmt); err != nil {
+					return fmt.Errorf("store: apply no-transaction migration %s: %w", name, err)
+				}
+			}
+			if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
+				return fmt.Errorf("store: record no-transaction migration %s: %w", name, err)
+			}
+			continue
+		}
 		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return err
@@ -104,6 +117,45 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func migrationNoTransaction(body []byte) bool {
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "--") {
+			continue
+		}
+		comment := strings.TrimSpace(strings.TrimPrefix(line, "--"))
+		comment = strings.ToLower(comment)
+		if comment == "migrate: no-transaction" || comment == "migrate: no-tx" {
+			return true
+		}
+	}
+	return false
+}
+
+func splitMigrationStatements(body string) []string {
+	var out []string
+	var buf strings.Builder
+	for _, line := range strings.SplitAfter(body, "\n") {
+		buf.WriteString(line)
+		sql := line
+		if i := strings.Index(sql, "--"); i >= 0 {
+			sql = sql[:i]
+		}
+		if !strings.Contains(sql, ";") {
+			continue
+		}
+		stmt := strings.TrimSpace(buf.String())
+		if stmt != "" {
+			out = append(out, stmt)
+		}
+		buf.Reset()
+	}
+	if stmt := strings.TrimSpace(buf.String()); stmt != "" {
+		out = append(out, stmt)
+	}
+	return out
 }
 
 // PendingMigrations reports, in order, the migrations that Migrate would apply —
