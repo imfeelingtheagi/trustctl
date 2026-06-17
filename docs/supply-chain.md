@@ -32,6 +32,11 @@ certificate identity is the workflow, asserted by GitHub's OIDC issuer) and that
 carries the **CycloneDX SBOM** attestation. Only an image built by
 `release.yml` verifies.
 
+For Kubernetes production admission, use digest-pinned image references plus the
+Sigstore policy-controller example in `deploy/kubernetes/sigstore-policy.yaml`.
+It admits only `ghcr.io/imfeelingtheagi/trstctl@sha256:*` images signed by this
+repository's release workflow identity.
+
 ## Software-composition analysis (every dependency surface)
 
 Dependencies live on three surfaces; two of them are **outside `go.sum`**, so they

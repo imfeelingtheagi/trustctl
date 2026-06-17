@@ -82,8 +82,9 @@ spec:
           # The operator ships inside the built multi-binary control-plane image;
           # this entrypoint override runs the trstctl-operator binary from it
           # (deploy/docker/Dockerfile installs /usr/local/bin/trstctl-operator).
-          # Pin to an immutable @sha256 digest of a release in production.
-          image: ghcr.io/imfeelingtheagi/trstctl:latest
+          # Replace this placeholder with the immutable digest from a verified
+          # release before applying; do not run the operator from a mutable tag.
+          image: ghcr.io/imfeelingtheagi/trstctl@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: ["/usr/local/bin/trstctl-operator"]
           args: ["--leader-elect"]
           securityContext:

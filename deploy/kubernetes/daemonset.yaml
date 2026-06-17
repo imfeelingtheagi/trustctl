@@ -26,9 +26,9 @@ spec:
           # The agent ships inside the single multi-binary trstctl image (the
           # one the release pipeline builds and pushes); run it by overriding the
           # image's default `trstctl` entrypoint with trstctl-agent. There is no
-          # separate, un-built "-agent" image (OPS-002). Pin to an immutable
-          # @sha256 digest in production rather than :latest.
-          image: ghcr.io/imfeelingtheagi/trstctl:latest
+          # separate, un-built "-agent" image (OPS-002). Replace this placeholder
+          # with the immutable digest from a verified release before applying.
+          image: ghcr.io/imfeelingtheagi/trstctl@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: ["/usr/local/bin/trstctl-agent"]
           args:
             - "--k8s"

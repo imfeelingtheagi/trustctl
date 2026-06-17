@@ -67,13 +67,14 @@ app.kubernetes.io/part-of: trstctl
 {{/*
 Resolve the control-plane image reference (OPS-003).
 
-The release pipeline (.github/workflows/release.yml) tags every image `vX.Y.Z`
-(from `git describe`) plus `:latest`. Chart.AppVersion follows Helm's
-leading-`v`-stripped convention, so when the operator does not override
-image.tag we form the tag as `v<appVersion>` — which is exactly a tag the
-pipeline publishes — rather than a bare `<appVersion>` that was never pushed and
-would ImagePullBackOff. An explicit image.tag (e.g. a digest or a specific
-`vX.Y.Z`/`latest`) is honored verbatim.
+The release pipeline (.github/workflows/release.yml) tags every release image
+`vX.Y.Z` (from `git describe`). Chart.AppVersion follows Helm's leading-`v`-
+stripped convention, so when the operator does not override image.tag we form the
+tag as `v<appVersion>` — which is exactly a tag the pipeline publishes — rather
+than a bare `<appVersion>` that was never pushed and would ImagePullBackOff. For
+production, set image.digest so the rendered pod specs use
+`repository@sha256:...`; when a digest is set, image.tag is ignored. An explicit
+image.tag is otherwise honored verbatim for controlled non-production installs.
 */}}
 {{- define "trstctl.imageTag" -}}
 {{- if .Values.image.tag -}}
@@ -84,7 +85,11 @@ would ImagePullBackOff. An explicit image.tag (e.g. a digest or a specific
 {{- end -}}
 
 {{- define "trstctl.image" -}}
+{{- if .Values.image.digest -}}
+{{- printf "%s@%s" .Values.image.repository (.Values.image.digest | trimPrefix "@") -}}
+{{- else -}}
 {{- printf "%s:%s" .Values.image.repository (include "trstctl.imageTag" .) -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

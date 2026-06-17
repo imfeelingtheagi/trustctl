@@ -21,7 +21,7 @@ For a standalone container, stop and remove it, then drop the image:
 
 ```bash
 docker rm -f trstctl
-docker image rm ghcr.io/imfeelingtheagi/trstctl:latest
+docker image rm "$TRSTCTL_IMAGE_REF"   # e.g. ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>
 ```
 
 ## Kubernetes

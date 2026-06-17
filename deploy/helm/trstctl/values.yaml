@@ -7,9 +7,11 @@ image:
   repository: ghcr.io/imfeelingtheagi/trstctl
   # Empty => the chart renders `v<appVersion>` (a tag the release pipeline
   # actually publishes, e.g. v0.5.0), NOT a bare `<appVersion>` that was never
-  # pushed (OPS-003). Override with a specific published tag (`vX.Y.Z` / `latest`)
-  # or, for production, an immutable `@sha256:` digest.
+  # pushed (OPS-003). Override tag only for controlled non-production installs.
   tag: ""
+  # Production should pin the release image by digest. When set, this wins over
+  # image.tag and renders `repository@sha256:...`.
+  digest: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 

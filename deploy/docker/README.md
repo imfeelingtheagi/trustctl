@@ -46,10 +46,11 @@ export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmo
 export TRSTCTL_NATS_MODE=external
 export TRSTCTL_NATS_URL='nats://nats.internal:4222'
 export TRSTCTL_NATS_REPLICAS=3
+export TRSTCTL_IMAGE_REF='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
 
 docker run --rm -e TRSTCTL_POSTGRES_MODE -e TRSTCTL_POSTGRES_DSN \
   -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -e TRSTCTL_NATS_REPLICAS -p 8443:8443 \
-  ghcr.io/imfeelingtheagi/trstctl:latest
+  "$TRSTCTL_IMAGE_REF"
 ```
 
 The binary validates configuration on boot and **fails fast** on a bad
@@ -57,8 +58,10 @@ combination (for example, external Postgres with no DSN). Verify a configuration
 without starting the server:
 
 ```bash
+export TRSTCTL_IMAGE_REF='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+
 docker run --rm -e TRSTCTL_POSTGRES_MODE=external -e TRSTCTL_POSTGRES_DSN=... \
-  ghcr.io/imfeelingtheagi/trstctl:latest -check-config
+  "$TRSTCTL_IMAGE_REF" -check-config
 ```
 
 `-check-config` prints the effective configuration with datastore credentials

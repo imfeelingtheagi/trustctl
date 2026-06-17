@@ -39,6 +39,7 @@ Provide external datastores + a stable KEK, then install:
 ```bash
 helm install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
+  --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
   --set kek.generate=true        # eval only; supply kek.existingSecret in production
@@ -55,6 +56,7 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 
 | Key | Default | Notes |
 |---|---|---|
+| `image.digest` | `""` | Production image digest. When set, pods render `image.repository@sha256:...` and ignore `image.tag`. |
 | `postgres.dsn` / `postgres.existingSecret` | `""` | External PostgreSQL (required). |
 | `nats.url` | `""` | External NATS JetStream (required). |
 | `nats.replicas` | `3` | Required JetStream replicas for the source-of-truth event stream. Startup/readiness fail if NATS cannot honor it. |

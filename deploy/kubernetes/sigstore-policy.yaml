@@ -1,0 +1,18 @@
+# Sigstore policy-controller example for production clusters.
+#
+# Install Sigstore policy-controller first, then apply this policy and replace the
+# image digest placeholders in the trstctl manifests with verified release
+# digests. The policy admits only trstctl images signed keylessly by this
+# repository's release workflow through GitHub OIDC.
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: trstctl-release-images
+spec:
+  images:
+    - glob: ghcr.io/imfeelingtheagi/trstctl@sha256:*
+  authorities:
+    - keyless:
+        identities:
+          - issuer: https://token.actions.githubusercontent.com
+            subjectRegExp: ^https://github.com/imfeelingtheagi/trstctl/.github/workflows/release.yml@refs/tags/v.*$

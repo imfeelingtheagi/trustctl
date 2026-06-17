@@ -13,15 +13,17 @@ Pick the platform you are installing on.
 ## Docker (control plane)
 
 The published image is distroless, unprivileged, and under 80 MB. Run it
-against your datastores:
+against your datastores by digest, after verifying the release image:
 
 ```bash
+export TRSTCTL_IMAGE_REF='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+
 docker run --rm -p 8443:8443 \
   -e TRSTCTL_POSTGRES_MODE=external \
   -e TRSTCTL_POSTGRES_DSN='postgres://user:pass@db:5432/trstctl?sslmode=require' \
   -e TRSTCTL_NATS_MODE=external \
   -e TRSTCTL_NATS_URL='nats://nats:4222' \
-  ghcr.io/imfeelingtheagi/trstctl:latest
+  "$TRSTCTL_IMAGE_REF"
 ```
 
 For a self-contained evaluation that brings up Postgres and NATS for you, use the
@@ -35,20 +37,22 @@ Verify a published image before you run it — its keyless cosign signature and 
 CycloneDX SBOM attestation — with the helper:
 
 ```bash
-scripts/verify-image.sh ghcr.io/imfeelingtheagi/trstctl:<tag>
+scripts/verify-image.sh "$TRSTCTL_IMAGE_REF"
 ```
 
 That wraps the underlying cosign check (only an image built by this repo's release
 workflow verifies):
 
 ```bash
-cosign verify ghcr.io/imfeelingtheagi/trstctl:<tag> \
+cosign verify "$TRSTCTL_IMAGE_REF" \
   --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 See [Supply chain](supply-chain.md) for the full signing, SBOM, provenance, and
-dependency-scanning story.
+dependency-scanning story. For Kubernetes admission-time enforcement, start from
+`deploy/kubernetes/sigstore-policy.yaml`; it admits only digest-pinned trstctl
+images signed by this repository's release workflow identity.
 
 ## Kubernetes (control plane via Helm)
 
@@ -61,6 +65,7 @@ default-deny `NetworkPolicy`, with TLS on by default (R1.3):
 ```bash
 helm install trstctl deploy/helm/trstctl \
   --namespace trstctl --create-namespace \
+  --set image.digest='sha256:<release-image-digest>' \
   --set postgres.dsn='postgres://user:pass@pg-host:5432/trstctl?sslmode=require' \
   --set nats.url='nats://nats-host:4222' \
   --set kek.generate=true   # eval only; set kek.existingSecret in production

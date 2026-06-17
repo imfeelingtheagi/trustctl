@@ -496,7 +496,7 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 		"affinity": map[string]any{"podAntiAffinity": map[string]any{}},
 		"tls":      map[string]any{"mode": "internal", "existingSecret": ""},
 		"server":   map[string]any{"addr": ":8443"},
-		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trstctl", "tag": ""},
+		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trstctl", "tag": "", "digest": ""},
 		"postgres": map[string]any{"existingSecret": "", "existingSecretKey": "dsn"},
 		"kek":      map[string]any{"existingSecret": ""},
 		"signer": map[string]any{
@@ -647,6 +647,35 @@ func TestDefaultImageTagIsPublishedByTheReleasePipeline(t *testing.T) {
 	}
 }
 
+func TestImageDigestRendersImmutableReference(t *testing.T) {
+	const digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	v := defaultishValues()
+	image := v["image"].(map[string]any)
+	image["repository"] = "ghcr.io/imfeelingtheagi/trstctl"
+	image["tag"] = "latest"
+	image["digest"] = digest
+
+	dep := renderControlPlaneDeployment(t, v)
+	objs := decodeAllYAML(t, dep)
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] == "Deployment" {
+			spec, _ := o["spec"].(map[string]any)
+			tmpl, _ := spec["template"].(map[string]any)
+			pod, _ = tmpl["spec"].(map[string]any)
+		}
+	}
+	if pod == nil {
+		t.Fatal("rendered chart has no control-plane Deployment pod spec")
+	}
+	want := "ghcr.io/imfeelingtheagi/trstctl@" + digest
+	for _, c := range asMaps(pod["containers"]) {
+		if got, _ := c["image"].(string); got != want {
+			t.Fatalf("container %s image = %q, want %q", c["name"], got, want)
+		}
+	}
+}
+
 // readWorkflow reads a file from .github/workflows (three levels up from
 // deploy/helm) so the chart tests can bind their assumptions to the real CI/CD.
 func readWorkflow(t *testing.T, name string) string {
@@ -750,14 +779,14 @@ func TestTemplatesParse(t *testing.T) {
 // guard to empty), `nindent` indents, `toYaml` echoes maps, etc.
 func helmRenderFuncs() template.FuncMap {
 	return template.FuncMap{
-		"include": func(name string, _ any) string {
+		"include": func(name string, data any) string {
 			switch name {
 			case "trstctl.labels", "trstctl.selectorLabels":
 				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: control-plane"
 			case "trstctl.signerLabels", "trstctl.signerSelectorLabels":
 				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.image":
-				return "ghcr.io/example/trstctl:v0.5.0"
+				return renderedImageRef(data)
 			case "trstctl.signer.guardMode":
 				return ""
 			}
@@ -789,6 +818,24 @@ func helmRenderFuncs() template.FuncMap {
 			return v
 		},
 	}
+}
+
+func renderedImageRef(data any) string {
+	ctx, _ := data.(map[string]any)
+	values, _ := ctx["Values"].(map[string]any)
+	image, _ := values["image"].(map[string]any)
+	repo := asString(image["repository"])
+	if repo == "" {
+		repo = "ghcr.io/example/trstctl"
+	}
+	if digest := strings.TrimPrefix(asString(image["digest"]), "@"); digest != "" {
+		return repo + "@" + digest
+	}
+	tag := asString(image["tag"])
+	if tag == "" {
+		tag = "v0.5.0"
+	}
+	return repo + ":" + tag
 }
 
 // renderChartFile renders a chart template by name with the given Values and returns
@@ -907,7 +954,7 @@ func defaultishValues() map[string]any {
 	return map[string]any{
 		"replicaCount":     2,
 		"updateStrategy":   map[string]any{"type": "RollingUpdate", "maxUnavailable": 0, "maxSurge": 1},
-		"image":            map[string]any{"repository": "ghcr.io/example/trstctl", "tag": "", "pullPolicy": "IfNotPresent"},
+		"image":            map[string]any{"repository": "ghcr.io/example/trstctl", "tag": "", "digest": "", "pullPolicy": "IfNotPresent"},
 		"imagePullSecrets": []any{},
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},

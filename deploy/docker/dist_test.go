@@ -407,6 +407,28 @@ func TestPatchedGoToolchainPinned(t *testing.T) {
 	mustContainAll(t, "supply-chain records patched Go scanner receipt", repoFile(t, "docs", "supply-chain.md"), "go"+patched, "0 vulnerabilities")
 }
 
+func TestProductionInstallPathsAvoidMutableLatest(t *testing.T) {
+	forbidden := regexp.MustCompile(`ghcr\.io/imfeelingtheagi/trstctl:latest|(?m)^\s*image:\s+.*:latest\b`)
+	for _, path := range []string{
+		"README.md",
+		"deploy/docker/docker-compose.yml",
+		"deploy/docker/README.md",
+		"deploy/kubernetes/daemonset.yaml",
+		"deploy/operator/operator.yaml",
+		"docs/install.md",
+		"docs/uninstall.md",
+	} {
+		if body := repoFile(t, strings.Split(path, "/")...); forbidden.MatchString(body) {
+			t.Errorf("%s still contains a mutable production image reference", path)
+		}
+	}
+	mustContainAll(t, "Sigstore admission policy", repoFile(t, "deploy", "kubernetes", "sigstore-policy.yaml"),
+		"ClusterImagePolicy",
+		"ghcr.io/imfeelingtheagi/trstctl@sha256:*",
+		"https://token.actions.githubusercontent.com",
+		"release.yml")
+}
+
 // TestSupplyChainIsScannedPinnedAndRecorded encodes the R3.5 acceptance: the
 // vulnerability scanners are PINNED (not @latest), the SCA reaches the npm tree
 // and the embedded-postgres binary (the two dependency surfaces outside go.sum),
