@@ -388,6 +388,7 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "protocols.est.enabled: %t\n", cfg.Protocols.EST.Enabled)
 	fmt.Fprintf(&b, "protocols.scep.enabled: %t\n", cfg.Protocols.SCEP.Enabled)
 	fmt.Fprintf(&b, "protocols.cmp.enabled: %t\n", cfg.Protocols.CMP.Enabled)
+	fmt.Fprintf(&b, "protocols.tsa.enabled: %t\n", cfg.Protocols.TSA.Enabled)
 	fmt.Fprintf(&b, "protocols.spiffe.enabled: %t\n", cfg.Protocols.SPIFFE.Enabled)
 	if cfg.Protocols.SPIFFE.Enabled {
 		fmt.Fprintf(&b, "protocols.spiffe.trust_domain: %s\n", cfg.Protocols.SPIFFE.TrustDomain)

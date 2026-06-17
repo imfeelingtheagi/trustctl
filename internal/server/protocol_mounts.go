@@ -1,14 +1,19 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -23,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/tsa"
 )
 
 const (
@@ -33,6 +39,8 @@ const (
 	sshCAHandle = "ssh-ca"
 	// spiffeJWTHandle is the fixed signer handle for the SPIFFE JWT-SVID signing key.
 	spiffeJWTHandle = "spiffe-jwt-ca"
+	// tsaSignerHandle is the fixed signer handle for the RFC 3161 timestamping key.
+	tsaSignerHandle = "tsa-timestamping"
 	// defaultSPIFFESocket is the default UDS path the SPIFFE Workload API binds when
 	// the operator does not configure one. It matches the SPIRE-style default
 	// location a spiffe-helper / Envoy SDS client looks for.
@@ -51,12 +59,14 @@ type servedProtocols struct {
 	est    *est.Server
 	scep   *scep.Server
 	cmp    *cmp.Server
+	tsa    *tsa.Authority
 	ssh    *sshProtocol
 	spiffe *spiffeProtocol
 
 	estTenant  string
 	scepTenant string
 	cmpTenant  string
+	tsaTenant  string
 
 	names []string // protocols actually served (logging / assertions)
 }
@@ -182,6 +192,16 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		sp.names = append(sp.names, "ssh")
 	}
 
+	if cfg.TSA.Enabled {
+		sp.tsaTenant = firstNonEmpty(cfg.TSA.TenantID, tenantFallback)
+		authority, err := s.buildTSA(ctx, sp.tsaTenant, cfg.TSACertFile)
+		if err != nil {
+			return nil, fmt.Errorf("server: build TSA: %w", err)
+		}
+		sp.tsa = authority
+		sp.names = append(sp.names, "tsa")
+	}
+
 	if cfg.SPIFFE.Enabled && cfg.SPIFFE.TrustDomain != "" {
 		spf, err := s.buildSPIFFE(ctx, cfg.SPIFFE, tenantFallback, pool)
 		if err != nil {
@@ -220,6 +240,9 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 			return cmp.WithTenant(ctx, sp.cmpTenant)
 		})))
 	}
+	if sp.tsa != nil {
+		mux.Handle("/tsa", wrap(sp.tsa.Handler()))
+	}
 	if sp.ssh != nil {
 		mux.Handle("/ssh/", wrap(sp.ssh))
 	}
@@ -242,6 +265,96 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Server) buildTSA(ctx context.Context, tenantID, certFile string) (*tsa.Authority, error) {
+	if tenantID == "" {
+		return nil, errors.New("tenant id required")
+	}
+	if s.signer == nil || s.signer.Client() == nil {
+		return nil, errors.New("signer is required")
+	}
+	c := s.signer.Client()
+	tsaSigner, err := c.SignerForHandleWithPurpose(ctx, tsaSignerHandle, signing.PurposeGeneric)
+	replacedKey := false
+	if err != nil {
+		generated, genErr := c.GenerateConstrainedKeyHandle(ctx, crypto.RSA2048, tsaSignerHandle,
+			[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
+		if genErr != nil {
+			if status.Code(genErr) == codes.AlreadyExists {
+				generated, genErr = c.SignerForHandleWithPurpose(ctx, tsaSignerHandle, signing.PurposeGeneric)
+			}
+			if genErr != nil {
+				return nil, fmt.Errorf("provision timestamping key in signer: %w", genErr)
+			}
+		} else {
+			replacedKey = true
+		}
+		tsaSigner = generated
+	}
+	certDER, err := s.tsaCertificate(ctx, tsaSigner, certFile, replacedKey)
+	if err != nil {
+		return nil, err
+	}
+	return tsa.New(tsa.Config{
+		TenantID:   tenantID,
+		TSACertDER: certDER,
+		TSASigner:  tsaSigner,
+		Audit:      audit.NewAuditor(s.log),
+	})
+}
+
+func (s *Server) tsaCertificate(_ context.Context, tsaSigner crypto.DigestSigner, certFile string, allowReplace bool) ([]byte, error) {
+	if certFile != "" {
+		certDER, found, err := readCertPEM(certFile)
+		if err != nil {
+			return nil, fmt.Errorf("load TSA certificate: %w", err)
+		}
+		if found {
+			pub, err := crypto.PublicKeyDERFromCert(certDER)
+			if err != nil {
+				return nil, fmt.Errorf("parse TSA certificate public key: %w", err)
+			}
+			if bytes.Equal(pub, tsaSigner.Public().DER) {
+				return certDER, nil
+			}
+			if !allowReplace {
+				return nil, errors.New("persisted TSA certificate does not match signer-held timestamping key")
+			}
+		}
+	}
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName:    "trstctl TSA",
+		RequestedEKUs: []string{"timeStamping"},
+	}, tsaSigner)
+	if err != nil {
+		return nil, fmt.Errorf("create TSA CSR: %w", err)
+	}
+	certDER, err := crypto.SignTimestampingCertFromCSR(s.caCertDER, s.caSigner, csr, protocolRATTL)
+	if err != nil {
+		return nil, fmt.Errorf("sign TSA certificate: %w", err)
+	}
+	if certFile != "" {
+		if err := writeCertPEM(certFile, certDER); err != nil {
+			return nil, fmt.Errorf("persist TSA certificate: %w", err)
+		}
+	}
+	return certDER, nil
+}
+
+func readCertPEM(path string) ([]byte, bool, error) {
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	blk, _ := pem.Decode(pemBytes)
+	if blk == nil || blk.Type != "CERTIFICATE" || len(blk.Bytes) == 0 {
+		return nil, false, fmt.Errorf("%s is not a PEM certificate", path)
+	}
+	return append([]byte(nil), blk.Bytes...), true, nil
 }
 
 const (

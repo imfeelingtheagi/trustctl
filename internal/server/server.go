@@ -822,9 +822,9 @@ func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl ti
 // through the signer. It is the EXC-REVOKE-01 wiring assertion.
 func (s *Server) RevocationServed() bool { return s.revoc != nil }
 
-// ServedProtocols reports the issuance protocols the running binary serves
-// (EXC-WIRE-02): the subset of {acme,est,scep,cmp,ssh,spiffe} actually mounted, in a
-// stable order. Empty when no issuing CA is provisioned or all protocols are
+// ServedProtocols reports the protocol surfaces the running binary serves
+// (EXC-WIRE-02): the subset of {acme,est,scep,cmp,tsa,ssh,spiffe} actually mounted,
+// in a stable order. Empty when no issuing CA is provisioned or all protocols are
 // disabled. It is the EXC-WIRE-02 wiring assertion (and is logged at startup).
 func (s *Server) ServedProtocols() []string {
 	if s.protocols == nil {

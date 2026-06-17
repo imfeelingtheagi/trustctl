@@ -23,7 +23,7 @@ func newTSA(t *testing.T, clock func() time.Time) (*Authority, []byte) {
 	}
 	t.Cleanup(tsaKey.Destroy)
 	csr, _ := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "TSA"}, tsaKey)
-	tsaCert, err := crypto.SignLeafFromCSR(rootDER, root, csr, time.Hour)
+	tsaCert, err := crypto.SignTimestampingCertFromCSR(rootDER, root, csr, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

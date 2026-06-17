@@ -14,11 +14,14 @@ func TestDefaultIsValid(t *testing.T) {
 		t.Fatalf("Default() must be valid, got: %v", err)
 	}
 	p := Default().Protocols
-	if p.ACME.Enabled || p.EST.Enabled || p.SCEP.Enabled || p.CMP.Enabled || p.SPIFFE.Enabled || p.SSH.Enabled {
-		t.Fatal("served enrollment protocols must default off until an operator binds a tenant")
+	if p.ACME.Enabled || p.EST.Enabled || p.SCEP.Enabled || p.CMP.Enabled || p.TSA.Enabled || p.SPIFFE.Enabled || p.SSH.Enabled {
+		t.Fatal("served protocol surfaces must default off until an operator binds a tenant")
 	}
 	if p.RAKeyFile == "" {
 		t.Fatal("protocols.ra_key_file must have a default so SCEP/CMP can persist a stable RA identity when enabled")
+	}
+	if p.TSACertFile == "" {
+		t.Fatal("protocols.tsa_cert_file must have a default so the served TSA can persist a stable certificate when enabled")
 	}
 }
 
@@ -52,8 +55,11 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_POSTGRES_DSN":             "env-dsn",
 		"TRSTCTL_LOG_LEVEL":                "debug",
 		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":    "/var/lib/trstctl/protocol-ra.key",
+		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":  "/var/lib/trstctl/tsa.crt",
 		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":   "true",
 		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID": "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_TSA_ENABLED":    "true",
+		"TRSTCTL_PROTOCOLS_TSA_TENANT_ID":  "11111111-1111-1111-1111-111111111111",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -71,8 +77,14 @@ func TestEnvOverridesFile(t *testing.T) {
 	if cfg.Protocols.RAKeyFile != "/var/lib/trstctl/protocol-ra.key" {
 		t.Errorf("protocols.ra_key_file env override not applied: got %q", cfg.Protocols.RAKeyFile)
 	}
+	if cfg.Protocols.TSACertFile != "/var/lib/trstctl/tsa.crt" {
+		t.Errorf("protocols.tsa_cert_file env override not applied: got %q", cfg.Protocols.TSACertFile)
+	}
 	if !cfg.Protocols.SCEP.Enabled || cfg.Protocols.SCEP.TenantID == "" {
 		t.Errorf("SCEP env enable+tenant should apply, got %+v", cfg.Protocols.SCEP)
+	}
+	if !cfg.Protocols.TSA.Enabled || cfg.Protocols.TSA.TenantID == "" {
+		t.Errorf("TSA env enable+tenant should apply, got %+v", cfg.Protocols.TSA)
 	}
 	if cfg.NATS.Mode != Default().NATS.Mode {
 		t.Errorf("untouched NATS.Mode should be default: got %q", cfg.NATS.Mode)
@@ -125,6 +137,7 @@ func TestEnabledProtocolsRequireTenantBinding(t *testing.T) {
 	c.Protocols.EST.Enabled = true
 	c.Protocols.SCEP.Enabled = true
 	c.Protocols.CMP.Enabled = true
+	c.Protocols.TSA.Enabled = true
 	err := c.Validate()
 	if err == nil {
 		t.Fatal("tenantless enabled enrollment protocols must fail config validation")
@@ -135,6 +148,7 @@ func TestEnabledProtocolsRequireTenantBinding(t *testing.T) {
 		"protocols.est.tenant_id is required",
 		"protocols.scep.tenant_id is required",
 		"protocols.cmp.tenant_id is required",
+		"protocols.tsa.tenant_id is required",
 		"AN-1",
 	} {
 		if !strings.Contains(msg, want) {
@@ -145,7 +159,7 @@ func TestEnabledProtocolsRequireTenantBinding(t *testing.T) {
 
 func TestEnabledProtocolsValidateWithExplicitTenant(t *testing.T) {
 	c := Default()
-	for _, toggle := range []*ProtocolToggle{&c.Protocols.ACME, &c.Protocols.EST, &c.Protocols.SCEP, &c.Protocols.CMP} {
+	for _, toggle := range []*ProtocolToggle{&c.Protocols.ACME, &c.Protocols.EST, &c.Protocols.SCEP, &c.Protocols.CMP, &c.Protocols.TSA} {
 		toggle.Enabled = true
 		toggle.TenantID = "11111111-1111-1111-1111-111111111111"
 	}
@@ -170,15 +184,31 @@ func TestSCEPCMPRequireStableRAKeyFile(t *testing.T) {
 	}
 }
 
+func TestTSARequiresStableCertificateFile(t *testing.T) {
+	c := Default()
+	c.Protocols.TSA.Enabled = true
+	c.Protocols.TSA.TenantID = "11111111-1111-1111-1111-111111111111"
+	c.Protocols.TSACertFile = ""
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("TSA without protocols.tsa_cert_file must fail validation")
+	}
+	if !strings.Contains(err.Error(), "protocols.tsa_cert_file is required") {
+		t.Fatalf("validation error should name protocols.tsa_cert_file, got %v", err)
+	}
+}
+
 func TestProtocolTenantFallbackIsOnlyForServerComposition(t *testing.T) {
 	p := Protocols{
-		ACME:      ProtocolToggle{Enabled: true},
-		EST:       ProtocolToggle{Enabled: true},
-		SCEP:      ProtocolToggle{Enabled: true},
-		CMP:       ProtocolToggle{Enabled: true},
-		RAKeyFile: "data/protocols/ra-transport.key",
-		SSH:       ProtocolToggle{Enabled: true},
-		SPIFFE:    SPIFFEProtocol{Enabled: true, TrustDomain: "example.org"},
+		ACME:        ProtocolToggle{Enabled: true},
+		EST:         ProtocolToggle{Enabled: true},
+		SCEP:        ProtocolToggle{Enabled: true},
+		CMP:         ProtocolToggle{Enabled: true},
+		TSA:         ProtocolToggle{Enabled: true},
+		RAKeyFile:   "data/protocols/ra-transport.key",
+		TSACertFile: "data/protocols/tsa.crt",
+		SSH:         ProtocolToggle{Enabled: true},
+		SPIFFE:      SPIFFEProtocol{Enabled: true, TrustDomain: "example.org"},
 	}
 	if errs := p.ValidateTenantBindings(""); len(errs) == 0 {
 		t.Fatal("tenantless enabled protocols should fail without an explicit fallback")

@@ -18,6 +18,11 @@ import (
 // RSA PKCS#1 v1.5, which smallstep/pkcs7 and openssl both verify out of the box)
 // and returns the authority plus the TSA cert DER.
 func newRSATSA(t *testing.T) (*tsa.Authority, []byte) {
+	a, _, tsaCert := newRSATSAWithRoot(t)
+	return a, tsaCert
+}
+
+func newRSATSAWithRoot(t *testing.T) (*tsa.Authority, []byte, []byte) {
 	t.Helper()
 	root, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
@@ -37,7 +42,7 @@ func newRSATSA(t *testing.T) (*tsa.Authority, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tsaCert, err := crypto.SignLeafFromCSR(rootDER, root, csr, time.Hour)
+	tsaCert, err := crypto.SignTimestampingCertFromCSR(rootDER, root, csr, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +50,7 @@ func newRSATSA(t *testing.T) (*tsa.Authority, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return a, tsaCert
+	return a, rootDER, tsaCert
 }
 
 // oidCTTSTInfo is id-ct-TSTInfo, the eContentType an RFC 3161 token must carry.

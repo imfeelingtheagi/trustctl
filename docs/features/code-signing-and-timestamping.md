@@ -93,19 +93,22 @@ timestamp falls inside the signing certificate's lifetime.
 
 ## Pitfalls & limits
 
-- **Serving status:** the code-signing service and the TSA are library-complete and
-  tested, but are **not yet wired** into the running control plane (no API route or CLI
-  command). Treat them as built, pending an exposed surface — see
-  [Current limitations](../limitations.md).
-- **TSA wire format is real RFC 3161 CMS (INTEROP-005); code-signing bundle is still
-  pragmatic.** The TSA now emits a real **RFC 3161 `TimeStampToken`** — a CMS `SignedData`
-  over a DER `TSTInfo` with `eContentType id-ct-TSTInfo`, in `Token.DER` with content
-  type `application/timestamp-reply` — so a stock verifier (`openssl ts -verify`, a
-  DSS/ESS validator) can parse it; it is no longer a bespoke JSON manifest (the JSON
-  struct fields remain only for the in-process LTV/message-imprint checks). The
-  **code-signing** output, by contrast, is still trstctl's own structure: full **Sigstore
-  bundle** interop is a documented follow-up, so if you need byte-level interop with an
-  external cosign verifier, confirm that encoding first.
+- **Serving status:** the TSA is now served by the running control plane at `/tsa`
+  when `protocols.tsa.enabled` plus `protocols.tsa.tenant_id` are set. It accepts
+  `application/timestamp-query` `TimeStampReq` bodies and returns
+  `application/timestamp-reply` `TimeStampResp` bodies; a required CI job proves
+  `openssl ts -query` -> HTTP POST -> `openssl ts -verify` end to end. The code-signing
+  service remains library-complete and tested, but is **not yet wired** into a public API
+  route or CLI command — see [Current limitations](../limitations.md).
+- **TSA wire format is real RFC 3161 (INTEROP-005); code-signing bundle is still
+  pragmatic.** The TSA emits a real **RFC 3161 `TimeStampToken`** — a CMS `SignedData`
+  over a DER `TSTInfo` with `eContentType id-ct-TSTInfo`, in `Token.DER` — and the
+  served handler wraps it in the required `TimeStampResp` envelope for stock verifiers
+  (`openssl ts -verify`, DSS/ESS validators). It is no longer a bespoke JSON manifest
+  (the JSON struct fields remain only for the in-process LTV/message-imprint checks).
+  The **code-signing** output, by contrast, is still trstctl's own structure: full
+  **Sigstore bundle** interop is a documented follow-up, so if you need byte-level
+  interop with an external cosign verifier, confirm that encoding first.
 - **Keys belong in the signer.** Use HSM/KMS-backed keys (see
   [Issuance & CAs](issuance-and-cas.md)) so signing keys never live in a build agent.
 - **Keyless still needs a real attestation** — it's only as strong as the OIDC identity

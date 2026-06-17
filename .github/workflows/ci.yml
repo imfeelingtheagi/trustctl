@@ -473,6 +473,41 @@ jobs:
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
 
+  tsa-client-conformance:
+    name: tsa client conformance (OpenSSL ts transcript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # INTEROP-005 (stock OpenSSL ts query/verify transcript)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify OpenSSL ts client is available
+        run: |
+          openssl version
+          openssl ts -help >/dev/null
+
+      - name: OpenSSL ts query verify against served TSA endpoint
+        env:
+          TRSTCTL_REQUIRE_OPENSSL_TSA: "1"
+          TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
+        run: |
+          mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
+          go test ./internal/tsa ./internal/server -run 'TestTimeStampHTTPPostOpenSSLTSVerify|TestServedTSAOpenSSLTimestampOverHTTP' -count=1 -v
+
+      - name: Upload TSA OpenSSL ts conformance transcripts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tsa-openssl-ts-transcripts
+          path: ${{ runner.temp }}/interop-transcripts
+          if-no-files-found: error
+
   scep-client-conformance:
     name: scep client conformance (sscep transcript)
     runs-on: ubuntu-latest

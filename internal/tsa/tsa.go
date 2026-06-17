@@ -6,11 +6,12 @@
 //
 // Wire format (INTEROP-005): each token carries a real RFC 3161 TimeStampToken —
 // a CMS SignedData over a DER-encoded TSTInfo with eContentType id-ct-TSTInfo,
-// produced by crypto.BuildTimeStampToken — in Token.DER. That is the
-// application/timestamp-reply payload a stock verifier (`openssl ts -verify`, a
-// DSS/ESS validator) parses; it is no longer a bespoke JSON manifest. The struct
-// fields below remain for the in-process LTV checks and the message-imprint
-// binding, and the DER token is the externally interoperable artifact.
+// produced by crypto.BuildTimeStampToken — in Token.DER. The HTTP handler wraps
+// that token in the RFC 3161 TimeStampResp envelope that a stock verifier
+// (`openssl ts -verify`, a DSS/ESS validator) parses; it is no longer a bespoke JSON
+// manifest. The struct fields below remain for the in-process LTV checks and the
+// message-imprint binding, and the DER token is the externally interoperable
+// artifact.
 package tsa
 
 import (
@@ -18,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -25,8 +27,11 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// ContentTypeReply is the HTTP content type of an RFC 3161 timestamp response
-// body (Token.DER), served when the TSA is exposed over HTTP.
+// ContentTypeQuery is the HTTP content type of an RFC 3161 TimeStampReq body.
+const ContentTypeQuery = "application/timestamp-query"
+
+// ContentTypeReply is the HTTP content type of an RFC 3161 TimeStampResp body,
+// served when the TSA is exposed over HTTP.
 const ContentTypeReply = "application/timestamp-reply"
 
 // TSTInfo is the timestamp-token info (RFC 3161 TSTInfo). MessageImprint
@@ -94,6 +99,10 @@ func manifest(info TSTInfo) ([]byte, error) { return json.Marshal(info) }
 
 // Timestamp issues a timestamp token over hashedMessage (the SHA-256 of the data).
 func (a *Authority) Timestamp(ctx context.Context, hashedMessage []byte) (Token, error) {
+	return a.timestamp(ctx, hashedMessage, nil)
+}
+
+func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *big.Int) (Token, error) {
 	if len(hashedMessage) == 0 {
 		return Token{}, fmt.Errorf("tsa: empty message imprint")
 	}
@@ -118,7 +127,7 @@ func (a *Authority) Timestamp(ctx context.Context, hashedMessage []byte) (Token,
 	// TSTInfo) through the crypto boundary (AN-3, INTEROP-005). This is the
 	// application/timestamp-reply artifact a stock verifier validates.
 	tstInfoDER, err := crypto.EncodeTSTInfo(crypto.TSTInfoParams{
-		PolicyOID: a.cfg.Policy, HashedMessage: hashedMessage, SerialNumber: serial, GenTime: info.GenTime,
+		PolicyOID: a.cfg.Policy, HashedMessage: hashedMessage, SerialNumber: serial, GenTime: info.GenTime, Nonce: nonce,
 	})
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: encode TSTInfo: %w", err)

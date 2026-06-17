@@ -364,12 +364,19 @@ This is a deliberate, documented trust boundary (not an accident):
     `ssh-keygen -L`), revokes it, and confirms the served KRL is the binary format.
     The SSH CA key lives in the signer under its own handle constrained to SSH-cert
     signing (AN-4).
+  - the **RFC 3161 TSA** is served at `/tsa` (`protocols.tsa.enabled`): clients POST
+    `application/timestamp-query` `TimeStampReq` bodies and receive
+    `application/timestamp-reply` `TimeStampResp` bodies. The timestamping key lives
+    in the signer under its own stable handle, the TSA certificate is persisted at
+    `protocols.tsa_cert_file`, and the certificate carries the critical
+    `timeStamping` EKU that stock OpenSSL enforces.
 
-  Each protocol is gated by `protocols.<name>.enabled` and binds a tenant via
+  Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator
   explicitly binds the served endpoint to a tenant; if a protocol is enabled without a
-  tenant, startup validation fails before the route is exposed (it must not mint into a
-  blank tenant — AN-1). All protocols activate only when an issuing CA is provisioned.
+  tenant, startup validation fails before the route is exposed (it must not mint or
+  issue tenant-scoped evidence into a blank tenant — AN-1). All protocols activate only
+  when an issuing CA is provisioned.
   - **Reference-implementation differentials (TEST-002).** Two protocols are
     cross-checked against an *independent* implementation, not just our own parser:
     **ACME** runs a differential against **Pebble** (the reference test ACME CA) as a
@@ -389,9 +396,12 @@ This is a deliberate, documented trust boundary (not an accident):
     artifacts. **SCEP** now has a dedicated stock-client CI transcript as well:
     a SHA-256-pinned `sscep` v0.10.0 build fetches the served CA, enrolls through
     `/scep/pkiclient.exe`, and uploads the captured PKIOperation request/response
-    plus client logs. What is **not yet wired** as a *dedicated CI job*: the
-    **libest** `estclient` differential is opt-in/local only (it runs when an
-    operator sets `EST_LIBEST`; no workflow ships the binary).
+    plus client logs. **TSA** has a dedicated stock-client CI transcript: OpenSSL
+    `ts -query` creates a DER `TimeStampReq`, CI POSTs it to the served `/tsa`
+    endpoint, OpenSSL `ts -verify` validates the returned `TimeStampResp`, and public
+    request/response/log artifacts are uploaded. What is **not yet wired** as a
+    *dedicated CI job*: the **libest** `estclient` differential is opt-in/local only
+    (it runs when an operator sets `EST_LIBEST`; no workflow ships the binary).
   - **SSH KRL distribution format (INTEROP-009).** The SSH CA's key-revocation list is
     now emitted in the **OpenSSH binary KRL format** (`KRL.DistributeKRL`), the artifact
     `sshd`'s `RevokedKeys` and `ssh-keygen -Q -f` consume — verified end-to-end by a test

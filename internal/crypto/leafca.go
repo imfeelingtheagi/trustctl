@@ -214,6 +214,70 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 	return der, nil
 }
 
+// SignTimestampingCertFromCSR signs a TSA end-entity certificate from a CSR. The
+// leaf has the exact RFC 3161 purpose OpenSSL expects: digitalSignature key usage
+// and a CRITICAL extendedKeyUsage containing only id-kp-timeStamping. Keeping this
+// constructor inside internal/crypto preserves AN-3 while giving the served TSA a
+// stock-client-verifiable certificate.
+func SignTimestampingCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
+	}
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse TSA CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("crypto: TSA CSR signature: %w", err)
+	}
+	adapter, err := newX509Signer(caSigner)
+	if err != nil {
+		return nil, err
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		return nil, err
+	}
+	ski, err := subjectKeyID(csr.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	eku, err := marshalExtKeyUsageExtension([]string{"timeStamping"})
+	if err != nil {
+		return nil, err
+	}
+	eku.Critical = true
+	now := time.Now()
+	leaf := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               csr.Subject,
+		DNSNames:              csr.DNSNames,
+		IPAddresses:           csr.IPAddresses,
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(ttl),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		SubjectKeyId:          ski,
+		ExtraExtensions:       []pkix.Extension{eku},
+	}
+	if len(caCert.SubjectKeyId) > 0 {
+		leaf.AuthorityKeyId = caCert.SubjectKeyId
+	}
+	der, err := x509.CreateCertificate(rand.Reader, leaf, caCert, csr.PublicKey, adapter)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: sign TSA cert: %w", err)
+	}
+	issued, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse issued TSA cert: %w", err)
+	}
+	if err := issued.CheckSignatureFrom(caCert); err != nil {
+		return nil, fmt.Errorf("crypto: issued TSA cert failed verification (signer misbehaved): %w", err)
+	}
+	return der, nil
+}
+
 // SignServerCertFromCSR signs a PKCS#10 CSR as a TLS SERVER certificate
 // (ExtKeyUsageServerAuth) with the CA key behind a DigestSigner — in production a
 // CA key held inside the out-of-process signer (AN-4). It covers the given DNS/IP

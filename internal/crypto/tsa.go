@@ -43,6 +43,7 @@ type TSTInfoParams struct {
 	HashedMessage []byte // the message imprint (a SHA-256 digest)
 	SerialNumber  uint64
 	GenTime       time.Time
+	Nonce         *big.Int // optional client nonce copied from TimeStampReq
 }
 
 // asn1MessageImprint is MessageImprint ::= SEQUENCE { hashAlgorithm, hashedMessage }.
@@ -60,6 +61,7 @@ type asn1TSTInfo struct {
 	MessageImprint asn1MessageImprint
 	SerialNumber   *big.Int
 	GenTime        time.Time `asn1:"generalized"`
+	Nonce          *big.Int  `asn1:"optional"`
 }
 
 // EncodeTSTInfo returns the DER of a TSTInfo for the given parameters. This is the
@@ -82,6 +84,9 @@ func EncodeTSTInfo(p TSTInfoParams) ([]byte, error) {
 		},
 		SerialNumber: new(big.Int).SetUint64(p.SerialNumber),
 		GenTime:      p.GenTime.UTC(),
+	}
+	if p.Nonce != nil {
+		info.Nonce = new(big.Int).Set(p.Nonce)
 	}
 	return asn1.Marshal(info)
 }
