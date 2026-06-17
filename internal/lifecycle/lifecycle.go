@@ -137,18 +137,14 @@ func (m *Manager) renew(ctx context.Context, tenantID string, old store.Certific
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na, Source: "lifecycle",
 	}
 
-	now := m.now()
 	// Record the successor and retire the predecessor through event-sourced
-	// commands (CORRECT-002): the read model is written only by the projector
-	// (AN-2), so both the successor row (with its replaces_id link) and the
-	// predecessor's superseded status are reconstructable from the log on a
-	// Rebuild() — not lost direct UPDATEs as before.
+	// projection semantics: the certificate.recorded event carries replaces_id,
+	// and the projector inserts the successor plus supersedes the predecessor in
+	// one tenant-scoped transaction. The later lifecycle event is audit history,
+	// not a second read-model mutation dependency.
 	recorded, err := m.orch.RecordSuccessorCertificate(ctx, tenantID, successor, old.ID)
 	if err != nil {
 		return store.Certificate{}, fmt.Errorf("lifecycle: record successor: %w", err)
-	}
-	if err := m.orch.SupersedeCertificate(ctx, tenantID, old.Fingerprint, old.Serial, info.SerialNumber, now); err != nil {
-		return store.Certificate{}, fmt.Errorf("lifecycle: supersede predecessor: %w", err)
 	}
 
 	if err := m.emit(ctx, tenantID, eventType, map[string]any{

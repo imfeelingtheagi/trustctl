@@ -80,11 +80,17 @@ func (s *Store) ApplyIdentityCreatedTx(ctx context.Context, tx pgx.Tx, it Identi
 // ApplyCertificateRecordedTx projects a certificate.recorded event. The
 // inventory is keyed by (tenant, fingerprint): re-recording the same certificate
 // refreshes the existing row (keeping its original id and created_at), so two
-// events collapse to one row deterministically.
+// events collapse to one row deterministically. When the event carries
+// replaces_id, the same transaction also supersedes that predecessor; successor
+// creation and predecessor retirement are one replay step, so a crash or replay
+// before a later lifecycle/audit event cannot leave two active certificates.
 func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Certificate) error {
 	sans := c.SANs
 	if sans == nil {
 		sans = []string{}
+	}
+	if c.ReplacesID != nil && *c.ReplacesID == c.ID {
+		return fmt.Errorf("certificate successor %s cannot replace itself", c.ID)
 	}
 	// replaces_id is carried when this certificate is the successor of a
 	// renewal/rotation (CORRECT-002); nil on a first issuance. Projecting it here
@@ -102,7 +108,36 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        replaces_id = EXCLUDED.replaces_id`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, c.ReplacesID, c.CreatedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	if c.ReplacesID == nil || *c.ReplacesID == "" {
+		return nil
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE certificates
+		    SET status = 'superseded', renewed_at = $3
+		  WHERE tenant_id = $1 AND id = $2 AND status <> 'revoked'`,
+		c.TenantID, *c.ReplacesID, c.CreatedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() > 0 {
+		return nil
+	}
+	var status string
+	if err := tx.QueryRow(ctx,
+		`SELECT status FROM certificates WHERE tenant_id = $1 AND id = $2`,
+		c.TenantID, *c.ReplacesID).Scan(&status); err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("certificate successor %s replaces missing predecessor %s", c.ID, *c.ReplacesID)
+		}
+		return err
+	}
+	if status == "revoked" {
+		return nil
+	}
+	return fmt.Errorf("certificate successor %s did not supersede predecessor %s in status %q", c.ID, *c.ReplacesID, status)
 }
 
 // SetCertificateRevokedTx projects a certificate.revoked event: it marks the

@@ -213,10 +213,10 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 // handleRenew processes a ca.renew outbox entry (the side effect of a deployed→
 // renewing lifecycle transition): it mints a signer-backed successor certificate,
 // records the successor through the event-sourced certificate.recorded path with
-// a replaces_id link, supersedes the predecessor through certificate.superseded,
-// records the successor serial for OCSP/CRL, and moves the identity back to
-// deployed via identity.renewed. It is idempotent on the outbox key (AN-5), so a
-// redelivery cannot mint a second successor.
+// a replaces_id link, whose projection atomically inserts the successor and
+// supersedes the predecessor, records the successor serial for OCSP/CRL, and
+// moves the identity back to deployed via identity.renewed. It is idempotent on
+// the outbox key (AN-5), so a redelivery cannot mint a second successor.
 func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Message) error {
 	var p transitionTrigger
 	if err := json.Unmarshal(m.Payload, &p); err != nil {
@@ -253,9 +253,6 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			}
 			if _, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID); err != nil {
 				return nil, fmt.Errorf("server: record renewal successor: %w", err)
-			}
-			if err := d.orch.SupersedeCertificate(ctx, m.TenantID, old.Fingerprint, old.Serial, successor.Serial, now); err != nil {
-				return nil, fmt.Errorf("server: supersede renewed predecessor: %w", err)
 			}
 			if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), successor.Serial, now); err != nil {
 				return nil, fmt.Errorf("server: record renewal serial: %w", err)

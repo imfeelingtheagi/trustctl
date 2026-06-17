@@ -399,3 +399,87 @@ func TestSupersededStatusAndSuccessorLinkSurviveRebuild(t *testing.T) {
 		t.Errorf("after Rebuild successor replaces_id = %v, want %s (link lost)", gotNew.ReplacesID, old.ID)
 	}
 }
+
+// TestSuccessorRecordedAloneSupersedesPredecessorOnReplay is the CORRECT-004
+// failure-injection acceptance: if a renewal records its successor and the
+// process dies before any later lifecycle/audit event, replaying only that
+// successor certificate.recorded event must not leave the predecessor active.
+// The replaces_id projection is the atomic rotation step: insert successor,
+// supersede predecessor, one transaction.
+func TestSuccessorRecordedAloneSupersedesPredecessorOnReplay(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	_, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+
+	old := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "partial-rotation.acme.test", 720*time.Hour)
+	issued, err := svc.Issue(ctx, ca.IssueRequest{
+		TenantID: tenantA,
+		CSR:      lifecycleCSR(t, "partial-rotation.acme.test"),
+		DNSNames: []string{"partial-rotation.acme.test"},
+		TTL:      90 * 24 * time.Hour,
+	}, "partial-rotation-successor")
+	if err != nil {
+		t.Fatalf("Issue successor: %v", err)
+	}
+	info, err := certinfo.Inspect(issued.CertificatePEM)
+	if err != nil {
+		t.Fatalf("inspect successor: %v", err)
+	}
+	nb, na := info.NotBefore, info.NotAfter
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+	fresh, err := orch.RecordSuccessorCertificate(ctx, tenantA, store.Certificate{
+		Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer,
+		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+		NotBefore: &nb, NotAfter: &na, Source: "lifecycle",
+	}, old.ID)
+	if err != nil {
+		t.Fatalf("RecordSuccessorCertificate: %v", err)
+	}
+	if fresh.ReplacesID == nil || *fresh.ReplacesID != old.ID {
+		t.Fatalf("successor replaces_id = %v, want %s", fresh.ReplacesID, old.ID)
+	}
+
+	var supersededEvents int
+	if err := log.Replay(ctx, 0, func(e events.Event) error {
+		if e.Type == projections.EventCertificateSuperseded {
+			supersededEvents++
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Replay: %v", err)
+	}
+	if supersededEvents != 0 {
+		t.Fatalf("test setup emitted %d certificate.superseded events, want 0", supersededEvents)
+	}
+
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	gotOld, err := s.GetCertificate(ctx, tenantA, old.ID)
+	if err != nil {
+		t.Fatalf("get predecessor after rebuild: %v", err)
+	}
+	if gotOld.Status != "superseded" || gotOld.RenewedAt == nil {
+		t.Fatalf("predecessor after successor-only replay = {status:%q renewed_at:%v}, want superseded + stamped", gotOld.Status, gotOld.RenewedAt)
+	}
+	gotNew, err := s.GetCertificateByFingerprint(ctx, tenantA, fresh.Fingerprint)
+	if err != nil {
+		t.Fatalf("get successor after rebuild: %v", err)
+	}
+	if gotNew.Status != "active" {
+		t.Fatalf("successor after replay status = %q, want active", gotNew.Status)
+	}
+	all, err := s.ListCertificatesPage(ctx, tenantA, store.ZeroUUID, nil, 100, nil)
+	if err != nil {
+		t.Fatalf("ListCertificatesPage: %v", err)
+	}
+	active := 0
+	for _, cert := range all {
+		if cert.Status == "active" {
+			active++
+		}
+	}
+	if active != 1 {
+		t.Fatalf("active certificate count after successor-only replay = %d, want 1", active)
+	}
+}

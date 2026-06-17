@@ -101,8 +101,10 @@ type IdentityCreated struct {
 // ReplacesID is optional (omitted on a first issuance, set when this certificate
 // is the successor produced by a renewal/rotation, CORRECT-002): carrying the
 // predecessor link in the event keeps the successor's replaces_id reconstructable
-// from the log on a Rebuild(). Adding this optional field is backward-compatible —
-// older v1 events without it decode to nil — so the schema version is unchanged.
+// from the log on a Rebuild(). Its projection also supersedes the predecessor in
+// the same transaction as the successor insert. Adding this optional field is
+// backward-compatible — older v1 events without it decode to nil — so the schema
+// version is unchanged.
 type CertificateRecorded struct {
 	ID                 string     `json:"id"`
 	OwnerID            *string    `json:"owner_id"`

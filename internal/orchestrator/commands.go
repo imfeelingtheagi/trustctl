@@ -227,9 +227,12 @@ func (o *Orchestrator) SupersedeCertificate(ctx context.Context, tenantID, finge
 
 // RecordSuccessorCertificate records a certificate.recorded event for the
 // successor produced by a renewal/rotation, carrying its predecessor link
-// (replaces_id) in the event so the link survives a Rebuild() (CORRECT-002). It
-// returns the canonical inventoried row. This is the event-sourced replacement
-// for the former direct successor-insert write into the read table.
+// (replaces_id) in the event so the link survives a Rebuild() (CORRECT-002).
+// The projector treats replaces_id as the rotation domain fact: it inserts the
+// successor and supersedes the predecessor in one transaction, so a partial
+// failure cannot leave both certificates active. It returns the canonical
+// inventoried row. This is the event-sourced replacement for the former direct
+// successor-insert write into the read table.
 func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID string, in store.Certificate, replacesID string) (store.Certificate, error) {
 	id := uuid.NewString()
 	sans := in.SANs
