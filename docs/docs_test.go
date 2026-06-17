@@ -521,9 +521,8 @@ type servedClaim struct {
 }
 
 // serverComposesAuth reports whether the served composition (internal/server)
-// wires interactive OIDC browser login via api.WithAuth. Today it does not — the
-// flow is library-complete but unserved (SEC-001/WIRE-001). When EXC-WIRE-01 wires
-// it, this flips true and the disclosure must be retired.
+// wires interactive OIDC browser login via api.WithAuth. The docs bind served
+// OIDC claims to this seam so a future removal or replacement has to update both.
 func serverComposesAuth(t *testing.T) bool {
 	t.Helper()
 	for _, f := range nonTestGoFiles(t, "../internal/server") {
@@ -535,9 +534,7 @@ func serverComposesAuth(t *testing.T) bool {
 }
 
 // apiServesAISurface reports whether the served API/server wires the AI surface
-// (the model adapter, RCA pipeline, or MCP server) into a served endpoint. Today
-// it does not — these are library islands (SURFACE-003). When EXC-WIRE-04 wires an
-// authenticated, tenant-scoped surface, this flips true.
+// (the model adapter, RCA pipeline, or MCP server) into a served endpoint.
 func apiServesAISurface(t *testing.T) bool {
 	t.Helper()
 	for _, dir := range []string{"../internal/api", "../internal/server"} {
@@ -560,11 +557,8 @@ func apiServesAISurface(t *testing.T) bool {
 // binaryServesIssuanceProtocols reports whether the served binary mounts ANY of the
 // non-ACME-DNS issuance protocol servers (EST, SCEP, CMP, SPIFFE, SSH) or the ACME
 // server itself — i.e. whether the running control plane imports an
-// internal/protocols/* package on its served path. Today none is mounted: the
-// composition (internal/api, internal/server) and cmd/trstctl reference no protocol
-// package, so every protocol is library-only (INTEROP-001/004). When EXC-WIRE-02
-// wires a protocol onto the served listener, the corresponding import appears and
-// this flips true, forcing the not-yet-served disclosure to be retired.
+// internal/protocols/* package on its served path. The limitations and feature docs
+// bind protocol served/library claims to this import reality.
 //
 // It deliberately ignores the DNS-01 *solver* import path: the acme DNS solver
 // packages legitimately reference internal/protocols/acme without the ACME server
@@ -655,9 +649,7 @@ func binaryMapsPerUserTenant(t *testing.T) bool {
 }
 
 // binaryServesReactConsole reports whether the embedded web UI is a real built
-// bundle (a hashed Vite asset) rather than the committed placeholder shell. Today
-// it is the placeholder, so the binary serves a "not built" page (SURFACE-001).
-// When EXC-WIRE-04 embeds a real bundle, the placeholder text is gone.
+// bundle (a hashed Vite asset) rather than the committed placeholder shell.
 func binaryServesReactConsole(t *testing.T) bool {
 	t.Helper()
 	idx := read(t, "../internal/webui/dist/index.html")
@@ -687,10 +679,10 @@ func nonTestGoFiles(t *testing.T, dir string) []string {
 
 // TestServedVsLibraryStatusIsHonestAndCodeBound is the anti-vacuous-green guard for
 // the served-vs-library honesty cluster (SEC-001, WIRE-001, SURFACE-001/002/003):
-// the served-vs-library status of OIDC browser login, the React console, and the
-// AI/RCA/MCP surface in limitations.md is asserted to MATCH THE CODE, in both
-// directions. A future PR that re-claims any of these as "served" while the binary
-// still does not wire it — or that quietly drops the disclosure — fails here.
+// the served-vs-library status in limitations.md is asserted to MATCH THE CODE, in
+// both directions. A future PR that claims a capability as "served" while the
+// binary does not wire it — or leaves a stale not-yet-served disclosure after code
+// wires it — fails here.
 func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 	lim := read(t, "limitations.md")
 	// Collapse whitespace so a marker/over-claim is matched even when the Markdown
@@ -858,6 +850,150 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 	}
 	if !strings.Contains(read(t, "../internal/api/auth.go"), "DefaultTenant") {
 		t.Error("internal/api/auth.go no longer references DefaultTenant; the TENANT-004 single-tenant disclosure has no code anchor — revisit this reality test")
+	}
+}
+
+// claimLedgerDocs returns the high-traffic docs surfaces where served/library
+// product claims most often appear. DOCS-004 exists because prior reality tests
+// were too concentrated on limitations.md; this ledger makes feature pages,
+// onboarding docs, runbooks, and Helm operator comments part of the docs gate.
+func claimLedgerDocs(t *testing.T) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	add := func(path string) {
+		out[path] = strings.Join(strings.Fields(strings.ToLower(read(t, path))), " ")
+	}
+	featureFiles, err := filepath.Glob(filepath.FromSlash("features/*.md"))
+	if err != nil {
+		t.Fatalf("list feature docs: %v", err)
+	}
+	if len(featureFiles) < 10 {
+		t.Fatalf("feature-doc claim ledger saw only %d pages; expected the full docs/features surface", len(featureFiles))
+	}
+	for _, f := range featureFiles {
+		add(filepath.ToSlash(f))
+	}
+	for _, f := range []string{
+		"getting-started.md",
+		"install.md",
+		"runbooks/incident-response.md",
+		"../deploy/helm/trstctl/values.yaml",
+	} {
+		add(f)
+	}
+	return out
+}
+
+func assertClaimReality(t *testing.T, page, body, claim string, served bool, servedMarkers, unservedMarkers, forbidden []string) {
+	t.Helper()
+	if served {
+		for _, m := range servedMarkers {
+			if !strings.Contains(body, m) {
+				t.Errorf("%s should describe %s as served using marker %q", page, claim, m)
+			}
+		}
+		for _, m := range append(unservedMarkers, forbidden...) {
+			if strings.Contains(body, m) {
+				t.Errorf("%s still carries stale not-served/forbidden wording for served %s: %q", page, claim, m)
+			}
+		}
+		return
+	}
+	for _, m := range unservedMarkers {
+		if !strings.Contains(body, m) {
+			t.Errorf("%s should disclose %s as not served using marker %q", page, claim, m)
+		}
+	}
+	for _, m := range append(servedMarkers, forbidden...) {
+		if strings.Contains(body, m) {
+			t.Errorf("%s over-claims unserved %s with marker %q", page, claim, m)
+		}
+	}
+}
+
+func apiServesCAHierarchy(t *testing.T) bool {
+	t.Helper()
+	const hierarchyImport = `trstctl.com/trstctl/internal/ca/hierarchy"`
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			if strings.Contains(read(t, f), hierarchyImport) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestHighTrafficClaimLedgerMatchesCodeReality extends the served/library guard
+// beyond limitations.md. It binds the specific stale surfaces cited by DOCS-004 to
+// code reality and rejects broad bundled-eval claims on feature pages.
+func TestHighTrafficClaimLedgerMatchesCodeReality(t *testing.T) {
+	ledger := claimLedgerDocs(t)
+
+	for _, required := range []string{
+		"features/platform-and-api.md",
+		"features/graph-query-ai.md",
+		"getting-started.md",
+		"install.md",
+		"runbooks/incident-response.md",
+		"../deploy/helm/trstctl/values.yaml",
+	} {
+		if _, ok := ledger[required]; !ok {
+			t.Fatalf("claim ledger does not include %s", required)
+		}
+	}
+
+	platform := ledger["features/platform-and-api.md"]
+	graphAI := ledger["features/graph-query-ai.md"]
+	incident := ledger["runbooks/incident-response.md"]
+	incidentRaw := strings.ToLower(read(t, "runbooks/incident-response.md"))
+	install := ledger["install.md"]
+	helmValues := ledger["../deploy/helm/trstctl/values.yaml"]
+
+	for _, stale := range []string{"zero external dependencies", "no external dependencies", "complete single-node evaluation stack out of the box", "serves out of the box"} {
+		if strings.Contains(platform, stale) {
+			t.Errorf("features/platform-and-api.md still makes an overbroad bundled-eval claim: %q", stale)
+		}
+	}
+	for _, want := range []string{"embedded-postgres.json", "linux-amd64", "linux-arm64v8", "darwin-arm64v8", "fails closed"} {
+		if !strings.Contains(platform, want) {
+			t.Errorf("features/platform-and-api.md should bind bundled eval to runtime pin/fail-closed detail %q", want)
+		}
+	}
+
+	assertClaimReality(t, "features/platform-and-api.md", platform, "OIDC browser login", serverComposesAuth(t),
+		[]string{"/auth/login", "/auth/callback", "auth.oidc.enabled", "served"},
+		[]string{"not yet served", "library-only"},
+		[]string{"not composed", "not wired"})
+
+	assertClaimReality(t, "features/platform-and-api.md", platform, "React web UI", binaryServesReactConsole(t),
+		[]string{"served by the binary", "internal/webui/dist", "vite bundle"},
+		[]string{"has not been built"},
+		[]string{"not yet served", "library-only"})
+
+	assertClaimReality(t, "features/graph-query-ai.md", graphAI, "AI/RCA/MCP surface", apiServesAISurface(t),
+		[]string{"ai.enable_api", "/api/v1/ai/query", "/api/v1/ai/rca", "/api/v1/mcp/tools"},
+		[]string{"not yet served", "library-only"},
+		[]string{"not wired", "library island"})
+
+	if apiServesCAHierarchy(t) {
+		if !strings.Contains(incident, "rotate the ca") || !strings.Contains(incident, "yes") {
+			t.Error("runbooks/incident-response.md should mark CA rotation as served once API/server wires the hierarchy manager")
+		}
+		if strings.Contains(incident, "library (go api)") {
+			t.Error("runbooks/incident-response.md still marks CA rotation library-only after API/server wires the hierarchy manager")
+		}
+	} else {
+		if !strings.Contains(incidentRaw, "| rotate the ca | m-of-n [key ceremony](key-ceremony.md) | library (go api) |") {
+			t.Error("runbooks/incident-response.md should mark CA rotation as library (Go API) until API/server wires the hierarchy manager")
+		}
+	}
+
+	if !strings.Contains(install, "signer.mode=isolated") || !strings.Contains(install, "separate signer pod") || !strings.Contains(install, "mutually pinned mtls") {
+		t.Error("install.md should keep the isolated-signer topology claim in the claim ledger")
+	}
+	if !strings.Contains(helmValues, "served agent steady-state") || !strings.Contains(helmValues, "off by default") {
+		t.Error("Helm values comments should keep the agent steady-state served/off-by-default claim in the ledger")
 	}
 }
 
