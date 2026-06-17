@@ -98,6 +98,23 @@ export interface CertificateList {
   next_cursor?: string;
 }
 
+export interface CredentialRisk {
+  components: RiskComponents;
+  credential_id: string;
+  expires_at: string;
+  exposure: number;
+  kind: string;
+  owner_active: boolean;
+  privilege: number;
+  score: number;
+  sensitivity: number;
+  subject: string;
+}
+
+export interface CredentialRiskList {
+  credentials: CredentialRisk[];
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;
@@ -246,6 +263,15 @@ export interface ProfileRequest {
 export interface RCARequest {
   question: string;
   subject?: string;
+}
+
+export interface RiskComponents {
+  age: number;
+  exposure: number;
+  owner: number;
+  privilege: number;
+  rotation: number;
+  sensitivity: number;
 }
 
 export interface SecretMeta {

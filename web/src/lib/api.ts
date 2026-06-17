@@ -13,6 +13,8 @@ import type {
   AIAnswer as GenAIAnswer,
   AIQueryRequest,
   Certificate as GenCertificate,
+  CredentialRisk as GenCredentialRisk,
+  CredentialRiskList,
   Owner as GenOwner,
   OwnerRequest,
   Issuer as GenIssuer,
@@ -36,6 +38,7 @@ export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
 export type AIAnswer = GenAIAnswer;
+export type CredentialRisk = GenCredentialRisk;
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
@@ -111,15 +114,6 @@ export interface Me {
   subject: string;
   tenant_id: string;
   email?: string;
-}
-
-export interface CredentialRisk {
-  credential_id: string;
-  subject: string;
-  kind: string;
-  score: number;
-  exposure: number;
-  owner_active: boolean;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -222,9 +216,7 @@ export const api: Api = {
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
   risk: () =>
-    req<{ credentials: CredentialRisk[] }>("/api/v1/risk/credentials?sort=score").then(
-      (r) => r.credentials ?? [],
-    ),
+    req<CredentialRiskList>("/api/v1/risk/credentials?sort=score").then((r) => r.credentials ?? []),
   aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
   aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),

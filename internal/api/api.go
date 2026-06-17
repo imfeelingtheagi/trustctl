@@ -309,7 +309,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: graphNodePath, successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, successCode: "200", perm: authz.GraphRead},
 
-		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, successCode: "200", perm: authz.RiskRead},
+		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, resSchema: "CredentialRiskList", successCode: "200", perm: authz.RiskRead},
 
 		// Served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/F77/F78). All
 		// READ-ONLY and tenant-scoped: the tenant + RBAC scope come from the

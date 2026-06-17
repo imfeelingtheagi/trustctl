@@ -238,6 +238,20 @@ func componentSchemas() map[string]*Schema {
 	enrollmentToken := object(map[string]*Schema{
 		"token": str(), "enroll_path": str(),
 	}, "token")
+	riskComponents := object(map[string]*Schema{
+		"age": {Type: "number"}, "exposure": {Type: "number"}, "privilege": {Type: "number"},
+		"rotation": {Type: "number"}, "owner": {Type: "number"}, "sensitivity": {Type: "number"},
+	}, "age", "exposure", "privilege", "rotation", "owner", "sensitivity")
+	credentialRisk := object(map[string]*Schema{
+		"credential_id": uuid(), "subject": str(), "kind": str(),
+		"privilege": {Type: "integer"}, "sensitivity": {Type: "integer"},
+		"exposure": {Type: "integer"}, "owner_active": {Type: "boolean"},
+		"expires_at": timestamp(), "score": {Type: "number"},
+		"components": ref("RiskComponents"),
+	}, "credential_id", "subject", "kind", "privilege", "sensitivity", "exposure", "owner_active", "expires_at", "score", "components")
+	credentialRiskList := object(map[string]*Schema{
+		"credentials": {Type: "array", Items: ref("CredentialRisk")},
+	}, "credentials")
 
 	profile := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "version": {Type: "integer"},
@@ -331,6 +345,9 @@ func componentSchemas() map[string]*Schema {
 		"Agent":                agent,
 		"AgentList":            agentList,
 		"EnrollmentToken":      enrollmentToken,
+		"RiskComponents":       riskComponents,
+		"CredentialRisk":       credentialRisk,
+		"CredentialRiskList":   credentialRiskList,
 		"Certificate":          certificate,
 		"CertificateIngest":    certificateIngest,
 		"CertificateList":      list("Certificate"),

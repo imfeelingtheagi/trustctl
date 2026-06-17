@@ -313,6 +313,69 @@
         ],
         "type": "object"
       },
+      "CredentialRisk": {
+        "properties": {
+          "components": {
+            "$ref": "#/components/schemas/RiskComponents"
+          },
+          "credential_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "exposure": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "owner_active": {
+            "type": "boolean"
+          },
+          "privilege": {
+            "type": "integer"
+          },
+          "score": {
+            "type": "number"
+          },
+          "sensitivity": {
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "credential_id",
+          "subject",
+          "kind",
+          "privilege",
+          "sensitivity",
+          "exposure",
+          "owner_active",
+          "expires_at",
+          "score",
+          "components"
+        ],
+        "type": "object"
+      },
+      "CredentialRiskList": {
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialRisk"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "credentials"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "enroll_path": {
@@ -836,6 +899,37 @@
         },
         "required": [
           "question"
+        ],
+        "type": "object"
+      },
+      "RiskComponents": {
+        "properties": {
+          "age": {
+            "type": "number"
+          },
+          "exposure": {
+            "type": "number"
+          },
+          "owner": {
+            "type": "number"
+          },
+          "privilege": {
+            "type": "number"
+          },
+          "rotation": {
+            "type": "number"
+          },
+          "sensitivity": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "age",
+          "exposure",
+          "privilege",
+          "rotation",
+          "owner",
+          "sensitivity"
         ],
         "type": "object"
       },
@@ -2576,6 +2670,13 @@
         "operationId": "listRiskScores",
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialRiskList"
+                }
+              }
+            },
             "description": "success"
           },
           "4XX": {

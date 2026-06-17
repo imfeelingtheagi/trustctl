@@ -140,6 +140,30 @@ func TestOpenAPISpecCoversMachineLogin(t *testing.T) {
 	}
 }
 
+func TestOpenAPISpecCoversRiskDashboardContract(t *testing.T) {
+	doc := fetchSpec(t)
+	paths := doc["paths"].(map[string]any)
+	rawPath, ok := paths["/api/v1/risk/credentials"].(map[string]any)
+	if !ok {
+		t.Fatal("OpenAPI spec is missing GET /api/v1/risk/credentials")
+	}
+	op, ok := rawPath["get"].(map[string]any)
+	if !ok {
+		t.Fatal("OpenAPI spec is missing GET operation for /api/v1/risk/credentials")
+	}
+	if got := op["operationId"]; got != "listRiskScores" {
+		t.Fatalf("risk operationId = %v, want listRiskScores", got)
+	}
+	respRef := op["responses"].(map[string]any)["200"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)["$ref"]
+	if respRef != "#/components/schemas/CredentialRiskList" {
+		t.Fatalf("risk response schema = %v, want CredentialRiskList", respRef)
+	}
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	if schemas["CredentialRisk"] == nil || schemas["RiskComponents"] == nil || schemas["CredentialRiskList"] == nil {
+		t.Fatalf("risk dashboard schemas missing from OpenAPI components")
+	}
+}
+
 func TestOpenAPIPathParameterSchemas(t *testing.T) {
 	doc := fetchSpec(t)
 
