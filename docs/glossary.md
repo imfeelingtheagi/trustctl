@@ -193,7 +193,9 @@ thrown away and rebuilt. When trstctl shows you a list, you're reading a project
 A reliability trick: when trstctl needs to call something external (a CA, a webhook),
 it writes that intent into an `outbox` table *in the same database transaction* as the
 state change, and a separate worker makes the call. The call can never be "lost" even
-if the process crashes mid-way (non-negotiable **AN-6**).
+if the process crashes mid-way (non-negotiable **AN-6**). Workers lease rows before
+calling out and finalize them after the call, so a slow external system does not keep
+a database transaction open or starve unrelated tenants.
 
 ### Multi-tenancy
 

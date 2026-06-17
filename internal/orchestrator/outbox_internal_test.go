@@ -146,10 +146,10 @@ func TestOutboxDeliversAndMarksDelivered(t *testing.T) {
 	}
 }
 
-// TestDispatchOneSkipLockedDoesNotDoubleDeliver is the FOR UPDATE SKIP LOCKED claim
-// guarantee (SPINE-012): two dispatchers sweeping the same single due entry
-// concurrently must deliver it exactly once between them, never twice. One claims
-// the row; the other skips the locked row and finds nothing.
+// TestDispatchOneSkipLockedDoesNotDoubleDeliver is the claim guarantee
+// (SPINE-012): two dispatchers sweeping the same single due entry concurrently
+// must deliver it exactly once between them, never twice. One leases the row; the
+// other sees no pending copy and finds nothing.
 func TestDispatchOneSkipLockedDoesNotDoubleDeliver(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
@@ -189,6 +189,164 @@ func TestDispatchOneSkipLockedDoesNotDoubleDeliver(t *testing.T) {
 	}
 	if totals[0]+totals[1] != 1 {
 		t.Fatalf("dispatchers processed %d entries total, want 1 (one claims, the other skips the locked row)", totals[0]+totals[1])
+	}
+}
+
+// TestOutboxLeasesDoNotStarveUnrelatedTenants is the SPINE-002 acceptance: a
+// slow destination for tenant A must not hold a database row lock through the
+// external call, and another outbox worker must be able to deliver tenant B's fast
+// destination while tenant A is still blocked.
+func TestOutboxLeasesDoNotStarveUnrelatedTenants(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithBackoff(func(int) time.Duration { return time.Hour }),
+		orchestrator.WithMaxInFlightPerDestination(1),
+		orchestrator.WithMaxInFlightPerTenant(1),
+		orchestrator.WithWorkerID("fairness-test"),
+	)
+
+	slowID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "slow-ca", IdempotencyKey: "slow-1", Payload: []byte(`{}`),
+	})
+	enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "slow-ca", IdempotencyKey: "slow-2", Payload: []byte(`{}`),
+	})
+	fastID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantB, Destination: "fast-webhook", IdempotencyKey: "fast-1", Payload: []byte(`{}`),
+	})
+
+	slowEntered := make(chan struct{})
+	releaseSlow := make(chan struct{})
+	fastDelivered := make(chan struct{})
+	var slowOnce, fastOnce sync.Once
+	handler := orchestrator.HandlerFunc(func(ctx context.Context, m orchestrator.Message) error {
+		switch m.Destination {
+		case "slow-ca":
+			slowOnce.Do(func() { close(slowEntered) })
+			select {
+			case <-releaseSlow:
+				return errors.New("slow destination still unavailable")
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		case "fast-webhook":
+			fastOnce.Do(func() { close(fastDelivered) })
+			return nil
+		default:
+			t.Fatalf("unexpected destination %q", m.Destination)
+			return nil
+		}
+	})
+
+	errs := make(chan error, 2)
+	go func() {
+		_, err := ob.Dispatch(ctx, handler)
+		errs <- err
+	}()
+
+	select {
+	case <-slowEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow outbox handler was not entered")
+	}
+	assertOutboxRowNotLocked(t, s, slowID)
+
+	go func() {
+		n, err := ob.Dispatch(ctx, handler)
+		if err == nil && n == 0 {
+			err = errors.New("second dispatcher did not process tenant B's fast row")
+		}
+		errs <- err
+	}()
+
+	select {
+	case <-fastDelivered:
+	case <-time.After(500 * time.Millisecond):
+		close(releaseSlow)
+		t.Fatal("tenant B fast destination was starved behind tenant A slow destination")
+	}
+
+	close(releaseSlow)
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errs:
+			if err != nil {
+				t.Fatalf("dispatch %d: %v", i, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("dispatch %d did not return", i)
+		}
+	}
+
+	rec, err := ob.Get(ctx, tenantB, fastID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != "delivered" {
+		t.Fatalf("tenant B fast row status = %q, want delivered", rec.Status)
+	}
+}
+
+func assertOutboxRowNotLocked(t *testing.T, s *store.Store, id int64) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	tx, err := s.Pool().Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin lock probe: %v", err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	var got int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM outbox WHERE id = $1 FOR UPDATE NOWAIT`, id).Scan(&got); err != nil {
+		t.Fatalf("outbox row %d is still locked while handler is sleeping: %v", id, err)
+	}
+	if got != id {
+		t.Fatalf("lock probe got row %d, want %d", got, id)
+	}
+}
+
+// TestOutboxExpiredLeaseIsReclaimed proves a worker crash after claim but before
+// finalize does not strand an outbox row forever: the next dispatcher returns the
+// expired lease to pending and redelivers it with the same idempotency key.
+func TestOutboxExpiredLeaseIsReclaimed(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s, orchestrator.WithWorkerID("rescuer"))
+	id := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "lease-retry-1", Payload: []byte(`{}`),
+	})
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE outbox
+		    SET status = 'processing',
+		        worker_id = 'dead-worker',
+		        lease_until = now() - interval '1 second',
+		        attempts = 1
+		  WHERE id = $1`, id); err != nil {
+		t.Fatalf("seed expired lease: %v", err)
+	}
+
+	var delivered []orchestrator.Message
+	n, err := ob.Dispatch(ctx, orchestrator.HandlerFunc(func(_ context.Context, m orchestrator.Message) error {
+		delivered = append(delivered, m)
+		return nil
+	}))
+	if err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+	if n != 1 || len(delivered) != 1 {
+		t.Fatalf("dispatch after expired lease = %d deliveries=%d, want exactly 1", n, len(delivered))
+	}
+	if delivered[0].IdempotencyKey != "lease-retry-1" {
+		t.Fatalf("redelivered key = %q, want lease-retry-1", delivered[0].IdempotencyKey)
+	}
+	rec, err := ob.Get(ctx, tenantA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != "delivered" || rec.Attempts != 2 {
+		t.Fatalf("rec = {status:%q attempts:%d}, want delivered/2", rec.Status, rec.Attempts)
 	}
 }
 

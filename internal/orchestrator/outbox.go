@@ -41,6 +41,12 @@ type Record struct {
 	Payload        []byte
 }
 
+type claimedOutboxEntry struct {
+	id       int64
+	msg      Message
+	attempts int
+}
+
 // Handler performs the external call for a Message. It must be idempotent on the
 // message's IdempotencyKey, since delivery is at-least-once.
 type Handler interface {
@@ -61,9 +67,13 @@ func (f HandlerFunc) Deliver(ctx context.Context, m Message) error { return f(ct
 // outside this repository package because it is a deliberate cross-tenant system
 // operation, like the idempotency-key GC.
 type Outbox struct {
-	store       *store.Store
-	backoff     func(attempts int) time.Duration
-	maxAttempts int
+	store                     *store.Store
+	backoff                   func(attempts int) time.Duration
+	maxAttempts               int
+	leaseTTL                  time.Duration
+	maxInFlightPerDestination int
+	maxInFlightPerTenant      int
+	workerID                  string
 }
 
 // Option configures an Outbox.
@@ -81,13 +91,58 @@ func WithMaxAttempts(n int) Option {
 	return func(o *Outbox) { o.maxAttempts = n }
 }
 
+// WithLeaseTTL sets how long a claimed row may remain processing before another
+// worker can recover it. A non-positive value leaves the production default.
+func WithLeaseTTL(n time.Duration) Option {
+	return func(o *Outbox) {
+		if n > 0 {
+			o.leaseTTL = n
+		}
+	}
+}
+
+// WithMaxInFlightPerDestination caps concurrently processing rows for one
+// destination. This prevents one down CA/connector/webhook from occupying every
+// outbox worker.
+func WithMaxInFlightPerDestination(n int) Option {
+	return func(o *Outbox) {
+		if n > 0 {
+			o.maxInFlightPerDestination = n
+		}
+	}
+}
+
+// WithMaxInFlightPerTenant caps concurrently processing rows for one tenant so a
+// noisy tenant leaves outbox capacity for unrelated tenants.
+func WithMaxInFlightPerTenant(n int) Option {
+	return func(o *Outbox) {
+		if n > 0 {
+			o.maxInFlightPerTenant = n
+		}
+	}
+}
+
+// WithWorkerID sets the lease owner written to claimed rows. It is mainly useful
+// for deterministic tests and diagnostics; production callers can use the default.
+func WithWorkerID(id string) Option {
+	return func(o *Outbox) {
+		if id != "" {
+			o.workerID = id
+		}
+	}
+}
+
 // NewOutbox returns an Outbox backed by the given store. By default it retries
 // with a quadratic backoff and dead-letters after 10 attempts.
 func NewOutbox(s *store.Store, opts ...Option) *Outbox {
 	o := &Outbox{
-		store:       s,
-		backoff:     func(attempts int) time.Duration { return time.Duration(attempts*attempts) * time.Second },
-		maxAttempts: 10,
+		store:                     s,
+		backoff:                   func(attempts int) time.Duration { return time.Duration(attempts*attempts) * time.Second },
+		maxAttempts:               10,
+		leaseTTL:                  30 * time.Second,
+		maxInFlightPerDestination: 1,
+		maxInFlightPerTenant:      2,
+		workerID:                  fmt.Sprintf("outbox-%d", time.Now().UTC().UnixNano()),
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -134,92 +189,210 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 	return tag.RowsAffected() > 0, nil
 }
 
-// Dispatch performs all entries that are due now, one per transaction, and
+// Dispatch performs entries that are due now, one leased row at a time, and
 // returns how many it attempted. A Handler failure is not a Dispatch error: it is
 // recorded on the row (attempts, last_error, next_attempt_at) for a later retry,
 // or dead-lettered once the attempt cap is reached. Only a database/transport
 // fault aborts Dispatch.
 //
 // Entries scheduled into the future (a failed entry serving its backoff) and
-// entries already handled in this run are skipped, so one Dispatch call drains
-// the currently-due backlog without spinning on a zero-backoff failure.
+// entries already handled in this run are skipped, so one Dispatch call drains the
+// currently-due backlog without spinning on a zero-backoff failure. Fairness is
+// round-robin by tenant and destination: each round claims at most one row per
+// tenant and destination, then starts a new round if more due work remains.
 func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
 	cutoff := time.Now().UTC()
-	seen := make(map[int64]bool)
+	seenTenants := make(map[string]bool)
+	seenDestinations := make(map[string]bool)
 	processed := 0
 	for {
-		id, claimed, err := o.dispatchOne(ctx, h, cutoff)
+		claim, claimed, err := o.claimOne(ctx, cutoff, seenTenants, seenDestinations)
 		if err != nil {
 			return processed, err
 		}
-		if !claimed || seen[id] {
-			break
+		if !claimed {
+			if len(seenTenants) == 0 && len(seenDestinations) == 0 {
+				break
+			}
+			seenTenants = make(map[string]bool)
+			seenDestinations = make(map[string]bool)
+			continue
 		}
-		seen[id] = true
+
+		seenTenants[claim.msg.TenantID] = true
+		seenDestinations[claim.msg.Destination] = true
 		processed++
+		if err := o.finalizeClaim(ctx, claim, h.Deliver(ctx, claim.msg)); err != nil {
+			return processed, err
+		}
 	}
 	return processed, nil
 }
 
-// dispatchOne claims at most one due entry (FOR UPDATE SKIP LOCKED so concurrent
-// dispatchers never grab the same row), delivers it, and records the outcome —
-// all in one transaction. The claim and the result mark are atomic; if the
-// process dies mid-delivery the transaction rolls back and the entry stays
-// pending, to be redelivered (at-least-once).
-func (o *Outbox) dispatchOne(ctx context.Context, h Handler, cutoff time.Time) (id int64, claimed bool, err error) {
+// claimOne recovers expired leases, then marks one fair due row processing in a
+// short transaction. The external call happens after this transaction commits, so
+// slow destinations do not hold row locks, database transactions, or pool
+// connections while the network is blocked.
+func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, seenDestinations map[string]bool) (claimedOutboxEntry, bool, error) {
 	tx, err := o.store.SystemPool().Begin(ctx)
 	if err != nil {
-		return 0, false, err
+		return claimedOutboxEntry{}, false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var msg Message
-	var attempts int
+	now := time.Now().UTC()
+	if _, err := tx.Exec(ctx,
+		//trstctl:system-query — lease recovery is a cross-tenant system worker path; expired processing rows are returned to the shared pending queue.
+		`UPDATE outbox
+		    SET status = 'pending', worker_id = NULL, lease_until = NULL
+		  WHERE status = 'processing' AND lease_until <= $1`, now); err != nil {
+		return claimedOutboxEntry{}, false, fmt.Errorf("orchestrator: recover expired outbox leases: %w", err)
+	}
+
+	leaseUntil := now.Add(o.leaseTTL)
+	var claim claimedOutboxEntry
 	err = tx.QueryRow(ctx,
-		//trstctl:system-query — the dispatcher drains every tenant's due entries in one pass (no tenant predicate); the claimed row's tenant_id is read back and carried in the Message. Cross-tenant by design (AN-1 exemption).
-		`SELECT id, tenant_id::text, destination, payload, idempotency_key, attempts
-		   FROM outbox
-		  WHERE status = 'pending' AND next_attempt_at <= $1
-		  ORDER BY id
-		  FOR UPDATE SKIP LOCKED
-		  LIMIT 1`, cutoff).
-		Scan(&id, &msg.TenantID, &msg.Destination, &msg.Payload, &msg.IdempotencyKey, &attempts)
+		//trstctl:system-query — the dispatcher fairly drains every tenant's due entries; tenant_id is read back and carried in the Message. Cross-tenant by design (AN-1 exemption).
+		`WITH candidate AS (
+		     SELECT o.id
+		       FROM outbox o
+		      WHERE o.status = 'pending'
+		        AND o.next_attempt_at <= $1
+		        AND o.tenant_id::text <> ALL($7::text[])
+		        AND o.destination <> ALL($8::text[])
+		        AND (
+		            SELECT count(*)
+		              FROM outbox p
+		             WHERE p.status = 'processing'
+		               AND p.destination = o.destination
+		               AND p.lease_until > $2
+		        ) < $3
+		        AND (
+		            SELECT count(*)
+		              FROM outbox p
+		             WHERE p.status = 'processing'
+		               AND p.tenant_id = o.tenant_id
+		               AND p.lease_until > $2
+		        ) < $4
+		        AND NOT EXISTS (
+		            SELECT 1
+		              FROM outbox older
+		             WHERE older.status = 'pending'
+		               AND older.next_attempt_at <= $1
+		               AND older.tenant_id = o.tenant_id
+		               AND older.destination = o.destination
+		               AND (older.next_attempt_at, older.id) < (o.next_attempt_at, o.id)
+		        )
+		      ORDER BY o.next_attempt_at, o.id
+		      FOR UPDATE OF o SKIP LOCKED
+		      LIMIT 1
+		)
+		UPDATE outbox o
+		   SET status = 'processing',
+		       attempts = o.attempts + 1,
+		       worker_id = $5,
+		       lease_until = $6,
+		       last_error = NULL
+		  FROM candidate
+		 WHERE o.id = candidate.id
+		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts`,
+		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
+		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenDestinations)).
+		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, nil
+		return claimedOutboxEntry{}, false, tx.Commit(ctx)
 	}
 	if err != nil {
-		return 0, false, fmt.Errorf("orchestrator: claim outbox: %w", err)
+		return claimedOutboxEntry{}, false, fmt.Errorf("orchestrator: claim outbox: %w", err)
 	}
-
-	attempts++
-	if derr := h.Deliver(ctx, msg); derr != nil {
-		status := "pending"
-		if attempts >= o.maxAttempts {
-			status = "failed"
-		}
-		next := time.Now().UTC().Add(o.backoff(attempts))
-		if _, err := tx.Exec(ctx,
-			`UPDATE outbox
-			    SET attempts = $3, last_error = $4, next_attempt_at = $5, status = $6
-			  WHERE id = $1 AND tenant_id = $2`,
-			id, msg.TenantID, attempts, derr.Error(), next, status); err != nil {
-			return 0, false, fmt.Errorf("orchestrator: record failure: %w", err)
-		}
-		return id, true, tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return claimedOutboxEntry{}, false, err
 	}
-
-	if _, err := tx.Exec(ctx,
-		`UPDATE outbox
-		    SET status = 'delivered', delivered_at = now(), attempts = $3, last_error = NULL
-		  WHERE id = $1 AND tenant_id = $2`,
-		id, msg.TenantID, attempts); err != nil {
-		return 0, false, fmt.Errorf("orchestrator: record delivery: %w", err)
-	}
-	return id, true, tx.Commit(ctx)
+	return claim, true, nil
 }
 
-// Pending returns the tenant's not-yet-delivered entries (pending or failed),
-// newest bookkeeping included, for observability. It is tenant-scoped under RLS.
+func mapKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// finalizeClaim records the result in a second short transaction. If the worker
+// dies after delivery but before this update, the lease expires and another worker
+// redelivers with the same idempotency key.
+func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, deliverErr error) error {
+	tx, err := o.store.SystemPool().Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if deliverErr != nil {
+		status := "pending"
+		if claim.attempts >= o.maxAttempts {
+			status = "failed"
+		}
+		next := time.Now().UTC().Add(o.backoff(claim.attempts))
+		tag, err := tx.Exec(ctx,
+			`UPDATE outbox
+			    SET last_error = $4,
+			        next_attempt_at = $5,
+			        status = $6,
+			        worker_id = NULL,
+			        lease_until = NULL
+			  WHERE id = $1
+			    AND tenant_id = $2
+			    AND status = 'processing'
+			    AND worker_id = $3`,
+			claim.id, claim.msg.TenantID, o.workerID, deliverErr.Error(), next, status)
+		if err != nil {
+			return fmt.Errorf("orchestrator: record failure: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return fmt.Errorf("orchestrator: finalize outbox failure: lease for row %d was lost", claim.id)
+		}
+		return tx.Commit(ctx)
+	}
+
+	tag, err := tx.Exec(ctx,
+		`UPDATE outbox
+		    SET status = 'delivered',
+		        delivered_at = now(),
+		        last_error = NULL,
+		        worker_id = NULL,
+		        lease_until = NULL
+		  WHERE id = $1
+		    AND tenant_id = $2
+		    AND status = 'processing'
+		    AND worker_id = $3`,
+		claim.id, claim.msg.TenantID, o.workerID)
+	if err != nil {
+		return fmt.Errorf("orchestrator: record delivery: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("orchestrator: finalize outbox delivery: lease for row %d was lost", claim.id)
+	}
+	return tx.Commit(ctx)
+}
+
+// dispatchOne keeps the one-row test seam while using the production leased
+// claim/finalize path.
+func (o *Outbox) dispatchOne(ctx context.Context, h Handler, cutoff time.Time) (id int64, claimed bool, err error) {
+	claim, ok, err := o.claimOne(ctx, cutoff, nil, nil)
+	if err != nil || !ok {
+		return 0, ok, err
+	}
+	if err := o.finalizeClaim(ctx, claim, h.Deliver(ctx, claim.msg)); err != nil {
+		return 0, false, err
+	}
+	return claim.id, true, nil
+}
+
+// Pending returns the tenant's not-yet-delivered entries (pending, processing,
+// or failed), newest bookkeeping included, for observability. It is tenant-scoped
+// under RLS.
 func (o *Outbox) Pending(ctx context.Context, tenantID string) ([]Record, error) {
 	var out []Record
 	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

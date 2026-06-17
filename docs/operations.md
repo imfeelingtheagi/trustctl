@@ -26,6 +26,20 @@ listener also caps streams per connection.
 
 The pool sizes ship with conservative defaults and are tuned per deployment.
 
+## Outbox delivery fairness
+
+The outbox worker does not keep a PostgreSQL transaction open while it calls an
+external CA, connector, webhook, or notification target. It first **leases** one
+due row in a short transaction (`processing`, `worker_id`, `lease_until`), commits,
+does the external call, then records success or retry state in a second short
+transaction. If a worker dies after claiming a row, the lease expires and another
+worker returns the row to pending.
+
+Dispatch is also fair by tenant and destination. Each sweep rotates across tenants
+and destinations, with explicit in-flight caps per tenant and per destination, so
+one down connector or one noisy tenant cannot occupy every outbox worker while
+unrelated tenants wait behind it.
+
 ## Rate limiting (per tenant, PostgreSQL-backed)
 
 A **per-tenant token bucket**, persisted in PostgreSQL (no Redis — the limit holds
