@@ -153,6 +153,9 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
   (`GAP-006`; enable with `secrets.enable_api`, off by default and fail-closed). **Secret
   sync** (`internal/secretsync`) is **not yet wired** — it remains library code. Track the
   remaining tail in [Current limitations](../limitations.md).
+- **Machine login tenant binding:** token credentials MAC-bind the tenant, the
+  `machine-login` audience, principal, and expiry. `X-Tenant-ID` is a lookup hint on
+  the public login route; a token for tenant A is rejected if presented with tenant B.
 - **Protect the KEK.** Everything at rest is only as safe as `TRSTCTL_SECRETS_KEK_FILE`;
   in production back it with an [HSM/KMS](issuance-and-cas.md).
 - **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if you

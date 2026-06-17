@@ -61,6 +61,19 @@ func New(cfg Config) (*Manager, error) {
 	}
 	m := map[string]Method{}
 	for _, meth := range cfg.Methods {
+		switch tm := meth.(type) {
+		case TokenMethod:
+			if tm.TenantID == "" {
+				tm.TenantID = cfg.TenantID
+			}
+			meth = tm
+		case *TokenMethod:
+			if tm != nil && tm.TenantID == "" {
+				clone := *tm
+				clone.TenantID = cfg.TenantID
+				meth = &clone
+			}
+		}
 		if meth == nil || meth.Name() == "" {
 			return nil, fmt.Errorf("authmethod: method with empty name")
 		}
@@ -107,12 +120,20 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 	return sess, nil
 }
 
-// TokenMethod authenticates a bearer token whose canonical form is
-// "<principal>.<expUnix>.<hexHMAC>", where the MAC is
-// HMAC-SHA256(secret, principal+"."+expUnix) computed via the crypto boundary, and
-// expUnix is the token's expiry as a Unix-seconds integer. Binding the expiry into
-// the MAC means a captured token stops working at expUnix and the expiry cannot be
-// tampered without the secret (GAP-008). Scopes are looked up per principal.
+const defaultTokenAudience = "machine-login"
+
+// TokenMethod authenticates a bearer token whose tenant-scoped canonical form is
+// "v1.<tenant>.<audience>.<principal>.<expUnix>.<hexHMAC>", where the MAC is
+// HMAC-SHA256(secret, "v1."+tenant+"."+audience+"."+principal+"."+expUnix)
+// computed via the crypto boundary, and expUnix is the token's expiry as a
+// Unix-seconds integer. Binding tenant, audience, and expiry into the MAC means a
+// captured token cannot be replayed into another tenant, cannot be replayed at a
+// different consumer, and stops working at expUnix (WIRE-002, GAP-008). Scopes are
+// looked up per principal.
+//
+// The earlier three-field form "<principal>.<expUnix>.<hexHMAC>" is accepted only
+// when TenantID is empty. Served machine login always configures TenantID, so a
+// public X-Tenant-ID header is a lookup hint, not a tenant authority.
 //
 // The legacy two-field form "<principal>.<hexHMAC>" (MAC over the principal alone)
 // has no expiry and is therefore an indefinite, replayable credential; it is
@@ -120,7 +141,13 @@ func (m *Manager) Login(ctx context.Context, method string, credential []byte) (
 // never-expiring tokens.
 type TokenMethod struct {
 	Secret []byte
-	Scopes map[string][]string
+	// TenantID, when set, is MAC-bound into every token and checked during
+	// authentication. It must match the tenant-scoped Manager using this method.
+	TenantID string
+	// Audience, when set, is MAC-bound into every token. Empty selects the machine
+	// login audience so tokens cannot be replayed into future TokenMethod consumers.
+	Audience string
+	Scopes   map[string][]string
 	// AllowUnexpiring, when true, accepts the legacy two-field form with no expiry.
 	// Leave it false (the default) so every accepted token is expiry-bound.
 	AllowUnexpiring bool
@@ -132,14 +159,22 @@ type TokenMethod struct {
 func (TokenMethod) Name() string { return "token" }
 
 // Issue mints a canonical, expiry-bound token for principal valid until expiresAt.
-// The returned string is "<principal>.<expUnix>.<hexHMAC>"; presenting it after
-// expiresAt is rejected by Authenticate. principal must not contain a '.' (it is
-// the MAC-covered field separator).
+// When TenantID is configured, the returned token is tenant/audience-bound. With an
+// empty TenantID, Issue retains the older tenantless three-field form for direct
+// tests and non-served callers; tenant-scoped Managers reject that form.
 func (t TokenMethod) Issue(principal string, expiresAt time.Time) (string, error) {
 	if principal == "" || strings.ContainsRune(principal, '.') {
 		return "", fmt.Errorf("authmethod: token principal must be non-empty and contain no '.'")
 	}
 	exp := strconv.FormatInt(expiresAt.Unix(), 10)
+	if t.TenantID != "" {
+		if strings.ContainsRune(t.TenantID, '.') || strings.ContainsRune(t.audience(), '.') {
+			return "", fmt.Errorf("authmethod: token tenant and audience must contain no '.'")
+		}
+		covered := tokenMACInput([]byte("v1"), []byte(t.TenantID), []byte(t.audience()), []byte(principal), []byte(exp))
+		mac := crypto.HMACSHA256(t.Secret, covered)
+		return "v1." + t.TenantID + "." + t.audience() + "." + principal + "." + exp + "." + hex.EncodeToString(mac), nil
+	}
 	mac := crypto.HMACSHA256(t.Secret, []byte(principal+"."+exp))
 	return principal + "." + exp + "." + hex.EncodeToString(mac), nil
 }
@@ -148,8 +183,42 @@ func (t TokenMethod) Issue(principal string, expiresAt time.Time) (string, error
 func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
 	parts := bytes.Split(credential, []byte("."))
 	switch len(parts) {
+	case 6:
+		// Canonical tenant/audience-bound form:
+		// v1.tenant.audience.principal.expUnix.hexHMAC.
+		version, tenantBytes, audienceBytes, principalBytes, expBytes, macHex := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+		if !bytes.Equal(version, []byte("v1")) || len(tenantBytes) == 0 || len(audienceBytes) == 0 || len(principalBytes) == 0 || len(expBytes) == 0 {
+			return "", nil, fmt.Errorf("malformed token")
+		}
+		if t.TenantID != "" && !bytes.Equal(tenantBytes, []byte(t.TenantID)) {
+			return "", nil, fmt.Errorf("token tenant mismatch")
+		}
+		if !bytes.Equal(audienceBytes, []byte(t.audience())) {
+			return "", nil, fmt.Errorf("token audience mismatch")
+		}
+		exp, err := parseUnixBytes(expBytes)
+		if err != nil {
+			return "", nil, fmt.Errorf("malformed token expiry")
+		}
+		mac := make([]byte, hex.DecodedLen(len(macHex)))
+		if _, err := hex.Decode(mac, macHex); err != nil {
+			return "", nil, fmt.Errorf("malformed token MAC")
+		}
+		covered := tokenMACInput(version, tenantBytes, audienceBytes, principalBytes, expBytes)
+		want := crypto.HMACSHA256(t.Secret, covered)
+		if !crypto.ConstantTimeEqual(mac, want) {
+			return "", nil, fmt.Errorf("invalid token")
+		}
+		if !t.now().Before(time.Unix(exp, 0)) {
+			return "", nil, fmt.Errorf("token expired")
+		}
+		principal := string(principalBytes)
+		return principal, t.Scopes[principal], nil
 	case 3:
 		// Canonical expiry-bound form: principal.expUnix.hexHMAC.
+		if t.TenantID != "" {
+			return "", nil, fmt.Errorf("tenantless token rejected")
+		}
 		principalBytes, expBytes, macHex := parts[0], parts[1], parts[2]
 		if len(principalBytes) == 0 || len(expBytes) == 0 {
 			return "", nil, fmt.Errorf("malformed token")
@@ -173,11 +242,7 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 		if !crypto.ConstantTimeEqual(mac, want) {
 			return "", nil, fmt.Errorf("invalid token")
 		}
-		now := time.Now
-		if t.Clock != nil {
-			now = t.Clock
-		}
-		if !now().Before(time.Unix(exp, 0)) {
+		if !t.now().Before(time.Unix(exp, 0)) {
 			return "", nil, fmt.Errorf("token expired")
 		}
 		principal := string(principalBytes)
@@ -185,6 +250,9 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 	case 2:
 		// Legacy unbounded form: principal.hexHMAC (MAC over the principal only). It
 		// never expires, so accept it only when the operator has opted in.
+		if t.TenantID != "" {
+			return "", nil, fmt.Errorf("tenantless token rejected")
+		}
 		if !t.AllowUnexpiring {
 			return "", nil, fmt.Errorf("unexpiring token rejected (set AllowUnexpiring to accept the legacy form)")
 		}
@@ -205,6 +273,36 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 	default:
 		return "", nil, fmt.Errorf("malformed token")
 	}
+}
+
+func (t TokenMethod) audience() string {
+	if t.Audience != "" {
+		return t.Audience
+	}
+	return defaultTokenAudience
+}
+
+func (t TokenMethod) now() time.Time {
+	if t.Clock != nil {
+		return t.Clock()
+	}
+	return time.Now()
+}
+
+func tokenMACInput(parts ...[]byte) []byte {
+	n := 0
+	for _, part := range parts {
+		n += len(part)
+	}
+	n += len(parts) - 1
+	out := make([]byte, 0, n)
+	for i, part := range parts {
+		if i > 0 {
+			out = append(out, '.')
+		}
+		out = append(out, part...)
+	}
+	return out
 }
 
 func parseUnixBytes(b []byte) (int64, error) {

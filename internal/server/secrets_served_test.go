@@ -341,14 +341,15 @@ func TestServedMachineLogin(t *testing.T) {
 	authSecret := []byte("super-secret-hmac-key-for-machine-login")
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
 
-	// Mint a workload token the served TokenMethod will accept (same HMAC secret).
-	method := authmethod.TokenMethod{Secret: authSecret, Scopes: map[string][]string{"workload-1": {"secrets:read"}}}
+	// Mint a workload token the served TokenMethod will accept (same HMAC secret,
+	// tenant MAC-bound so X-Tenant-ID is only a lookup hint).
+	method := authmethod.TokenMethod{Secret: authSecret, TenantID: h.tenant, Scopes: map[string][]string{"workload-1": {"secrets:read"}}}
 	cred, err := method.Issue("workload-1", time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatalf("issue workload token: %v", err)
 	}
 
-	// LOGIN (public route; tenant via header since the login establishes the principal).
+	// LOGIN (public route; the tenant header must match the credential-bound tenant).
 	bodyBytes, _ := json.Marshal(map[string]any{"method": "token", "credential": cred})
 	req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/login", bytes.NewReader(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
@@ -387,6 +388,35 @@ func TestServedMachineLogin(t *testing.T) {
 	_ = resp2.Body.Close()
 	if resp2.StatusCode == http.StatusOK {
 		t.Error("machine login accepted a forged token (fail-closed broken)")
+	}
+}
+
+func TestServedMachineLoginRejectsCrossTenantHeader(t *testing.T) {
+	authSecret := []byte("super-secret-hmac-key-for-machine-login")
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
+	tenantB := "22222222-2222-2222-2222-222222222222"
+
+	method := authmethod.TokenMethod{Secret: authSecret, TenantID: h.tenant, Scopes: map[string][]string{"workload-1": {"secrets:read"}}}
+	cred, err := method.Issue("workload-1", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("issue tenant-A workload token: %v", err)
+	}
+
+	bodyBytes, _ := json.Marshal(map[string]any{"method": "token", "credential": cred})
+	req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/login", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantB)
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("cross-tenant login request: %v", err)
+	}
+	data, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("tenant-A token with tenant-B header: status %d body %s, want 401", resp.StatusCode, data)
+	}
+	if strings.Contains(string(data), cred) {
+		t.Error("cross-tenant rejection echoed the credential (AN-8 violation)")
 	}
 }
 

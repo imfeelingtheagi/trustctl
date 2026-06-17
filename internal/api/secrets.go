@@ -490,9 +490,9 @@ type machineLoginResponse struct {
 // machineLogin authenticates a workload credential via the authmethod framework (F58)
 // and returns a scoped, audited, tenant-scoped session. This route is PUBLIC (it is
 // the entry point for an unauthenticated workload), so it carries no RBAC permission;
-// the credential itself authenticates. The tenant comes from X-Tenant-ID here because
-// the login is what establishes a principal — the method is tenant-scoped at
-// construction (AN-1).
+// the credential itself authenticates. X-Tenant-ID is only a lookup hint for the
+// tenant-scoped method; token credentials MAC-bind the tenant and this handler
+// rejects any header/credential mismatch (WIRE-002, AN-1).
 func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -525,6 +525,10 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	req.Credential.wipe() // the credential is consumed; wipe our copy (AN-8)
 	if err != nil {
 		// Do not echo the credential or the reason beyond "unauthorized".
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "machine login failed"))
+		return
+	}
+	if sess.TenantID != tenantID {
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "machine login failed"))
 		return
 	}
@@ -620,7 +624,7 @@ func (s *secretsService) authManager(tenantID string) (*authmethod.Manager, erro
 	}
 	return authmethod.New(authmethod.Config{
 		TenantID: tenantID,
-		Methods:  []authmethod.Method{authmethod.TokenMethod{Secret: s.be.AuthSecret}},
+		Methods:  []authmethod.Method{authmethod.TokenMethod{Secret: s.be.AuthSecret, TenantID: tenantID}},
 		Audit:    s.be.Audit,
 		TTL:      ttl,
 	})

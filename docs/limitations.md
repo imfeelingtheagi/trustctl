@@ -187,7 +187,9 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   off, requiring a KEK when on):
   - the workload **auth-method framework** (`internal/authmethod`, F58) backs
     `POST /api/v1/secrets/login` — a machine presents a token credential and receives
-    a scoped, tenant-scoped session (distinct from the human OIDC SSO bridge);
+    a scoped, tenant-scoped session (distinct from the human OIDC SSO bridge). Token
+    credentials MAC-bind tenant, audience, principal, and expiry; `X-Tenant-ID` is only
+    the lookup hint and mismatched tenant headers are rejected;
   - the **application secrets SDK** (`internal/secretsdk`, F64) backs the secret store
     `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, **rotate**, delete);
     values are sealed at rest under the KEK (`internal/crypto/seal`) and the read path

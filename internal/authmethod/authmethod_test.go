@@ -14,7 +14,7 @@ import (
 
 func TestTokenMethodLoginAndReject(t *testing.T) {
 	secret := []byte("s3cret")
-	tm := TokenMethod{Secret: secret, Scopes: map[string][]string{"app1": {"read:db"}}}
+	tm := TokenMethod{Secret: secret, TenantID: "t1", Scopes: map[string][]string{"app1": {"read:db"}}}
 	tok, err := tm.Issue("app1", time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
@@ -33,6 +33,46 @@ func TestTokenMethodLoginAndReject(t *testing.T) {
 	}
 	if rec.Count("auth.rejected") != 1 || rec.Count("auth.session.issued") != 1 {
 		t.Error("auth events not audited as expected")
+	}
+}
+
+func TestMachineLoginTokenIsTenantBound(t *testing.T) {
+	secret := []byte("tenant-bound-secret")
+	tenantA := "11111111-1111-1111-1111-111111111111"
+	tenantB := "22222222-2222-2222-2222-222222222222"
+	tmA := TokenMethod{Secret: secret, TenantID: tenantA, Scopes: map[string][]string{"app1": {"read:db"}}}
+	tokA, err := tmA.Issue("app1", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Issue tenant-bound token: %v", err)
+	}
+	if !strings.HasPrefix(tokA, "v1."+tenantA+".") {
+		t.Fatalf("token %q does not expose tenant-bound v1 prefix", tokA)
+	}
+	if principal, scopes, err := tmA.Authenticate(context.Background(), []byte(tokA)); err != nil || principal != "app1" || len(scopes) != 1 {
+		t.Fatalf("tenant A token rejected by tenant A method: principal=%q scopes=%v err=%v", principal, scopes, err)
+	}
+
+	tmB := TokenMethod{Secret: secret, TenantID: tenantB, Scopes: tmA.Scopes}
+	if _, _, err := tmB.Authenticate(context.Background(), []byte(tokA)); err == nil {
+		t.Fatal("tenant A token authenticated under tenant B")
+	}
+	tamperedTenant := strings.Replace(tokA, tenantA, tenantB, 1)
+	if _, _, err := tmB.Authenticate(context.Background(), []byte(tamperedTenant)); err == nil {
+		t.Fatal("tenant-tampered token authenticated under tenant B")
+	}
+	tamperedAudience := strings.Replace(tokA, defaultTokenAudience, "other-audience", 1)
+	if _, _, err := tmA.Authenticate(context.Background(), []byte(tamperedAudience)); err == nil {
+		t.Fatal("audience-tampered token authenticated")
+	}
+
+	tenantless := TokenMethod{Secret: secret}
+	oldTok, err := tenantless.Issue("app1", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("Issue tenantless token: %v", err)
+	}
+	m, _ := New(Config{TenantID: tenantA, Methods: []Method{tenantless}})
+	if _, err := m.Login(context.Background(), "token", []byte(oldTok)); err == nil {
+		t.Fatal("tenant-scoped manager accepted a tenantless machine token")
 	}
 }
 
