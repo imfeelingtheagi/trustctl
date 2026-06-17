@@ -44,13 +44,12 @@ Command groups: `owners`, `issuers`, `identities`, `certificates`, `profiles`, `
 
 ### The web UI (F12)
 
-The UI is a React 18 + Vite + shadcn/ui single-page app, designed to be **compiled into
-the binary** as an embedded filesystem and served on the same port and TLS certificate as
-the API (real asset files served directly; deep links fall back to the SPA; `/api/*` is
-left to the API handler). No separate static server to run. *Code:* `internal/webui`,
-`web/`. **Library / not yet served** — the SPA is built and tested (Vitest/axe), but a
-clean build embeds a placeholder, so the running binary does not yet serve the console;
-wiring a real Vite bundle is **`EXC-WIRE-04`**. See [Current limitations](../limitations.md).
+The UI is a React 18 + Vite + shadcn/ui single-page app **served by the binary** from
+an embedded filesystem on the same port and TLS certificate as the API. Real hashed
+asset files are served directly, deep links fall back to the SPA, and `/api/*` stays
+owned by the API handler. No separate static server is required. *Code:* `internal/webui`,
+`internal/webui/dist`, `web/`. **Served.** The embedded `index.html` references the real
+Vite bundle, and tests fail if a clean build regresses to the placeholder.
 
 ### OIDC single sign-on (F13)
 
@@ -61,11 +60,9 @@ The authorization-code flow uses random `state` (CSRF protection) and a mandator
 trstctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
 session resolves to an [RBAC](policy-and-governance.md) principal, so a browser login
 authorizes API calls. CI/CD instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash
-stored). *Code:* `internal/auth`, `internal/api/auth.go`. **Library / not yet served** —
-the flow is implemented and tested, but `api.WithAuth` is not wired into the served
-composition, so `/auth/login`, `/auth/callback`, `/auth/me`, and `/auth/logout` are **not
-served by the running binary today** (API tokens are the served auth path); serving the
-browser login is **`EXC-WIRE-01`**. See [Current limitations](../limitations.md).
+stored). *Code:* `internal/auth`, `internal/api/auth.go`, `internal/server`. **Served
+when `auth.oidc.enabled` is configured.** API tokens remain the default auth path when
+OIDC is disabled; an enabled-but-incomplete OIDC block fails closed at startup.
 
 ### Single-binary distribution (F14)
 
@@ -127,11 +124,10 @@ trstctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
 TRSTCTL_POSTGRES_MODE=bundled TRSTCTL_NATS_MODE=embedded ./trstctl
 ```
 
-The web console and browser `/auth/login` are built and tested but **not yet served by
-the binary** (`EXC-WIRE-04` / `EXC-WIRE-01`); today you drive the running binary through
-the REST API and the CLI with scoped API tokens. See
-[Current limitations](../limitations.md), [Install](../install.md), and
-[Configuration](../configuration.md) for production setup.
+The web console, browser `/auth/login` flow, REST API, and CLI all drive the same
+served control plane. API tokens are still the zero-dependency bootstrap path; OIDC
+turns on only when configured. See [Current limitations](../limitations.md),
+[Install](../install.md), and [Configuration](../configuration.md) for production setup.
 
 ## Pitfalls & limits
 
@@ -151,9 +147,10 @@ the REST API and the CLI with scoped API tokens. See
   on mutations; cursor pagination; `429` + `Retry-After`.
 - **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
   `graph`, `risk`, `agents`.
-- **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC); API tokens
-  prefixed `trst_`. Config: `TRSTCTL_OIDC_ISSUER`, `TRSTCTL_OIDC_CLIENT_ID`,
-  `TRSTCTL_OIDC_REDIRECT_URI`.
+- **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when
+  `auth.oidc.enabled` is on); API tokens prefixed `trst_`. Config:
+  `TRSTCTL_AUTH_OIDC_ISSUER`, `TRSTCTL_AUTH_OIDC_CLIENT_ID`,
+  `TRSTCTL_AUTH_OIDC_REDIRECT_URI`.
 - **Run modes:** `TRSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRSTCTL_NATS_MODE`
   (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
 - **Federation (F41):** planned (S21.2), not implemented.

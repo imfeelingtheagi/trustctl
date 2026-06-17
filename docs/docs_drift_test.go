@@ -184,6 +184,150 @@ func TestChangelogExistsAndIsLinked(t *testing.T) {
 	}
 }
 
+// TestServedSurfaceDocsMatchCodeReality is the DOCS-001/DOCS-002/DOCS-005 drift
+// guard for surfaces that recently moved from library-only to served: OIDC, the
+// embedded web UI, graph/risk, AI/RCA/MCP, public revocation, the isolated signer
+// transport, and the minimal Kubernetes Operator. If the route/config anchors are in
+// code, the docs must not keep telling operators those surfaces are unwired.
+func TestServedSurfaceDocsMatchCodeReality(t *testing.T) {
+	api := read(t, "../internal/api/api.go")
+	server := read(t, "../internal/server/server.go")
+	webIndex := read(t, "../internal/webui/dist/index.html")
+
+	requireAnchor := func(name, body string, needles ...string) {
+		t.Helper()
+		for _, needle := range needles {
+			if !strings.Contains(body, needle) {
+				t.Fatalf("%s no longer contains %q; revisit this docs reality test", name, needle)
+			}
+		}
+	}
+
+	requireAnchor("internal/api/api.go", api,
+		`path: "/api/v1/ai/query"`,
+		`path: "/api/v1/ai/rca"`,
+		`path: "/api/v1/mcp/tools"`,
+		`path: "/api/v1/graph"`,
+		`path: "/api/v1/risk/credentials"`,
+		`mux.HandleFunc("GET /auth/login"`,
+	)
+	requireAnchor("internal/server/server.go", server,
+		"api.WithAISurface",
+		`mux.Handle("/auth/"`,
+		`mux.Handle("/api/v1/graph"`,
+		`mux.Handle("/api/v1/risk/"`,
+		`mux.Handle("/ocsp/"`,
+		`mux.Handle("/crl/"`,
+	)
+	requireAnchor("internal/webui/dist/index.html", webIndex, "assets/index-", "<script")
+	requireAnchor("internal/signing/serve.go", read(t, "../internal/signing/serve.go"), "ServeServerMTLS")
+	requireAnchor("internal/signing/client.go", read(t, "../internal/signing/client.go"), "DialMTLS")
+	if _, err := os.Stat(filepath.FromSlash("../cmd/trstctl-operator")); err != nil {
+		t.Fatalf("cmd/trstctl-operator should exist while install docs describe a shipped minimal operator: %v", err)
+	}
+
+	platform := strings.ToLower(read(t, "features/platform-and-api.md"))
+	for _, stale := range []string{
+		"library / not yet served",
+		"interactive oidc login is not wired",
+		"web console and `/auth/login` are not yet served",
+		"trstctl_oidc_",
+	} {
+		if strings.Contains(platform, stale) {
+			t.Errorf("features/platform-and-api.md still carries stale served-surface wording %q", stale)
+		}
+	}
+	for _, want := range []string{
+		"served by the binary",
+		"/auth/login",
+		"trstctl_auth_oidc_issuer",
+		"trstctl_auth_oidc_client_id",
+		"trstctl_auth_oidc_redirect_uri",
+	} {
+		if !strings.Contains(platform, want) {
+			t.Errorf("features/platform-and-api.md should document served OIDC/web reality (missing %q)", want)
+		}
+	}
+
+	graphAI := strings.ToLower(read(t, "features/graph-query-ai.md"))
+	for _, want := range []string{
+		"/api/v1/graph",
+		"/api/v1/ai/query",
+		"/api/v1/ai/rca",
+		"/api/v1/mcp/tools",
+		"ai.enable_api",
+		"read-only",
+	} {
+		if !strings.Contains(graphAI, want) {
+			t.Errorf("features/graph-query-ai.md should document the served graph/AI/MCP surface (missing %q)", want)
+		}
+	}
+	for _, stale := range []string{
+		"mcp server` | library",
+		"grounded rca / nl query` | library",
+		"not yet served by the binary",
+	} {
+		if strings.Contains(graphAI, stale) {
+			t.Errorf("features/graph-query-ai.md still frames a served AI/MCP surface as library-only (%q)", stale)
+		}
+	}
+
+	lim := strings.ToLower(read(t, "limitations.md"))
+	for _, want := range []string{
+		"/api/v1/graph",
+		"/api/v1/risk/credentials",
+		"/api/v1/ai/query",
+		"/api/v1/ai/rca",
+		"/api/v1/mcp/tools",
+		"ai.enable_api",
+	} {
+		if !strings.Contains(lim, want) {
+			t.Errorf("limitations.md should name the served graph/risk/AI/MCP routes (missing %q)", want)
+		}
+	}
+	for _, stale := range []string{
+		"posture**: the **credential graph",
+		"risk scoring read apis are not yet served",
+		"ai/rca/mcp**: the packages",
+		"oidc**, **web console**, and **ai/rca/mcp** are covered in",
+	} {
+		if strings.Contains(lim, stale) {
+			t.Errorf("limitations.md still groups a served surface into the not-yet-served bucket (%q)", stale)
+		}
+	}
+
+	incident := strings.ToLower(read(t, "runbooks/incident-response.md"))
+	for _, want := range []string{"/api/v1/graph/blast-radius/{id}", "/ocsp/{tenant}", "/crl/{tenant}", "served revocation surface"} {
+		if !strings.Contains(incident, want) {
+			t.Errorf("incident-response.md should document served graph/revocation reality (missing %q)", want)
+		}
+	}
+	for _, stale := range []string{"crl/ocsp is library-only", "graph is library-only", "not yet served"} {
+		if strings.Contains(incident, stale) {
+			t.Errorf("incident-response.md still contains stale library-only language (%q)", stale)
+		}
+	}
+
+	for _, f := range []string{"install.md", "disaster-recovery.md", "../deploy/helm/trstctl/values.yaml"} {
+		body := strings.ToLower(read(t, f))
+		for _, stale := range []string{
+			"isolated signer is not yet implemented",
+			"isolated mode not yet implemented",
+			"not-yet-built isolated signer",
+			"still-deferred isolated signer",
+		} {
+			if strings.Contains(body, stale) {
+				t.Errorf("%s still says isolated signer mode is deferred even though signer mTLS is implemented (%q)", f, stale)
+			}
+		}
+	}
+
+	install := strings.ToLower(read(t, "install.md"))
+	if !strings.Contains(install, "cmd/trstctl-operator") || !strings.Contains(install, "helm remains") {
+		t.Error("install.md should explain the shipped minimal operator and that Helm remains the full install path")
+	}
+}
+
 // TestKeyPackagesHaveLeafClaudeMd is the CODE-004 reality-test: the hub-and-spoke
 // per-package CLAUDE.md convention (root CLAUDE.md §4) is actually followed for the
 // internal packages that carry significant local invariants — the AN-3 crypto

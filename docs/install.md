@@ -83,11 +83,14 @@ cosign verify ghcr.io/imfeelingtheagi/trstctl/charts/trstctl:<chart-version> \
 
 See [`deploy/helm/trstctl/README.md`](https://github.com/imfeelingtheagi/trstctl/tree/main/deploy/helm/trstctl)
 for the full values reference. The chart runs the signer co-located (sidecar, over
-an in-memory UDS) by default; set `signer.mode=isolated` to run it as a **fully
-separate pod reached over mTLS** (TLS 1.3, both-ways certificate pinning,
-SIGNER-005). A Kubernetes **Operator** is still **planned for S15.1** — see
-[limitations](limitations.md); today the Helm chart is the supported control-plane
-install.
+an in-memory UDS) by default; set `signer.mode=isolated` plus the required
+`signer.mtls.*` values to render a **separate signer pod reached over mutually
+pinned mTLS** (TLS 1.3, both-ways certificate pinning, SIGNER-005). A minimal
+Kubernetes **Operator** binary (`cmd/trstctl-operator`) ships for CRD-driven
+Deployment replica/image reconciliation; Helm remains the supported full
+control-plane install for services,
+secrets, network policy, signer topology, PostgreSQL, and NATS — see
+[limitations](limitations.md).
 
 ## Kubernetes (agent)
 

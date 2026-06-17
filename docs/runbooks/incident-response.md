@@ -6,11 +6,12 @@ credential leak. It assumes you operate trstctl per the other runbooks
 ([backup/DR](../disaster-recovery.md), [migrations](../migrations.md),
 [key ceremony](key-ceremony.md)).
 
-> **Maturity note.** Some response capabilities (CRL/OCSP revocation, the CA
-> hierarchy) are implemented and tested as library code and not yet served by the
-> binary — see [Current limitations](../limitations.md). Where a step depends on an
-> as-yet-unserved subsystem, this runbook says so and gives the operational
-> alternative.
+> **Maturity note.** The served binary now publishes tenant-scoped OCSP/CRL status
+> for issued leaves and the credential graph can answer blast-radius reads. Some
+> response capabilities remain library/operator work — notably CA hierarchy
+> rotation ceremonies, CT alert scheduling, and connector-driven redeploys. Where a
+> step depends on an as-yet-unserved subsystem, this runbook says so and gives the
+> operational alternative.
 
 ## First moves (any incident)
 
@@ -25,8 +26,8 @@ credential leak. It assumes you operate trstctl per the other runbooks
    tampered with and to establish a trustworthy timeline of who did what
    (`Actor` is recorded on every event).
 4. **Scope the blast radius.** Identify the affected credentials and everything that
-   depends on them (the credential graph models reachability and blast radius;
-   library-level today — until served, enumerate dependents from inventory).
+   depends on them with the served graph API (`/api/v1/graph/blast-radius/{id}`) or
+   the `trstctl-cli graph blast-radius` command.
 
 ## Scenario: signer / CA key compromise
 
@@ -43,10 +44,11 @@ worst case.
    so rotation is a **deliberate re-key**, not an automatic restart side-effect:
    per the key ceremony, replace the signer's sealed key store with the new CA key,
    then restart the signer so it adopts it, and re-issue under the new CA.
-4. **Revoke** the compromised CA and any suspect leaves. Revocation (CRL and OCSP)
-   is implemented in `internal/ca/revocation`; publish updated CRLs / OCSP responses
-   to relying parties. Until revocation is served end to end, distribute the new CA
-   bundle and shorten trust by re-issuing.
+4. **Revoke** suspect leaves through the served lifecycle path; OCSP answers change
+   immediately and trusted revocation paths publish a fresh tenant CRL. If the CA
+   itself is compromised, distribute a replacement CA bundle and re-issue under the
+   new CA; CA-level revocation and cross-sign choreography remains an operator/key
+   ceremony procedure.
 5. **Re-issue** active credentials under the new CA and **redeploy** them to their
    targets.
 6. **Recover** any lost state from backup ([DR runbook](../disaster-recovery.md)).
@@ -83,5 +85,5 @@ worst case.
 | Verify audit timeline | `audit.VerifyChain` (R2.1) | yes |
 | Backup / restore | `trstctl --full-backup-dir` / `--full-restore-dir` | yes |
 | Rotate the CA | m-of-n [key ceremony](key-ceremony.md) | library (Go API) |
-| Revoke (CRL/OCSP) | `internal/ca/revocation` | library |
+| Revoke leaves (CRL/OCSP) | served revocation surface (`/ocsp/{tenant}`, `/crl/{tenant}`) | yes |
 | Unexpected-issuance alert | CT monitoring | library |

@@ -243,13 +243,11 @@ ha:
 #              persistence.signerKeysAccessMode) every replica's sidecar loads the
 #              SAME sealed issuing-CA key, so all replicas are the same CA. signer.replicas
 #              is unused in this mode (one sidecar per control-plane pod).
-#   "isolated" (NOT YET IMPLEMENTED) — would run the signer as its OWN
-#              network-policy-isolated pod reached over an mTLS gRPC channel. The
-#              cross-node mTLS transport this needs is not built yet (the
-#              trstctl-signer binary is UDS-only; see docs/limitations.md
-#              "Multi-replica HA" and SIGNER-005), so selecting it FAILS the render
-#              with guidance rather than shipping a crash-looping signer pod (OPS-001).
-#              Leave this at "sidecar" — it is the supported HA topology.
+#   "isolated" — runs the signer as its OWN network-policy-isolated pod reached
+#              over a mutually pinned mTLS gRPC channel. Selecting it requires the
+#              signer.mtls.* trust material below; the chart fails fast when those
+#              values are missing rather than rendering a pod the control plane
+#              cannot authenticate. Sidecar remains the default HA topology.
 signer:
   # "sidecar" (default): the signer runs co-located with the control plane over an
   # in-memory peer-authenticated UDS — the supported single-pod/eval topology.

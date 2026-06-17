@@ -77,14 +77,15 @@ remaining integration work.
   with the flag off the agent only *discovers* SSH trust (inventory, above), it
   does not *mutate* it. Trust *removal* still requires its own explicit confirmation
   (the safe default, SIGNER-007).
-- **Posture**: the **credential graph** (reachability, blast radius), **composite
-  risk scoring**, and **drift detection**.
-- **The React web console (F12) — now served (see "The React web console" below).**
-  The console moved out of this list: a clean `go build` embeds the real Vite bundle
-  and serves it (`EXC-WIRE-04`/SURFACE-001). The **AI/RCA/MCP** surface also moved out —
-  it is **now served** (`SURFACE-003`, behind `ai.enable_api`; see its section below).
-  What remains *not yet served* of the original F12 epic is two SPA scale items
-  (cursor pagination, list virtualization, SURFACE-007).
+- **Posture collectors and agents:** CT monitoring, CBOM scanning triggers, drift
+  detection loops, and discovery schedulers remain library/agent work. The **credential
+  graph** and **risk scoring** read APIs are already served (`/api/v1/graph*`,
+  `/api/v1/risk/credentials`), and the **AI/RCA/MCP** surface is served behind
+  `ai.enable_api`; they are not part of this not-yet-served bucket.
+- **React console scale work:** the console itself is served (see "The React web
+  console" below). What remains not yet served of the original F12 epic is cursor
+  pagination and list virtualization for very large tables (SURFACE-007).
+
 ## The React web console: served by the binary
 
 As of **`EXC-WIRE-04`** the React 18 + Vite + shadcn/ui single-page app (F12) is the

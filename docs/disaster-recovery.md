@@ -165,11 +165,11 @@ running more than one control-plane replica **safe**:
   it takes the projection advisory lock (`ProjectionAdvisoryLockKey`, like migrations)
   so concurrent boots serialize and each resumes from the shared projection checkpoint
   (SPINE-007).
-- **A shared signer key store so every replica is the same CA.** The control plane
-  still co-locates the signing service as a locked-down sidecar reachable only over a
-  shared in-memory Unix domain socket (AN-4) — the supported topology, **not** the
-  not-yet-built isolated-mTLS one. For HA the signer key store and the control-plane
-  data dir default to **ReadWriteMany** (`persistence.signerKeysAccessMode` /
+- **A shared signer key store so every replica is the same CA.** The default control
+  plane topology co-locates the signing service as a locked-down sidecar reachable only
+  over a shared in-memory Unix domain socket (AN-4). For HA the signer key store and
+  the control-plane data dir default to **ReadWriteMany**
+  (`persistence.signerKeysAccessMode` /
   `persistence.controlPlaneAccessMode`), so every pod's sidecar signer loads the SAME
   sealed issuing-CA key and every replica serves the same CA cert and verifies the
   same audit chain. First-boot CA provisioning is serialized by an advisory lock
@@ -189,15 +189,16 @@ Durability still lives in the **datastores** (external PostgreSQL + replicated N
 the event log is the source of truth and a rebuilt pod re-derives state from it, so a
 control-plane failure is an availability event, not a data-loss one.
 
-**The still-deferred piece — isolated signer (SIGNER-005).** A single signer pod
-serving all replicas over **mTLS gRPC** (`signer.mode: isolated`) is a future topology
-(the `trstctl-signer` binary is UDS-only today, so selecting it **fails the Helm
-render** with guidance rather than shipping a crash-looping pod, OPS-001). It is not
+**Optional isolated signer (SIGNER-005).** `signer.mode: isolated` renders the signer as
+its own pod and has the control plane dial it over mutually pinned mTLS gRPC. It is not
 required for the HA above — the shared-keystore sidecar model already gives a single,
-consistent CA across replicas — but it would let the signer scale independently of the
-control plane. For a single-replica eval set `replicaCount: 1` and the access modes to
-`ReadWriteOnce`; the PDB is then irrelevant (disable it, since a `minAvailable: 1` PDB
-would block a single-replica node drain).
+consistent CA across replicas — but it lets operators move the signer into a separate
+pod/network-policy boundary once they supply the `signer.mtls.*` trust material. The
+chart fails fast if isolated mode is selected without that material, rather than
+shipping a signer pod the control plane cannot authenticate. For a single-replica eval
+set `replicaCount: 1` and the access modes to `ReadWriteOnce`; the PDB is then
+irrelevant (disable it, since a `minAvailable: 1` PDB would block a single-replica node
+drain).
 
 ## DR runbook
 

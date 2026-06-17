@@ -109,9 +109,10 @@ rotate and renew it automatically.
 ## Get your first API token
 
 A freshly booted control plane **fails closed**: every API route returns `401`
-until you present a credential, and interactive OIDC login is not wired in this
-build. To get the first credential, run the network-trust-free bootstrap verb on
-the host (it talks straight to the datastore — no existing token required) and it
+until you present a credential. Interactive OIDC login is served when
+`auth.oidc.enabled` is configured, but the zero-dependency first credential is still
+the host-local bootstrap token. Run the network-trust-free bootstrap verb on the
+host (it talks straight to the datastore — no existing token required) and it
 prints a tenant-scoped token **once**:
 
 ```bash

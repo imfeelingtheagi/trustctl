@@ -53,8 +53,10 @@ whole query is denied before execution — not post-filtered). It runs on a
 to an event-log offset for consistency (**AN-2**), and returns deliberately coarse errors
 so a caller can't tell "out of scope" from "not found."
 
-*Code:* `internal/query` (`Engine`, `Spec`, `Surface`, `Predicate`). **Library** (the
-designated mount point is the serving-integration sprint).
+*Code:* `internal/query` (`Engine`, `Spec`, `Surface`, `Predicate`),
+`internal/api`, `internal/server`. **Served through the read-only AI/RCA routes when
+`ai.enable_api` is on** (`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and used by the
+read-only MCP tools. The standalone Go API remains available for embedded consumers.
 
 ### The pluggable AI model adapter (F76)
 
@@ -62,9 +64,10 @@ trstctl's AI features are model-agnostic: a thin adapter routes reasoning to eit
 cloud LLM or a **local** Ollama/vLLM endpoint by config, for air-gapped or
 data-sovereign deployments. Critically, a **redactor** runs before any prompt leaves the
 process — stripping PEM blocks, secret/token assignments, and long base64 runs (**AN-8**)
-— so key material can never reach a model or its logs. If no model is configured, the rest
-of trstctl degrades gracefully. *Code:* `internal/aimodel` (`Adapter`, `DefaultRedactor`,
-`CloudModel`, `LocalModel`). **Library.**
+— so key material cannot reach a model or its logs. If no model is configured, the served
+AI surface still returns grounded evidence/citations without model egress. *Code:*
+`internal/aimodel` (`Adapter`, `DefaultRedactor`, `CloudModel`, `LocalModel`). **Served
+as an optional adapter behind `ai.enable_api`; no model is configured by default.**
 
 ### Grounded RCA & natural-language query (F77)
 
@@ -75,7 +78,7 @@ scoping), then a synthesizer answers using **only** that evidence — every clai
 than inventing an answer. The prompt explicitly treats retrieved data as untrusted (so a
 hostile string in a SAN can't become an instruction), the pipeline is strictly
 **read-only**, and every gather is audited. *Code:* `internal/rca` (`Pipeline`,
-`Synthesizer`). **Library.**
+`Synthesizer`). **Served** at `POST /api/v1/ai/rca` when `ai.enable_api` is on.
 
 ### The trstctl MCP server (F78)
 
@@ -87,7 +90,8 @@ refused *before* any query), per-caller rate-limited to resist enumeration, and 
 answers flow through the grounded RCA pipeline so they're cited and redacted. Fittingly,
 the server holds a [workload identity](workload-identity.md) issued by trstctl's own
 broker — it dogfoods the platform. *Code:* `internal/mcpserver` (`Server`, `Call`,
-`Tools`). **Library.**
+`Tools`). **Served** at `GET /api/v1/mcp/tools` and
+`POST /api/v1/mcp/tools/{tool}` when `ai.enable_api` is on.
 
 ## Use it
 
@@ -99,12 +103,17 @@ trstctl-cli graph blast-radius cert:payments-tls
 trstctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHERE w.name = "payments-svc" RETURN c, r.name'
 ```
 
-Those map to the served `/api/v1/graph*` routes. The query engine, RCA pipeline, and MCP
-server are driven through their Go APIs today — e.g. a grounded question:
+Those map to the served `/api/v1/graph*` routes. When `ai.enable_api` is on, grounded
+query/RCA and read-only MCP are served too:
 
-```go
-ev, _  := pipeline.Gather(ctx, tenantID, "payments cert", "what is its blast radius")
-ans, _ := synth.Answer(ctx, ev)   // ans.Citations = ["graph#cert:...", ...]
+```sh
+curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"what is the blast radius of the payments cert?"}' \
+  https://trstctl.example.com/api/v1/ai/rca
+
+curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  https://trstctl.example.com/api/v1/mcp/tools
 ```
 
 ## Pitfalls & limits
@@ -112,10 +121,10 @@ ans, _ := synth.Answer(ctx, ev)   // ans.Citations = ["graph#cert:...", ...]
 | Capability | Status today |
 |---|---|
 | Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI |
-| Semantic query layer (F75) | **Library-complete**, tested; serving mount is the integration step (`EXC-WIRE-04`) |
-| AI model adapter (F76) | **Library-complete**, tested; off unless a model is configured; not served by the binary (`EXC-WIRE-04`) |
-| Grounded RCA / NL query (F77) | **Library-complete**, tested; **not yet served by the binary** (`EXC-WIRE-04`) |
-| MCP server (F78) | **Library-complete**, tested; no HTTP/gRPC wrapper wired yet; **not served by the binary** (`EXC-WIRE-04`) |
+| Semantic query layer (F75) | **Served** through `/api/v1/ai/query` and `/api/v1/ai/rca` when `ai.enable_api` is on; Go API also available |
+| AI model adapter (F76) | **Optional served adapter**; no model configured by default, cloud/local model egress only when an operator opts in |
+| Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
+| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`, read-only tools only |
 
 Other notes: the graph and query layer are built per request from the store, so very large
 tenants pay a build cost (bounded by caps). The AI features are **grounded and read-only by
