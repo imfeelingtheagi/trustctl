@@ -147,6 +147,8 @@ type composeFile struct {
 		Entrypoint  []string       `yaml:"entrypoint"`
 		Command     yaml.Node      `yaml:"command"`
 		Environment map[string]any `yaml:"environment"`
+		Volumes     []string       `yaml:"volumes"`
+		Ports       []any          `yaml:"ports"`
 		DependsOn   map[string]struct {
 			Condition string `yaml:"condition"`
 		} `yaml:"depends_on"`
@@ -154,6 +156,7 @@ type composeFile struct {
 			Test yaml.Node `yaml:"test"`
 		} `yaml:"healthcheck"`
 	} `yaml:"services"`
+	Volumes map[string]any `yaml:"volumes"`
 }
 
 // TestComposeBringsUpEvaluableStack encodes the Compose half of the acceptance:
@@ -254,6 +257,71 @@ func TestComposeBringsUpEvaluableStack(t *testing.T) {
 	})
 }
 
+// TestComposeSignerIsSeparateService locks ARCH-005's Docker topology: the eval
+// stack must keep the signer as its own process/service, not fold private-key
+// custody back into the control plane. The only shared signing channel is the UDS
+// volume mounted at /run/trstctl, and the control plane must explicitly dial it as
+// an external signer.
+func TestComposeSignerIsSeparateService(t *testing.T) {
+	raw := readArtifact(t, "docker-compose.yml")
+	var cf composeFile
+	if err := yaml.Unmarshal([]byte(raw), &cf); err != nil {
+		t.Fatalf("docker-compose.yml is not valid YAML: %v", err)
+	}
+
+	signer, ok := cf.Services["signer"]
+	if !ok {
+		t.Fatal("docker-compose.yml has no separate signer service (AN-4)")
+	}
+	cp, ok := cf.Services["trstctl"]
+	if !ok {
+		t.Fatal("docker-compose.yml has no control-plane service")
+	}
+
+	if ep := strings.Join(signer.Entrypoint, " "); !strings.Contains(ep, "/usr/local/bin/trstctl-signer") {
+		t.Errorf("signer entrypoint = %q, want the isolated trstctl-signer binary", ep)
+	}
+	if !containsStr(nodeToStrings(signer.Command), "--socket=/run/trstctl/signer.sock") {
+		t.Errorf("signer command %v does not bind the shared UDS socket", nodeToStrings(signer.Command))
+	}
+	if len(signer.Ports) != 0 {
+		t.Errorf("signer service exposes ports %v; Compose AN-4 topology should use only the shared UDS", signer.Ports)
+	}
+
+	dep, ok := cp.DependsOn["signer"]
+	if !ok {
+		t.Fatal("control-plane service does not depend on the separate signer service")
+	}
+	if dep.Condition != "service_started" {
+		t.Errorf("control-plane depends_on signer condition = %q, want service_started", dep.Condition)
+	}
+	if asEnvString(cp.Environment["TRSTCTL_SIGNER_MODE"]) != "external" {
+		t.Errorf("TRSTCTL_SIGNER_MODE = %q, want external", asEnvString(cp.Environment["TRSTCTL_SIGNER_MODE"]))
+	}
+	if asEnvString(cp.Environment["TRSTCTL_SIGNER_SOCKET"]) != "/run/trstctl/signer.sock" {
+		t.Errorf("TRSTCTL_SIGNER_SOCKET = %q, want /run/trstctl/signer.sock", asEnvString(cp.Environment["TRSTCTL_SIGNER_SOCKET"]))
+	}
+
+	if _, ok := cf.Volumes["signersock"]; !ok {
+		t.Fatal("compose file does not declare the shared signersock volume")
+	}
+	if _, ok := cf.Volumes["signerkeys"]; !ok {
+		t.Fatal("compose file does not declare the signerkeys custody volume")
+	}
+	if !hasComposeVolumeMount(signer.Volumes, "signersock", "/run/trstctl") {
+		t.Errorf("signer volumes %v do not mount signersock at /run/trstctl", signer.Volumes)
+	}
+	if !hasComposeVolumeMount(cp.Volumes, "signersock", "/run/trstctl") {
+		t.Errorf("control-plane volumes %v do not mount signersock at /run/trstctl", cp.Volumes)
+	}
+	if !hasComposeVolumeMount(signer.Volumes, "signerkeys", "/data/signer") {
+		t.Errorf("signer volumes %v do not mount signerkeys at /data/signer", signer.Volumes)
+	}
+	if hasComposeVolume(cp.Volumes, "signerkeys") {
+		t.Errorf("control-plane volumes %v must not mount the signer's key-custody volume", cp.Volumes)
+	}
+}
+
 // nodeToStrings flattens a compose command/test field, which YAML may model as a
 // single string or a sequence of strings, into a string slice.
 func nodeToStrings(n yaml.Node) []string {
@@ -269,6 +337,25 @@ func nodeToStrings(n yaml.Node) []string {
 		return out
 	}
 	return nil
+}
+
+func hasComposeVolumeMount(volumes []string, volume, mountPath string) bool {
+	for _, v := range volumes {
+		parts := strings.Split(v, ":")
+		if len(parts) >= 2 && parts[0] == volume && parts[1] == mountPath {
+			return true
+		}
+	}
+	return false
+}
+
+func hasComposeVolume(volumes []string, volume string) bool {
+	for _, v := range volumes {
+		if strings.Split(v, ":")[0] == volume {
+			return true
+		}
+	}
+	return false
 }
 
 func anyContains(ss []string, sub string) bool {
