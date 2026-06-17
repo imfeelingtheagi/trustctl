@@ -12,6 +12,7 @@
       "helm (lint + render + schema)",
       "proto (buf lint + breaking-change gate)",
       "acme conformance (Pebble differential)",
+      "acme stock-client conformance (certbot transcript)",
       "cmp client conformance (OpenSSL transcript)",
       "scep client conformance (sscep transcript)",
       "windows cross-build",

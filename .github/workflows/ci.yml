@@ -401,6 +401,43 @@ jobs:
           SSL_CERT_FILE: ${{ runner.temp }}/pebble-ca.pem
         run: go test ./internal/protocols/acme/ -run TestACMEProtocolDifferentialVsPebble -count=1 -v
 
+  acme-stock-client-conformance:
+    name: acme stock-client conformance (certbot transcript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # INTEROP-004 (stock certbot issue/renew/revoke transcript)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install pinned certbot client
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/certbot-venv"
+          "${RUNNER_TEMP}/certbot-venv/bin/python" -m pip install 'certbot==5.6.0'
+          echo "${RUNNER_TEMP}/certbot-venv/bin" >> "${GITHUB_PATH}"
+
+      - name: certbot issue renew revoke against served ACME endpoint
+        env:
+          TRSTCTL_REQUIRE_CERTBOT: "1"
+          TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
+        run: |
+          command -v certbot
+          mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
+          go test ./internal/protocols/acme -run 'TestACMECertbotManualDNSIssueRenewRevoke|TestArchiveACMEConformanceTranscriptsWritesPublicFiles' -count=1 -v
+
+      - name: Upload ACME certbot conformance transcripts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: acme-certbot-transcripts
+          path: ${{ runner.temp }}/interop-transcripts
+          if-no-files-found: error
+
   cmp-client-conformance:
     name: cmp client conformance (OpenSSL transcript)
     runs-on: ubuntu-latest

@@ -373,10 +373,13 @@ This is a deliberate, documented trust boundary (not an accident):
   - **Reference-implementation differentials (TEST-002).** Two protocols are
     cross-checked against an *independent* implementation, not just our own parser:
     **ACME** runs a differential against **Pebble** (the reference test ACME CA) as a
-    dedicated CI job, and **EST** runs a differential against the **OpenSSL** `pkcs7`
-    parser/verifier on every `make test` (so `/cacerts` and `/simpleenroll` output is
-    validated by code we did not write). The EST wire framing is *additionally*
-    corroborated by an embedded C reference client that enrolls end to end. The
+    dedicated CI job, and now also has a **stock certbot CI transcript**: certbot
+    manual DNS-01 issues, renews, and revokes through the served `/directory` endpoint
+    while CI archives public challenge records, client logs, and issued certificates.
+    **EST** runs a differential against the **OpenSSL** `pkcs7` parser/verifier on
+    every `make test` (so `/cacerts` and `/simpleenroll` output is validated by code
+    we did not write). The EST wire framing is *additionally* corroborated by an
+    embedded C reference client that enrolls end to end. The
     **SPIFFE Workload API** has a **served round-trip differential**: a real
     Workload-API gRPC client (the go-spiffe-vendored protobuf contract, with the
     mandatory `workload.spiffe.io` metadata) fetches and validates an SVID over the
