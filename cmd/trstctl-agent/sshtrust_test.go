@@ -98,6 +98,25 @@ func TestAgentSSHTrustAddsCAAdditively(t *testing.T) {
 	}
 }
 
+func TestAgentSSHTrustIgnoresCommentedDirective(t *testing.T) {
+	o := baseOpts(t)
+	if err := os.WriteFile(o.sshdConfig, []byte("# TrustedUserCAKeys "+o.trustedKeys+"\nPort 2222\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	handled, err := runSSHTrustAddCA(context.Background(), o)
+	if !handled || err != nil {
+		t.Fatalf("AddCATrust: handled=%v err=%v", handled, err)
+	}
+	cfg, _ := os.ReadFile(o.sshdConfig)
+	if got := activeTrustedUserCAKeysDirectives(string(cfg), o.trustedKeys); got != 1 {
+		t.Fatalf("active TrustedUserCAKeys directives = %d, want one active directive; cfg=%q", got, cfg)
+	}
+	if !strings.Contains(string(cfg), "# TrustedUserCAKeys "+o.trustedKeys) {
+		t.Fatalf("commented directive was not preserved: %q", cfg)
+	}
+}
+
 // TestAgentSSHTrustRollsBackOnValidateFailure is the SIGNER-004 lockout-protection
 // assertion: when `sshd -t` (here, a failing validate command) rejects the new
 // config, the change is rolled back — the trust file returns to its prior content
@@ -176,6 +195,21 @@ func TestAgentSSHTrustHealthRequired(t *testing.T) {
 	if string(trust) != orig {
 		t.Errorf("trust file not rolled back after missing health command: %q", trust)
 	}
+}
+
+func activeTrustedUserCAKeysDirectives(content, trustedKeys string) int {
+	count := 0
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) >= 2 && strings.EqualFold(fields[0], "TrustedUserCAKeys") && fields[1] == trustedKeys {
+			count++
+		}
+	}
+	return count
 }
 
 // TestAgentSSHTrustRollsBackOnHealthFailure exercises the production command path:

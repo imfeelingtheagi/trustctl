@@ -85,6 +85,8 @@ type osFS struct{}
 
 func (osFS) ReadFile(p string) ([]byte, error) { return os.ReadFile(p) }
 
+func (osFS) Glob(pattern string) ([]string, error) { return filepath.Glob(pattern) }
+
 func (osFS) WriteFileAtomic(p string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(p)
 	tmp, err := os.CreateTemp(dir, ".trstctl-sshtrust-*")

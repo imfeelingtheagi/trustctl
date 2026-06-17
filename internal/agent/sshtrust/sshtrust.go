@@ -10,7 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+	"unicode"
 
 	"trstctl.com/trstctl/internal/auditsink"
 )
@@ -51,14 +54,18 @@ func (a *Applier) AddCATrust(ctx context.Context, caPublicKey []byte) (changed b
 	if caLine == "" {
 		return false, fmt.Errorf("sshtrust: empty CA public key")
 	}
-	if containsLine(string(trustBak), caLine) {
-		return false, nil // already trusted — idempotent no-op
+	trustHasCA := containsLine(string(trustBak), caLine)
+	newTrust := string(trustBak)
+	if !trustHasCA {
+		newTrust = appendLine(newTrust, caLine)
 	}
-
-	newTrust := appendLine(string(trustBak), caLine)
 	newCfg := string(cfgBak)
 	directive := "TrustedUserCAKeys " + a.cfg.TrustedUserCAKeysPath
-	if !strings.Contains(newCfg, directive) {
+	cfgReferencesTrustFile := a.sshdConfigReferencesTrustedKeys(a.cfg.SSHDConfigPath, newCfg, a.cfg.TrustedUserCAKeysPath, map[string]bool{})
+	if trustHasCA && cfgReferencesTrustFile {
+		return false, nil // already trusted and enabled — idempotent no-op
+	}
+	if !cfgReferencesTrustFile {
 		newCfg = appendLine(newCfg, directive)
 	}
 
@@ -210,4 +217,113 @@ func containsLine(content, line string) bool {
 		}
 	}
 	return false
+}
+
+func (a *Applier) sshdConfigReferencesTrustedKeys(path, content, trustedKeysPath string, seen map[string]bool) bool {
+	cleanPath := filepath.Clean(path)
+	if seen[cleanPath] {
+		return false
+	}
+	seen[cleanPath] = true
+
+	for _, line := range strings.Split(content, "\n") {
+		fields := sshdConfigFields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		switch {
+		case strings.EqualFold(fields[0], "TrustedUserCAKeys") && len(fields) >= 2:
+			if sameSSHDPath(path, fields[1], trustedKeysPath) {
+				return true
+			}
+		case strings.EqualFold(fields[0], "Include"):
+			for _, include := range fields[1:] {
+				for _, includePath := range a.expandInclude(path, include) {
+					includeContent, err := a.cfg.FS.ReadFile(includePath)
+					if err != nil {
+						continue
+					}
+					if a.sshdConfigReferencesTrustedKeys(includePath, string(includeContent), trustedKeysPath, seen) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (a *Applier) expandInclude(configPath, pattern string) []string {
+	resolved := pattern
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(filepath.Dir(configPath), resolved)
+	}
+	if globber, ok := a.cfg.FS.(interface {
+		Glob(pattern string) ([]string, error)
+	}); ok {
+		matches, err := globber.Glob(resolved)
+		if err == nil && len(matches) > 0 {
+			sort.Strings(matches)
+			return matches
+		}
+	}
+	return []string{resolved}
+}
+
+func sameSSHDPath(configPath, got, want string) bool {
+	if got == "" || want == "" {
+		return false
+	}
+	if !filepath.IsAbs(got) {
+		got = filepath.Join(filepath.Dir(configPath), got)
+	}
+	if !filepath.IsAbs(want) {
+		want = filepath.Join(filepath.Dir(configPath), want)
+	}
+	return filepath.Clean(got) == filepath.Clean(want)
+}
+
+func sshdConfigFields(line string) []string {
+	var fields []string
+	var b strings.Builder
+	var quote rune
+	escaped := false
+	flush := func() {
+		if b.Len() == 0 {
+			return
+		}
+		fields = append(fields, b.String())
+		b.Reset()
+	}
+	for _, r := range line {
+		if escaped {
+			b.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if quote != 0 {
+			switch r {
+			case '\\':
+				escaped = true
+			case quote:
+				quote = 0
+			default:
+				b.WriteRune(r)
+			}
+			continue
+		}
+		switch {
+		case r == '#':
+			flush()
+			return fields
+		case r == '"' || r == '\'':
+			quote = r
+		case unicode.IsSpace(r):
+			flush()
+		default:
+			b.WriteRune(r)
+		}
+	}
+	flush()
+	return fields
 }

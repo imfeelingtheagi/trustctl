@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -51,6 +53,20 @@ func (m *memFS) Remove(p string) error {
 	return nil
 }
 func (m *memFS) Exists(p string) bool { _, ok := m.files[p]; return ok }
+func (m *memFS) Glob(pattern string) ([]string, error) {
+	var matches []string
+	for p := range m.files {
+		ok, err := filepath.Match(pattern, p)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			matches = append(matches, p)
+		}
+	}
+	sort.Strings(matches)
+	return matches, nil
+}
 
 func (m *memFS) failWritesAfter(path string, successfulWrites int, err error) {
 	m.writeErr[path] = err
@@ -152,6 +168,89 @@ func TestAddCATrustIsAdditive(t *testing.T) {
 	cfg := string(fs.files[cfgPath])
 	if !strings.Contains(cfg, "Port 2222") || !strings.Contains(cfg, "PermitRootLogin no") {
 		t.Errorf("existing sshd_config directives lost: %q", cfg)
+	}
+}
+
+func TestAddCATrustIgnoresCommentedSSHDDirective(t *testing.T) {
+	fs := newMemFS()
+	fs.files[cfgPath] = []byte("# TrustedUserCAKeys " + trustPath + "\nPort 22\n")
+	a := newApplier(t, fs, &fakeReloader{}, nil)
+	if _, err := a.AddCATrust(context.Background(), []byte(caLine)); err != nil {
+		t.Fatal(err)
+	}
+	cfg := string(fs.files[cfgPath])
+	if got := activeTrustedKeysDirectives(cfg, cfgPath, trustPath); got != 1 {
+		t.Fatalf("active TrustedUserCAKeys directives = %d, want one appended directive; cfg=%q", got, cfg)
+	}
+	if !strings.Contains(cfg, "# TrustedUserCAKeys "+trustPath) {
+		t.Fatalf("commented operator config was not preserved: %q", cfg)
+	}
+}
+
+func TestAddCATrustRepairsConfigWhenCAAlreadyPresentButDirectiveCommented(t *testing.T) {
+	fs := newMemFS()
+	fs.files[trustPath] = []byte(caLine + "\n")
+	fs.files[cfgPath] = []byte("# TrustedUserCAKeys " + trustPath + "\nPort 22\n")
+	a := newApplier(t, fs, &fakeReloader{}, nil)
+	changed, err := a.AddCATrust(context.Background(), []byte(caLine))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("AddCATrust reported idempotent no-op while sshd_config only had a commented directive")
+	}
+	cfg := string(fs.files[cfgPath])
+	if got := activeTrustedKeysDirectives(cfg, cfgPath, trustPath); got != 1 {
+		t.Fatalf("active TrustedUserCAKeys directives = %d, want one repaired directive; cfg=%q", got, cfg)
+	}
+	if strings.Count(string(fs.files[trustPath]), caLine) != 1 {
+		t.Fatalf("repair duplicated CA line in trust file: %q", fs.files[trustPath])
+	}
+}
+
+func TestAddCATrustDoesNotDuplicateActiveSSHDDirective(t *testing.T) {
+	fs := newMemFS()
+	fs.files[cfgPath] = []byte("TrustedUserCAKeys    \"" + trustPath + "\" # managed by operator\n")
+	a := newApplier(t, fs, &fakeReloader{}, nil)
+	if _, err := a.AddCATrust(context.Background(), []byte(caLine)); err != nil {
+		t.Fatal(err)
+	}
+	cfg := string(fs.files[cfgPath])
+	if got := activeTrustedKeysDirectives(cfg, cfgPath, trustPath); got != 1 {
+		t.Fatalf("active TrustedUserCAKeys directives = %d, want no duplicate; cfg=%q", got, cfg)
+	}
+}
+
+func TestAddCATrustHonorsIncludedSSHDDirective(t *testing.T) {
+	fs := newMemFS()
+	includePath := "/etc/ssh/sshd_config.d/10-trust.conf"
+	fs.files[cfgPath] = []byte("Include /etc/ssh/sshd_config.d/*.conf\nPort 22\n")
+	fs.files[includePath] = []byte("TrustedUserCAKeys " + trustPath + "\n")
+	a := newApplier(t, fs, &fakeReloader{}, nil)
+	if _, err := a.AddCATrust(context.Background(), []byte(caLine)); err != nil {
+		t.Fatal(err)
+	}
+	cfg := string(fs.files[cfgPath])
+	if got := activeTrustedKeysDirectives(cfg, cfgPath, trustPath); got != 0 {
+		t.Fatalf("main sshd_config gained a duplicate directive despite active include, got %d; cfg=%q", got, cfg)
+	}
+	if !strings.Contains(string(fs.files[trustPath]), caLine) {
+		t.Fatal("CA was not added to the configured trust file")
+	}
+}
+
+func TestAddCATrustIgnoresCommentedIncludedSSHDDirective(t *testing.T) {
+	fs := newMemFS()
+	includePath := "/etc/ssh/sshd_config.d/10-trust.conf"
+	fs.files[cfgPath] = []byte("Include /etc/ssh/sshd_config.d/*.conf\nPort 22\n")
+	fs.files[includePath] = []byte("# TrustedUserCAKeys " + trustPath + "\n")
+	a := newApplier(t, fs, &fakeReloader{}, nil)
+	if _, err := a.AddCATrust(context.Background(), []byte(caLine)); err != nil {
+		t.Fatal(err)
+	}
+	cfg := string(fs.files[cfgPath])
+	if got := activeTrustedKeysDirectives(cfg, cfgPath, trustPath); got != 1 {
+		t.Fatalf("commented included directive suppressed active append, got %d; cfg=%q", got, cfg)
 	}
 }
 
@@ -338,4 +437,15 @@ func TestAllowUnconfirmedRemovalOptOut(t *testing.T) {
 	if strings.Contains(string(fs.files[trustPath]), caLine) {
 		t.Error("trust line not removed under the explicit opt-out")
 	}
+}
+
+func activeTrustedKeysDirectives(content, configPath, trustedKeysPath string) int {
+	count := 0
+	for _, line := range strings.Split(content, "\n") {
+		fields := sshdConfigFields(line)
+		if len(fields) >= 2 && strings.EqualFold(fields[0], "TrustedUserCAKeys") && sameSSHDPath(configPath, fields[1], trustedKeysPath) {
+			count++
+		}
+	}
+	return count
 }
