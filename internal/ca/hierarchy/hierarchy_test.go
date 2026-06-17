@@ -7,13 +7,16 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -148,6 +151,84 @@ func TestCompletedCeremonyCannotBeReused(t *testing.T) {
 	if len(authorities) != 1 || authorities[0].CommonName != "root-a" {
 		t.Fatalf("authorities after reuse attempt = %+v, want only root-a", authorities)
 	}
+}
+
+func TestApprovalWithoutEventEvidenceCannotReachQuorum(t *testing.T) {
+	m, s := newHierarchyHarness(t)
+	ctx := context.Background()
+	spec := CASpec{CommonName: "evidence-root", MaxPathLen: 1, TTL: time.Hour}
+	ceremonyID, err := m.StartCeremony(ctx, testTenant, PurposeRoot(spec), 1)
+	if err != nil {
+		t.Fatalf("StartCeremony: %v", err)
+	}
+
+	// Force the append after the approval-row reservation to fail. The row may exist
+	// as retry state, but it has no event id/sequence and must not count.
+	if err := m.log.Close(); err != nil {
+		t.Fatalf("close event log: %v", err)
+	}
+	if count, err := m.Approve(ctx, testTenant, ceremonyID, "custodian-1"); err == nil {
+		t.Fatal("Approve with a closed event log succeeded; want append failure")
+	} else if count != 0 {
+		t.Fatalf("Approve with failed event append returned count %d, want 0 evidence-backed approvals", count)
+	}
+	c, err := s.GetKeyCeremony(ctx, testTenant, ceremonyID)
+	if err != nil {
+		t.Fatalf("GetKeyCeremony: %v", err)
+	}
+	if c.Approvals != 0 {
+		t.Fatalf("unevidenced approval count = %d, want 0", c.Approvals)
+	}
+	if _, err := m.CreateRoot(ctx, testTenant, ceremonyID, spec); !errors.Is(err, ErrQuorumNotMet) {
+		t.Fatalf("CreateRoot with unevidenced approval = %v, want ErrQuorumNotMet", err)
+	}
+
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("events.Open retry log: %v", err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	m2 := NewManager(s, log)
+	if count, err := m2.Approve(ctx, testTenant, ceremonyID, "custodian-1"); err != nil {
+		t.Fatalf("Approve retry with event log: %v", err)
+	} else if count != 1 {
+		t.Fatalf("Approve retry count = %d, want 1", count)
+	}
+	root, err := m2.CreateRoot(ctx, testTenant, ceremonyID, spec)
+	if err != nil {
+		t.Fatalf("CreateRoot after evidenced approval: %v", err)
+	}
+
+	sk, err := jose.GenerateRSASigningKey("ceremony-evidence-key")
+	if err != nil {
+		t.Fatalf("GenerateRSASigningKey: %v", err)
+	}
+	svc := audit.NewService(log, sk)
+	signed, err := svc.Export(ctx, audit.Query{TenantID: testTenant})
+	if err != nil {
+		t.Fatalf("Export audit bundle: %v", err)
+	}
+	bundle, err := audit.VerifyBundle(signed, svc.VerificationKeys())
+	if err != nil {
+		t.Fatalf("VerifyBundle: %v", err)
+	}
+	sawApproval := false
+	sawRoot := false
+	for _, rec := range bundle.Records {
+		switch rec.Type {
+		case "ca.ceremony.approved":
+			sawApproval = sawApproval || strings.Contains(string(rec.Data), "custodian-1")
+		case "ca.root.created":
+			sawRoot = true
+		}
+	}
+	if !sawApproval {
+		t.Fatal("signed audit bundle lacks ca.ceremony.approved for custodian-1")
+	}
+	if !sawRoot {
+		t.Fatal("signed audit bundle lacks ca.root.created")
+	}
+	_ = root
 }
 
 func TestCeremonyPurposeMismatchFailsClosedForPrivilegedCAOperations(t *testing.T) {

@@ -126,9 +126,10 @@ func (s *Store) SupersedeCAAuthorityTx(ctx context.Context, tx pgx.Tx, tenantID,
 }
 
 // KeyCeremony is an m-of-n CA key-generation ceremony. Approvals is the current
-// count of distinct custodian approvals. Opener is the authenticated principal
-// who started it (empty when unattributed), used to enforce opener != approver
-// separation of duties (PKIGOV-006).
+// count of distinct custodian approvals that also have immutable event-log
+// evidence. Opener is the authenticated principal who started it (empty when
+// unattributed), used to enforce opener != approver separation of duties
+// (PKIGOV-006).
 type KeyCeremony struct {
 	ID        string
 	TenantID  string
@@ -176,24 +177,29 @@ func (s *Store) CreateKeyCeremony(ctx context.Context, tenantID, purpose, opener
 	return id, err
 }
 
-// ApproveKeyCeremony records a custodian's approval (idempotent per custodian) and
-// returns the resulting distinct-approval count. It enforces PKIGOV-006: the
-// custodian must be a named identity (not empty), and the ceremony's opener may not
-// approve their own ceremony (opener != approver). Both checks run in the same
-// tenant-scoped transaction as the insert, fail closed, and never record a
-// disallowed approval.
-func (s *Store) ApproveKeyCeremony(ctx context.Context, tenantID, ceremonyID, custodian string) (int, error) {
+// ReserveKeyCeremonyApproval reserves a custodian's approval row (idempotent per
+// custodian) and returns the current evidence-backed approval count plus whether
+// this row still needs event evidence. It enforces PKIGOV-006: the custodian must
+// be a named identity (not empty), and the ceremony's opener may not approve their
+// own ceremony (opener != approver). PKIGOV-003: a reserved row has no quorum power
+// until AttachKeyCeremonyApprovalEvidence records the event id/sequence that is
+// present in the immutable audit bundle.
+func (s *Store) ReserveKeyCeremonyApproval(ctx context.Context, tenantID, ceremonyID, custodian string) (int, bool, error) {
 	if custodian == "" {
-		return 0, ErrAnonymousApproval
+		return 0, false, ErrAnonymousApproval
 	}
 	var count int
+	var evidenced bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		// Separation of duties: a ceremony's opener cannot also approve it.
-		var opener string
+		var opener, status string
 		if err := tx.QueryRow(ctx,
-			`SELECT opener FROM ca_key_ceremonies WHERE tenant_id = $1 AND id = $2`,
-			tenantID, ceremonyID).Scan(&opener); err != nil {
+			`SELECT opener, status FROM ca_key_ceremonies WHERE tenant_id = $1 AND id = $2`,
+			tenantID, ceremonyID).Scan(&opener, &status); err != nil {
 			return err
+		}
+		if status != "pending" {
+			return ErrKeyCeremonyNotPending
 		}
 		if opener != "" && opener == custodian {
 			return ErrSelfApproval
@@ -205,8 +211,47 @@ func (s *Store) ApproveKeyCeremony(ctx context.Context, tenantID, ceremonyID, cu
 			tenantID, ceremonyID, custodian); err != nil {
 			return err
 		}
+		if err := tx.QueryRow(ctx,
+			`SELECT approval_event_id IS NOT NULL
+			   FROM ca_ceremony_approvals
+			  WHERE tenant_id = $1 AND ceremony_id = $2 AND custodian = $3`,
+			tenantID, ceremonyID, custodian).Scan(&evidenced); err != nil {
+			return err
+		}
 		return tx.QueryRow(ctx,
-			`SELECT count(*) FROM ca_ceremony_approvals WHERE tenant_id = $1 AND ceremony_id = $2`,
+			`SELECT count(*) FROM ca_ceremony_approvals
+			  WHERE tenant_id = $1 AND ceremony_id = $2 AND approval_event_id IS NOT NULL`,
+			tenantID, ceremonyID).Scan(&count)
+	})
+	return count, !evidenced, err
+}
+
+// AttachKeyCeremonyApprovalEvidence gives a reserved approval row quorum power by
+// binding it to the event id and stream sequence returned by events.Append. If the
+// event append never happened, callers cannot call this method with real evidence,
+// and the row remains ignored by quorum checks.
+func (s *Store) AttachKeyCeremonyApprovalEvidence(ctx context.Context, tenantID, ceremonyID, custodian, eventID string, eventSequence uint64) (int, error) {
+	if eventID == "" || eventSequence == 0 {
+		return 0, errors.New("store: ceremony approval evidence requires event id and sequence")
+	}
+	var count int
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var attachedID string
+		if err := tx.QueryRow(ctx,
+			`UPDATE ca_ceremony_approvals
+			    SET approval_event_id = COALESCE(approval_event_id, $4),
+			        approval_event_sequence = COALESCE(approval_event_sequence, $5)
+			  WHERE tenant_id = $1 AND ceremony_id = $2 AND custodian = $3
+			  RETURNING approval_event_id`,
+			tenantID, ceremonyID, custodian, eventID, int64(eventSequence)).Scan(&attachedID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrKeyCeremonyQuorumNotMet
+			}
+			return err
+		}
+		return tx.QueryRow(ctx,
+			`SELECT count(*) FROM ca_ceremony_approvals
+			  WHERE tenant_id = $1 AND ceremony_id = $2 AND approval_event_id IS NOT NULL`,
 			tenantID, ceremonyID).Scan(&count)
 	})
 	return count, err
@@ -219,7 +264,8 @@ func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCer
 		return tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, purpose, threshold, status, opener, created_at,
 			        (SELECT count(*) FROM ca_ceremony_approvals a
-			          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id)
+			          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id
+			            AND a.approval_event_id IS NOT NULL)
 			   FROM ca_key_ceremonies c WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals)
 	})
@@ -253,7 +299,8 @@ func (s *Store) ConsumeKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, i
 	if err := tx.QueryRow(ctx,
 		`SELECT c.id::text, c.tenant_id::text, c.purpose, c.threshold, c.status, c.opener, c.created_at,
 		        (SELECT count(*) FROM ca_ceremony_approvals a
-		          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id)
+		          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id
+		            AND a.approval_event_id IS NOT NULL)
 		   FROM ca_key_ceremonies c
 		  WHERE c.tenant_id = $1 AND c.id = $2
 		  FOR UPDATE`,

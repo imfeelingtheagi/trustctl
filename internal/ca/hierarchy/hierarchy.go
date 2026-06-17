@@ -131,27 +131,35 @@ func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, t
 // PKIGOV-006: a named (non-empty) custodian, and opener != approver. A self-
 // approval by the opener is rejected with store.ErrSelfApproval.
 //
-// PKIGOV-010: the individual approval act is also emitted as a ca.ceremony.approved
-// event on the AN-2 log (custodian, ceremony, count, time), so the four-eyes trail
-// is part of the signed, hash-chained, offline-verifiable audit-evidence bundle —
-// not only a row in the ca_key_ceremonies read table. The event is emitted only
-// after the store records the approval; if the store rejects it (self-approval,
-// anonymous custodian), no event is written. A best-effort emit failure does not
-// roll back the recorded approval but is returned so the caller sees it.
+// PKIGOV-010 / PKIGOV-003: the individual approval act is emitted as a
+// ca.ceremony.approved event on the AN-2 log (custodian, ceremony, count, time), so
+// the four-eyes trail is part of the signed, hash-chained, offline-verifiable
+// audit-evidence bundle — not only a row in the ca_key_ceremonies read table. The
+// store first reserves an idempotent approval row, then the event append succeeds,
+// then the row is bound to that event id/sequence. If the append fails, the row has
+// no evidence and does not count toward quorum.
 func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian string) (int, error) {
 	if a, ok := events.ActorFromContext(ctx); ok && a.Subject != "" {
 		custodian = a.Subject
 	}
-	count, err := m.store.ApproveKeyCeremony(ctx, tenantID, ceremonyID, custodian)
+	count, needsEvidence, err := m.store.ReserveKeyCeremonyApproval(ctx, tenantID, ceremonyID, custodian)
 	if err != nil {
 		return count, err
 	}
-	if emitErr := m.emit(ctx, tenantID, "ca.ceremony.approved", map[string]any{
+	if !needsEvidence {
+		return count, nil
+	}
+	ev, emitErr := m.appendEvent(ctx, tenantID, "ca.ceremony.approved", map[string]any{
 		"ceremony_id": ceremonyID,
 		"custodian":   custodian,
-		"approvals":   count,
-	}); emitErr != nil {
+		"approvals":   count + 1,
+	})
+	if emitErr != nil {
 		return count, fmt.Errorf("hierarchy: record ceremony approval event: %w", emitErr)
+	}
+	count, err = m.store.AttachKeyCeremonyApprovalEvidence(ctx, tenantID, ceremonyID, custodian, ev.ID, ev.Sequence)
+	if err != nil {
+		return count, fmt.Errorf("hierarchy: attach ceremony approval evidence: %w", err)
 	}
 	return count, nil
 }
@@ -356,12 +364,16 @@ func (m *Manager) get(id string) (*cryptoca.CA, error) {
 }
 
 func (m *Manager) emit(ctx context.Context, tenantID, eventType string, data map[string]any) error {
+	_, err := m.appendEvent(ctx, tenantID, eventType, data)
+	return err
+}
+
+func (m *Manager) appendEvent(ctx context.Context, tenantID, eventType string, data map[string]any) (events.Event, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return events.Event{}, err
 	}
-	_, err = m.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
-	return err
+	return m.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
 }
 
 func toCryptoSpec(s CASpec) cryptoca.CASpec {

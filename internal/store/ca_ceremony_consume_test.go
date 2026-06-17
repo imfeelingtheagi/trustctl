@@ -18,6 +18,23 @@ func consumeCeremonyForTest(t *testing.T, s *store.Store, ceremonyID, expectedPu
 	})
 }
 
+func approveCeremonyWithEvidenceForTest(t *testing.T, s *store.Store, ceremonyID, custodian, eventID string, seq uint64) int {
+	t.Helper()
+	ctx := context.Background()
+	count, needsEvidence, err := s.ReserveKeyCeremonyApproval(ctx, tenantA, ceremonyID, custodian)
+	if err != nil {
+		t.Fatalf("ReserveKeyCeremonyApproval(%s): %v", custodian, err)
+	}
+	if !needsEvidence {
+		return count
+	}
+	count, err = s.AttachKeyCeremonyApprovalEvidence(ctx, tenantA, ceremonyID, custodian, eventID, seq)
+	if err != nil {
+		t.Fatalf("AttachKeyCeremonyApprovalEvidence(%s): %v", custodian, err)
+	}
+	return count
+}
+
 func TestConsumeKeyCeremonyTxIsSingleUseAndPurposeBound(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
@@ -27,18 +44,14 @@ func TestConsumeKeyCeremonyTxIsSingleUseAndPurposeBound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateKeyCeremony: %v", err)
 	}
-	if _, err := s.ApproveKeyCeremony(ctx, tenantA, ceremonyID, "bob"); err != nil {
-		t.Fatalf("ApproveKeyCeremony(bob): %v", err)
-	}
+	approveCeremonyWithEvidenceForTest(t, s, ceremonyID, "bob", "ev-bob", 1)
 	if err := consumeCeremonyForTest(t, s, ceremonyID, "root"); !errors.Is(err, store.ErrKeyCeremonyQuorumNotMet) {
 		t.Fatalf("consume below quorum = %v, want ErrKeyCeremonyQuorumNotMet", err)
 	}
 	if err := consumeCeremonyForTest(t, s, ceremonyID, "intermediate:parent"); !errors.Is(err, store.ErrKeyCeremonyPurposeMismatch) {
 		t.Fatalf("consume with wrong purpose = %v, want ErrKeyCeremonyPurposeMismatch", err)
 	}
-	if _, err := s.ApproveKeyCeremony(ctx, tenantA, ceremonyID, "carol"); err != nil {
-		t.Fatalf("ApproveKeyCeremony(carol): %v", err)
-	}
+	approveCeremonyWithEvidenceForTest(t, s, ceremonyID, "carol", "ev-carol", 2)
 	if err := consumeCeremonyForTest(t, s, ceremonyID, "root"); err != nil {
 		t.Fatalf("consume with quorum and purpose: %v", err)
 	}

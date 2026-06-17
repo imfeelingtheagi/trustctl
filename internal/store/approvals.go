@@ -10,10 +10,11 @@ import (
 // Served dual-control for privileged issuance/revoke (EXC-WIRE-03; closes SEC-002,
 // the served half of RED-004). These repositories back the served mutation gate's
 // distinct-approver requirement. They mirror the proven m-of-n CA key-ceremony
-// approval store (CreateKeyCeremony/ApproveKeyCeremony): every query is tenant-
-// scoped and runs under row-level security (AN-1), an approver's approval is
-// idempotent, and the request opener (requester) may NOT approve their own request
-// (opener != approver separation of duties — the dual-control invariant).
+// approval store (CreateKeyCeremony plus evidence-backed approval reservation):
+// every query is tenant-scoped and runs under row-level security (AN-1), an
+// approver's approval is idempotent, and the request opener (requester) may NOT
+// approve their own request (opener != approver separation of duties — the
+// dual-control invariant).
 
 // ErrSelfIssuanceApproval is returned when the requester of a privileged action
 // attempts to approve it themselves. Dual control requires a DISTINCT approver
