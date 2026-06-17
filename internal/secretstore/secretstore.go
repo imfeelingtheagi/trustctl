@@ -204,17 +204,24 @@ func (s *Store) Purge(ctx context.Context, path string) error {
 
 // Reconstruct rebuilds per-path version envelopes from the event log for a tenant,
 // proving the read model is a projection of the event stream (AN-2). The returned
-// envelopes are still encrypted; callers with the KEK can OpenEnvelope them.
-func Reconstruct(records []auditsink.Record, tenantID string) map[string][]crypto.Envelope {
+// envelopes are still encrypted; callers with the KEK can OpenEnvelope them. Replay
+// validates the explicit envelope format/version instead of blindly trusting a JSON
+// shape; pre-SCHEMA-006 events with no metadata decode through the legacy v1 branch.
+func Reconstruct(records []auditsink.Record, tenantID string) (map[string][]crypto.Envelope, error) {
 	out := map[string][]crypto.Envelope{}
 	for _, r := range records {
 		if r.Type != EventVersionWritten || r.TenantID != tenantID {
 			continue
 		}
 		var ev writeEvent
-		if json.Unmarshal(r.Data, &ev) == nil {
-			out[ev.Path] = append(out[ev.Path], ev.Envelope)
+		if err := json.Unmarshal(r.Data, &ev); err != nil {
+			return nil, fmt.Errorf("secrets: decode version-written event: %w", err)
 		}
+		env, err := crypto.NormalizeEnvelope(ev.Envelope)
+		if err != nil {
+			return nil, fmt.Errorf("secrets: decode envelope for %q version %d: %w", ev.Path, ev.Version, err)
+		}
+		out[ev.Path] = append(out[ev.Path], env)
 	}
-	return out
+	return out, nil
 }

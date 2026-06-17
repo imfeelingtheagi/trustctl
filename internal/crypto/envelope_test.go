@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"testing"
 )
@@ -47,6 +48,51 @@ func TestEnvelopeFailsClosed(t *testing.T) {
 	bad.Ciphertext[0] ^= 0xff
 	if _, err := OpenEnvelope(kek, bad, aad); err == nil {
 		t.Error("opened tampered ciphertext")
+	}
+}
+
+func TestEnvelopeCarriesVersionAndLegacyDecoder(t *testing.T) {
+	kek, _ := NewKEK()
+	aad := []byte("tenant1|app/db/password")
+	pt := []byte("super-secret-value")
+
+	env, err := SealEnvelope(kek, pt, aad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Format != EnvelopeFormat || env.Version != EnvelopeVersion {
+		t.Fatalf("envelope metadata = %q v%d, want %q v%d", env.Format, env.Version, EnvelopeFormat, EnvelopeVersion)
+	}
+	raw, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range [][]byte{[]byte(`"format"`), []byte(`"version"`), []byte(EnvelopeFormat)} {
+		if !bytes.Contains(raw, want) {
+			t.Fatalf("marshaled envelope %s does not contain %s", raw, want)
+		}
+	}
+
+	legacy := env
+	legacy.Format = ""
+	legacy.Version = 0
+	got, err := OpenEnvelope(kek, legacy, aad)
+	if err != nil {
+		t.Fatalf("OpenEnvelope legacy v1: %v", err)
+	}
+	if !bytes.Equal(got, pt) {
+		t.Fatalf("legacy v1 plaintext = %q, want %q", got, pt)
+	}
+
+	unknownVersion := env
+	unknownVersion.Version = EnvelopeVersion + 1
+	if _, err := OpenEnvelope(kek, unknownVersion, aad); err == nil {
+		t.Fatal("OpenEnvelope accepted an explicitly unknown envelope version")
+	}
+	unknownFormat := env
+	unknownFormat.Format = "trstctl.crypto.future-envelope"
+	if _, err := OpenEnvelope(kek, unknownFormat, aad); err == nil {
+		t.Fatal("OpenEnvelope accepted an explicitly unknown envelope format")
 	}
 }
 

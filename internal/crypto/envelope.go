@@ -9,12 +9,24 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
+const (
+	// EnvelopeFormat identifies the legacy secretstore JSON envelope. The served
+	// secret store uses internal/crypto/seal's binary container; this older event
+	// payload keeps an explicit format/version so replay can dispatch safely.
+	EnvelopeFormat = "trstctl.crypto.envelope"
+	// EnvelopeVersion is the only JSON envelope layout written today.
+	EnvelopeVersion = 1
+)
+
 // Envelope is an envelope-encrypted secret: the plaintext is encrypted under a
 // per-secret data key (DEK) with AES-256-GCM, and the DEK is itself wrapped under
 // the key-encryption key (KEK) with AES-256-GCM. This is the at-rest storage form
 // for the secret store (S16.3); the KEK lives in software or an HSM (S9.x). All
-// material is []byte and DEKs are zeroized after use (AN-8).
+// material is []byte and DEKs are zeroized after use (AN-8). Format and Version
+// are not secret material; they make persisted event history self-describing.
 type Envelope struct {
+	Format     string `json:"format,omitempty"`
+	Version    int    `json:"version,omitempty"`
 	WrappedDEK []byte `json:"wrapped_dek"`
 	DEKNonce   []byte `json:"dek_nonce"`
 	Nonce      []byte `json:"nonce"`
@@ -50,7 +62,14 @@ func SealEnvelope(kek, plaintext, aad []byte) (Envelope, error) {
 	if err != nil {
 		return Envelope{}, err
 	}
-	return Envelope{WrappedDEK: wrapped, DEKNonce: dnonce, Nonce: nonce, Ciphertext: ct}, nil
+	return Envelope{
+		Format:     EnvelopeFormat,
+		Version:    EnvelopeVersion,
+		WrappedDEK: wrapped,
+		DEKNonce:   dnonce,
+		Nonce:      nonce,
+		Ciphertext: ct,
+	}, nil
 }
 
 // OpenEnvelope decrypts an Envelope under kek with the same aad. A wrong KEK,
@@ -58,6 +77,10 @@ func SealEnvelope(kek, plaintext, aad []byte) (Envelope, error) {
 func OpenEnvelope(kek []byte, env Envelope, aad []byte) ([]byte, error) {
 	if len(kek) != 32 {
 		return nil, fmt.Errorf("crypto: KEK must be 32 bytes (AES-256)")
+	}
+	env, err := NormalizeEnvelope(env)
+	if err != nil {
+		return nil, err
 	}
 	dek, err := gcmOpen(kek, env.WrappedDEK, env.DEKNonce, aad)
 	if err != nil {
@@ -69,6 +92,23 @@ func OpenEnvelope(kek []byte, env Envelope, aad []byte) ([]byte, error) {
 		return nil, fmt.Errorf("crypto: decrypt secret: %w", err)
 	}
 	return pt, nil
+}
+
+// NormalizeEnvelope validates the envelope metadata and returns a canonical v1
+// envelope. A pre-SCHEMA-006 event with no metadata is treated as legacy v1 so
+// existing history still replays; any explicit unknown format or version fails
+// closed until this package learns that layout.
+func NormalizeEnvelope(env Envelope) (Envelope, error) {
+	switch {
+	case env.Format == "" && env.Version == 0:
+		env.Format = EnvelopeFormat
+		env.Version = EnvelopeVersion
+		return env, nil
+	case env.Format == EnvelopeFormat && env.Version == EnvelopeVersion:
+		return env, nil
+	default:
+		return Envelope{}, fmt.Errorf("crypto: unsupported envelope format %q version %d", env.Format, env.Version)
+	}
 }
 
 // AESGCMSeal encrypts plaintext with a 32-byte key and returns nonce||ciphertext.

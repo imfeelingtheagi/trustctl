@@ -3,6 +3,7 @@ package secretstore
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -83,7 +84,19 @@ func TestStoreVersionHistoryReconstructsFromEvents(t *testing.T) {
 	_, _ = s.Put(ctx, "app/db", []byte("v2"), "")
 
 	// Rebuild from the event log alone (AN-2 projection).
-	rebuilt := Reconstruct(rec.Records(), "t1")
+	records := rec.Records()
+	var written writeEvent
+	if err := json.Unmarshal(records[0].Data, &written); err != nil {
+		t.Fatal(err)
+	}
+	if written.Envelope.Format != crypto.EnvelopeFormat || written.Envelope.Version != crypto.EnvelopeVersion {
+		t.Fatalf("version-written event envelope metadata = %q v%d, want %q v%d",
+			written.Envelope.Format, written.Envelope.Version, crypto.EnvelopeFormat, crypto.EnvelopeVersion)
+	}
+	rebuilt, err := Reconstruct(records, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	envs := rebuilt["app/db"]
 	if len(envs) != 2 {
 		t.Fatalf("reconstructed %d versions, want 2", len(envs))
@@ -92,6 +105,66 @@ func TestStoreVersionHistoryReconstructsFromEvents(t *testing.T) {
 	pt, err := crypto.OpenEnvelope(kek, envs[1], []byte("t1|app/db"))
 	if err != nil || string(pt) != "v2" {
 		t.Fatalf("decrypt reconstructed v2 = %q (err %v), want v2", pt, err)
+	}
+}
+
+func TestStoreReconstructAcceptsLegacyEnvelopeVersion(t *testing.T) {
+	kek, _ := crypto.NewKEK()
+	env, err := crypto.SealEnvelope(kek, []byte("legacy-v1"), []byte("t1|app/db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Format = ""
+	env.Version = 0
+	payload, err := json.Marshal(writeEvent{Path: "app/db", Version: 1, Envelope: env})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rebuilt, err := Reconstruct([]auditsink.Record{{
+		Type:     EventVersionWritten,
+		TenantID: "t1",
+		Data:     payload,
+	}}, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	envs := rebuilt["app/db"]
+	if len(envs) != 1 {
+		t.Fatalf("reconstructed %d versions, want 1", len(envs))
+	}
+	if envs[0].Format != crypto.EnvelopeFormat || envs[0].Version != crypto.EnvelopeVersion {
+		t.Fatalf("legacy envelope normalized to %q v%d, want %q v%d",
+			envs[0].Format, envs[0].Version, crypto.EnvelopeFormat, crypto.EnvelopeVersion)
+	}
+	pt, err := crypto.OpenEnvelope(kek, envs[0], []byte("t1|app/db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(pt) != "legacy-v1" {
+		t.Fatalf("legacy reconstructed plaintext = %q, want legacy-v1", pt)
+	}
+}
+
+func TestStoreReconstructRejectsUnknownEnvelopeVersion(t *testing.T) {
+	kek, _ := crypto.NewKEK()
+	env, err := crypto.SealEnvelope(kek, []byte("future"), []byte("t1|app/db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Version = crypto.EnvelopeVersion + 1
+	payload, err := json.Marshal(writeEvent{Path: "app/db", Version: 1, Envelope: env})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Reconstruct([]auditsink.Record{{
+		Type:     EventVersionWritten,
+		TenantID: "t1",
+		Data:     payload,
+	}}, "t1")
+	if err == nil {
+		t.Fatal("Reconstruct accepted an explicitly unknown envelope version")
 	}
 }
 
