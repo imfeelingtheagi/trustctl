@@ -33,8 +33,10 @@ spec:
           args:
             - "--k8s"
             - "--enroll-url=$(TRSTCTL_ENROLL_URL)"
+            - "--bootstrap-token-file=/var/run/trstctl/bootstrap/token"
             - "--ca-bundle=/etc/trstctl/ca-bundle.pem"
             - "--server=$(TRSTCTL_SERVER)"
+            - "--server-name=$(TRSTCTL_SERVER_NAME)"
             - "--name=$(NODE_NAME)"
             - "--k8s-secret=trstctl/$(NODE_NAME)-tls"
             - "--cert-manager-issuer=trstctl"
@@ -44,10 +46,15 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: TRSTCTL_ENROLL_URL
-              value: "https://trstctl.trstctl.svc:8443/enroll"
+              value: "https://trstctl:8443"
             - name: TRSTCTL_SERVER
-              value: "trstctl.trstctl.svc:9443"
+              value: "trstctl:9443"
+            - name: TRSTCTL_SERVER_NAME
+              value: "trstctl"
           volumeMounts:
+            - name: bootstrap-token
+              mountPath: /var/run/trstctl/bootstrap
+              readOnly: true
             - name: ca-bundle
               mountPath: /etc/trstctl
               readOnly: true
@@ -64,6 +71,12 @@ spec:
               cpu: 200m
               memory: 128Mi
       volumes:
+        - name: bootstrap-token
+          secret:
+            secretName: trstctl-agent-bootstrap
+            items:
+              - key: token
+                path: token
         - name: ca-bundle
           configMap:
             name: trstctl-ca-bundle

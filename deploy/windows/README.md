@@ -44,17 +44,38 @@ the `.exe`/`.msi` with `signtool` when `WINDOWS_CODESIGN_PFX_BASE64` is set. The
 
 The MSI registers the service automatically (its `ServiceInstall` /
 `ServiceControl` elements, generated from the same `winservice.Spec` the agent
-uses). The agent can also manage the service directly:
+uses). A production install must provide the first-boot enrollment settings:
+the enrollment base URL, a one-time bootstrap token file, the CA bundle, the
+agent-channel endpoint, and the TLS server name the control plane cert carries.
+
+```powershell
+New-Item -ItemType Directory -Force C:\ProgramData\trstctl | Out-Null
+$token = (trstctl-cli agents enroll-token | ConvertFrom-Json).token
+Set-Content -Path C:\ProgramData\trstctl\bootstrap-token.txt -Value $token -NoNewline
+
+msiexec /i trstctl-agent.msi /qn `
+  ENROLLURL=https://cp:8443 `
+  SERVER=cp:9443 `
+  SERVERNAME=cp `
+  CABUNDLE=C:\ProgramData\trstctl\ca-bundle.pem `
+  BOOTSTRAPTOKENFILE=C:\ProgramData\trstctl\bootstrap-token.txt
+```
+
+The agent can also manage the service directly:
 
 ```bat
-trstctl-agent.exe --service=install --enroll-url https://cp:8443/enroll ^
-    --ca-bundle C:\ProgramData\trstctl\ca-bundle.pem --server cp:9443 --name %COMPUTERNAME%
+trstctl-agent.exe --service=install --enroll-url https://cp:8443 ^
+    --bootstrap-token-file C:\ProgramData\trstctl\bootstrap-token.txt ^
+    --ca-bundle C:\ProgramData\trstctl\ca-bundle.pem --server cp:9443 ^
+    --server-name cp --name %COMPUTERNAME%
 trstctl-agent.exe --service=uninstall
 ```
 
 `--service=install` registers an auto-start `LocalSystem` service whose command
 line reproduces the supplied flags with `--service=run`; the SCM then starts the
 agent, which enrolls, maintains mutual TLS, and installs and rotates credentials.
+The token file is single-use. After enrollment succeeds and the service persists
+its certificate, rotate or delete the token file.
 
 ## Certificate store destination
 

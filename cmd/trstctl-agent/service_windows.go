@@ -63,6 +63,9 @@ func serviceArguments(o agentOptions) []string {
 	if o.token != "" {
 		args = append(args, "--bootstrap-token", o.token)
 	}
+	if o.tokenFile != "" {
+		args = append(args, "--bootstrap-token-file", o.tokenFile)
+	}
 	if o.serverName != "" {
 		args = append(args, "--server-name", o.serverName)
 	}

@@ -13,14 +13,17 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 func main() {
@@ -28,6 +31,7 @@ func main() {
 	service := flag.String("service", "", "Windows service control: install | uninstall | run")
 	enrollURL := flag.String("enroll-url", "", "control-plane enrollment base URL")
 	token := flag.String("bootstrap-token", "", "one-time bootstrap token")
+	tokenFile := flag.String("bootstrap-token-file", "", "file containing the one-time bootstrap token")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
 	serverName := flag.String("server-name", "", "expected control-plane server name (defaults to --name)")
@@ -82,8 +86,12 @@ func main() {
 
 	o := agentOptions{
 		enrollURL: *enrollURL, token: *token, caBundle: *caBundle,
-		serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
+		tokenFile: *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
+	}
+	if o.token != "" && o.tokenFile != "" {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: use only one of --bootstrap-token or --bootstrap-token-file")
+		os.Exit(2)
 	}
 
 	// Uninstalling a service needs no connection settings; everything else does.
@@ -120,8 +128,8 @@ func main() {
 }
 
 type agentOptions struct {
-	enrollURL, token, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
-	rotateEvery                                                                       time.Duration
+	enrollURL, token, tokenFile, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
+	rotateEvery                                                                                  time.Duration
 }
 
 // runAgent bootstraps the agent, connects to the control plane over mTLS, and
@@ -132,6 +140,15 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if err != nil {
 		return fmt.Errorf("read CA bundle: %w", err)
 	}
+	token, err := bootstrapTokenForRun(o)
+	if err != nil {
+		return err
+	}
+	enrollTransport, err := mtls.HTTPTransport(caPEM)
+	if err != nil {
+		return fmt.Errorf("build enrollment TLS trust: %w", err)
+	}
+	enrollClient := &http.Client{Transport: enrollTransport, Timeout: 30 * time.Second}
 	serverName := o.serverName
 	if serverName == "" {
 		serverName = o.commonName
@@ -139,14 +156,14 @@ func runAgent(ctx context.Context, o agentOptions) error {
 
 	a := agent.New(agent.Config{
 		CommonName:     o.commonName,
-		BootstrapToken: o.token,
+		BootstrapToken: token,
 		KeyPath:        o.keyPath,
 		CertPath:       o.certPath,
 		ServerName:     serverName,
 		ServerCAPEM:    caPEM,
 		RefreshBefore:  o.rotateEvery,
 		Version:        buildinfo.Version(),
-	}, agent.NewHTTPEnroller(o.enrollURL, nil))
+	}, agent.NewHTTPEnroller(o.enrollURL, enrollClient))
 
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
@@ -209,6 +226,49 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			resetTimer(rotateTimer, o.rotateEvery)
 		}
 	}
+}
+
+func bootstrapToken(o agentOptions) (string, error) {
+	if o.token != "" && o.tokenFile != "" {
+		return "", fmt.Errorf("use only one of --bootstrap-token or --bootstrap-token-file")
+	}
+	if o.tokenFile == "" {
+		return o.token, nil
+	}
+	data, err := os.ReadFile(o.tokenFile)
+	if err != nil {
+		return "", fmt.Errorf("read bootstrap token file: %w", err)
+	}
+	defer func() {
+		for i := range data {
+			data[i] = 0
+		}
+	}()
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return "", fmt.Errorf("bootstrap token file %s is empty", o.tokenFile)
+	}
+	return token, nil
+}
+
+func bootstrapTokenForRun(o agentOptions) (string, error) {
+	if agentIdentityFilesExist(o) {
+		return "", nil
+	}
+	return bootstrapToken(o)
+}
+
+func agentIdentityFilesExist(o agentOptions) bool {
+	if o.keyPath == "" || o.certPath == "" {
+		return false
+	}
+	if _, err := os.Stat(o.keyPath); err != nil {
+		return false
+	}
+	if _, err := os.Stat(o.certPath); err != nil {
+		return false
+	}
+	return true
 }
 
 // channelAdapter adapts the transport gRPC client to the agent package's

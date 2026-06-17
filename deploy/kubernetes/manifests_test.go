@@ -80,15 +80,7 @@ func TestManifestsDeclareTheDaemonSetAndItsRBAC(t *testing.T) {
 // TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trstctl-agent
 // image in --k8s mode under the dedicated service account.
 func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
-	var ds map[string]any
-	for _, d := range docs(t) {
-		if d["kind"] == "DaemonSet" {
-			ds = d
-		}
-	}
-	if ds == nil {
-		t.Fatal("no DaemonSet found")
-	}
+	ds := daemonSet(t)
 	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
 	if podSpec["serviceAccountName"] == nil || podSpec["serviceAccountName"] == "" {
 		t.Error("DaemonSet pod does not run under a serviceAccountName")
@@ -148,6 +140,64 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	})
 }
 
+func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
+	ds := daemonSet(t)
+	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	containers, _ := podSpec["containers"].([]any)
+	if len(containers) == 0 {
+		t.Fatal("DaemonSet has no containers")
+	}
+	c := containers[0].(map[string]any)
+	args := asStringSlice(c["args"])
+	for _, want := range []string{
+		"--enroll-url=$(TRSTCTL_ENROLL_URL)",
+		"--bootstrap-token-file=/var/run/trstctl/bootstrap/token",
+		"--server=$(TRSTCTL_SERVER)",
+		"--server-name=$(TRSTCTL_SERVER_NAME)",
+	} {
+		if !contains(args, want) {
+			t.Errorf("DaemonSet args missing %q; got %v", want, args)
+		}
+	}
+
+	env := envValues(c["env"])
+	if got := env["TRSTCTL_ENROLL_URL"]; got != "https://trstctl:8443" {
+		t.Errorf("TRSTCTL_ENROLL_URL = %q, want control-plane base URL without duplicated /enroll", got)
+	}
+	if got := env["TRSTCTL_SERVER"]; got != "trstctl:9443" {
+		t.Errorf("TRSTCTL_SERVER = %q, want agent-channel service endpoint", got)
+	}
+	if got := env["TRSTCTL_SERVER_NAME"]; got != "trstctl" {
+		t.Errorf("TRSTCTL_SERVER_NAME = %q, want DNS SAN configured on Helm agentChannel.serverName", got)
+	}
+
+	if !hasVolumeMount(c, "bootstrap-token", "/var/run/trstctl/bootstrap") {
+		t.Fatal("DaemonSet does not mount the bootstrap-token Secret at /var/run/trstctl/bootstrap")
+	}
+	if !hasSecretVolume(podSpec, "bootstrap-token", "trstctl-agent-bootstrap", "token") {
+		t.Fatal("DaemonSet does not source /var/run/trstctl/bootstrap/token from Secret trstctl-agent-bootstrap/token")
+	}
+}
+
+func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
+	body, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(body)
+	for _, want := range []string{
+		"trstctl-cli agents enroll-token",
+		"create secret generic trstctl-agent-bootstrap",
+		"agentChannel.enabled=true",
+		"agentChannel.serverName=trstctl",
+		"kubectl apply -f deploy/kubernetes/daemonset.yaml",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("deploy/kubernetes/README.md missing runnable bootstrap marker %q", want)
+		}
+	}
+}
+
 // agentBinaryFlags parses the trstctl-agent binary's real flag set from its --help
 // output (run from the repo root, two levels up from deploy/kubernetes).
 func agentBinaryFlags(t *testing.T) map[string]bool {
@@ -170,6 +220,17 @@ func agentBinaryFlags(t *testing.T) map[string]bool {
 	return flags
 }
 
+func daemonSet(t *testing.T) map[string]any {
+	t.Helper()
+	for _, d := range docs(t) {
+		if d["kind"] == "DaemonSet" {
+			return d
+		}
+	}
+	t.Fatal("no DaemonSet found")
+	return nil
+}
+
 // manifestFlagNames extracts long-flag names (without leading dashes, without
 // =value) from a list of arg tokens.
 func manifestFlagNames(args []string) []string {
@@ -190,6 +251,47 @@ func manifestFlagNames(args []string) []string {
 	return out
 }
 
+func envValues(v any) map[string]string {
+	out := map[string]string{}
+	for _, raw := range asMaps(v) {
+		name, _ := raw["name"].(string)
+		value, _ := raw["value"].(string)
+		if name != "" {
+			out[name] = value
+		}
+	}
+	return out
+}
+
+func hasVolumeMount(container map[string]any, name, path string) bool {
+	for _, m := range asMaps(container["volumeMounts"]) {
+		gotName, _ := m["name"].(string)
+		gotPath, _ := m["mountPath"].(string)
+		if gotName == name && gotPath == path {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSecretVolume(podSpec map[string]any, name, secretName, key string) bool {
+	for _, v := range asMaps(podSpec["volumes"]) {
+		if gotName, _ := v["name"].(string); gotName != name {
+			continue
+		}
+		secret, _ := v["secret"].(map[string]any)
+		if gotSecret, _ := secret["secretName"].(string); gotSecret != secretName {
+			return false
+		}
+		for _, item := range asMaps(secret["items"]) {
+			if gotKey, _ := item["key"].(string); gotKey == key {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func contains(ss []string, want string) bool {
 	for _, s := range ss {
 		if s == want {
@@ -205,6 +307,20 @@ func sortedFlagNames(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+func asMaps(v any) []map[string]any {
+	raw, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(raw))
+	for _, e := range raw {
+		if m, ok := e.(map[string]any); ok {
+			out = append(out, m)
+		}
+	}
 	return out
 }
 

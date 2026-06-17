@@ -10,11 +10,43 @@ in-cluster CA — no `client-go` dependency.
 
 ## Deploy
 
+First make the control plane publish the agent steady-state channel. The packaged
+DaemonSet connects to the in-namespace `trstctl` Service on `:9443`, so the chart
+must enable that port and mint the channel certificate with `trstctl` as a DNS SAN:
+
 ```sh
+helm upgrade --install trstctl deploy/helm/trstctl \
+  --namespace trstctl --create-namespace \
+  --set agentChannel.enabled=true \
+  --set agentChannel.serverName=trstctl
+```
+
+Then mint a one-time bootstrap token, store it in the Secret the DaemonSet mounts,
+and apply the agent manifests:
+
+```sh
+export TRSTCTL_SERVER=https://cp.example.com
+export TRSTCTL_TOKEN=trst_...
+
+TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
 kubectl apply -f deploy/kubernetes/namespace.yaml
+kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+  --from-literal=token="$TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/rbac.yaml
 kubectl apply -f deploy/kubernetes/daemonset.yaml
 ```
+
+The bootstrap token is single-use and short-lived. The DaemonSet mounts it from
+`Secret/trstctl-agent-bootstrap` at `/var/run/trstctl/bootstrap/token` and passes
+`--bootstrap-token-file`; the token is not placed directly on the agent command
+line. The enrollment URL is the control-plane base URL (`https://trstctl:8443`);
+the agent appends `/enroll/bootstrap` itself.
+
+Create `ConfigMap/trstctl-ca-bundle` with `ca-bundle.pem` before applying the
+DaemonSet when your API TLS CA and agent-channel CA are not already trusted by the
+node image. The PEM bundle may contain more than one certificate; the agent uses
+it for both bootstrap HTTPS and the steady-state mTLS channel.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
 validated in tests. The `ClusterRole` grants least privilege: write Secrets, and

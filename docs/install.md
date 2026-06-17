@@ -98,14 +98,26 @@ The trstctl agent runs as a **DaemonSet** so every node is covered. The manifest
 live under `deploy/kubernetes` (namespace, RBAC, and the DaemonSet):
 
 ```bash
+helm upgrade --install trstctl deploy/helm/trstctl \
+  --namespace trstctl --create-namespace \
+  --set agentChannel.enabled=true \
+  --set agentChannel.serverName=trstctl
+
+TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
 kubectl apply -f deploy/kubernetes/namespace.yaml
+kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+  --from-literal=token="$TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/rbac.yaml
 kubectl apply -f deploy/kubernetes/daemonset.yaml
 ```
 
-Point the DaemonSet at your control plane and provide its bootstrap token through
-the referenced secret; see `deploy/kubernetes/README.md` for the exact env and
-secret wiring.
+The DaemonSet points at the in-namespace `trstctl` Service and reads the
+single-use bootstrap token from `Secret/trstctl-agent-bootstrap`. It also sets
+`--server-name=trstctl`, so the Helm value above is required for the
+agent-channel certificate SAN. Create `ConfigMap/trstctl-ca-bundle` with
+`ca-bundle.pem` when the API TLS CA or agent-channel CA is private to your
+cluster. See `deploy/kubernetes/README.md` for the exact env and Secret wiring.
 
 ## Linux (control plane or agent)
 
@@ -184,12 +196,23 @@ always Authenticode-signed.
 Install it (elevated PowerShell):
 
 ```powershell
-msiexec /i trstctl-agent.msi /qn
+$token = (trstctl-cli agents enroll-token | ConvertFrom-Json).token
+Set-Content -Path C:\ProgramData\trstctl\bootstrap-token.txt -Value $token -NoNewline
+
+msiexec /i trstctl-agent.msi /qn `
+  ENROLLURL=https://cp:8443 `
+  SERVER=cp:9443 `
+  SERVERNAME=cp `
+  CABUNDLE=C:\ProgramData\trstctl\ca-bundle.pem `
+  BOOTSTRAPTOKENFILE=C:\ProgramData\trstctl\bootstrap-token.txt
 ```
 
-The MSI registers and starts the `trstctl-agent` service. See
-`deploy/windows/README.md` for Authenticode signing and the WiX/msitools build
-details.
+The MSI registers and starts the service only after the first-boot settings are
+present: enrollment base URL, bootstrap token file, CA bundle, agent-channel
+endpoint, and server name. The token is single-use; after the service enrolls and
+persists its certificate, rotate or delete the file. See
+`deploy/windows/README.md` for Authenticode signing, direct service install, and
+the WiX/msitools build details.
 
 ### Verify the agent download
 
