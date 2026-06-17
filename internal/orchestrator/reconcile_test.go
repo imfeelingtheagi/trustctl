@@ -83,7 +83,7 @@ func TestReconcileOutboxHealsCrashGapExactlyOnce(t *testing.T) {
 	}
 
 	// Pre-condition: no outbox effect yet (the inline tx never ran).
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 0 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 0 {
 		t.Fatalf("pre-reconcile outbox rows for the orphaned event = %d, want 0", got)
 	}
 
@@ -95,7 +95,7 @@ func TestReconcileOutboxHealsCrashGapExactlyOnce(t *testing.T) {
 	if healed != 1 {
 		t.Fatalf("ReconcileOutbox healed %d effects, want 1 (the lost ca.issue)", healed)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 1 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("post-reconcile outbox rows = %d, want exactly 1 (ca.issue enqueued once)", got)
 	}
 
@@ -107,7 +107,7 @@ func TestReconcileOutboxHealsCrashGapExactlyOnce(t *testing.T) {
 	if healed2 != 0 {
 		t.Fatalf("second ReconcileOutbox healed %d, want 0 (already enqueued)", healed2)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 1 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("after second reconcile outbox rows = %d, want still exactly 1 (no duplicate)", got)
 	}
 }
@@ -176,7 +176,7 @@ func TestReconcileOutboxDoesNotDoubleEnqueueWithInlinePath(t *testing.T) {
 	if healed != 0 {
 		t.Fatalf("reconcile healed %d after inline enqueue, want 0", healed)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 1 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("outbox rows = %d, want exactly 1 (no double-enqueue)", got)
 	}
 }
@@ -233,7 +233,7 @@ func TestReconcileOutboxResumesFromCheckpointTail(t *testing.T) {
 		t.Fatalf("append non-lifecycle tail event: %v", err)
 	}
 
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, tail.ID); got != 0 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, tail.ID); got != 0 {
 		t.Fatalf("pre-reconcile tail outbox rows = %d, want 0", got)
 	}
 
@@ -244,7 +244,7 @@ func TestReconcileOutboxResumesFromCheckpointTail(t *testing.T) {
 	if healed != 1 {
 		t.Fatalf("ReconcileOutbox healed %d effects, want 1 tail effect", healed)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, tail.ID); got != 1 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, tail.ID); got != 1 {
 		t.Fatalf("post-reconcile tail outbox rows = %d, want exactly 1", got)
 	}
 	head, err := log.LastSequence(ctx)
@@ -285,7 +285,7 @@ func TestReconcileOutboxRejectsUnknownLifecycleSchemaVersion(t *testing.T) {
 	if healed != 0 {
 		t.Fatalf("ReconcileOutbox healed %d effects before schema failure, want 0", healed)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 0 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 0 {
 		t.Fatalf("outbox rows after unknown schema reconcile = %d, want 0", got)
 	}
 }

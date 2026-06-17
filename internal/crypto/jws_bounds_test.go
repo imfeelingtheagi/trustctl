@@ -120,6 +120,7 @@ func TestParseJWKSRejectsInvalidECPoint(t *testing.T) {
 	}
 
 	curve, size := ecCurve("P-256")
+	//nolint:staticcheck // This bounds test needs a deterministic valid legacy ECDSA affine point.
 	vx, vy := curve.ScalarBaseMult([]byte{1})
 	xb := make([]byte, size)
 	yb := make([]byte, size)

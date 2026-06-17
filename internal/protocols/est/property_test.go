@@ -69,7 +69,6 @@ func TestParseEnrollBodyRoundTrip(t *testing.T) {
 // wsRuns is a generator of whitespace runs to splice around / into the base64 body.
 type wsRuns struct {
 	left, right string
-	insertAt    int
 	insertWS    string
 }
 

@@ -97,7 +97,7 @@ func mustAppendEv(t *testing.T, log *events.Log, e events.Event) {
 
 func ownerNames(t *testing.T, s *store.Store, tenantID string) map[string]string {
 	t.Helper()
-	rows, err := s.Pool().Query(context.Background(),
+	rows, err := s.SystemPool().Query(context.Background(),
 		`SELECT id::text, name FROM owners WHERE tenant_id = $1`, tenantID)
 	if err != nil {
 		t.Fatalf("query owners: %v", err)

@@ -30,13 +30,6 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// Certificate status values maintained on the inventory by the engine.
-const (
-	statusActive     = "active"
-	statusSuperseded = "superseded"
-	statusRevoked    = "revoked"
-)
-
 // Outbox destination for revocation propagation (shared with the lifecycle state
 // machine's side-effect map, S3.2).
 const destinationRevoke = "revocation.publish"

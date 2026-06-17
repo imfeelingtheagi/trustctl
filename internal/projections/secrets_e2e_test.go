@@ -33,7 +33,7 @@ func TestSealedCredentialsAtRestAndTenantIsolated(t *testing.T) {
 	// At rest: read the raw column (as the privileged pool role) and confirm it is
 	// ciphertext, not the plaintext.
 	var sealed []byte
-	if err := st.Pool().QueryRow(ctx,
+	if err := st.SystemPool().QueryRow(ctx,
 		"SELECT sealed FROM credentials WHERE tenant_id = $1 AND ref = $2", tenantA, "target-1").
 		Scan(&sealed); err != nil {
 		t.Fatalf("read raw sealed column: %v", err)

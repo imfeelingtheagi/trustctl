@@ -21,8 +21,9 @@ func TestWipeStdlibKeyZeroesSecretScalars(t *testing.T) {
 			t.Fatal(err)
 		}
 		wipeStdlibKey(k)
+		//nolint:staticcheck // This regression verifies AN-8 zeroing of the legacy ECDSA scalar.
 		if k.D.Sign() != 0 {
-			t.Errorf("ecdsa D not zeroed after wipe: %s", k.D)
+			t.Error("ecdsa D not zeroed after wipe")
 		}
 	})
 
@@ -129,8 +130,9 @@ func TestSignDigestZeroizesTransientKeyAfterOp(t *testing.T) {
 			// After the op, the transient key's secret scalars must be zero.
 			switch k := captured.(type) {
 			case *ecdsa.PrivateKey:
+				//nolint:staticcheck // This regression verifies AN-8 zeroing of the transient legacy ECDSA scalar.
 				if k.D.Sign() != 0 {
-					t.Errorf("ecdsa D not zeroized after SignDigest: %s", k.D)
+					t.Error("ecdsa D not zeroized after SignDigest")
 				}
 			case *rsa.PrivateKey:
 				if k.D.Sign() != 0 {
@@ -242,6 +244,7 @@ func assertStdlibPrivateKeyWiped(t *testing.T, captured any) {
 	}
 	switch k := captured.(type) {
 	case *ecdsa.PrivateKey:
+		//nolint:staticcheck // This regression verifies AN-8 zeroing of the constructor's legacy ECDSA scalar.
 		if k.D.Sign() != 0 {
 			t.Fatalf("ecdsa D still live after constructor returned")
 		}

@@ -292,7 +292,7 @@ func assertOutboxRowNotLocked(t *testing.T, s *store.Store, id int64) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	tx, err := s.Pool().Begin(ctx)
+	tx, err := s.SystemPool().Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin lock probe: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestOutboxExpiredLeaseIsReclaimed(t *testing.T) {
 	id := enqueue(t, s, ob, orchestrator.Entry{
 		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "lease-retry-1", Payload: []byte(`{}`),
 	})
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`UPDATE outbox
 		    SET status = 'processing',
 		        worker_id = 'dead-worker',

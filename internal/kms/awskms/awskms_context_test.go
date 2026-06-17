@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -20,7 +19,6 @@ import (
 // operation specifically. It performs no SigV4 verification (the test asserts
 // cancellation, not auth) and returns no crypto material it does not have to.
 type signThenBlockDoer struct {
-	mu      sync.Mutex
 	key     *crypto.LockedSigner
 	signHit chan struct{} // signalled the first time a Sign request arrives
 }

@@ -64,7 +64,9 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		if r.URL.Query().Has("versions") {
-			fmt.Fprintf(w, "%v", a.store.Versions(path))
+			if _, err := fmt.Fprintf(w, "%v", a.store.Versions(path)); err != nil {
+				return
+			}
 			return
 		}
 		val, ver, err := a.store.Get(r.Context(), path)
@@ -73,7 +75,9 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("X-Version", strconv.Itoa(ver))
-		w.Write(val)
+		if _, err := w.Write(val); err != nil {
+			return
+		}
 	case http.MethodPut:
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		ver, err := a.store.Put(r.Context(), path, body, r.Header.Get("Idempotency-Key"))
@@ -81,7 +85,9 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprintf(w, `{"version":%d}`, ver)
+		if _, err := fmt.Fprintf(w, `{"version":%d}`, ver); err != nil {
+			return
+		}
 	case http.MethodPost:
 		if v := r.URL.Query().Get("rollback"); v != "" {
 			to, err := strconv.Atoi(v)
@@ -94,7 +100,9 @@ func (a *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			fmt.Fprintf(w, `{"version":%d}`, ver)
+			if _, err := fmt.Fprintf(w, `{"version":%d}`, ver); err != nil {
+				return
+			}
 			return
 		}
 		http.Error(w, "unsupported", http.StatusBadRequest)

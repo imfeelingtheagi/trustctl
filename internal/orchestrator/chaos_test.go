@@ -184,7 +184,7 @@ func TestChaosNATSRestartPreservesAckedEvents(t *testing.T) {
 	if healed != 1 {
 		t.Fatalf("reconcile after restart healed %d effects, want 1", healed)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 1 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("outbox rows for replayed event = %d, want 1", got)
 	}
 }
@@ -243,7 +243,7 @@ func TestChaosPostgresFailoverMidTransactionRollsBackIntent(t *testing.T) {
 	if !errors.Is(err, failover) {
 		t.Fatalf("transaction error = %v, want injected failover", err)
 	}
-	if got := countOutbox(t, ctx, s.Pool(), tenantA, "chaos-pg-tx"); got != 0 {
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, "chaos-pg-tx"); got != 0 {
 		t.Fatalf("outbox rows after rolled-back transaction = %d, want 0", got)
 	}
 }

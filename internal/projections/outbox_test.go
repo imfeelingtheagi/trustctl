@@ -17,7 +17,7 @@ import (
 // fixture, run as the system role.
 func forcePending(t *testing.T, s *store.Store, id int64) {
 	t.Helper()
-	if _, err := s.Pool().Exec(context.Background(),
+	if _, err := s.SystemPool().Exec(context.Background(),
 		"UPDATE outbox SET status='pending', delivered_at=NULL, next_attempt_at=now() WHERE id=$1", id); err != nil {
 		t.Fatalf("force pending: %v", err)
 	}

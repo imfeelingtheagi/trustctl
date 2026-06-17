@@ -22,10 +22,10 @@ func archiveArch() string {
 func postgresArchiveArch(goos, goarch, postgresVersion string, linuxMachineName func() string, alpine bool) string {
 	arch := goarch
 	if goos == "linux" {
-		switch {
-		case arch == "arm64":
+		switch arch {
+		case "arm64":
 			arch = "arm64v8"
-		case arch == "arm":
+		case "arm":
 			machine := linuxMachineName()
 			switch {
 			case strings.HasPrefix(machine, "armv7"):

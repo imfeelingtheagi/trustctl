@@ -377,19 +377,6 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 	return tx.Commit(ctx)
 }
 
-// dispatchOne keeps the one-row test seam while using the production leased
-// claim/finalize path.
-func (o *Outbox) dispatchOne(ctx context.Context, h Handler, cutoff time.Time) (id int64, claimed bool, err error) {
-	claim, ok, err := o.claimOne(ctx, cutoff, nil, nil)
-	if err != nil || !ok {
-		return 0, ok, err
-	}
-	if err := o.finalizeClaim(ctx, claim, h.Deliver(ctx, claim.msg)); err != nil {
-		return 0, false, err
-	}
-	return claim.id, true, nil
-}
-
 // Pending returns the tenant's not-yet-delivered entries (pending, processing,
 // or failed), newest bookkeeping included, for observability. It is tenant-scoped
 // under RLS.

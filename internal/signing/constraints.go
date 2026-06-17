@@ -62,12 +62,6 @@ func constraintsFromGenerate(req *signerpb.GenerateKeyRequest) (keyConstraints, 
 	return kc, nil
 }
 
-// constrained reports whether any limit is set; an unconstrained key skips the
-// purpose check entirely (back-compat).
-func (kc keyConstraints) constrained() bool {
-	return len(kc.purposes) > 0 || len(kc.hashes) > 0 || kc.requireAuth
-}
-
 // check enforces the constraints against a Sign request. A violation returns
 // FAILED_PRECONDITION (the code the design reserves for usage constraints, §5.5)
 // and never reveals key material. For a constrained-by-purpose key, an

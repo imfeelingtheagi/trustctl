@@ -70,7 +70,7 @@ func TestJOSEVerifierRejectsHS256Confusion(t *testing.T) {
 	header := map[string]any{"alg": "HS256", "kid": "k"}
 	hb, _ := json.Marshal(header)
 	signingInput := algB64.EncodeToString(hb) + "." + algB64.EncodeToString(payload)
-	mac := hmac.New(sha256.New, key.PublicKey.N.Bytes())
+	mac := hmac.New(sha256.New, key.N.Bytes())
 	mac.Write([]byte(signingInput))
 	token := signingInput + "." + algB64.EncodeToString(mac.Sum(nil))
 
@@ -147,7 +147,7 @@ func TestACMEJOSEVerifierRejectsAlgConfusion(t *testing.T) {
 		ph, _ := json.Marshal(map[string]any{"alg": "HS256", "jwk": jwk, "nonce": "n", "url": "u"})
 		phB64 := algB64.EncodeToString(ph)
 		plB64 := algB64.EncodeToString(payload)
-		mac := hmac.New(sha256.New, key.PublicKey.N.Bytes())
+		mac := hmac.New(sha256.New, key.N.Bytes())
 		mac.Write([]byte(phB64 + "." + plB64))
 		body := acmeFlattenedRaw(phB64, plB64, algB64.EncodeToString(mac.Sum(nil)))
 		msg, perr := ParseACMEJWS(body)

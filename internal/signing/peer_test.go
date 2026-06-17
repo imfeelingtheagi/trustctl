@@ -46,12 +46,12 @@ func TestPeerAuthListenerRejectsMismatchedUID(t *testing.T) {
 	fl := &fakeListener{conns: make(chan net.Conn, 2)}
 
 	server, client := net.Pipe()
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	spy := &closeSpyConn{Conn: server, closed: make(chan struct{})}
 
 	matching, mclient := net.Pipe()
-	defer mclient.Close()
-	defer matching.Close()
+	defer func() { _ = mclient.Close() }()
+	defer func() { _ = matching.Close() }()
 
 	// First conn (the spy) resolves to a non-matching uid; the second matches.
 	uids := map[net.Conn]int{spy: 1234, matching: 1000}
@@ -89,8 +89,8 @@ func TestPeerAuthListenerAcceptsMatchingUID(t *testing.T) {
 		peerUID:    func(net.Conn) (int, bool) { return 1000, true },
 	}
 	server, client := net.Pipe()
-	defer client.Close()
-	defer server.Close()
+	defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
 	fl.conns <- server
 
 	got, err := l.Accept()
@@ -114,8 +114,8 @@ func TestPeerAuthListenerAcceptsWhenUIDUndeterminable(t *testing.T) {
 		peerUID:    func(net.Conn) (int, bool) { return 0, false }, // undeterminable (non-Linux)
 	}
 	server, client := net.Pipe()
-	defer client.Close()
-	defer server.Close()
+	defer func() { _ = client.Close() }()
+	defer func() { _ = server.Close() }()
 	fl.conns <- server
 
 	got, err := l.Accept()

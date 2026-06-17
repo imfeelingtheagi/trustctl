@@ -150,7 +150,7 @@ func (m TenantMapper) Validate() error {
 			errs = append(errs, fmt.Errorf("tenant mapping %d has empty tenant_id", i))
 		}
 	}
-	if len(m.Mappings) == 0 && !m.ClaimIsTenant && !(m.AllowDefault && m.DefaultTenant != "") {
+	if len(m.Mappings) == 0 && !m.ClaimIsTenant && (!m.AllowDefault || m.DefaultTenant == "") {
 		errs = append(errs, errors.New("no tenant mapping configured: set a tenant_claim, a mappings table, or an explicit default tenant — otherwise every login fails closed"))
 	}
 	return errors.Join(errs...)

@@ -517,7 +517,7 @@ func stripSQLComments(s string) string {
 		// Block comment: /* ... */ (non-nested, which is enough for our SQL).
 		if s[i] == '/' && i+1 < len(s) && s[i+1] == '*' {
 			j := i + 2
-			for j+1 < len(s) && !(s[j] == '*' && s[j+1] == '/') {
+			for j+1 < len(s) && (s[j] != '*' || s[j+1] != '/') {
 				j++
 			}
 			b.WriteByte(' ')

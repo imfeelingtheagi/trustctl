@@ -211,7 +211,7 @@ func (readErrorOps) Exec(string, []string) error    { return nil }
 func (o readErrorOps) Request(req *http.Request) (*http.Response, error) {
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       readErrorCloser{err: o.err},
+		Body:       readErrorCloser(o),
 		Header:     make(http.Header),
 		Request:    req,
 	}, nil

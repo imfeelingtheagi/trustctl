@@ -28,7 +28,7 @@ func newAgentAPIServer(t *testing.T) (*httptest.Server, *store.Store) {
 func seedAPIAgentAt(t *testing.T, s *store.Store, n int, createdAt time.Time) string {
 	t.Helper()
 	id := fmt.Sprintf("00000000-0000-0000-0000-%012d", n)
-	if _, err := s.Pool().Exec(context.Background(),
+	if _, err := s.SystemPool().Exec(context.Background(),
 		`INSERT INTO agents (id, tenant_id, name, status, version, created_at)
 		 VALUES ($1, $2, $3, 'online', 'test', $4)`,
 		id, tenantA, fmt.Sprintf("edge-%d", n), createdAt); err != nil {

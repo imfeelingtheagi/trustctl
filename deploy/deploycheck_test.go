@@ -185,9 +185,7 @@ func staticContainers(t *testing.T, root string) []container {
 			if err := dec.Decode(&doc); err != nil {
 				break
 			}
-			for _, c := range containersOf(doc) {
-				out = append(out, c)
-			}
+			out = append(out, containersOf(doc)...)
 		}
 	}
 	if len(out) == 0 {

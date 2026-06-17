@@ -41,11 +41,11 @@ func certificateRevoked(fingerprint, serial, reason string) []byte {
 func truncateReadModelAndCheckpoint(t *testing.T, s *store.Store) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE owners, issuers, identities, certificates, identity_transitions, tenants RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate read model: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, `UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
+	if _, err := s.SystemPool().Exec(ctx, `UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
 		t.Fatalf("reset checkpoint: %v", err)
 	}
 }

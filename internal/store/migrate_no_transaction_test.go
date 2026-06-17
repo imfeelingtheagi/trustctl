@@ -47,7 +47,7 @@ func TestNoTransactionMigration(t *testing.T) {
 	for _, name := range noTx {
 		version := migrationNumber(name)
 		var applied bool
-		if err := s.Pool().QueryRow(ctx,
+		if err := s.SystemPool().QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`, version).Scan(&applied); err != nil {
 			t.Fatalf("query migration ledger for %s: %v", name, err)
 		}
@@ -57,7 +57,7 @@ func TestNoTransactionMigration(t *testing.T) {
 	}
 	for _, indexName := range createdIndexes {
 		var ready bool
-		err := s.Pool().QueryRow(ctx, `
+		err := s.SystemPool().QueryRow(ctx, `
 			SELECT i.indisready AND i.indisvalid
 			  FROM pg_class c
 			  JOIN pg_index i ON i.indexrelid = c.oid

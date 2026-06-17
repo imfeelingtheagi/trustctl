@@ -100,17 +100,17 @@ func newStore(t *testing.T) *store.Store {
 		t.Fatalf("Migrate: %v", err)
 	}
 	// The package shares one database; reset the spine tables between tests.
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox,
 		          owners, issuers, identities, identity_transitions, certificates
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`UPDATE outbox_reconciliation_checkpoint SET reconciled_seq = 0 WHERE id = 1`); err != nil {
 		t.Fatalf("reset outbox reconciliation checkpoint: %v", err)
 	}

@@ -283,6 +283,7 @@ func canonicalJWK(pub any) (string, error) {
 		size := (k.Curve.Params().BitSize + 7) / 8
 		// RFC 7638 §3.2: EC required members are crv, kty, x, y, with fixed-width
 		// coordinates (RFC 7518 §6.2.1.2).
+		//nolint:staticcheck // JWK thumbprints are defined over legacy ECDSA affine coordinates.
 		return fmt.Sprintf(`{"crv":%q,"kty":"EC","x":%q,"y":%q}`,
 			crv, enc(leftPad(k.X.Bytes(), size)), enc(leftPad(k.Y.Bytes(), size))), nil
 	case ed25519.PublicKey:

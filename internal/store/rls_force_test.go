@@ -24,7 +24,7 @@ func TestEveryTenantTableForcesRLS(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	rows, err := s.Pool().Query(ctx, `
+	rows, err := s.SystemPool().Query(ctx, `
 		SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
 		FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -88,7 +88,7 @@ func TestNoTenantPolicyIsUsingOnly(t *testing.T) {
 	// expression. A policy that has a qual (a read filter) but a NULL with_check is
 	// "USING-only". We restrict to policies on tables that carry tenant_id (the
 	// tenant tables) so unrelated system policies are out of scope.
-	rows, err := s.Pool().Query(ctx, `
+	rows, err := s.SystemPool().Query(ctx, `
 		SELECT p.tablename, p.policyname
 		FROM pg_policies p
 		WHERE p.schemaname = 'public'

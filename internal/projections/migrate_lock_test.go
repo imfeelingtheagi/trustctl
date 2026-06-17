@@ -109,7 +109,7 @@ func TestMigrateConcurrentInstancesApplyExactlyOnce(t *testing.T) {
 		t.Fatalf("after concurrent migrate, %d migrations still pending: %v", len(pending), pending)
 	}
 	var total, distinct int
-	if err := stores[0].Pool().QueryRow(ctx,
+	if err := stores[0].SystemPool().QueryRow(ctx,
 		"SELECT count(*), count(distinct version) FROM schema_migrations").Scan(&total, &distinct); err != nil {
 		t.Fatalf("ledger count: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +13,7 @@ import (
 )
 
 func handler(body string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, body) })
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, body) })
 }
 
 func TestRegistryRoutesByLongestPrefix(t *testing.T) {
@@ -30,9 +31,13 @@ func TestRegistryRoutesByLongestPrefix(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		buf := make([]byte, len(want))
-		resp.Body.Read(buf)
-		resp.Body.Close()
+		buf, err := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Fatal(closeErr)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
 		if string(buf) != want {
 			t.Errorf("%s -> %q, want %q", path, buf, want)
 		}

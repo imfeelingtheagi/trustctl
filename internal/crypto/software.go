@@ -142,6 +142,7 @@ func wipeStdlibKey(key any) {
 	switch k := key.(type) {
 	case *ecdsa.PrivateKey:
 		if k != nil {
+			//nolint:staticcheck // AN-8 defense-in-depth wipe must zero the legacy ECDSA scalar when present.
 			zeroBigInt(k.D)
 		}
 	case *rsa.PrivateKey:

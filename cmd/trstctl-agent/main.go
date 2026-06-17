@@ -184,7 +184,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	fmt.Printf("trstctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	nextHeartbeat := heartbeatDelaySeconds(0, defaultHeartbeatInterval, rng)
+	var nextHeartbeat time.Duration
 	heartbeatFailures := 0
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial heartbeat failed:", herr)

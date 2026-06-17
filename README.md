@@ -244,7 +244,8 @@ cd trstctl
 make build    # control plane, signer, agent, operator, and CLI -> ./bin
 make web      # build the React UI into the binary's embed
 make test     # unit + property + embedded-PostgreSQL/NATS integration tests
-make lint     # gofmt, vet, the architecture linter, and actionlint
+make lint     # full lint: gofmt, vet, architecture, golangci-lint, actionlint
+make lint-partial # explicit local subset when optional lint tools are absent
 ```
 
 Bring up the whole evaluation stack — PostgreSQL, NATS JetStream, and the control
@@ -350,7 +351,8 @@ security-critical signing service has its own
 ## Contributing
 
 trstctl is built sprint by sprint with a tests-first discipline and the architecture
-linter as a hard gate — `make lint test` must be green, and the non-negotiables above
+linter as a hard gate. `make lint test` must be green; `make lint-partial` is only
+for fast local feedback when optional lint tools are absent. The non-negotiables above
 are not optional. Start with the authoring guides for
 [connectors](docs/guides/connector-authoring.md) and
 [plugins](docs/guides/plugin-authoring.md). Fuller contribution guidelines are on the

@@ -170,6 +170,7 @@ func ecACMEKey(crv, x, y string) (*ACMEKey, error) {
 		return nil, fmt.Errorf("jose: jwk EC y: %w", err)
 	}
 	pub := &ecdsa.PublicKey{Curve: curve, X: new(big.Int).SetBytes(xb), Y: new(big.Int).SetBytes(yb)}
+	//nolint:staticcheck // ACME JWK parsing receives legacy ECDSA affine coordinates on the wire.
 	if !curve.IsOnCurve(pub.X, pub.Y) {
 		return nil, errors.New("jose: EC jwk point is not on the curve")
 	}

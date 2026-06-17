@@ -139,7 +139,7 @@ func TestStoreSystemPoolIsTheNamedRLSBypassAccessor(t *testing.T) {
 	if s.SystemPool() == nil {
 		t.Fatal("SystemPool() returned nil")
 	}
-	if s.SystemPool() != s.Pool() {
+	if s.SystemPool() != s.Pool() { //nolint:staticcheck // This test pins the deprecated Pool alias during its compatibility window.
 		t.Error("Pool() must remain an alias of SystemPool() during deprecation")
 	}
 

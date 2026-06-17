@@ -40,7 +40,7 @@ func TestListCertificatesExpiringKeysetUsesIndex(t *testing.T) {
 			t.Fatalf("seed cert %d: %v", i, err)
 		}
 	}
-	if _, err := s.Pool().Exec(ctx, "ANALYZE certificates"); err != nil {
+	if _, err := s.SystemPool().Exec(ctx, "ANALYZE certificates"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,7 +132,7 @@ func TestListCertificatesExpiringKeysetPaginatesCorrectly(t *testing.T) {
 
 func explainCertQuery(t *testing.T, s *store.Store, sql string, args ...any) string {
 	t.Helper()
-	rows, err := s.Pool().Query(context.Background(), sql, args...)
+	rows, err := s.SystemPool().Query(context.Background(), sql, args...)
 	if err != nil {
 		t.Fatalf("EXPLAIN: %v", err)
 	}

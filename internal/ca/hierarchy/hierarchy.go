@@ -333,20 +333,6 @@ func (m *Manager) consumeCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, ce
 	return err
 }
 
-func (m *Manager) requireQuorum(ctx context.Context, tenantID, ceremonyID string) error {
-	c, err := m.store.GetKeyCeremony(ctx, tenantID, ceremonyID)
-	if err != nil {
-		return err
-	}
-	if c.Status != "pending" {
-		return store.ErrKeyCeremonyNotPending
-	}
-	if c.Approvals < c.Threshold {
-		return fmt.Errorf("%w (%d of %d approvals)", ErrQuorumNotMet, c.Approvals, c.Threshold)
-	}
-	return nil
-}
-
 func (m *Manager) put(id string, ca *cryptoca.CA) {
 	m.mu.Lock()
 	m.cas[id] = ca

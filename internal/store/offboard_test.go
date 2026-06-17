@@ -73,7 +73,7 @@ func newStore(t *testing.T) *store.Store {
 	}
 	// Per-test isolation: the package shares one database, so reset every
 	// tenant-scoped table (and the operational tables) between tests.
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, policy_bindings, attestations, api_tokens, certificates,
@@ -272,7 +272,7 @@ func TestEveryTenantTableCoveredByOffboard(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	rows, err := s.Pool().Query(ctx, `
+	rows, err := s.SystemPool().Query(ctx, `
 		SELECT c.relname
 		FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace

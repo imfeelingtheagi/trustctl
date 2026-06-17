@@ -60,11 +60,11 @@ jobs:
       - name: Install lint tooling
         run: make tools
 
-      # LINT_STRICT=1 makes `make lint` HARD-FAIL if golangci-lint/actionlint are
-      # absent rather than silently skipping them (CODE-005) — since `make tools`
-      # just installed them, this proves the full lint actually ran in CI.
+      # `make lint` fails closed if golangci-lint/actionlint are absent rather
+      # than silently skipping them (CODE-005). Since `make tools` just installed
+      # the pinned tools, this proves the full lint actually ran in CI.
       - name: Lint
-        run: make lint LINT_STRICT=1
+        run: make lint
 
       # Verify the CI gates' own logic (the critical-package coverage evaluator
       # and the base-image digest-pinning guard) so a regression in a gate is

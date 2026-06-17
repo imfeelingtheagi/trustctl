@@ -30,7 +30,7 @@ func TestProvisionCAStableAcrossSignerRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create short temp dir: %v", err)
 	}
-	defer os.RemoveAll(socketDir)
+	defer func() { _ = os.RemoveAll(socketDir) }()
 	socket := filepath.Join(socketDir, "s.sock")
 	caCertFile := filepath.Join(dir, "issuing-ca.crt")
 

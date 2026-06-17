@@ -1325,7 +1325,7 @@ func (o OIDC) validate() []error {
 			continue
 		}
 		u, err := url.Parse(e.v)
-		if err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && isLoopbackHost(u.Hostname()))) {
+		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname()))) {
 			errs = append(errs, fmt.Errorf("auth.oidc.%s %q must be an absolute https URL (http is allowed only for a loopback host)", e.name, e.v))
 		}
 	}

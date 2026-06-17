@@ -39,7 +39,7 @@ func parseCodeowners(t *testing.T) []codeownerRule {
 	if err != nil {
 		t.Fatalf("a CODEOWNERS file must exist at .github/CODEOWNERS (TEST-006): %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var rules []codeownerRule
 	sc := bufio.NewScanner(f)

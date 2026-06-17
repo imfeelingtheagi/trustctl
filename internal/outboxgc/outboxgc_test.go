@@ -69,7 +69,7 @@ func newStore(t *testing.T) *store.Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx, `TRUNCATE tenants, outbox RESTART IDENTITY CASCADE`); err != nil {
+	if _, err := s.SystemPool().Exec(ctx, `TRUNCATE tenants, outbox RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })
@@ -78,7 +78,7 @@ func newStore(t *testing.T) *store.Store {
 
 func seedDelivered(t *testing.T, s *store.Store, key string, deliveredAt time.Time) {
 	t.Helper()
-	if _, err := s.Pool().Exec(context.Background(),
+	if _, err := s.SystemPool().Exec(context.Background(),
 		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, delivered_at)
 		 VALUES ($1, 'issuance', $2, $3, 'delivered', $4)`,
 		tenantA, []byte("p"), key, deliveredAt); err != nil {
@@ -106,12 +106,12 @@ func TestOutboxPurgeBoundsTable(t *testing.T) {
 	}
 	// A pending (not-yet-delivered) row and a dead-lettered failed row must survive
 	// any sweep — they are the dispatcher's work queue and the failure trail (AN-6).
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status)
 		 VALUES ($1, 'issuance', $2, 'pending-key', 'pending')`, tenantA, []byte("p")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, last_error)
 		 VALUES ($1, 'issuance', $2, 'failed-key', 'failed', 10, 'boom')`, tenantA, []byte("p")); err != nil {
 		t.Fatal(err)
@@ -144,11 +144,11 @@ func TestOutboxPurgeBoundsTable(t *testing.T) {
 	// The pending and failed rows specifically must still be there (AN-6: no
 	// undelivered effect is ever dropped).
 	var pending, failed int
-	if err := s.Pool().QueryRow(ctx,
+	if err := s.SystemPool().QueryRow(ctx,
 		`SELECT count(*) FROM outbox WHERE status = 'pending'`).Scan(&pending); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Pool().QueryRow(ctx,
+	if err := s.SystemPool().QueryRow(ctx,
 		`SELECT count(*) FROM outbox WHERE status = 'failed'`).Scan(&failed); err != nil {
 		t.Fatal(err)
 	}
@@ -184,12 +184,12 @@ func TestOutboxPurgeIndexUsed(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		seedDelivered(t, s, fmt.Sprintf("old-%d", i), old)
 	}
-	if _, err := s.Pool().Exec(ctx, "ANALYZE outbox"); err != nil {
+	if _, err := s.SystemPool().Exec(ctx, "ANALYZE outbox"); err != nil {
 		t.Fatal(err)
 	}
 
 	cutoff := time.Now().UTC().Add(-24 * time.Hour)
-	rows, err := s.Pool().Query(ctx,
+	rows, err := s.SystemPool().Query(ctx,
 		`EXPLAIN SELECT 1 FROM outbox WHERE status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < $1`, cutoff)
 	if err != nil {
 		t.Fatal(err)

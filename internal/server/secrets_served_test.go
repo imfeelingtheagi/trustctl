@@ -231,6 +231,9 @@ func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 		t.Fatalf("idempotent rotate statuses = %d, %d", s1, s2)
 	}
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get after idempotent double-rotate status = %d", status)
+	}
 	_ = json.Unmarshal(body, &rv)
 	if rv.Version != 3 {
 		t.Fatalf("after idempotent double-rotate, version = %d, want 3 (a single bump — AN-5)", rv.Version)

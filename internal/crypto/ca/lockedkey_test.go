@@ -52,6 +52,7 @@ func TestLockedKeySignsAndDestroys(t *testing.T) {
 	// sign reconstructs the private key for exactly one operation.
 	signed := false
 	if err := lk.sign(func(priv *ecdsa.PrivateKey) error {
+		//nolint:staticcheck // This test verifies the legacy ECDSA scalar is present only inside the signing callback.
 		if priv == nil || priv.D == nil {
 			t.Fatal("sign handed a nil/empty private key")
 		}
@@ -89,6 +90,7 @@ func TestNewLockedKeyZeroizesSourcePrivateScalar(t *testing.T) {
 	if captured == nil {
 		t.Fatal("observer was not called")
 	}
+	//nolint:staticcheck // This test proves newLockedKey zeroes the legacy ECDSA scalar after locked-buffer transfer.
 	if captured.D.Sign() != 0 {
 		t.Fatalf("source ECDSA private scalar still live after newLockedKey returned")
 	}

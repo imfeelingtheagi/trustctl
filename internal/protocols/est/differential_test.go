@@ -116,7 +116,7 @@ func fetchPKCS7(t *testing.T, url, method string, body []byte) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("%s %s -> %d", method, url, resp.StatusCode)
 	}

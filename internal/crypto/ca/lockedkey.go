@@ -94,12 +94,15 @@ func (l *lockedKey) destroy() {
 // wipeECDSA zeroes the secret scalar D of a parsed ECDSA private key. It cannot
 // reach copies the runtime may have made, but it clears the value this code holds.
 func wipeECDSA(k *ecdsa.PrivateKey) {
+	//nolint:staticcheck // AN-8 defense-in-depth wipe must detect the legacy ECDSA scalar when present.
 	if k == nil || k.D == nil {
 		return
 	}
+	//nolint:staticcheck // AN-8 defense-in-depth wipe must zero the legacy ECDSA scalar in memory.
 	words := k.D.Bits()
 	for i := range words {
 		words[i] = 0
 	}
+	//nolint:staticcheck // AN-8 defense-in-depth wipe must reset the legacy ECDSA scalar value after clearing words.
 	k.D.SetInt64(0)
 }

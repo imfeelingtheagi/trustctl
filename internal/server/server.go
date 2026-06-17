@@ -838,17 +838,6 @@ func (s *Server) ServedProtocols() []string {
 	return append([]string(nil), s.protocols.names...)
 }
 
-// acmeHandlerForTest returns the served ACME http.Handler, or nil when ACME is not
-// served. Exported (test-only via the unexported name) so the acceptance test can
-// drive the SAME served ACME handler the binary mounts, without re-implementing the
-// composition. It is the wire-in proof seam for ACME.
-func (s *Server) acmeHandlerForTest() http.Handler {
-	if s.protocols == nil || s.protocols.acme == nil {
-		return nil
-	}
-	return s.protocols.acme
-}
-
 // sshProtocolForTest returns the served SSH protocol surface, or nil when SSH is not
 // served. Exported (test-only) so the acceptance test can drive the served SSH CA.
 func (s *Server) sshProtocolForTest() *sshProtocol {

@@ -79,7 +79,7 @@ func newStore(t *testing.T) *store.Store {
 	}
 	// Per-test isolation: the whole package shares one database, so reset the
 	// read model and the orchestrator's state/outbox tables between tests.
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, policy_bindings, attestations, api_tokens, certificates,
@@ -92,7 +92,7 @@ func newStore(t *testing.T) *store.Store {
 	// shared database persists across tests; reset its watermark to 0 so each test
 	// starts from a clean catch-up position (TRUNCATE would drop the seeded row, so
 	// reset the value instead).
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}

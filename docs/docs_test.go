@@ -1683,7 +1683,7 @@ func TestVulnerabilityManagementProcess(t *testing.T) {
 			t.Errorf("the patch SLA must cover %q severity", sev)
 		}
 	}
-	if !strings.Contains(low, "sla") || !(strings.Contains(low, "day") || strings.Contains(low, "hour")) {
+	if !strings.Contains(low, "sla") || !strings.Contains(low, "day") && !strings.Contains(low, "hour") {
 		t.Error("the patch SLA must state timelines (hours/days) by severity")
 	}
 	// Worked dry-run against a sample advisory, end to end.

@@ -13,7 +13,7 @@ import (
 
 func seedAgentAt(t *testing.T, s *store.Store, id, name string, createdAt time.Time) {
 	t.Helper()
-	if _, err := s.Pool().Exec(context.Background(),
+	if _, err := s.SystemPool().Exec(context.Background(),
 		`INSERT INTO agents (id, tenant_id, name, status, version, created_at)
 		 VALUES ($1, $2, $3, 'online', 'test', $4)`,
 		id, tenantA, name, createdAt); err != nil {

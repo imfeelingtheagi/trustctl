@@ -50,7 +50,7 @@ func TestTenantsRLSWithCheckBlocksCrossTenantWrite(t *testing.T) {
 
 	// The denied row must not exist (read via the system pool, cross-tenant).
 	var n int
-	if err := s.Pool().QueryRow(ctx,
+	if err := s.SystemPool().QueryRow(ctx,
 		`SELECT count(*) FROM tenants WHERE tenant_id = $1`, tenantC).Scan(&n); err != nil {
 		t.Fatal(err)
 	}

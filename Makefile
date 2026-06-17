@@ -156,8 +156,11 @@ chaos: ## Run the fault-injection / chaos suite over the embedded spine (RESIL-0
 	$(GO) test -tags=chaos -race -count=1 -run '^TestChaos' ./internal/orchestrator/... ./internal/signing/...
 	@echo ">> chaos: all fault-injection scenarios held the safe failure direction"
 
-.PHONY: lint
-lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if installed)
+.PHONY: lint lint-partial
+lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
+	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1
+
+lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
 	@echo ">> gofmt"
 	@unformatted=$$(gofmt -l -s $$(find . -name '*.go' -not -path '*/testdata/*' -not -path './.git/*')); \
 	if [ -n "$$unformatted" ]; then \
@@ -173,31 +176,28 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 	$(GO) build -o "$$vettool" ./tools/trstctllint; \
 	$(GO) vet -vettool="$$vettool" ./...
 	@# golangci-lint carries errcheck/staticcheck/unused — a real part of the gate.
-	@# When it is missing we must NOT pass silently (CODE-005): in strict mode
-	@# (LINT_STRICT=1, which CI sets after `make tools`) its absence is a hard error
-	@# so the gate cannot go green without actually running it; otherwise we print a
-	@# LOUD, impossible-to-miss SKIPPED banner so a local run is never mistaken for a
-	@# full lint.
+	@# When it is missing we must NOT pass silently (CODE-005): make lint is the
+	@# full gate and fails closed by default. Developers who explicitly want only
+	@# the cheap local subset must run the intentionally named make lint-partial.
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		echo ">> golangci-lint"; golangci-lint run ./...; \
-	elif [ "$${LINT_STRICT:-0}" = "1" ]; then \
-		echo "FAIL: golangci-lint is not installed but LINT_STRICT=1 (errcheck/staticcheck/unused would be skipped). Run 'make tools'." >&2; \
-		exit 1; \
-	else \
+	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! ============================================================"; \
 		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \
 		echo "!! errcheck / staticcheck / unused did NOT run; this is a PARTIAL"; \
-		echo "!! lint. Install it with 'make tools' (CI runs it and sets"; \
-		echo "!! LINT_STRICT=1 so the gate cannot pass without it)."; \
+		echo "!! lint. Run 'make tools' and then 'make lint' for the full gate."; \
 		echo "!! ============================================================"; \
+	else \
+		echo "FAIL: golangci-lint is not installed, so make lint would skip errcheck/staticcheck/unused. Run 'make tools' or use 'make lint-partial' deliberately." >&2; \
+		exit 1; \
 	fi
 	@if command -v actionlint >/dev/null 2>&1; then \
 		echo ">> actionlint (GitHub Actions workflows)"; actionlint; \
-	elif [ "$${LINT_STRICT:-0}" = "1" ]; then \
-		echo "FAIL: actionlint is not installed but LINT_STRICT=1 (workflow lint would be skipped). Run 'make tools'." >&2; \
-		exit 1; \
-	else \
+	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! WARNING: actionlint NOT installed — SKIPPING workflow lint (install with: make tools)"; \
+	else \
+		echo "FAIL: actionlint is not installed, so make lint would skip workflow lint. Run 'make tools' or use 'make lint-partial' deliberately." >&2; \
+		exit 1; \
 	fi
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null

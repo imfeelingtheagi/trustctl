@@ -266,6 +266,7 @@ func ecPublicKeyFromJWKBytes(curve elliptic.Curve, size int, xb, yb []byte) (*ec
 	}
 	x := new(big.Int).SetBytes(xb)
 	y := new(big.Int).SetBytes(yb)
+	//nolint:staticcheck // JWK parsing receives legacy ECDSA affine coordinates on the wire.
 	if !curve.IsOnCurve(x, y) {
 		return nil, fmt.Errorf("crypto: JWK EC point is not on curve")
 	}
@@ -293,7 +294,9 @@ func PublicJWK(pub PublicKey, kid string) (JWK, error) {
 		}
 		xb := make([]byte, size)
 		yb := make([]byte, size)
+		//nolint:staticcheck // Public JWKS output must serialize legacy ECDSA affine coordinates.
 		k.X.FillBytes(xb)
+		//nolint:staticcheck // Public JWKS output must serialize legacy ECDSA affine coordinates.
 		k.Y.FillBytes(yb)
 		return JWK{
 			Kty: "EC", Kid: kid, Alg: esAlg(size), Use: "sig", Crv: crv,

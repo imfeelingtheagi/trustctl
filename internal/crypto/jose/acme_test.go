@@ -113,7 +113,9 @@ func TestACMEJWSVerifyAndThumbprint(t *testing.T) {
 // fixed-width coordinates (RFC 7518 §6.2.1.2). Coordinate width is ceil(bits/8).
 func ecJWK(pub *ecdsa.PublicKey, crv string) []byte {
 	size := (pub.Curve.Params().BitSize + 7) / 8
+	//nolint:staticcheck // ACME reference JWK fixtures are encoded from legacy ECDSA affine coordinates.
 	x := leftPad(pub.X.Bytes(), size)
+	//nolint:staticcheck // ACME reference JWK fixtures are encoded from legacy ECDSA affine coordinates.
 	y := leftPad(pub.Y.Bytes(), size)
 	return []byte(`{"crv":"` + crv + `","kty":"EC","x":"` +
 		base64.RawURLEncoding.EncodeToString(x) + `","y":"` +

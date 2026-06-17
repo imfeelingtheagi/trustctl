@@ -149,7 +149,7 @@ func TestIdempotencyPurgeBoundsTable(t *testing.T) {
 	old := time.Now().UTC().Add(-30 * 24 * time.Hour)
 	recent := time.Now().UTC()
 	seedKey := func(key string, completedAt time.Time) {
-		if _, err := s.Pool().Exec(ctx,
+		if _, err := s.SystemPool().Exec(ctx,
 			`INSERT INTO idempotency_keys (tenant_id, key, status, result, completed_at)
 			 VALUES ($1, $2, 'completed', $3, $4)`,
 			tenantA, key, []byte("result-"+key), completedAt); err != nil {
@@ -161,7 +161,7 @@ func TestIdempotencyPurgeBoundsTable(t *testing.T) {
 		seedKey(fmt.Sprintf("old-%d", i), old)
 	}
 	// A pending (in-flight) key has a NULL completed_at and must never be purged.
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`INSERT INTO idempotency_keys (tenant_id, key, status) VALUES ($1, 'pending-key', 'pending')`,
 		tenantA); err != nil {
 		t.Fatal(err)
@@ -228,7 +228,7 @@ func TestIdempotencyPurgeIndexUsed(t *testing.T) {
 	young := time.Now().UTC()
 	old := time.Now().UTC().Add(-30 * 24 * time.Hour)
 	for i := 0; i < 2000; i++ {
-		if _, err := s.Pool().Exec(ctx,
+		if _, err := s.SystemPool().Exec(ctx,
 			`INSERT INTO idempotency_keys (tenant_id, key, status, completed_at)
 			 VALUES ($1, $2, 'completed', $3)`,
 			tenantA, fmt.Sprintf("young-%d", i), young); err != nil {
@@ -236,19 +236,19 @@ func TestIdempotencyPurgeIndexUsed(t *testing.T) {
 		}
 	}
 	for i := 0; i < 10; i++ {
-		if _, err := s.Pool().Exec(ctx,
+		if _, err := s.SystemPool().Exec(ctx,
 			`INSERT INTO idempotency_keys (tenant_id, key, status, completed_at)
 			 VALUES ($1, $2, 'completed', $3)`,
 			tenantA, fmt.Sprintf("old-%d", i), old); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Pool().Exec(ctx, "ANALYZE idempotency_keys"); err != nil {
+	if _, err := s.SystemPool().Exec(ctx, "ANALYZE idempotency_keys"); err != nil {
 		t.Fatal(err)
 	}
 
 	cutoff := time.Now().UTC().Add(-7 * 24 * time.Hour)
-	rows, err := s.Pool().Query(ctx,
+	rows, err := s.SystemPool().Query(ctx,
 		`EXPLAIN SELECT 1 FROM idempotency_keys WHERE completed_at IS NOT NULL AND completed_at < $1`, cutoff)
 	if err != nil {
 		t.Fatal(err)

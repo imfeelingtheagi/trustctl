@@ -70,7 +70,7 @@ func newHierarchyHarness(t *testing.T) (*Manager, *store.Store) {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if _, err := s.Pool().Exec(ctx,
+	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, ca_authorities, ca_key_ceremonies, ca_ceremony_approvals
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
