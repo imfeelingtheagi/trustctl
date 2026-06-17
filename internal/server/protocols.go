@@ -33,8 +33,8 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 // guarantee: a protocol never signs anything itself and never reaches the signer
 // directly — it calls here, and here every non-negotiable is enforced in one place:
 //
-//   - AN-4/AN-3: the leaf is signed by Server.IssueLeaf, i.e. the issuing CA key
-//     in the out-of-process signer through the internal/crypto boundary. No
+//   - AN-4/AN-3: the leaf is signed by Server.IssueLeafWithProfile, i.e. the
+//     issuing CA key in the out-of-process signer through the internal/crypto boundary. No
 //     protocol holds a private key; SCEP/CMP transport keys are their own RSA pair
 //     and never the CA key.
 //   - AN-1: every mint is bound to a tenant_id; the issued-cert record and the
@@ -58,13 +58,14 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 // responder / CRL endpoint (EXC-REVOKE-01) can answer for a protocol-issued cert and
 // a later revocation has a row to flip — the same bridge the API mint uses.
 type protocolIssuer struct {
-	issue          issueFunc                  // Server.IssueLeaf — signs through the signer (AN-3/AN-4)
+	issue          issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
 	orch           *orchestrator.Orchestrator // records the cert as an event (AN-2)
 	idem           *orchestrator.Idempotency  // dedupe a retried enrollment (AN-5)
 	store          *store.Store               // tenant-scoped reads/writes under RLS (AN-1)
 	log            *events.Log                // protocol.issued / profile decision events (AN-2)
 	caID           string                     // the served issuing CA's deterministic ca_id
 	defaultProfile string                     // PKIGOV-002 served profile binding; empty = none
+	leafProfile    crypto.LeafProfile         // operator profile plus tenant certificate-profile constraints at mint time
 	ensureCRL      func(context.Context, string) error
 	publishCRL     func(context.Context, string) error
 }
@@ -110,12 +111,13 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		}
 		// PKIGOV-002 served profile gate: validate before signing, fail closed, and
 		// record the decision (AN-2). A no-op when no default profile is configured.
-		if err := p.enforceProfile(ctx, tenantID, protocolName, csrDER, csrInfo, dnsNames, ttl); err != nil {
+		leafProfile, err := p.enforceProfile(ctx, tenantID, protocolName, csrDER, csrInfo, dnsNames, ttl)
+		if err != nil {
 			return nil, err
 		}
-		// Sign through the signer (AN-3/AN-4) — Server.IssueLeaf fails closed when the
+		// Sign through the signer (AN-3/AN-4) — Server.IssueLeafWithProfile fails closed when the
 		// signer is slow/unavailable and never signs in-process.
-		leafPEM, err := p.issue(ctx, csrDER, ttl)
+		leafPEM, err := p.issue(ctx, csrDER, ttl, leafProfile)
 		if err != nil {
 			return nil, err
 		}
@@ -226,33 +228,35 @@ func (p *protocolIssuer) ensureTenantCRL(ctx context.Context, tenantID string) e
 // (PKIGOV-002), mirroring the API mint's gate (internal/server/issuance.go) and the
 // IssuanceService gate so all three produce the same audit shape. A no-op when no
 // default profile is configured; a configured-but-unresolved profile fails closed.
-func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName string, csrDER []byte, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) error {
+func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName string, csrDER []byte, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, error) {
 	if p.defaultProfile == "" {
-		return nil
+		return p.leafProfile, nil
 	}
 	rec, err := p.store.GetActiveProfile(ctx, tenantID, p.defaultProfile)
 	if err != nil {
 		if store.IsNotFound(err) {
 			msg := fmt.Sprintf("served default profile %q not found", p.defaultProfile)
 			p.auditProfileDecision(ctx, tenantID, protocolName, 0, "deny", msg)
-			return fmt.Errorf("server: %s (fail closed)", msg)
+			return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
 		}
-		return err
+		return crypto.LeafProfile{}, err
 	}
 	var prof profile.CertificateProfile
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
-		return fmt.Errorf("server: decode profile %q: %w", p.defaultProfile, err)
+		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", p.defaultProfile, err)
 	}
+	requestedEKUs := intendedProfileEKUs(csrInfo.RequestedEKUs, prof.AllowedEKUs)
 	preq := profile.Request{
 		KeyAlgorithm: csrInfo.KeyAlgorithm, KeyBits: csrInfo.KeyBits,
-		TTL: ttl, DNSNames: dnsNames, Protocol: protocolName,
+		RequestedEKUs: requestedEKUs,
+		TTL:           ttl, DNSNames: dnsNames, Protocol: protocolName,
 	}
 	if verr := prof.Validate(preq); verr != nil {
 		p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "deny", verr.Error())
-		return verr
+		return crypto.LeafProfile{}, verr
 	}
 	p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "allow", "")
-	return nil
+	return leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), nil
 }
 
 // caCA adapts the protocol issuer to the ca.CA interface so the built-in ACME

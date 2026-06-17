@@ -147,6 +147,10 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 	if err != nil {
 		return nil, err
 	}
+	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage)
+	if err != nil {
+		return nil, &leafProfileError{err.Error()}
+	}
 	serial, err := randomSerial()
 	if err != nil {
 		return nil, err
@@ -166,7 +170,8 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		NotBefore:             now.Add(-time.Minute),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              leafKeyUsage(prof.AllowedKeyUsages),
-		ExtKeyUsage:           leafExtKeyUsage(prof.AllowedExtKeyUsage),
+		ExtKeyUsage:           knownEKUs,
+		UnknownExtKeyUsage:    customEKUs,
 		BasicConstraintsValid: true,
 		SubjectKeyId:          ski,
 		// Revocation + chain-building pointers (PKIGOV-001).
@@ -418,35 +423,6 @@ func leafKeyUsage(u *KeyUsages) x509.KeyUsage {
 		ku = x509.KeyUsageDigitalSignature
 	}
 	return ku
-}
-
-// leafExtKeyUsage maps the profile's EKU names to x509 EKUs, defaulting to the
-// serverAuth+clientAuth pair (the prior served-leaf EKU) when unset.
-func leafExtKeyUsage(names []string) []x509.ExtKeyUsage {
-	if len(names) == 0 {
-		return []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-	}
-	var out []x509.ExtKeyUsage
-	for _, n := range names {
-		switch n {
-		case "serverAuth":
-			out = append(out, x509.ExtKeyUsageServerAuth)
-		case "clientAuth":
-			out = append(out, x509.ExtKeyUsageClientAuth)
-		case "codeSigning":
-			out = append(out, x509.ExtKeyUsageCodeSigning)
-		case "emailProtection":
-			out = append(out, x509.ExtKeyUsageEmailProtection)
-		case "timeStamping":
-			out = append(out, x509.ExtKeyUsageTimeStamping)
-		case "any":
-			out = append(out, x509.ExtKeyUsageAny)
-		}
-	}
-	if len(out) == 0 {
-		out = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-	}
-	return out
 }
 
 // policyOIDs parses dotted-OID strings into asn1.ObjectIdentifiers for the

@@ -110,3 +110,66 @@ func TestSignLeafFailsClosedOnGarbageSignature(t *testing.T) {
 		t.Fatal("SignLeafFromCSR returned a certificate despite a garbage signature; must fail closed")
 	}
 }
+
+func TestSignLeafWithProfileEmitsOnlyConfiguredEKUs(t *testing.T) {
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer caKey.Destroy()
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl EKU Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leafKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "svc.eku.test"}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, time.Hour, crypto.LeafProfile{
+		AllowedExtKeyUsage: []string{"serverAuth"},
+	})
+	if err != nil {
+		t.Fatalf("SignLeafFromCSRWithProfile: %v", err)
+	}
+	info, err := certinfo.Inspect(leafDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(info.ExtKeyUsages) != 1 || info.ExtKeyUsages[0] != "serverAuth" {
+		t.Fatalf("ExtKeyUsages = %v, want exactly [serverAuth]", info.ExtKeyUsages)
+	}
+}
+
+func TestSignLeafWithProfileRejectsUnknownEKU(t *testing.T) {
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer caKey.Destroy()
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl EKU Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leafKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "svc.eku.test"}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, time.Hour, crypto.LeafProfile{
+		AllowedExtKeyUsage: []string{"notAnEKU"},
+	})
+	if err == nil || !crypto.IsLeafProfileViolation(err) {
+		t.Fatalf("SignLeafFromCSRWithProfile error = %v, want leaf profile violation", err)
+	}
+}

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -14,8 +15,10 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -120,6 +123,131 @@ func TestIssuanceDispatcherFailsUnsupportedFirstPartyDestination(t *testing.T) {
 	}
 }
 
+func TestIssuanceDispatcherServedProfileControlsLeafEKUs(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	storeServerTestProfile(t, h.store, h.tenant, "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"}, MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},
+	})
+
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "API EKU CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var issuedEKUs []string
+	h.handler.defaultProfile = "tls-server"
+	h.handler.issue = func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+		leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+		if err != nil {
+			return nil, err
+		}
+		info, err := certinfo.Inspect(leafDER)
+		if err != nil {
+			return nil, err
+		}
+		issuedEKUs = info.ExtKeyUsages
+		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
+	}
+
+	if _, err := h.handler.mintServedLeaf(ctx, h.tenant, "owner-1", "api.eku.test", []string{"api.eku.test"}); err != nil {
+		t.Fatalf("mint served leaf: %v", err)
+	}
+	if !sameStrings(issuedEKUs, []string{"serverAuth"}) {
+		t.Fatalf("issued EKUs = %v, want exactly [serverAuth]", issuedEKUs)
+	}
+}
+
+func TestIssuanceDispatcherRejectsExcludedCSRRequestedEKUBeforeSigning(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	storeServerTestProfile(t, h.store, h.tenant, "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"}, MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"api"},
+	})
+
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "client-only.eku.test", DNSNames: []string{"client-only.eku.test"}, RequestedEKUs: []string{"clientAuth"},
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.handler.defaultProfile = "tls-server"
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+		t.Fatal("signing must not be reached for an excluded EKU")
+		return nil, nil
+	}
+
+	_, err = h.handler.enforceProfile(ctx, h.tenant, csrDER, []string{"client-only.eku.test"}, time.Hour)
+	if err == nil || !strings.Contains(err.Error(), `extended key usage "clientAuth"`) {
+		t.Fatalf("enforceProfile error = %v, want excluded clientAuth before signing", err)
+	}
+}
+
+func TestProtocolIssuerServedProfileControlsAndRejectsLeafEKUs(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+	storeServerTestProfile(t, h.store, h.tenant, "tls-server", profile.CertificateProfile{
+		Name: "tls-server", AllowedEKUs: []string{"serverAuth"}, MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"acme"},
+	})
+
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "Protocol EKU CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var issuedEKUs []string
+	called := 0
+	issuer := &protocolIssuer{
+		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+			called++
+			leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+			if err != nil {
+				return nil, err
+			}
+			info, err := certinfo.Inspect(leafDER)
+			if err != nil {
+				return nil, err
+			}
+			issuedEKUs = info.ExtKeyUsages
+			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
+		},
+		orch: h.orch, idem: orchestrator.NewIdempotency(h.store), store: h.store, log: h.log, caID: IssuingCAID(), defaultProfile: "tls-server",
+	}
+
+	serverCSR := serverTestCSR(t, "proto.eku.test", nil)
+	if _, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "eku-positive", serverCSR, time.Hour); err != nil {
+		t.Fatalf("protocol issue: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("signing calls = %d, want 1", called)
+	}
+	if !sameStrings(issuedEKUs, []string{"serverAuth"}) {
+		t.Fatalf("protocol issued EKUs = %v, want exactly [serverAuth]", issuedEKUs)
+	}
+
+	clientCSR := serverTestCSR(t, "client-only.proto.test", []string{"clientAuth"})
+	if _, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "eku-negative", clientCSR, time.Hour); err == nil || !strings.Contains(err.Error(), `extended key usage "clientAuth"`) {
+		t.Fatalf("protocol excluded EKU error = %v, want clientAuth profile rejection", err)
+	}
+	if called != 1 {
+		t.Fatalf("signing calls after rejected protocol CSR = %d, want still 1", called)
+	}
+}
+
 type issuanceDispatcherHarness struct {
 	store   *store.Store
 	log     *events.Log
@@ -184,8 +312,8 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 	idem := orchestrator.NewIdempotency(st)
 	orch := orchestrator.NewOrchestrator(log, st, outbox)
 	handler := &issuanceDispatcher{
-		issue: func(_ context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
-			leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, crypto.LeafProfile{})
+		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+			leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
 			if err != nil {
 				return nil, err
 			}
@@ -201,6 +329,47 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 		t.Fatalf("upsert tenant: %v", err)
 	}
 	return h
+}
+
+func storeServerTestProfile(t *testing.T, s *store.Store, tenant, name string, p profile.CertificateProfile) {
+	t.Helper()
+	spec, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateProfileVersion(context.Background(), store.ProfileRecord{
+		TenantID: tenant, Name: name, Spec: spec, CreatedBy: "test",
+	}); err != nil {
+		t.Fatalf("CreateProfileVersion: %v", err)
+	}
+}
+
+func serverTestCSR(t *testing.T, cn string, requestedEKUs []string) []byte {
+	t.Helper()
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: cn, DNSNames: []string{cn}, RequestedEKUs: requestedEKUs,
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return csrDER
+}
+
+func sameStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func dispatchOutbox(t *testing.T, h *issuanceDispatcherHarness, want int) {

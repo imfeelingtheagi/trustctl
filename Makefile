@@ -35,6 +35,11 @@ ACTIONLINT_VERSION ?= v1.7.7
 # Supply-chain tooling, pinned so the vulnerability gate and SBOM are deterministic.
 GOVULNCHECK_VERSION ?= v1.1.4
 CYCLONEDX_GOMOD_VERSION ?= v1.7.0
+GO_ENV_GOBIN := $(shell $(GO) env GOBIN)
+GO_ENV_GOPATH := $(shell $(GO) env GOPATH)
+GO_TOOL_BIN ?= $(if $(GO_ENV_GOBIN),$(GO_ENV_GOBIN),$(GO_ENV_GOPATH)/bin)
+GOVULNCHECK := $(GO_TOOL_BIN)/govulncheck
+CYCLONEDX_GOMOD := $(GO_TOOL_BIN)/cyclonedx-gomod
 
 # Minimum total test coverage (percent), enforced by `make test`. Generated code
 # (*.pb.go) is excluded from the measurement.
@@ -258,12 +263,12 @@ tools: ## Install developer tooling (golangci-lint v2, govulncheck, actionlint)
 .PHONY: vuln
 vuln: ## Reachability-aware vulnerability scan (pinned govulncheck) over shipped packages
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-	govulncheck ./...
+	$(GOVULNCHECK) ./...
 
 .PHONY: sbom
 sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx.json)
 	$(GO) install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@$(CYCLONEDX_GOMOD_VERSION)
-	cyclonedx-gomod mod -json -licenses -output sbom.module.cyclonedx.json
+	$(CYCLONEDX_GOMOD) mod -json -licenses -output sbom.module.cyclonedx.json
 	@test -s sbom.module.cyclonedx.json && echo ">> wrote sbom.module.cyclonedx.json"
 
 .PHONY: sca

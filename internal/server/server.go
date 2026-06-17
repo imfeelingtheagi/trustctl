@@ -633,7 +633,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	case s.obHandler != nil:
 		// keep the injected handler
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins}
 	default:
 		// No issuing CA: issuance is unavailable, but a served connector.deploy can
 		// still be routed to a verified plugin (deployment is not signer-gated). The
@@ -925,6 +925,14 @@ func (s *Server) OutOfProcessSigning() bool {
 // never an in-process-signed certificate — when the signer is unavailable, slow,
 // or returns a signature that does not verify.
 func (s *Server) IssueLeaf(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	return s.IssueLeafWithProfile(ctx, csrDER, ttl, s.leafProfile)
+}
+
+// IssueLeafWithProfile signs an end-entity certificate under the supplied
+// per-issuance leaf profile. Served API/protocol paths pass the active tenant
+// certificate-profile constraints here so the signer emits exactly the EKUs that
+// were validated, not the legacy default set.
+func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
 	if s.caSigner == nil || s.caCertDER == nil {
 		return nil, errors.New("server: issuance unavailable — no out-of-process signer (fail closed)")
 	}
@@ -949,7 +957,7 @@ func (s *Server) IssueLeaf(ctx context.Context, csrDER []byte, ttl time.Duration
 		// Sign under the served issuing profile (PKIGOV-001/002): the leaf carries
 		// the configured CDP/AIA/policy pointers + an always-present SKI, and any
 		// profile constraints (validity/EKU/DNS-suffix) are enforced before signing.
-		der, err := crypto.SignLeafFromCSRWithProfile(s.caCertDER, s.caSigner, csrDER, ttl, s.leafProfile)
+		der, err := crypto.SignLeafFromCSRWithProfile(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
 		ch <- result{der, err}
 	}()
 	select {

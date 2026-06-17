@@ -15,8 +15,9 @@ import (
 // CertificateRequestTemplate is a backend-agnostic PKCS#10 CSR template so
 // callers never touch crypto/x509 directly (AN-3).
 type CertificateRequestTemplate struct {
-	CommonName string
-	DNSNames   []string
+	CommonName    string
+	DNSNames      []string
+	RequestedEKUs []string
 }
 
 // CreateCertificateRequest builds and signs a CSR using signer. The private key
@@ -30,6 +31,13 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 	req := &x509.CertificateRequest{
 		Subject:  pkix.Name{CommonName: tmpl.CommonName},
 		DNSNames: tmpl.DNSNames,
+	}
+	if len(tmpl.RequestedEKUs) > 0 {
+		ext, err := marshalExtKeyUsageExtension(tmpl.RequestedEKUs)
+		if err != nil {
+			return nil, err
+		}
+		req.ExtraExtensions = append(req.ExtraExtensions, ext)
 	}
 	return x509.CreateCertificateRequest(rand.Reader, req, adapter)
 }
@@ -47,10 +55,11 @@ func VerifyCertificateRequest(der []byte) error {
 // against a certificate profile (S8.1), so profile enforcement never imports
 // crypto/x509 (AN-3).
 type CSRInfo struct {
-	KeyAlgorithm string   // "RSA" | "ECDSA" | "Ed25519"
-	KeyBits      int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
-	DNSNames     []string // SAN dNSNames in the request
-	CommonName   string
+	KeyAlgorithm  string   // "RSA" | "ECDSA" | "Ed25519"
+	KeyBits       int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
+	DNSNames      []string // SAN dNSNames in the request
+	CommonName    string
+	RequestedEKUs []string // EKUs requested in the CSR's extensionRequest, if any
 }
 
 // InspectCSR parses a CSR (verifying its self-signature) and returns the
@@ -65,6 +74,11 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 		return CSRInfo{}, err
 	}
 	info := CSRInfo{DNSNames: csr.DNSNames, CommonName: csr.Subject.CommonName}
+	ekus, err := extKeyUsageNamesFromExtensions(csr.Extensions)
+	if err != nil {
+		return CSRInfo{}, err
+	}
+	info.RequestedEKUs = ekus
 	switch pub := csr.PublicKey.(type) {
 	case *rsa.PublicKey:
 		info.KeyAlgorithm, info.KeyBits = "RSA", pub.N.BitLen()

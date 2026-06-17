@@ -41,8 +41,9 @@ func IssuingCAID() string {
 	return uuid.NewSHA1(caNamespace, []byte(issuingCAHandle)).String()
 }
 
-// issueFunc mints a leaf certificate from a CSR (Server.IssueLeaf satisfies it).
-type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error)
+// issueFunc mints a leaf certificate from a CSR under the caller-supplied served
+// leaf profile (Server.IssueLeafWithProfile satisfies it).
+type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error)
 
 // issuanceDispatcher is the real outbox handler (AN-6). For a requested→issued
 // lifecycle transition it mints a leaf certificate from the assembled CA (whose
@@ -67,6 +68,10 @@ type issuanceDispatcher struct {
 	// when it resolves for the tenant (PKIGOV-002). Empty means no served-side
 	// profile binding, preserving the prior behavior.
 	defaultProfile string
+	// leafProfile is the operator-configured served issuer profile (revocation
+	// pointers, policy OIDs, and any static constraints). Tenant certificate-profile
+	// constraints are merged into a per-issuance copy before signing.
+	leafProfile crypto.LeafProfile
 	// ensureCRL makes sure the tenant has a public CRL after trusted issue/renew
 	// paths record issued serial state; publishCRL forces a fresh CRL after trusted
 	// revocation state changes. Neither is used by public GET /crl/{tenant}; reads
@@ -179,10 +184,11 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 	// this request against it BEFORE signing and emit the allow/deny decision as
 	// an issuance.profile_evaluated event. A violation rejects (fail closed) so an
 	// out-of-profile certificate is never minted on the served path.
-	if err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL); err != nil {
+	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL)
+	if err != nil {
 		return store.Certificate{}, err
 	}
-	leafPEM, err := d.issue(ctx, csrDER, leafTTL)
+	leafPEM, err := d.issue(ctx, csrDER, leafTTL, leafProfile)
 	if err != nil {
 		return store.Certificate{}, err
 	}
@@ -279,9 +285,9 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 // violation so the mint is rejected before any signature. A configured-but-
 // unresolved profile fails closed: the platform must not silently mint outside a
 // declared governance model.
-func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration) error {
+func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string, csrDER []byte, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, error) {
 	if d.defaultProfile == "" {
-		return nil
+		return d.leafProfile, nil
 	}
 	rec, err := d.store.GetActiveProfile(ctx, tenantID, d.defaultProfile)
 	if err != nil {
@@ -289,34 +295,39 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 			// Configured profile does not resolve: deny (fail closed) and record it.
 			msg := fmt.Sprintf("served default profile %q not found", d.defaultProfile)
 			if aerr := d.auditProfileDecision(ctx, tenantID, 0, "deny", msg); aerr != nil {
-				return aerr
+				return crypto.LeafProfile{}, aerr
 			}
-			return fmt.Errorf("server: %s (fail closed)", msg)
+			return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
 		}
-		return err
+		return crypto.LeafProfile{}, err
 	}
 	var prof profile.CertificateProfile
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
-		return fmt.Errorf("server: decode profile %q: %w", d.defaultProfile, err)
+		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", d.defaultProfile, err)
 	}
 	info, err := crypto.InspectCSR(csrDER)
 	if err != nil {
 		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", "unparseable CSR"); aerr != nil {
-			return aerr
+			return crypto.LeafProfile{}, aerr
 		}
-		return fmt.Errorf("server: profile %q: unparseable CSR: %w", d.defaultProfile, err)
+		return crypto.LeafProfile{}, fmt.Errorf("server: profile %q: unparseable CSR: %w", d.defaultProfile, err)
 	}
+	requestedEKUs := intendedProfileEKUs(info.RequestedEKUs, prof.AllowedEKUs)
 	preq := profile.Request{
 		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits,
-		TTL: ttl, DNSNames: dnsNames, Protocol: "api",
+		RequestedEKUs: requestedEKUs,
+		TTL:           ttl, DNSNames: dnsNames, Protocol: "api",
 	}
 	if verr := prof.Validate(preq); verr != nil {
 		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", verr.Error()); aerr != nil {
-			return aerr
+			return crypto.LeafProfile{}, aerr
 		}
-		return verr
+		return crypto.LeafProfile{}, verr
 	}
-	return d.auditProfileDecision(ctx, tenantID, rec.Version, "allow", "")
+	if err := d.auditProfileDecision(ctx, tenantID, rec.Version, "allow", ""); err != nil {
+		return crypto.LeafProfile{}, err
+	}
+	return leafProfileForCertificateProfile(d.leafProfile, prof, requestedEKUs), nil
 }
 
 // auditProfileDecision emits the served profile-gated decision as an AN-2 event,

@@ -12,6 +12,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
@@ -37,6 +38,7 @@ type Info struct {
 	KeyAlgorithm      string
 	PublicKeyBits     int // key size in bits (RSA modulus, EC curve, 256 for Ed25519); 0 if unknown
 	IsCA              bool
+	ExtKeyUsages      []string // extended key usages, known names or dotted custom OIDs
 
 	// RFC 5280 profile fields surfaced for served-leaf conformance checks
 	// (PKIGOV-001). Empty/absent extensions yield empty slices.
@@ -105,6 +107,7 @@ func Inspect(raw []byte) (Info, error) {
 	info.OCSPServers = append(info.OCSPServers, cert.OCSPServer...)
 	info.IssuingCertificateURL = append(info.IssuingCertificateURL, cert.IssuingCertificateURL...)
 	info.PolicyOIDs = policyStrings(cert)
+	info.ExtKeyUsages = extKeyUsageStrings(cert)
 	// Structural fields for the RFC 5280 profile linter (PKIGOV-009).
 	info.Version = cert.Version
 	info.SignatureAlgorithm = cert.SignatureAlgorithm.String()
@@ -112,6 +115,69 @@ func Inspect(raw []byte) (Info, error) {
 	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
 	info.BasicConstraints = cert.BasicConstraintsValid
 	return info, nil
+}
+
+func extKeyUsageStrings(cert *x509.Certificate) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(s string) {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, usage := range cert.ExtKeyUsage {
+		add(extKeyUsageString(usage))
+	}
+	for _, oid := range cert.UnknownExtKeyUsage {
+		add(oid.String())
+	}
+	return out
+}
+
+func extKeyUsageString(usage x509.ExtKeyUsage) string {
+	switch usage {
+	case x509.ExtKeyUsageAny:
+		return "any"
+	case x509.ExtKeyUsageServerAuth:
+		return "serverAuth"
+	case x509.ExtKeyUsageClientAuth:
+		return "clientAuth"
+	case x509.ExtKeyUsageCodeSigning:
+		return "codeSigning"
+	case x509.ExtKeyUsageEmailProtection:
+		return "emailProtection"
+	case x509.ExtKeyUsageTimeStamping:
+		return "timeStamping"
+	case x509.ExtKeyUsageOCSPSigning:
+		return "ocspSigning"
+	default:
+		if oid := extKeyUsageOID(usage); oid != nil {
+			return oid.String()
+		}
+		return ""
+	}
+}
+
+func extKeyUsageOID(usage x509.ExtKeyUsage) asn1.ObjectIdentifier {
+	switch usage {
+	case x509.ExtKeyUsageIPSECEndSystem:
+		return asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 5}
+	case x509.ExtKeyUsageIPSECTunnel:
+		return asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 6}
+	case x509.ExtKeyUsageIPSECUser:
+		return asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 7}
+	case x509.ExtKeyUsageMicrosoftServerGatedCrypto:
+		return asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 10, 3, 3}
+	case x509.ExtKeyUsageNetscapeServerGatedCrypto:
+		return asn1.ObjectIdentifier{2, 16, 840, 1, 113730, 4, 1}
+	case x509.ExtKeyUsageMicrosoftCommercialCodeSigning:
+		return asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 2, 1, 22}
+	case x509.ExtKeyUsageMicrosoftKernelCodeSigning:
+		return asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 61, 1, 1}
+	default:
+		return nil
+	}
 }
 
 // policyStrings returns the certificatePolicies OIDs in dotted form, reading the
