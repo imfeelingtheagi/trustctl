@@ -24,6 +24,55 @@ import (
 	"testing"
 )
 
+// ---- ARCH-004: AN-1 storage tenancy guards stay in required gates ---------------
+
+// TestStorageTenancyRegressionGuardsStayRequired locks ARCH-004: tenant isolation is
+// not just a convention in repository code. The migrated PostgreSQL catalog is
+// checked by internal/store tests, and the query-shape analyzer is part of the
+// normal lint gate. If a future change removes either guard from the required
+// gates, this docs-package protect test fails before the strength can silently rot.
+func TestStorageTenancyRegressionGuardsStayRequired(t *testing.T) {
+	for _, testName := range []string{"TestEveryTenantTableForcesRLS", "TestNoTenantPolicyIsUsingOnly"} {
+		if !anyTestDeclaresUnder(t, "../internal/store", testName) {
+			t.Errorf("ARCH-004: internal/store no longer declares %s; catalog-derived RLS protection is not locked", testName)
+		}
+	}
+
+	rlsGuard := read(t, "../internal/store/rls_force_test.go")
+	for _, want := range []string{"pg_class", "relforcerowsecurity", "pg_policies", "with_check IS NULL"} {
+		if !strings.Contains(rlsGuard, want) {
+			t.Errorf("ARCH-004: rls_force_test.go no longer checks %q; the RLS catalog guard may be too weak", want)
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{
+		"$(GO) test -race",
+		"-coverpkg=./...",
+		"./...",
+		"./tools/trstctllint",
+		"-vettool",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("ARCH-004: Makefile no longer contains %q; AN-1 guards must stay in required make gates", want)
+		}
+	}
+
+	linterMain := read(t, "../tools/trstctllint/main.go")
+	for _, want := range []string{"tools/trstctllint/tenantfilter", "tenantfilter.Analyzer"} {
+		if !strings.Contains(linterMain, want) {
+			t.Errorf("ARCH-004: trstctllint main no longer wires %q; tenant query filtering is no longer part of make lint", want)
+		}
+	}
+
+	tenantfilterTest := read(t, "../tools/trstctllint/tenantfilter/tenantfilter_test.go")
+	for _, want := range []string{"analysistest.Run", "trstctl.com/trstctl/internal/store", "trstctl.com/trstctl/internal/orchestrator"} {
+		if !strings.Contains(tenantfilterTest, want) {
+			t.Errorf("ARCH-004: tenantfilter fixtures no longer cover %q; AN-1 query-shape lint can regress without proof", want)
+		}
+	}
+}
+
 // ---- DOCS-006: the reality-tests provably catch over-claims (injection self-test) -
 
 // TestDocsHonestyCheckCatchesInjectedOverclaim is the DOCS-006 lock: it proves the
