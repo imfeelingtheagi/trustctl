@@ -21,7 +21,10 @@ policy. `scripts/supply-chain/verify-embedded-postgres.sh` enforces it:
 2. Computes its SHA-256 and **fails the build** if the jar or inner `.txz` hash
    changes for the pinned version. The trust-on-first-use bootstrap is complete;
    empty pins are a hard failure.
-3. Extracts and Trivy-scans the binaries (HIGH/CRITICAL, ignore-unfixed).
+3. Extracts and Trivy-scans the binaries (HIGH/CRITICAL, ignore-unfixed), writing
+   the `embedded-postgres-trivy-receipt` CI artifact: raw Trivy JSON, Trivy
+   version/DB metadata, and HIGH/CRITICAL counts. Fixable CRITICAL findings fail;
+   HIGH and non-fixable CRITICAL findings are recorded for audit.
 
 The manifest currently covers `linux-amd64`, `linux-arm64v8`, and
 `darwin-arm64v8`. Run a non-default architecture with, for example:

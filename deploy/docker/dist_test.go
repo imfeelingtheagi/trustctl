@@ -460,10 +460,20 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// committed manifest pins the version + source, and CI verifies its checksum.
 	manifest := repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")
 	mustContainAll(t, "embedded-postgres manifest", manifest, "16.4.0", "sha256")
+	mustContainAll(t, "embedded-postgres scanner receipt policy", manifest,
+		"receiptArtifact", "embedded-postgres-trivy-receipt", "failOnFixableCritical", "lastResult")
+	if strings.Contains(manifest, "pending first CI run") {
+		t.Fatal("embedded-postgres manifest still says the scanner receipt is pending")
+	}
 	mustContainAny(t, "embedded-postgres manifest source", manifest,
 		"embedded-postgres-binaries", "zonky", "repo1.maven.org")
-	mustContainAny(t, "ci.yml embedded-postgres scan", ci,
-		"embedded-postgres", "supply-chain/embedded-postgres", "sha256")
+	mustContainAll(t, "ci.yml embedded-postgres scan receipt", ci,
+		"TRSTCTL_EMBEDDED_PG_SCAN_DIR", "embedded-postgres-trivy-receipt", "if-no-files-found: error")
+	verifyPG := repoFile(t, "scripts", "supply-chain", "verify-embedded-postgres.sh")
+	mustContainAll(t, "embedded-postgres Docker Trivy DB receipt path", verifyPG,
+		`trivy_cache="$archWorkdir/trivy-cache"`,
+		`-v "${trivy_cache}:/root/.cache/trivy"`,
+		`-v "${trivy_cache}:/root/.cache/trivy:ro" "$TRIVY_IMAGE" --version >"$trivy_version_out"`)
 
 	// (4) The version the manifest pins is the version the integration tests
 	// actually request — so the scanned binary is the binary that runs.
@@ -480,7 +490,16 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// present).
 	sc := repoFile(t, "docs", "supply-chain.md")
 	mustContainAll(t, "supply-chain page records the SCA surfaces", sc,
-		"govulncheck", "npm audit", "embedded-postgres")
+		"govulncheck", "npm audit", "embedded-postgres", "Trivy version/DB metadata")
+}
+
+func TestEmbeddedPostgresScanReceiptPolicySelfTest(t *testing.T) {
+	cmd := exec.Command("bash", filepath.Join("scripts", "supply-chain", "embedded-postgres-scan-receipt_selftest.sh"))
+	cmd.Dir = filepath.Join("..", "..")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("embedded-postgres scan receipt self-test failed: %v\n%s", err, out)
+	}
 }
 
 // TestACMEConformanceHarnessIsWired encodes the R4.2 close: the ACME server has a

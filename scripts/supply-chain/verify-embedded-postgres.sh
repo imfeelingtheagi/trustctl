@@ -90,21 +90,33 @@ find "$archWorkdir" -name '*.txz' -print0 | while IFS= read -r -d '' txz; do
   tar -xf "$txz" -C "$archWorkdir" 2>/dev/null || true
 done
 
-# The scan is advisory (exit-code 0): this binary is integration-test only and is
-# not shipped, and a transitive OS-package CVE in a prebuilt PostgreSQL binary is
-# only fixable by bumping the pinned version upstream — so we RECORD findings here
-# rather than block the build. The hard gate is the checksum-change check above.
+# The Trivy JSON report and compact receipt are CI artifacts. HIGH and non-fixable
+# CRITICAL findings are recorded for audit. Fixable CRITICAL findings fail the gate:
+# the pinned binary has an available patched upstream replacement, so continuing
+# would turn the receipt into a known-bad green check.
 TRIVY_IMAGE="aquasec/trivy:0.58.1"
-scan_args=(rootfs --severity HIGH,CRITICAL --ignore-unfixed --no-progress --exit-code 0)
+scan_args=(rootfs --severity HIGH,CRITICAL --ignore-unfixed --no-progress --format json --exit-code 0)
+receipt_dir="${TRSTCTL_EMBEDDED_PG_SCAN_DIR:-$archWorkdir/scan-receipt}"
+mkdir -p "$receipt_dir"
+receipt_dir="$(cd "$receipt_dir" && pwd)"
+trivy_report="$receipt_dir/trivy-rootfs.json"
+trivy_version_out="$receipt_dir/trivy-version.txt"
+receipt="$receipt_dir/embedded-postgres-trivy-receipt.json"
 if command -v trivy >/dev/null 2>&1; then
-  echo ">> trivy rootfs scan (local binary; advisory)"
-  trivy "${scan_args[@]}" "$archWorkdir" || echo "::warning::trivy scan did not complete cleanly (advisory; checksum gate already passed)"
+  echo ">> trivy rootfs scan (local binary; receipt ${receipt_dir})"
+  trivy "${scan_args[@]}" --output "$trivy_report" "$archWorkdir"
+  trivy --version >"$trivy_version_out"
 elif command -v docker >/dev/null 2>&1; then
-  echo ">> trivy rootfs scan (pinned ${TRIVY_IMAGE}; advisory)"
-  docker run --rm -v "${archWorkdir}:/scan:ro" "$TRIVY_IMAGE" "${scan_args[@]}" /scan \
-    || echo "::warning::trivy (docker) scan did not complete cleanly (advisory; checksum gate already passed)"
+  echo ">> trivy rootfs scan (pinned ${TRIVY_IMAGE}; receipt ${receipt_dir})"
+  trivy_cache="$archWorkdir/trivy-cache"
+  mkdir -p "$trivy_cache"
+  docker run --rm -v "${trivy_cache}:/root/.cache/trivy" -v "${archWorkdir}:/scan:ro" -v "${receipt_dir}:/out" "$TRIVY_IMAGE" "${scan_args[@]}" --output /out/trivy-rootfs.json /scan
+  docker run --rm -v "${trivy_cache}:/root/.cache/trivy:ro" "$TRIVY_IMAGE" --version >"$trivy_version_out"
 else
-  echo "::notice::neither trivy nor docker present; provenance + checksum verified, deep scan skipped."
+  echo "::error::neither trivy nor docker present; cannot produce the embedded-postgres scanner receipt (SUPPLY-003)" >&2
+  exit 1
 fi
+"$here/embedded-postgres-scan-receipt.sh" "$trivy_report" "$trivy_version_out" "$receipt" "$arch" "$ver" "$gotJar" "$gotTxz"
+echo ">> wrote embedded-postgres Trivy receipt: $receipt"
 
 echo ">> embedded-postgres supply-chain check complete"

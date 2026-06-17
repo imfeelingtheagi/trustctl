@@ -306,10 +306,20 @@ jobs:
       # Verify and scan the embedded-postgres runtime binary (PostgreSQL pulled
       # from Maven Central — it lives outside go.sum): checksum-pin against the
       # committed provenance manifest (hard fail on any change), then Trivy-scan
-      # the extracted binaries via Trivy's pinned official image (Docker is
-      # preinstalled on the runner — no flaky installer).
+      # the extracted binaries and write a machine-readable scanner receipt.
       - name: Verify & scan the embedded-postgres binary
+        env:
+          ARCH: linux-amd64
+          TRSTCTL_EMBEDDED_PG_SCAN_DIR: ${{ runner.temp }}/embedded-postgres-scan
         run: bash scripts/supply-chain/verify-embedded-postgres.sh
+
+      - name: Upload embedded-postgres Trivy receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: embedded-postgres-trivy-receipt
+          path: ${{ runner.temp }}/embedded-postgres-scan
+          if-no-files-found: error
 
   helm:
     name: helm (lint + render + schema)

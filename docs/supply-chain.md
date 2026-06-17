@@ -100,9 +100,14 @@ enforced at runtime**, not merely scanned in CI (SUPPLY-003):
 - `scripts/supply-chain/verify-embedded-postgres.sh` (CI `supply-chain` job)
   verifies the downloaded jar **and** its inner `.txz` against the committed pins
   (failing the build on any change) and **Trivy-scans** the extracted binaries for
-  HIGH/CRITICAL issues. CI defaults to `ARCH=linux-amd64`; developers can also run
-  `ARCH=darwin-arm64v8 scripts/supply-chain/verify-embedded-postgres.sh` when
-  refreshing the macOS local-test pin.
+  HIGH/CRITICAL issues. CI stores `embedded-postgres-trivy-receipt`, containing the
+  raw Trivy JSON report, Trivy version/DB metadata, severity counts, and a compact
+  pass/fail receipt. HIGH and non-fixable CRITICAL findings are recorded; any
+  **fixable CRITICAL** finding fails the gate because a patched upstream binary is
+  available and the committed pin must move. CI defaults to `ARCH=linux-amd64`;
+  developers can also run `ARCH=darwin-arm64v8
+  scripts/supply-chain/verify-embedded-postgres.sh` when refreshing the macOS
+  local-test pin.
 
 This binary is **not** bundled in the shipped distroless image (which carries only
 the Go binaries); it is fetched on first run of the bundled single-node/eval path.
