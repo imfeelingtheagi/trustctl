@@ -13,7 +13,7 @@ package docs
 //     carries no PII/credential field; no gating symbol exists; getting-started cites
 //     the real measured issuance test).
 //   - DOCS-009: the headline counts the docs advertise (78 capabilities, 9 CA
-//     integrations, 13 connectors, ~870 internal Go files, federation NOT built)
+//     integrations, 13 connectors, current internal Go-file count, federation NOT built)
 //     stay equal to what the tree actually contains.
 
 import (
@@ -304,10 +304,10 @@ func TestCAIntegrationCountMatchesDocs(t *testing.T) {
 	}
 }
 
-// TestInternalPackageCountMatchesReadme is the DOCS-009 lock for the "~870 Go
-// files across the internal subsystem packages" claim. The README advertises the
-// size of internal/; this binds that number to the real recursive Go-file count
-// within a small tolerance for trivial drift, so large divergence is caught.
+// TestInternalPackageCountMatchesReadme is the DOCS-009 lock for the README's
+// internal Go-file scale claim. The README advertises the size of internal/; this
+// binds that number to the real recursive Go-file count within a small tolerance
+// for trivial drift, so large divergence is caught.
 func TestInternalPackageCountMatchesReadme(t *testing.T) {
 	goFiles := 0
 	err := filepath.WalkDir(filepath.FromSlash("../internal"), func(path string, d os.DirEntry, err error) error {
