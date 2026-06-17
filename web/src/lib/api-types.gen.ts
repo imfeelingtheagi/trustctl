@@ -170,6 +170,19 @@ export interface MCPToolResult {
   tool: string;
 }
 
+export interface MachineLoginRequest {
+  credential: string;
+  method?: string;
+}
+
+export interface MachineLoginResponse {
+  expires_at: string;
+  method: string;
+  principal: string;
+  scopes: string[];
+  session_id: string;
+}
+
 export interface Owner {
   created_at?: string;
   email?: string;

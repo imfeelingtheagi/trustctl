@@ -115,6 +115,28 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)
+	body := `{"credential":"machine-token","method":"token"}`
+	code, _, _ := run(t, []string{"secrets", "login", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/login" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("machine login mutation should send an Idempotency-Key")
+	}
+}
+
 func TestQueryFlag(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{}`, &cap)

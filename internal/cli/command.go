@@ -70,6 +70,7 @@ var commandTable = []Command{
 	{Name: []string{"mcp", "call"}, Method: "POST", Path: "/api/v1/mcp/tools/{tool}", Body: bodyFile, Summary: "Invoke an MCP tool"},
 
 	// Secret store, secret sharing, and dynamic PKI secret (GAP-006).
+	{Name: []string{"secrets", "login"}, Method: "POST", Path: "/api/v1/secrets/login", Body: bodyFile, Summary: "Exchange a machine credential for a workload session"},
 	{Name: []string{"secrets", "store", "put"}, Method: "POST", Path: "/api/v1/secrets/store", Body: bodyFile, Summary: "Store a secret"},
 	{Name: []string{"secrets", "store", "list"}, Method: "GET", Path: "/api/v1/secrets/store", Query: []string{"limit", "cursor"}, Summary: "List stored secrets"},
 	{Name: []string{"secrets", "store", "get"}, Method: "GET", Path: "/api/v1/secrets/store/{name}", Summary: "Get a stored secret"},

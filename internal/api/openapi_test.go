@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -111,6 +113,45 @@ func TestOpenAPISpecCoversRoutes(t *testing.T) {
 		if pi[strings.ToLower(rt.Method)] == nil {
 			t.Errorf("route %s %s not documented (method missing)", rt.Method, rt.Path)
 		}
+	}
+}
+
+func TestOpenAPISpecCoversMachineLogin(t *testing.T) {
+	doc := fetchSpec(t)
+	paths := doc["paths"].(map[string]any)
+	rawPath, ok := paths["/api/v1/secrets/login"].(map[string]any)
+	if !ok {
+		t.Fatal("OpenAPI spec is missing POST /api/v1/secrets/login")
+	}
+	op, ok := rawPath["post"].(map[string]any)
+	if !ok {
+		t.Fatal("OpenAPI spec is missing POST operation for /api/v1/secrets/login")
+	}
+	if got := op["operationId"]; got != "machineLogin" {
+		t.Fatalf("machine-login operationId = %v, want machineLogin", got)
+	}
+	reqRef := op["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)["$ref"]
+	if reqRef != "#/components/schemas/MachineLoginRequest" {
+		t.Fatalf("machine-login request schema = %v", reqRef)
+	}
+	respRef := op["responses"].(map[string]any)["200"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)["$ref"]
+	if respRef != "#/components/schemas/MachineLoginResponse" {
+		t.Fatalf("machine-login response schema = %v", respRef)
+	}
+}
+
+func TestNoManualAPIV1MuxRoutesBypassOpenAPI(t *testing.T) {
+	src, err := os.ReadFile("api.go")
+	if err != nil {
+		t.Fatalf("read api.go: %v", err)
+	}
+	re := regexp.MustCompile(`mux\.HandleFunc\("[A-Z]+\s+(/api/v1/[^"]+)"`)
+	if matches := re.FindAllStringSubmatch(string(src), -1); len(matches) > 0 {
+		var paths []string
+		for _, m := range matches {
+			paths = append(paths, m[1])
+		}
+		t.Fatalf("literal /api/v1 mux registrations bypass the route registry/OpenAPI: %s", strings.Join(paths, ", "))
 	}
 }
 

@@ -178,16 +178,6 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if a.agentEnroller != nil {
 		mux.HandleFunc("POST /enroll/bootstrap", a.enrollBootstrap)
 	}
-	// Machine login (authmethod/F58): a workload presents a credential and receives a
-	// scoped session. The credential authenticates the request, so this route carries
-	// no RBAC permission — like the OIDC bridge and agent bootstrap, it stays out of
-	// the route registry (and thus the OpenAPI/CLI surface). It is registered only when
-	// the served secrets surface is wired; otherwise it fails closed in the handler.
-	// The path is /api/v1/secrets/login (distinct from the browser OIDC /auth/login
-	// bridge — this is the machine-identity login, not the human SSO).
-	if a.secrets != nil {
-		mux.HandleFunc("POST /api/v1/secrets/login", a.machineLogin)
-	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux
 	a.spec = buildSpec(a.routes())
@@ -322,7 +312,8 @@ func (a *API) routes() []route {
 		// secret (pkisecret/F67). Each is auth-gated, tenant-scoped under RLS (AN-1),
 		// idempotent (AN-5), and event-sourced (AN-2); values are never logged or
 		// returned beyond their design (AN-8). The machine-login route (authmethod/F58)
-		// is PUBLIC and registered separately in New (it authenticates a credential).
+		// is public because the presented credential authenticates the workload; it is
+		// still in the registry so OpenAPI/generated clients see the served contract.
 		{method: "POST", path: "/api/v1/secrets/store", opID: "createSecret", summary: "Create an application secret (sealed at rest)", handler: a.createSecret, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: []string{"name"}, resSchema: "SecretValue", successCode: "200", perm: authz.SecretsRead},
@@ -333,6 +324,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/secrets/shares/redeem", opID: "redeemShare", summary: "Redeem a one-time secret share exactly once", handler: a.redeemShare, reqSchema: "ShareRedeemRequest", resSchema: "ShareValue", successCode: "200", mutation: true, perm: authz.SecretsRead},
 
 		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200"},
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}

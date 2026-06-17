@@ -581,6 +581,51 @@
         ],
         "type": "object"
       },
+      "MachineLoginRequest": {
+        "properties": {
+          "credential": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "type": "object"
+      },
+      "MachineLoginResponse": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "principal",
+          "method",
+          "scopes",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "Owner": {
         "properties": {
           "created_at": {
@@ -2534,6 +2579,54 @@
           }
         },
         "summary": "Rank credentials by composite risk score"
+      }
+    },
+    "/api/v1/secrets/login": {
+      "post": {
+        "operationId": "machineLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineLoginResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Exchange a machine credential for a scoped workload session"
       }
     },
     "/api/v1/secrets/pki": {
