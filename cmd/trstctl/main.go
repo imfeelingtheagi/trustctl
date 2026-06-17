@@ -394,6 +394,14 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "protocols.spiffe.trust_domain: %s\n", cfg.Protocols.SPIFFE.TrustDomain)
 	}
 	fmt.Fprintf(&b, "protocols.ssh.enabled: %t\n", cfg.Protocols.SSH.Enabled)
+	// Served agent steady-state channel (WIRE-004 / OPS-005): these are
+	// redaction-safe fleet rollout knobs. They contain addresses and public CA paths,
+	// not tokens or private key material.
+	fmt.Fprintf(&b, "agent_channel.enabled: %t\n", cfg.AgentChannel.Enabled)
+	fmt.Fprintf(&b, "agent_channel.addr: %s\n", cfg.AgentChannel.Addr)
+	fmt.Fprintf(&b, "agent_channel.server_name: %s\n", cfg.AgentChannel.ServerName)
+	fmt.Fprintf(&b, "agent_channel.ca_cert_file: %s\n", cfg.AgentChannel.CACertFile)
+	fmt.Fprintf(&b, "agent_channel.heartbeat_interval: %s\n", cfg.AgentChannel.HeartbeatInterval)
 	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01):
 	// show whether the binary mounts the /auth/* login and, when on, the IdP it trusts
 	// and the per-user tenant-mapping mode. Never the client secret or session secret

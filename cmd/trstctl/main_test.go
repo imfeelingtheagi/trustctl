@@ -208,6 +208,32 @@ func TestRun_CheckConfigExternalTargets(t *testing.T) {
 	}
 }
 
+func TestRun_CheckConfigAgentChannel(t *testing.T) {
+	env := envFunc(map[string]string{
+		"TRSTCTL_AGENT_CHANNEL_ENABLED":            "true",
+		"TRSTCTL_AGENT_CHANNEL_ADDR":               ":9443",
+		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":        "agents.example.com",
+		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":       "/var/lib/trstctl/agent-ca.crt",
+		"TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL": "45s",
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config, agent_channel) returned error: %v", err)
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"agent_channel.enabled: true",
+		"agent_channel.addr: :9443",
+		"agent_channel.server_name: agents.example.com",
+		"agent_channel.ca_cert_file: /var/lib/trstctl/agent-ca.crt",
+		"agent_channel.heartbeat_interval: 45s",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("check-config output %q missing %q", out, want)
+		}
+	}
+}
+
 // TestRun_InvalidConfigFailsFast encodes that an invalid configuration is
 // rejected before the control plane boots — external Postgres with no DSN must
 // be an error, not a silent fallback.
