@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -67,6 +68,9 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	if protocols.RAKeyFile == "" && (protocols.SCEP.Enabled || protocols.CMP.Enabled) {
+		protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
+	}
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(dir, "nats")})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
@@ -86,13 +90,35 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	if err != nil {
 		t.Fatalf("new signer: %v", err)
 	}
-	socket := filepath.Join(dir, "signer.sock")
+	socketDir, err := os.MkdirTemp("", "trstctl-signer-")
+	if err != nil {
+		t.Fatalf("signer socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "s.sock")
 	signerCtx, cancelSigner := context.WithCancel(ctx)
-	signerDone := make(chan struct{})
-	go func() { defer close(signerDone); _ = signing.ServeServer(signerCtx, socket, signerSrv) }()
-	t.Cleanup(func() { cancelSigner(); <-signerDone })
+	signerDone := make(chan error, 1)
+	signerEarlyErr := make(chan error, 1)
+	go func() {
+		serr := signing.ServeServer(signerCtx, socket, signerSrv)
+		if serr != nil {
+			signerEarlyErr <- serr
+		}
+		signerDone <- serr
+	}()
+	t.Cleanup(func() {
+		cancelSigner()
+		if serr := <-signerDone; serr != nil {
+			t.Errorf("serve signer: %v", serr)
+		}
+	})
 	client, err := signing.DialReady(ctx, socket, 10*time.Second)
 	if err != nil {
+		select {
+		case serr := <-signerEarlyErr:
+			t.Fatalf("serve signer: %v", serr)
+		default:
+		}
 		t.Fatalf("dial signer: %v", err)
 	}
 	t.Cleanup(func() { _ = client.Close() })

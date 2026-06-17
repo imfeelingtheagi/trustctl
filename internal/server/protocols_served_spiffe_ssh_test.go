@@ -33,7 +33,12 @@ import (
 // verify. It MUST fail on the pre-wiring tree (no UDS server existed — the spiffe
 // package exposed only Go methods) and PASS after, race-clean.
 func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
-	socket := filepath.Join(t.TempDir(), "spiffe.sock")
+	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-")
+	if err != nil {
+		t.Fatalf("spiffe socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "s.sock")
 	h := newServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
 			Enabled:     true,

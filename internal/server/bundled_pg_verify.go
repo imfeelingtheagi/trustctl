@@ -13,18 +13,20 @@ import (
 
 // archiveArch reproduces the embedded-postgres library's per-arch naming for the
 // cached binary archive, so we can locate the exact `.txz` it downloads and run
-// (SUPPLY-003). On linux the library renames arm64->arm64v8 (and arm->arm32vN),
-// and appends `-alpine` on Alpine; on every other GOOS it uses GOARCH verbatim.
-// We mirror that here (instead of importing the library's unexported strategy) so
-// the cache path we verify is byte-identical to the one it uses.
+// (SUPPLY-003). We mirror that unexported strategy here instead of importing it,
+// because this verifier must fail closed before the third-party binary starts.
 func archiveArch() string {
-	arch := runtime.GOARCH
-	if runtime.GOOS == "linux" {
+	return postgresArchiveArch(runtime.GOOS, runtime.GOARCH, bundledPGVersion, unameMachine, isAlpine())
+}
+
+func postgresArchiveArch(goos, goarch, postgresVersion string, linuxMachineName func() string, alpine bool) string {
+	arch := goarch
+	if goos == "linux" {
 		switch {
 		case arch == "arm64":
 			arch = "arm64v8"
 		case arch == "arm":
-			machine := unameMachine()
+			machine := linuxMachineName()
 			switch {
 			case strings.HasPrefix(machine, "armv7"):
 				arch = "arm32v7"
@@ -32,11 +34,27 @@ func archiveArch() string {
 				arch = "arm32v6"
 			}
 		}
-		if isAlpine() {
+		if alpine {
 			arch += "-alpine"
 		}
 	}
+
+	if goos == "darwin" && arch == "arm64" {
+		if postgresAtLeast(postgresVersion, 14, 2) {
+			arch = "arm64v8"
+		} else {
+			arch = "amd64"
+		}
+	}
 	return arch
+}
+
+func postgresAtLeast(version string, wantMajor, wantMinor int) bool {
+	var major, minor int
+	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
+		return false
+	}
+	return major > wantMajor || (major == wantMajor && minor >= wantMinor)
 }
 
 func unameMachine() string {

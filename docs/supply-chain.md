@@ -87,7 +87,9 @@ enforced at runtime**, not merely scanned in CI (SUPPLY-003):
   coordinates, source URLs, and a **committed per-arch SHA-256 pin** for both the
   Maven `jar` and the inner `.txz` archive the library caches and extracts. The pin
   is **populated** (the trust-on-first-use bootstrap is complete), so the gate is a
-  hard fail, not a no-op.
+  hard fail, not a no-op. The shipped pins cover linux/amd64, linux/arm64, and
+  darwin/arm64 local developer gates using the same archive names the
+  `embedded-postgres` library fetches.
 - `internal/server/bundled_pg_pins.go` carries the same per-arch `.txz` pins that
   the **served binary enforces at runtime**: before starting bundled PostgreSQL,
   `startBundledPostgres` verifies the cached `.txz` against the committed pin and
@@ -98,7 +100,9 @@ enforced at runtime**, not merely scanned in CI (SUPPLY-003):
 - `scripts/supply-chain/verify-embedded-postgres.sh` (CI `supply-chain` job)
   verifies the downloaded jar **and** its inner `.txz` against the committed pins
   (failing the build on any change) and **Trivy-scans** the extracted binaries for
-  HIGH/CRITICAL issues.
+  HIGH/CRITICAL issues. CI defaults to `ARCH=linux-amd64`; developers can also run
+  `ARCH=darwin-arm64v8 scripts/supply-chain/verify-embedded-postgres.sh` when
+  refreshing the macOS local-test pin.
 
 This binary is **not** bundled in the shipped distroless image (which carries only
 the Go binaries); it is fetched on first run of the bundled single-node/eval path.

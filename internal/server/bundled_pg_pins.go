@@ -15,13 +15,15 @@ package server
 // These hashes are the human-readable manifest's `archives[].txz_sha256` values in
 // deploy/supply-chain/embedded-postgres.json; TestBundledPGPinsMatchManifest
 // asserts the two never drift. Keys are the embedded-postgres cache-file arch
-// segment, i.e. `linux-<arch>` where <arch> follows the library's naming
+// segment, i.e. `<os>-<arch>` where <arch> follows the library's naming
 // (amd64, arm64v8, …) — see archiveArch().
 var bundledPGTxzSHA256 = map[string]string{
 	// PostgreSQL 16.4.0, linux/amd64 — the production single-node/eval default.
 	"linux-amd64": "d24cafae863e1ba9502bdc27942661391748ce60345725e7a15429be637fc8b6",
 	// PostgreSQL 16.4.0, linux/arm64 (zonky names it arm64v8).
 	"linux-arm64v8": "5b8a4b595f847ef11d47c51f40de713ff0ef335aa86f668677470d43c681f47b",
+	// PostgreSQL 16.4.0, darwin/arm64 (zonky names it arm64v8).
+	"darwin-arm64v8": "2805111c0e325e191be8eb4290e0e45930cd30250a864ca30b385d828ae7b309",
 }
 
 // bundledPGVersion is the pinned PostgreSQL version (must match

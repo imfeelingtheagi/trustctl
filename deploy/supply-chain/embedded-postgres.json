@@ -9,9 +9,9 @@
   "source": {
     "registry": "Maven Central",
     "group": "io.zonky.test.postgres",
-    "artifact": "embedded-postgres-binaries-linux-<arch>",
+    "artifact": "embedded-postgres-binaries-<os>-<arch>",
     "version": "16.4.0",
-    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/16.4.0/embedded-postgres-binaries-linux-amd64-16.4.0.jar"
+    "urlTemplate": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-<os>-<arch>/16.4.0/embedded-postgres-binaries-<os>-<arch>-16.4.0.jar"
   },
   "checksum": {
     "algorithm": "sha256",
@@ -33,6 +33,13 @@
       "txz_sha256": "5b8a4b595f847ef11d47c51f40de713ff0ef335aa86f668677470d43c681f47b",
       "txz_name": "postgres-linux-arm_64.txz",
       "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-arm64v8/16.4.0/embedded-postgres-binaries-linux-arm64v8-16.4.0.jar"
+    },
+    {
+      "arch": "darwin-arm64v8",
+      "jar_sha256": "ad810a174664012341f1c9c1ff9667f61930d054f34bd650ceb2bc0c8796ccf9",
+      "txz_sha256": "2805111c0e325e191be8eb4290e0e45930cd30250a864ca30b385d828ae7b309",
+      "txz_name": "postgres-darwin-arm_64.txz",
+      "jarUrl": "https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-darwin-arm64v8/16.4.0/embedded-postgres-binaries-darwin-arm64v8-16.4.0.jar"
     }
   ],
   "scan": {

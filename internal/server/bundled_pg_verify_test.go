@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -97,6 +98,39 @@ func TestRuntimePinsMatchManifest(t *testing.T) {
 	}
 }
 
+func TestArchiveArchMirrorsEmbeddedPostgresStrategy(t *testing.T) {
+	tests := []struct {
+		goos    string
+		goarch  string
+		version string
+		uname   string
+		alpine  bool
+		want    string
+	}{
+		{goos: "linux", goarch: "amd64", version: "16.4.0", want: "amd64"},
+		{goos: "linux", goarch: "arm64", version: "16.4.0", want: "arm64v8"},
+		{goos: "linux", goarch: "arm", version: "16.4.0", uname: "armv7l", want: "arm32v7"},
+		{goos: "linux", goarch: "arm", version: "16.4.0", uname: "armv6l", want: "arm32v6"},
+		{goos: "linux", goarch: "amd64", version: "16.4.0", alpine: true, want: "amd64-alpine"},
+		{goos: "darwin", goarch: "amd64", version: "16.4.0", want: "amd64"},
+		{goos: "darwin", goarch: "arm64", version: "14.1.0", want: "amd64"},
+		{goos: "darwin", goarch: "arm64", version: "14.2.0", want: "arm64v8"},
+		{goos: "darwin", goarch: "arm64", version: "16.4.0", want: "arm64v8"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(fmt.Sprintf("%s/%s/%s", tt.goos, tt.goarch, tt.version), func(t *testing.T) {
+			got := postgresArchiveArch(tt.goos, tt.goarch, tt.version, func() string {
+				return tt.uname
+			}, tt.alpine)
+			if got != tt.want {
+				t.Fatalf("postgresArchiveArch() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestVerifyBundledPostgresArchiveRejectsTamper is the SUPPLY-003 acceptance, part
 // 2: tampering the cached binary makes the runtime verifier refuse, a matching
 // binary verifies, and a cold (absent) cache is a non-error no-op. It exercises the
@@ -185,7 +219,7 @@ func TestUnpinnedArchFailsClosed(t *testing.T) {
 	// branch by checking that an unknown key is absent and that the error path is
 	// taken via a direct lookup. The pure verifier is covered above; here we assert
 	// the policy: every arch we ship must be pinned (no silent unverified run).
-	for _, archKey := range []string{"linux-amd64", "linux-arm64v8"} {
+	for _, archKey := range []string{"linux-amd64", "linux-arm64v8", "darwin-arm64v8"} {
 		if _, ok := bundledPGTxzSHA256[archKey]; !ok {
 			t.Errorf("shipped arch %q must have a committed provenance pin (SUPPLY-003)", archKey)
 		}

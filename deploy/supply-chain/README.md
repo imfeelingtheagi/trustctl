@@ -13,14 +13,21 @@ them live outside `go.sum`, so they are easy to miss:
 
 The `embedded-postgres` test dependency downloads a real PostgreSQL binary from
 **Maven Central** at runtime — that binary is **not** covered by `go.sum`. This
-manifest pins its exact version and source, and records the checksum + scan
-policy. `scripts/supply-chain/verify-embedded-postgres.sh` enforces it:
+manifest pins its exact version and per-arch sources, and records the checksum +
+scan policy. `scripts/supply-chain/verify-embedded-postgres.sh` enforces it:
 
 1. Downloads the pinned PostgreSQL binary from the recorded URL.
-2. Computes its SHA-256. On first run (empty `sha256`) it prints the value for a
-   maintainer to pin and commit; thereafter it **fails the build** if the hash
-   ever changes for the pinned version (trust-on-first-use).
+2. Computes its SHA-256 and **fails the build** if the jar or inner `.txz` hash
+   changes for the pinned version. The trust-on-first-use bootstrap is complete;
+   empty pins are a hard failure.
 3. Extracts and Trivy-scans the binaries (HIGH/CRITICAL, ignore-unfixed).
+
+The manifest currently covers `linux-amd64`, `linux-arm64v8`, and
+`darwin-arm64v8`. Run a non-default architecture with, for example:
+
+```bash
+ARCH=darwin-arm64v8 scripts/supply-chain/verify-embedded-postgres.sh
+```
 
 It is integration-test only and is **not** bundled in the shipped distroless
 image. Run the whole pass locally with `make supply-chain` (needs network for the

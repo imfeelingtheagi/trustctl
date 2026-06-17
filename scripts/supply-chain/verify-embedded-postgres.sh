@@ -15,6 +15,7 @@
 #
 #   ARCH=linux-amd64 ./verify-embedded-postgres.sh   # default
 #   ARCH=linux-arm64v8 ./verify-embedded-postgres.sh
+#   ARCH=darwin-arm64v8 ./verify-embedded-postgres.sh
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,7 +47,10 @@ if [ -z "$wantJar" ] || [ -z "$wantTxz" ]; then
 fi
 
 mkdir -p "$workdir"
-jar="$workdir/embedded-postgres-${arch}-${ver}.jar"
+archWorkdir="$workdir/${arch}-${ver}"
+rm -rf "$archWorkdir"
+mkdir -p "$archWorkdir"
+jar="$archWorkdir/embedded-postgres-${arch}-${ver}.jar"
 
 echo ">> downloading PostgreSQL ${ver} (${arch}) binary: ${url}"
 curl -fsSL "$url" -o "$jar"
@@ -62,8 +66,8 @@ fi
 echo ">> jar checksum verified against the committed manifest"
 
 # Verify the inner .txz too — that is the artifact the runtime caches and checks.
-( cd "$workdir" && unzip -oq "$jar" )
-innerTxz="$(find "$workdir" -name '*.txz' -print | head -1)"
+( cd "$archWorkdir" && unzip -oq "$jar" )
+innerTxz="$(find "$archWorkdir" -name '*.txz' -print | head -1)"
 if [ -z "$innerTxz" ]; then
   echo "::error::could not find the inner .txz inside the jar for ${arch}" >&2
   exit 1
@@ -79,11 +83,11 @@ fi
 echo ">> inner .txz checksum verified against the committed runtime pin"
 
 echo ">> extracting for vulnerability scan"
-( cd "$workdir" && unzip -oq "$jar" )
+( cd "$archWorkdir" && unzip -oq "$jar" )
 # The jar wraps a postgres-<os>-<arch>.txz; unpack any we find so Trivy can scan
 # the actual binaries and shared libraries.
-find "$workdir" -name '*.txz' -print0 | while IFS= read -r -d '' txz; do
-  tar -xf "$txz" -C "$workdir" 2>/dev/null || true
+find "$archWorkdir" -name '*.txz' -print0 | while IFS= read -r -d '' txz; do
+  tar -xf "$txz" -C "$archWorkdir" 2>/dev/null || true
 done
 
 # The scan is advisory (exit-code 0): this binary is integration-test only and is
@@ -94,10 +98,10 @@ TRIVY_IMAGE="aquasec/trivy:0.58.1"
 scan_args=(rootfs --severity HIGH,CRITICAL --ignore-unfixed --no-progress --exit-code 0)
 if command -v trivy >/dev/null 2>&1; then
   echo ">> trivy rootfs scan (local binary; advisory)"
-  trivy "${scan_args[@]}" "$workdir" || echo "::warning::trivy scan did not complete cleanly (advisory; checksum gate already passed)"
+  trivy "${scan_args[@]}" "$archWorkdir" || echo "::warning::trivy scan did not complete cleanly (advisory; checksum gate already passed)"
 elif command -v docker >/dev/null 2>&1; then
   echo ">> trivy rootfs scan (pinned ${TRIVY_IMAGE}; advisory)"
-  docker run --rm -v "${workdir}:/scan:ro" "$TRIVY_IMAGE" "${scan_args[@]}" /scan \
+  docker run --rm -v "${archWorkdir}:/scan:ro" "$TRIVY_IMAGE" "${scan_args[@]}" /scan \
     || echo "::warning::trivy (docker) scan did not complete cleanly (advisory; checksum gate already passed)"
 else
   echo "::notice::neither trivy nor docker present; provenance + checksum verified, deep scan skipped."
