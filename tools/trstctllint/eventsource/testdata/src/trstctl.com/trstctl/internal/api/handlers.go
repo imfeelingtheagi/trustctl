@@ -7,6 +7,21 @@ import "trstctl.com/trstctl/internal/store"
 // emit stands in for appending a domain event to the log.
 func emit(eventType string) error { _ = eventType; return nil }
 
+type API struct{}
+
+type route struct {
+	handler  any
+	mutation bool
+}
+
+func (a *API) routes() []route {
+	return []route{
+		{handler: a.RouteMutationWritesStore, mutation: true},
+		{handler: a.RouteMutationEmitsEvent, mutation: true},
+		{handler: a.RouteReadWritesStore, mutation: false},
+	}
+}
+
 // CreateOwnerBad writes the owners read table directly — the violation the
 // audit found in the served handlers.
 //
@@ -92,13 +107,11 @@ func RawSelectOK(st *store.Store) error {
 }
 
 // RawWriteNonReadModelOK writes a NON-read-model table (an operational table that
-// is not a projection of the log) — out of scope, not flagged. certificate_profiles
-// is written directly by design (the event is the audit record), the documented
-// exception SPINE-010 names.
+// is not a projection of the log) — out of scope, not flagged.
 //
 //trstctl:mutation
 func RawWriteNonReadModelOK(st *store.Store) error {
-	return exec("INSERT INTO certificate_profiles (name, spec) VALUES ($1, $2)")
+	return exec("INSERT INTO ca_authorities (tenant_id, name) VALUES ($1, $2)")
 }
 
 // NotSQLLooking proves the shape check: a struct-literal-ish string that merely
@@ -107,4 +120,26 @@ func RawWriteNonReadModelOK(st *store.Store) error {
 //trstctl:mutation
 func NotSQLLooking(st *store.Store) error {
 	return exec("update your profile in settings") // prose, no SET clause — not SQL
+}
+
+// RouteMutationWritesStore is not annotated, but the route registry declares it
+// as a mutation. Route-derived coverage must catch the direct read-model write.
+func (a *API) RouteMutationWritesStore(st *store.Store) error {
+	_, err := st.CreateOwner("billing") // want "must not write the read model directly"
+	return err
+}
+
+// RouteMutationEmitsEvent proves route-derived coverage accepts event emission.
+func (a *API) RouteMutationEmitsEvent(st *store.Store) error {
+	if _, err := st.GetOwner("owner-1"); err != nil {
+		return err
+	}
+	return emit("owner.created")
+}
+
+// RouteReadWritesStore is registered as read-only, so it is ignored by this
+// served-mutation rule.
+func (a *API) RouteReadWritesStore(st *store.Store) error {
+	_, err := st.CreateOwner("ignored")
+	return err
 }

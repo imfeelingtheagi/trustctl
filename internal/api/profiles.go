@@ -31,6 +31,7 @@ func toProfileResponse(r store.ProfileRecord) profileResponse {
 	return profileResponse{ID: r.ID, Name: r.Name, Version: r.Version, Active: r.Active, CreatedBy: r.CreatedBy, Spec: r.Spec}
 }
 
+//trstctl:mutation
 func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {

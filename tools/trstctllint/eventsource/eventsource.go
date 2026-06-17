@@ -5,9 +5,10 @@
 // directly bypasses the log, so the audit trail and a rebuild-from-log cannot
 // reproduce the change.
 //
-// A handler opts into the served-mutation surface with the //trstctl:mutation
-// marker (the same marker AN-5 uses — these are the same handlers). Inside such a
-// handler, BOTH of these are a violation:
+// A handler enters the served-mutation surface with either the //trstctl:mutation
+// marker (the same marker AN-5 uses — these are the same handlers) or a
+// route-registry entry whose metadata says mutation: true. Inside such a handler,
+// BOTH of these are a violation:
 //
 //   - a call to a Create/Update/Delete/Upsert/Set method on *store.Store (a
 //     read-model mutator), resolved by TYPE so it cannot be evaded by aliasing;
@@ -35,13 +36,12 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"trstctl.com/trstctl/tools/trstctllint/internal/directive"
+	"trstctl.com/trstctl/tools/trstctllint/internal/servedmutation"
 )
 
 const (
-	mutationMarker = "trstctl:mutation"
-	storePkgPath   = "trstctl.com/trstctl/internal/store"
-	storeTypeName  = "Store"
+	storePkgPath  = "trstctl.com/trstctl/internal/store"
+	storeTypeName = "Store"
 )
 
 // mutatorPrefixes name the store methods that write the relational read model.
@@ -55,48 +55,42 @@ var mutatorPrefixes = []string{"Create", "Update", "Delete", "Upsert", "Set"}
 // internal/store.ReadModelTables; a table joins this set as it becomes
 // event-sourced.
 var readModelTables = []string{
-	"owners", "issuers", "identities", "certificates", "tenants", "identity_transitions",
+	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles",
 }
 
 // Analyzer enforces AN-2.
 var Analyzer = &analysis.Analyzer{
 	Name: "eventsource",
-	Doc:  "AN-2: a //trstctl:mutation handler must not write the read model directly (store mutator OR raw SQL); it must emit an event.",
+	Doc:  "AN-2: a served mutation handler must not write the read model directly (store mutator OR raw SQL); it must emit an event.",
 	Run:  run,
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	for _, file := range pass.Files {
-		for _, decl := range file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil || !directive.OnFunc(fn, mutationMarker) {
-				continue
+	for fn := range servedmutation.Funcs(pass) {
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			// (1) Store read-model mutator call (resolved by type).
+			if call, ok := n.(*ast.CallExpr); ok {
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok && isMutatorName(sel.Sel.Name) {
+					if isStoreReceiver(pass, sel.X) {
+						pass.Reportf(call.Pos(),
+							"served mutation must not write the read model directly via store.%s; emit an event and project it (AN-2)",
+							sel.Sel.Name)
+					}
+				}
 			}
-			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				// (1) Store read-model mutator call (resolved by type).
-				if call, ok := n.(*ast.CallExpr); ok {
-					if sel, ok := call.Fun.(*ast.SelectorExpr); ok && isMutatorName(sel.Sel.Name) {
-						if isStoreReceiver(pass, sel.X) {
-							pass.Reportf(call.Pos(),
-								"served mutation must not write the read model directly via store.%s; emit an event and project it (AN-2)",
-								sel.Sel.Name)
-						}
+			// (2) Raw SQL write of a read-model table (SPINE-010): a string
+			// literal that is an INSERT/UPDATE/DELETE against a projected table.
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				if s, err := strconv.Unquote(lit.Value); err == nil {
+					if tbl, bad := rawReadModelWrite(s); bad {
+						pass.Reportf(lit.Pos(),
+							"served mutation must not write the read model table %q with raw SQL; emit an event and project it (AN-2)",
+							tbl)
 					}
 				}
-				// (2) Raw SQL write of a read-model table (SPINE-010): a string
-				// literal that is an INSERT/UPDATE/DELETE against a projected table.
-				if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-					if s, err := strconv.Unquote(lit.Value); err == nil {
-						if tbl, bad := rawReadModelWrite(s); bad {
-							pass.Reportf(lit.Pos(),
-								"served mutation must not write the read model table %q with raw SQL; emit an event and project it (AN-2)",
-								tbl)
-						}
-					}
-				}
-				return true
-			})
-		}
+			}
+			return true
+		})
 	}
 	return nil, nil
 }

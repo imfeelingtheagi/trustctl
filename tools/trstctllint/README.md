@@ -11,16 +11,17 @@ request cannot merge while any rule is violated.
 | `cryptoboundary` | **AN-3** | `crypto` / `crypto/*` may be imported only inside `internal/crypto` (and its subpackages). Every other package routes crypto through that boundary. |
 | `tenantfilter` | **AN-1** | SQL data-manipulation queries (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) in repository packages must **filter** on `tenant_id` — it must sit in a `WHERE` / `JOIN..ON` / `INSERT`-column / `ON CONFLICT` predicate, not merely appear in the text (comments and the `SELECT` list are stripped/ignored). |
 | `keymaterial` | **AN-8** | In packages handling key material, fields/params/results must not be **string-backed** — bare `string`, named string types, `[]string`, `map[K]string`, arrays, and pointers to any of those are all flagged (use `[]byte`). |
-| `idempotency` | **AN-5** | Mutating handlers (`//trstctl:mutation`) must thread an idempotency key into a **real dedupe sink** (`orchestrator.Idempotency.Do` or a key-accepting forwarder such as `API.mutate`) — not merely name it, log it, or accept an unused parameter. |
-| `eventsource` | **AN-2** | A served mutation handler (`//trstctl:mutation`) must not write the relational read model directly — neither via a `store.Store` `Create`/`Update`/`Delete`/`Upsert`/`Set` method NOR via raw `INSERT`/`UPDATE`/`DELETE` SQL targeting a read-model table (`owners`, `issuers`, `identities`, `certificates`, `tenants`, `identity_transitions`); it must emit a domain event and let a projection build the read model (SPINE-010 closed the raw-SQL evasion). `SELECT` reads are allowed. |
+| `idempotency` | **AN-5** | Served mutation handlers (either `//trstctl:mutation` or HTTP `route{mutation: true, handler: ...}`) must thread an idempotency key into a **real dedupe sink** (`orchestrator.Idempotency.Do` or a key-accepting forwarder such as `API.mutate`) — not merely name it, log it, or accept an unused parameter. |
+| `eventsource` | **AN-2** | A served mutation handler (either `//trstctl:mutation` or HTTP `route{mutation: true, handler: ...}`) must not write the relational read model directly — neither via a `store.Store` `Create`/`Update`/`Delete`/`Upsert`/`Set` method NOR via raw `INSERT`/`UPDATE`/`DELETE` SQL targeting a read-model table (`owners`, `issuers`, `identities`, `certificates`, `agents`, `tenants`, `identity_transitions`, `certificate_profiles`); it must emit a domain event and let a projection build the read model (SPINE-010 closed the raw-SQL evasion). `SELECT` reads are allowed. |
 
 All five rules resolve types and SQL clauses (not substrings/source spelling), so
 a future violation cannot slip past CI by aliasing a receiver, hiding a secret
 behind a named type, mentioning `tenant_id` in a comment, or passing an
 idempotency key to a logger. `cryptoboundary`, `tenantfilter`, and `eventsource`
-run over their whole scope; `keymaterial` and `idempotency` apply to a
-fail-closed default set of packages **plus** any package/handler that opts in via
-a marker directive (below).
+run over their whole scope; `keymaterial` applies to a fail-closed default set of
+packages plus any marker opt-in; and served mutation coverage comes from both the
+route registry and marker directives, so a missing comment cannot make an HTTP
+mutation invisible.
 
 ## Marker directives (opt-in extension, fail-closed defaults)
 
@@ -36,7 +37,9 @@ never silence a finding.
   applies to it. (`internal/crypto/secret` and `internal/crypto/seal` are covered
   by default, marker or not.)
 - `//trstctl:mutation` — marks a handler function as a served mutation, so both
-  `idempotency` (AN-5) and `eventsource` (AN-2) apply to it.
+  `idempotency` (AN-5) and `eventsource` (AN-2) apply to it. HTTP routes with
+  `mutation: true` are also covered automatically; the marker is the human-local
+  declaration, not the only enforcement source.
 - `//trstctl:system-query` — the **only** way to exempt a real DML statement from
   `tenantfilter`: it marks a single, deliberate cross-tenant **system** query (an
   auth-by-secret lookup whose tenant is not yet known, a cross-tenant

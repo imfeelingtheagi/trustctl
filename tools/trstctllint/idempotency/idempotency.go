@@ -2,9 +2,10 @@
 // must accept and honor an idempotency key, so a retried request cannot execute
 // the same mutation twice.
 //
-// A handler opts in by carrying the //trstctl:mutation marker on its doc
-// comment. It then honors the rule only when the idempotency key actually FLOWS
-// INTO A RECOGNIZED DEDUPE SINK — a call that genuinely collapses retries:
+// A handler enters this rule either by carrying the //trstctl:mutation marker on
+// its doc comment, or by being referenced from the HTTP route registry with
+// mutation: true. It then honors the rule only when the idempotency key actually
+// FLOWS INTO A RECOGNIZED DEDUPE SINK — a call that genuinely collapses retries:
 //
 //   - the canonical sink, (*orchestrator.Idempotency).Do(ctx, tenant, key, fn),
 //     resolved by type (the receiver's method, not its spelling); or
@@ -35,12 +36,10 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"trstctl.com/trstctl/tools/trstctllint/internal/directive"
+	"trstctl.com/trstctl/tools/trstctllint/internal/servedmutation"
 )
 
 const (
-	mutationMarker = "trstctl:mutation"
-
 	// idempotencyPkgPath and idempotencyTypeName/Method name the canonical
 	// dedupe sink: orchestrator.Idempotency.Do. A call resolving to this method
 	// honors AN-5 outright.
@@ -52,24 +51,15 @@ const (
 // Analyzer enforces AN-5.
 var Analyzer = &analysis.Analyzer{
 	Name: "idempotency",
-	Doc:  "AN-5: handlers marked //trstctl:mutation must thread an idempotency key into a real dedupe sink.",
+	Doc:  "AN-5: served mutation handlers must thread an idempotency key into a real dedupe sink.",
 	Run:  run,
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	for _, file := range pass.Files {
-		for _, decl := range file.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
-				continue
-			}
-			if !directive.OnFunc(fn, mutationMarker) {
-				continue
-			}
-			if !honorsIdempotency(pass, fn) {
-				pass.Reportf(fn.Pos(),
-					"mutating handler must thread an idempotency key into a dedupe sink (Idempotency.Do or a key-accepting mutate), not merely name or log it (AN-5)")
-			}
+	for fn := range servedmutation.Funcs(pass) {
+		if !honorsIdempotency(pass, fn) {
+			pass.Reportf(fn.Pos(),
+				"mutating handler must thread an idempotency key into a dedupe sink (Idempotency.Do or a key-accepting mutate), not merely name or log it (AN-5)")
 		}
 	}
 	return nil, nil

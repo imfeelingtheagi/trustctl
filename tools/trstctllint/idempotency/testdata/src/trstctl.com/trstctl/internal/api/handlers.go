@@ -30,6 +30,21 @@ func save(ctx context.Context, idempotencyKey string) error {
 // dedupe is the orchestrator dedupe store used by the canonical-sink cases.
 var dedupe *orchestrator.Idempotency
 
+type API struct{}
+
+type route struct {
+	handler  http.HandlerFunc
+	mutation bool
+}
+
+func (a *API) routes() []route {
+	return []route{
+		{handler: a.RouteMutationNoKey, mutation: true},
+		{handler: a.RouteMutationGoodViaMutate, mutation: true},
+		{handler: a.RouteReadNoKey, mutation: false},
+	}
+}
+
 // CreateBad never touches an idempotency key at all.
 //
 //trstctl:mutation
@@ -105,6 +120,27 @@ func RegisterTenantForwards(ctx context.Context, tenantID, name, idempotencyKey 
 // Unmarked is not annotated as a mutation, so it is ignored even though it never
 // touches an idempotency key.
 func Unmarked(w http.ResponseWriter, r *http.Request) {
+	_ = w
+	_ = r
+}
+
+// RouteMutationNoKey is not annotated, but the route registry declares it as a
+// mutation. The analyzer must still inspect it so route/marker drift fails CI.
+func (a *API) RouteMutationNoKey(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+	_ = w
+	_ = r
+}
+
+// RouteMutationGoodViaMutate proves route-derived mutation coverage accepts the
+// same real dedupe flow as marker-derived coverage.
+func (a *API) RouteMutationGoodViaMutate(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	_ = save(r.Context(), idempotencyKey)
+	_ = w
+}
+
+// RouteReadNoKey is registered as read-only, so it is ignored.
+func (a *API) RouteReadNoKey(w http.ResponseWriter, r *http.Request) {
 	_ = w
 	_ = r
 }
