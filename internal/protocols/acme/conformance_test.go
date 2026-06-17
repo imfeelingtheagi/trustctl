@@ -357,7 +357,18 @@ func TestACMERevokeCertRoundTrips(t *testing.T) {
 	builtin, _ := ca.NewBuiltin("ca")
 	cs := newChallengeServer()
 	t.Cleanup(cs.Close)
-	srv := acmesrv.New(builtin, conformanceValidators(cs))
+	var (
+		hookMu    sync.Mutex
+		hookCalls int
+		hookReq   acmesrv.RevocationRequest
+	)
+	srv := acmesrv.New(builtin, conformanceValidators(cs)).WithRevocationHook(func(ctx context.Context, req acmesrv.RevocationRequest) error {
+		hookMu.Lock()
+		defer hookMu.Unlock()
+		hookCalls++
+		hookReq = req
+		return nil
+	})
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 
@@ -390,12 +401,32 @@ func TestACMERevokeCertRoundTrips(t *testing.T) {
 	if serial == "" {
 		t.Error("revocation recorded an empty serial")
 	}
+	hookMu.Lock()
+	if hookCalls != 1 {
+		t.Errorf("revocation hook calls = %d, want 1", hookCalls)
+	}
+	if hookReq.Fingerprint != fp.SHA256Fingerprint {
+		t.Errorf("revocation hook fingerprint = %q, want %q", hookReq.Fingerprint, fp.SHA256Fingerprint)
+	}
+	if hookReq.Serial != fp.SerialNumber {
+		t.Errorf("revocation hook serial = %q, want %q", hookReq.Serial, fp.SerialNumber)
+	}
+	if hookReq.Reason != int(xacme.CRLReasonKeyCompromise) {
+		t.Errorf("revocation hook reason = %d, want %d", hookReq.Reason, xacme.CRLReasonKeyCompromise)
+	}
+	hookMu.Unlock()
 
 	// A double revocation is a clean no-op for the client (the server returns
-	// alreadyRevoked, which x/crypto/acme treats as success).
+	// alreadyRevoked, which x/crypto/acme treats as success) and must not replay
+	// the served platform effect.
 	if err := client.RevokeCert(ctx, nil, leaf, xacme.CRLReasonKeyCompromise); err != nil {
 		t.Fatalf("second RevokeCert should be a no-op, got: %v", err)
 	}
+	hookMu.Lock()
+	if hookCalls != 1 {
+		t.Errorf("revocation hook calls after duplicate revoke = %d, want 1", hookCalls)
+	}
+	hookMu.Unlock()
 }
 
 // TestACMERevokeRejectsUnauthorizedAccount proves revocation is AUTHORIZED, not a
@@ -406,7 +437,16 @@ func TestACMERevokeRejectsUnauthorizedAccount(t *testing.T) {
 	builtin, _ := ca.NewBuiltin("ca")
 	cs := newChallengeServer()
 	t.Cleanup(cs.Close)
-	srv := acmesrv.New(builtin, conformanceValidators(cs))
+	var (
+		hookMu    sync.Mutex
+		hookCalls int
+	)
+	srv := acmesrv.New(builtin, conformanceValidators(cs)).WithRevocationHook(func(ctx context.Context, req acmesrv.RevocationRequest) error {
+		hookMu.Lock()
+		defer hookMu.Unlock()
+		hookCalls++
+		return nil
+	})
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	ctx := context.Background()
@@ -436,6 +476,11 @@ func TestACMERevokeRejectsUnauthorizedAccount(t *testing.T) {
 	if _, revoked := srv.IsRevoked(fp.SHA256Fingerprint); revoked {
 		t.Fatal("certificate was marked revoked by an unauthorized account")
 	}
+	hookMu.Lock()
+	if hookCalls != 0 {
+		t.Errorf("revocation hook calls after unauthorized revoke = %d, want 0", hookCalls)
+	}
+	hookMu.Unlock()
 }
 
 // TestACMEKeyChangeRollsOverAccountKey is the INTEROP-002 key-rollover acceptance:

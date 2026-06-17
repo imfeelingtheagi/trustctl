@@ -11,6 +11,7 @@
 package acme
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -56,6 +57,23 @@ type DirectoryMeta struct {
 	CAAIdentities           []string // hostnames the CA recognises in CAA records
 	ExternalAccountRequired bool     // require an externalAccountBinding on newAccount
 }
+
+// RevocationRequest is the authorized ACME revokeCert effect the served control
+// plane receives after RFC 8555 account-key or certificate-key authorization has
+// already succeeded. The ACME package remains storage-agnostic; served deployments
+// use a hook to make the platform revocation state, OCSP, CRL, and audit trail
+// converge before ACME returns success.
+type RevocationRequest struct {
+	Fingerprint string
+	Serial      string
+	Reason      int
+	CertDER     []byte
+}
+
+// RevocationHook persists an authorized revocation effect. It must be idempotent
+// for a repeated certificate fingerprint because ACME clients do not send a
+// trustctl HTTP Idempotency-Key on revokeCert.
+type RevocationHook func(context.Context, RevocationRequest) error
 
 type challenge struct {
 	id      string
@@ -128,6 +146,8 @@ type Server struct {
 	earlyRenew map[string]bool        // ARI: certIDs flagged for proactive renewal
 	seq        int
 
+	revokeHook RevocationHook
+
 	mux *http.ServeMux
 }
 
@@ -167,6 +187,14 @@ func New(ca ca.CA, validator Validator) *Server {
 // is safe to call once immediately after New, before serving.
 func (s *Server) WithDirectoryMeta(m DirectoryMeta) *Server {
 	s.meta = m
+	return s
+}
+
+// WithRevocationHook installs the served-platform revocation effect. The hook is
+// invoked only after ACME revokeCert authorization succeeds; if it fails, revokeCert
+// fails and the in-memory ACME state is not marked revoked.
+func (s *Server) WithRevocationHook(h RevocationHook) *Server {
+	s.revokeHook = h
 	return s
 }
 
@@ -663,7 +691,22 @@ func (s *Server) revokeCert(w http.ResponseWriter, r *http.Request, msg *jose.AC
 		s.problem(w, r, http.StatusForbidden, "unauthorized", "not authorized to revoke this certificate")
 		return
 	}
-	s.revoked[fp] = revocation{serial: ic.serial, reason: req.Reason, at: time.Now()}
+	revReq := RevocationRequest{Fingerprint: fp, Serial: ic.serial, Reason: req.Reason, CertDER: req.CertDER}
+	hook := s.revokeHook
+	revokedAt := time.Now()
+	s.mu.Unlock()
+
+	if hook != nil {
+		if err := hook(r.Context(), revReq); err != nil {
+			s.problem(w, r, http.StatusInternalServerError, "serverInternal", "revocation failed: "+err.Error())
+			return
+		}
+	}
+
+	s.mu.Lock()
+	if _, done := s.revoked[fp]; !done {
+		s.revoked[fp] = revocation{serial: ic.serial, reason: req.Reason, at: revokedAt}
+	}
 	s.mu.Unlock()
 
 	// §7.6: a successful revocation responds 200 with an empty body.

@@ -285,27 +285,20 @@ func TestServedACMEEndToEnd(t *testing.T) {
 		t.Fatalf("ACME revoke: %v", err)
 	}
 
-	// The ACME server records the revocation in-memory; the served wire-in must also
-	// drive the platform revocation so OCSP reflects it. Bridge the ACME revocation
-	// into the served revocation path (the issuanceDispatcher revoke handler is the
-	// outbox-driven equivalent; here we assert the served OCSP responder honors a
-	// revoked serial recorded in ca_issued_certs).
-	revokeServedSerial(t, h, info.SerialNumber)
-
 	if st := servedOCSPStatus(t, h.srv, h.tenant, leafDER, h.caPEM); st != "revoked" {
 		t.Fatalf("post-revoke OCSP status = %q, want revoked", st)
 	}
-}
 
-// revokeServedSerial records the serial revoked in the served revocation table and
-// projects the certificate.revoked event (the same store/orchestrator calls the
-// served outbox revoke handler makes), so the served OCSP responder reflects it. This
-// closes the loop from the ACME revokeCert to the served OCSP/CRL responder.
-func revokeServedSerial(t *testing.T, h *servedHarness, serial string) {
-	t.Helper()
-	ctx := context.Background()
-	if err := h.store.RevokeIssuedCert(ctx, h.tenant, IssuingCAID(), serial, 1, time.Now()); err != nil {
-		t.Fatalf("revoke issued cert: %v", err)
+	crlDER, err := h.srv.GenerateCRL(ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("generate served CRL after ACME revoke: %v", err)
+	}
+	crlInfo, err := crypto.ParseCRL(crlDER, caCertDER(t, h.caPEM))
+	if err != nil {
+		t.Fatalf("parse served CRL after ACME revoke: %v", err)
+	}
+	if !protoContains(crlInfo.RevokedSerials, info.SerialNumber) {
+		t.Fatalf("CRL revoked serials = %v, want %s from ACME revoke", crlInfo.RevokedSerials, info.SerialNumber)
 	}
 }
 

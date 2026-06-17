@@ -156,6 +156,50 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 	return raw, nil
 }
 
+// RevokeProtocolLeaf records an authorized served-protocol revocation. Protocol
+// packages call this only after their own wire-level authorization succeeds (for
+// ACME, RFC 8555 §7.6 account-key or certificate-key authorization). The platform
+// effect is idempotent by certificate fingerprint (AN-5), tenant-scoped (AN-1), and
+// event-sourced through certificate.revoked (AN-2); the issued-cert bridge is also
+// updated so served OCSP and CRL answer revoked for the serial.
+func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, protocolName string, fingerprint, serial string, reasonCode int, certDER []byte) error {
+	if tenantID == "" {
+		return errors.New("server: protocol revocation requires a tenant (AN-1)")
+	}
+	if fingerprint == "" || serial == "" {
+		info, err := certinfo.Inspect(certDER)
+		if err != nil {
+			return fmt.Errorf("server: protocol revoke certificate does not parse: %w", err)
+		}
+		if fingerprint == "" {
+			fingerprint = info.SHA256Fingerprint
+		}
+		if serial == "" {
+			serial = info.SerialNumber
+		}
+	}
+	if fingerprint == "" {
+		return errors.New("server: protocol revoke requires a certificate fingerprint")
+	}
+	if serial == "" {
+		return errors.New("server: protocol revoke requires a certificate serial")
+	}
+	key := "protocol-revoke:" + protocolName + ":" + fingerprint
+	_, err := p.idem.Do(ctx, tenantID, key, func(ctx context.Context) ([]byte, error) {
+		now := time.Now()
+		reason := fmt.Sprintf("%s revokeCert reason code %d", protocolName, reasonCode)
+		if err := p.orch.RevokeCertificate(ctx, tenantID, fingerprint, serial, reason, now); err != nil {
+			return nil, err
+		}
+		if err := p.store.RevokeIssuedCert(ctx, tenantID, p.caID, serial, reasonCode, now); err != nil {
+			return nil, err
+		}
+		p.auditRevoked(ctx, tenantID, protocolName, serial, reasonCode)
+		return []byte("revoked:" + serial), nil
+	})
+	return err
+}
+
 // enforceProfile applies the served certificate-profile model to a protocol mint
 // (PKIGOV-002), mirroring the API mint's gate (internal/server/issuance.go) and the
 // IssuanceService gate so all three produce the same audit shape. A no-op when no
@@ -300,6 +344,26 @@ func (p *protocolIssuer) auditIssued(ctx context.Context, tenantID, protocolName
 		return
 	}
 	_, _ = p.log.Append(ctx, events.Event{Type: "protocol.issued", TenantID: tenantID, Data: payload})
+}
+
+// auditRevoked emits the served protocol revocation decision as an AN-2 audit
+// event. The authoritative inventory mutation is certificate.revoked from
+// RevokeProtocolLeaf; this protocol event preserves the wire entrypoint that caused
+// it.
+func (p *protocolIssuer) auditRevoked(ctx context.Context, tenantID, protocolName, serial string, reasonCode int) {
+	if p.log == nil {
+		return
+	}
+	payload, err := json.Marshal(struct {
+		Protocol   string `json:"protocol"`
+		Serial     string `json:"serial,omitempty"`
+		ReasonCode int    `json:"reason_code"`
+		Decision   string `json:"decision"`
+	}{protocolName, serial, reasonCode, "allow"})
+	if err != nil {
+		return
+	}
+	_, _ = p.log.Append(ctx, events.Event{Type: "protocol.revoked", TenantID: tenantID, Data: payload})
 }
 
 // auditProfileDecision emits the served profile-gated decision for a protocol mint

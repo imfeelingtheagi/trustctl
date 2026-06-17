@@ -94,7 +94,10 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		if acmeValidators != nil {
 			validators = *acmeValidators
 		}
-		sp.acme = acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators)
+		sp.acme = acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
+			WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
+				return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
+			})
 		sp.names = append(sp.names, "acme")
 	}
 
