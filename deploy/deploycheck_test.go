@@ -105,6 +105,12 @@ type container struct {
 	Image   string   `yaml:"image"`
 	Command []string `yaml:"command"`
 	Args    []string `yaml:"args"`
+	Env     []envVar `yaml:"env"`
+}
+
+type envVar struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 // flagsIn extracts the long-flag names (without leading dashes, without =value)
@@ -262,6 +268,77 @@ func TestManifestFlagsAreDefinedByTheBinary(t *testing.T) {
 		if !signerFlags[fl] {
 			t.Errorf("helm signer-deployment.yaml passes --%s to trstctl-signer, which it does not define "+
 				"(real flags: %v) — the OPS-001 crash-loop (e.g. --mtls-listen)", fl, keys(signerFlags))
+		}
+	}
+}
+
+func TestDeployEnrollmentURLMatchesClient(t *testing.T) {
+	root := repoRoot(t)
+	var agentContainer *container
+	for _, c := range staticContainers(t, root) {
+		if binaryForContainer(c) == "trstctl-agent" {
+			copy := c
+			agentContainer = &copy
+			break
+		}
+	}
+	if agentContainer == nil {
+		t.Fatal("static deploy manifests do not run trstctl-agent")
+	}
+	hasEnrollURLArg := false
+	for _, arg := range agentContainer.Args {
+		if arg == "--enroll-url=$(TRSTCTL_ENROLL_URL)" {
+			hasEnrollURLArg = true
+			break
+		}
+	}
+	if !hasEnrollURLArg {
+		t.Fatalf("agent DaemonSet args = %v, want --enroll-url from TRSTCTL_ENROLL_URL", agentContainer.Args)
+	}
+	env := map[string]string{}
+	for _, item := range agentContainer.Env {
+		env[item.Name] = item.Value
+	}
+	if got, want := env["TRSTCTL_ENROLL_URL"], "https://trstctl:8443"; got != want {
+		t.Fatalf("TRSTCTL_ENROLL_URL = %q, want %q so the client appends exactly /enroll/bootstrap", got, want)
+	}
+
+	checks := []struct {
+		rel     string
+		want    string
+		forbid  string
+		context string
+	}{
+		{
+			rel:     filepath.Join("windows", "README.md"),
+			want:    "ENROLLURL=https://cp:8443",
+			forbid:  "ENROLLURL=https://cp:8443/enroll",
+			context: "Windows MSI example",
+		},
+		{
+			rel:     filepath.Join("windows", "README.md"),
+			want:    "--enroll-url https://cp:8443",
+			forbid:  "--enroll-url https://cp:8443/enroll",
+			context: "Windows service example",
+		},
+		{
+			rel:     filepath.Join("windows", "trstctl-agent.wxs"),
+			want:    "ENROLLURL=https://cp:8443.",
+			forbid:  "ENROLLURL=https://cp:8443/enroll",
+			context: "Windows MSI condition",
+		},
+	}
+	for _, check := range checks {
+		raw, err := os.ReadFile(filepath.Join(root, "deploy", check.rel))
+		if err != nil {
+			t.Fatalf("read deploy/%s: %v", check.rel, err)
+		}
+		text := string(raw)
+		if !strings.Contains(text, check.want) {
+			t.Errorf("%s in deploy/%s does not contain origin-only example %q", check.context, check.rel, check.want)
+		}
+		if strings.Contains(text, check.forbid) {
+			t.Errorf("%s in deploy/%s still passes enrollment collection URL %q", check.context, check.rel, check.forbid)
 		}
 	}
 }

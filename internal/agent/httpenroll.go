@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	pathpkg "path"
 	"strings"
 	"time"
 
@@ -152,7 +153,24 @@ func validateEnrollmentBaseURL(raw string, client *http.Client, allowLoopbackDev
 	default:
 		return nil, fmt.Errorf("agent: enrollment URL scheme %q is not supported", base.Scheme)
 	}
-	return base, nil
+	return normalizeEnrollmentBaseURL(base), nil
+}
+
+func normalizeEnrollmentBaseURL(base *url.URL) *url.URL {
+	normalized := *base
+	normalized.RawPath = ""
+	normalized.Path = strings.TrimRight(normalized.Path, "/")
+	if normalized.Path == "" {
+		return &normalized
+	}
+	if pathpkg.Base(normalized.Path) != "enroll" {
+		return &normalized
+	}
+	normalized.Path = pathpkg.Dir(normalized.Path)
+	if normalized.Path == "." || normalized.Path == "/" {
+		normalized.Path = ""
+	}
+	return &normalized
 }
 
 func isLoopbackHost(host string) bool {

@@ -55,6 +55,40 @@ func TestAgentBootstrapPinsCABundle(t *testing.T) {
 	}
 }
 
+func TestEnrollmentURLNormalization(t *testing.T) {
+	cases := []struct {
+		name     string
+		suffix   string
+		wantPath string
+	}{
+		{name: "origin", wantPath: "/enroll/bootstrap"},
+		{name: "origin trailing slash", suffix: "/", wantPath: "/enroll/bootstrap"},
+		{name: "legacy enroll base", suffix: "/enroll", wantPath: "/enroll/bootstrap"},
+		{name: "legacy enroll base trailing slash", suffix: "/enroll/", wantPath: "/enroll/bootstrap"},
+		{name: "path prefix", suffix: "/edge", wantPath: "/edge/enroll/bootstrap"},
+		{name: "path prefix with legacy enroll base", suffix: "/edge/enroll", wantPath: "/edge/enroll/bootstrap"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotPath string
+			enrollURL, trustPEM := newHTTPSEnrollServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"certificate":"pem"}`))
+			}))
+
+			enroller := agent.NewHTTPEnroller(enrollURL+tc.suffix, pinnedClientFromPEM(t, trustPEM))
+			if _, err := enroller.EnrollBootstrap(context.Background(), "tok", []byte("csr")); err != nil {
+				t.Fatalf("EnrollBootstrap: %v", err)
+			}
+			if gotPath != tc.wantPath {
+				t.Fatalf("request path = %q, want %q", gotPath, tc.wantPath)
+			}
+		})
+	}
+}
+
 func TestAgentBootstrapRejectsWrongCA(t *testing.T) {
 	authority, token := newBootstrapAuthority(t)
 	enrollURL, _ := newHTTPSEnrollServer(t, enroll.Handler(authority))
