@@ -7,6 +7,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 //go:embed migrations/*.sql
@@ -15,11 +18,14 @@ var migrationFS embed.FS
 // MigrateAdvisoryLockKey is the fixed PostgreSQL advisory-lock key that every
 // instance takes for the duration of a migration run. Because all instances of
 // one deployment connect to the same database and use the same key, only one can
-// migrate at a time: a replica booting concurrently blocks on this lock until the
-// first finishes, then sees the migrations already applied and does nothing. This
-// closes the replica-boot race where two instances auto-migrate at once. The
-// value spells ASCII "ctlmgr"; operators can see the held lock in pg_locks
-// (locktype = 'advisory', objid = the low 32 bits of this key).
+// migrate at a time: a replica booting concurrently polls this lock until the
+// first finishes, then sees the migrations already applied and does nothing. The
+// try-lock polling is intentional: a backend blocked inside pg_advisory_lock can
+// hold an open statement transaction, which can deadlock with CREATE INDEX
+// CONCURRENTLY. Short pg_try_advisory_lock probes keep waiters out of the way of
+// online DDL. This closes the replica-boot race where two instances auto-migrate
+// at once. The value spells ASCII "ctlmgr"; operators can see the held lock in
+// pg_locks (locktype = 'advisory', objid = the low 32 bits of this key).
 const MigrateAdvisoryLockKey int64 = 0x63746C6D6772 // "ctlmgr"
 
 // Migrate applies any pending migrations in order, tracked in the
@@ -40,9 +46,11 @@ func (s *Store) Migrate(ctx context.Context) error {
 	}
 	defer conn.Release()
 
-	// Take the migration lock; this blocks until any other migrating instance
-	// releases it. Holding it on this one session serializes the run.
-	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", MigrateAdvisoryLockKey); err != nil {
+	// Take the migration lock. Use short try-lock probes rather than one blocking
+	// pg_advisory_lock statement, because no-transaction migrations may run CREATE
+	// INDEX CONCURRENTLY and PostgreSQL waits for older transactions before the
+	// index validation phase.
+	if err := acquireMigrationLock(ctx, conn, MigrateAdvisoryLockKey); err != nil {
 		return fmt.Errorf("store: acquire migration lock: %w", err)
 	}
 	defer func() {
@@ -117,6 +125,27 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func acquireMigrationLock(ctx context.Context, conn *pgxpool.Conn, key int64) error {
+	const interval = 100 * time.Millisecond
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+		var ok bool
+		if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&ok); err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
+		timer.Reset(interval)
+	}
 }
 
 func migrationNoTransaction(body []byte) bool {

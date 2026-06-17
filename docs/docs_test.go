@@ -258,7 +258,7 @@ func TestMigrationsDocIsReal(t *testing.T) {
 	}
 	// The migration runner really takes the advisory lock the doc rests on.
 	migrate := read(t, "../internal/store/migrate.go")
-	if !strings.Contains(migrate, "pg_advisory_lock") || !strings.Contains(migrate, "MigrateAdvisoryLockKey") {
+	if !strings.Contains(migrate, "pg_try_advisory_lock") || !strings.Contains(migrate, "MigrateAdvisoryLockKey") {
 		t.Error("Migrate should serialize the run on a PostgreSQL advisory lock")
 	}
 	// The gate (TRSTCTL_MIGRATE_AUTO) is honored by config.

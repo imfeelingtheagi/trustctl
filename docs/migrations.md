@@ -24,11 +24,14 @@ safe to retry.
 
 In a multi-replica deployment, several instances may boot at once and all try to
 migrate. trstctl serializes the **entire** migration run on a PostgreSQL
-**session-level advisory lock** (`pg_advisory_lock`, a fixed key shared by all
-instances of the deployment). The first instance to acquire it migrates; any other
-instance **blocks** on the lock until the first finishes, then sees the migrations
-already applied and does nothing. This closes the replica-boot race where two
-instances could otherwise apply the same migration concurrently and collide.
+**session-level advisory lock** (`pg_try_advisory_lock` over the same advisory-lock
+family as `pg_advisory_lock`, with a fixed key shared by all instances of the
+deployment). The first instance to acquire it migrates; any other instance waits by
+polling with short try-lock probes until the first finishes, then sees the
+migrations already applied and does nothing. This closes the replica-boot race
+where two instances could otherwise apply the same migration concurrently and
+collide, without leaving blocked waiters in open statement transactions while an
+online index build runs.
 
 You can see the lock while a migration is in flight:
 
