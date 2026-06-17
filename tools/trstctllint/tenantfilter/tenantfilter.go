@@ -546,6 +546,11 @@ var systemTables = []string{
 	// owned by the system role and never read under a tenant RLS context, like
 	// schema_migrations.
 	"projection_checkpoint",
+	// outbox_reconciliation_checkpoint is the single-row global high-water mark
+	// for the boot pass that re-derives missing side-effect intents from lifecycle
+	// events (SPINE-003). The event sequence is global, so the cursor is system
+	// state rather than tenant data.
+	"outbox_reconciliation_checkpoint",
 }
 
 // referencesSystemTable reports whether a query targets a known system table.

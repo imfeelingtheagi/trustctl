@@ -22,8 +22,10 @@ const (
 	ddl = "CREATE TABLE certificates (id uuid primary key)"
 
 	// System (non-tenant) tables are exempt: no tenant_id is expected.
-	migCheck  = "SELECT version FROM schema_migrations"
-	migRecord = "INSERT INTO schema_migrations (version) VALUES ($1)"
+	migCheck                  = "SELECT version FROM schema_migrations"
+	migRecord                 = "INSERT INTO schema_migrations (version) VALUES ($1)"
+	projectionCheckpoint      = "SELECT applied_seq FROM projection_checkpoint WHERE id = 1"
+	outboxReconcileCheckpoint = "UPDATE outbox_reconciliation_checkpoint SET reconciled_seq = GREATEST(reconciled_seq, $1) WHERE id = 1"
 
 	// Session/lock control functions read no table, so they are exempt: the
 	// migration advisory lock (AN-1 R2.5) carries no tenant_id, and set_config

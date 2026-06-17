@@ -91,13 +91,14 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 // (AN-6). If the process dies in that gap, the event survives but the effect was
 // never enqueued — a transition recorded but never acted on.
 //
-// This pass makes the side effect log-derivable: it replays the lifecycle
-// transition events from the log and, for each transition that carries a side
-// effect, enqueues that effect idempotently keyed by the event's ID
+// This pass makes the side effect log-derivable: it resumes from the persisted
+// reconciliation checkpoint and, for each lifecycle transition that carries a
+// side effect, enqueues that effect idempotently keyed by the event's ID
 // (EnqueueIfAbsent). An effect that already landed (the common case) is left
-// untouched; one lost to a crash is re-created exactly once. It is meant to run on
-// boot (after the projection catch-up) and is safe to run repeatedly. It returns
-// how many missing effects it healed.
+// untouched; one lost to a crash is re-created exactly once. After each event's
+// effect has been checked, the checkpoint advances so later boots scan only the
+// unreconciled tail. It is meant to run on boot (after the projection catch-up)
+// and is safe to run repeatedly. It returns how many missing effects it healed.
 //
 // It does not re-drive the projection itself — that is the projector's job (the boot
 // catch-up and the tailing worker), and a re-driven transition is in any case
@@ -105,11 +106,15 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 // durability edge.
 func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (int, error) {
 	healed := 0
-	err := log.Replay(ctx, 0, func(ev events.Event) error {
+	from, err := o.store.OutboxReconciliationCheckpoint(ctx)
+	if err != nil {
+		return 0, err
+	}
+	err = log.Replay(ctx, from+1, func(ev events.Event) error {
 		// Only lifecycle transition events carry a state-machine side effect; skip
 		// everything else (domain CRUD events, tenant events, certificate events).
 		if !isLifecycleTransition(ev.Type) {
-			return nil
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
 		if err := projections.ValidateSchemaVersion(ev); err != nil {
 			return err
@@ -122,9 +127,11 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		}
 		dest, ok := sideEffectFor(pl.From, pl.To)
 		if !ok {
-			return nil // a transition with no external effect — nothing to reconcile
+			// A transition with no external effect is still reconciled: after this
+			// point the boot pass never needs to inspect it again.
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
-		return o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+		if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 			inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 				TenantID:       ev.TenantID,
 				Destination:    dest,
@@ -138,7 +145,10 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				healed++
 			}
 			return nil
-		})
+		}); err != nil {
+			return err
+		}
+		return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 	})
 	if err != nil {
 		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)

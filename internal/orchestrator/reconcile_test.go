@@ -181,6 +181,85 @@ func TestReconcileOutboxDoesNotDoubleEnqueueWithInlinePath(t *testing.T) {
 	}
 }
 
+func TestReconcileOutboxResumesFromCheckpointTail(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	for i := 0; i < 128; i++ {
+		if _, err := log.Append(ctx, events.Event{
+			Type:     projections.EventOwnerCreated,
+			TenantID: tenantA,
+			Data:     []byte(`{"id":"owner-prefix","kind":"team","name":"prefix","email":"prefix@example.test"}`),
+		}); err != nil {
+			t.Fatalf("append warm-prefix event %d: %v", i, err)
+		}
+	}
+
+	// This malformed lifecycle event is deliberately behind the reconciliation
+	// checkpoint. A lifetime replay would decode it and fail; a checkpointed replay
+	// starts after it and only scans the unreconciled tail.
+	poison, err := log.Append(ctx, events.Event{
+		Type:     "identity.issued",
+		TenantID: tenantA,
+		Data:     []byte(`{`),
+	})
+	if err != nil {
+		t.Fatalf("append poison prefix event: %v", err)
+	}
+	if err := s.AdvanceProjectionCheckpoint(ctx, poison.Sequence); err != nil {
+		t.Fatalf("advance warm projection checkpoint: %v", err)
+	}
+	if err := s.AdvanceOutboxReconciliationCheckpoint(ctx, poison.Sequence); err != nil {
+		t.Fatalf("advance warm outbox reconciliation checkpoint: %v", err)
+	}
+
+	const identityID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+	tail, err := log.Append(ctx, events.Event{
+		Type:     "identity.issued",
+		TenantID: tenantA,
+		Data:     transitionEvent(t, identityID, orchestrator.StateRequested, orchestrator.StateIssued),
+	})
+	if err != nil {
+		t.Fatalf("append unreconciled tail transition: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type:     projections.EventOwnerCreated,
+		TenantID: tenantA,
+		Data:     []byte(`{"id":"owner-tail","kind":"team","name":"tail","email":"tail@example.test"}`),
+	}); err != nil {
+		t.Fatalf("append non-lifecycle tail event: %v", err)
+	}
+
+	if got := countOutbox(t, ctx, s.Pool(), tenantA, tail.ID); got != 0 {
+		t.Fatalf("pre-reconcile tail outbox rows = %d, want 0", got)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("ReconcileOutbox healed %d effects, want 1 tail effect", healed)
+	}
+	if got := countOutbox(t, ctx, s.Pool(), tenantA, tail.ID); got != 1 {
+		t.Fatalf("post-reconcile tail outbox rows = %d, want exactly 1", got)
+	}
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatalf("last sequence: %v", err)
+	}
+	checkpoint, err := s.OutboxReconciliationCheckpoint(ctx)
+	if err != nil {
+		t.Fatalf("read outbox reconciliation checkpoint: %v", err)
+	}
+	if checkpoint != head {
+		t.Fatalf("outbox reconciliation checkpoint = %d, want log head %d", checkpoint, head)
+	}
+}
+
 func TestReconcileOutboxRejectsUnknownLifecycleSchemaVersion(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)

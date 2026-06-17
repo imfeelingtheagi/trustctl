@@ -310,8 +310,9 @@ type Server struct {
 
 	// Tailing projection worker + lag gauge (SPINE-009): a durable consumer that
 	// projects events appended out of band and surfaces projection lag.
-	tailWorker *projections.TailWorker
-	mProjLag   *observ.Gauge
+	tailWorker          *projections.TailWorker
+	mProjLag            *observ.Gauge
+	mOutboxReconcileLag *observ.Gauge
 	// Event-log durability gauges (RESIL-004): desired vs observed JetStream
 	// replicas for the source-of-truth stream, so an under-replicated external log is
 	// visible in /readyz and /metrics.
@@ -593,10 +594,14 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
+	s.mOutboxReconcileLag = s.registry.Gauge("trstctl_outbox_reconciliation_lag_events", "Number of events after the last boot reconciliation checkpoint.")
 	s.mEventLogReplicasDesired = s.registry.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.")
 	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
 	if err := s.sampleEventLogReplicas(ctx); err != nil {
 		s.logger.Warn("event-log replica metrics sample failed", slog.String("error", err.Error()))
+	}
+	if err := s.sampleOutboxReconciliationLag(ctx); err != nil {
+		s.logger.Warn("outbox reconciliation lag metrics sample failed", slog.String("error", err.Error()))
 	}
 	s.proj = proj
 	s.mSnapshots = s.registry.CounterVec("trstctl_read_model_snapshots_written_total", "Read-model snapshots written by the periodic snapshot worker.", nil).WithLabelValues()
@@ -1088,6 +1093,9 @@ func (s *Server) probeEventLog(ctx context.Context) error {
 	if sampleErr := s.sampleEventLogReplicas(ctx); sampleErr != nil && err == nil {
 		err = sampleErr
 	}
+	if sampleErr := s.sampleOutboxReconciliationLag(ctx); sampleErr != nil && err == nil {
+		err = sampleErr
+	}
 	return err
 }
 
@@ -1104,6 +1112,28 @@ func (s *Server) sampleEventLogReplicas(ctx context.Context) error {
 	}
 	if s.mEventLogReplicasActual != nil {
 		s.mEventLogReplicasActual.Set(float64(status.Actual))
+	}
+	return nil
+}
+
+func (s *Server) sampleOutboxReconciliationLag(ctx context.Context) error {
+	if s.log == nil || s.store == nil {
+		return nil
+	}
+	head, err := s.log.LastSequence(ctx)
+	if err != nil {
+		return err
+	}
+	reconciled, err := s.store.OutboxReconciliationCheckpoint(ctx)
+	if err != nil {
+		return err
+	}
+	lag := uint64(0)
+	if head > reconciled {
+		lag = head - reconciled
+	}
+	if s.mOutboxReconcileLag != nil {
+		s.mOutboxReconcileLag.Set(float64(lag))
 	}
 	return nil
 }

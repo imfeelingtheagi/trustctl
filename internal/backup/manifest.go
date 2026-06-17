@@ -61,6 +61,12 @@ var Ephemeral = []string{
 	// restore the read model is truncated and re-derived by projections.Rebuild,
 	// which resets the checkpoint to head — so it is regenerated, never depended on.
 	"projection_checkpoint",
+	// outbox_reconciliation_checkpoint is the boot repair watermark for deriving
+	// missing side-effect intents from the event log (SPINE-003). If it is absent or
+	// reset on restore, the reconciler simply scans more history; EnqueueIfAbsent
+	// keeps already-restored outbox intents idempotent, so correctness does not
+	// depend on preserving this cursor.
+	"outbox_reconciliation_checkpoint",
 	// read_model_snapshots is a boot/DR optimization (EXC-SCALE-01): a periodic
 	// snapshot of the read model at an event offset so boot replays only the tail.
 	// It is reconstructible by full replay of the event log (the source of truth,

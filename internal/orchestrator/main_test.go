@@ -110,6 +110,10 @@ func newStore(t *testing.T) *store.Store {
 		`UPDATE projection_checkpoint SET applied_seq = 0 WHERE id = 1`); err != nil {
 		t.Fatalf("reset projection checkpoint: %v", err)
 	}
+	if _, err := s.Pool().Exec(ctx,
+		`UPDATE outbox_reconciliation_checkpoint SET reconciled_seq = 0 WHERE id = 1`); err != nil {
+		t.Fatalf("reset outbox reconciliation checkpoint: %v", err)
+	}
 	t.Cleanup(func() { s.Close() })
 	return s
 }

@@ -88,6 +88,9 @@ func TestAssembledServerObservability(t *testing.T) {
 	if !strings.Contains(string(body), "trstctl_http_requests_total") {
 		t.Errorf("/metrics is missing the request counter:\n%s", body)
 	}
+	if !strings.Contains(string(body), "trstctl_outbox_reconciliation_lag_events") {
+		t.Errorf("/metrics is missing the outbox reconciliation lag gauge:\n%s", body)
+	}
 
 	// The /readyz request produced a trace spanning the real subsystems: a root
 	// span plus db/nats/signer children, all sharing one trace id.
