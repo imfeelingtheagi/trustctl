@@ -57,6 +57,8 @@ silently fall out of the required set.
 | `helm (lint + render + schema)` | `ci.yml` | Control-plane chart lint + kubeconform |
 | `proto (buf lint + breaking-change gate)` | `ci.yml` | Signer gRPC contract (AN-4) wire-compat |
 | `acme conformance (Pebble differential)` | `ci.yml` | ACME protocol differential vs the reference CA |
+| `cmp client conformance (OpenSSL transcript)` | `ci.yml` | Stock OpenSSL `cmp p10cr` enrollment against the served CMP endpoint, with request/response transcripts archived |
+| `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
 | `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager bridge |

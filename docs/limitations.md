@@ -380,11 +380,15 @@ This is a deliberate, documented trust boundary (not an accident):
     **SPIFFE Workload API** has a **served round-trip differential**: a real
     Workload-API gRPC client (the go-spiffe-vendored protobuf contract, with the
     mandatory `workload.spiffe.io` metadata) fetches and validates an SVID over the
-    served UDS. What is **not yet wired** as a *dedicated CI job*: the **libest**
-    `estclient` differential is opt-in/local only (it runs when an operator sets
-    `EST_LIBEST`; no workflow ships the binary), and SCEP/CMP have served round-trip
-    acceptance tests but no external-reference (sscep / OpenSSL-cmp) differential CI
-    job yet — those reference cross-checks are tracked under **`EXC-GATE-01`**.
+    served UDS. **CMP** has a dedicated stock-client CI transcript: OpenSSL
+    `cmp -cmd p10cr` creates the request, enrolls through the served `/cmp` endpoint,
+    accepts the protected response, and uploads the request/response/cert/log
+    artifacts. **SCEP** now has a dedicated stock-client CI transcript as well:
+    a SHA-256-pinned `sscep` v0.10.0 build fetches the served CA, enrolls through
+    `/scep/pkiclient.exe`, and uploads the captured PKIOperation request/response
+    plus client logs. What is **not yet wired** as a *dedicated CI job*: the
+    **libest** `estclient` differential is opt-in/local only (it runs when an
+    operator sets `EST_LIBEST`; no workflow ships the binary).
   - **SSH KRL distribution format (INTEROP-009).** The SSH CA's key-revocation list is
     now emitted in the **OpenSSH binary KRL format** (`KRL.DistributeKRL`), the artifact
     `sshd`'s `RevokedKeys` and `ssh-keygen -Q -f` consume — verified end-to-end by a test

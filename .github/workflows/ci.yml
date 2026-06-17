@@ -401,6 +401,81 @@ jobs:
           SSL_CERT_FILE: ${{ runner.temp }}/pebble-ca.pem
         run: go test ./internal/protocols/acme/ -run TestACMEProtocolDifferentialVsPebble -count=1 -v
 
+  cmp-client-conformance:
+    name: cmp client conformance (OpenSSL transcript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # INTEROP-003 (stock OpenSSL cmp p10cr transcript)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify OpenSSL CMP client is available
+        run: |
+          openssl version
+          openssl cmp -help >/dev/null
+
+      - name: OpenSSL cmp p10cr against served CMP endpoint
+        env:
+          TRSTCTL_REQUIRE_OPENSSL_CMP: "1"
+          TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
+        run: |
+          mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
+          go test ./internal/protocols/cmp -run 'TestCMPOpenSSLClientP10CREnrollment|TestOpenSSLCMPP10CRRequestParses' -count=1 -v
+
+      - name: Upload CMP conformance transcripts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cmp-openssl-p10cr-transcripts
+          path: ${{ runner.temp }}/interop-transcripts
+          if-no-files-found: error
+
+  scep-client-conformance:
+    name: scep client conformance (sscep transcript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # INTEROP-003 (stock sscep enrollment transcript)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install sscep build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake libssl-dev
+
+      - name: Build pinned sscep client
+        run: bash scripts/ci/install-sscep.sh "${RUNNER_TEMP}/sscep"
+
+      - name: sscep enroll against served SCEP endpoint
+        env:
+          TRSTCTL_REQUIRE_SSCEP: "1"
+          TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
+        run: |
+          export PATH="${RUNNER_TEMP}/sscep/bin:${PATH}"
+          command -v sscep
+          mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
+          go test ./internal/protocols/scep -run 'TestSCEPSSCEPClientEnrollment|TestArchiveSCEPConformanceTranscriptsWritesAllFiles' -count=1 -v
+
+      - name: Upload SCEP conformance transcripts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scep-sscep-enroll-transcripts
+          path: ${{ runner.temp }}/interop-transcripts
+          if-no-files-found: error
+
   compose-e2e:
     name: compose e2e + PKI conformance (EXC-GATE-01)
     runs-on: ubuntu-latest

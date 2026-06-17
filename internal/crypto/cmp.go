@@ -92,12 +92,8 @@ type cmpStatusInfo struct {
 	FailInfo     asn1.BitString  `asn1:"optional"`
 }
 
-type cmpCertOrEncCert struct {
-	Certificate asn1.RawValue // [0] CMPCertificate (constructed via choiceRaw so the tag is applied)
-}
-
 type cmpCertifiedKeyPair struct {
-	CertOrEncCert cmpCertOrEncCert
+	CertOrEncCert asn1.RawValue // CertOrEncCert CHOICE: certificate [0] CMPCertificate.
 }
 
 type cmpCertResponse struct {
@@ -203,7 +199,7 @@ func BuildCMPResponse(issuedCertDER, caCertDER, caKeyPKCS8 []byte, req *CMPReque
 			CertReqID: 0,
 			Status:    cmpStatusInfo{Status: cmpStatusAccepted},
 			CertifiedKeyPair: cmpCertifiedKeyPair{
-				CertOrEncCert: cmpCertOrEncCert{Certificate: choiceRaw(0, issuedCertDER)},
+				CertOrEncCert: choiceRaw(0, issuedCertDER),
 			},
 		}},
 	}
@@ -258,7 +254,11 @@ func ParseCMPResponse(der []byte) ([]byte, error) {
 	if r.Status.Status != cmpStatusAccepted {
 		return nil, fmt.Errorf("cmp: request rejected (status %d)", r.Status.Status)
 	}
-	certDER := r.CertifiedKeyPair.CertOrEncCert.Certificate.Bytes
+	cert := r.CertifiedKeyPair.CertOrEncCert
+	if cert.Class != asn1.ClassContextSpecific || cert.Tag != 0 {
+		return nil, fmt.Errorf("cmp: response carried unsupported CertOrEncCert choice tag %d", cert.Tag)
+	}
+	certDER := cert.Bytes
 	if len(certDER) == 0 {
 		return nil, errors.New("cmp: response carried no certificate")
 	}
