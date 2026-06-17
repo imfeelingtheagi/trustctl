@@ -10,9 +10,23 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 )
 
-type memFS struct{ files map[string][]byte }
+type memFS struct {
+	files         map[string][]byte
+	writes        map[string]int
+	writeErr      map[string]error
+	writeErrAfter map[string]int
+	removeErr     map[string]error
+}
 
-func newMemFS() *memFS { return &memFS{files: map[string][]byte{}} }
+func newMemFS() *memFS {
+	return &memFS{
+		files:         map[string][]byte{},
+		writes:        map[string]int{},
+		writeErr:      map[string]error{},
+		writeErrAfter: map[string]int{},
+		removeErr:     map[string]error{},
+	}
+}
 
 func (m *memFS) ReadFile(p string) ([]byte, error) {
 	b, ok := m.files[p]
@@ -22,19 +36,45 @@ func (m *memFS) ReadFile(p string) ([]byte, error) {
 	return append([]byte(nil), b...), nil
 }
 func (m *memFS) WriteFileAtomic(p string, data []byte, _ os.FileMode) error {
+	m.writes[p]++
+	if err, ok := m.writeErr[p]; ok && m.writes[p] > m.writeErrAfter[p] {
+		return err
+	}
 	m.files[p] = append([]byte(nil), data...)
 	return nil
 }
-func (m *memFS) Remove(p string) error { delete(m.files, p); return nil }
-func (m *memFS) Exists(p string) bool  { _, ok := m.files[p]; return ok }
+func (m *memFS) Remove(p string) error {
+	if err, ok := m.removeErr[p]; ok {
+		return err
+	}
+	delete(m.files, p)
+	return nil
+}
+func (m *memFS) Exists(p string) bool { _, ok := m.files[p]; return ok }
+
+func (m *memFS) failWritesAfter(path string, successfulWrites int, err error) {
+	m.writeErr[path] = err
+	m.writeErrAfter[path] = successfulWrites
+}
+
+func (m *memFS) failRemove(path string, err error) {
+	m.removeErr[path] = err
+}
 
 type fakeReloader struct {
 	validateErr, reloadErr, healthErr error
 	reloads                           int
+	reloadErrOnCall                   int
 }
 
 func (r *fakeReloader) Validate(context.Context) error { return r.validateErr }
-func (r *fakeReloader) Reload(context.Context) error   { r.reloads++; return r.reloadErr }
+func (r *fakeReloader) Reload(context.Context) error {
+	r.reloads++
+	if r.reloadErr != nil && (r.reloadErrOnCall == 0 || r.reloads == r.reloadErrOnCall) {
+		return r.reloadErr
+	}
+	return nil
+}
 func (r *fakeReloader) HealthCheck(context.Context) error {
 	return r.healthErr
 }
@@ -151,6 +191,86 @@ func TestAddCATrustRollsBackOnHealthFailure(t *testing.T) {
 	// rollback reloads the restored config (initial reload + rollback reload).
 	if rl.reloads < 2 {
 		t.Errorf("expected a rollback reload, reloads=%d", rl.reloads)
+	}
+}
+
+func TestAddCATrustSurfacesRollbackWriteFailure(t *testing.T) {
+	fs := newMemFS()
+	fs.files[trustPath] = []byte("existing\n")
+	fs.files[cfgPath] = []byte("Port 22\n")
+	fs.failWritesAfter(trustPath, 1, errors.New("restore trust denied"))
+	rl := &fakeReloader{validateErr: errors.New("bad config")}
+	rec := &auditsink.Recorder{}
+	a := newApplier(t, fs, rl, rec)
+
+	_, err := a.AddCATrust(context.Background(), []byte(caLine))
+	if err == nil {
+		t.Fatal("expected validate failure plus rollback write failure")
+	}
+	for _, want := range []string{"rollback failed", "bad config", "restore trust denied"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+	if rec.Count("ssh.trust.rollback_failed") != 1 {
+		t.Fatal("failed rollback was not audited")
+	}
+	if rec.Count("ssh.trust.rolled_back") != 0 {
+		t.Fatal("failed rollback must not be audited as successful")
+	}
+}
+
+func TestAddCATrustSurfacesRollbackRemoveFailure(t *testing.T) {
+	fs := newMemFS()
+	fs.files[cfgPath] = []byte("Port 22\n")
+	fs.failRemove(trustPath, errors.New("remove denied"))
+	rl := &fakeReloader{validateErr: errors.New("bad config")}
+	rec := &auditsink.Recorder{}
+	a := newApplier(t, fs, rl, rec)
+
+	_, err := a.AddCATrust(context.Background(), []byte(caLine))
+	if err == nil {
+		t.Fatal("expected validate failure plus rollback remove failure")
+	}
+	for _, want := range []string{"rollback failed", "bad config", "remove denied"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+	if rec.Count("ssh.trust.rollback_failed") != 1 {
+		t.Fatal("failed rollback was not audited")
+	}
+	if rec.Count("ssh.trust.rolled_back") != 0 {
+		t.Fatal("failed rollback must not be audited as successful")
+	}
+}
+
+func TestAddCATrustSurfacesRollbackReloadFailure(t *testing.T) {
+	fs := newMemFS()
+	fs.files[trustPath] = []byte("existing\n")
+	fs.files[cfgPath] = []byte("Port 22\n")
+	rl := &fakeReloader{
+		healthErr:       errors.New("sshd unhealthy"),
+		reloadErr:       errors.New("reload refused"),
+		reloadErrOnCall: 2,
+	}
+	rec := &auditsink.Recorder{}
+	a := newApplier(t, fs, rl, rec)
+
+	_, err := a.AddCATrust(context.Background(), []byte(caLine))
+	if err == nil {
+		t.Fatal("expected health failure plus rollback reload failure")
+	}
+	for _, want := range []string{"rollback failed", "sshd unhealthy", "reload refused"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+	if rec.Count("ssh.trust.rollback_failed") != 1 {
+		t.Fatal("failed rollback was not audited")
+	}
+	if rec.Count("ssh.trust.rolled_back") != 0 {
+		t.Fatal("failed rollback must not be audited as successful")
 	}
 }
 

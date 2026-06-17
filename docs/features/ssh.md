@@ -64,6 +64,9 @@ the post-reload health command are both operator-supplied and required
 as proof that SSH is healthy. Removing trust is never an implicit side
 effect: `RemoveCATrust` refuses to run without an explicit confirmation flag. Every
 action is audited (`ssh.trust.added`, `ssh.trust.removed`, `ssh.trust.rolled_back`).
+If restoration or the restored-config reload fails, the agent audits
+`ssh.trust.rollback_failed` instead; that means the host is in an unknown SSH-trust
+state and needs operator intervention.
 
 *Code:* `internal/agent/sshtrust` (`Applier`, `AddCATrust`, `RemoveCATrust`).
 
@@ -123,10 +126,10 @@ against the trusted CA without any stored key.
 - **CA operations:** `IssueUserCert`, `IssueHostCert`, `AuthorityKey` (for
   `TrustedUserCAKeys` / `@cert-authority`), `KRL.RevokeSerial`, `KRL.Distribute`.
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
-  `RequireConfirmationToRemoveTrust` (default true).
+  `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method + payload → attested cert).
 - **Events:** `ssh.cert.issued`, `ssh.attested_cert.issued`, `ssh.trust.added`,
-  `ssh.trust.removed`, `ssh.trust.rolled_back`.
+  `ssh.trust.removed`, `ssh.trust.rolled_back`, `ssh.trust.rollback_failed`.
 - **Standard:** OpenSSH certificate format (`PROTOCOL.certkeys`).
 - **Design deep-dive:** [SSH trust-rewrite design](../design/ssh-trust-rewrite.md).
 

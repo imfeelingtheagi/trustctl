@@ -66,7 +66,9 @@ func (a *Applier) AddCATrust(ctx context.Context, caPublicKey []byte) (changed b
 		return false, fmt.Errorf("sshtrust: write trust file: %w", err)
 	}
 	if err := a.cfg.FS.WriteFileAtomic(a.cfg.SSHDConfigPath, []byte(newCfg), 0o600); err != nil {
-		a.restore(a.cfg.TrustedUserCAKeysPath, trustBak, trustExisted)
+		if rollbackErr := a.rollbackFiles(ctx, "write sshd_config", err, false, fileBackup{path: a.cfg.TrustedUserCAKeysPath, data: trustBak, existed: trustExisted}); rollbackErr != nil {
+			return false, rollbackErr
+		}
 		return false, fmt.Errorf("sshtrust: write sshd_config: %w", err)
 	}
 
@@ -108,11 +110,10 @@ func (a *Applier) RemoveCATrust(ctx context.Context, caPublicKey []byte, confirm
 // restores both files from backup and reloads the restored config (rollback).
 func (a *Applier) validateReloadHealth(ctx context.Context, trustBak []byte, trustExisted bool, cfgBak []byte, cfgExisted bool) error {
 	rollback := func(stage string, cause error) error {
-		a.restore(a.cfg.TrustedUserCAKeysPath, trustBak, trustExisted)
-		a.restore(a.cfg.SSHDConfigPath, cfgBak, cfgExisted)
-		_ = a.cfg.Reloader.Reload(ctx) // reload the restored, known-good config
-		a.auditEv(ctx, "ssh.trust.rolled_back", stage)
-		return fmt.Errorf("sshtrust: %s failed, rolled back to last-known-good: %w", stage, cause)
+		return a.rollbackFiles(ctx, stage, cause, true,
+			fileBackup{path: a.cfg.TrustedUserCAKeysPath, data: trustBak, existed: trustExisted},
+			fileBackup{path: a.cfg.SSHDConfigPath, data: cfgBak, existed: cfgExisted},
+		)
 	}
 	if err := a.cfg.Reloader.Validate(ctx); err != nil {
 		return rollback("validate", err)
@@ -126,6 +127,35 @@ func (a *Applier) validateReloadHealth(ctx context.Context, trustBak []byte, tru
 	return nil
 }
 
+type fileBackup struct {
+	path    string
+	data    []byte
+	existed bool
+}
+
+func (a *Applier) rollbackFiles(ctx context.Context, stage string, cause error, reload bool, backups ...fileBackup) error {
+	var rollbackErrs []error
+	for _, backup := range backups {
+		if err := a.restore(backup.path, backup.data, backup.existed); err != nil {
+			rollbackErrs = append(rollbackErrs, err)
+		}
+	}
+	if reload {
+		// Reload the restored, known-good config only after best-effort file
+		// restoration. A reload failure is a rollback failure, not a successful
+		// rollback with a hidden footnote.
+		if err := a.cfg.Reloader.Reload(ctx); err != nil {
+			rollbackErrs = append(rollbackErrs, fmt.Errorf("sshtrust: reload restored config: %w", err))
+		}
+	}
+	if rollbackErr := errors.Join(rollbackErrs...); rollbackErr != nil {
+		a.auditEv(ctx, "ssh.trust.rollback_failed", stage)
+		return fmt.Errorf("sshtrust: %s failed and rollback failed: %w", stage, errors.Join(cause, rollbackErr))
+	}
+	a.auditEv(ctx, "ssh.trust.rolled_back", stage)
+	return fmt.Errorf("sshtrust: %s failed, rolled back to last-known-good: %w", stage, cause)
+}
+
 func (a *Applier) read(path string) (data []byte, existed bool) {
 	b, err := a.cfg.FS.ReadFile(path)
 	if err != nil {
@@ -137,12 +167,17 @@ func (a *Applier) read(path string) (data []byte, existed bool) {
 	return b, true
 }
 
-func (a *Applier) restore(path string, backup []byte, existed bool) {
+func (a *Applier) restore(path string, backup []byte, existed bool) error {
 	if existed {
-		_ = a.cfg.FS.WriteFileAtomic(path, backup, 0o600)
-		return
+		if err := a.cfg.FS.WriteFileAtomic(path, backup, 0o600); err != nil {
+			return fmt.Errorf("sshtrust: restore %s: %w", path, err)
+		}
+		return nil
 	}
-	_ = a.cfg.FS.Remove(path)
+	if err := a.cfg.FS.Remove(path); err != nil {
+		return fmt.Errorf("sshtrust: remove new %s during rollback: %w", path, err)
+	}
+	return nil
 }
 
 func (a *Applier) auditEv(ctx context.Context, event, detail string) {

@@ -7,6 +7,7 @@ package rotation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -24,12 +25,15 @@ type Rotator interface {
 
 // Report summarizes a rotation.
 type Report struct {
-	Key         string
-	OldRef      string
-	NewRef      string
-	Completed   bool
-	RolledBack  bool
-	FailedPhase string
+	Key               string
+	OldRef            string
+	NewRef            string
+	Completed         bool
+	RolledBack        bool
+	RollbackAttempted bool
+	RollbackFailed    bool
+	RollbackError     string
+	FailedPhase       string
 }
 
 // Engine runs rollback-safe rotations.
@@ -62,16 +66,10 @@ func (e *Engine) Rotate(ctx context.Context, key, oldRef string) (Report, error)
 	e.emit(ctx, "rotation.staged", key, "stage")
 
 	if err := e.rotator.Cutover(ctx, key, newRef); err != nil {
-		_ = e.rotator.Rollback(ctx, key, oldRef)
-		rep.RolledBack, rep.FailedPhase = true, "cutover"
-		e.emit(ctx, "rotation.rolled_back", key, "cutover")
-		return rep, fmt.Errorf("rotation: cutover (rolled back): %w", err)
+		return e.rollback(ctx, rep, key, oldRef, "cutover", err)
 	}
 	if err := e.rotator.Verify(ctx, key); err != nil {
-		_ = e.rotator.Rollback(ctx, key, oldRef)
-		rep.RolledBack, rep.FailedPhase = true, "verify"
-		e.emit(ctx, "rotation.rolled_back", key, "verify")
-		return rep, fmt.Errorf("rotation: verify (rolled back): %w", err)
+		return e.rollback(ctx, rep, key, oldRef, "verify", err)
 	}
 	if err := e.rotator.Retire(ctx, key, oldRef); err != nil {
 		// New version is live and healthy; only retiring the old one failed — safe to retry.
@@ -82,6 +80,20 @@ func (e *Engine) Rotate(ctx context.Context, key, oldRef string) (Report, error)
 	rep.Completed = true
 	e.emit(ctx, "rotation.completed", key, "retire")
 	return rep, nil
+}
+
+func (e *Engine) rollback(ctx context.Context, rep Report, key, oldRef, phase string, cause error) (Report, error) {
+	rep.FailedPhase = phase
+	rep.RollbackAttempted = true
+	if err := e.rotator.Rollback(ctx, key, oldRef); err != nil {
+		rep.RollbackFailed = true
+		rep.RollbackError = err.Error()
+		e.emit(ctx, "rotation.rollback_failed", key, phase)
+		return rep, fmt.Errorf("rotation: %s failed and rollback failed: %w", phase, errors.Join(cause, err))
+	}
+	rep.RolledBack = true
+	e.emit(ctx, "rotation.rolled_back", key, phase)
+	return rep, fmt.Errorf("rotation: %s (rolled back): %w", phase, cause)
 }
 
 func (e *Engine) emit(ctx context.Context, event, key, phase string) {

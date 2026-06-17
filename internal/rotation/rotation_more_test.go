@@ -10,6 +10,7 @@ import (
 
 type failRotator struct {
 	failStage, failCutover, failRetire bool
+	rollbackErr                        error
 	rolled                             bool
 }
 
@@ -32,7 +33,13 @@ func (r *failRotator) Retire(context.Context, string, string) error {
 	}
 	return nil
 }
-func (r *failRotator) Rollback(context.Context, string, string) error { r.rolled = true; return nil }
+func (r *failRotator) Rollback(context.Context, string, string) error {
+	if r.rollbackErr != nil {
+		return r.rollbackErr
+	}
+	r.rolled = true
+	return nil
+}
 
 func TestRotationStageFailureChangesNothing(t *testing.T) {
 	r := &failRotator{failStage: true}
@@ -46,7 +53,7 @@ func TestRotationCutoverFailureRollsBack(t *testing.T) {
 	r := &failRotator{failCutover: true}
 	rec := &auditsink.Recorder{}
 	rep, err := New("t1", r, rec).Rotate(context.Background(), "app", "old")
-	if err == nil || rep.FailedPhase != "cutover" || !rep.RolledBack || !r.rolled {
+	if err == nil || rep.FailedPhase != "cutover" || !rep.RollbackAttempted || rep.RollbackFailed || !rep.RolledBack || !r.rolled {
 		t.Errorf("cutover failure: rep=%+v err=%v (must roll back)", rep, err)
 	}
 	if rec.Count("rotation.rolled_back") != 1 {

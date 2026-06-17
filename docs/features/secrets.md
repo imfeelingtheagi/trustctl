@@ -83,8 +83,11 @@ generated locked and destroyed immediately (**AN-8**). *Code:* `internal/dynsecr
 The rotation engine replaces a long-lived secret in **four rollback-safe phases**: stage
 the new version, cut consumers over, verify they're healthy, retire the old one. If
 cutover or verification fails, it **automatically rolls back** so the application is never
-left broken; each phase is audited and, in production, delivered via the outbox so a crash
-mid-rotation strands nothing. *Code:* `internal/rotation` (`Engine.Rotate`).
+left broken. If backend rollback itself fails, the report sets `RollbackAttempted` and
+`RollbackFailed`, leaves `RolledBack` false, and audits `rotation.rollback_failed` so
+operators know the consumer may be on the new secret and needs intervention. Each phase is
+audited and, in production, delivered via the outbox so a crash mid-rotation strands
+nothing. *Code:* `internal/rotation` (`Engine.Rotate`).
 
 ### Ephemeral API keys (F38)
 
@@ -175,7 +178,8 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
 - **Transit:** `Encrypt/Decrypt/Rewrap/HMAC/Sign/Verify`, versioned `trv:<n>:` ciphertext.
 - **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
   Parameter Store, webhook.
-- **Events:** `secret.version.written`, `rotation.*`, `auth.session.issued`,
+- **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
+  `auth.session.issued`,
   `secretscan.finding`.
 
 ## See also
