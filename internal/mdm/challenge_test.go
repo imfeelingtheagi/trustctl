@@ -1,6 +1,7 @@
 package mdm_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +24,12 @@ func TestChallengeRoundTrip(t *testing.T) {
 func TestChallengeTampered(t *testing.T) {
 	ch := mdm.New(testKey, time.Minute)
 	tok, _ := ch.Issue()
-	tampered := tok[:len(tok)-1] + flip(tok[len(tok)-1])
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 || parts[2] == "" {
+		t.Fatalf("issued malformed test challenge: %q", tok)
+	}
+	parts[2] = flip(parts[2][0]) + parts[2][1:]
+	tampered := strings.Join(parts, ".")
 	if err := ch.Validate(tampered); err == nil {
 		t.Fatal("a tampered challenge must be rejected")
 	}
