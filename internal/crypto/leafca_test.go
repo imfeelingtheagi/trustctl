@@ -146,6 +146,51 @@ func TestSignLeafWithProfileEmitsOnlyConfiguredEKUs(t *testing.T) {
 	}
 }
 
+func TestSignLeafWithClientAuthProfileOmitsKeyEncipherment(t *testing.T) {
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer caKey.Destroy()
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl ClientAuth Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leafKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName:    "client.eku.test",
+		DNSNames:      []string{"client.eku.test"},
+		RequestedEKUs: []string{"clientAuth"},
+	}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, time.Hour, crypto.LeafProfile{
+		AllowedExtKeyUsage: []string{"clientAuth"},
+	})
+	if err != nil {
+		t.Fatalf("SignLeafFromCSRWithProfile: %v", err)
+	}
+	info, err := certinfo.Inspect(leafDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.KeyUsageDigitalSig {
+		t.Fatalf("clientAuth leaf must include digitalSignature")
+	}
+	if info.KeyUsageEncipher {
+		t.Fatalf("clientAuth leaf must not include keyEncipherment")
+	}
+	if len(info.ExtKeyUsages) != 1 || info.ExtKeyUsages[0] != "clientAuth" {
+		t.Fatalf("ExtKeyUsages = %v, want exactly [clientAuth]", info.ExtKeyUsages)
+	}
+}
+
 func TestSignLeafWithProfileRejectsUnknownEKU(t *testing.T) {
 	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {

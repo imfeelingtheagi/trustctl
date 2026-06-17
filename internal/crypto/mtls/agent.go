@@ -201,14 +201,16 @@ func (c *CA) SignClientCSR(csrDER []byte, ttl time.Duration) ([]byte, error) {
 	return out, nil
 }
 
-// tenantTrustDomain is the SPIFFE trust domain under which agent identities are
-// stamped with their authorizing tenant.
-const tenantTrustDomain = "trstctl"
+// tenantTrustDomain is the DNS-shaped SPIFFE trust domain under which agent
+// identities are stamped with their authorizing tenant. It is a reserved example
+// domain so the default URI SAN is RFC 5280-lintable without claiming a public
+// production domain.
+const tenantTrustDomain = "trstctl.example"
 
 // AgentSPIFFEID is the SPIFFE ID stamped into an agent's client certificate for
 // tenant tenantID and the agent's common name cn:
 //
-//	spiffe://trstctl/tenant/<tenantID>/agent/<cn>
+//	spiffe://trstctl.example/tenant/<tenantID>/agent/<cn>
 //
 // The tenant segment is what lets the mTLS consumer derive the tenant from the
 // certificate itself rather than trusting a client-supplied header (WIRE-003).
@@ -223,7 +225,7 @@ func AgentSPIFFEID(tenantID, cn string) string {
 // SignClientCSRWithTenant signs a PKCS#10 CSR as a short-lived agent client
 // certificate (ClientAuth), exactly like SignClientCSR, but ADDITIONALLY stamps
 // the authorizing tenant into the certificate as a SPIFFE URI SAN
-// (spiffe://trstctl/tenant/<tenantID>/agent/<cn>). The SAN is set by the CA from
+// (spiffe://trstctl.example/tenant/<tenantID>/agent/<cn>). The SAN is set by the CA from
 // the redeemed token's tenant — NOT from the CSR — so a holder of a tenant-A
 // token can never obtain a certificate attributed to tenant B even by crafting
 // the CSR. The common name still comes from the CSR's subject, but tenant
@@ -272,7 +274,7 @@ func (c *CA) SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Du
 // certificate's SPIFFE URI SAN (the one SignClientCSRWithTenant stamps). It is how
 // a future mTLS consumer derives the tenant from the presented certificate rather
 // than a client-supplied header (WIRE-003). It returns an error if no
-// spiffe://trstctl/tenant/<id>/... SAN is present.
+// spiffe://trstctl.example/tenant/<id>/... SAN is present.
 func TenantFromClientCert(certDER []byte) (string, error) {
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {

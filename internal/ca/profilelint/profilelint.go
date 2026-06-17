@@ -1,18 +1,17 @@
 // Package profilelint is a structural RFC 5280 / CA-Browser-Forum profile linter for
-// issued certificates (PKIGOV-009). It is the in-tree stand-in for an external
-// public-CA linter (zlint / certlint): those tools are not vendored, so this package
-// encodes the high-value structural checks they perform — version, serial bounds,
-// validity ordering and length, BasicConstraints, key usage, SAN presence, SKI/AKI
-// presence, signature-algorithm sanity, and minimum key strength — as code the
-// issuance test suite runs over a sample of every issued profile. It FAILS (returns
+// issued certificates (PKIGOV-009). It is the in-tree companion to the pinned
+// external zlint corpus gate in CI: this package keeps high-value structural checks
+// close to the issuance tests — version, serial bounds, validity ordering and
+// length, BasicConstraints, key usage, SAN presence, SKI/AKI presence,
+// signature-algorithm sanity, and minimum key strength — while CI runs zlint over
+// generated PEM fixtures for every emitted X.509 profile shape. It FAILS (returns
 // error-level findings) on a malformed profile, so a profile regression (a missing
-// extension, a missing SAN, an over-long validity) is caught in CI.
+// extension, a missing SAN, an over-long validity) is caught before the external
+// corpus gate is reached.
 //
 // It reads the certificate only through the crypto boundary's certinfo.Inspect
-// (AN-3): this package imports no crypto/* itself. This is a structural lint, not
-// the full zlint corpus; wiring an external public-CA linter as a CI gate is tracked
-// as EXC-GATE-01 (see docs/limitations.md). The checks are deliberately conservative
-// so they never false-positive on a conformant trstctl-issued leaf.
+// (AN-3): this package imports no crypto/* itself. The checks are deliberately
+// conservative so they never false-positive on a conformant trstctl-issued leaf.
 package profilelint
 
 import (

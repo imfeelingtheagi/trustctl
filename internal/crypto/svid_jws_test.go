@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/x509"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -37,6 +38,16 @@ func TestSignSVIDCarriesURISANAndChains(t *testing.T) {
 	}
 	if got != id {
 		t.Errorf("SPIFFE ID = %q, want %q", got, id)
+	}
+	info, err := x509.ParseCertificate(svid)
+	if err != nil {
+		t.Fatalf("ParseCertificate: %v", err)
+	}
+	if len(info.SubjectKeyId) == 0 {
+		t.Error("SVID leaf is missing Subject Key Identifier")
+	}
+	if len(info.AuthorityKeyId) == 0 {
+		t.Error("SVID leaf is missing Authority Key Identifier")
 	}
 }
 

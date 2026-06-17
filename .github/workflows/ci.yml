@@ -74,6 +74,7 @@ jobs:
           bash scripts/ci/coverage-critical_selftest.sh
           bash scripts/ci/coverage-server-lifecycle_selftest.sh
           bash scripts/ci/check-base-pinned_selftest.sh
+          bash scripts/ci/profile-zlint_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
 
   # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
@@ -609,19 +610,27 @@ jobs:
         env:
           BASE_URL: https://localhost:8443
         run: bash scripts/ci/compose-e2e.sh
-      - name: PKI profile conformance (zlint on the served issuing CA)
+      - name: PKI profile conformance (zlint emitted-profile corpus)
+        env:
+          TRSTCTL_PROFILE_LINT_FIXTURE_DIR: ${{ runner.temp }}/profile-lint-fixtures
         run: |
           go install github.com/zmap/zlint/v3/cmd/zlint@v3.6.0
+          mkdir -p "${TRSTCTL_PROFILE_LINT_FIXTURE_DIR}" "${RUNNER_TEMP}/profile-lint-zlint"
+          go test ./internal/ca/profilelint -run TestArchiveProfileLintFixturesWritesCorpus -count=1 -v
           # served-ca.pem is the issuing CA chain the deployment serves over EST
-          # /cacerts, written by the e2e step above. Lint it for RFC 5280 X.509
-          # well-formedness — NOT CABForum public-CA policy, which an internal eval CA
-          # is not required to meet (gating on CABF lints would false-fail a valid
-          # private CA).
-          if [ ! -s served-ca.pem ]; then echo "::error::no served CA chain to lint"; exit 1; fi
-          zlint -includeSources RFC5280 -prettyprint served-ca.pem | tee zlint.out
-          if grep -Eq '"result":[[:space:]]*"error"' zlint.out; then
-            echo "::error::zlint reported RFC5280 error-level findings on the served CA"; exit 1
-          fi
+          # /cacerts, written by the e2e step above. The fixture directory adds the
+          # emitted leaf shapes (served leaf, mTLS agent certs, SPIFFE SVID, TSA).
+          # Gate on RFC 5280 error-level findings, not CABF public-trust policy.
+          bash scripts/ci/profile-zlint.sh served-ca.pem "${TRSTCTL_PROFILE_LINT_FIXTURE_DIR}" "${RUNNER_TEMP}/profile-lint-zlint"
+      - name: Upload PKI profile zlint corpus
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pki-profile-zlint-corpus
+          path: |
+            ${{ runner.temp }}/profile-lint-fixtures
+            ${{ runner.temp }}/profile-lint-zlint
+          if-no-files-found: error
       - name: Dump compose logs on failure
         if: failure()
         run: |

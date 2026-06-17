@@ -419,15 +419,17 @@ This is a deliberate, documented trust boundary (not an accident):
     retained for programmatic callers. The SSH CA is now **served** (`EXC-WIRE-02`,
     `protocols.ssh.enabled`): cert issuance at `/ssh/...` and the binary KRL at
     `/ssh/krl`, the artifact a host's `RevokedKeys` consumes.
-  - **Public-CA profile linter (PKIGOV-009).** Issued certificates are checked by an
-    in-tree **structural RFC 5280 / CA-Browser-Forum profile linter**
+  - **Public-CA profile linter (PKIGOV-009 / PKIGOV-004).** Issued certificates are
+    checked by an in-tree **structural RFC 5280 / CA-Browser-Forum profile linter**
     (`internal/ca/profilelint`) in the issuance test suite — version, serial bounds,
     validity ordering/length, basicConstraints, key usage, SAN presence, SKI/AKI
-    presence, weak-signature and minimum-key-strength checks — and the suite is **red on
-    a deliberately-broken profile**. What is **not yet wired** is an *external* public-CA
-    linter (**zlint**/**certlint**) as a dedicated CI gate over a sample of every emitted
-    profile; standing that up (vendoring/pinning the tool and running it on issued
-    fixtures) is tracked as **`EXC-GATE-01`**.
+    presence, weak-signature and minimum-key-strength checks — and the suite is **red
+    on a deliberately-broken profile**. The compose CI gate now also generates a PEM
+    corpus for every emitted X.509 profile shape (served leaves, mTLS agent
+    certificates, SPIFFE X.509-SVID, TSA, and the issuing CA), runs pinned **zlint**
+    over the served CA plus that corpus, and uploads the generated fixtures and JSON
+    lint transcripts as artifacts. This is an internal/private-CA assurance gate, not a
+    claim that trstctl operates as a WebPKI public CA.
 - **SPIFFE transport (Workload API):** the SVID *document* is spec-shaped (a single
   `spiffe://` URI SAN, correct key usage), and the Workload API is now **served as a
   gRPC service on a Unix domain socket** (`EXC-WIRE-02`, `protocols.spiffe.enabled`),

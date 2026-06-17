@@ -54,6 +54,8 @@ type Info struct {
 	Version            int    // certificate version (3 for v3)
 	SignatureAlgorithm string // e.g. "SHA256-RSA", "ECDSA-SHA256"
 	KeyUsageSet        bool   // whether a keyUsage extension is present (non-zero)
+	KeyUsageDigitalSig bool   // digitalSignature bit
+	KeyUsageEncipher   bool   // keyEncipherment bit
 	KeyUsageCertSign   bool   // keyCertSign bit
 	BasicConstraints   bool   // whether basicConstraints is present/valid
 }
@@ -112,6 +114,8 @@ func Inspect(raw []byte) (Info, error) {
 	info.Version = cert.Version
 	info.SignatureAlgorithm = cert.SignatureAlgorithm.String()
 	info.KeyUsageSet = cert.KeyUsage != 0
+	info.KeyUsageDigitalSig = cert.KeyUsage&x509.KeyUsageDigitalSignature != 0
+	info.KeyUsageEncipher = cert.KeyUsage&x509.KeyUsageKeyEncipherment != 0
 	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
 	info.BasicConstraints = cert.BasicConstraintsValid
 	return info, nil

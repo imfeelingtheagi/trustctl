@@ -169,7 +169,7 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		IPAddresses:           csr.IPAddresses,
 		NotBefore:             now.Add(-time.Minute),
 		NotAfter:              now.Add(ttl),
-		KeyUsage:              leafKeyUsage(prof.AllowedKeyUsages),
+		KeyUsage:              leafKeyUsageForProfile(prof),
 		ExtKeyUsage:           knownEKUs,
 		UnknownExtKeyUsage:    customEKUs,
 		BasicConstraintsValid: true,
@@ -357,7 +357,7 @@ func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byt
 // in production the agent CA key held inside the out-of-process signer (AN-4),
 // so the raw CA private key never enters the control plane. It stamps the
 // authorizing tenant into the certificate as the given SPIFFE URI SAN
-// (spiffe://trstctl/tenant/<id>/agent/<cn>, built by the caller from the
+// (spiffe://trstctl.example/tenant/<id>/agent/<cn>, built by the caller from the
 // REDEEMED/PRESENTED tenant — never the CSR), so the mTLS consumer derives the
 // tenant from the certificate, not a client-chosen field (WIRE-003/AN-1). It is
 // the served agent-channel analogue of mtls.SignClientCSRWithTenant, which signs
@@ -489,6 +489,16 @@ func leafKeyUsage(u *KeyUsages) x509.KeyUsage {
 	return ku
 }
 
+func leafKeyUsageForProfile(prof LeafProfile) x509.KeyUsage {
+	if prof.AllowedKeyUsages != nil {
+		return leafKeyUsage(prof.AllowedKeyUsages)
+	}
+	if len(prof.AllowedExtKeyUsage) > 0 && !containsString(prof.AllowedExtKeyUsage, "serverAuth") {
+		return x509.KeyUsageDigitalSignature
+	}
+	return leafKeyUsage(nil)
+}
+
 // policyOIDs parses dotted-OID strings into asn1.ObjectIdentifiers for the
 // certificatePolicies extension (the deprecated x509 field).
 func policyOIDs(dotted []string) ([]asn1.ObjectIdentifier, error) {
@@ -589,3 +599,12 @@ func parseOID(s string) (asn1.ObjectIdentifier, error) {
 func trimLeadingDot(s string) string { return strings.TrimPrefix(s, ".") }
 
 func hasDotSuffix(name, suffix string) bool { return strings.HasSuffix(name, "."+suffix) }
+
+func containsString(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}

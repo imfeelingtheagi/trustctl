@@ -36,6 +36,10 @@ func SignSVID(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffe
 	if err != nil {
 		return nil, err
 	}
+	ski, err := subjectKeyID(pub)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
@@ -45,6 +49,10 @@ func SignSVID(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffe
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
+		SubjectKeyId:          ski,
+	}
+	if len(caCert.SubjectKeyId) > 0 {
+		leaf.AuthorityKeyId = caCert.SubjectKeyId
 	}
 	der, err := x509.CreateCertificate(rand.Reader, leaf, caCert, pub, adapter)
 	if err != nil {

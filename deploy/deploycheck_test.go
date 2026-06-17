@@ -351,6 +351,37 @@ func TestComposeE2EGeneratesPortableUUIDs(t *testing.T) {
 	}
 }
 
+func TestProfileZlintGateFailsOnMalformedGeneratedLeaf(t *testing.T) {
+	root := repoRoot(t)
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "ci", "profile-zlint_selftest.sh"))
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("profile zlint self-test failed: %v\n%s", err, out)
+	}
+}
+
+func TestComposeE2EPublishesPKIProfileLintArtifacts(t *testing.T) {
+	root := repoRoot(t)
+	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("read ci workflow: %v", err)
+	}
+	workflow := string(raw)
+	for _, want := range []string{
+		"TestArchiveProfileLintFixturesWritesCorpus",
+		"bash scripts/ci/profile-zlint.sh served-ca.pem",
+		"name: pki-profile-zlint-corpus",
+		"${{ runner.temp }}/profile-lint-fixtures",
+		"${{ runner.temp }}/profile-lint-zlint",
+		"if-no-files-found: error",
+	} {
+		if !strings.Contains(workflow, want) {
+			t.Fatalf("compose e2e workflow does not publish the PKI profile lint corpus; missing %q", want)
+		}
+	}
+}
+
 // literalFlagTokens extracts literal long-flag names from a Helm template's
 // command/args lines, ignoring any token that is itself a Go-template action
 // ({{ ... }}). It handles both the inline-array form (args: ["--a", "--b=c"]) and

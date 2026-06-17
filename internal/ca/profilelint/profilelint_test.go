@@ -1,6 +1,11 @@
 package profilelint_test
 
 import (
+	"encoding/pem"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -24,23 +29,14 @@ func issueProfiledLeaf(t *testing.T, cn string, ttl time.Duration) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(leafKey.Destroy)
-	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn, DNSNames: []string{cn}}, leafKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	leaf, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csr, ttl, crypto.LeafProfile{
+	leaf, err := issueCSRLeaf(t, caDER, caKey, cn, []string{cn}, nil, ttl, crypto.LeafProfile{
 		CRLDistributionPoints: []string{"http://crl.trstctl.test/issuing.crl"},
 		OCSPServers:           []string{"http://ocsp.trstctl.test"},
 		IssuingCertificateURL: []string{"http://pki.trstctl.test/issuing.crt"},
 		CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 	})
 	if err != nil {
-		t.Fatalf("SignLeafFromCSRWithProfile: %v", err)
+		t.Fatal(err)
 	}
 	return leaf
 }
@@ -115,4 +111,241 @@ func TestProfileLintFlagsOverlongValidity(t *testing.T) {
 	if !found {
 		t.Errorf("linter did not flag an over-long validity; findings = %v", findings)
 	}
+}
+
+func TestArchiveProfileLintFixturesWritesCorpus(t *testing.T) {
+	dir := os.Getenv("TRSTCTL_PROFILE_LINT_FIXTURE_DIR")
+	if dir == "" {
+		dir = t.TempDir()
+	}
+	written := writeProfileLintFixtures(t, dir)
+	want := []string{
+		"agent-client-mtls-leaf.pem",
+		"agent-server-mtls-leaf.pem",
+		"issuing-ca.pem",
+		"served-leaf-client-auth.pem",
+		"served-leaf-full-profile.pem",
+		"served-leaf-legacy-empty-profile.pem",
+		"served-leaf-server-auth.pem",
+		"spiffe-x509-svid.pem",
+		"timestamping-leaf.pem",
+	}
+	if !reflect.DeepEqual(written, want) {
+		t.Fatalf("fixture corpus = %v, want %v", written, want)
+	}
+	for _, name := range want {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if block, _ := pem.Decode(raw); block == nil || block.Type != "CERTIFICATE" {
+			t.Fatalf("%s is not a PEM certificate", name)
+		}
+		if name == "issuing-ca.pem" {
+			continue
+		}
+		findings, err := profilelint.Lint(raw, profilelint.Options{Leaf: true, MaxValidity: 398 * 24 * time.Hour})
+		if err != nil {
+			t.Fatalf("Lint %s: %v", name, err)
+		}
+		if profilelint.HasErrors(findings) {
+			t.Fatalf("%s has structural profile lint errors: %v", name, profilelint.Errors(findings))
+		}
+	}
+}
+
+type profileLintFixture struct {
+	name string
+	der  []byte
+}
+
+func writeProfileLintFixtures(t *testing.T, dir string) []string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create fixture dir: %v", err)
+	}
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "Profile Corpus Issuing CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fullProfile := crypto.LeafProfile{
+		CRLDistributionPoints: []string{"http://crl.trstctl.test/issuing.crl"},
+		OCSPServers:           []string{"http://ocsp.trstctl.test"},
+		IssuingCertificateURL: []string{"http://pki.trstctl.test/issuing.crt"},
+		CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
+		MaxValidity:           398 * 24 * time.Hour,
+		PermittedDNSSuffixes:  []string{"fixture.test"},
+	}
+	fullLeaf, err := issueCSRLeaf(t, caDER, caKey, "full.fixture.test", []string{"full.fixture.test"}, nil, 90*24*time.Hour, fullProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyLeaf, err := issueCSRLeaf(t, caDER, caKey, "legacy.fixture.test", []string{"legacy.fixture.test"}, nil, 30*24*time.Hour, crypto.LeafProfile{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverAuthLeaf, err := issueCSRLeaf(t, caDER, caKey, "server.fixture.test", []string{"server.fixture.test"}, []string{"serverAuth"}, 24*time.Hour, crypto.LeafProfile{AllowedExtKeyUsage: []string{"serverAuth"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientAuthLeaf, err := issueCSRLeaf(t, caDER, caKey, "client.fixture.test", []string{"client.fixture.test"}, []string{"clientAuth"}, 24*time.Hour, crypto.LeafProfile{AllowedExtKeyUsage: []string{"clientAuth"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsaLeaf, err := issueTimestampingLeaf(t, caDER, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentServerLeaf, err := issueAgentServerLeaf(t, caDER, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentClientLeaf, err := issueAgentClientLeaf(t, caDER, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svidLeaf, err := issueSVIDLeaf(t, caDER, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fixtures := []profileLintFixture{
+		{name: "agent-client-mtls-leaf.pem", der: agentClientLeaf},
+		{name: "agent-server-mtls-leaf.pem", der: agentServerLeaf},
+		{name: "issuing-ca.pem", der: caDER},
+		{name: "served-leaf-client-auth.pem", der: clientAuthLeaf},
+		{name: "served-leaf-full-profile.pem", der: fullLeaf},
+		{name: "served-leaf-legacy-empty-profile.pem", der: legacyLeaf},
+		{name: "served-leaf-server-auth.pem", der: serverAuthLeaf},
+		{name: "spiffe-x509-svid.pem", der: svidLeaf},
+		{name: "timestamping-leaf.pem", der: tsaLeaf},
+	}
+
+	names := make([]string, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		if err := os.WriteFile(filepath.Join(dir, fixture.name), pemCert(fixture.der), 0o644); err != nil {
+			t.Fatalf("write %s: %v", fixture.name, err)
+		}
+		names = append(names, fixture.name)
+	}
+	manifest := []byte("trstctl generated PKI profile corpus\n")
+	for _, name := range names {
+		role := "leaf"
+		if name == "issuing-ca.pem" {
+			role = "ca"
+		}
+		manifest = append(manifest, fmt.Sprintf("%s %s\n", role, name)...)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "MANIFEST.txt"), manifest, 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	return names
+}
+
+func issueCSRLeaf(t *testing.T, caDER []byte, caKey crypto.DigestSigner, cn string, dns, requestedEKUs []string, ttl time.Duration, prof crypto.LeafProfile) ([]byte, error) {
+	t.Helper()
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return nil, err
+	}
+	t.Cleanup(leafKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn, DNSNames: dns, RequestedEKUs: requestedEKUs}, leafKey)
+	if err != nil {
+		return nil, err
+	}
+	leaf, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csr, ttl, prof)
+	if err != nil {
+		return nil, fmt.Errorf("SignLeafFromCSRWithProfile: %w", err)
+	}
+	return leaf, nil
+}
+
+func issueTimestampingLeaf(t *testing.T, caDER []byte, caKey crypto.DigestSigner) ([]byte, error) {
+	t.Helper()
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return nil, err
+	}
+	t.Cleanup(leafKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName:    "tsa.fixture.test",
+		DNSNames:      []string{"tsa.fixture.test"},
+		RequestedEKUs: []string{"timeStamping"},
+	}, leafKey)
+	if err != nil {
+		return nil, err
+	}
+	leaf, err := crypto.SignTimestampingCertFromCSR(caDER, caKey, csr, 24*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("SignTimestampingCertFromCSR: %w", err)
+	}
+	return leaf, nil
+}
+
+func issueAgentServerLeaf(t *testing.T, caDER []byte, caKey crypto.DigestSigner) ([]byte, error) {
+	t.Helper()
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return nil, err
+	}
+	t.Cleanup(leafKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "agent-server.fixture.test"}, leafKey)
+	if err != nil {
+		return nil, err
+	}
+	chain, err := crypto.SignServerCertFromCSR(caDER, caKey, csr, []string{"agent-server.fixture.test"}, 24*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("SignServerCertFromCSR: %w", err)
+	}
+	return firstPEMCert(chain)
+}
+
+func issueAgentClientLeaf(t *testing.T, caDER []byte, caKey crypto.DigestSigner) ([]byte, error) {
+	t.Helper()
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return nil, err
+	}
+	t.Cleanup(leafKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "agent-client.fixture.test"}, leafKey)
+	if err != nil {
+		return nil, err
+	}
+	chain, err := crypto.SignAgentClientCSR(caDER, caKey, csr, "spiffe://trstctl.example/tenant/profile-lint/agent/fixture", 24*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("SignAgentClientCSR: %w", err)
+	}
+	return firstPEMCert(chain)
+}
+
+func issueSVIDLeaf(t *testing.T, caDER []byte, caKey crypto.DigestSigner) ([]byte, error) {
+	t.Helper()
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return nil, err
+	}
+	t.Cleanup(leafKey.Destroy)
+	leaf, err := crypto.SignSVID(caDER, caKey, leafKey.Public().DER, "spiffe://fixture.test/ns/default/sa/web", 24*time.Hour)
+	if err != nil {
+		return nil, fmt.Errorf("SignSVID: %w", err)
+	}
+	return leaf, nil
+}
+
+func pemCert(der []byte) []byte {
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+}
+
+func firstPEMCert(chain []byte) ([]byte, error) {
+	block, _ := pem.Decode(chain)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("chain does not start with a certificate PEM block")
+	}
+	return block.Bytes, nil
 }
