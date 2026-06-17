@@ -30,3 +30,9 @@ func TestTenantFilter(t *testing.T) {
 		"notstore",      // not a repository: ignored
 	)
 }
+
+func TestBootstrapTokenSystemQueryFixture(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), tenantfilter.Analyzer,
+		"trstctl.com/trstctl/internal/store",
+	)
+}

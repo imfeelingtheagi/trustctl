@@ -52,6 +52,7 @@ func (s *Store) CreateBootstrapToken(ctx context.Context, r BootstrapTokenRecord
 func (s *Store) RedeemBootstrapToken(ctx context.Context, tokenHash string) (BootstrapTokenRecord, error) {
 	var r BootstrapTokenRecord
 	err := s.pool.QueryRow(ctx,
+		//trstctl:system-query — agent bootstrap runs before any tenant is known; the lookup is keyed by a globally-unique, high-entropy one-time token hash and returns the owning tenant. Cross-tenant by design; runs on the pool, not under RLS (AN-1 exemption).
 		`UPDATE agent_bootstrap_tokens
 		    SET used_at = now()
 		  WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()

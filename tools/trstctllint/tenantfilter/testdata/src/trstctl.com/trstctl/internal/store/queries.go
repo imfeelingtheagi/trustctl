@@ -95,6 +95,19 @@ func systemException() string {
 	return "SELECT tenant_id::text, name FROM tenants ORDER BY tenant_id"
 }
 
+// bootstrapTokenRedeem is the TENANT-004 shape: a pre-tenant auth lookup by a
+// globally unique, high-entropy bootstrap-token hash. The marker is required
+// because this deliberate system query returns the owning tenant before RLS can
+// be scoped.
+func bootstrapTokenRedeem() string {
+	//trstctl:system-query — agent bootstrap runs before any tenant is known; the lookup is keyed by a globally-unique, high-entropy one-time token hash and returns the owning tenant.
+	return "UPDATE agent_bootstrap_tokens SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL RETURNING tenant_id::text"
+}
+
+func bootstrapTokenRedeemMissingMarker() string {
+	return "UPDATE agent_bootstrap_tokens SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL RETURNING tenant_id::text" // want "does not filter on tenant_id"
+}
+
 // incidentalMarkerMention proves the marker only exempts when it LEADS the
 // comment: a mid-sentence mention does not exempt the following query.
 func incidentalMarkerMention() string {
