@@ -82,6 +82,27 @@ function parseRetryAfter(h: string | null): number | undefined {
   return undefined;
 }
 
+function isUnsafeMethod(method: string | undefined): boolean {
+  const m = (method ?? "GET").toUpperCase();
+  return m !== "GET" && m !== "HEAD" && m !== "OPTIONS" && m !== "TRACE";
+}
+
+function readCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(prefix)) return decodeURIComponent(trimmed.slice(prefix.length));
+  }
+  return undefined;
+}
+
+function csrfHeaders(method: string | undefined): Record<string, string> {
+  if (!isUnsafeMethod(method)) return {};
+  const token = readCookie("trstctl_csrf");
+  return token ? { "X-CSRF-Token": token } : {};
+}
+
 // Me is the browser-session principal returned by GET /auth/me. It is NOT a REST
 // component schema (it comes from the auth/session layer, not the resource API), so it
 // is hand-written here rather than generated — and stays minimal by design (subject +
@@ -102,10 +123,11 @@ export interface CredentialRisk {
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method;
   const res = await fetch(path, {
     credentials: "include",
-    headers: { Accept: "application/json", ...(init?.headers ?? {}) },
     ...init,
+    headers: { Accept: "application/json", ...csrfHeaders(method), ...(init?.headers ?? {}) },
   });
   if (res.status === 401) throw new UnauthorizedError();
   if (res.status === 429) {

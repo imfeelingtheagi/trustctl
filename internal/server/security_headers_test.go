@@ -119,6 +119,9 @@ func TestCORSReflectsAllowedOriginOnly(t *testing.T) {
 	if rec3.Result().StatusCode != http.StatusNoContent {
 		t.Errorf("preflight status = %d, want 204", rec3.Result().StatusCode)
 	}
+	if allow := rec3.Result().Header.Get("Access-Control-Allow-Headers"); !contains(allow, "X-CSRF-Token") {
+		t.Errorf("preflight allowed headers = %q, want X-CSRF-Token for SPA session mutations (SEC-001)", allow)
+	}
 
 	// "*" must never be honored even if configured.
 	hw := securityHeadersMiddleware(SecurityHeaders{AllowedOrigins: []string{"*"}}, okHandler())

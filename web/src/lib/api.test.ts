@@ -15,6 +15,7 @@ function mockFetch(status: number, body: string, headers: Record<string, string>
 }
 
 afterEach(() => {
+  document.cookie = "trstctl_csrf=; Max-Age=0; path=/";
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -58,5 +59,41 @@ describe("api error handling (SURFACE-007)", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(500);
     expect(err.isRateLimited).toBe(false);
+  });
+});
+
+describe("api CSRF contract (SEC-001)", () => {
+  function sentHeaders(): Record<string, string> {
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    return calls[0][1]?.headers as Record<string, string>;
+  }
+
+  it("echoes the CSRF cookie on mutating session requests", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-1; path=/";
+    mockFetch(
+      200,
+      JSON.stringify({
+        id: "owner-1",
+        tenant_id: "tenant-1",
+        kind: "team",
+        name: "Platform",
+      }),
+    );
+
+    await api.createOwner({ kind: "team", name: "Platform" });
+
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-1");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+
+  it("echoes the CSRF cookie on session read POST requests", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-2; path=/";
+    mockFetch(200, JSON.stringify({ text: "answer", sufficient: true }));
+
+    await api.aiQuery({ surfaces: ["certificates"], question: "which certs are risky?" });
+
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-2");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
   });
 });
