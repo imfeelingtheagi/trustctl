@@ -381,6 +381,32 @@ func repoFile(t *testing.T, parts ...string) string {
 	return readArtifact(t, filepath.Join(append([]string{"..", ".."}, parts...)...))
 }
 
+// TestPatchedGoToolchainPinned keeps the build and release toolchain on the
+// patched Go line recorded by SUPPLY-001. A vulnerable standard library is still
+// reachable if only local developer machines move forward while Docker, CI, or
+// source-build docs lag behind.
+func TestPatchedGoToolchainPinned(t *testing.T) {
+	const patched = "1.26.4"
+
+	gomod := repoFile(t, "go.mod")
+	mustContainAll(t, "go.mod pins patched toolchain", gomod,
+		"go 1.26.0", "toolchain go"+patched)
+
+	dockerfile := repoFile(t, "deploy", "docker", "Dockerfile")
+	mustContainAll(t, "Dockerfile pins patched Go build image", dockerfile,
+		"ARG GO_VERSION="+patched)
+
+	ci := repoFile(t, ".github", "workflows", "ci.yml")
+	rel := repoFile(t, ".github", "workflows", "release.yml")
+	mustContainAll(t, "ci.yml uses go.mod toolchain", ci, "go-version-file: go.mod")
+	mustContainAll(t, "release.yml uses go.mod toolchain", rel, "go-version-file: go.mod")
+
+	mustContainAll(t, "README advertises patched Go floor", repoFile(t, "README.md"), "Go-"+patched+"+", "Go "+patched+"+")
+	mustContainAll(t, "getting started advertises patched Go floor", repoFile(t, "docs", "getting-started.md"), "Go\n  "+patched+"+")
+	mustContainAll(t, "install advertises patched Go floor", repoFile(t, "docs", "install.md"), "Go "+patched+"+")
+	mustContainAll(t, "supply-chain records patched Go scanner receipt", repoFile(t, "docs", "supply-chain.md"), "go"+patched, "0 vulnerabilities")
+}
+
 // TestSupplyChainIsScannedPinnedAndRecorded encodes the R3.5 acceptance: the
 // vulnerability scanners are PINNED (not @latest), the SCA reaches the npm tree
 // and the embedded-postgres binary (the two dependency surfaces outside go.sum),

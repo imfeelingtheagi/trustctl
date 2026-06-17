@@ -11,7 +11,7 @@ a CA, install an agent, and issue a certificate.
 ## Prerequisites
 
 - Docker with the Compose plugin (`docker compose version` works), **or** a Go
-  1.25+ toolchain if you prefer to run from source.
+  1.26.4+ toolchain if you prefer to run from source.
 - About 1 GB of free disk for the Postgres and NATS volumes.
 
 ## 1. Bring up the control plane (about 2 minutes)

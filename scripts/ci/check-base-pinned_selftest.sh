@@ -16,7 +16,7 @@ trap 'rm -rf "$tmp"' EXIT
 # --- GOOD fixture: runtime FROM ${BASE_IMAGE}, release resolves a digest ---
 mkdir -p "$tmp/good/deploy/docker" "$tmp/good/.github/workflows"
 cat >"$tmp/good/deploy/docker/Dockerfile" <<'EOF'
-FROM golang:1.25-bookworm AS build
+FROM golang:1.26.4-bookworm AS build
 RUN true
 FROM ${BASE_IMAGE}
 EOF
@@ -30,7 +30,7 @@ EOF
 # --- BAD fixture A: runtime FROM a floating tag ---
 mkdir -p "$tmp/bad1/deploy/docker" "$tmp/bad1/.github/workflows"
 cat >"$tmp/bad1/deploy/docker/Dockerfile" <<'EOF'
-FROM golang:1.25-bookworm AS build
+FROM golang:1.26.4-bookworm AS build
 FROM gcr.io/distroless/static-debian12:nonroot
 EOF
 cp "$tmp/good/.github/workflows/release.yml" "$tmp/bad1/.github/workflows/release.yml"

@@ -43,12 +43,21 @@ get their own scans. All three run in CI and via `make sca`.
 gate is deterministic, not a moving `@latest`. It is reachability-aware: it fails
 only on advisories the code can actually call.
 
+The Go standard library is part of the shipped artifact, so the build toolchain is
+also pinned. `go.mod` requires `go 1.26.0` with `toolchain go1.26.4`, the Docker
+build stage defaults to `GO_VERSION=1.26.4`, and CI/release use
+`go-version-file: go.mod`. That keeps local, CI, release, and container builds on
+the patched standard library line.
+
 ```
+$ go version
+go version go1.26.4 darwin/arm64
+
 $ govulncheck ./...
 === Symbol Results ===
 No vulnerabilities found.
 Your code is affected by 0 vulnerabilities.
-(2 advisories exist in imported packages but are not reachable from trstctl's code.)
+(advisories can exist in imported modules, but none are reachable from trstctl's code.)
 ```
 
 ### npm (web UI) — `npm audit`

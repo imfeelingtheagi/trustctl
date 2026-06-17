@@ -55,7 +55,7 @@ jobs:
           TRSTCTL_REQUIRE_OPENSSH: "1"
         run: make test
 
-      # Install the pinned golangci-lint v2 (required for Go 1.25) so the lint
+      # Install the pinned golangci-lint v2 (required for Go 1.26) so the lint
       # step uses a deterministic version rather than the runner's.
       - name: Install lint tooling
         run: make tools

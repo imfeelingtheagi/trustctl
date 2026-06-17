@@ -16,7 +16,7 @@
 # .dockerignore). Version metadata is injected via --build-arg, and the release
 # pipeline rewrites layer timestamps to SOURCE_DATE_EPOCH.
 
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.26.4
 
 # Runtime base image. Declared in the GLOBAL scope (before the first FROM) so the
 # runtime stage's `FROM ${BASE_IMAGE}` can resolve it — a variable in a FROM is

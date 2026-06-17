@@ -23,7 +23,7 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 <a href="https://github.com/imfeelingtheagi/trstctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imfeelingtheagi/trstctl/actions/workflows/ci.yml/badge.svg"></a>
 <a href="https://github.com/imfeelingtheagi/trstctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/imfeelingtheagi/trstctl?label=tag&sort=semver"></a>
 <a href="https://goreportcard.com/report/github.com/imfeelingtheagi/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/imfeelingtheagi/trstctl"></a>
-<img alt="Go" src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white">
+<img alt="Go" src="https://img.shields.io/badge/Go-1.26.4+-00ADD8?logo=go&logoColor=white">
 <img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
 <img alt="license" src="https://img.shields.io/badge/license-source--available%20%C2%B7%20not%20OSS%20yet-lightgrey">
 </p>
@@ -235,7 +235,7 @@ architecture linter in CI.
 
 ## Try it
 
-Requires Go 1.25+, Node 22+ (for the web UI), and Docker (for the evaluation stack).
+Requires Go 1.26.4+, Node 22+ (for the web UI), and Docker (for the evaluation stack).
 
 ```bash
 git clone https://github.com/imfeelingtheagi/trstctl

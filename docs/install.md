@@ -123,7 +123,7 @@ cluster. See `deploy/kubernetes/README.md` for the exact env and Secret wiring.
 
 Install from a release binary or build from source.
 
-**From source** (requires Go 1.25+):
+**From source** (requires Go 1.26.4+):
 
 ```bash
 git clone https://github.com/imfeelingtheagi/trstctl
