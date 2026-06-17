@@ -34,6 +34,17 @@ func FuzzParseJWKS(f *testing.F) {
 	f.Add([]byte(``))
 	f.Add([]byte(`{"keys":[{"kty":"EC","crv":"P-256","x":"a","y":"b"}]}`))
 	f.Fuzz(func(t *testing.T, b []byte) {
-		_, _ = ParseJWKS(b)
+		jwks, err := ParseJWKS(b)
+		if err != nil {
+			return
+		}
+		if len(jwks.Keys) > jwksMaxKeys {
+			t.Fatalf("ParseJWKS accepted %d keys, cap is %d", len(jwks.Keys), jwksMaxKeys)
+		}
+		for i, k := range jwks.Keys {
+			if err := k.validatePublicKey(); err != nil {
+				t.Fatalf("ParseJWKS returned unvalidated key %d: %v", i, err)
+			}
+		}
 	})
 }

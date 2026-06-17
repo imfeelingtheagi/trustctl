@@ -17,6 +17,15 @@ import (
 	"strings"
 )
 
+const (
+	jwksMaxKeys           = 32
+	jwkMinRSABits         = 2048
+	jwkMaxRSABits         = 8192
+	jwkMaxRSABytes        = jwkMaxRSABits / 8
+	jwkMaxRSAExponent     = 1 << 31
+	jwkMaxRSAExponentByte = 4
+)
+
 // This file implements the minimal JOSE (JWS/JWK) surface trstctl needs for
 // SPIFFE JWT-SVIDs (signing) and for verifying external OIDC / Kubernetes
 // service-account tokens (the S11.7/S11.8 attesters). It lives inside the AN-3
@@ -143,6 +152,14 @@ func ParseJWKS(b []byte) (JWKS, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return JWKS{}, fmt.Errorf("crypto: parse JWKS: %w", err)
 	}
+	if len(s.Keys) > jwksMaxKeys {
+		return JWKS{}, fmt.Errorf("crypto: JWKS declares %d keys, exceeds the %d-key cap", len(s.Keys), jwksMaxKeys)
+	}
+	for i, k := range s.Keys {
+		if err := k.validatePublicKey(); err != nil {
+			return JWKS{}, fmt.Errorf("crypto: JWK %d: %w", i, err)
+		}
+	}
 	return s, nil
 }
 
@@ -164,40 +181,95 @@ func (s JWKS) find(kid string) (JWK, error) {
 func (k JWK) publicKey() (any, error) {
 	switch k.Kty {
 	case "RSA":
-		nb, err := base64.RawURLEncoding.DecodeString(k.N)
+		nb, err := decodeBoundedJWKField("RSA modulus", k.N, jwkMaxRSABytes)
 		if err != nil {
-			return nil, fmt.Errorf("crypto: JWK n: %w", err)
+			return nil, err
 		}
-		eb, err := base64.RawURLEncoding.DecodeString(k.E)
+		eb, err := decodeBoundedJWKField("RSA exponent", k.E, jwkMaxRSAExponentByte)
 		if err != nil {
-			return nil, fmt.Errorf("crypto: JWK e: %w", err)
+			return nil, err
 		}
-		e := 0
-		for _, b := range eb {
-			e = e<<8 | int(b)
-		}
-		if e == 0 {
-			return nil, fmt.Errorf("crypto: JWK e is zero")
-		}
-		return &rsa.PublicKey{N: new(big.Int).SetBytes(nb), E: e}, nil
+		return rsaPublicKeyFromJWKBytes(nb, eb)
 	case "EC":
 		curve, size := ecCurve(k.Crv)
 		if curve == nil {
 			return nil, fmt.Errorf("crypto: unsupported JWK crv %q", k.Crv)
 		}
-		xb, err := base64.RawURLEncoding.DecodeString(k.X)
+		xb, err := decodeBoundedJWKField("x", k.X, size)
 		if err != nil {
-			return nil, fmt.Errorf("crypto: JWK x: %w", err)
+			return nil, err
 		}
-		yb, err := base64.RawURLEncoding.DecodeString(k.Y)
+		yb, err := decodeBoundedJWKField("y", k.Y, size)
 		if err != nil {
-			return nil, fmt.Errorf("crypto: JWK y: %w", err)
+			return nil, err
 		}
-		_ = size
-		return &ecdsa.PublicKey{Curve: curve, X: new(big.Int).SetBytes(xb), Y: new(big.Int).SetBytes(yb)}, nil
+		return ecPublicKeyFromJWKBytes(curve, size, xb, yb)
 	default:
 		return nil, fmt.Errorf("crypto: unsupported JWK kty %q", k.Kty)
 	}
+}
+
+func decodeBoundedJWKField(name, value string, maxDecoded int) ([]byte, error) {
+	if maxDecoded <= 0 {
+		return nil, fmt.Errorf("crypto: JWK %s has invalid decoded-size cap %d", name, maxDecoded)
+	}
+	if decodedUpper := base64.RawURLEncoding.DecodedLen(len(value)); decodedUpper > maxDecoded {
+		return nil, fmt.Errorf("crypto: JWK %s decodes to more than %d bytes", name, maxDecoded)
+	}
+	b, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: JWK %s: %w", name, err)
+	}
+	if len(b) > maxDecoded {
+		return nil, fmt.Errorf("crypto: JWK %s decodes to %d bytes, exceeds %d", name, len(b), maxDecoded)
+	}
+	return b, nil
+}
+
+func (k JWK) validatePublicKey() error {
+	switch k.Kty {
+	case "":
+		return fmt.Errorf("missing JWK kty")
+	case "RSA", "EC":
+		_, err := k.publicKey()
+		return err
+	default:
+		return nil
+	}
+}
+
+func rsaPublicKeyFromJWKBytes(nb, eb []byte) (*rsa.PublicKey, error) {
+	n := new(big.Int).SetBytes(nb)
+	if n.Sign() <= 0 {
+		return nil, fmt.Errorf("crypto: JWK RSA modulus is zero")
+	}
+	if bits := n.BitLen(); bits < jwkMinRSABits || bits > jwkMaxRSABits {
+		return nil, fmt.Errorf("crypto: JWK RSA modulus is %d bits, outside the accepted %d-%d range", bits, jwkMinRSABits, jwkMaxRSABits)
+	}
+	e := new(big.Int).SetBytes(eb)
+	if e.Sign() <= 0 || e.Cmp(big.NewInt(jwkMaxRSAExponent)) > 0 {
+		return nil, fmt.Errorf("crypto: JWK RSA exponent out of range (want 3..%d)", jwkMaxRSAExponent)
+	}
+	ei := int(e.Int64())
+	if ei < 3 || ei%2 == 0 {
+		return nil, fmt.Errorf("crypto: JWK RSA exponent %d invalid (must be odd and >= 3)", ei)
+	}
+	return &rsa.PublicKey{N: n, E: ei}, nil
+}
+
+func ecPublicKeyFromJWKBytes(curve elliptic.Curve, size int, xb, yb []byte) (*ecdsa.PublicKey, error) {
+	if len(xb) != size {
+		return nil, fmt.Errorf("crypto: JWK x has %d bytes, want %d", len(xb), size)
+	}
+	if len(yb) != size {
+		return nil, fmt.Errorf("crypto: JWK y has %d bytes, want %d", len(yb), size)
+	}
+	x := new(big.Int).SetBytes(xb)
+	y := new(big.Int).SetBytes(yb)
+	if !curve.IsOnCurve(x, y) {
+		return nil, fmt.Errorf("crypto: JWK EC point is not on curve")
+	}
+	return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
 }
 
 // PublicJWK converts a PKIX public key into a JWK for publication in a JWKS, such
