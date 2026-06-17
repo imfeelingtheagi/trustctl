@@ -26,6 +26,10 @@ var requiredPages = []string{
 	"limitations.md",
 	"runbooks/key-ceremony.md",
 	"runbooks/incident-response.md",
+	"runbooks/fleet-rollout.md",
+	"runbooks/fleet-rollback.md",
+	"runbooks/signer-recovery.md",
+	"runbooks/upgrade-rollback.md",
 	"security/threat-model.md",
 	"security/vulnerability-management.md",
 	"troubleshooting.md",
@@ -1541,6 +1545,72 @@ func TestIncidentResponseRunbookCoversEssentials(t *testing.T) {
 		if !strings.Contains(read(t, "../internal/audit/audit.go"), "VerifyChain") {
 			t.Error("the runbook cites audit-chain verification but internal/audit no longer exposes VerifyChain")
 		}
+	}
+}
+
+// TestOpsFleetRunbooksAreActionable pins OPS-005: day-2 fleet procedures must
+// be concrete enough for an operator to execute, and they must be tied to the real
+// shipped files and health signals rather than free-floating prose.
+func TestOpsFleetRunbooksAreActionable(t *testing.T) {
+	runbooks := []string{
+		"runbooks/fleet-rollout.md",
+		"runbooks/fleet-rollback.md",
+		"runbooks/signer-recovery.md",
+		"runbooks/upgrade-rollback.md",
+	}
+	all := ""
+	for _, rb := range runbooks {
+		body := read(t, rb)
+		all += "\n" + body
+		lower := strings.ToLower(body)
+		for _, want := range []string{
+			"## prerequisites",
+			"## commands",
+			"## expected metrics and logs",
+			"## abort criteria",
+			"## rollback commands",
+			"## post-checks",
+			"/readyz",
+			"trstctl_signer_up",
+			"heartbeat",
+			"inventory count",
+		} {
+			if !strings.Contains(lower, want) {
+				t.Errorf("%s should include actionable OPS-005 marker %q", rb, want)
+			}
+		}
+	}
+
+	for _, cited := range []string{
+		"deploy/kubernetes/daemonset.yaml",
+		"deploy/windows/trstctl-agent.wxs",
+		"deploy/helm/trstctl/values.yaml",
+		"deploy/helm/trstctl/templates/signer-deployment.yaml",
+		"deploy/helm/trstctl/templates/service.yaml",
+	} {
+		if !strings.Contains(all, cited) {
+			t.Errorf("OPS runbooks should cite %s", cited)
+		}
+		if _, err := os.Stat(filepath.FromSlash("../" + cited)); err != nil {
+			t.Errorf("OPS runbooks cite %s but it is missing: %v", cited, err)
+		}
+	}
+
+	cli := read(t, "../internal/cli/command.go")
+	if !strings.Contains(cli, "enroll-token") || !strings.Contains(cli, "agents") {
+		t.Error("OPS runbooks cite trstctl-cli agents enroll-token/list, but the CLI command registry no longer exposes the agents group")
+	}
+	if !strings.Contains(read(t, "../cmd/trstctl/main.go"), "check-config") {
+		t.Error("OPS runbooks cite trstctl --check-config, but the binary no longer exposes that flag")
+	}
+	if !strings.Contains(read(t, "../internal/observ/signer.go"), "trstctl_signer_up") {
+		t.Error("OPS runbooks cite trstctl_signer_up, but signer observability no longer emits it")
+	}
+	if !strings.Contains(read(t, "../internal/server/agentchannel.go"), "agent.heartbeat") {
+		t.Error("OPS runbooks cite event-sourced agent heartbeat, but the served agent channel no longer records agent.heartbeat")
+	}
+	if !strings.Contains(read(t, "../internal/api/api.go"), "/api/v1/agents") {
+		t.Error("OPS runbooks cite agent inventory checks, but the API no longer serves /api/v1/agents")
 	}
 }
 
