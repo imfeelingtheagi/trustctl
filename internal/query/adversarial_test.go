@@ -267,6 +267,36 @@ func TestJoinAcrossSurfaces(t *testing.T) {
 	assertNoForeignRows(t, tenantA, res.Rows)
 }
 
+// TestLogOffsetDoesNotRevealForeignTenantEvents is the TENANT-003 regression:
+// Result.Offset is a tenant-local high-water mark for the event-log surface, not
+// the global stream head. Foreign-tenant events can be interleaved after tenant A's
+// last event without changing tenant A's visible offset.
+func TestLogOffsetDoesNotRevealForeignTenantEvents(t *testing.T) {
+	ctx := context.Background()
+	log := openLog(t)
+	if _, err := log.Append(ctx, events.Event{Type: "owner.created", TenantID: tenantA, Data: []byte(`{}`)}); err != nil {
+		t.Fatalf("append tenant A event: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := log.Append(ctx, events.Event{Type: "owner.created", TenantID: tenantB, Data: []byte(`{}`)}); err != nil {
+			t.Fatalf("append tenant B event %d: %v", i, err)
+		}
+	}
+
+	e := query.New(nil, log, nil, query.Config{MaxRows: 10, MaxDepth: 1, Timeout: time.Second})
+	res, err := e.Query(ctx, admin(tenantA), query.Spec{Select: []query.Surface{query.SurfaceLog}})
+	if err != nil {
+		t.Fatalf("query tenant A log: %v", err)
+	}
+	if res.Offset != 1 {
+		t.Fatalf("tenant A offset = %d, want 1; foreign tenant events must not advance it", res.Offset)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("tenant A log rows = %d, want 1", len(res.Rows))
+	}
+	assertNoForeignRows(t, tenantA, res.Rows)
+}
+
 // TestRBACViewerCannotReadLog: a viewer (no audit:read) is denied the log surface at
 // this layer, but can read the surfaces it is granted.
 func TestRBACViewerCannotReadLog(t *testing.T) {

@@ -41,7 +41,8 @@ res, err := e.Query(ctx, principal, query.Spec{
   deadline; over-budget or runaway queries fail closed. Held by
   `TestBackpressureRejectsWhenPoolSaturated`, `TestLimit/DepthOverBudgetFailsClosed`,
   and `TestDeadlineGuardTrips`.
-- **AN-2 consistency.** `Result.Offset` reports the log offset the result reflects.
+- **AN-2 consistency.** `Result.Offset` reports the tenant-local log offset the result
+  reflects; it must never expose the global event stream head.
 
 When you add a surface: add the `Surface`, its `requiredPermission`, a reader that is
 tenant-scoped by construction, and extend the adversarial suite (especially the

@@ -78,6 +78,38 @@ func TestSearchFiltersByTenantAndType(t *testing.T) {
 	}
 }
 
+// TestTenantAuditUsesTenantLocalSequence is the TENANT-003 regression: a tenant's
+// public audit sequence is a tenant-local ordinal, not the global JetStream
+// sequence. Foreign-tenant activity may be interleaved in the stream, but it must
+// not show up as gaps in another tenant's audit trail.
+func TestTenantAuditUsesTenantLocalSequence(t *testing.T) {
+	log := openLog(t)
+	ctx := context.Background()
+	appendEvent(t, log, tenantA, "identity.requested")
+	foreignGlobalSeq := appendEvent(t, log, tenantB, "identity.issued")
+	appendEvent(t, log, tenantA, "identity.issued")
+
+	svc := newService(t, log)
+	recs, err := svc.Search(ctx, audit.Query{TenantID: tenantA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 2 {
+		t.Fatalf("tenant A records = %d, want 2", len(recs))
+	}
+	if got := []uint64{recs[0].Sequence, recs[1].Sequence}; got[0] != 1 || got[1] != 2 {
+		t.Fatalf("tenant-local sequences = %v, want [1 2] with foreign global seq %d hidden", got, foreignGlobalSeq)
+	}
+
+	asOf, err := svc.Search(ctx, audit.Query{TenantID: tenantA, AsOfSequence: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(asOf) != 1 || asOf[0].Type != "identity.requested" {
+		t.Fatalf("tenant-local as_of=1 returned %#v, want only the first tenant-A event", asOf)
+	}
+}
+
 // TestPointInTimeQuery is the acceptance: a point-in-time query returns the log
 // as of a sequence.
 func TestPointInTimeQuery(t *testing.T) {

@@ -22,14 +22,19 @@ import (
 // authorization"); Hash is the record's position in the tamper-evident chain
 // (R2.1), each linked to its predecessor so any alteration is detectable.
 type Record struct {
-	Sequence uint64          `json:"sequence"`
-	ID       string          `json:"id"`
-	Type     string          `json:"type"`
-	TenantID string          `json:"tenant_id"`
-	Time     time.Time       `json:"time"`
-	Actor    *events.Actor   `json:"actor,omitempty"`
-	Data     json.RawMessage `json:"data,omitempty"`
-	Hash     string          `json:"hash,omitempty"`
+	Sequence uint64 `json:"sequence"`
+	// StreamSequence is the raw event-stream sequence. It is intentionally omitted
+	// from JSON: tenant-facing audit/query APIs expose only the tenant-local
+	// Sequence above, while retention/pruning still needs the operator-only stream
+	// cursor to delete archived events safely.
+	StreamSequence uint64          `json:"-"`
+	ID             string          `json:"id"`
+	Type           string          `json:"type"`
+	TenantID       string          `json:"tenant_id"`
+	Time           time.Time       `json:"time"`
+	Actor          *events.Actor   `json:"actor,omitempty"`
+	Data           json.RawMessage `json:"data,omitempty"`
+	Hash           string          `json:"hash,omitempty"`
 }
 
 // ErrMissingTenant is returned by Search/Export/VerifyChain when the query has an
@@ -47,7 +52,7 @@ type Query struct {
 	Types        []string  `json:"types,omitempty"`          // exact event-type filter
 	Since        time.Time `json:"since,omitempty"`          // inclusive lower time bound
 	Until        time.Time `json:"until,omitempty"`          // inclusive upper time bound
-	AsOfSequence uint64    `json:"as_of_sequence,omitempty"` // point-in-time: only events with Sequence <= this
+	AsOfSequence uint64    `json:"as_of_sequence,omitempty"` // point-in-time over tenant-local Sequence
 	Contains     string    `json:"contains,omitempty"`       // substring match on type or data
 	Limit        int       `json:"limit,omitempty"`          // cap on records returned (0 = all)
 }
@@ -109,18 +114,18 @@ func NewService(log *events.Log, signer *jose.SigningKey, opts ...Option) *Servi
 // searchSeed returns the replay floor and chain seed for a tenant: a sealed
 // retention boundary anchors the live chain just past the archived prefix. With no
 // checkpoint source, no tenant, or no sealed boundary it is (0, "") — i.e. genesis.
-func (s *Service) searchSeed(ctx context.Context, tenantID string) (from uint64, seed string, err error) {
+func (s *Service) searchSeed(ctx context.Context, tenantID string) (from uint64, seed string, tenantOrdinalBase uint64, err error) {
 	if s.checkpoints == nil || tenantID == "" {
-		return 0, "", nil
+		return 0, "", 0, nil
 	}
 	cp, ok, err := s.checkpoints.LatestAuditCheckpoint(ctx, tenantID)
 	if err != nil {
-		return 0, "", err
+		return 0, "", 0, err
 	}
 	if !ok {
-		return 0, "", nil
+		return 0, "", 0, nil
 	}
-	return cp.BoundarySeq + 1, cp.BoundaryHash, nil
+	return cp.BoundarySeq + 1, cp.BoundaryHash, uint64(cp.RecordCount), nil
 }
 
 // Search returns the records matching q, in append order. It replays the log and
@@ -137,17 +142,21 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 	if q.TenantID == "" {
 		return nil, ErrMissingTenant
 	}
-	from, seed, err := s.searchSeed(ctx, q.TenantID)
+	from, seed, tenantOrdinal, err := s.searchSeed(ctx, q.TenantID)
 	if err != nil {
 		return nil, err
 	}
 	out := []Record{}
 	err = s.log.Replay(ctx, from, func(e events.Event) error {
-		if !q.matches(e) {
+		if e.TenantID != q.TenantID { // AN-1: tenant floor before any public cursor advances.
+			return nil
+		}
+		tenantOrdinal++
+		if !q.matches(e, tenantOrdinal) {
 			return nil
 		}
 		out = append(out, Record{
-			Sequence: e.Sequence, ID: e.ID, Type: e.Type,
+			Sequence: tenantOrdinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
 			TenantID: e.TenantID, Time: e.Time, Actor: e.Actor, Data: json.RawMessage(e.Data),
 		})
 		return nil
@@ -165,11 +174,8 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 	return out, nil
 }
 
-func (q Query) matches(e events.Event) bool {
-	if q.TenantID != "" && e.TenantID != q.TenantID { // AN-1
-		return false
-	}
-	if q.AsOfSequence != 0 && e.Sequence > q.AsOfSequence {
+func (q Query) matches(e events.Event, tenantSequence uint64) bool {
+	if q.AsOfSequence != 0 && tenantSequence > q.AsOfSequence {
 		return false
 	}
 	if !q.Since.IsZero() && e.Time.Before(q.Since) {
@@ -221,7 +227,7 @@ func (s *Service) Export(ctx context.Context, q Query) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, seed, err := s.searchSeed(ctx, q.TenantID)
+	_, seed, _, err := s.searchSeed(ctx, q.TenantID)
 	if err != nil {
 		return "", err
 	}
@@ -246,7 +252,7 @@ func (s *Service) VerifyChain(ctx context.Context, tenantID string) (string, err
 	// Verify from the same sealed boundary Search hashed the survivors onto (R4.4),
 	// so a pruned tenant's chain checks out as a continuation rather than reporting
 	// a false tamper at the first surviving record.
-	_, seed, err := s.searchSeed(ctx, tenantID)
+	_, seed, _, err := s.searchSeed(ctx, tenantID)
 	if err != nil {
 		return "", err
 	}

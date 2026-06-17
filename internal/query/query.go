@@ -111,8 +111,9 @@ type Row struct {
 	Columns map[string]string
 }
 
-// Result carries the scoped rows plus the log offset they are consistent with
-// (AN-2): callers can tell which point in the event-sourced model they reflect.
+// Result carries the scoped rows plus the tenant-local log offset they are
+// consistent with (AN-2): callers can tell which point in their own event-sourced
+// model they reflect without seeing the global stream head.
 type Result struct {
 	Rows   []Row
 	Offset uint64

@@ -272,7 +272,7 @@ func (a *API) routes() []route {
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
 		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
 		{name: "until", typ: "string", desc: "RFC3339 inclusive upper time bound"},
-		{name: "as_of", typ: "integer", desc: "point-in-time: only events with sequence <= this"},
+		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
 		{name: "q", typ: "string", desc: "substring match on event type or data"},
 		{name: "limit", typ: "integer", desc: "maximum records to return"},
 	}

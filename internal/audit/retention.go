@@ -158,9 +158,12 @@ func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cu
 
 	// The seed the survivors (and thus this segment) were hashed from — the prior
 	// checkpoint's boundary, or genesis.
-	_, prevSeed, err := w.svc.searchSeed(ctx, tenantID)
+	_, prevSeed, _, err := w.svc.searchSeed(ctx, tenantID)
 	if err != nil {
 		return 0, err
+	}
+	if boundary.StreamSequence == 0 {
+		return 0, errors.New("audit: retention boundary is missing stream sequence")
 	}
 
 	// 1) Archive: sign the segment as a self-contained, offline-verifiable bundle.
@@ -178,16 +181,19 @@ func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cu
 	}
 	// 3) Seal the checkpoint — the survivors' new chain anchor.
 	if err := w.sink.SaveAuditCheckpoint(ctx, Checkpoint{
-		TenantID: tenantID, BoundarySeq: boundary.Sequence, BoundaryHash: boundary.Hash,
-		RecordCount: len(segment), ArchiveURI: uri,
+		TenantID: tenantID, BoundarySeq: boundary.StreamSequence, BoundaryHash: boundary.Hash,
+		RecordCount: int(boundary.Sequence), ArchiveURI: uri,
 	}); err != nil {
 		return 0, err
 	}
 	// 4) Prune the archived events from the hot log (the only delete in the system,
 	// and only after archive+verify+seal — AN-2 exception, R4.4).
 	for _, r := range segment {
-		if err := w.log.Delete(ctx, r.Sequence); err != nil {
-			return 0, fmt.Errorf("prune seq %d: %w", r.Sequence, err)
+		if r.StreamSequence == 0 {
+			return 0, fmt.Errorf("audit: record %d missing stream sequence", r.Sequence)
+		}
+		if err := w.log.Delete(ctx, r.StreamSequence); err != nil {
+			return 0, fmt.Errorf("prune stream seq %d: %w", r.StreamSequence, err)
 		}
 	}
 	// 5) Emit an audit event recording the run (observable and itself auditable).

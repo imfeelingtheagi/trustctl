@@ -109,15 +109,17 @@ func (e *Engine) readLog(ctx context.Context, tenant string, eq map[Field]string
 		return nil
 	}
 	want, filter := eq[FieldLogType]
+	var tenantOffset uint64
 	err := e.log.Replay(ctx, 0, func(ev events.Event) error {
-		if ev.Sequence > *offset {
-			*offset = ev.Sequence // AN-2: pin the result to the log offset observed
-		}
 		// Tenant floor in-process: the event log is not RLS-backed, so the engine
 		// drops any event not belonging to the caller's tenant. Combined with the
 		// Postgres RLS floor on the other surfaces, no cross-tenant row is reachable.
 		if ev.TenantID != tenant {
 			return nil
+		}
+		tenantOffset++
+		if tenantOffset > *offset {
+			*offset = tenantOffset // AN-2: tenant-local high-water mark observed.
 		}
 		if filter && ev.Type != want {
 			return nil
