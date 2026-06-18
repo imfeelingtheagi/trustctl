@@ -83,6 +83,24 @@ func TestAssembledServerIssuesCertIntoInventory(t *testing.T) {
 	if fp, _ := cert["fingerprint"].(string); fp == "" {
 		t.Error("issued certificate has no fingerprint; it was not really minted")
 	}
+	firstFingerprint, _ := cert["fingerprint"].(string)
+
+	// Replay the same served mutation. The shared req helper uses the same
+	// Idempotency-Key for this method/path, so the transition result should replay
+	// and the outbox drain must not mint or record a second certificate.
+	if code, body := req(t, ts, http.MethodPost, "/api/v1/identities/"+identityID+"/transitions", token, `{"to":"issued"}`); code != http.StatusOK {
+		t.Fatalf("idempotent replay transition to issued = %d: %s", code, body)
+	}
+	if err := asm.Drain(context.Background()); err != nil {
+		t.Fatalf("Drain after idempotent replay: %v", err)
+	}
+	replayed := list(t, ts, token, "/api/v1/certificates")
+	if len(replayed) != 1 {
+		t.Fatalf("after idempotent replay, inventory has %d certificates, want still 1", len(replayed))
+	}
+	if fp, _ := replayed[0]["fingerprint"].(string); fp != firstFingerprint {
+		t.Fatalf("idempotent replay changed the issued certificate fingerprint: %q -> %q", firstFingerprint, fp)
+	}
 	t.Logf("R1.4 measured time-to-first-cert (transition→outbox→inventory): %v", elapsed)
 }
 
