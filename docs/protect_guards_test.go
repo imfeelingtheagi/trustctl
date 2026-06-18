@@ -2255,6 +2255,218 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- SIGNER-005..006: signer isolation and key custody stay locked -------------
+
+// TestSignerIsolationAndCustodyStrengthGuardsStayRequired locks the SIGNER
+// confirmed strengths. The signer must stay a separate gRPC-only process with
+// bounded UDS/mTLS serving, no SQL or HTTP server surface, and key custody that
+// keeps private bytes in locked, non-dumpable buffers and sealed persistent
+// storage. ELI5: the signing key lives in the vault room, callers get a handle,
+// and tests keep checking that no one quietly adds a side door.
+func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
+	for _, tc := range []struct {
+		root string
+		name string
+		id   string
+	}{
+		{"../internal/signing", "TestNoSQLDriverLinkedIntoSigner", "SIGNER-005"},
+		{"../internal/signing", "TestNoHTTPServerLinkedIntoSigner", "SIGNER-005"},
+		{"../internal/signing", "TestSignerDependencyClosure", "SIGNER-005"},
+		{"../internal/signing", "TestSignerHasNoHTTPServerCall", "SIGNER-005"},
+		{"../internal/signing", "TestSignerBinaryRequiresContentAuthorizationForCASign", "SIGNER-005"},
+		{"../internal/signing", "TestSignerShedsFloodOverUDS", "SIGNER-005"},
+		{"../internal/signing", "TestSignerHealthUnaffectedBySlowKeygen", "SIGNER-005"},
+		{"../internal/signing", "TestSignerMTLSConfigFailsClosed", "SIGNER-005"},
+		{"../internal/crypto/mtls", "TestSignerMTLSNegotiatesTLS13AEAD", "SIGNER-005"},
+		{"../internal/crypto/mtls", "TestSignerMTLSRejectsUntrustedClientAtHandshake", "SIGNER-005"},
+		{"../internal/crypto", "TestLockedSigner", "SIGNER-006"},
+		{"../internal/crypto", "TestLockedKeyPKCS8RoundTrip", "SIGNER-006"},
+		{"../internal/crypto", "TestWipeStdlibKeyZeroesSecretScalars", "SIGNER-006"},
+		{"../internal/crypto", "TestSignDigestWipesParsedKeyAndStillSigns", "SIGNER-006"},
+		{"../internal/crypto", "TestGenerateLockedKeyZeroizesGeneratedStdlibKey", "SIGNER-006"},
+		{"../internal/crypto", "TestPKCS8ImportConstructorsZeroizeParsedStdlibKey", "SIGNER-006"},
+		{"../internal/crypto/secret", "TestWipeZeroesEveryByte", "SIGNER-006"},
+		{"../internal/crypto/secret", "TestLockedBufferSourceKeepsMemoryHardening", "SIGNER-006"},
+		{"../internal/crypto/secret", "TestBufferLockedAndNoDumpLinux", "SIGNER-006"},
+		{"../internal/crypto/ca", "TestCAKeyIsLockedNotBareECDSA", "SIGNER-006"},
+		{"../internal/crypto/ca", "TestLockedKeySignsAndDestroys", "SIGNER-006"},
+		{"../internal/crypto/ca", "TestNewLockedKeyZeroizesSourcePrivateScalar", "SIGNER-006"},
+		{"../internal/crypto/ca", "TestCAHierarchyRoundTripsWithLockedKey", "SIGNER-006"},
+		{"../internal/signing", "TestSignerPersistsKeysAcrossRestart", "SIGNER-006"},
+		{"../internal/signing", "TestSignerReloadsHandleFromSharedStoreOnMiss", "SIGNER-006"},
+		{"../internal/signing", "TestSignerKeyBackupRestore", "SIGNER-006"},
+		{"../internal/signing", "TestConstraintsSurviveRestart", "SIGNER-006"},
+		{"../internal/signing", "TestDualControlConstraintSurvivesRestart", "SIGNER-006"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("%s: %s no longer declares %s; signer isolation or custody proof weakened", tc.id, tc.root, tc.name)
+		}
+	}
+
+	signerMain := read(t, "../cmd/trstctl-signer/main.go")
+	for _, want := range []string{
+		"Command trstctl-signer is the isolated signing service (AN-4).",
+		"socket := flag.String(\"socket\"",
+		"keystore := flag.String(\"keystore\"",
+		"kekFile := flag.String(\"kek\"",
+		"authSecret := flag.String(\"auth-secret\"",
+		"mtlsListen := flag.String(\"mtls-listen\"",
+		"signing.Harden()",
+		"signing.LoadOrCreateAuthorizer",
+		"signing.WithAuthorizer(authz)",
+		"signing.NewPersistentServer(signing.NewKeyStore(",
+		"signing.ServeServerMTLS(ctx",
+		"signing.ServeServer(ctx, *socket, srv)",
+	} {
+		if !strings.Contains(signerMain, want) {
+			t.Errorf("SIGNER-005/006: trstctl-signer main no longer contains %q; isolated process or persistent custody wiring weakened", want)
+		}
+	}
+
+	serveGo := read(t, "../internal/signing/serve.go")
+	for _, want := range []string{
+		"const maxMessageBytes = 1 << 20",
+		"const maxConcurrentStreams = 256",
+		"func ServeServerWithOptions(",
+		"func ServeServerMTLS(",
+		"mtls.SignerServerCredentials(tlsCfg)",
+		"grpc.MaxRecvMsgSize(maxMessageBytes)",
+		"grpc.MaxSendMsgSize(maxMessageBytes)",
+		"grpc.MaxConcurrentStreams(maxConcurrentStreams)",
+		"grpc.UnaryInterceptor(bulkheadInterceptor(lim))",
+		"signerpb.RegisterSignerServiceServer(srv, svc)",
+		"srv.GracefulStop()",
+		"svc.Shutdown()",
+		"os.MkdirAll(dir, 0o700)",
+		"os.Chmod(socketPath, 0o600)",
+		"newPeerAuthListener(ln, os.Geteuid())",
+	} {
+		if !strings.Contains(serveGo, want) {
+			t.Errorf("SIGNER-005: serve.go no longer contains %q; signer transport isolation/backpressure proof weakened", want)
+		}
+	}
+
+	designTests := read(t, "../internal/signing/design_test.go")
+	for _, want := range []string{
+		"go list -deps",
+		"./cmd/trstctl-signer",
+		"database/sql",
+		"github.com/jackc/pgx",
+		"github.com/nats-io",
+		"TestSignerHasNoHTTPServerCall",
+		"http.ListenAndServe(",
+	} {
+		if !strings.Contains(designTests, want) {
+			t.Errorf("SIGNER-005: design_test.go no longer contains %q; dependency-closure guard weakened", want)
+		}
+	}
+	staticTests := read(t, "../internal/signing/static_test.go")
+	for _, want := range []string{"go tool nm", "database/sql", "github.com/jackc/pgx", "net/http.(*Server).Serve"} {
+		if !strings.Contains(staticTests, want) {
+			t.Errorf("SIGNER-005: static_test.go no longer contains %q; linked-symbol guard weakened", want)
+		}
+	}
+
+	lockedGo := read(t, "../internal/crypto/locked.go")
+	for _, want := range []string{
+		"type LockedSigner struct",
+		"der       *secret.Buffer",
+		"func GenerateLockedKey(",
+		"defer wipeStdlibKey(key)",
+		"secret.NewFrom(der)",
+		"secret.Wipe(der)",
+		"func NewLockedSignerFromPKCS8(",
+		"wipeStdlibKey(parsed)",
+		"func (l *LockedSigner) SignDigest(",
+		"x509.ParsePKCS8PrivateKey(der)",
+		"defer func() {",
+		"runtime.KeepAlive(key)",
+		"runtime.KeepAlive(l.der)",
+		"func (l *LockedSigner) Destroy() { l.der.Destroy() }",
+	} {
+		if !strings.Contains(lockedGo, want) {
+			t.Errorf("SIGNER-006: locked.go no longer contains %q; locked-key custody proof weakened", want)
+		}
+	}
+	pkcs8Go := read(t, "../internal/crypto/locked_pkcs8.go")
+	for _, want := range []string{
+		"func (l *LockedSigner) PKCS8()",
+		"func LockedKeyFromPKCS8(der []byte)",
+		"defer wipeStdlibKey(key)",
+		"secret.NewFrom(der)",
+	} {
+		if !strings.Contains(pkcs8Go, want) {
+			t.Errorf("SIGNER-006: locked_pkcs8.go no longer contains %q; sealed-keystore import/export boundary weakened", want)
+		}
+	}
+	secretBuffer := read(t, "../internal/crypto/secret/buffer.go")
+	for _, want := range []string{
+		"Buffer holds secret material in locked, non-dumpable, zeroizable memory",
+		"region []byte",
+		"data   []byte",
+		"func NewFrom(src []byte)",
+		"func (b *Buffer) Destroy()",
+		"Wipe(b.region)",
+		"_ = free(b.region)",
+		"runtime.KeepAlive(b)",
+	} {
+		if !strings.Contains(secretBuffer, want) {
+			t.Errorf("SIGNER-006: secret/buffer.go no longer contains %q; locked buffer zeroization proof weakened", want)
+		}
+	}
+	secretLinux := read(t, "../internal/crypto/secret/mem_linux.go")
+	for _, want := range []string{
+		"unix.Mmap",
+		"unix.Mlock(region)",
+		"unix.Madvise(region, unix.MADV_DONTDUMP)",
+		"unix.Madvise(region, unix.MADV_DODUMP)",
+		"unix.Munlock(region)",
+		"unix.Munmap(region)",
+	} {
+		if !strings.Contains(secretLinux, want) {
+			t.Errorf("SIGNER-006: secret/mem_linux.go no longer contains %q; Linux mlock/dontdump custody proof weakened", want)
+		}
+	}
+	keyStore := read(t, "../internal/signing/keystore.go")
+	for _, want := range []string{
+		"KeyStore persists signer keys",
+		"metaMagic = []byte(\"CSKM\")",
+		"const metaVersion = 2",
+		"const flagRequireAuth = 1 << 0",
+		"func (ks *KeyStore) Save(",
+		"secret.Wipe(der)",
+		"secret.Wipe(plaintext)",
+		"seal.Seal(ks.wrapper, plaintext, []byte(stem))",
+		"os.MkdirAll(ks.dir, 0o700)",
+		"os.WriteFile(ks.path(stem), sealed, 0o600)",
+		"func (ks *KeyStore) Load()",
+		"seal.Open(ks.wrapper, sealed, []byte(stem))",
+		"crypto.LockedKeyFromPKCS8(der)",
+		"func (ks *KeyStore) LoadHandle(",
+	} {
+		if !strings.Contains(keyStore, want) {
+			t.Errorf("SIGNER-006: keystore.go no longer contains %q; sealed persistent custody proof weakened", want)
+		}
+	}
+	proto := read(t, "../internal/signing/proto/signer.proto")
+	for _, want := range []string{
+		"service SignerService",
+		"rpc GenerateKey",
+		"rpc GetPublicKey",
+		"rpc Sign",
+		"rpc DestroyKey",
+		"rpc Health",
+		"bytes public_key",
+		"bytes digest",
+		"bytes signature",
+		"KeyPurpose purpose = 5",
+	} {
+		if !strings.Contains(proto, want) {
+			t.Errorf("SIGNER-005/006: signer.proto no longer contains %q; key-handle-only RPC boundary weakened", want)
+		}
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
