@@ -180,6 +180,151 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- ARCH-008: AN-3 crypto and AN-8 keymaterial lint gates stay wired ----------
+
+// TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired locks ARCH-008: the
+// crypto-boundary and keymaterial analyzers are CI gates, not optional local advice.
+// The ELI5 version is: production code may not pick up crypto tools directly from
+// the shelf; it must ask internal/crypto, and secret key bytes must stay in wipeable
+// byte buffers instead of immortal strings. This guard pins analyzer wiring and the
+// positive/negative fixtures that prove those rules actually bite.
+func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
+	linterMain := read(t, "../tools/trstctllint/main.go")
+	for _, want := range []string{
+		"tools/trstctllint/cryptoboundary",
+		"tools/trstctllint/keymaterial",
+		"cryptoboundary.Analyzer, // AN-3",
+		"keymaterial.Analyzer,    // AN-8",
+	} {
+		if !strings.Contains(linterMain, want) {
+			t.Errorf("ARCH-008: trstctllint main no longer wires %q; AN-3/AN-8 lint may no longer be required", want)
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{"./tools/trstctllint", "-vettool", "lint:"} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("ARCH-008: Makefile no longer contains %q; trstctllint must stay in the required lint gate", want)
+		}
+	}
+
+	cryptoAnalyzer := read(t, "../tools/trstctllint/cryptoboundary/cryptoboundary.go")
+	for _, want := range []string{
+		`boundaryPkg = modulePath + "/internal/crypto"`,
+		"func isStdlibCryptoImport(",
+		`strings.HasPrefix(path, "crypto/")`,
+		"thirdPartyCryptoPrefixes",
+		`"golang.org/x/crypto/"`,
+		`"github.com/cloudflare/circl/"`,
+		`strings.HasSuffix(pass.Fset.File(file.Pos()).Name(), "_test.go")`,
+	} {
+		if !strings.Contains(cryptoAnalyzer, want) {
+			t.Errorf("ARCH-008: cryptoboundary analyzer no longer contains %q; AN-3 crypto import coverage weakened", want)
+		}
+	}
+
+	cryptoTest := read(t, "../tools/trstctllint/cryptoboundary/cryptoboundary_test.go")
+	for _, want := range []string{
+		"TestCryptoBoundary",
+		"analysistest.Run",
+		`"trstctl.com/trstctl/internal/crypto"`,
+		`"trstctl.com/trstctl/internal/store"`,
+		`"thirdpartycrypto"`,
+		`"trstctl.com/trstctl/internal/crypto/pqcfix"`,
+	} {
+		if !strings.Contains(cryptoTest, want) {
+			t.Errorf("ARCH-008: cryptoboundary test no longer covers %q; AN-3 fixtures may have stopped proving the boundary", want)
+		}
+	}
+	for file, wants := range map[string][]string{
+		"../tools/trstctllint/cryptoboundary/testdata/src/trstctl.com/trstctl/internal/store/store.go": {
+			`import _ "crypto/x509" // want`,
+		},
+		"../tools/trstctllint/cryptoboundary/testdata/src/thirdpartycrypto/prod.go": {
+			`import _ "golang.org/x/crypto/acme" // want`,
+		},
+		"../tools/trstctllint/cryptoboundary/testdata/src/thirdpartycrypto/oracle_test.go": {
+			`import _ "golang.org/x/crypto/acme"`,
+		},
+	} {
+		body := read(t, file)
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("ARCH-008: fixture %s no longer contains %q; AN-3 fixture coverage weakened", file, want)
+			}
+		}
+	}
+
+	keyAnalyzer := read(t, "../tools/trstctllint/keymaterial/keymaterial.go")
+	for _, want := range []string{
+		"const keyMaterialMarker",
+		"defaultKeyMaterialPkgs",
+		`"trstctl.com/trstctl/internal/crypto/secret"`,
+		`"trstctl.com/trstctl/internal/crypto/seal"`,
+		"secretSurfacePkgs",
+		"secretSurfaceNames",
+		"secretConversionIdents",
+		"func typeIsStringBacked(",
+		"types.String",
+		"*types.Map",
+	} {
+		if !strings.Contains(keyAnalyzer, want) {
+			t.Errorf("ARCH-008: keymaterial analyzer no longer contains %q; AN-8 string-backed secret coverage weakened", want)
+		}
+	}
+
+	keyTest := read(t, "../tools/trstctllint/keymaterial/keymaterial_test.go")
+	for _, want := range []string{
+		"TestKeyMaterial",
+		"analysistest.Run",
+		`"keyhandling"`,
+		`"cleankeys"`,
+		`"plainpkg"`,
+		`"sealedcreds"`,
+		`"trstctl.com/trstctl/internal/api"`,
+		`"trstctl.com/trstctl/internal/authmethod"`,
+		`"trstctl.com/trstctl/internal/crypto/secret"`,
+	} {
+		if !strings.Contains(keyTest, want) {
+			t.Errorf("ARCH-008: keymaterial test no longer covers %q; AN-8 fixtures may have stopped proving string-backed secret rejection", want)
+		}
+	}
+	keyFixture := read(t, "../tools/trstctllint/keymaterial/testdata/src/keyhandling/keys.go")
+	for _, want := range []string{
+		"type Secret string",
+		"PEM      string",
+		"Parts    []string",
+		"Labeled  map[string]string",
+		"Ptr      *string",
+		"func Sign(priv string)",
+		"func Vault() (m map[string]Secret)",
+	} {
+		if !strings.Contains(keyFixture, want) {
+			t.Errorf("ARCH-008: keymaterial evasion fixture no longer contains %q; AN-8 type-resolved coverage weakened", want)
+		}
+	}
+	secretPrimitiveFixture := read(t, "../tools/trstctllint/keymaterial/testdata/src/trstctl.com/trstctl/internal/crypto/secret/buffer.go")
+	for _, want := range []string{
+		"deliberately OMITS the marker",
+		"Secret string // want",
+		"func Wrap(plaintext string)",
+	} {
+		if !strings.Contains(secretPrimitiveFixture, want) {
+			t.Errorf("ARCH-008: default-on secret primitive fixture no longer contains %q; fail-closed AN-8 coverage weakened", want)
+		}
+	}
+
+	signerMain := read(t, "../cmd/trstctl-signer/main.go")
+	hardenAt := strings.Index(signerMain, "signing.Harden()")
+	keyStoreAt := strings.Index(signerMain, "signing.NewKeyStore(")
+	if hardenAt < 0 {
+		t.Fatal("ARCH-008: trstctl-signer no longer calls signing.Harden(); process memory hardening before key use is not locked")
+	}
+	if keyStoreAt >= 0 && hardenAt > keyStoreAt {
+		t.Fatal("ARCH-008: trstctl-signer calls signing.Harden() after key-store setup; memory hardening must happen before key material can touch RAM")
+	}
+}
+
 // ---- DOCS-006: the reality-tests provably catch over-claims (injection self-test) -
 
 // TestDocsHonestyCheckCatchesInjectedOverclaim is the DOCS-006 lock: it proves the
