@@ -3231,6 +3231,170 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 	)
 }
 
+// TestTenantStrengthGuardsStayRequired locks TENANT-005..006: storage-layer RLS
+// must stay forced and write-symmetric, the RLS-bypass accessor must stay named
+// and auditable, offboarding must stay catalog-covered, and every served/query
+// surface must keep deriving tenant scope from the authenticated principal rather
+// than a client-selected tenant. ELI5: the tenant fence lives in Postgres first,
+// and every higher layer must prove it never hands a caller the wrong tenant key.
+func TestTenantStrengthGuardsStayRequired(t *testing.T) {
+	check := func(label, body string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("TENANT PROTECT: %s no longer contains %q", label, want)
+			}
+		}
+	}
+
+	for _, tc := range []struct {
+		root string
+		name string
+	}{
+		{"../internal/store", "TestEveryTenantTableForcesRLS"},
+		{"../internal/store", "TestNoTenantPolicyIsUsingOnly"},
+		{"../internal/store", "TestTenantsRLSWithCheckBlocksCrossTenantWrite"},
+		{"../internal/store", "TestOffboardTenantErasesOnlyThatTenant"},
+		{"../internal/store", "TestEveryTenantTableCoveredByOffboard"},
+		{"../internal/store", "TestStoreSystemPoolIsTheNamedRLSBypassAccessor"},
+		{"../internal/store", "TestBootstrapTokenRedeemIsMarkedSystemQueryAndSingleUse"},
+		{"../tools/trstctllint/tenantfilter", "TestTenantFilter"},
+		{"../tools/trstctllint/tenantfilter", "TestBootstrapTokenSystemQueryFixture"},
+		{"../internal/api", "TestServedAPIRejectsClientSuppliedIdentityHeaders"},
+		{"../internal/api", "TestProductionBinaryDoesNotLinkHeaderTrust"},
+		{"../internal/projections", "TestHeaderOnlyRequestIsRejected"},
+		{"../internal/projections", "TestTokenForTenantACannotReachTenantB"},
+		{"../internal/query", "TestCrossTenantReturnsNothingByConstruction"},
+		{"../internal/query", "TestPropertyNoQueryPathLeaksOutOfScope"},
+		{"../internal/query", "TestLogOffsetDoesNotRevealForeignTenantEvents"},
+		{"../internal/audit", "TestSearchFiltersByTenantAndType"},
+		{"../internal/audit", "TestTenantAuditUsesTenantLocalSequence"},
+		{"../internal/audit", "TestSearchFailsClosedOnEmptyTenant"},
+		{"../internal/events", "TestAppendRequiresTypeAndTenant"},
+		{"../internal/projections", "TestRLSDeniesCrossTenantRead"},
+		{"../internal/projections", "TestTenantOffboardedEventErasesAndSurvivesRebuild"},
+		{"../internal/projections", "TestSnapshotRestoreIsTenantScoped"},
+		{"../internal/projections", "TestCertificateInventoryTenantScopedAndPaginated"},
+		{"../internal/projections", "TestProfileVersioningAndTenantIsolation"},
+		{"../internal/projections", "TestCAHierarchyTenantIsolation"},
+		{"../internal/projections", "TestDurableBootstrapTokenTenantIsolation"},
+		{"../internal/projections", "TestSealedCredentialsAtRestAndTenantIsolated"},
+		{"../internal/server", "TestServedMachineLoginRejectsCrossTenantHeader"},
+		{"../internal/server", "TestServedSecretsCrossTenantDenial"},
+		{"../internal/server", "TestServedAICrossTenantDenial"},
+		{"../internal/server", "TestPublicCRLDoesNotCreateForeignTenantState"},
+		{"../internal/agent/enroll", "TestBootstrapTokenIsTenantAttributed"},
+		{"../internal/agent/enroll", "TestTwoTenantsGetDistinctAttribution"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("TENANT PROTECT: %s no longer declares %s; tenant isolation proof weakened", tc.root, tc.name)
+		}
+	}
+
+	storeCore := read(t, "../internal/store/store.go")
+	check("internal/store/store.go RLS entry points", storeCore,
+		`const appRole = "trstctl_app"`,
+		"func (s *Store) SystemPool() *pgxpool.Pool",
+		"RLS-BYPASSING work such as migrations",
+		"grep for SystemPool to find every RLS-bypassing access site",
+		"Pool is a deprecated alias for SystemPool",
+		"func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error",
+		`tx.Exec(ctx, "SET LOCAL ROLE "+appRole)`,
+		`tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID)`,
+	)
+
+	rlsGuard := read(t, "../internal/store/rls_force_test.go")
+	check("internal/store/rls_force_test.go catalog guards", rlsGuard,
+		"pg_class c",
+		"relrowsecurity",
+		"relforcerowsecurity",
+		"pg_policies p",
+		"p.with_check IS NULL",
+		"len(tables) < 20",
+	)
+
+	offboard := read(t, "../internal/store/offboard.go")
+	check("internal/store/offboard.go erase inventory", offboard,
+		"var TenantScopedTables = []string{",
+		"func (s *Store) OffboardTenant(ctx context.Context, tenantID string)",
+		"s.WithTenant(ctx, tenantID",
+		`"DELETE FROM "+table+" WHERE tenant_id = $1"`,
+		`"SELECT count(*) FROM "+table+" WHERE tenant_id = $1"`,
+		"att.Complete = true",
+	)
+
+	tenantfilter := read(t, "../tools/trstctllint/tenantfilter/tenantfilter.go")
+	check("tools/trstctllint/tenantfilter/tenantfilter.go", tenantfilter,
+		"tenant_id must appear in a WHERE clause",
+		"JOIN ... ON condition",
+		"systemQueryMarker = \"trstctl:system-query\"",
+		"defaultRepositoryPkgs = map[string]bool",
+		"repository query does not filter on tenant_id in a WHERE/ON-CONFLICT/INSERT-column predicate",
+		"func predicateMentionsTenant(",
+		"func insertConstrainsTenant(",
+		"var tenantColRe = regexp.MustCompile",
+		"func stripSQLComments(",
+	)
+	tenantfilterTest := read(t, "../tools/trstctllint/tenantfilter/tenantfilter_test.go")
+	check("tools/trstctllint/tenantfilter/tenantfilter_test.go", tenantfilterTest,
+		"analysistest.Run",
+		`"trstctl.com/trstctl/internal/store"`,
+		`"trstctl.com/trstctl/internal/orchestrator"`,
+		"TestBootstrapTokenSystemQueryFixture",
+	)
+
+	api := read(t, "../internal/api/api.go")
+	check("internal/api/api.go principal-derived tenancy", api,
+		"func (a *API) tenant(r *http.Request) (string, bool)",
+		"return p.TenantID, p.TenantID != \"\"",
+		"It NEVER trusts client-supplied identity headers",
+		"return auth.APIToken{TenantID: rec.TenantID",
+		"Scope: authz.Scope{TenantID: sess.TenantID}",
+		"target := authz.Scope{TenantID: principal.TenantID",
+		"a.rateLimiter.Allow(r.Context(), principal.TenantID)",
+		"ctx = events.ContextWithActor(ctx, events.Actor",
+		"a.idem.Do(r.Context(), tenantID, idempotencyKey",
+	)
+	failClosed := read(t, "../internal/api/failclosed_guard_test.go")
+	check("internal/api/failclosed_guard_test.go", failClosed,
+		"permScopedGETProbes",
+		"X-Tenant-ID",
+		"X-Tenant",
+		"X-User",
+		"X-Roles",
+		"want 401",
+	)
+	headerGuard := read(t, "../internal/api/headerauth_guard_test.go")
+	check("internal/api/headerauth_guard_test.go", headerGuard,
+		"go tool nm",
+		"insecureHeaderResolver",
+		"WithInsecureHeaderResolver",
+	)
+
+	queryCore := read(t, "../internal/query/query.go")
+	check("internal/query/query.go", queryCore,
+		"Spec is a typed, parameterized query plan. It has NO tenant or scope field",
+		"tenant is p.TenantID throughout",
+		"requiredPermission",
+		"ErrForbidden",
+		"e.readLog(ctx, p.TenantID",
+	)
+	queryReaders := read(t, "../internal/query/readers.go")
+	check("internal/query/readers.go event-log tenant floor", queryReaders,
+		"if ev.TenantID != tenant {",
+		"tenantOffset++",
+		"*offset = tenantOffset",
+		`"tenant_id": ev.TenantID`,
+	)
+	queryTests := read(t, "../internal/query/adversarial_test.go")
+	check("internal/query/adversarial_test.go", queryTests,
+		"foreignMarkers",
+		"assertNoForeignRows",
+		"filtered by tenant-B's owner id returned",
+		"for i := 0; i < 300; i++",
+	)
+}
+
 // TestReleaseGuardrailCommandsStayFirstClass locks CODE-102: build, lint, full
 // tests, docs reality checks, and the web test/type/build commands must remain
 // named release gates. This is the simple version: the repo should keep big red
