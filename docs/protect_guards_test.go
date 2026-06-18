@@ -820,6 +820,146 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 	return false
 }
 
+// ---- INTEROP-103: OCSP/CRL and RFC 3161 object/served verifier guards ---------
+
+// TestWireObjectVerifierCoverageStaysRequired locks INTEROP-103: revocation and
+// timestamp wire objects must keep both low-level verifier proof and served-path
+// proof. ELI5: it is not enough to draw a valid-looking stamp; OpenSSL and the
+// relying-party parsers must be able to read the stamp, and the running server
+// must hand those same bytes out on the public routes.
+func TestWireObjectVerifierCoverageStaysRequired(t *testing.T) {
+	for _, testName := range []string{
+		"TestSignOCSPResponseGoodVerifies",
+		"TestSignOCSPResponseRevokedVerifies",
+		"TestCreateCRLContainsRevokedAndVerifies",
+		"TestParseOCSPResponseRejectsWrongIssuer",
+		"TestParseCRLRejectsWrongIssuer",
+		"TestBuildOCSPRequestForSerialRoundTrips",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/crypto", testName) {
+			t.Errorf("INTEROP-103: internal/crypto no longer declares %s; OCSP/CRL object-verifier coverage weakened", testName)
+		}
+	}
+
+	revocation := read(t, "../internal/crypto/revocation_test.go")
+	for _, want := range []string{
+		"SignOCSPResponse(caDER, signer, OCSPGood",
+		"SignOCSPResponse(caDER, signer, OCSPRevoked",
+		"ParseOCSPResponse(respDER, caDER)",
+		"CreateCRL(caDER, signer",
+		"ParseCRL(crlDER, caDER)",
+		"ParseOCSPResponse(respDER, otherDER); err == nil",
+		"ParseCRL(crlDER, otherDER); err == nil",
+	} {
+		if !strings.Contains(revocation, want) {
+			t.Errorf("INTEROP-103: revocation object tests no longer contain %q; verifier or wrong-issuer proof weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestTimestampTokenIsRealCMSDER",
+		"TestTimestampTokenOpenSSLCMSDifferential",
+		"TestTimestampTokenIsParseableTSTInfo",
+		"TestTimeStampHTTPPostOpenSSLTSVerify",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/tsa", testName) {
+			t.Errorf("INTEROP-103: internal/tsa no longer declares %s; RFC 3161 object or HTTP verifier coverage weakened", testName)
+		}
+	}
+
+	tsaObject := read(t, "../internal/tsa/tsa_rfc3161_test.go")
+	for _, want := range []string{
+		"oidCTTSTInfo",
+		"TestTimestampTokenOpenSSLCMSDifferential",
+		"exec.Command(ossl, \"cms\", \"-verify\"",
+		"\"-inform\", \"DER\"",
+		"\"-noverify\"",
+		"the TSTInfo OpenSSL extracted does not bind the message imprint",
+	} {
+		if !strings.Contains(tsaObject, want) {
+			t.Errorf("INTEROP-103: TSA CMS differential no longer contains %q; RFC 3161 object proof weakened", want)
+		}
+	}
+
+	tsaHTTP := read(t, "../internal/tsa/http_test.go")
+	for _, want := range []string{
+		"TestTimeStampHTTPPostOpenSSLTSVerify",
+		"httptest.NewServer(a.Handler())",
+		"exec.Command(ossl, \"ts\", \"-query\"",
+		"http.Post(ts.URL, tsa.ContentTypeQuery",
+		"tsa.ContentTypeReply",
+		"exec.Command(ossl, \"ts\", \"-verify\"",
+		"archiveTSAConformanceTranscripts",
+		"TRSTCTL_REQUIRE_OPENSSL_TSA",
+	} {
+		if !strings.Contains(tsaHTTP, want) {
+			t.Errorf("INTEROP-103: TSA HTTP stock-client test no longer contains %q; served RFC 3161 proof weakened", want)
+		}
+	}
+
+	if !anyTestDeclaresUnder(t, "../internal/server", "TestServedTSAOpenSSLTimestampOverHTTP") {
+		t.Error("INTEROP-103: internal/server no longer declares TestServedTSAOpenSSLTimestampOverHTTP; /tsa served OpenSSL proof weakened")
+	}
+	servedTSA := read(t, "../internal/server/protocols_served_tsa_test.go")
+	for _, want := range []string{
+		"TestServedTSAOpenSSLTimestampOverHTTP",
+		"hasServedProtocol(h.srv.ServedProtocols(), \"tsa\")",
+		"http.Post(h.ts.URL+\"/tsa\", tsa.ContentTypeQuery",
+		"exec.Command(ossl, \"ts\", \"-query\"",
+		"exec.Command(ossl, \"ts\", \"-verify\"",
+		"archiveServedTSATranscripts",
+		"TRSTCTL_REQUIRE_OPENSSL_TSA",
+	} {
+		if !strings.Contains(servedTSA, want) {
+			t.Errorf("INTEROP-103: served TSA OpenSSL test no longer contains %q; /tsa stock-client proof weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestServedOCSPAndCRLReflectRevocation",
+		"TestServedOCSPAndCRLOverHTTP",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/projections", testName) {
+			t.Errorf("INTEROP-103: internal/projections no longer declares %s; served OCSP/CRL proof weakened", testName)
+		}
+	}
+
+	servedRevocation := read(t, "../internal/projections/served_revocation_e2e_test.go")
+	for _, want := range []string{
+		"httptest.NewServer(asm.Handler())",
+		"\"/crl/\"+tenantA",
+		"\"application/pkix-crl\"",
+		"crypto.ParseCRL(crlDER, caDER)",
+		"crypto.BuildOCSPRequestForSerial(caDER, serial)",
+		"httpPostOCSP(t, ts, \"/ocsp/\"+tenantA, reqDER)",
+		"\"application/ocsp-response\"",
+		"crypto.ParseOCSPResponse(respDER, caDER)",
+		"crypto.OCSPRevoked",
+	} {
+		if !strings.Contains(servedRevocation, want) {
+			t.Errorf("INTEROP-103: served OCSP/CRL test no longer contains %q; HTTP revocation proof weakened", want)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"tsa-client-conformance:",
+		"tsa client conformance (OpenSSL ts transcript)",
+		"TRSTCTL_REQUIRE_OPENSSL_TSA: \"1\"",
+		"TestTimeStampHTTPPostOpenSSLTSVerify|TestServedTSAOpenSSLTimestampOverHTTP",
+		"tsa-openssl-ts-transcripts",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("INTEROP-103: CI no longer contains %q; RFC 3161 stock-verifier proof is not required", want)
+		}
+	}
+
+	branchProtection := read(t, "branch-protection.md")
+	if !strings.Contains(branchProtection, "tsa client conformance (OpenSSL ts transcript)") {
+		t.Error("INTEROP-103: branch-protection.md must keep the OpenSSL TSA transcript job in the required set")
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
