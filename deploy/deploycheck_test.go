@@ -73,6 +73,36 @@ func repoRoot(t *testing.T) string {
 	return filepath.Dir(wd) // strip the trailing /deploy
 }
 
+func requireTestDeclares(t *testing.T, root, rel, name string) {
+	t.Helper()
+	path := filepath.Join(root, rel)
+	f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", rel, err)
+	}
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == name {
+			return
+		}
+	}
+	t.Fatalf("%s no longer declares %s", rel, name)
+}
+
+func requireFileContains(t *testing.T, root, rel string, wants ...string) {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatalf("read %s: %v", rel, err)
+	}
+	text := string(body)
+	for _, want := range wants {
+		if !strings.Contains(text, want) {
+			t.Errorf("%s no longer contains %q", rel, want)
+		}
+	}
+}
+
 // flagRe matches a flag definition line in `go ... --help` output, e.g. "  -socket string".
 var flagRe = regexp.MustCompile(`(?m)^\s+-([A-Za-z][\w-]*)`)
 
@@ -338,6 +368,67 @@ func TestDeployEnrollmentURLMatchesClient(t *testing.T) {
 		if strings.Contains(text, check.forbid) {
 			t.Errorf("%s in deploy/%s still passes enrollment collection URL %q", check.context, check.rel, check.forbid)
 		}
+	}
+}
+
+// TestOPS008DeploymentStrengthGuardsStayWired locks the audit's positive OPS-008
+// finding: deploy tests are useful because they drill real rendered manifests,
+// binary flags, config env keys, and installer docs instead of loose string claims.
+// ELI5: this keeps the "deployment tests are a serious safety net" proof from
+// quietly shrinking back to a checklist that can pass while Kubernetes would route
+// to an unready pod, an isolated signer would miss its key storage, or a fresh
+// fleet agent would boot with no enrollment token.
+func TestOPS008DeploymentStrengthGuardsStayWired(t *testing.T) {
+	root := repoRoot(t)
+
+	// OPS-001: readiness is not liveness. The chart test renders the control-plane
+	// Deployment and requires readinessProbe -> --ready-check while startup/liveness
+	// stay on the shallow --health-check path.
+	requireTestDeclares(t, root, filepath.Join("deploy", "helm", "helm_test.go"), "TestReadinessProbeUsesReadyCheck")
+	requireFileContains(t, root, filepath.Join("deploy", "helm", "helm_test.go"),
+		"requireProbeCommand(t, controlPlane, \"startupProbe\", []string{\"/usr/local/bin/trstctl\", \"--health-check\"})",
+		"requireProbeCommand(t, controlPlane, \"readinessProbe\", []string{\"/usr/local/bin/trstctl\", \"--ready-check\"})",
+		"requireProbeCommand(t, controlPlane, \"livenessProbe\", []string{\"/usr/local/bin/trstctl\", \"--health-check\"})")
+
+	// OPS-002: isolated signer storage must render complete, not merely selectable.
+	// These tests render the isolated signer Deployment and require the signer mTLS,
+	// sealed key store, KEK, and auth-secret mounts/volumes the signer binary needs.
+	requireTestDeclares(t, root, filepath.Join("deploy", "helm", "helm_s15_test.go"), "TestSignerIsolationChartIsStructurallyValid")
+	requireTestDeclares(t, root, filepath.Join("deploy", "helm", "helm_s15_test.go"), "TestIsolatedSignerGuardIsCodeBound")
+	requireFileContains(t, root, filepath.Join("deploy", "helm", "helm_s15_test.go"),
+		"\"/etc/trstctl/signer-mtls\", \"/data/signer\", \"/etc/trstctl/kek\", \"/etc/trstctl/signer-auth\"",
+		"\"signer-mtls\", \"signer-keys\", \"kek\", \"signer-auth\"",
+		"requireSecretDefaultMode(t, pod, \"kek\", 0o440)",
+		"requireSecretDefaultMode(t, pod, \"signer-auth\", 0o440)")
+
+	// OPS-003: first boot needs a token and a reachable steady-state channel. The
+	// static Kubernetes and Windows packaging tests pin token-file wiring, CA pinning,
+	// agent-channel endpoint settings, and operator docs for minting the Secret.
+	requireTestDeclares(t, root, filepath.Join("deploy", "kubernetes", "manifests_test.go"), "TestAgentBootstrapManifestWiresTokenAndAgentChannel")
+	requireTestDeclares(t, root, filepath.Join("deploy", "kubernetes", "manifests_test.go"), "TestAgentBootstrapDocsMintSecretAndEnableChannel")
+	requireFileContains(t, root, filepath.Join("deploy", "kubernetes", "daemonset.yaml"),
+		"--bootstrap-token-file=/var/run/trstctl/bootstrap/token",
+		"secretName: trstctl-agent-bootstrap",
+		"TRSTCTL_SERVER",
+		"trstctl:9443")
+	requireTestDeclares(t, root, filepath.Join("deploy", "windows", "windows_test.go"), "TestAgentBootstrapMSIRequiresConfiguredFirstBootProperties")
+	requireTestDeclares(t, root, filepath.Join("deploy", "windows", "windows_test.go"), "TestAgentBootstrapWindowsDocsUseTokenFile")
+	requireFileContains(t, root, filepath.Join("deploy", "windows", "trstctl-agent.wxs"),
+		"BOOTSTRAPTOKENFILE",
+		"--bootstrap-token-file [BOOTSTRAPTOKENFILE]")
+
+	// The shared deploycheck pattern itself must stay alive: manifest flags are
+	// reconciled against binary --help, TRSTCTL_* env keys against the config loader,
+	// Helm values against templates, and rendered objects against basic Kubernetes
+	// structure. Those are the OPS-008 "serious testing spine" anchors.
+	for _, name := range []string{
+		"TestManifestFlagsAreDefinedByTheBinary",
+		"TestEveryDeployImageIsBuiltOrMarkedPlanned",
+		"TestManifestEnvKeysAreReadByTheBinary",
+		"TestEveryTemplateValueExistsInValuesYAML",
+		"TestRenderedManifestsAreStructurallyValid",
+	} {
+		requireTestDeclares(t, root, filepath.Join("deploy", "deploycheck_test.go"), name)
 	}
 }
 
