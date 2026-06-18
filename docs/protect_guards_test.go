@@ -3594,6 +3594,171 @@ func TestVerifyAuditCorpusGuardStayRequired(t *testing.T) {
 	)
 }
 
+// TestWireStrengthGuardsStayRequired locks WIRE-006..010: the served API and UI
+// keep TLS on by default with a TLS 1.3 floor, the agent channel keeps deriving
+// tenant from verified mTLS certificates, bootstrap tokens stay random/hash-only/
+// tenant-bound/single-use, REST tenant scope stays principal-derived and
+// fail-closed, and the signer transport stays UDS-permissioned locally or pinned
+// mTLS cross-node.
+func TestWireStrengthGuardsStayRequired(t *testing.T) {
+	check := func(label, body string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("WIRE PROTECT: %s no longer contains %q", label, want)
+			}
+		}
+	}
+
+	for _, tc := range []struct {
+		root string
+		name string
+	}{
+		{"../internal/config", "TestTLSDisabledRequiresDevOverride"},
+		{"../internal/config", "TestTLSDisabledLoopbackOnly"},
+		{"../internal/crypto/mtls", "TestServeHTTPSEncryptsAndRefusesPlaintext"},
+		{"../internal/crypto/mtls", "TestServeHTTPSRefusesTLS12"},
+		{"../internal/crypto/mtls", "TestTLSConfigsPinTLS13"},
+		{"../internal/server", "TestServeControlPlaneInternalRefusesPlaintext"},
+		{"../internal/server", "TestServeControlPlaneDisabledAllowsPlaintext"},
+		{"../internal/server", "TestServedAgentChannelEndToEnd"},
+		{"../internal/server", "TestServedAgentChannelRejectsUntrustedClient"},
+		{"../internal/agent/enroll", "TestBootstrapTokenIsTenantAttributed"},
+		{"../internal/agent/enroll", "TestBootstrapTokenIsSingleUse"},
+		{"../internal/agent/enroll", "TestMintRequiresTenant"},
+		{"../internal/agent/enroll", "TestTwoTenantsGetDistinctAttribution"},
+		{"../internal/store", "TestBootstrapTokenRedeemIsMarkedSystemQueryAndSingleUse"},
+		{"../internal/projections", "TestDurableBootstrapTokenTenantAttributed"},
+		{"../internal/projections", "TestDurableBootstrapTokenSingleUseAcrossInstances"},
+		{"../internal/projections", "TestDurableBootstrapTokenTenantIsolation"},
+		{"../internal/projections", "TestBootstrapTokenExpiryRejected"},
+		{"../internal/api", "TestServedAPIIsFailClosedWithoutCredentials"},
+		{"../internal/api", "TestServedAPIRejectsClientSuppliedIdentityHeaders"},
+		{"../internal/api", "TestProductionBinaryDoesNotLinkHeaderTrust"},
+		{"../internal/projections", "TestHeaderOnlyRequestIsRejected"},
+		{"../internal/projections", "TestTokenForTenantACannotReachTenantB"},
+		{"../internal/signing", "TestPeerAuthListenerRejectsMismatchedUID"},
+		{"../internal/signing", "TestPeerAuthListenerAcceptsMatchingUID"},
+		{"../internal/signing", "TestPeerAuthListenerAcceptsWhenUIDUndeterminable"},
+		{"../internal/signing", "TestSignCSROverUDS"},
+		{"../internal/signing", "TestSignOverMTLS_EndToEnd"},
+		{"../internal/signing", "TestSignOverMTLS_RejectsUntrustedPeer"},
+		{"../internal/signing", "TestSignOverMTLS_RejectsCASignedButUnpinnedPeer"},
+		{"../internal/signing", "TestSignOverMTLS_RejectsUntrustedSigner"},
+		{"../internal/signing", "TestSignerMTLSConfigFailsClosed"},
+		{"../internal/crypto/mtls", "TestSignerMTLSNegotiatesTLS13AEAD"},
+		{"../internal/crypto/mtls", "TestSignerMTLSRejectsUntrustedClientAtHandshake"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("WIRE PROTECT: %s no longer declares %s; transport/control-plane proof weakened", tc.root, tc.name)
+		}
+	}
+
+	serve := read(t, "../internal/server/serve.go")
+	check("internal/server/serve.go API TLS default", serve,
+		"case config.TLSDisabled:",
+		"PLAINTEXT HTTP",
+		"local development",
+		"case config.TLSFile:",
+		"return sc.ServeHTTPS(srv, ln)",
+		"default: // TLSInternal, and the zero value defensively",
+		"mtls.SelfSignedServerCert(serverHosts(), internalCertTTL)",
+	)
+	serverTLS := read(t, "../internal/crypto/mtls/server.go")
+	check("internal/crypto/mtls/server.go TLS floor", serverTLS,
+		"func (s *ServerCert) ServeHTTPS",
+		"MinVersion:       tls.VersionTLS13",
+		"CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384}",
+	)
+
+	agentMTLS := read(t, "../internal/crypto/mtls/agent.go")
+	check("internal/crypto/mtls/agent.go tenant SAN", agentMTLS,
+		"func AgentSPIFFEID(tenantID, cn string) string",
+		"func (c *CA) SignClientCSRWithTenant",
+		"refusing to sign agent CSR without a tenant attribution",
+		"URIs:                  []*url.URL{spiffeURI}",
+		"func TenantFromClientCert",
+		"client certificate carries no tenant SPIFFE SAN",
+	)
+	agentChannel := read(t, "../internal/server/agentchannel.go")
+	check("internal/server/agentchannel.go certificate-derived tenant", agentChannel,
+		"func peerInfo(ctx context.Context) (mtls.PeerCertInfo, error)",
+		"agent channel requires mutual TLS",
+		"agent certificate not tenant-attributed",
+		"The tenant is the certificate's, never a request field.",
+		"OutOfProcessAgentCA",
+		"the renewal signs through",
+		"the signer-held agent CA",
+	)
+
+	enroll := read(t, "../internal/agent/enroll/enroll.go")
+	check("internal/agent/enroll/enroll.go bootstrap token custody", enroll,
+		"crypto.RandomBytes(24)",
+		"base64.RawURLEncoding.EncodeToString(b)",
+		"hashToken(token)",
+		"a.store.Save(ctx, MintedToken{",
+		"redeemed, err := a.store.Redeem(ctx, hash)",
+		"SignClientCSRWithTenant(csrDER, redeemed.TenantID",
+	)
+	bootstrapStore := read(t, "../internal/store/agent_bootstrap_token.go")
+	check("internal/store/agent_bootstrap_token.go single-use redemption", bootstrapStore,
+		"TokenHash       string",
+		"CreateBootstrapToken",
+		"RedeemBootstrapToken",
+		"//trstctl:system-query",
+		"UPDATE agent_bootstrap_tokens",
+		"used_at IS NULL AND expires_at > now()",
+		"RETURNING id::text, tenant_id::text",
+	)
+	bootstrapMigration := read(t, "../internal/store/migrations/0019_agent_bootstrap_tokens.sql")
+	check("0019_agent_bootstrap_tokens.sql RLS", bootstrapMigration,
+		"token_hash    text        NOT NULL UNIQUE",
+		"ALTER TABLE agent_bootstrap_tokens ENABLE ROW LEVEL SECURITY",
+		"ALTER TABLE agent_bootstrap_tokens FORCE ROW LEVEL SECURITY",
+		"WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)",
+	)
+
+	api := read(t, "../internal/api/api.go")
+	check("internal/api/api.go principal-derived tenant", api,
+		"return p.TenantID, p.TenantID != \"\"",
+		"LookupAPITokenByHash",
+		"NEVER trusts client-supplied identity headers",
+		"WithInsecureHeaderResolver",
+		"a.writeProblem(w, problemUnauthorized())",
+		"target := authz.Scope{TenantID: principal.TenantID",
+		"Idempotency-Key header is required for mutations",
+	)
+
+	signingServe := read(t, "../internal/signing/serve.go")
+	check("internal/signing/serve.go UDS and mTLS transport", signingServe,
+		"func ServeServerMTLS(",
+		"mtls.SignerServerCredentials(tlsCfg)",
+		"grpc.Creds(creds)",
+		"os.MkdirAll(dir, 0o700)",
+		"os.Chmod(dir, 0o700)",
+		"os.Chmod(socketPath, 0o600)",
+		"newPeerAuthListener(ln, os.Geteuid())",
+	)
+	peerAuth := read(t, "../internal/signing/peer.go")
+	check("internal/signing/peer.go peer UID filter", peerAuth,
+		"type peerAuthListener struct",
+		"allowedUID int",
+		"peerUID func(net.Conn) (int, bool)",
+		"if uid, ok := l.peerUID(c); !ok || uid == l.allowedUID",
+		"_ = c.Close() // reject a peer whose uid does not match",
+	)
+	signerMTLS := read(t, "../internal/crypto/mtls/signer.go")
+	check("internal/crypto/mtls/signer.go pinned mTLS", signerMTLS,
+		"func SignerServerCredentials(cfg SignerPeerConfig)",
+		"func SignerClientCredentials(cfg SignerPeerConfig, serverName string)",
+		"cfg.validate()",
+		"ParsePin(cfg.PeerPinHex)",
+		"serverTLSConfigPinned(cert, clientCAs, &pin)",
+		"clientTLSConfig(src, serverCAs, serverName, &pin)",
+		"requires a server name to verify the signer certificate SAN",
+	)
+}
+
 // TestReleaseGuardrailCommandsStayFirstClass locks CODE-102: build, lint, full
 // tests, docs reality checks, and the web test/type/build commands must remain
 // named release gates. This is the simple version: the repo should keep big red
