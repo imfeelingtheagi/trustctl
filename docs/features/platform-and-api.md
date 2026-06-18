@@ -69,9 +69,9 @@ OIDC is disabled; an enabled-but-incomplete OIDC block fails closed at startup.
 For evaluation, the one `trstctl` binary **can supervise its own datastores**: bundled
 PostgreSQL (downloaded once, checksum-pinned, run on loopback) and embedded,
 file-backed NATS JetStream. Bundled PostgreSQL is allowed only for host archives with
-committed runtime pins in
-[`deploy/supply-chain/embedded-postgres.json`](../../deploy/supply-chain/embedded-postgres.json)
-(`linux-amd64`, `linux-arm64v8`, `darwin-arm64v8` today), and startup fails closed if
+committed runtime pins in `deploy/supply-chain/embedded-postgres.json` (summarized in
+[Supply chain](../supply-chain.md)) (`linux-amd64`, `linux-arm64v8`, `darwin-arm64v8`
+today), and startup fails closed if
 the archive is unsupported, unpinned, or hash-mismatched. Even bundled, Postgres runs
 under the non-superuser `trstctl_app` role so row-level security still applies
 (**AN-1** isn't relaxed for eval). The [signing service](../design/signing-service.md) is

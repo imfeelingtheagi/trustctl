@@ -38,7 +38,10 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
+	certName := "trstctl-acme-certbot"
+	domain := "certbot.acme.test"
 	recordsPath := filepath.Join(dir, "certbot-dns-records.tsv")
+	hookLogPath := filepath.Join(dir, "certbot-hooks.log")
 	hooksDir := filepath.Join(dir, "hooks")
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -65,15 +68,33 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	issueLogPath := filepath.Join(dir, "certbot-issue.log")
+	renewLogPath := filepath.Join(dir, "certbot-renew.log")
+	revokeLogPath := filepath.Join(dir, "certbot-revoke.log")
+	letsEncryptLogPath := filepath.Join(logsDir, "letsencrypt.log")
+	liveDir := filepath.Join(configDir, "live", certName)
+	certPath := filepath.Join(liveDir, "cert.pem")
+	fullchainPath := filepath.Join(liveDir, "fullchain.pem")
+	renewalPath := filepath.Join(configDir, "renewal", certName+".conf")
+	t.Cleanup(func() {
+		archiveExistingConformanceTranscripts(t, "acme-certbot", caFile, recordsPath,
+			hookLogPath,
+			issueLogPath,
+			renewLogPath,
+			revokeLogPath,
+			letsEncryptLogPath,
+			certPath,
+			fullchainPath,
+			renewalPath,
+		)
+	})
 
 	env := append(os.Environ(),
 		"REQUESTS_CA_BUNDLE="+caFile,
 		"SSL_CERT_FILE="+caFile,
 		"TRSTCTL_CERTBOT_RECORDS="+recordsPath,
-		"TRSTCTL_CERTBOT_HOOK_LOG="+filepath.Join(dir, "certbot-hooks.log"),
+		"TRSTCTL_CERTBOT_HOOK_LOG="+hookLogPath,
 	)
-	certName := "trstctl-acme-certbot"
-	domain := "certbot.acme.test"
 	commonArgs := []string{
 		"--server", ts.URL + "/directory",
 		"--config-dir", configDir,
@@ -93,11 +114,7 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		"--no-eff-email",
 		"--cert-name", certName,
 		"-d", domain,
-	}, commonArgs...), env, filepath.Join(dir, "certbot-issue.log"))
-
-	liveDir := filepath.Join(configDir, "live", certName)
-	certPath := filepath.Join(liveDir, "cert.pem")
-	fullchainPath := filepath.Join(liveDir, "fullchain.pem")
+	}, commonArgs...), env, issueLogPath)
 	assertCertbotIssuedDomain(t, certPath, domain)
 
 	runExternalClient(t, certbot, append([]string{
@@ -108,7 +125,7 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		"--manual-auth-hook", authHook,
 		"--manual-cleanup-hook", cleanupHook,
 		"--no-random-sleep-on-renew",
-	}, commonArgs...), env, filepath.Join(dir, "certbot-renew.log"))
+	}, commonArgs...), env, renewLogPath)
 	assertCertbotIssuedDomain(t, certPath, domain)
 
 	runExternalClient(t, certbot, append([]string{
@@ -116,16 +133,16 @@ func TestACMECertbotManualDNSIssueRenewRevoke(t *testing.T) {
 		"--cert-path", certPath,
 		"--reason", "keycompromise",
 		"--no-delete-after-revoke",
-	}, commonArgs...), env, filepath.Join(dir, "certbot-revoke.log"))
+	}, commonArgs...), env, revokeLogPath)
 
 	archiveConformanceTranscripts(t, "acme-certbot", caFile, recordsPath,
-		filepath.Join(dir, "certbot-hooks.log"),
-		filepath.Join(dir, "certbot-issue.log"),
-		filepath.Join(dir, "certbot-renew.log"),
-		filepath.Join(dir, "certbot-revoke.log"),
+		hookLogPath,
+		issueLogPath,
+		renewLogPath,
+		revokeLogPath,
 		certPath,
 		fullchainPath,
-		filepath.Join(configDir, "renewal", certName+".conf"),
+		renewalPath,
 	)
 }
 
@@ -257,29 +274,50 @@ func archiveConformanceTranscripts(t *testing.T, prefix string, paths ...string)
 		t.Fatalf("create transcript archive dir: %v", err)
 	}
 	for _, src := range paths {
-		in, err := os.Open(src)
-		if err != nil {
-			t.Fatalf("open transcript %s: %v", src, err)
-		}
-		dst := filepath.Join(dstDir, prefix+"-"+filepath.Base(src))
-		out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-		if err != nil {
-			_ = in.Close()
-			t.Fatalf("create archived transcript %s: %v", dst, err)
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			_ = in.Close()
-			_ = out.Close()
-			t.Fatalf("copy transcript %s: %v", src, err)
-		}
-		if err := in.Close(); err != nil {
-			_ = out.Close()
-			t.Fatalf("close transcript %s: %v", src, err)
-		}
-		if err := out.Close(); err != nil {
-			t.Fatalf("close archived transcript %s: %v", dst, err)
+		if err := copyConformanceTranscript(dstDir, prefix, src); err != nil {
+			t.Fatalf("archive transcript %s: %v", src, err)
 		}
 	}
+}
+
+func archiveExistingConformanceTranscripts(t *testing.T, prefix string, paths ...string) {
+	t.Helper()
+	dstDir := os.Getenv("TRSTCTL_INTEROP_TRANSCRIPT_DIR")
+	if dstDir == "" {
+		return
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Logf("create partial transcript archive dir: %v", err)
+		return
+	}
+	for _, src := range paths {
+		if err := copyConformanceTranscript(dstDir, prefix, src); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Logf("archive partial transcript %s: %v", src, err)
+		}
+	}
+}
+
+func copyConformanceTranscript(dstDir, prefix, src string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	dst := filepath.Join(dstDir, prefix+"-"+filepath.Base(src))
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		_ = in.Close()
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = in.Close()
+		_ = out.Close()
+		return err
+	}
+	if err := in.Close(); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func TestArchiveACMEConformanceTranscriptsWritesPublicFiles(t *testing.T) {
@@ -296,5 +334,24 @@ func TestArchiveACMEConformanceTranscriptsWritesPublicFiles(t *testing.T) {
 	}
 	if !bytes.Equal(got, []byte("transcript")) {
 		t.Fatalf("archived transcript = %q", got)
+	}
+}
+
+func TestArchiveExistingACMEConformanceTranscriptsKeepsPartialLogs(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TRSTCTL_INTEROP_TRANSCRIPT_DIR", dir)
+	src := filepath.Join(t.TempDir(), "certbot-issue.log")
+	if err := os.WriteFile(src, []byte("partial failure log"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	archiveExistingConformanceTranscripts(t, "unit", src, filepath.Join(t.TempDir(), "missing.log"))
+
+	got, err := os.ReadFile(filepath.Join(dir, "unit-certbot-issue.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, []byte("partial failure log")) {
+		t.Fatalf("archived partial transcript = %q", got)
 	}
 }

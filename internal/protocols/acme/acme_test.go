@@ -8,7 +8,9 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
 
 	xacme "golang.org/x/crypto/acme"
@@ -40,6 +42,125 @@ func chainToPEM(der [][]byte) []byte {
 		out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: b})...)
 	}
 	return out
+}
+
+type acmeResponseRecord struct {
+	method string
+	path   string
+	header http.Header
+}
+
+type acmeResponseRecorder struct {
+	base http.RoundTripper
+	mu   sync.Mutex
+	seen []acmeResponseRecord
+}
+
+func (r *acmeResponseRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := r.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	resp, err := base.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	r.seen = append(r.seen, acmeResponseRecord{
+		method: req.Method,
+		path:   req.URL.Path,
+		header: resp.Header.Clone(),
+	})
+	r.mu.Unlock()
+	return resp, nil
+}
+
+func (r *acmeResponseRecorder) header(method, rawURL string) http.Header {
+	u, err := url.Parse(rawURL)
+	path := rawURL
+	if err == nil {
+		path = u.Path
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := len(r.seen) - 1; i >= 0; i-- {
+		if r.seen[i].method == method && r.seen[i].path == path {
+			return r.seen[i].header.Clone()
+		}
+	}
+	return nil
+}
+
+func assertRecordedLink(t *testing.T, rec *acmeResponseRecorder, method, rawURL, target, rel string) {
+	t.Helper()
+	h := rec.header(method, rawURL)
+	if h == nil {
+		t.Fatalf("no recorded ACME response for %s %s", method, rawURL)
+	}
+	if !hasLink(h, target, rel) {
+		t.Fatalf("%s %s Link headers = %q, missing <%s>;rel=%q", method, rawURL, h.Values("Link"), target, rel)
+	}
+}
+
+func hasLink(h http.Header, target, rel string) bool {
+	want := "<" + target + ">;rel=\"" + rel + "\""
+	for _, got := range h.Values("Link") {
+		for _, part := range strings.Split(got, ",") {
+			if strings.TrimSpace(part) == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestACMEResourceResponsesAdvertiseLinkRelations(t *testing.T) {
+	builtin, err := ca.NewBuiltin("trstctl ACME link relation CA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(acmesrv.New(builtin, acmesrv.AcceptAll{}))
+	t.Cleanup(ts.Close)
+
+	rec := &acmeResponseRecorder{}
+	client, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.HTTPClient = &http.Client{Transport: rec}
+
+	ctx := context.Background()
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	assertRecordedLink(t, rec, http.MethodPost, ts.URL+"/acme/new-account", ts.URL+"/directory", "index")
+
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs("links.acme.test"))
+	if err != nil {
+		t.Fatalf("authorize order: %v", err)
+	}
+	assertRecordedLink(t, rec, http.MethodPost, ts.URL+"/acme/new-order", ts.URL+"/directory", "index")
+
+	authz, err := client.GetAuthorization(ctx, order.AuthzURLs[0])
+	if err != nil {
+		t.Fatalf("get authorization: %v", err)
+	}
+	assertRecordedLink(t, rec, http.MethodPost, authz.URI, ts.URL+"/directory", "index")
+
+	var chal *xacme.Challenge
+	for _, c := range authz.Challenges {
+		if c.Type == "http-01" {
+			chal = c
+		}
+	}
+	if chal == nil {
+		t.Fatal("server offered no http-01 challenge")
+	}
+	if _, err := client.Accept(ctx, chal); err != nil {
+		t.Fatalf("accept challenge: %v", err)
+	}
+	assertRecordedLink(t, rec, http.MethodPost, chal.URI, ts.URL+"/directory", "index")
+	assertRecordedLink(t, rec, http.MethodPost, chal.URI, authz.URI, "up")
 }
 
 // TestACMEClientEnrollsEndToEnd is the acceptance proxy for "cert-manager enrolls

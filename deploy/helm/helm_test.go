@@ -1,6 +1,8 @@
 package helm
 
 import (
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -769,6 +771,38 @@ func TestTemplatesParse(t *testing.T) {
 	}
 }
 
+func TestSecretTemplateRendersEvalSecretsAsSeparateDocuments(t *testing.T) {
+	v := defaultishValues()
+	v["postgres"] = map[string]any{
+		"mode": "external", "dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require",
+		"existingSecret": "", "existingSecretKey": "dsn",
+	}
+	v["kek"] = map[string]any{
+		"existingSecret": "", "existingSecretKey": "kek.bin", "generate": true,
+	}
+	signer := v["signer"].(map[string]any)
+	signer["auth"] = map[string]any{
+		"existingSecret": "", "existingSecretKey": "sign-auth.bin", "generate": true,
+	}
+
+	rendered := renderChartFile(t, "secret.yaml", v)
+	docs := decodeAllYAML(t, rendered)
+	if len(docs) != 3 {
+		t.Fatalf("secret.yaml rendered %d objects, want KEK, signer auth, and Postgres Secret:\n%s", len(docs), rendered)
+	}
+
+	wantNames := []string{"trstctl-kek", "trstctl-signer-auth", "trstctl-db"}
+	for i, want := range wantNames {
+		if got := docs[i]["kind"]; got != "Secret" {
+			t.Fatalf("rendered object %d kind = %v, want Secret:\n%s", i+1, got, rendered)
+		}
+		metadata, _ := docs[i]["metadata"].(map[string]any)
+		if got := metadata["name"]; got != want {
+			t.Fatalf("rendered Secret %d name = %v, want %s:\n%s", i+1, got, want, rendered)
+		}
+	}
+}
+
 // --- Behavioural render + reconciliation helpers (OPS-008) -------------------
 //
 // These render the chart templates into REAL Kubernetes objects (parsed YAML) and
@@ -784,6 +818,12 @@ func helmRenderFuncs() template.FuncMap {
 	return template.FuncMap{
 		"include": func(name string, data any) string {
 			switch name {
+			case "trstctl.kekSecretName":
+				return "trstctl-kek"
+			case "trstctl.signerAuthSecretName":
+				return "trstctl-signer-auth"
+			case "trstctl.dbSecretName":
+				return "trstctl-db"
 			case "trstctl.labels", "trstctl.selectorLabels":
 				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: control-plane"
 			case "trstctl.signerLabels", "trstctl.signerSelectorLabels":
@@ -810,6 +850,9 @@ func helmRenderFuncs() template.FuncMap {
 		"indent":     func(n int, s string) string { return strings.Repeat(" ", n) + s },
 		"toYaml":     func(v any) string { b, _ := yaml.Marshal(v); return strings.TrimRight(string(b), "\n") },
 		"quote":      func(v any) string { return strconv.Quote(asString(v)) },
+		"lookup":     func(...any) any { return nil },
+		"randBytes":  func(int) string { return "test-secret-bytes" },
+		"b64enc":     func(v any) string { return "encoded-" + asString(v) },
 		"sha256sum":  func(...any) string { return "deadbeef" },
 		"required":   func(_ string, v any) any { return v },
 		"trunc":      func(_ int, s any) any { return s },
@@ -1040,6 +1083,9 @@ func decodeAllYAML(t *testing.T, rendered string) []map[string]any {
 	for {
 		var d map[string]any
 		if err := dec.Decode(&d); err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("rendered manifest is not valid YAML: %v\n%s", err, rendered)
+			}
 			break
 		}
 		if len(d) > 0 {

@@ -134,6 +134,9 @@ func validateParents(path string) error {
 }
 
 func validateParentMode(path string, info os.FileInfo) error {
+	if !supportsUnixModeCustody() {
+		return nil
+	}
 	perm := info.Mode().Perm()
 	if perm&0o022 != 0 {
 		return fmt.Errorf("secretfile: parent directory %s has unsafe mode %o", path, perm)
@@ -156,6 +159,9 @@ func validateFile(path string, info os.FileInfo) error {
 	}
 	if !mode.IsRegular() {
 		return fmt.Errorf("secretfile: %s is not a regular file", path)
+	}
+	if !supportsUnixModeCustody() {
+		return nil
 	}
 	perm := mode.Perm()
 	if perm&0o111 != 0 {

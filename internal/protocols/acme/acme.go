@@ -212,6 +212,14 @@ func baseURL(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
+func addLink(w http.ResponseWriter, target, rel string) {
+	w.Header().Add("Link", fmt.Sprintf("<%s>;rel=\"%s\"", target, rel))
+}
+
+func addIndexLink(w http.ResponseWriter, r *http.Request) {
+	addLink(w, baseURL(r)+"/directory", "index")
+}
+
 func (s *Server) nextID() string {
 	s.seq++
 	return fmt.Sprintf("%d", s.seq)
@@ -268,11 +276,12 @@ func (s *Server) directoryMeta(base string) map[string]any {
 	return meta
 }
 
-func (s *Server) newNonce(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) newNonce(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	w.Header().Set("Replay-Nonce", s.mintNonce())
 	s.mu.Unlock()
 	w.Header().Set("Cache-Control", "no-store")
+	addIndexLink(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -340,6 +349,7 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 		s.mu.Lock()
 		w.Header().Set("Replay-Nonce", s.mintNonce())
 		s.mu.Unlock()
+		addIndexLink(w, r)
 		h(w, r, msg, acct)
 	}
 }
@@ -486,6 +496,7 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 	}
 	s.mu.Unlock()
 
+	addLink(w, base+"/acme/authz/"+az.id, "up")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"type": ch.typ, "url": base + "/acme/chal/" + ch.id, "token": ch.token, "status": ch.status,
 	})
@@ -763,6 +774,7 @@ func (s *Server) renewalInfo(w http.ResponseWriter, r *http.Request) {
 	info := ari.RenewalInfo{SuggestedWindow: ari.SuggestWindow(win.notBefore, win.notAfter, time.Now(), early)}
 	w.Header().Set("Retry-After", strconv.Itoa(ariRetryAfterSeconds))
 	w.Header().Set("Cache-Control", "no-store")
+	addIndexLink(w, r)
 	writeJSON(w, http.StatusOK, info)
 }
 

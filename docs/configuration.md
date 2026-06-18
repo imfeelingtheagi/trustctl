@@ -67,8 +67,8 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
     `TRSTCTL_POSTGRES_DATA_DIR` on `TRSTCTL_POSTGRES_PORT`, default 5432) and
     embedded NATS (`TRSTCTL_NATS_MODE=embedded`, the default — in-process
     file-backed JetStream). Bundled PostgreSQL is available only for host archives
-    with committed runtime pins in
-    [`deploy/supply-chain/embedded-postgres.json`](../deploy/supply-chain/embedded-postgres.json):
+    with committed runtime pins in `deploy/supply-chain/embedded-postgres.json`
+    (summarized in [Supply chain](supply-chain.md)):
     currently `linux-amd64`, `linux-arm64v8`, and `darwin-arm64v8`. It downloads
     that pinned PostgreSQL runtime once on first use, verifies the cached archive
     before execution, and fails closed if the host archive is unsupported, unpinned,

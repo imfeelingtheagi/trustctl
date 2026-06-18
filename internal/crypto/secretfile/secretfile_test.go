@@ -22,7 +22,7 @@ func TestLoadOrCreateCreatesPrivateFileAndReloads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat created secret: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("created mode = %o, want 0600", got)
 	}
 	second, err := secretfile.LoadOrCreate(path, func() ([]byte, error) {

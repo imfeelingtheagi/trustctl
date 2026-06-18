@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"testing"
@@ -56,7 +56,7 @@ func (m *memFS) Exists(p string) bool { _, ok := m.files[p]; return ok }
 func (m *memFS) Glob(pattern string) ([]string, error) {
 	var matches []string
 	for p := range m.files {
-		ok, err := filepath.Match(pattern, p)
+		ok, err := path.Match(pattern, strings.ReplaceAll(p, `\`, `/`))
 		if err != nil {
 			return nil, err
 		}

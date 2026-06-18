@@ -56,8 +56,8 @@ The web UI is served by the same binary at <https://localhost:8443>.
     production. The `trstctl` binary can also run a single-node eval stack —
     bundled PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`, the default) plus embedded
     NATS (`TRSTCTL_NATS_MODE=embedded`, the default) — on host archives with
-    committed provenance pins in
-    [`deploy/supply-chain/embedded-postgres.json`](../deploy/supply-chain/embedded-postgres.json).
+    committed provenance pins in `deploy/supply-chain/embedded-postgres.json`
+    (summarized in [Supply chain](supply-chain.md)).
     Those pins currently cover `linux-amd64`, `linux-arm64v8`, and
     `darwin-arm64v8`. Bundled PostgreSQL downloads its pinned runtime once on first
     use and fails closed if the host archive is unsupported, unpinned, or hash-

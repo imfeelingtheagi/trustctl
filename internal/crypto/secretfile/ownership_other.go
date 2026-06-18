@@ -12,3 +12,7 @@ type owner struct {
 func fileOwner(os.FileInfo) (owner, bool) {
 	return owner{}, false
 }
+
+func supportsUnixModeCustody() bool {
+	return false
+}

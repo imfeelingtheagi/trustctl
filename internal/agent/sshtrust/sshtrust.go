@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"unicode"
@@ -220,7 +220,7 @@ func containsLine(content, line string) bool {
 }
 
 func (a *Applier) sshdConfigReferencesTrustedKeys(path, content, trustedKeysPath string, seen map[string]bool) bool {
-	cleanPath := filepath.Clean(path)
+	cleanPath := cleanSSHDPath(path)
 	if seen[cleanPath] {
 		return false
 	}
@@ -254,9 +254,9 @@ func (a *Applier) sshdConfigReferencesTrustedKeys(path, content, trustedKeysPath
 }
 
 func (a *Applier) expandInclude(configPath, pattern string) []string {
-	resolved := pattern
-	if !filepath.IsAbs(resolved) {
-		resolved = filepath.Join(filepath.Dir(configPath), resolved)
+	resolved := strings.ReplaceAll(pattern, `\`, `/`)
+	if !path.IsAbs(resolved) {
+		resolved = path.Join(path.Dir(cleanSSHDPath(configPath)), resolved)
 	}
 	if globber, ok := a.cfg.FS.(interface {
 		Glob(pattern string) ([]string, error)
@@ -274,13 +274,20 @@ func sameSSHDPath(configPath, got, want string) bool {
 	if got == "" || want == "" {
 		return false
 	}
-	if !filepath.IsAbs(got) {
-		got = filepath.Join(filepath.Dir(configPath), got)
+	configDir := path.Dir(cleanSSHDPath(configPath))
+	got = strings.ReplaceAll(got, `\`, `/`)
+	want = strings.ReplaceAll(want, `\`, `/`)
+	if !path.IsAbs(got) {
+		got = path.Join(configDir, got)
 	}
-	if !filepath.IsAbs(want) {
-		want = filepath.Join(filepath.Dir(configPath), want)
+	if !path.IsAbs(want) {
+		want = path.Join(configDir, want)
 	}
-	return filepath.Clean(got) == filepath.Clean(want)
+	return cleanSSHDPath(got) == cleanSSHDPath(want)
+}
+
+func cleanSSHDPath(p string) string {
+	return path.Clean(strings.ReplaceAll(p, `\`, `/`))
 }
 
 func sshdConfigFields(line string) []string {

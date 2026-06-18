@@ -19,3 +19,7 @@ func fileOwner(info os.FileInfo) (owner, bool) {
 	}
 	return owner{uid: int(st.Uid), gid: int(st.Gid)}, true
 }
+
+func supportsUnixModeCustody() bool {
+	return true
+}
