@@ -56,7 +56,7 @@ func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 
 	for _, subsystem := range []string{bulkhead.SubsystemAPI, bulkhead.SubsystemProtocols, bulkhead.SubsystemOutbox} {
 		done := make(chan struct{})
-		if err := set.Submit(subsystem, func() { close(done) }); err != nil {
+		if err := submitUntilAccepted(t, set.Pool(subsystem), func() { close(done) }); err != nil {
 			t.Fatalf("%s pool should remain independent while agent is saturated: %v", subsystem, err)
 		}
 		<-done

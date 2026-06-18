@@ -2467,6 +2467,247 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- SPINE-101..104: event spine, projections, retention, and bulkheads --------
+
+// TestSpineStrengthGuardsStayRequired locks the SPINE confirmed strengths:
+// JetStream remains the durable source-of-truth event spine, served read models
+// remain rebuildable/checkpointed/snapshot-backed projections, high-volume
+// idempotency/outbox tables keep retention sweepers, and key served workloads run
+// behind isolated bulkheads. ELI5: the ledger stays the notebook of truth, the
+// shelves can be rebuilt from it, old finished receipts get swept, and busy doors
+// do not block each other.
+func TestSpineStrengthGuardsStayRequired(t *testing.T) {
+	for _, tc := range []struct {
+		root string
+		name string
+		id   string
+	}{
+		{"../internal/events", "TestAppendAssignsSequenceAndTime", "SPINE-101"},
+		{"../internal/events", "TestAppendRequiresTypeAndTenant", "SPINE-101"},
+		{"../internal/events", "TestReplayOrderedAndDeterministic", "SPINE-101"},
+		{"../internal/events", "TestDurabilityAcrossReopen", "SPINE-101"},
+		{"../internal/events", "TestEmbeddedStreamIsSingleReplica", "SPINE-101"},
+		{"../internal/events", "TestExternalReplicasStrictModeFailsOnSingleNode", "SPINE-101"},
+		{"../internal/events", "TestSchemaVersionStampedAndReplayed", "SPINE-101"},
+		{"../internal/projections", "TestServedReadModelIsAProjectionOfTheLog", "SPINE-102"},
+		{"../internal/projections", "TestEveryServedMutationEmitsExactlyOneEvent", "SPINE-102"},
+		{"../internal/projections", "TestProjectCatchUpReplaysOnlyAfterCheckpoint", "SPINE-102"},
+		{"../internal/projections", "TestProjectCatchUpSkipsEventsBelowCheckpoint", "SPINE-102"},
+		{"../internal/projections", "TestSnapshotBootReplaysOnlyTheTail", "SPINE-102"},
+		{"../internal/projections", "TestSnapshotRestoreSkipsPoisonBelowOffset", "SPINE-102"},
+		{"../internal/projections", "TestSnapshotWarmBootSkipsRestore", "SPINE-102"},
+		{"../internal/projections", "TestProfileVersionsSurviveReadModelRebuild", "SPINE-102"},
+		{"../internal/projections", "TestReadModelTablesClassifyLogRebuiltTables", "SPINE-102"},
+		{"../internal/orchestrator", "TestReconcileOutboxHealsCrashGapExactlyOnce", "SPINE-102"},
+		{"../internal/orchestrator", "TestReconcileOutboxResumesFromCheckpointTail", "SPINE-102"},
+		{"../internal/idemgc", "TestIdempotencyPurgeBoundsTable", "SPINE-103"},
+		{"../internal/idemgc", "TestIdempotencyPurgeIndexUsed", "SPINE-103"},
+		{"../internal/outboxgc", "TestOutboxPurgeBoundsTable", "SPINE-103"},
+		{"../internal/outboxgc", "TestOutboxPurgeIndexUsed", "SPINE-103"},
+		{"../internal/orchestrator", "TestOutboxLeasesDoNotStarveUnrelatedTenants", "SPINE-103"},
+		{"../internal/orchestrator", "TestOutboxExpiredLeaseIsReclaimed", "SPINE-103"},
+		{"../internal/bulkhead", "TestPoolFastRejectsWhenSaturated", "SPINE-104"},
+		{"../internal/bulkhead", "TestSetIsolatesSubsystems", "SPINE-104"},
+		{"../internal/bulkhead", "TestPoolCloseDrainsThenRejects", "SPINE-104"},
+		{"../internal/server", "TestAgentBulkheadShedsWithoutStarvingOtherSubsystems", "SPINE-104"},
+		{"../internal/server", "TestAgentBulkheadRejectsMissingPool", "SPINE-104"},
+		{"../internal/server", "TestOutboxTickShedUnderSaturationPreservesWork", "SPINE-104"},
+		{"../internal/server", "TestHeavyReadRoutesUseSeparatePool", "SPINE-104"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("%s: %s no longer declares %s; event-spine, projection, retention, or bulkhead proof weakened", tc.id, tc.root, tc.name)
+		}
+	}
+
+	eventsGo := read(t, "../internal/events/events.go")
+	for _, want := range []string{
+		"type Event struct",
+		"TenantID string",
+		"SchemaVersion int",
+		"Storage:     jetstream.FileStorage",
+		"Replicas:    replicas",
+		"AllowDirect: true",
+		"config.DefaultExternalReplicas",
+		"events: tenant_id is required (AN-1)",
+		"ack, err := l.js.Publish",
+		"e.Sequence = ack.Sequence",
+		"func (l *Log) Replay(",
+		"stream.GetMsg(ctx, seq)",
+	} {
+		if !strings.Contains(eventsGo, want) {
+			t.Errorf("SPINE-101: events.go no longer contains %q; durable event-log proof weakened", want)
+		}
+	}
+	for _, forbidden := range []string{"MaxAge:", "MaxMsgs:", "MaxBytes:"} {
+		if strings.Contains(eventsGo, forbidden) {
+			t.Errorf("SPINE-101: events.go contains %q; source-of-truth events must not silently auto-expire", forbidden)
+		}
+	}
+
+	storeProjection := read(t, "../internal/store/projection.go")
+	for _, want := range []string{
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles"}`,
+		"func (s *Store) RebuildReadModelTx(",
+		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
+		"func (s *Store) RestoreReadModelTx(",
+		"func (s *Store) ApplyProfileVersionTx(",
+	} {
+		if !strings.Contains(storeProjection, want) {
+			t.Errorf("SPINE-102: store/projection.go no longer contains %q; read-model rebuild proof weakened", want)
+		}
+	}
+	projectionsGo := read(t, "../internal/projections/projections.go")
+	for _, want := range []string{
+		"func (p *Projector) ProjectCatchUp(",
+		"checkpoint, err := p.store.ProjectionCheckpoint(ctx)",
+		"log.Replay(ctx, from+1",
+		"p.store.AdvanceProjectionCheckpoint(ctx, last)",
+		"const checkpointEvery = 256",
+		"func (p *Projector) Rebuild(",
+		"func (p *Projector) Snapshot(",
+		"func (p *Projector) RestoreFromSnapshot(",
+		"p.store.RestoreReadModelTx(ctx, func(tx pgx.Tx) error",
+	} {
+		if !strings.Contains(projectionsGo, want) {
+			t.Errorf("SPINE-102: projections.go no longer contains %q; checkpoint/snapshot projection proof weakened", want)
+		}
+	}
+	snapshotGo := read(t, "../internal/store/snapshot.go")
+	for _, want := range []string{
+		"const SnapshotFormatVersion = 1",
+		"func (s *Store) WriteTenantSnapshot(",
+		"func (s *Store) LatestSnapshotOffset(",
+		"func (s *Store) RestoreSnapshotsTx(",
+		"SnapshotFormatVersion",
+	} {
+		if !strings.Contains(snapshotGo, want) {
+			t.Errorf("SPINE-102: store/snapshot.go no longer contains %q; snapshot restore proof weakened", want)
+		}
+	}
+
+	idemGC := read(t, "../internal/idemgc/idemgc.go")
+	for _, want := range []string{
+		"const DefaultRetention = 7 * 24 * time.Hour",
+		"func (w *Sweeper) Sweep(",
+		"WHERE completed_at IS NOT NULL AND completed_at < $1",
+		"func (w *Sweeper) Count(",
+		"SELECT count(*) FROM idempotency_keys",
+	} {
+		if !strings.Contains(idemGC, want) {
+			t.Errorf("SPINE-103: idemgc.go no longer contains %q; idempotency retention proof weakened", want)
+		}
+	}
+	outboxGC := read(t, "../internal/outboxgc/outboxgc.go")
+	for _, want := range []string{
+		"const DefaultRetention = 24 * time.Hour",
+		"func (w *Sweeper) Sweep(",
+		"WHERE status = 'delivered' AND delivered_at IS NOT NULL AND delivered_at < $1",
+		"func (w *Sweeper) Count(",
+		"SELECT count(*) FROM outbox",
+	} {
+		if !strings.Contains(outboxGC, want) {
+			t.Errorf("SPINE-103: outboxgc.go no longer contains %q; outbox retention proof weakened", want)
+		}
+	}
+	for _, file := range []struct {
+		path  string
+		wants []string
+	}{
+		{"../internal/store/migrations/0018_idempotency_ttl.sql", []string{"idempotency_keys_completed_at_idx", "WHERE completed_at IS NOT NULL"}},
+		{"../internal/store/migrations/0021_outbox_retention.sql", []string{"outbox_delivered_at_idx", "WHERE status = 'delivered'"}},
+		{"../internal/store/migrations/0034_outbox_reconciliation_checkpoint.sql", []string{"outbox_reconciliation_checkpoint", "reconciled_seq"}},
+	} {
+		body := read(t, file.path)
+		for _, want := range file.wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("SPINE: %s no longer contains %q; retention/reconciliation migration proof weakened", file.path, want)
+			}
+		}
+	}
+
+	outbox := read(t, "../internal/orchestrator/outbox.go")
+	for _, want := range []string{
+		"status = 'processing'",
+		"lease_until",
+		"maxInFlightPerDestination",
+		"maxInFlightPerTenant",
+		"ORDER BY o.next_attempt_at, o.id",
+		"FOR UPDATE OF o SKIP LOCKED",
+		"func (o *Outbox) finalizeClaim(",
+	} {
+		if !strings.Contains(outbox, want) {
+			t.Errorf("SPINE-103: orchestrator/outbox.go no longer contains %q; leased/fair outbox proof weakened", want)
+		}
+	}
+
+	bulkheadGo := read(t, "../internal/bulkhead/bulkhead.go")
+	for _, want := range []string{
+		"type Rejected struct",
+		"func (e *Rejected) Retryable() bool",
+		"ReasonFull",
+		"case p.queue <- task:",
+		"default:",
+	} {
+		if !strings.Contains(bulkheadGo, want) {
+			t.Errorf("SPINE-104: bulkhead.go no longer contains %q; fast-rejection primitive weakened", want)
+		}
+	}
+	bulkheadSet := read(t, "../internal/bulkhead/set.go")
+	for _, want := range []string{
+		"SubsystemAPI",
+		"SubsystemOutbox",
+		"SubsystemSigning",
+		"SubsystemQuery",
+		"SubsystemProtocols",
+		"SubsystemAgent = \"agent\"",
+		"Config{Name: SubsystemAgent, Workers: 16, Queue: 1024}",
+	} {
+		if !strings.Contains(bulkheadSet, want) {
+			t.Errorf("SPINE-104: bulkhead/set.go no longer contains %q; subsystem isolation proof weakened", want)
+		}
+	}
+	agentChannel := read(t, "../internal/server/agentchannel.go")
+	for _, want := range []string{
+		"type bulkheadedAgentService struct",
+		"newBulkheadedAgentService",
+		"runAgentBulkhead",
+		"pool.Submit(func()",
+		"codes.ResourceExhausted",
+		"retry after 1s",
+	} {
+		if !strings.Contains(agentChannel, want) {
+			t.Errorf("SPINE-104: agentchannel.go no longer contains %q; agent channel bulkhead proof weakened", want)
+		}
+	}
+	serverGo := read(t, "../internal/server/server.go")
+	for _, want := range []string{
+		"s.mIdemPurged = s.registry.CounterVec(\"trstctl_idempotency_keys_purged_total\"",
+		"s.mOutboxPurged = s.registry.CounterVec(\"trstctl_outbox_delivered_purged_total\"",
+		"s.mOutboxReconcileLag = s.registry.Gauge(\"trstctl_outbox_reconciliation_lag_events\"",
+		"newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent))",
+		"func (s *Server) RunIdempotencyGC(",
+		"func (s *Server) RunOutboxGC(",
+		"func (s *Server) RunProjectionTail(",
+		"func (s *Server) RunSnapshotWorker(",
+		"func (s *Server) sampleOutboxReconciliationLag(",
+	} {
+		if !strings.Contains(serverGo, want) {
+			t.Errorf("SPINE: server.go no longer contains %q; served runtime spine/metrics proof weakened", want)
+		}
+	}
+	runGo := read(t, "../internal/server/run.go")
+	for _, want := range []string{
+		"startRuntimeWorker(workCtx, srv.RunIdempotencyGC)",
+		"startRuntimeWorker(workCtx, srv.RunOutboxGC)",
+		"startRuntimeWorker(workCtx, srv.RunProjectionTail)",
+		"startRuntimeWorker(workCtx, srv.RunSnapshotWorker)",
+	} {
+		if !strings.Contains(runGo, want) {
+			t.Errorf("SPINE: run.go no longer contains %q; runtime worker wiring weakened", want)
+		}
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
