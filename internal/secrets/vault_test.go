@@ -67,6 +67,31 @@ func TestVaultStoresSealedAndReadsBack(t *testing.T) {
 	}
 }
 
+func TestVaultSealedCredentialBindsAADContext(t *testing.T) {
+	kek := loadKEK(t)
+	fs := newFakeStore()
+	v := secrets.NewVault(kek, fs)
+	ctx := context.Background()
+
+	if err := v.Put(ctx, "tenant-A", "issuer", "issuer-1", "api_key", []byte("digicert-api-key-abc123")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	original := fs.rows[key("tenant-A", "issuer", "issuer-1", "api_key")]
+	moved := original
+	moved.TenantID = "tenant-B"
+	moved.Ref = "issuer-2"
+	fs.rows[key("tenant-B", "issuer", "issuer-2", "api_key")] = moved
+
+	if got, err := v.Get(ctx, "tenant-B", "issuer", "issuer-2", "api_key"); err == nil {
+		t.Fatalf("Get opened ciphertext moved to a different AAD context: %q", got)
+	}
+
+	if got, err := v.Get(ctx, "tenant-A", "issuer", "issuer-1", "api_key"); err != nil || string(got) != "digicert-api-key-abc123" {
+		t.Fatalf("original credential no longer opens: got %q err %v", got, err)
+	}
+}
+
 // TestVaultGetMissing: a missing credential is a clean not-found, not a panic.
 func TestVaultGetMissing(t *testing.T) {
 	v := secrets.NewVault(loadKEK(t), newFakeStore())
