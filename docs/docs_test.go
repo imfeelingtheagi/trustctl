@@ -1472,6 +1472,95 @@ func TestContinuousFuzzingIsRealNotOverclaimed(t *testing.T) {
 	}
 }
 
+func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
+	fuzzTargets := committedFuzzTargets(t)
+	if len(fuzzTargets) < 31 {
+		t.Fatalf("FUZZ-010: found only %d committed FuzzXxx targets, want at least 31 including OCSP", len(fuzzTargets))
+	}
+	if !containsString(fuzzTargets, "FuzzParseOCSPRequestSerial") {
+		t.Fatal("FUZZ-010: served OCSP parser fuzzer is missing from the committed fuzz denominator")
+	}
+
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{
+		"FUZZ_SMOKE_TIME ?= 10s",
+		"fuzz-smoke:",
+		"grep -rEl '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' internal",
+		"$(GO) test \"$$pkg\" -run='^$$' -fuzz=\"^$$fn$$\" -fuzztime=$(FUZZ_SMOKE_TIME)",
+		">> fuzz-smoke: all targets clean",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("FUZZ-010: Makefile no longer contains %q; fuzz-smoke may not auto-discover and run every target", want)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
+		"make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("FUZZ-010: CI workflow no longer contains %q; fuzz smoke is not locked as a required check", want)
+		}
+	}
+
+	clusterFuzzBuild := read(t, "../.clusterfuzzlite/build.sh")
+	for _, want := range []string{
+		"grep -rE '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' ./internal",
+		"compile_go_fuzzer \"${pkg}\" \"${fn}\" \"${fn}\"",
+	} {
+		if !strings.Contains(clusterFuzzBuild, want) {
+			t.Errorf("FUZZ-010: ClusterFuzzLite build script no longer contains %q; hosted fuzz builds may miss targets", want)
+		}
+	}
+
+	parserGuard := read(t, "../internal/crypto/parserfuzz_audit_test.go")
+	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial"} {
+		if !strings.Contains(parserGuard, want) {
+			t.Errorf("FUZZ-010: parser denominator guard no longer contains %q", want)
+		}
+	}
+}
+
+func committedFuzzTargets(t *testing.T) []string {
+	t.Helper()
+	re := regexp.MustCompile(`(?m)^func (Fuzz[A-Za-z0-9_]+)\(`)
+	found := map[string]bool{}
+	err := filepath.WalkDir("../internal", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		body, err := os.ReadFile(filepath.FromSlash(path))
+		if err != nil {
+			return err
+		}
+		for _, match := range re.FindAllStringSubmatch(string(body), -1) {
+			found[match[1]] = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan committed fuzz targets: %v", err)
+	}
+	out := make([]string, 0, len(found))
+	for name := range found {
+		out = append(out, name)
+	}
+	return out
+}
+
+func containsString(values []string, want string) bool {
+	for _, got := range values {
+		if got == want {
+			return true
+		}
+	}
+	return false
+}
+
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
 // canonical namespace (imfeelingtheagi). The audit flagged a bare organization
 // namespace vs imfeelingtheagi/trstctl drift; this fails if it ever returns.
