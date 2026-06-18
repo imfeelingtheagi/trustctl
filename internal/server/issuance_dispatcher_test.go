@@ -239,12 +239,22 @@ func TestProtocolIssuerServedProfileControlsAndRejectsLeafEKUs(t *testing.T) {
 		t.Fatalf("protocol issued EKUs = %v, want exactly [serverAuth]", issuedEKUs)
 	}
 
-	clientCSR := serverTestCSR(t, "client-only.proto.test", []string{"clientAuth"})
-	if _, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "eku-negative", clientCSR, time.Hour); err == nil || !strings.Contains(err.Error(), `extended key usage "clientAuth"`) {
-		t.Fatalf("protocol excluded EKU error = %v, want clientAuth profile rejection", err)
-	}
-	if called != 1 {
-		t.Fatalf("signing calls after rejected protocol CSR = %d, want still 1", called)
+	for _, protocolName := range []string{"acme", "est", "scep", "cmp", "ssh", "spiffe"} {
+		t.Run("deny before signing/"+protocolName, func(t *testing.T) {
+			profileName := "tls-server-" + protocolName
+			storeServerTestProfile(t, h.store, h.tenant, profileName, profile.CertificateProfile{
+				Name: profileName, AllowedEKUs: []string{"serverAuth"}, MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{protocolName},
+			})
+			issuer.defaultProfile = profileName
+			before := called
+			clientCSR := serverTestCSR(t, "client-only."+protocolName+".proto.test", []string{"clientAuth"})
+			if _, err := issuer.IssueProtocolLeaf(ctx, h.tenant, protocolName, "eku-negative-"+protocolName, clientCSR, time.Hour); err == nil || !strings.Contains(err.Error(), `extended key usage "clientAuth"`) {
+				t.Fatalf("protocol %s excluded EKU error = %v, want clientAuth profile rejection", protocolName, err)
+			}
+			if called != before {
+				t.Fatalf("protocol %s reached signing after rejected CSR: calls %d -> %d", protocolName, before, called)
+			}
+		})
 	}
 }
 
