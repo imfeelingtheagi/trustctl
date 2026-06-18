@@ -63,6 +63,7 @@ silently fall out of the required set.
 | `cmp client conformance (OpenSSL transcript)` | `ci.yml` | Stock OpenSSL `cmp p10cr` enrollment against the served CMP endpoint, with request/response transcripts archived |
 | `tsa client conformance (OpenSSL ts transcript)` | `ci.yml` | Stock OpenSSL `ts -query` and `ts -verify` against the served `/tsa` RFC 3161 endpoint, with public request/response transcripts archived |
 | `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
+| `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
 | `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager bridge |

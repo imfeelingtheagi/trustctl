@@ -85,8 +85,15 @@ EOF
 
 compose_e2e_init_ids() {
   if [[ -z "${TENANT:-}" ]]; then
-    TENANT="$(compose_e2e_uuid)" || return 1
+    if [[ "${COMPOSE_E2E_UUID_SELFTEST:-0}" == "1" ]]; then
+      TENANT="$(compose_e2e_uuid)" || return 1
+    else
+      TENANT="${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}"
+    fi
+  else
+    TENANT="$(compose_e2e_normalize_uuid "$TENANT")" || return 1
   fi
+  compose_e2e_normalize_uuid "$TENANT" >/dev/null || return 1
   if [[ -z "${IDEM_BASE:-}" ]]; then
     local idem_uuid
     idem_uuid="$(compose_e2e_uuid)" || return 1
@@ -103,6 +110,7 @@ fi
 
 BASE_URL="${BASE_URL:?set BASE_URL to the served control plane, e.g. https://localhost:8443}"
 COMPOSE_FILE="${COMPOSE_FILE:-deploy/docker/docker-compose.yml}"
+COMPOSE_E2E_TENANT="${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}"
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
 compose_e2e_init_ids || fail "could not generate portable UUIDs for TENANT/IDEM_BASE"
 CURL=(curl -fsS -k)          # -k: the eval stack serves a self-signed cert (TLS internal mode)

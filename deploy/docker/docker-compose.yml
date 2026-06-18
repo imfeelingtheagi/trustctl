@@ -127,6 +127,13 @@ services:
       TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
       TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
       TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      # EVAL ONLY — bind the served protocol smoke paths to the same deterministic
+      # tenant used by scripts/ci/compose-e2e.sh. Operators can override this before
+      # `docker compose up` with COMPOSE_E2E_TENANT=<uuid>.
+      TRSTCTL_PROTOCOLS_ACME_ENABLED: "true"
+      TRSTCTL_PROTOCOLS_ACME_TENANT_ID: "${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}"
+      TRSTCTL_PROTOCOLS_EST_ENABLED: "true"
+      TRSTCTL_PROTOCOLS_EST_TENANT_ID: "${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}"
       # TLS is on by default (server.tls.mode=internal): the control plane serves
       # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
       # (curl -k). For production set TRSTCTL_SERVER_TLS_MODE=file with your cert.

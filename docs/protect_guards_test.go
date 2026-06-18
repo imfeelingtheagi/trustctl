@@ -960,6 +960,118 @@ func TestWireObjectVerifierCoverageStaysRequired(t *testing.T) {
 	}
 }
 
+// ---- OPS-007: Docker Compose eval stack and portable e2e gate stay required ----
+
+// TestComposeE2EGateStaysRequired locks OPS-007: the evaluation deployment must
+// stay a real multi-process stack, not a static YAML demo. ELI5: the local stack
+// has to start the real database, real event bus, and a separate signer, then the
+// script has to press the same served API buttons an operator would press.
+func TestComposeE2EGateStaysRequired(t *testing.T) {
+	compose := read(t, "../deploy/docker/docker-compose.yml")
+	for _, want := range []string{
+		"postgres:",
+		"nats:",
+		"signer:",
+		"trstctl:",
+		"--jetstream",
+		"TRSTCTL_POSTGRES_MODE: external",
+		"TRSTCTL_POSTGRES_DSN:",
+		"TRSTCTL_NATS_MODE: external",
+		"TRSTCTL_NATS_URL:",
+		"TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: \"true\"",
+		"TRSTCTL_SIGNER_MODE: external",
+		"TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock",
+		"TRSTCTL_SIGNER_AUTH_SECRET_FILE:",
+		"TRSTCTL_PROTOCOLS_ACME_ENABLED: \"true\"",
+		"TRSTCTL_PROTOCOLS_ACME_TENANT_ID: \"${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}\"",
+		"TRSTCTL_PROTOCOLS_EST_ENABLED: \"true\"",
+		"TRSTCTL_PROTOCOLS_EST_TENANT_ID: \"${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}\"",
+		"signersock:/run/trstctl",
+		"signerkeys:/data/signer",
+		"secrets:/data/secrets",
+		"trstctl-eval:local",
+		"postgres:16-alpine@sha256:",
+		"nats:2.10-alpine@sha256:",
+		"healthcheck:",
+	} {
+		if !strings.Contains(compose, want) {
+			t.Errorf("OPS-007: docker-compose.yml no longer contains %q; eval stack may not exercise real Postgres/NATS/signer topology", want)
+		}
+	}
+
+	e2e := read(t, "../scripts/ci/compose-e2e.sh")
+	for _, want := range []string{
+		"compose_e2e_uuid()",
+		"uuidgen",
+		"python3",
+		"python",
+		"go run",
+		"/proc/sys/kernel/random/uuid",
+		"COMPOSE_E2E_TENANT",
+		"11111111-1111-4111-8111-111111111111",
+		"COMPOSE_E2E_UUID_SELFTEST",
+		"docker compose -f \"$COMPOSE_FILE\"",
+		"exec -T trstctl /usr/local/bin/trstctl token create",
+		"/readyz",
+		"unauthenticated GET /api/v1/owners",
+		"/api/v1/owners",
+		"/api/v1/identities/$IDENT/transitions",
+		"Idempotency-Key",
+		"AN-5 VIOLATED",
+		"/directory",
+		"/ocsp/$TENANT",
+		"/.well-known/est/cacerts",
+		"openssl pkcs7 -inform DER -print_certs",
+		"EXC-GATE-01 e2e PASS",
+	} {
+		if !strings.Contains(e2e, want) {
+			t.Errorf("OPS-007: compose-e2e.sh no longer contains %q; served deployment smoke or portable UUID coverage weakened", want)
+		}
+	}
+
+	selftest := read(t, "../scripts/ci/compose-e2e_selftest.sh")
+	for _, want := range []string{
+		"Self-test for compose-e2e.sh portable UUID generation",
+		"COMPOSE_E2E_UUID_SELFTEST=1",
+		"uuidgen fallback lowercases TENANT",
+		"python fallback sets TENANT",
+		"ALL SELF-TESTS PASSED",
+	} {
+		if !strings.Contains(selftest, want) {
+			t.Errorf("OPS-007: compose-e2e selftest no longer contains %q; OPS-006 portability fix can regress silently", want)
+		}
+	}
+	if !anyTestDeclaresUnder(t, "../deploy", "TestComposeE2EGeneratesPortableUUIDs") {
+		t.Error("OPS-007: deploy tests no longer declare TestComposeE2EGeneratesPortableUUIDs; portable compose e2e helper is no longer locked")
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"compose-e2e:",
+		"name: compose e2e + PKI conformance (EXC-GATE-01)",
+		"docker compose -f deploy/docker/docker-compose.yml up -d --build",
+		"curl -fsk https://localhost:8443/readyz",
+		"run: bash scripts/ci/compose-e2e.sh",
+		"go install github.com/zmap/zlint/v3/cmd/zlint@v3.6.0",
+		"bash scripts/ci/profile-zlint.sh served-ca.pem",
+		"docker compose -f deploy/docker/docker-compose.yml down -v || true",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("OPS-007: ci.yml no longer contains %q; compose e2e deployment gate weakened", want)
+		}
+	}
+
+	branchProtection := read(t, "../.github/branch-protection.json") + "\n" + read(t, "branch-protection.md")
+	for _, want := range []string{
+		"est client conformance (libest estclient)",
+		"compose e2e + PKI conformance (EXC-GATE-01)",
+	} {
+		if !strings.Contains(branchProtection, want) {
+			t.Errorf("OPS-007: branch protection artifacts no longer require %q", want)
+		}
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
