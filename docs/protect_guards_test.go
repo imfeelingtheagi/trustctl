@@ -73,6 +73,113 @@ func TestStorageTenancyRegressionGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- ARCH-007: AN-6 outbox and AN-7 bulkhead guards stay in required gates ------
+
+// TestOutboxAndBulkheadRegressionGuardsStayRequired locks ARCH-007: outbox and
+// bulkhead are not just files that happen to exist. The outbox must stay tested as
+// same-transaction, idempotent, non-lock-holding side-effect delivery, and the
+// bulkhead must stay tested as fast, structured rejection plus subsystem isolation.
+// If future cleanup deletes those proofs or disconnects the served dispatcher from
+// the outbox pool, this docs-package protect test turns red.
+func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
+	for _, testName := range []string{
+		"TestOutboxDeliversAndMarksDelivered",
+		"TestDispatchOneSkipLockedDoesNotDoubleDeliver",
+		"TestOutboxLeasesDoNotStarveUnrelatedTenants",
+		"TestReconcileOutboxHealsCrashGapExactlyOnce",
+		"TestReconcileOutboxDoesNotDoubleEnqueueWithInlinePath",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/orchestrator", testName) {
+			t.Errorf("ARCH-007: internal/orchestrator no longer declares %s; AN-6 outbox protection is not locked", testName)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestPoolFastRejectsWhenSaturated",
+		"TestSetIsolatesSubsystems",
+		"TestPoolCloseDrainsThenRejects",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/bulkhead", testName) {
+			t.Errorf("ARCH-007: internal/bulkhead no longer declares %s; AN-7 bulkhead protection is not locked", testName)
+		}
+	}
+
+	outbox := read(t, "../internal/orchestrator/outbox.go")
+	for _, want := range []string{
+		"func (o *Outbox) Enqueue(",
+		"INSERT INTO outbox",
+		"func (o *Outbox) EnqueueIfAbsent(",
+		"WHERE NOT EXISTS",
+		"FOR UPDATE OF o SKIP LOCKED",
+		"maxInFlightPerDestination",
+		"maxInFlightPerTenant",
+	} {
+		if !strings.Contains(outbox, want) {
+			t.Errorf("ARCH-007: orchestrator outbox no longer contains %q; AN-6 delivery/backpressure evidence weakened", want)
+		}
+	}
+
+	orch := read(t, "../internal/orchestrator/orchestrator.go")
+	for _, want := range []string{
+		"func (o *Orchestrator) Transition(",
+		"o.store.WithTenant(ctx, tenantID",
+		"o.proj.ApplyTx(ctx, tx, ev)",
+		"o.outbox.EnqueueIfAbsent(ctx, tx",
+		"Destination:    dest",
+		"IdempotencyKey: ev.ID",
+	} {
+		if !strings.Contains(orch, want) {
+			t.Errorf("ARCH-007: lifecycle transition path no longer contains %q; state change and outbox intent may no longer commit together", want)
+		}
+	}
+
+	bulk := read(t, "../internal/bulkhead/bulkhead.go")
+	for _, want := range []string{
+		"case p.queue <- task:",
+		"return &Rejected{Pool: p.name, Reason: ReasonFull",
+		"default:",
+		"close(p.queue)",
+	} {
+		if !strings.Contains(bulk, want) {
+			t.Errorf("ARCH-007: bulkhead pool no longer contains %q; fast rejection or drain semantics may have regressed", want)
+		}
+	}
+
+	set := read(t, "../internal/bulkhead/set.go")
+	for _, want := range []string{
+		"Config{Name: SubsystemAPI",
+		"Config{Name: SubsystemOutbox",
+		"Config{Name: SubsystemSigning",
+		"Config{Name: SubsystemQuery",
+		"Config{Name: SubsystemPolicy",
+		"Config{Name: SubsystemProtocols",
+		"Config{Name: SubsystemAgent",
+	} {
+		if !strings.Contains(set, want) {
+			t.Errorf("ARCH-007: default bulkhead set no longer registers %q; subsystem isolation may have regressed", want)
+		}
+	}
+
+	server := read(t, "../internal/server/server.go")
+	for _, want := range []string{
+		"s.outbox.Dispatch(ctx, s.obHandler)",
+		"s.bulk.Submit(bulkhead.SubsystemOutbox, run)",
+		"s.bulk.Close()",
+		"drain outbox",
+	} {
+		if !strings.Contains(server, want) {
+			t.Errorf("ARCH-007: served server no longer contains %q; outbox dispatch/drain may not be bulkheaded", want)
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{"$(GO) test -race", "./..."} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("ARCH-007: Makefile no longer contains %q; orchestrator/bulkhead tests must stay inside the required test gate", want)
+		}
+	}
+}
+
 // ---- DOCS-006: the reality-tests provably catch over-claims (injection self-test) -
 
 // TestDocsHonestyCheckCatchesInjectedOverclaim is the DOCS-006 lock: it proves the
