@@ -17,10 +17,13 @@ package docs
 //     stay equal to what the tree actually contains.
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -414,6 +417,79 @@ func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- CRYPTO-101: production crypto imports stay centralized --------------------
+
+// TestProductionCryptoImportsStayCentralized locks CRYPTO-101: production Go code
+// outside internal/crypto must not import stdlib or third-party crypto directly.
+// The ELI5 version is: every package that needs a cryptographic tool must ask the
+// crypto workshop, not smuggle its own tool from the shelf. This parses imports
+// instead of grepping text, so comments that explain AN-3 do not create false hits.
+func TestProductionCryptoImportsStayCentralized(t *testing.T) {
+	cryptoBoundary := read(t, "../internal/crypto/crypto.go")
+	for _, want := range []string{
+		"type PublicKey struct {",
+		"DER       []byte",
+		"type Signer interface {",
+		"Sign(message []byte, opts SignOptions) (signature []byte, err error)",
+		"type KeyGenerator interface {",
+	} {
+		if !strings.Contains(cryptoBoundary, want) {
+			t.Errorf("CRYPTO-101: internal/crypto/crypto.go no longer exposes %q; callers may lose the opaque AN-3 crypto boundary", want)
+		}
+	}
+
+	backendBoundary := read(t, "../internal/crypto/backend.go")
+	for _, want := range []string{
+		"type Backend interface {",
+		"KeyGenerator",
+		"type KeyRef struct {",
+		"type RemoteKeyLifecycle interface {",
+		"GenerateManagedKey(ctx context.Context, algorithm Algorithm) (Signer, KeyRef, error)",
+	} {
+		if !strings.Contains(backendBoundary, want) {
+			t.Errorf("CRYPTO-101: internal/crypto/backend.go no longer exposes %q; backend/key-handle contracts may have drifted", want)
+		}
+	}
+
+	allowedRoots := []string{
+		"internal/crypto/",
+		"tools/trstctllint/",
+	}
+	forbiddenPrefixes := []string{
+		"crypto",
+		"crypto/",
+		"golang.org/x/crypto/",
+		"github.com/cloudflare/circl/",
+	}
+
+	var violations []string
+	for _, rel := range gitTrackedFiles(t) {
+		if !strings.HasSuffix(rel, ".go") || strings.HasSuffix(rel, "_test.go") {
+			continue
+		}
+		if hasAnyPrefix(rel, allowedRoots) {
+			continue
+		}
+		path := filepath.Join("..", filepath.FromSlash(rel))
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatalf("CRYPTO-101: parse imports for %s: %v", rel, err)
+		}
+		for _, imp := range file.Imports {
+			importPath, err := strconv.Unquote(imp.Path.Value)
+			if err != nil {
+				t.Fatalf("CRYPTO-101: unquote import in %s: %v", rel, err)
+			}
+			if importPath == "crypto" || hasAnyPrefix(importPath, forbiddenPrefixes[1:]) {
+				violations = append(violations, rel+": "+importPath)
+			}
+		}
+	}
+	if len(violations) > 0 {
+		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto:\n%s", strings.Join(violations, "\n"))
+	}
+}
+
 // ---- DOCS-006: the reality-tests provably catch over-claims (injection self-test) -
 
 // TestDocsHonestyCheckCatchesInjectedOverclaim is the DOCS-006 lock: it proves the
@@ -626,6 +702,33 @@ func anyTestDeclaresUnder(t *testing.T, root, name string) bool {
 		return nil
 	})
 	return found
+}
+
+// gitTrackedFiles returns the repository's tracked files relative to the root.
+func gitTrackedFiles(t *testing.T) []string {
+	t.Helper()
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = ".."
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("list tracked files: %v", err)
+	}
+	var files []string
+	for _, rel := range strings.Split(string(out), "\x00") {
+		if rel != "" {
+			files = append(files, rel)
+		}
+	}
+	return files
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
