@@ -680,6 +680,66 @@ func TestDebtMarkersRequireOwnerOrIssue(t *testing.T) {
 	}
 }
 
+// TestReleaseGuardrailCommandsStayFirstClass locks CODE-102: build, lint, full
+// tests, docs reality checks, and the web test/type/build commands must remain
+// named release gates. This is the simple version: the repo should keep big red
+// switches for the surfaces humans actually rely on before a release.
+func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{
+		"CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli",
+		".PHONY: build",
+		"build: ## Build all binaries into ./bin",
+		"$(GO) test -race",
+		"-coverpkg=./...",
+		"scripts/ci/coverage-critical.sh",
+		".PHONY: lint lint-partial",
+		"$(GO) vet ./...",
+		"./tools/trstctllint",
+		"golangci-lint run ./...",
+		"actionlint",
+		"check-actions-pinned.sh",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("CODE-102: Makefile no longer contains %q; a release guardrail may have stopped being first-class", want)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"run: make build",
+		"run: make test",
+		"run: make lint",
+		"run: npm ci",
+		"run: npm run typecheck",
+		"run: npm run test:coverage",
+		"run: npm run build",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("CODE-102: ci.yml no longer contains %q; the required guardrail may have fallen out of CI", want)
+		}
+	}
+
+	webPackage := read(t, "../web/package.json")
+	for _, want := range []string{
+		`"build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"typecheck": "tsc -p tsconfig.json --noEmit"`,
+		`"test": "vitest run"`,
+		`"test:coverage": "vitest run --coverage"`,
+	} {
+		if !strings.Contains(webPackage, want) {
+			t.Errorf("CODE-102: web/package.json no longer contains %q; frontend guardrail scripts must stay explicit", want)
+		}
+	}
+
+	branchProtection := read(t, "branch-protection.md")
+	for _, want := range []string{"build / test / lint", "make test", "make lint", "required status checks"} {
+		if !strings.Contains(branchProtection, want) {
+			t.Errorf("CODE-102: branch-protection.md no longer documents %q; release guard evidence is less reviewable", want)
+		}
+	}
+}
+
 // atoiTest parses a small non-negative integer for the count guards.
 func atoiTest(t *testing.T, s string) int {
 	t.Helper()
