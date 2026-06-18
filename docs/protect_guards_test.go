@@ -1289,6 +1289,143 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- RED-101: existing trust-root controls stay locked -------------------------
+
+// TestTrustRootControlsStayRequired locks RED-101: the red-team report found real
+// blocker chains, but also confirmed useful root-of-trust controls that must not
+// regress while the blockers are closed. ELI5: the signer must stay a tiny separate
+// signing box, issued trust must still need the right purpose/approval, tenant/auth
+// gates must fail closed, the agent channel must trust the verified certificate
+// rather than request fields, and release artifacts must keep SBOM/signing evidence.
+func TestTrustRootControlsStayRequired(t *testing.T) {
+	signerMain := read(t, "../cmd/trstctl-signer/main.go")
+	for _, want := range []string{
+		"Command trstctl-signer is the isolated signing service (AN-4).",
+		"has no HTTP server, no SQL driver",
+		"socket := flag.String(\"socket\"",
+		"mtlsListen := flag.String(\"mtls-listen\"",
+		"signing.Harden()",
+		"signing.LoadOrCreateAuthorizer",
+		"signing.ServeServerMTLS",
+		"signing.ServeServer(ctx, *socket, srv)",
+	} {
+		if !strings.Contains(signerMain, want) {
+			t.Errorf("RED-101: cmd/trstctl-signer no longer contains %q; isolated signer process evidence weakened", want)
+		}
+	}
+	for _, forbidden := range []string{
+		`"net/http"`,
+		`"database/sql"`,
+		`"github.com/jackc/pgx/v5"`,
+		"ListenAndServe",
+	} {
+		if strings.Contains(signerMain, forbidden) {
+			t.Errorf("RED-101: cmd/trstctl-signer contains forbidden signer surface %q", forbidden)
+		}
+	}
+	for _, testName := range []string{
+		"TestNoSQLDriverLinkedIntoSigner",
+		"TestNoHTTPServerLinkedIntoSigner",
+		"TestSignCSROverUDS",
+		"TestSignerBinaryRequiresContentAuthorizationForCASign",
+		"TestDualControlBlocksDigestBlindForgeryOverUDS",
+		"TestSignRefusesDisallowedPurpose",
+		"TestServedCAKeyRefusesForgeryOverUDS",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/signing", testName) {
+			t.Errorf("RED-101: internal/signing no longer declares %s; signer process, purpose, or dual-control proof weakened", testName)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestEveryTenantTableForcesRLS",
+		"TestNoTenantPolicyIsUsingOnly",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/store", testName) {
+			t.Errorf("RED-101: internal/store no longer declares %s; tenant RLS proof weakened", testName)
+		}
+	}
+	for _, testName := range []string{
+		"TestServedAPIIsFailClosedWithoutCredentials",
+		"TestServedAPIRejectsForgedBearerToken",
+		"TestServedAPIRejectsClientSuppliedIdentityHeaders",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/api", testName) {
+			t.Errorf("RED-101: internal/api no longer declares %s; served auth fail-closed proof weakened", testName)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestServedAgentChannelEndToEnd",
+		"TestServedAgentChannelRejectsUntrustedClient",
+		"TestAgentBulkheadShedsWithoutStarvingOtherSubsystems",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/server", testName) {
+			t.Errorf("RED-101: internal/server no longer declares %s; served agent-channel proof weakened", testName)
+		}
+	}
+	for _, testName := range []string{
+		"TestBootstrapTokenIsTenantAttributed",
+		"TestEnrollRenewalRequiresVerifiedClientCert",
+		"TestTwoTenantsGetDistinctAttribution",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/agent/enroll", testName) {
+			t.Errorf("RED-101: internal/agent/enroll no longer declares %s; agent tenant attribution proof weakened", testName)
+		}
+	}
+	agentChannel := read(t, "../internal/server/agentchannel.go")
+	for _, want := range []string{
+		"func peerInfo(ctx context.Context)",
+		"mtls.PeerCertInfoFromAuthInfo",
+		"TenantID: info.TenantID",
+		"spiffeURI := mtls.AgentSPIFFEID(info.TenantID, info.CommonName)",
+		"a.idem.Do(ctx, info.TenantID",
+		"EventAgentHeartbeat",
+		"EventAgentCertRenewed",
+	} {
+		if !strings.Contains(agentChannel, want) {
+			t.Errorf("RED-101: agentchannel.go no longer contains %q; tenant-derived mTLS channel evidence weakened", want)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"supply-chain:",
+		"name: supply-chain (SBOM + binary SCA)",
+		"make sbom",
+		"Verify & scan the embedded-postgres binary",
+		"embedded-postgres-trivy-receipt",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("RED-101: ci.yml no longer contains %q; supply-chain evidence gate weakened", want)
+		}
+	}
+	release := read(t, "../.github/workflows/release.yml")
+	for _, want := range []string{
+		"provenance: true",
+		"Generate CycloneDX SBOM",
+		"cosign sign",
+		"cosign attest --yes --predicate sbom.cyclonedx.json",
+		"agent / windows sign + publish",
+		"Verify the signatures",
+	} {
+		if !strings.Contains(release, want) {
+			t.Errorf("RED-101: release.yml no longer contains %q; release signing/SBOM proof weakened", want)
+		}
+	}
+	branchProtection := read(t, "branch-protection.md")
+	for _, want := range []string{
+		"supply-chain (SBOM + binary SCA)",
+		"secret scan (gitleaks)",
+		"container image scan (Trivy)",
+		"`internal/signing`, `cmd/trstctl-signer`",
+	} {
+		if !strings.Contains(branchProtection, want) {
+			t.Errorf("RED-101: branch-protection.md no longer contains %q; trust-root checks may not be required", want)
+		}
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
