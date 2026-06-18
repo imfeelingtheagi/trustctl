@@ -295,7 +295,7 @@ jobs:
             {
               echo "### Windows agent artifacts not published"
               echo
-              echo 'A version-tag release built unsigned Windows agent artifacts because `WINDOWS_CODESIGN_PFX_BASE64` is not set. The upload step is skipped so the release cannot ship unsigned `.exe` or `.msi` files.'
+              echo "A version-tag release built unsigned Windows agent artifacts because WINDOWS_CODESIGN_PFX_BASE64 is not set. The upload step is skipped so the release cannot ship unsigned .exe or .msi files."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
