@@ -18,6 +18,7 @@ package docs
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -641,6 +642,41 @@ func TestInternalPackageCountMatchesReadme(t *testing.T) {
 		if diff := stated - goFiles; diff > 25 || diff < -25 {
 			t.Errorf("DOCS-009: README claims %d internal Go files but internal/ has %d (drift > 25); update the README count", stated, goFiles)
 		}
+	}
+}
+
+// TestDebtMarkersRequireOwnerOrIssue locks CODE-101: low debt-marker density is
+// useful only when every marker is intentional and reviewable. The marker words are
+// assembled at runtime so this guard does not create extra scan hits by existing.
+func TestDebtMarkersRequireOwnerOrIssue(t *testing.T) {
+	markers := []string{"TO" + "DO", "FIX" + "ME", "HA" + "CK", "X" + "XX"}
+	markerRE := regexp.MustCompile(`(?i)\b(?:` + strings.Join(markers, "|") + `)\b`)
+	ownerRE := regexp.MustCompile(`(?i)(\b[A-Z][A-Z0-9]+-[0-9]+\b|#[0-9]+\b|@[a-z0-9][a-z0-9_-]*\b|\bowner\s*:)`)
+
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = ".."
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("CODE-101: list tracked files: %v", err)
+	}
+
+	var unowned []string
+	for _, rel := range strings.Split(string(out), "\x00") {
+		if rel == "" || rel == "web/package-lock.json" || strings.HasPrefix(rel, "internal/webui/dist/") {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("CODE-101: read %s: %v", rel, err)
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			if markerRE.MatchString(line) && !ownerRE.MatchString(line) {
+				unowned = append(unowned, rel+":"+itoa(i+1))
+			}
+		}
+	}
+	if len(unowned) > 0 {
+		t.Errorf("CODE-101: debt markers must carry an owner, issue number, or backlog ID: %s", strings.Join(unowned, ", "))
 	}
 }
 

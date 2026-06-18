@@ -1,5 +1,5 @@
 <!--
-  TODO before going public:
+  TODO(CODE-101) before going public:
   - set the real license + license badge once finalized
   (Repo/registry namespace is standardized on imfeelingtheagi/trstctl.)
 -->
