@@ -1561,6 +1561,81 @@ func containsString(values []string, want string) bool {
 	return false
 }
 
+func TestHistoricalParserCrashGuardrailsStayConcrete(t *testing.T) {
+	pkcs7Safe := read(t, "../internal/crypto/pkcs7safe.go")
+	for _, want := range []string{
+		"func safeParsePKCS7(der []byte) (p7 *pkcs7.PKCS7, err error)",
+		"defer func()",
+		"recover()",
+		"errPKCS7Panic",
+		"debug.Stack()",
+		"return pkcs7.Parse(der)",
+	} {
+		if !strings.Contains(pkcs7Safe, want) {
+			t.Errorf("FUZZ-011: PKCS#7 panic boundary no longer contains %q", want)
+		}
+	}
+	for _, file := range []string{"../internal/crypto/scep.go", "../internal/crypto/verify.go"} {
+		if !strings.Contains(read(t, file), "safeParsePKCS7(") {
+			t.Errorf("FUZZ-011: %s no longer routes untrusted CMS through safeParsePKCS7", file)
+		}
+	}
+	pkcs7Tests := read(t, "../internal/crypto/pkcs7safe_fuzz_test.go")
+	for _, want := range []string{
+		"TestPKCS7BoundaryRecoversFUZZ001Crasher",
+		"scepCrasherFUZZ001 = []byte{0x30, 0x84}",
+		"FuzzParseSCEPResponse",
+		"FuzzVerifyCMSSignature",
+	} {
+		if !strings.Contains(pkcs7Tests, want) {
+			t.Errorf("FUZZ-011: PKCS#7 regression/fuzz tests no longer contain %q", want)
+		}
+	}
+
+	envelope := read(t, "../internal/crypto/envelope.go")
+	for _, want := range []string{
+		"func gcmOpen(key, ct, nonce, aad []byte) ([]byte, error)",
+		"AEAD.Open panics on a wrong-length nonce",
+		"if len(nonce) != g.NonceSize()",
+		"return nil, fmt.Errorf(\"crypto: invalid GCM nonce length",
+		"return g.Open(nil, nonce, ct, aad)",
+	} {
+		if !strings.Contains(envelope, want) {
+			t.Errorf("FUZZ-011: envelope nonce guard no longer contains %q", want)
+		}
+	}
+	envelopeFuzz := read(t, "../internal/crypto/envelope_fuzz_test.go")
+	for _, want := range []string{"FuzzOpenEnvelope", "OpenEnvelope accepted a forged envelope"} {
+		if !strings.Contains(envelopeFuzz, want) {
+			t.Errorf("FUZZ-011: envelope fuzz guard no longer contains %q", want)
+		}
+	}
+
+	estClient := read(t, "../clients/embedded/csrc/est_client.c")
+	for _, want := range []string{
+		"char resp[65536]",
+		"const size_t RESP_CAP = sizeof resp - 1",
+		"if (total >= RESP_CAP)",
+		"if (read(fd, &extra, 1) > 0) truncated = 1",
+		"refusing to decode a truncated certificate chain",
+	} {
+		if !strings.Contains(estClient, want) {
+			t.Errorf("FUZZ-011: embedded EST client response cap no longer contains %q", want)
+		}
+	}
+	estTests := read(t, "../clients/embedded/est_client_test.go")
+	for _, want := range []string{
+		"TestEmbeddedESTClientRejectsOversizedResponse",
+		"TestEmbeddedESTClientRejectsShellInjectionWorkdir",
+		"TestEmbeddedESTClientBuildsWithSanitizersWhenAvailable",
+		"-fsanitize=address,undefined",
+	} {
+		if !strings.Contains(estTests, want) {
+			t.Errorf("FUZZ-011: embedded EST client tests no longer contain %q", want)
+		}
+	}
+}
+
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
 // canonical namespace (imfeelingtheagi). The audit flagged a bare organization
 // namespace vs imfeelingtheagi/trstctl drift; this fails if it ever returns.
