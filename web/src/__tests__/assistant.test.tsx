@@ -56,6 +56,11 @@ describe("assistant console workflow", () => {
 
     expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Assistant/i })).toHaveAttribute("href", "/assistant");
+    expect(screen.getByText("AI runtime boundary")).toBeInTheDocument();
+    expect(screen.getByText("AI model and runtime status not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/BACKEND-PLATFORM-STATUS/)).toBeInTheDocument();
+    expect(screen.getByText("Structured query preview")).toBeInTheDocument();
+    expect(screen.getByText(/Tenant\/RBAC filtering is applied/)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Question"), "What should rotate first?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
@@ -84,6 +89,7 @@ describe("assistant console workflow", () => {
 
     await screen.findByRole("heading", { name: "Assistant" });
     await user.click(screen.getByRole("button", { name: "RCA" }));
+    expect(screen.getByText("RCA evidence workspace")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Question"), "Why is the service high risk?");
     await user.click(screen.getByRole("button", { name: /^Analyze$/i }));
 
@@ -107,6 +113,20 @@ describe("assistant console workflow", () => {
     expect(screen.queryByText(/tenant t2 exists/)).not.toBeInTheDocument();
   });
 
+  it("shows the fail-closed disabled state when the AI surface is off", async () => {
+    const { ApiError } = await import("@/lib/api");
+    apiMock.aiQuery.mockRejectedValue(new ApiError(503, JSON.stringify({ detail: "ai.enable_api disabled" })));
+    const user = userEvent.setup();
+    renderAssistant();
+
+    await screen.findByRole("heading", { name: "Assistant" });
+    await user.type(screen.getByLabelText("Question"), "Can you answer?");
+    await user.click(screen.getByRole("button", { name: /^Ask$/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Assistant surface is not enabled.");
+    expect(screen.getByText(/fail closed when disabled/i)).toBeInTheDocument();
+  });
+
   it("shows an empty state when no MCP tools are exposed", async () => {
     apiMock.mcpTools.mockResolvedValue({ read_only: true, tools: [] });
     const user = userEvent.setup();
@@ -115,6 +135,7 @@ describe("assistant console workflow", () => {
     await screen.findByRole("heading", { name: "Assistant" });
     await user.click(screen.getByRole("button", { name: "MCP tools" }));
 
+    expect(screen.getByText("MCP permission boundary")).toBeInTheDocument();
     expect(await screen.findByText("No MCP tools are available for this tenant.")).toBeInTheDocument();
   });
 
@@ -129,6 +150,7 @@ describe("assistant console workflow", () => {
 
     await screen.findByRole("heading", { name: "Assistant" });
     await user.click(screen.getByRole("button", { name: "MCP tools" }));
+    expect(screen.getByText(/Tools are read-only/)).toBeInTheDocument();
     await screen.findByLabelText("Tool");
     await user.type(screen.getByLabelText("Subject"), "payments");
     await user.click(screen.getByRole("button", { name: /^Invoke$/i }));

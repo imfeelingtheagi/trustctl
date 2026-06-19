@@ -4,6 +4,7 @@ import { api, ApiError, type AIAnswer } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
 
 type Tab = "query" | "rca" | "mcp";
@@ -89,6 +90,77 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
           </ul>
         )}
       </div>
+    </section>
+  );
+}
+
+function AssistantRuntimeDisclosure() {
+  return (
+    <section aria-labelledby="assistant-runtime-heading" className="mb-5 grid gap-3 border-y border-border py-4">
+      <div>
+        <h2 id="assistant-runtime-heading" className="text-lg font-semibold">
+          AI runtime boundary
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
+        </p>
+      </div>
+      <UnavailableState title="AI model and runtime status not served yet">
+        `BACKEND-PLATFORM-STATUS` must expose enabled state, model mode, egress posture, redaction/refusal counters, and last model error. Until then the console states the safe default: no model configured means nothing phones home, and every model path must cross the redaction boundary before egress.
+      </UnavailableState>
+    </section>
+  );
+}
+
+function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: string }) {
+  return (
+    <section aria-labelledby="query-preview-heading" className="mb-4 rounded-md border border-border p-3 text-sm">
+      <h3 id="query-preview-heading" className="font-semibold">
+        Structured query preview
+      </h3>
+      <dl className="mt-2 grid gap-2 md:grid-cols-3">
+        <div>
+          <dt className="text-muted-foreground">Surfaces</dt>
+          <dd>{surfaces.join(", ") || "none selected"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Subject</dt>
+          <dd>{subject.trim() || "not scoped"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Limit</dt>
+          <dd>25 cited records</dd>
+        </div>
+      </dl>
+      <p className="mt-2 text-muted-foreground">
+        Tenant/RBAC filtering is applied by the served query layer below this request; a prompt cannot ask for another tenant.
+      </p>
+    </section>
+  );
+}
+
+function RCAWorkspaceDisclosure() {
+  return (
+    <section aria-labelledby="rca-workspace-heading" className="mb-4 rounded-md border border-border p-3 text-sm">
+      <h3 id="rca-workspace-heading" className="font-semibold">
+        RCA evidence workspace
+      </h3>
+      <p className="mt-2 text-muted-foreground">
+        RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a served remediation workflow exists.
+      </p>
+    </section>
+  );
+}
+
+function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
+  return (
+    <section aria-labelledby="mcp-boundary-heading" className="mb-4 rounded-md border border-border p-3 text-sm">
+      <h3 id="mcp-boundary-heading" className="font-semibold">
+        MCP permission boundary
+      </h3>
+      <p className="mt-2 text-muted-foreground">
+        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Runtime status, tool audit event ids, and enabled-state reads need `BACKEND-PLATFORM-STATUS`.
+      </p>
     </section>
   );
 }
@@ -196,6 +268,7 @@ export function Assistant() {
           </span>
         )}
       </div>
+      <AssistantRuntimeDisclosure />
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Assistant workflow">
         <ToggleTab
@@ -233,6 +306,7 @@ export function Assistant() {
             <CardTitle>Grounded query</CardTitle>
           </CardHeader>
           <CardContent>
+            <QueryPreview surfaces={surfaces} subject={subject} />
             <form onSubmit={runQuery} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
                 <label className="space-y-2 text-sm font-medium">
@@ -286,6 +360,7 @@ export function Assistant() {
             <CardTitle>Root-cause analysis</CardTitle>
           </CardHeader>
           <CardContent>
+            <RCAWorkspaceDisclosure />
             <form onSubmit={runRCA} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
                 <label className="space-y-2 text-sm font-medium">
@@ -324,6 +399,7 @@ export function Assistant() {
             <CardTitle>MCP tools</CardTitle>
           </CardHeader>
           <CardContent>
+            <MCPBoundary readOnly={tools.data?.read_only} />
             {tools.loading && <p role="status">Loading tools...</p>}
             {tools.error && <p role="alert">Could not load tools: {tools.error}</p>}
             {tools.data && tools.data.tools.length === 0 && (

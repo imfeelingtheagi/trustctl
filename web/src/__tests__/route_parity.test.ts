@@ -21,6 +21,7 @@ const servedFeatureIds = [
   "F22",
   "F23",
   "F24",
+  "F28",
   "F33",
   "F40",
   "F43",
@@ -35,6 +36,10 @@ const servedFeatureIds = [
   "F63",
   "F64",
   "F67",
+  "F75",
+  "F76",
+  "F77",
+  "F78",
 ];
 
 function surfacesFor(featureId: string): RealGuiSurface[] {

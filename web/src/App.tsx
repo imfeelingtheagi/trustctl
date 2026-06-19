@@ -19,6 +19,7 @@ import { FeatureCoverage } from "@/pages/FeatureCoverage";
 import { Platform } from "@/pages/Platform";
 import { Protocols } from "@/pages/Protocols";
 import { Secrets } from "@/pages/Secrets";
+import { Policy } from "@/pages/Policy";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -57,6 +58,7 @@ export function AppRoutes() {
         <Route path="profiles" element={<Profiles />} />
         <Route path="protocols" element={<Protocols />} />
         <Route path="secrets" element={<Secrets />} />
+        <Route path="policy" element={<Policy />} />
         <Route path="risk" element={<Risk />} />
         <Route path="graph" element={<Graph />} />
         <Route path="audit" element={<Audit />} />

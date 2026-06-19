@@ -45,6 +45,7 @@ export const appRoutePaths = [
   "/profiles",
   "/protocols",
   "/secrets",
+  "/policy",
   "/risk",
   "/graph",
   "/audit",
@@ -127,7 +128,7 @@ export const navGroups: NavGroup[] = [
       { to: "/audit", label: "Audit", icon: "audit", mode: "real", featureIds: ["F9"] },
       { to: "/owners", label: "Ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
       { to: "/coverage?feature=F8", label: "RBAC", icon: "policy", mode: "disclosure", featureIds: ["F8"] },
-      { to: "/coverage?feature=F28", label: "Policy", icon: "policy", mode: "disclosure", featureIds: ["F28"] },
+      { to: "/policy", label: "Policy", icon: "policy", mode: "real", featureIds: ["F28"] },
     ],
   },
   {
@@ -165,6 +166,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F22", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "EST endpoint setup and protocol-status unavailable state" },
   { featureId: "F23", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SCEP endpoint setup and protocol-status unavailable state" },
   { featureId: "F24", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SPIFFE Workload API socket setup and protocol-status unavailable state" },
+  { featureId: "F28", routes: ["/policy", "/identities", "/audit"], component: "Policy", kind: "observe", evidence: "served policy gate explanation plus dry-run API unavailable state" },
   { featureId: "F33", routes: ["/identities"], component: "Identities", kind: "operate", evidence: "JIT request queue and dual-control approval mutation" },
   { featureId: "F37", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "manual native-store rotate/delete through served secrets store" },
   { featureId: "F40", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
@@ -180,4 +182,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F63", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "native secret store metadata/create/reveal/rotate/delete" },
   { featureId: "F64", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "developer snippets plus access test against served store" },
   { featureId: "F67", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "PKI secret issue with reveal-once bundle" },
+  { featureId: "F75", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded query with citations and platform-status unavailable state" },
+  { featureId: "F76", routes: ["/assistant"], component: "Assistant", kind: "observe", evidence: "AI model runtime disclosure and redaction boundary" },
+  { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and platform-status unavailable state" },
+  { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and runtime-status unavailable state" },
 ];
