@@ -56,7 +56,7 @@
         "web/src/pages/Dashboard.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F002",
@@ -77,7 +77,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F003",
@@ -101,7 +101,7 @@
         "web/src/pages/Wizard.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F004",
@@ -124,7 +124,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F005",
@@ -145,7 +145,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F006",
@@ -168,7 +168,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F007",
@@ -191,7 +191,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F008",
@@ -212,7 +212,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F009",
@@ -233,7 +233,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F010",
@@ -256,7 +256,7 @@
         "web/src/pages/Risk.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F011",
@@ -277,7 +277,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F012",
@@ -301,7 +301,7 @@
         "web/src/pages/Wizard.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F013",
@@ -323,7 +323,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F014",
@@ -347,7 +347,7 @@
         "web/src/pages/Profiles.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F015",
@@ -370,7 +370,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F016",
@@ -395,7 +395,7 @@
         "web/src/pages/Audit.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F017",
@@ -417,7 +417,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F018",
@@ -439,7 +439,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F019",
@@ -461,7 +461,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F020",
@@ -483,7 +483,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F021",
@@ -504,7 +504,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F022",
@@ -525,7 +525,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F023",
@@ -546,7 +546,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F024",
@@ -567,7 +567,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F025",
@@ -589,7 +589,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F026",
@@ -610,7 +610,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F027",
@@ -631,7 +631,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F028",
@@ -655,7 +655,7 @@
         "web/src/pages/Wizard.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F029",
@@ -677,7 +677,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F030",
@@ -698,7 +698,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F031",
@@ -719,7 +719,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F032",
@@ -740,7 +740,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F033",
@@ -763,7 +763,7 @@
         "web/src/pages/Identities.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F034",
@@ -784,7 +784,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F035",
@@ -808,7 +808,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F036",
@@ -831,7 +831,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F037",
@@ -852,7 +852,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F038",
@@ -876,7 +876,7 @@
         "web/src/pages/Identities.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F039",
@@ -898,7 +898,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F040",
@@ -919,7 +919,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F041",
@@ -941,7 +941,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F042",
@@ -966,7 +966,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F043",
@@ -987,7 +987,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F044",
@@ -1009,7 +1009,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F045",
@@ -1030,7 +1030,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F046",
@@ -1051,7 +1051,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F047",
@@ -1075,7 +1075,7 @@
         "web/src/pages/Identities.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F048",
@@ -1096,7 +1096,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F049",
@@ -1118,7 +1118,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F050",
@@ -1140,7 +1140,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F051",
@@ -1161,7 +1161,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F052",
@@ -1182,7 +1182,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F053",
@@ -1204,7 +1204,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F054",
@@ -1225,7 +1225,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F055",
@@ -1247,7 +1247,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F056",
@@ -1268,7 +1268,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F057",
@@ -1289,7 +1289,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F058",
@@ -1311,7 +1311,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F059",
@@ -1334,7 +1334,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F060",
@@ -1358,7 +1358,7 @@
         "web/src/pages/Identities.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F061",
@@ -1379,7 +1379,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F062",
@@ -1400,7 +1400,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F063",
@@ -1425,7 +1425,7 @@
         "web/src/components/AppShell.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F064",
@@ -1449,7 +1449,7 @@
         "web/src/pages/Audit.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F065",
@@ -1472,7 +1472,7 @@
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F066",
@@ -1494,7 +1494,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F067",
@@ -1519,7 +1519,7 @@
         "web/src/components/AppShell.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F068",
@@ -1545,7 +1545,7 @@
         "web/src/auth/AuthProvider.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F069",
@@ -1567,7 +1567,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F070",
@@ -1589,7 +1589,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F071",
@@ -1613,7 +1613,7 @@
         "web/src/components/AppShell.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F072",
@@ -1632,7 +1632,7 @@
       "source_backend": [],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F073",
@@ -1654,7 +1654,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F074",
@@ -1678,7 +1678,7 @@
         "web/src/pages/Graph.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F075",
@@ -1702,7 +1702,7 @@
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F076",
@@ -1725,7 +1725,7 @@
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F077",
@@ -1749,7 +1749,7 @@
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     },
     {
       "id": "GUI-F078",
@@ -1773,7 +1773,7 @@
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. The GUI exposes this feature as an operate/observe/disclose row with backend status, current mapping, target GUI mapping, and acceptance evidence; deeper workflow work remains encoded in target_gui_mapping."
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation."
     }
   ]
 }
