@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, identityState, type Identity, type TransitionTo } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
+import { UnavailableState } from "@/components/StatePrimitives";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -25,13 +26,34 @@ function isDestructive(to: TransitionTo): boolean {
 
 /** errorMessage renders an action error, special-casing a 429 so the user sees a
  * concrete retry hint (Retry-After) instead of a bare failure (SURFACE-007). */
+function apiProblemMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    try {
+      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
+      return problem.detail || problem.title || err.message;
+    } catch {
+      return err.body || err.message;
+    }
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.isRateLimited) {
     return err.retryAfterSeconds != null
       ? `Rate limited — please retry in ${err.retryAfterSeconds}s.`
       : "Rate limited — please retry shortly.";
   }
-  return `Action failed: ${String(err)}`;
+  return `Action failed: ${apiProblemMessage(err)}`;
+}
+
+function approvalErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.isRateLimited) {
+    return err.retryAfterSeconds != null
+      ? `Approval rate limited — please retry in ${err.retryAfterSeconds}s.`
+      : "Approval rate limited — please retry shortly.";
+  }
+  return `Approval failed: ${apiProblemMessage(err)}`;
 }
 
 /** actionsFor returns the lifecycle actions valid from a state — the UI mirror
@@ -73,11 +95,39 @@ function approvalActionsFor(state: string): ApprovalAction[] {
   }
 }
 
+function deliveryEvidence(state: string): string {
+  switch (state) {
+    case "requested":
+      return "Awaiting issue approval or issue request; no downstream delivery yet.";
+    case "issued":
+      return "Issued. Deploy can be requested; outbox delivery receipt is not served.";
+    case "deployed":
+      return "Backend state says deployed; connector delivery proof is not served.";
+    case "renewing":
+      return "Renewal in progress; rotation worker status is not served.";
+    case "revoked":
+      return "Revoked. OCSP/CRL health needs protocol status before it can be shown here.";
+    case "retired":
+      return "Terminal retired state; no next lifecycle action.";
+    default:
+      return "Lifecycle state is served; downstream delivery status is not served.";
+  }
+}
+
+function transitionNotice(to: TransitionTo): string {
+  return `${to} request accepted. Idempotency-Key protects retried submissions from duplicate execution; downstream outbox delivery status is not served yet.`;
+}
+
+function deniedKey(id: string, to: TransitionTo): string {
+  return `${id}:${to}`;
+}
+
 export function Identities() {
   const [items, setItems] = useState<Identity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deniedTransitions, setDeniedTransitions] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
   // means no confirmation is pending.
@@ -103,7 +153,16 @@ export function Identities() {
     try {
       await api.transitionIdentity(id, to, `${to} via UI`);
       await load();
+      setNotice(transitionNotice(to));
+      setDeniedTransitions((current) => {
+        const next = { ...current };
+        delete next[deniedKey(id, to)];
+        return next;
+      });
     } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err) }));
+      }
       setError(errorMessage(err));
     } finally {
       setBusyId(null);
@@ -117,8 +176,14 @@ export function Identities() {
     try {
       const result = await api.approveIdentityAction(id, action);
       setNotice(`${result.action} approval recorded for ${result.resource} (${result.approvals})`);
+      setDeniedTransitions((current) => {
+        const next = { ...current };
+        delete next[deniedKey(id, "issued")];
+        delete next[deniedKey(id, "revoked")];
+        return next;
+      });
     } catch (err) {
-      setError(`Approval failed: ${String(err)}`);
+      setError(approvalErrorMessage(err));
     } finally {
       setBusyId(null);
     }
@@ -154,6 +219,34 @@ export function Identities() {
           }}
         />
       )}
+
+      <section aria-labelledby="issuance-guardrails" className="mb-4 border-y border-border py-4">
+        <h2 id="issuance-guardrails" className="text-sm font-semibold">
+          Issuance guardrails
+        </h2>
+        <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
+          <p>
+            Issue and revoke are privileged signing actions. The backend enforces RA
+            separation, dual control, and policy before the signer is asked to act.
+          </p>
+          <p>
+            A request-only principal cannot self-issue, and self-approval is denied.
+            Use the approval action with a distinct approver, then retry the transition.
+          </p>
+          <p>
+            Every lifecycle mutation carries an Idempotency-Key. If the same request is
+            retried by the network, the backend returns the original result.
+          </p>
+        </div>
+      </section>
+
+      <div className="mb-4">
+        <UnavailableState title="Outbox delivery status not served yet">
+          Deploy, renew, revoke, and connector side effects are queued server-side, but
+          pending, processing, delivered, failed, and replayed delivery states do not
+          have a served read API yet.
+        </UnavailableState>
+      </div>
 
       {error && (
         <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
@@ -222,7 +315,9 @@ export function Identities() {
           <thead>
             <tr className="border-b border-border text-muted-foreground">
               <th scope="col" className="py-2 pr-4 font-medium">Name</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
               <th scope="col" className="py-2 pr-4 font-medium">State</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Delivery evidence</th>
               <th scope="col" className="py-2 font-medium">Actions</th>
             </tr>
           </thead>
@@ -232,22 +327,36 @@ export function Identities() {
               return (
                 <tr key={i.id} className="border-b border-border">
                   <td className="py-2 pr-4">{i.name}</td>
+                  <td className="py-2 pr-4">{i.kind ?? "unknown"}</td>
                   <td className="py-2 pr-4">
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{state}</span>
                   </td>
+                  <td className="py-2 pr-4 text-muted-foreground">{deliveryEvidence(state)}</td>
                   <td className="py-2">
                     <div className="flex gap-2">
                       {actionsFor(state).map((a) => (
-                        <Button
-                          key={a.to}
-                          type="button"
-                          size="sm"
-                          variant={isDestructive(a.to) ? "outline" : "default"}
-                          disabled={busyId === i.id}
-                          onClick={() => request(i.id, i.name, a.to, a.label)}
-                        >
-                          {a.label}
-                        </Button>
+                        <div key={a.to} className="space-y-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isDestructive(a.to) ? "outline" : "default"}
+                            disabled={busyId === i.id || Boolean(deniedTransitions[deniedKey(i.id, a.to)])}
+                            aria-describedby={
+                              deniedTransitions[deniedKey(i.id, a.to)] ? `denied-${i.id}-${a.to}` : undefined
+                            }
+                            onClick={() => request(i.id, i.name, a.to, a.label)}
+                          >
+                            {a.label}
+                          </Button>
+                          {deniedTransitions[deniedKey(i.id, a.to)] && (
+                            <p
+                              id={`denied-${i.id}-${a.to}`}
+                              className="max-w-xs text-xs text-amber-700 dark:text-amber-300"
+                            >
+                              {deniedTransitions[deniedKey(i.id, a.to)]}
+                            </p>
+                          )}
+                        </div>
                       ))}
                       {approvalActionsFor(state).map((a) => (
                         <Button

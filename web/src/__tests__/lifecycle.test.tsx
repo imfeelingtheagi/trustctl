@@ -115,6 +115,83 @@ describe("lifecycle actions from the UI", () => {
     expect(alert).toHaveTextContent(/12s/);
   });
 
+  it("shows RA separation guardrails and served problem details for denied issue", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "req-1", name: "request-only-svc", kind: "x509_certificate", status: "requested" },
+    ]);
+    apiMock.transitionIdentity.mockReset().mockRejectedValue(
+      new ApiError(
+        403,
+        JSON.stringify({
+          detail: "certs:request principals cannot self-issue; a distinct approver is required",
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderIdentities();
+
+    expect(await screen.findByText(/A request-only principal cannot self-issue/i)).toBeInTheDocument();
+    const row = screen.getByText("request-only-svc").closest("tr")!;
+    const issue = within(row).getByRole("button", { name: /^issue$/i });
+    await user.click(issue);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/certs:request principals cannot self-issue/i);
+    expect(alert).toHaveTextContent(/distinct approver/i);
+    expect(issue).toBeDisabled();
+    expect(row).toHaveTextContent(/certs:request principals cannot self-issue/i);
+  });
+
+  it("shows served self-approval denial details for dual-control approvals", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "req-1", name: "self-approval-svc", kind: "x509_certificate", status: "requested" },
+    ]);
+    apiMock.approveIdentityAction.mockReset().mockRejectedValue(
+      new ApiError(
+        403,
+        JSON.stringify({
+          detail: "self-approval is denied; approval must come from a distinct principal",
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("self-approval-svc")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /approve issue/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/self-approval is denied/i);
+    expect(alert).toHaveTextContent(/distinct principal/i);
+  });
+
+  it("labels outbox delivery state as unavailable instead of claiming synchronous deploy", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "iss-1", name: "issued-svc", kind: "x509_certificate", status: "issued" },
+    ]);
+    renderIdentities();
+
+    expect(await screen.findByText(/Outbox delivery status not served yet/i)).toBeInTheDocument();
+    expect(document.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();
+    const row = screen.getByText("issued-svc").closest("tr")!;
+    expect(row).toHaveTextContent(/Deploy can be requested; outbox delivery receipt is not served/i);
+  });
+
+  it("reports idempotency protection after a successful lifecycle transition", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "req-1", name: "idempotent-svc", kind: "x509_certificate", status: "requested" },
+    ]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("idempotent-svc")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /^issue$/i }));
+
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything()));
+    expect(await screen.findByRole("status")).toHaveTextContent(/Idempotency-Key protects/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/duplicate execution/i);
+  });
+
   it("creates (issues) a new identity from the page", async () => {
     apiMock.identities.mockResolvedValue([]);
     const user = userEvent.setup();
