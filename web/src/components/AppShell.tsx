@@ -4,6 +4,7 @@ import {
   FileClock,
   GitFork,
   LayoutDashboard,
+  Map,
   ScrollText,
   Settings2,
   ShieldAlert,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/coverage", label: "Coverage", icon: Map },
   { to: "/certificates", label: "Certificates", icon: ScrollText },
   { to: "/identities", label: "Identities", icon: KeyRound },
   { to: "/owners", label: "Owners", icon: Users },

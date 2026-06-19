@@ -1,7 +1,10 @@
+import { Link } from "react-router-dom";
+import { Map } from "lucide-react";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/EmptyState";
+import { featureCoverageTotals } from "@/lib/featureCoverage";
 
 export function Dashboard() {
   const certs = useResource(api.certificates);
@@ -29,7 +32,7 @@ export function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>Certificates</CardTitle>
@@ -57,6 +60,21 @@ export function Dashboard() {
           <CardContent>
             <p className="text-3xl font-semibold">{topRisk[0] ? Math.round(topRisk[0].score) : "—"}</p>
             <p className="text-sm text-muted-foreground">top score</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Map aria-hidden="true" className="h-4 w-4 text-primary" />
+              GUI coverage
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">{featureCoverageTotals.features}</p>
+            <p className="text-sm text-muted-foreground">backend features mapped</p>
+            <Link to="/coverage" className="mt-3 inline-flex text-sm font-medium text-primary">
+              Review feature map
+            </Link>
           </CardContent>
         </Card>
       </div>
