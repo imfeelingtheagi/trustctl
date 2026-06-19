@@ -44,6 +44,7 @@ export const appRoutePaths = [
   "/agents",
   "/discovery",
   "/profiles",
+  "/ca-hierarchy",
   "/protocols",
   "/secrets",
   "/policy",
@@ -80,7 +81,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: "/profiles", label: "Profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
       { to: "/identities", label: "Issuance", icon: "key", mode: "real", featureIds: ["F4", "F6", "F33"] },
-      { to: "/coverage?domain=Issuance%20and%20CAs", label: "CA ceremonies", icon: "certificate", mode: "disclosure", featureIds: ["F18"] },
+      { to: "/ca-hierarchy", label: "CA hierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
     ],
   },
   {
@@ -172,6 +173,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F22", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "EST endpoint setup and protocol-status unavailable state" },
   { featureId: "F23", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SCEP endpoint setup and protocol-status unavailable state" },
   { featureId: "F24", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SPIFFE Workload API socket setup and protocol-status unavailable state" },
+  { featureId: "F26", routes: ["/ca-hierarchy"], component: "CAHierarchy", kind: "observe", evidence: "HSM/KMS custody metadata preview plus library-tier disclosure without key bytes" },
   { featureId: "F28", routes: ["/policy", "/identities", "/audit"], component: "Policy", kind: "observe", evidence: "served policy gate explanation plus dry-run API unavailable state" },
   { featureId: "F33", routes: ["/identities"], component: "Identities", kind: "operate", evidence: "JIT request queue and dual-control approval mutation" },
   { featureId: "F35", routes: ["/discovery", "/secrets"], component: "Discovery", kind: "observe", evidence: "native secret metadata table plus external discovery blocked disclosure" },
@@ -181,6 +183,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F42", routes: ["/discovery"], component: "Discovery", kind: "observe", evidence: "ssh_key/ssh_certificate identity table plus SSH scan findings blocked disclosure" },
   { featureId: "F43", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SSH CA endpoint/KRL setup and protocol-status unavailable state" },
   { featureId: "F47", routes: ["/identities", "/audit"], component: "Identities", kind: "operate", evidence: "revoke transition plus audit trail" },
+  { featureId: "F48", routes: ["/ca-hierarchy", "/certificates"], component: "CAHierarchy", kind: "observe", evidence: "served issuer table plus m-of-n hierarchy ceremony blocked disclosure" },
   { featureId: "F49", routes: ["/discovery", "/secrets", "/certificates"], component: "Discovery", kind: "observe", evidence: "cloud discovery blocked disclosure with sealed-secret credential-reference guidance" },
   { featureId: "F51", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "TSA endpoint setup and protocol-status unavailable state" },
   { featureId: "F52", routes: ["/posture", "/risk"], component: "Posture", kind: "observe", evidence: "CBOM library-only disclosure plus weak-crypto preview linked to risk" },
