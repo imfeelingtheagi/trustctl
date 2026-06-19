@@ -346,6 +346,8 @@ export function Identities() {
         </UnavailableState>
       </div>
 
+      <LifecycleAutomationDisclosure />
+
       <RevocationPublicationPanel />
 
       {error && (
@@ -441,7 +443,7 @@ export function Identities() {
       )}
 
       {items && items.length > 0 && (
-        <table className="w-full text-left text-sm">
+        <table id="manual-lifecycle-transitions" className="w-full text-left text-sm">
           <caption className="sr-only">Credential identities and their lifecycle state</caption>
           <thead>
             <tr className="border-b border-border text-muted-foreground">
@@ -538,6 +540,43 @@ export function Identities() {
           }}
         />
       )}
+    </section>
+  );
+}
+
+function LifecycleAutomationDisclosure() {
+  const previewRows = [
+    ["Renew before", "Preview only: schedule window is not served"],
+    ["Alert before", "Preview only: notification timing is not served"],
+    ["Dry run", "Preview only: no served dry-run endpoint"],
+    ["Rollback", "Preview only: rollback status needs outbox delivery state"],
+  ];
+  return (
+    <section aria-labelledby="lifecycle-automation-heading" className="mb-4 border-y border-border py-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <div>
+          <h2 id="lifecycle-automation-heading" className="text-sm font-semibold">
+            Lifecycle automation
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Renewal is manual today. Auto-renewal, rotation schedules, pending runs, dry-run results, and rollback evidence need `BACKEND-LIFECYCLE-AUTOMATION` plus `BACKEND-OUTBOX-STATUS`.
+          </p>
+          <a className="mt-3 inline-flex text-sm font-medium text-primary underline" href="#manual-lifecycle-transitions">
+            Use manual lifecycle transitions
+          </a>
+        </div>
+        <div className="rounded-md border border-border p-3 text-sm">
+          <p className="font-medium">Automation layout preview</p>
+          <dl className="mt-2 grid gap-2">
+            {previewRows.map(([label, value]) => (
+              <div key={label} className="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
     </section>
   );
 }

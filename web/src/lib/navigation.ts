@@ -65,7 +65,7 @@ export const navGroups: NavGroup[] = [
     label: "Inventory & Discovery",
     items: [
       { to: "/certificates", label: "Certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
-      { to: "/identities", label: "Identities", icon: "identity", mode: "real", featureIds: ["F4", "F47", "F59"] },
+      { to: "/identities", label: "Identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
       { to: "/owners", label: "Owners", icon: "owner", mode: "real", featureIds: ["F59"] },
       { to: "/agents", label: "Agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/coverage?domain=SSH", label: "SSH inventory", icon: "ssh", mode: "disclosure", featureIds: ["F42"] },
@@ -75,7 +75,7 @@ export const navGroups: NavGroup[] = [
     label: "Issuance & CAs",
     items: [
       { to: "/profiles", label: "Profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
-      { to: "/identities", label: "Issuance", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
+      { to: "/identities", label: "Issuance", icon: "key", mode: "real", featureIds: ["F4", "F6", "F33"] },
       { to: "/coverage?domain=Issuance%20and%20CAs", label: "CA ceremonies", icon: "certificate", mode: "disclosure", featureIds: ["F18"] },
     ],
   },
@@ -151,6 +151,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F3", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "agent fleet and enrollment token workflow" },
   { featureId: "F4", routes: ["/identities", "/wizard"], component: "Identities", kind: "operate", evidence: "identity issue/deploy/revoke transitions" },
   { featureId: "F5", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "ACME endpoint setup and protocol-status unavailable state" },
+  { featureId: "F6", routes: ["/identities"], component: "Identities", kind: "observe", evidence: "manual lifecycle transitions and automation unavailable state" },
   { featureId: "F8", routes: ["/platform", "/identities", "/certificates"], component: "Platform access control", kind: "observe", evidence: "required-scope map and permission-denied states" },
   { featureId: "F9", routes: ["/audit"], component: "Audit", kind: "observe", evidence: "audit filters, event detail, and signed export" },
   { featureId: "F10", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "static OpenAPI spec view" },

@@ -303,6 +303,28 @@ describe("lifecycle actions from the UI", () => {
     expect(row).toHaveTextContent(/Deploy can be requested; outbox delivery receipt is not served/i);
   });
 
+  it("discloses lifecycle automation as manual until schedules and outbox status are served", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" },
+    ]);
+    renderIdentities();
+
+    expect(await screen.findByText("Lifecycle automation")).toBeInTheDocument();
+    expect(screen.getByText(/renewal is manual today/i)).toBeInTheDocument();
+    expect(screen.getByText("Automation layout preview")).toBeInTheDocument();
+    expect(screen.getByText("Renew before")).toBeInTheDocument();
+    expect(screen.getByText("Alert before")).toBeInTheDocument();
+    expect(screen.getByText("Dry run")).toBeInTheDocument();
+    expect(screen.getByText("Rollback")).toBeInTheDocument();
+    expect(screen.getByText(/BACKEND-LIFECYCLE-AUTOMATION/)).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-OUTBOX-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /use manual lifecycle transitions/i })).toHaveAttribute(
+      "href",
+      "#manual-lifecycle-transitions",
+    );
+    expect(screen.queryByRole("button", { name: /save schedule|run automation/i })).not.toBeInTheDocument();
+  });
+
   it("reports idempotency protection after a successful lifecycle transition", async () => {
     apiMock.identities.mockResolvedValue([
       { id: "req-1", name: "idempotent-svc", kind: "x509_certificate", status: "requested" },
