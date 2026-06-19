@@ -84,8 +84,9 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: "/protocols", label: "ACME and DNS", icon: "protocol", mode: "real", featureIds: ["F5"] },
       { to: "/protocols", label: "Enrollment protocols", icon: "protocol", mode: "real", featureIds: ["F22", "F23", "F55"] },
-      { to: "/coverage?feature=F24", label: "SPIFFE", icon: "spiffe", mode: "disclosure", featureIds: ["F24"] },
-      { to: "/coverage?feature=F43", label: "SSH CA", icon: "ssh", mode: "disclosure", featureIds: ["F43"] },
+      { to: "/protocols", label: "SPIFFE", icon: "spiffe", mode: "real", featureIds: ["F24"] },
+      { to: "/protocols", label: "SSH CA", icon: "ssh", mode: "real", featureIds: ["F43"] },
+      { to: "/protocols", label: "TSA", icon: "protocol", mode: "real", featureIds: ["F51"] },
     ],
   },
   {
@@ -160,8 +161,11 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F21", routes: ["/graph"], component: "Graph", kind: "observe", evidence: "graph and blast radius" },
   { featureId: "F22", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "EST endpoint setup and protocol-status unavailable state" },
   { featureId: "F23", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SCEP endpoint setup and protocol-status unavailable state" },
+  { featureId: "F24", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SPIFFE Workload API socket setup and protocol-status unavailable state" },
   { featureId: "F40", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
+  { featureId: "F43", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SSH CA endpoint/KRL setup and protocol-status unavailable state" },
   { featureId: "F47", routes: ["/identities", "/audit"], component: "Identities", kind: "operate", evidence: "revoke transition plus audit trail" },
+  { featureId: "F51", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "TSA endpoint setup and protocol-status unavailable state" },
   { featureId: "F53", routes: ["/profiles"], component: "Profiles", kind: "operate", evidence: "profile creation" },
   { featureId: "F54", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "bootstrap token install command plus renewal-status unavailable state" },
   { featureId: "F55", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CMP endpoint setup and protocol-status unavailable state" },

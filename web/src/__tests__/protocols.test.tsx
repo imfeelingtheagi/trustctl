@@ -67,4 +67,35 @@ describe("served-gated protocol surface", () => {
     expect(screen.getByText("CMP enrollment transcript not served yet")).toBeInTheDocument();
     expect(screen.getAllByText(/does not invent order, challenge, or transcript data/i).length).toBeGreaterThan(0);
   });
+
+  it("renders SPIFFE, SSH CA, and TSA setup without exposing private key material", async () => {
+    const writeText = installClipboardSpy();
+    renderProtocols();
+
+    expect(screen.getAllByText("gRPC UDS /tmp/trstctl-spiffe-workload.sock").length).toBeGreaterThan(0);
+    expect(screen.getByText("TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN")).toBeInTheDocument();
+    expect(screen.getByText("SPIFFE live workload status not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/X.509-SVID and JWT-SVID support/i)).toBeInTheDocument();
+
+    expect(screen.getAllByText("GET /ssh/ca + POST /ssh/issue/user|host + GET /ssh/krl").length).toBeGreaterThan(0);
+    expect(screen.getByText("TRSTCTL_PROTOCOLS_SSH_TENANT_ID")).toBeInTheDocument();
+    expect(screen.getByText("SSH issue/revoke log not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/OpenSSH binary KRL/i)).toBeInTheDocument();
+
+    expect(screen.getAllByText("POST /tsa").length).toBeGreaterThan(0);
+    expect(screen.getByText("TRSTCTL_PROTOCOLS_TSA_CERT_FILE")).toBeInTheDocument();
+    expect(screen.getByText("TSA issuance health not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/openssl ts -query/i)).toBeInTheDocument();
+    expect(screen.getByText(/openssl ts -verify/i)).toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN OPENSSH PRIVATE KEY/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/SVID private key:/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy TSA HTTP POST command" }));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://trstctl.example.test/tsa")),
+    );
+    expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/PRIVATE KEY|password/i));
+  });
 });

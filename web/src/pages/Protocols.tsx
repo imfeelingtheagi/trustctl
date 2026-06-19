@@ -109,6 +109,85 @@ const protocolSurfaces: ProtocolSurface[] = [
     deferredRead: "CMP enrollment transcript",
     diagnostics: "No served CMP admin read exposes recent enrollment outcomes or response diagnostics yet.",
   },
+  {
+    id: "spiffe",
+    name: "SPIFFE",
+    feature: "F24",
+    route: "gRPC UDS /tmp/trstctl-spiffe-workload.sock",
+    auth: "Workload API metadata, selector match, X.509-SVID and JWT-SVID support",
+    env: [
+      "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED",
+      "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID",
+      "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH",
+      "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN",
+    ],
+    profile: "Selectors map a workload to an allowed SPIFFE ID; no SVID private key is exposed through the console.",
+    snippets: [
+      {
+        label: "spiffe-helper",
+        command:
+          "SPIFFE_ENDPOINT_SOCKET=unix:///tmp/trstctl-spiffe-workload.sock spiffe-helper -config ./spiffe-helper.conf",
+      },
+      {
+        label: "go-spiffe",
+        command:
+          'source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/trstctl-spiffe-workload.sock")))',
+      },
+    ],
+    deferredRead: "SPIFFE live workload status",
+    diagnostics: "No served console read exposes trust domain, socket path, enabled state, or SVID issuance health yet.",
+  },
+  {
+    id: "ssh",
+    name: "SSH CA",
+    feature: "F43",
+    route: "GET /ssh/ca + POST /ssh/issue/user|host + GET /ssh/krl",
+    auth: "Tenant-scoped JSON issuance, signer-held SSH CA key, OpenSSH binary KRL",
+    env: ["TRSTCTL_PROTOCOLS_SSH_ENABLED", "TRSTCTL_PROTOCOLS_SSH_TENANT_ID"],
+    profile: "Principals, extensions, and TTL policy are enforced by the SSH CA path; the CA private key stays in the signer.",
+    snippets: [
+      {
+        label: "authority key",
+        command:
+          "curl -s https://trstctl.example.test/ssh/ca -o /etc/ssh/trusted_user_ca_keys",
+      },
+      {
+        label: "KRL",
+        command:
+          "curl -s https://trstctl.example.test/ssh/krl -o /etc/ssh/revoked_keys.krl",
+      },
+    ],
+    deferredRead: "SSH issue/revoke log",
+    diagnostics: "No served SSH-CA admin read exposes issued user/host certificates or KRL revocation rows yet.",
+  },
+  {
+    id: "tsa",
+    name: "TSA",
+    feature: "F51",
+    route: "POST /tsa",
+    auth: "RFC 3161 TimeStampReq, stable TSA certificate, signer-held TSA key",
+    env: ["TRSTCTL_PROTOCOLS_TSA_ENABLED", "TRSTCTL_PROTOCOLS_TSA_TENANT_ID", "TRSTCTL_PROTOCOLS_TSA_CERT_FILE"],
+    profile: "The TSA certificate is persisted for stable verification; the timestamp signing key stays in the signer.",
+    snippets: [
+      {
+        label: "OpenSSL query",
+        command:
+          "openssl ts -query -data artifact.bin -sha256 -cert -out request.tsq",
+      },
+      {
+        label: "HTTP POST",
+        command:
+          "curl -s -H 'Content-Type: application/timestamp-query' --data-binary @request.tsq https://trstctl.example.test/tsa -o response.tsr",
+      },
+      {
+        label: "OpenSSL verify",
+        command:
+          "openssl ts -verify -in response.tsr -queryfile request.tsq -CAfile tsa-ca.pem",
+      },
+    ],
+    deferredRead: "TSA issuance health",
+    diagnostics: "No served TSA admin read exposes the active TSA certificate, tenant binding, enabled state, or timestamp issuance health yet.",
+  },
 ];
 
 export function Protocols() {
