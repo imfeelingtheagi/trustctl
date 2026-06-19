@@ -205,6 +205,7 @@ export interface Api {
   createEnrollmentToken(): Promise<EnrollmentToken>;
   risk(): Promise<CredentialRisk[]>;
   profiles(): Promise<Profile[]>;
+  getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
   auditEvents(): Promise<AuditEvent[]>;
   exportAudit(): Promise<AuditBundle>;
@@ -259,6 +260,8 @@ export const api: Api = {
   risk: () =>
     req<CredentialRiskList>("/api/v1/risk/credentials?sort=score").then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
+  getProfileVersion: (name, version) =>
+    req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
   auditEvents: () => req<{ events: AuditEvent[] }>("/api/v1/audit/events?limit=50").then((r) => r.events ?? []),
   exportAudit: () => req<AuditBundle>("/api/v1/audit/export?limit=50"),

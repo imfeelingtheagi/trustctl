@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { ApiError } from "@/lib/api";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
@@ -10,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
     profiles: vi.fn(),
+    getProfileVersion: vi.fn(),
     createProfile: vi.fn(),
     auditEvents: vi.fn(),
     exportAudit: vi.fn(),
@@ -44,7 +46,7 @@ describe("operational console surface", () => {
   it("routes to profiles, lists versions, and creates a profile", async () => {
     apiMock.profiles
       .mockResolvedValueOnce([{ id: "p1", name: "server", version: 1, active: true, created_by: "ra" }])
-      .mockResolvedValueOnce([{ id: "p1", name: "server", version: 2, active: true, created_by: "ra" }]);
+      .mockResolvedValueOnce([{ id: "p2", name: "server", version: 2, active: true, created_by: "ra" }]);
     apiMock.createProfile.mockResolvedValue({ id: "p1", name: "server", version: 2, active: true });
     const user = userEvent.setup();
     renderAt("/profiles");
@@ -61,9 +63,82 @@ describe("operational console surface", () => {
     await waitFor(() =>
       expect(apiMock.createProfile).toHaveBeenCalledWith({
         name: "server",
-        spec: { subject: { common_name: "{{ identity.name }}" } },
+        spec: {
+          allowed_key_algorithms: ["ECDSA"],
+          min_ecdsa_bits: 256,
+          allowed_ekus: ["serverAuth"],
+          max_validity: "2160h",
+          allowed_protocols: ["api", "acme"],
+          allowed_dns_suffixes: ["example.com"],
+        },
       }),
     );
+  });
+
+  it("surfaces served profile validation problems from the JSON fallback", async () => {
+    apiMock.profiles.mockResolvedValue([]);
+    apiMock.createProfile.mockRejectedValue(
+      new ApiError(422, JSON.stringify({ detail: "max_validity exceeds the tenant profile ceiling" })),
+    );
+    const user = userEvent.setup();
+    renderAt("/profiles");
+
+    await user.click(await screen.findByRole("button", { name: /New profile/i }));
+    await user.type(screen.getByLabelText(/Profile name/i), "oversized");
+    await user.click(screen.getByRole("button", { name: /JSON editor/i }));
+    fireEvent.change(screen.getByLabelText(/JSON spec/i), {
+      target: { value: '{"max_validity":"999999h"}' },
+    });
+    await user.click(screen.getByRole("button", { name: /Create profile/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("max_validity exceeds the tenant profile ceiling");
+  });
+
+  it("loads concrete profile versions and diffs selected rules against the active version", async () => {
+    const versionOne = {
+      id: "p1",
+      name: "server",
+      version: 1,
+      active: false,
+      created_by: "ra",
+      spec: {
+        allowed_key_algorithms: ["RSA"],
+        min_rsa_bits: 2048,
+        allowed_ekus: ["serverAuth"],
+        max_validity: "720h",
+      },
+    };
+    const versionTwo = {
+      id: "p2",
+      name: "server",
+      version: 2,
+      active: true,
+      created_by: "ra",
+      spec: {
+        allowed_key_algorithms: ["ECDSA"],
+        min_ecdsa_bits: 256,
+        allowed_ekus: ["serverAuth"],
+        max_validity: "2160h",
+        allowed_dns_suffixes: ["example.com"],
+      },
+    };
+    apiMock.profiles.mockResolvedValue([versionOne, versionTwo]);
+    apiMock.getProfileVersion.mockImplementation((_name: string, version: number) =>
+      Promise.resolve(version === 1 ? versionOne : versionTwo),
+    );
+    const user = userEvent.setup();
+    renderAt("/profiles");
+
+    await user.click(await screen.findByRole("button", { name: "View server version 1" }));
+    expect(await screen.findByRole("heading", { name: "server version 1" })).toBeInTheDocument();
+    expect(screen.getByText(/does not rewrite past decisions/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Diff version/i }));
+
+    await waitFor(() => expect(apiMock.getProfileVersion).toHaveBeenCalledWith("server", 2));
+    expect(await screen.findByText(/Comparing selected v1 to v2/i)).toBeInTheDocument();
+    expect(screen.getByText("max_validity")).toBeInTheDocument();
+    expect(screen.getAllByText("Changed").length).toBeGreaterThan(0);
   });
 
   it("routes to audit events and exports signed evidence", async () => {

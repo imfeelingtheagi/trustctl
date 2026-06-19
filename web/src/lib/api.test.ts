@@ -158,3 +158,22 @@ describe("certificate inventory contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/certificates/cert%2Funsafe");
   });
 });
+
+describe("profile contract", () => {
+  it("fetches a concrete profile version by encoded name and number", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        id: "profile-1",
+        name: "web/server",
+        version: 2,
+        active: true,
+        spec: { max_validity: "2160h" },
+      }),
+    );
+
+    await api.getProfileVersion("web/server", 2);
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/profiles/web%2Fserver/versions/2");
+  });
+});
