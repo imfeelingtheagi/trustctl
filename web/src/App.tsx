@@ -25,6 +25,9 @@ import { Posture } from "@/pages/Posture";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 import { Workloads } from "@/pages/Workloads";
 import { SSHTrust } from "@/pages/SSHTrust";
+import { Connectors } from "@/pages/Connectors";
+import { CodeSigning } from "@/pages/CodeSigning";
+import { Incidents } from "@/pages/Incidents";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -66,9 +69,12 @@ export function AppRoutes() {
         <Route path="workloads" element={<Workloads />} />
         <Route path="protocols" element={<Protocols />} />
         <Route path="ssh" element={<SSHTrust />} />
+        <Route path="codesign" element={<CodeSigning />} />
         <Route path="secrets" element={<Secrets />} />
+        <Route path="connectors" element={<Connectors />} />
         <Route path="policy" element={<Policy />} />
         <Route path="risk" element={<Risk />} />
+        <Route path="incidents" element={<Incidents />} />
         <Route path="posture" element={<Posture />} />
         <Route path="graph" element={<Graph />} />
         <Route path="audit" element={<Audit />} />
