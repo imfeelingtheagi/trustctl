@@ -67,7 +67,7 @@ export const navGroups: NavGroup[] = [
       { to: "/certificates", label: "Certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
       { to: "/identities", label: "Identities", icon: "identity", mode: "real", featureIds: ["F4", "F47", "F59"] },
       { to: "/owners", label: "Owners", icon: "owner", mode: "real", featureIds: ["F59"] },
-      { to: "/agents", label: "Agents", icon: "activity", mode: "real", featureIds: ["F3"] },
+      { to: "/agents", label: "Agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/coverage?domain=SSH", label: "SSH inventory", icon: "ssh", mode: "disclosure", featureIds: ["F42"] },
     ],
   },
@@ -163,6 +163,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F40", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
   { featureId: "F47", routes: ["/identities", "/audit"], component: "Identities", kind: "operate", evidence: "revoke transition plus audit trail" },
   { featureId: "F53", routes: ["/profiles"], component: "Profiles", kind: "operate", evidence: "profile creation" },
+  { featureId: "F54", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "bootstrap token install command plus renewal-status unavailable state" },
   { featureId: "F55", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CMP endpoint setup and protocol-status unavailable state" },
   { featureId: "F59", routes: ["/identities", "/owners"], component: "Identities", kind: "operate", evidence: "NHI lifecycle rows and owner link" },
 ];
