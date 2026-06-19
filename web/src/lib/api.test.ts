@@ -157,6 +157,23 @@ describe("certificate inventory contract", () => {
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/certificates/cert%2Funsafe");
   });
+
+  it("fetches an individual identity detail by id", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        id: "identity/unsafe",
+        kind: "workload_identity",
+        name: "svc",
+        owner_id: "owner-1",
+        status: "issued",
+      }),
+    );
+
+    await api.getIdentity("identity/unsafe");
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/identities/identity%2Funsafe");
+  });
 });
 
 describe("profile contract", () => {

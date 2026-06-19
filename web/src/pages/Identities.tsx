@@ -17,6 +17,35 @@ interface ApprovalAction {
   action: "issue" | "revoke";
 }
 
+const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "revoked", "retired"];
+
+const kindCopy: Record<Identity["kind"], { title: string; description: string }> = {
+  x509_certificate: {
+    title: "X.509 certificate identity",
+    description: "A TLS or mTLS identity whose lifecycle is backed by certificate issuance, revocation, and expiry evidence.",
+  },
+  ssh_certificate: {
+    title: "SSH certificate identity",
+    description: "A short-lived SSH host or user certificate identity controlled by the SSH CA and lifecycle state machine.",
+  },
+  ssh_key: {
+    title: "SSH key identity",
+    description: "A standing SSH key identity that should be owned, rotated, and retired like any other non-human credential.",
+  },
+  secret: {
+    title: "Secret identity",
+    description: "A password, shared secret, or opaque credential identity tracked separately from certificate inventory.",
+  },
+  api_key: {
+    title: "API key identity",
+    description: "An API token or service key identity where ownership, age, and retirement matter more than a certificate chain.",
+  },
+  workload_identity: {
+    title: "Workload identity",
+    description: "A service, job, agent, or workload identity that can be issued short-lived credentials instead of storing static secrets.",
+  },
+};
+
 /** isDestructive reports whether a target state is a destructive transition that must
  * be confirmed before it runs — revoke permanently invalidates the credential, and
  * retire discards it (SURFACE-007). */
@@ -82,6 +111,10 @@ function actionsFor(state: string): Action[] {
   }
 }
 
+function actionForTarget(state: string, target: TransitionTo): Action | undefined {
+  return actionsFor(state).find((a) => a.to === target);
+}
+
 function approvalActionsFor(state: string): ApprovalAction[] {
   switch (state) {
     case "requested":
@@ -93,6 +126,16 @@ function approvalActionsFor(state: string): ApprovalAction[] {
     default:
       return [];
   }
+}
+
+function terminalMessage(state: string): string | null {
+  if (state === "retired") {
+    return "Terminal state: retired identities have no valid next transition.";
+  }
+  if (state === "revoked") {
+    return "Terminal trust state: relying parties should no longer accept this identity; only record-retirement cleanup remains.";
+  }
+  return null;
 }
 
 function deliveryEvidence(state: string): string {
@@ -122,16 +165,46 @@ function deniedKey(id: string, to: TransitionTo): string {
   return `${id}:${to}`;
 }
 
+function formatDate(value?: string): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
+function displayValue(value: unknown): string {
+  if (value == null) return "-";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function attributeRows(identity: Identity): Array<[string, string]> {
+  return Object.entries(identity.attributes ?? {})
+    .slice(0, 8)
+    .map(([key, value]) => [key, displayValue(value)]);
+}
+
 export function Identities() {
   const [items, setItems] = useState<Identity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deniedTransitions, setDeniedTransitions] = useState<Record<string, string>>({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Identity | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [transitionReasons, setTransitionReasons] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
   // means no confirmation is pending.
-  const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string } | null>(null);
+  const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string; reason?: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -146,13 +219,34 @@ export function Identities() {
     void load();
   }, [load]);
 
-  async function act(id: string, to: TransitionTo) {
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      setDetail(await api.getIdentity(id));
+    } catch (err) {
+      setDetailError(`Could not load identity detail: ${apiProblemMessage(err)}`);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  function openDetail(identity: Identity) {
+    setSelectedId(identity.id);
+    setDetail(identity);
+    void loadDetail(identity.id);
+  }
+
+  async function act(id: string, to: TransitionTo, reason?: string) {
     setBusyId(id);
     setError(null);
     setNotice(null);
     try {
-      await api.transitionIdentity(id, to, `${to} via UI`);
+      await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`);
       await load();
+      if (selectedId === id) {
+        await loadDetail(id);
+      }
       setNotice(transitionNotice(to));
       setDeniedTransitions((current) => {
         const next = { ...current };
@@ -192,12 +286,12 @@ export function Identities() {
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
    * which is first parked in `pending` so the user must confirm it in a dialog that
    * names the credential (SURFACE-007). */
-  function request(id: string, name: string, to: TransitionTo, label: string) {
+  function request(id: string, name: string, to: TransitionTo, label: string, reason?: string) {
     if (isDestructive(to)) {
-      setPending({ id, name, to, label });
+      setPending({ id, name, to, label, reason });
       return;
     }
-    void act(id, to);
+    void act(id, to, reason);
   }
 
   return (
@@ -285,7 +379,7 @@ export function Identities() {
               onClick={() => {
                 const p = pending;
                 setPending(null);
-                void act(p.id, p.to);
+                void act(p.id, p.to, p.reason);
               }}
             >
               {`Yes, ${pending.label.toLowerCase()}`}
@@ -333,7 +427,15 @@ export function Identities() {
                   </td>
                   <td className="py-2 pr-4 text-muted-foreground">{deliveryEvidence(state)}</td>
                   <td className="py-2">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openDetail(i)}
+                      >
+                        View details
+                      </Button>
                       {actionsFor(state).map((a) => (
                         <div key={a.to} className="space-y-1">
                           <Button
@@ -381,7 +483,202 @@ export function Identities() {
           </tbody>
         </table>
       )}
+
+      {selectedId && (
+        <IdentityDetailPanel
+          identity={detail}
+          loading={detailLoading}
+          error={detailError}
+          busy={busyId === selectedId}
+          deniedTransitions={deniedTransitions}
+          reason={transitionReasons[selectedId] ?? ""}
+          onReasonChange={(value) =>
+            setTransitionReasons((current) => ({ ...current, [selectedId]: value }))
+          }
+          onTransition={(to, label) => {
+            if (!detail) return;
+            request(detail.id, detail.name, to, label, transitionReasons[detail.id]);
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+function IdentityDetailPanel({
+  identity,
+  loading,
+  error,
+  busy,
+  deniedTransitions,
+  reason,
+  onReasonChange,
+  onTransition,
+}: {
+  identity: Identity | null;
+  loading: boolean;
+  error: string | null;
+  busy: boolean;
+  deniedTransitions: Record<string, string>;
+  reason: string;
+  onReasonChange: (value: string) => void;
+  onTransition: (to: TransitionTo, label: string) => void;
+}) {
+  const state = identity ? identityState(identity) : "";
+  const kind = identity?.kind ? kindCopy[identity.kind] : null;
+  const terminal = terminalMessage(state);
+  const rows = identity ? attributeRows(identity) : [];
+
+  return (
+    <aside
+      aria-labelledby="identity-detail-heading"
+      className="mt-6 rounded-md border border-border bg-card p-4 text-sm"
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase text-muted-foreground">Served identity detail</p>
+          <h2 id="identity-detail-heading" className="text-lg font-semibold">
+            Identity detail
+          </h2>
+        </div>
+        {loading && <p role="status">Loading identity detail...</p>}
+      </div>
+
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
+      {identity && (
+        <>
+          <section aria-labelledby="identity-kind-heading" className="mb-4 rounded-md border border-border p-3">
+            <h3 id="identity-kind-heading" className="font-semibold">
+              {kind?.title ?? "Identity"}
+            </h3>
+            <p className="mt-1 text-muted-foreground">
+              {kind?.description ?? "A served non-human identity bound to this tenant."}
+            </p>
+            {terminal && (
+              <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-medium text-foreground">
+                {terminal}
+              </p>
+            )}
+          </section>
+
+          <dl className="grid gap-3 md:grid-cols-2">
+            <div>
+              <dt className="font-medium text-muted-foreground">Name</dt>
+              <dd>{identity.name}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Status</dt>
+              <dd>{state || "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Kind</dt>
+              <dd>{identity.kind}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Not after</dt>
+              <dd>{formatDate(identity.not_after)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Not before</dt>
+              <dd>{formatDate(identity.not_before)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Owner</dt>
+              <dd>
+                <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(identity.owner_id)}`}>
+                  Owner {identity.owner_id}
+                </a>
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Issuer</dt>
+              <dd>
+                {identity.issuer_id ? (
+                  <a className="text-primary underline" href={`/coverage?feature=F5&issuer=${encodeURIComponent(identity.issuer_id)}`}>
+                    Issuer {identity.issuer_id}
+                  </a>
+                ) : (
+                  "No issuer bound"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Identity ID</dt>
+              <dd className="break-all font-mono text-xs">{identity.id}</dd>
+            </div>
+          </dl>
+
+          <section aria-labelledby="identity-attributes-heading" className="mt-4">
+            <h3 id="identity-attributes-heading" className="font-semibold">
+              Kind attributes
+            </h3>
+            {rows.length > 0 ? (
+              <dl className="mt-2 grid gap-2 md:grid-cols-2">
+                {rows.map(([key, value]) => (
+                  <div key={key}>
+                    <dt className="font-medium text-muted-foreground">{key}</dt>
+                    <dd className="break-all font-mono text-xs">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="mt-1 text-muted-foreground">
+                No extra kind attributes were returned by the served detail endpoint.
+              </p>
+            )}
+          </section>
+
+          <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
+            <h3 id="identity-lifecycle-heading" className="font-semibold">
+              Lifecycle state machine
+            </h3>
+            <p className="mt-1 text-muted-foreground">
+              Only valid next states are enabled. Disabled targets are not sent to the backend.
+            </p>
+            <label htmlFor="transition-reason" className="mt-3 block text-sm font-medium">
+              Transition reason
+            </label>
+            <textarea
+              id="transition-reason"
+              value={reason}
+              onChange={(e) => onReasonChange(e.target.value)}
+              className="mt-1 min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="e.g. change approved in CAB-1234"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {lifecycleTargets.map((target) => {
+                const action = actionForTarget(state, target);
+                const denied = deniedTransitions[deniedKey(identity.id, target)];
+                const disabled = busy || !action || Boolean(denied);
+                const reasonId = `state-machine-${identity.id}-${target}-reason`;
+                return (
+                  <div key={target} className="max-w-xs space-y-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isDestructive(target) ? "outline" : "default"}
+                      disabled={disabled}
+                      aria-describedby={reasonId}
+                      onClick={() => action && onTransition(target, action.label)}
+                    >
+                      Move to {target}
+                    </Button>
+                    <p id={reasonId} className="text-xs text-muted-foreground">
+                      {denied || (action ? `Valid from ${state}.` : target === state ? "Already in this state." : `Invalid from ${state || "unknown"}.`)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </>
+      )}
+    </aside>
   );
 }
 

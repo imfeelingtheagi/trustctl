@@ -195,6 +195,7 @@ export interface Api {
   issuers(): Promise<Issuer[]>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
   identities(): Promise<Identity[]>;
+  getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
   transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string): Promise<Identity>;
   approveIdentityAction(id: string, action: ApprovalRequest["action"]): Promise<Approval>;
@@ -236,11 +237,12 @@ export const api: Api = {
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
+  getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
   transitionIdentity: (id, to, reason) =>
-    mutate<Identity>("POST", `/api/v1/identities/${id}/transitions`, { to, reason }),
+    mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, { to, reason }),
   approveIdentityAction: (id, action) =>
-    mutate<Approval>("POST", `/api/v1/identities/${id}/approvals`, { action }),
+    mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, { action }),
   issueCertificate: async (input) => {
     let ownerId = input.ownerId;
     if (!ownerId) {

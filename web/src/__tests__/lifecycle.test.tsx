@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     issuers: vi.fn(),
     owners: vi.fn(),
+    getIdentity: vi.fn(),
     issueCertificate: vi.fn(),
     transitionIdentity: vi.fn(),
     approveIdentityAction: vi.fn(),
@@ -38,6 +39,7 @@ describe("lifecycle actions from the UI", () => {
     // Fixtures use `status` — the field the SERVED Identity contract (OpenAPI) carries
     // and that identityState() reads (SURFACE-005: the FE no longer guesses `state`).
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", status: "issued" });
+    apiMock.getIdentity.mockReset();
     apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", status: "x" });
     apiMock.approveIdentityAction.mockReset().mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.identities.mockReset();
@@ -66,6 +68,111 @@ describe("lifecycle actions from the UI", () => {
     const depRow = screen.getByText("deployed-svc").closest("tr")!;
     await user.click(within(depRow).getByRole("button", { name: /renew/i }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything()));
+  });
+
+  it("loads kind-specific identity details and links owner plus issuer", async () => {
+    const details = {
+      "x509/1": {
+        id: "x509/1",
+        name: "tls-api",
+        kind: "x509_certificate",
+        owner_id: "owner-x",
+        issuer_id: "issuer-x",
+        status: "issued",
+        not_after: "2026-07-01T00:00:00Z",
+        attributes: { dns_names: ["api.example.test"] },
+      },
+      "ssh-key-1": {
+        id: "ssh-key-1",
+        name: "deploy-key",
+        kind: "ssh_key",
+        owner_id: "owner-ssh",
+        status: "deployed",
+        attributes: { fingerprint: "SHA256:abc" },
+      },
+      "workload-1": {
+        id: "workload-1",
+        name: "payments-worker",
+        kind: "workload_identity",
+        owner_id: "owner-workload",
+        issuer_id: "issuer-workload",
+        status: "requested",
+        attributes: { spiffe_id: "spiffe://example.test/payments" },
+      },
+    };
+    apiMock.identities.mockResolvedValue(Object.values(details));
+    apiMock.getIdentity.mockImplementation(async (id: keyof typeof details) => details[id]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const x509Row = (await screen.findByText("tls-api")).closest("tr")!;
+    await user.click(within(x509Row).getByRole("button", { name: /view details/i }));
+
+    await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith("x509/1"));
+    expect(await screen.findByText("X.509 certificate identity")).toBeInTheDocument();
+    expect(screen.getByText("Not after")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Owner owner-x" })).toHaveAttribute("href", "/owners?owner=owner-x");
+    expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute(
+      "href",
+      "/coverage?feature=F5&issuer=issuer-x",
+    );
+    expect(screen.getByText(/api.example.test/)).toBeInTheDocument();
+
+    const sshRow = screen.getByText("deploy-key").closest("tr")!;
+    await user.click(within(sshRow).getByRole("button", { name: /view details/i }));
+    expect(await screen.findByText("SSH key identity")).toBeInTheDocument();
+    expect(screen.getByText("No issuer bound")).toBeInTheDocument();
+    expect(screen.getByText(/SHA256:abc/)).toBeInTheDocument();
+
+    const workloadRow = screen.getByText("payments-worker").closest("tr")!;
+    await user.click(within(workloadRow).getByRole("button", { name: /view details/i }));
+    expect(await screen.findByText("Workload identity")).toBeInTheDocument();
+    expect(screen.getByText(/spiffe:\/\/example.test\/payments/)).toBeInTheDocument();
+  });
+
+  it("disables invalid state-machine targets and sends the captured transition reason", async () => {
+    const identity = { id: "req-1", name: "request-state-machine", kind: "x509_certificate", owner_id: "owner-1", status: "requested" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("request-state-machine")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /view details/i }));
+
+    expect(await screen.findByText("Lifecycle state machine")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move to issued" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Move to deployed" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move to retired" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Transition reason"), "approved in CAB-1234");
+    await user.click(screen.getByRole("button", { name: "Move to issued" }));
+
+    await waitFor(() =>
+      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234"),
+    );
+  });
+
+  it("shows revoked and retired terminal handling in the state machine", async () => {
+    const revoked = { id: "rev-1", name: "revoked-svc", kind: "api_key", owner_id: "owner-r", status: "revoked" };
+    const retired = { id: "ret-1", name: "retired-svc", kind: "secret", owner_id: "owner-t", status: "retired" };
+    apiMock.identities.mockResolvedValue([revoked, retired]);
+    apiMock.getIdentity.mockImplementation(async (id: string) => (id === "rev-1" ? revoked : retired));
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const revokedRow = (await screen.findByText("revoked-svc")).closest("tr")!;
+    await user.click(within(revokedRow).getByRole("button", { name: /view details/i }));
+    expect(await screen.findByText(/Terminal trust state/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move to issued" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move to retired" })).toBeEnabled();
+
+    const retiredRow = screen.getByText("retired-svc").closest("tr")!;
+    await user.click(within(retiredRow).getByRole("button", { name: /view details/i }));
+    expect(await screen.findByText(/Terminal state: retired identities/i)).toBeInTheDocument();
+    for (const target of ["issued", "deployed", "renewing", "revoked", "retired"]) {
+      expect(screen.getByRole("button", { name: `Move to ${target}` })).toBeDisabled();
+    }
   });
 
   it("revokes an identity only after the user confirms (SURFACE-007)", async () => {
