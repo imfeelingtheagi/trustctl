@@ -41,6 +41,7 @@ export const appRoutePaths = [
   "/coverage",
   "/identities",
   "/owners",
+  "/agents",
   "/profiles",
   "/risk",
   "/graph",
@@ -65,7 +66,7 @@ export const navGroups: NavGroup[] = [
       { to: "/certificates", label: "Certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
       { to: "/identities", label: "Identities", icon: "identity", mode: "real", featureIds: ["F4", "F47", "F59"] },
       { to: "/owners", label: "Owners", icon: "owner", mode: "real", featureIds: ["F59"] },
-      { to: "/wizard", label: "Agents", icon: "activity", mode: "real", featureIds: ["F3"] },
+      { to: "/agents", label: "Agents", icon: "activity", mode: "real", featureIds: ["F3"] },
       { to: "/coverage?domain=SSH", label: "SSH inventory", icon: "ssh", mode: "disclosure", featureIds: ["F42"] },
     ],
   },
@@ -145,7 +146,7 @@ export interface RealGuiSurface {
 
 export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F1", routes: ["/certificates"], component: "Certificates", kind: "operate", evidence: "certificatePage/getCertificate/ingestCertificate" },
-  { featureId: "F3", routes: ["/wizard"], component: "Wizard", kind: "operate", evidence: "agents and enrollment token workflow" },
+  { featureId: "F3", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "agent fleet and enrollment token workflow" },
   { featureId: "F4", routes: ["/identities", "/wizard"], component: "Identities", kind: "operate", evidence: "identity issue/deploy/revoke transitions" },
   { featureId: "F8", routes: ["/platform", "/identities", "/certificates"], component: "Platform access control", kind: "observe", evidence: "required-scope map and permission-denied states" },
   { featureId: "F9", routes: ["/audit"], component: "Audit", kind: "observe", evidence: "audit filters, event detail, and signed export" },

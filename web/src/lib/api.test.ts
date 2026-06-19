@@ -117,6 +117,52 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-3");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
+
+  it("mints an enrollment token through the served mutation with Idempotency-Key", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-agent; path=/";
+    mockFetch(201, JSON.stringify({ token: "BOOT-TOKEN-XYZ", enroll_path: "/enroll/bootstrap" }));
+
+    const token = await api.createEnrollmentToken();
+
+    expect(token.token).toBe("BOOT-TOKEN-XYZ");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents/enrollment-tokens");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+});
+
+describe("agent contract", () => {
+  it("lists agents from the served envelope", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        agents: [
+          {
+            id: "ag-1",
+            name: "edge-01",
+            status: "online",
+            version: "0.4.0",
+            last_seen_at: "2026-06-19T12:00:00Z",
+          },
+        ],
+        next_cursor: "cursor-2",
+      }),
+    );
+
+    const agents = await api.agents();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents");
+    expect(agents).toEqual([
+      {
+        id: "ag-1",
+        name: "edge-01",
+        status: "online",
+        version: "0.4.0",
+        last_seen_at: "2026-06-19T12:00:00Z",
+      },
+    ]);
+  });
 });
 
 describe("certificate inventory contract", () => {

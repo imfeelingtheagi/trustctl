@@ -9,6 +9,7 @@ import { Certificates } from "@/pages/Certificates";
 import { Identities } from "@/pages/Identities";
 import { Owners } from "@/pages/Owners";
 import { Risk } from "@/pages/Risk";
+import { Agents } from "@/pages/Agents";
 import { Wizard } from "@/pages/Wizard";
 import { Assistant } from "@/pages/Assistant";
 import { Profiles } from "@/pages/Profiles";
@@ -50,6 +51,7 @@ export function AppRoutes() {
         <Route path="coverage" element={<FeatureCoverage />} />
         <Route path="identities" element={<Identities />} />
         <Route path="owners" element={<Owners />} />
+        <Route path="agents" element={<Agents />} />
         <Route path="profiles" element={<Profiles />} />
         <Route path="risk" element={<Risk />} />
         <Route path="graph" element={<Graph />} />
