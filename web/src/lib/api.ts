@@ -17,6 +17,8 @@ import type {
   AuditBundle,
   AuditEvent as GenAuditEvent,
   Certificate as GenCertificate,
+  CertificateIngest,
+  CertificateList,
   CredentialRisk as GenCredentialRisk,
   CredentialRiskList,
   GraphImpact,
@@ -40,6 +42,8 @@ import type {
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
 export type Certificate = GenCertificate;
+export type CertificatePage = CertificateList;
+export type CertificateIngestRequest = CertificateIngest;
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type Identity = GenIdentity;
@@ -179,6 +183,13 @@ function postRead<T>(path: string, body?: unknown): Promise<T> {
 export interface Api {
   me(): Promise<Me>;
   certificates(): Promise<Certificate[]>;
+  certificatePage(options?: {
+    limit?: number;
+    cursor?: string;
+    expiringBefore?: string;
+  }): Promise<CertificatePage>;
+  getCertificate(id: string): Promise<Certificate>;
+  ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
   createOwner(input: OwnerRequest): Promise<Owner>;
   issuers(): Promise<Issuer[]>;
@@ -207,8 +218,18 @@ export interface Api {
 
 export const api: Api = {
   me: () => req<Me>("/auth/me"),
+  certificatePage: (options) => {
+    const qs = new URLSearchParams();
+    if (options?.limit != null) qs.set("limit", String(options.limit));
+    if (options?.cursor) qs.set("cursor", options.cursor);
+    if (options?.expiringBefore) qs.set("expiring_before", options.expiringBefore);
+    const suffix = qs.toString();
+    return req<CertificatePage>(`/api/v1/certificates${suffix ? `?${suffix}` : ""}`);
+  },
   certificates: () =>
-    req<{ items: Certificate[] }>("/api/v1/certificates").then((r) => r.items ?? []),
+    api.certificatePage().then((r) => r.items ?? []),
+  getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
+  ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),

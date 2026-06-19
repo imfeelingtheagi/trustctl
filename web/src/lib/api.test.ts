@@ -96,4 +96,65 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-2");
     expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
   });
+
+  it("sends certificate ingest through the served mutation with Idempotency-Key", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-3; path=/";
+    mockFetch(
+      201,
+      JSON.stringify({
+        id: "cert-1",
+        tenant_id: "tenant-1",
+        subject: "CN=svc",
+        fingerprint: "sha256:abc",
+        status: "active",
+      }),
+    );
+
+    await api.ingestCertificate({ pem: "-----BEGIN CERTIFICATE-----\n..." });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/certificates");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-3");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+});
+
+describe("certificate inventory contract", () => {
+  it("keeps next_cursor available through the cursor-aware page helper", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        items: [{ id: "cert-1", tenant_id: "tenant-1", subject: "CN=svc", fingerprint: "fp", status: "active" }],
+        next_cursor: "cursor-2",
+      }),
+    );
+
+    const page = await api.certificatePage({
+      limit: 5,
+      cursor: "cursor-1",
+      expiringBefore: "2026-07-01T00:00:00.000Z",
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      "/api/v1/certificates?limit=5&cursor=cursor-1&expiring_before=2026-07-01T00%3A00%3A00.000Z",
+    );
+    expect(page.next_cursor).toBe("cursor-2");
+  });
+
+  it("fetches an individual certificate detail by id", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        id: "cert/unsafe",
+        tenant_id: "tenant-1",
+        subject: "CN=svc",
+        fingerprint: "fp",
+        status: "active",
+      }),
+    );
+
+    await api.getCertificate("cert/unsafe");
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/certificates/cert%2Funsafe");
+  });
 });

@@ -7,7 +7,15 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { me: vi.fn(), certificates: vi.fn(), owners: vi.fn(), risk: vi.fn() },
+  apiMock: {
+    me: vi.fn(),
+    certificates: vi.fn(),
+    certificatePage: vi.fn(),
+    getCertificate: vi.fn(),
+    ingestCertificate: vi.fn(),
+    owners: vi.fn(),
+    risk: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
@@ -31,8 +39,12 @@ describe("auth + dashboards", () => {
   beforeEach(() => {
     apiMock.me.mockReset();
     apiMock.certificates.mockReset();
+    apiMock.certificatePage.mockReset();
+    apiMock.getCertificate.mockReset();
+    apiMock.ingestCertificate.mockReset();
     apiMock.risk.mockReset();
     apiMock.certificates.mockResolvedValue([]);
+    apiMock.certificatePage.mockResolvedValue({ items: [] });
     apiMock.risk.mockResolvedValue([]);
   });
 
@@ -78,15 +90,18 @@ describe("auth + dashboards", () => {
 
   it("renders the certificate inventory in a table", async () => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
-    apiMock.certificates.mockResolvedValue([
-      { id: "c1", subject: "CN=payments.example.com", issuer: "CN=CA", status: "active" },
-      { id: "c2", subject: "CN=web.example.com", issuer: "CN=CA", status: "active" },
-    ]);
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        { id: "c1", subject: "CN=payments.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
+        { id: "c2", subject: "CN=web.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp2" },
+      ],
+    });
 
     renderAt("/certificates");
 
     await waitFor(() => expect(screen.getByText("CN=payments.example.com")).toBeInTheDocument());
     expect(screen.getByText("CN=web.example.com")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: undefined });
   });
 });
