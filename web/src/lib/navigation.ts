@@ -43,6 +43,7 @@ export const appRoutePaths = [
   "/owners",
   "/agents",
   "/profiles",
+  "/protocols",
   "/risk",
   "/graph",
   "/audit",
@@ -81,8 +82,8 @@ export const navGroups: NavGroup[] = [
   {
     label: "Protocols",
     items: [
-      { to: "/coverage?domain=ACME%20and%20DNS", label: "ACME and DNS", icon: "protocol", mode: "disclosure", featureIds: ["F5"] },
-      { to: "/coverage?domain=Enrollment%20protocols", label: "Enrollment protocols", icon: "protocol", mode: "disclosure", featureIds: ["F22", "F23", "F55"] },
+      { to: "/protocols", label: "ACME and DNS", icon: "protocol", mode: "real", featureIds: ["F5"] },
+      { to: "/protocols", label: "Enrollment protocols", icon: "protocol", mode: "real", featureIds: ["F22", "F23", "F55"] },
       { to: "/coverage?feature=F24", label: "SPIFFE", icon: "spiffe", mode: "disclosure", featureIds: ["F24"] },
       { to: "/coverage?feature=F43", label: "SSH CA", icon: "ssh", mode: "disclosure", featureIds: ["F43"] },
     ],
@@ -148,6 +149,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F1", routes: ["/certificates"], component: "Certificates", kind: "operate", evidence: "certificatePage/getCertificate/ingestCertificate" },
   { featureId: "F3", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "agent fleet and enrollment token workflow" },
   { featureId: "F4", routes: ["/identities", "/wizard"], component: "Identities", kind: "operate", evidence: "identity issue/deploy/revoke transitions" },
+  { featureId: "F5", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "ACME endpoint setup and protocol-status unavailable state" },
   { featureId: "F8", routes: ["/platform", "/identities", "/certificates"], component: "Platform access control", kind: "observe", evidence: "required-scope map and permission-denied states" },
   { featureId: "F9", routes: ["/audit"], component: "Audit", kind: "observe", evidence: "audit filters, event detail, and signed export" },
   { featureId: "F10", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "static OpenAPI spec view" },
@@ -156,8 +158,11 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F15", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "browser transport posture and platform-status gap" },
   { featureId: "F19", routes: ["/risk"], component: "Risk", kind: "observe", evidence: "credential risk list" },
   { featureId: "F21", routes: ["/graph"], component: "Graph", kind: "observe", evidence: "graph and blast radius" },
+  { featureId: "F22", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "EST endpoint setup and protocol-status unavailable state" },
+  { featureId: "F23", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SCEP endpoint setup and protocol-status unavailable state" },
   { featureId: "F40", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
   { featureId: "F47", routes: ["/identities", "/audit"], component: "Identities", kind: "operate", evidence: "revoke transition plus audit trail" },
   { featureId: "F53", routes: ["/profiles"], component: "Profiles", kind: "operate", evidence: "profile creation" },
+  { featureId: "F55", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CMP endpoint setup and protocol-status unavailable state" },
   { featureId: "F59", routes: ["/identities", "/owners"], component: "Identities", kind: "operate", evidence: "NHI lifecycle rows and owner link" },
 ];
