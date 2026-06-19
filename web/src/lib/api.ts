@@ -22,6 +22,9 @@ import type {
   CredentialRisk as GenCredentialRisk,
   CredentialRiskList,
   GraphImpact,
+  GraphNode,
+  GraphQueryResult,
+  GraphReachable,
   GraphResponse,
   Owner as GenOwner,
   OwnerRequest,
@@ -54,6 +57,7 @@ export type CredentialRisk = GenCredentialRisk;
 export type Approval = GenApproval;
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
+export type { GraphImpact, GraphNode, GraphQueryResult, GraphReachable, GraphResponse };
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
@@ -212,6 +216,8 @@ export interface Api {
   exportAudit(): Promise<AuditBundle>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
+  graphReachable(id: string): Promise<GraphReachable>;
+  graphQuery(query: string): Promise<GraphQueryResult>;
   aiQuery(input: AIQueryRequest): Promise<AIAnswer>;
   aiRCA(input: RCARequest): Promise<AIAnswer>;
   mcpTools(): Promise<MCPToolList>;
@@ -269,6 +275,8 @@ export const api: Api = {
   exportAudit: () => req<AuditBundle>("/api/v1/audit/export?limit=50"),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
+  graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
+  graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
   aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
   aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),

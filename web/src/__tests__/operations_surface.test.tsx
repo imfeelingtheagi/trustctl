@@ -17,6 +17,8 @@ const { apiMock } = vi.hoisted(() => ({
     exportAudit: vi.fn(),
     graph: vi.fn(),
     graphBlastRadius: vi.fn(),
+    graphReachable: vi.fn(),
+    graphQuery: vi.fn(),
     risk: vi.fn(),
   },
 }));
@@ -182,6 +184,119 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: /Analyze/i }));
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:1"));
     expect(screen.getByTestId("blast-radius-count")).toHaveTextContent("1");
+  });
+
+  it("renders graph nodes and edges, filters by kind, and opens URL-safe node detail links", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [
+        { id: "cert:cert/unsafe", kind: "credential", name: "payments-cert", attrs: { serial: "01" } },
+        { id: "workload:payments", kind: "workload", name: "payments-api", attrs: { owner: "team-a" } },
+      ],
+      edges: [{ from: "cert:cert/unsafe", to: "workload:payments", type: "DEPLOYED_TO" }],
+    });
+    const user = userEvent.setup();
+    renderAt("/graph");
+
+    expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
+    expect(screen.getByText("The credential is deployed to that workload or resource.")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Kind"), "credential");
+    expect(screen.getAllByTestId("graph-node-name").map((cell) => cell.textContent)).toEqual(["payments-cert"]);
+
+    await user.click(screen.getByRole("button", { name: "Select payments-cert" }));
+
+    expect(await screen.findByRole("heading", { name: "Node detail" })).toBeInTheDocument();
+    expect(screen.getAllByText("cert:cert/unsafe").length).toBeGreaterThan(0);
+    expect(screen.getByText("01")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Certificate detail" })).toHaveAttribute(
+      "href",
+      "/certificates?credential=cert%2Funsafe",
+    );
+    expect(screen.getByRole("link", { name: "Risk row" })).toHaveAttribute("href", "/risk?node=cert%3Acert%2Funsafe");
+    expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute(
+      "href",
+      "/audit?node=cert%3Acert%2Funsafe",
+    );
+  });
+
+  it("renders blast-radius by-kind, reachable nodes, graph query rows, and export", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [
+        { id: "cert:payments", kind: "credential", name: "payments-cert" },
+        { id: "res:db", kind: "resource", name: "payments-db" },
+      ],
+      edges: [{ from: "cert:payments", to: "res:db", type: "GRANTS_ACCESS" }],
+    });
+    apiMock.graphBlastRadius.mockResolvedValue({
+      node: { id: "cert:payments", kind: "credential", name: "payments-cert" },
+      affected: [{ id: "res:db", kind: "resource", name: "payments-db" }],
+      by_kind: { resource: 1 },
+    });
+    apiMock.graphReachable.mockResolvedValue({
+      from: "cert:payments",
+      nodes: [{ id: "res:db", kind: "resource", name: "payments-db" }],
+    });
+    apiMock.graphQuery.mockResolvedValue({ rows: [{ credential: "payments-cert", resource: "payments-db" }] });
+    const user = userEvent.setup();
+    renderAt("/graph");
+
+    await waitFor(() => expect(screen.getAllByTestId("graph-node-name")[0]).toHaveTextContent("payments-cert"));
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:payments"));
+    expect(await screen.findByRole("heading", { name: "Blast-radius paths and by-kind summary" })).toBeInTheDocument();
+    expect(screen.getAllByText("resource").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("payments-db").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "Show reachable" }));
+    await waitFor(() => expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments"));
+    expect(await screen.findByRole("heading", { name: "Reachable nodes" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Cypher-style query"), {
+      target: { value: "MATCH (a)-[e]->(b) RETURN a,b" },
+    });
+    await user.click(screen.getByRole("button", { name: "Run graph query" }));
+    await waitFor(() => expect(apiMock.graphQuery).toHaveBeenCalledWith("MATCH (a)-[e]->(b) RETURN a,b"));
+    expect((await screen.findAllByText(/payments-db/)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Export query rows" })).toHaveAttribute("download", "graph-query-results.json");
+  });
+
+  it("shows graph empty and permission-denied states without leaking tenant details", async () => {
+    apiMock.graph.mockResolvedValueOnce({ nodes: [], edges: [] });
+    const empty = renderAt("/graph");
+
+    expect(await screen.findByText("No graph nodes yet")).toBeInTheDocument();
+    expect(empty.container.querySelector('[data-state-primitive="empty"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze" })).toBeDisabled();
+    empty.unmount();
+
+    apiMock.graph.mockRejectedValue(
+      new ApiError(403, JSON.stringify({ detail: "tenant t2 graph scope exists but is forbidden" })),
+    );
+    renderAt("/graph");
+
+    expect(await screen.findByText("Permission denied")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Your session cannot read the credential graph for this tenant.");
+    expect(screen.queryByText(/tenant t2/i)).not.toBeInTheDocument();
+  });
+
+  it("shows served graph problem details and 429 retry hints for graph actions", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [{ id: "cert:payments", kind: "credential", name: "payments-cert" }],
+      edges: [],
+    });
+    apiMock.graphReachable.mockRejectedValue(new ApiError(429, "queue full", 7));
+    apiMock.graphQuery.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "query parser rejected RETURN" })));
+    const user = userEvent.setup();
+    renderAt("/graph");
+
+    await waitFor(() => expect(screen.getAllByTestId("graph-node-name")[0]).toHaveTextContent("payments-cert"));
+    await user.click(screen.getByRole("button", { name: "Show reachable" }));
+    expect(await screen.findByText(/Could not compute reachability: retry in 7s/)).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Cypher-style query"));
+    await user.type(screen.getByLabelText("Cypher-style query"), "RETURN");
+    await user.click(screen.getByRole("button", { name: "Run graph query" }));
+    expect(await screen.findByText(/Could not run graph query: query parser rejected RETURN/)).toBeInTheDocument();
   });
 
   it("routes to risk, expands all six served components, and sorts or filters by factor", async () => {
