@@ -44,6 +44,7 @@ export const appRoutePaths = [
   "/agents",
   "/profiles",
   "/protocols",
+  "/secrets",
   "/risk",
   "/graph",
   "/audit",
@@ -92,9 +93,10 @@ export const navGroups: NavGroup[] = [
   {
     label: "Secrets",
     items: [
-      { to: "/coverage?domain=Secrets", label: "Native secrets", icon: "secret", mode: "disclosure", featureIds: ["F63"] },
-      { to: "/coverage?feature=F67", label: "PKI secrets", icon: "secret", mode: "disclosure", featureIds: ["F67"] },
-      { to: "/coverage?feature=F60", label: "Secret sharing", icon: "secret", mode: "disclosure", featureIds: ["F60"] },
+      { to: "/secrets", label: "Native secrets", icon: "secret", mode: "real", featureIds: ["F37", "F63", "F64"] },
+      { to: "/secrets", label: "PKI secrets", icon: "secret", mode: "real", featureIds: ["F67"] },
+      { to: "/secrets", label: "Machine login", icon: "key", mode: "real", featureIds: ["F58"] },
+      { to: "/secrets", label: "Secret sharing", icon: "secret", mode: "real", featureIds: ["F60"] },
     ],
   },
   {
@@ -164,6 +166,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F23", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SCEP endpoint setup and protocol-status unavailable state" },
   { featureId: "F24", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SPIFFE Workload API socket setup and protocol-status unavailable state" },
   { featureId: "F33", routes: ["/identities"], component: "Identities", kind: "operate", evidence: "JIT request queue and dual-control approval mutation" },
+  { featureId: "F37", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "manual native-store rotate/delete through served secrets store" },
   { featureId: "F40", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
   { featureId: "F43", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SSH CA endpoint/KRL setup and protocol-status unavailable state" },
   { featureId: "F47", routes: ["/identities", "/audit"], component: "Identities", kind: "operate", evidence: "revoke transition plus audit trail" },
@@ -172,4 +175,9 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F54", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "bootstrap token install command plus renewal-status unavailable state" },
   { featureId: "F55", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CMP endpoint setup and protocol-status unavailable state" },
   { featureId: "F59", routes: ["/identities", "/owners"], component: "Identities", kind: "operate", evidence: "NHI lifecycle rows and owner link" },
+  { featureId: "F58", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "machine login exchange through served secrets login" },
+  { featureId: "F60", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "one-time share create/redeem" },
+  { featureId: "F63", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "native secret store metadata/create/reveal/rotate/delete" },
+  { featureId: "F64", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "developer snippets plus access test against served store" },
+  { featureId: "F67", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "PKI secret issue with reveal-once bundle" },
 ];

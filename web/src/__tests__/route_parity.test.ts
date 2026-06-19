@@ -29,7 +29,12 @@ const servedFeatureIds = [
   "F53",
   "F54",
   "F55",
+  "F58",
   "F59",
+  "F60",
+  "F63",
+  "F64",
+  "F67",
 ];
 
 function surfacesFor(featureId: string): RealGuiSurface[] {

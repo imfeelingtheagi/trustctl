@@ -40,7 +40,19 @@ import type {
   MCPToolCall,
   MCPToolList,
   MCPToolResult,
+  MachineLoginRequest,
+  MachineLoginResponse,
+  PKISecret,
+  PKISecretRequest,
   RCARequest,
+  SecretMeta,
+  SecretMetaList,
+  SecretRequest,
+  SecretValue,
+  ShareRedeemRequest,
+  ShareRequest,
+  ShareToken,
+  ShareValue,
 } from "./api-types.gen";
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
@@ -57,7 +69,26 @@ export type CredentialRisk = GenCredentialRisk;
 export type Approval = GenApproval;
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
-export type { AuditBundle, GraphImpact, GraphNode, GraphQueryResult, GraphReachable, GraphResponse };
+export type {
+  AuditBundle,
+  GraphImpact,
+  GraphNode,
+  GraphQueryResult,
+  GraphReachable,
+  GraphResponse,
+  MachineLoginRequest,
+  MachineLoginResponse,
+  PKISecret,
+  PKISecretRequest,
+  SecretMeta,
+  SecretMetaList,
+  SecretRequest,
+  SecretValue,
+  ShareRedeemRequest,
+  ShareRequest,
+  ShareToken,
+  ShareValue,
+};
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
@@ -231,6 +262,15 @@ export interface Api {
   aiRCA(input: RCARequest): Promise<AIAnswer>;
   mcpTools(): Promise<MCPToolList>;
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
+  secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
+  createSecret(input: SecretRequest): Promise<SecretMeta>;
+  getSecret(name: string): Promise<SecretValue>;
+  rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
+  deleteSecret(name: string): Promise<void>;
+  issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
+  machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
+  createShare(input: ShareRequest): Promise<ShareToken>;
+  redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
 }
 
 export const api: Api = {
@@ -292,6 +332,22 @@ export const api: Api = {
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
   callMCPTool: (tool, input) =>
     postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
+  secretPage: (options) => {
+    const qs = new URLSearchParams();
+    if (options?.limit != null) qs.set("limit", String(options.limit));
+    if (options?.cursor) qs.set("cursor", options.cursor);
+    const suffix = qs.toString();
+    return req<SecretMetaList>(`/api/v1/secrets/store${suffix ? `?${suffix}` : ""}`);
+  },
+  createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
+  getSecret: (name) => req<SecretValue>(`/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  rotateSecret: (name, input) =>
+    mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
+  deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
+  machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
+  createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),
+  redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
 };
 
 /** loginURL is where the browser is sent to begin the OIDC flow. */

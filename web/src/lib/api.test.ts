@@ -165,6 +165,80 @@ describe("agent contract", () => {
   });
 });
 
+describe("secrets contract", () => {
+  function sentHeaders(): Record<string, string> {
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    return calls[0][1]?.headers as Record<string, string>;
+  }
+
+  it("lists secret metadata without values through the served store page", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        items: [{ name: "app/db/password", version: 3, updated_at: "2026-06-19T12:00:00Z" }],
+        next_cursor: "cursor-2",
+      }),
+    );
+
+    const page = await api.secretPage({ limit: 10, cursor: "cursor-1" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store?limit=10&cursor=cursor-1");
+    expect(page.items[0]).toEqual({
+      name: "app/db/password",
+      version: 3,
+      updated_at: "2026-06-19T12:00:00Z",
+    });
+    expect(JSON.stringify(page)).not.toContain("value");
+  });
+
+  it("reads and rotates URL-encoded secret names", async () => {
+    mockFetch(200, JSON.stringify({ name: "app/db/password", value: "read-once", version: 3 }));
+
+    await api.getSecret("app/db/password");
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
+
+    document.cookie = "trstctl_csrf=csrf-secret-rotate; path=/";
+    mockFetch(200, JSON.stringify({ name: "app/db/password", version: 4 }));
+
+    await api.rotateSecret("app/db/password", { name: "app/db/password", value: "new-value" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("PUT");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-rotate");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+
+  it("sends served secret creation, PKI issue, login, and sharing as idempotent mutations", async () => {
+    document.cookie = "trstctl_csrf=csrf-secrets; path=/";
+    mockFetch(201, JSON.stringify({ name: "app/api", version: 1 }));
+    await api.createSecret({ name: "app/api", value: "stored" });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+
+    mockFetch(201, JSON.stringify({ serial: "01", certificate: "CERT", private_key: "KEY" }));
+    await api.issuePKISecret({ common_name: "svc.internal", ttl_seconds: 600 });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/pki");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+
+    mockFetch(200, JSON.stringify({ session_id: "sess-1", principal: "svc", method: "token", scopes: ["secrets:read"], expires_at: "2026-06-19T13:00:00Z" }));
+    await api.machineLogin({ method: "token", credential: "machine-token" });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/login");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+
+    mockFetch(201, JSON.stringify({ token: "share-token", expires_at: "2026-06-19T13:00:00Z" }));
+    await api.createShare({ value: "secret", ttl_seconds: 300 });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+
+    mockFetch(200, JSON.stringify({ value: "redeemed-once" }));
+    await api.redeemShare({ token: "share-token" });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares/redeem");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+});
+
 describe("certificate inventory contract", () => {
   it("keeps next_cursor available through the cursor-aware page helper", async () => {
     mockFetch(
