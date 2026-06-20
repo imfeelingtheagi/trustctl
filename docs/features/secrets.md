@@ -98,12 +98,14 @@ nothing is minted unless attestation verifies. *Code:* `internal/ephemeral`.
 
 ### Encryption-as-a-service & KMIP (F66)
 
-The **transit** service encrypts, decrypts, HMACs, and signs data using named keys the
+The **transit** library encrypts, decrypts, HMACs, and signs data using named keys the
 application *never sees* — ciphertexts are versioned (`trv:<version>:...`) so a key
-rotation can re-wrap old data, and intermediate plaintext is zeroized (**AN-8**). For
-legacy enterprise gear (databases, storage arrays) trstctl also answers **KMIP**, the
-standard key-management protocol, with TLS client-cert auth and key material zeroized on
-destroy. *Code:* `internal/transit`, `internal/kmip`.
+rotation can re-wrap old data, and intermediate plaintext is zeroized (**AN-8**).
+For legacy enterprise gear (databases, storage arrays), the **KMIP** library has a
+bounded TTLV RequestMessage parser plus TLS client-cert-authenticated operation
+model with key material zeroized on destroy. No served transit or KMIP API/CLI
+surface exists yet; the console marks it library-only until a listener is mounted.
+*Code:* `internal/transit`, `internal/kmip`.
 
 ### Secret sync (F68)
 
@@ -163,8 +165,10 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
   in production back it with an [HSM/KMS](issuance-and-cas.md).
 - **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if you
   must store a long-lived secret, put it on a rotation schedule.
-- **KMIP/transit wire interop** is tested against reference clients but confirm your
-  specific appliance's KMIP profile.
+- **Transit/KMIP serving status:** the KMIP TTLV parser is fuzzed and covered by an
+  operation-level interop fixture, but no KMIP listener/API/CLI is mounted yet. Treat
+  appliance profile validation as future served-endpoint work, not as a currently
+  available network surface.
 - **Sync is push + drift-detect**, not a two-way merge — trstctl is the source of truth.
 
 ## Reference

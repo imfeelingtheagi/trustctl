@@ -228,6 +228,13 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   connector-target surface) is tracked as the remaining tail of **`EXC-WIRE-03`**. Its
   deliveries go through the outbox (AN-6) and are tenant-scoped (AN-1) and audited
   (AN-2) in library code today.
+- **Transit/KMIP (`internal/transit`, `internal/kmip`, F66) — still library-only.**
+  The KMIP package now has a bounded TTLV RequestMessage parser with frame-size,
+  field-count, and nesting-depth caps plus `FuzzParseTTLV`, and its library operation
+  model still requires TLS client-certificate authentication before decode. The
+  running binary does **not** import a KMIP listener or transit API/CLI surface yet,
+  so the console and feature docs must keep disclosing it as library-only until a
+  served endpoint is mounted and reference-client appliance profiles are exercised.
 
 ## Authorization policy gates: served on the issue/deploy/revoke path
 

@@ -1,10 +1,8 @@
-// Package kmip implements a KMIP key-management server (S18.2, F66) so enterprise
-// systems (databases, storage arrays, backup appliances) can use trstctl as their
-// key manager. It exposes the KMIP operation set (Create, Register, Get, Locate,
-// ReKey, Revoke, Destroy) over the crypto boundary, gated by TLS
-// client-certificate authentication, tenant-scoped (AN-1) and audited (AN-2). The
-// KMIP TTLV wire encoding and reference-client interop are the CI backstop (like
-// the SCEP/EST differentials); the operation semantics and auth are exercised here.
+// Package kmip implements the library-level KMIP operation model (S18.2, F66) and
+// a bounded TTLV RequestMessage decoder for enterprise key-management clients.
+// Operations are gated by TLS client-certificate authentication, tenant-scoped
+// (AN-1), and audited (AN-2). The network listener/API/CLI surface is not mounted
+// yet; docs must say that plainly until a served KMIP endpoint exists.
 package kmip
 
 import (
@@ -64,6 +62,16 @@ func (s *Server) authClient(ctx context.Context, op string, clientCertDER []byte
 		return "", fmt.Errorf("kmip: client certificate not authenticated")
 	}
 	return id, nil
+}
+
+// DecodeTTLVRequest authenticates a KMIP client certificate and decodes a bounded
+// TTLV RequestMessage. It is the server-side library ingress a future network
+// listener must call before dispatching operations.
+func (s *Server) DecodeTTLVRequest(ctx context.Context, clientCertDER []byte, frame []byte) (RequestMessage, error) {
+	if _, err := s.authClient(ctx, "decode_ttlv", clientCertDER); err != nil {
+		return RequestMessage{}, err
+	}
+	return DecodeRequestMessage(frame)
 }
 
 // Create generates a new symmetric key and returns its unique identifier.

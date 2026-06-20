@@ -1223,6 +1223,77 @@ func TestSecretsFrameworksDisclosedAsLibraryOnly(t *testing.T) {
 	}
 }
 
+// binaryServesTransitOrKMIP reports whether the running binary wires the transit
+// or KMIP libraries into cmd/trstctl, internal/api, or internal/server. Until that
+// happens, docs must describe F66 as library-only even though the KMIP parser and
+// operation model are real library code.
+func binaryServesTransitOrKMIP(t *testing.T) bool {
+	t.Helper()
+	imports := []string{
+		`trstctl.com/trstctl/internal/transit"`,
+		`trstctl.com/trstctl/internal/kmip"`,
+	}
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
+		for _, f := range nonTestGoFiles(t, dir) {
+			src := read(t, f)
+			for _, imp := range imports {
+				if strings.Contains(src, imp) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
+	for _, pkg := range []string{"transit", "kmip"} {
+		if _, err := os.Stat(filepath.FromSlash("../internal/" + pkg)); err != nil {
+			t.Fatalf("internal/%s no longer exists; revisit this F66 reality test", pkg)
+		}
+	}
+
+	feature := strings.Join(strings.Fields(strings.ToLower(read(t, "features/secrets.md"))), " ")
+	glossary := strings.Join(strings.Fields(strings.ToLower(read(t, "glossary.md"))), " ")
+	limitations := strings.Join(strings.Fields(strings.ToLower(read(t, "limitations.md"))), " ")
+
+	if binaryServesTransitOrKMIP(t) {
+		for _, stale := range []string{"no served transit or kmip api/cli surface exists yet", "transit/kmip (`internal/transit`, `internal/kmip`, f66) — still library-only"} {
+			if strings.Contains(feature, stale) || strings.Contains(limitations, stale) {
+				t.Errorf("F66 appears to be served now, but docs still contain stale library-only disclosure %q", stale)
+			}
+		}
+		return
+	}
+
+	for _, want := range []string{
+		"bounded ttlv requestmessage parser",
+		"no served transit or kmip api/cli surface exists yet",
+		"operation-level interop fixture",
+	} {
+		if !strings.Contains(feature, want) {
+			t.Errorf("features/secrets.md must honestly describe F66 library/parser status (missing %q)", want)
+		}
+	}
+	for _, want := range []string{
+		"does not yet mount a served kmip listener",
+		"bounded kmip ttlv parser",
+	} {
+		if !strings.Contains(glossary, want) {
+			t.Errorf("glossary.md must disclose KMIP served status (missing %q)", want)
+		}
+	}
+	for _, want := range []string{
+		"transit/kmip (`internal/transit`, `internal/kmip`, f66) — still library-only",
+		"fuzzparsettlv",
+		"frame-size, field-count, and nesting-depth caps",
+	} {
+		if !strings.Contains(limitations, want) {
+			t.Errorf("limitations.md must disclose F66 library-only status and FUZZ-004 guardrails (missing %q)", want)
+		}
+	}
+}
+
 // agentImportsSSHTrust reports whether the agent binary or its (non-sshtrust)
 // agent packages import the privileged SSH-trust rewrite package. Today nothing
 // links it (SIGNER-004): it is library-only. When a future change wires it behind
@@ -1610,8 +1681,10 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	if len(fuzzTargets) < 31 {
 		t.Fatalf("FUZZ-010: found only %d committed FuzzXxx targets, want at least 31 including OCSP", len(fuzzTargets))
 	}
-	if !containsString(fuzzTargets, "FuzzParseOCSPRequestSerial") {
-		t.Fatal("FUZZ-010: served OCSP parser fuzzer is missing from the committed fuzz denominator")
+	for _, want := range []string{"FuzzParseOCSPRequestSerial", "FuzzParseTTLV"} {
+		if !containsString(fuzzTargets, want) {
+			t.Fatalf("FUZZ-010: required parser fuzzer %s is missing from the committed fuzz denominator", want)
+		}
 	}
 
 	makefile := read(t, "../Makefile")
@@ -1648,7 +1721,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	}
 
 	parserGuard := read(t, "../internal/crypto/parserfuzz_audit_test.go")
-	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial"} {
+	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial", "FuzzParseTTLV", "../kmip"} {
 		if !strings.Contains(parserGuard, want) {
 			t.Errorf("FUZZ-010: parser denominator guard no longer contains %q", want)
 		}

@@ -3505,6 +3505,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		`"../protocols/est"`,
 		`"../signing"`,
 		`"../secretscan"`,
+		`"../kmip"`,
 		`"../attest/awsiid"`,
 		`"../attest/azureimds"`,
 		"FuzzParseSCEPRequest",
@@ -3512,6 +3513,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"FuzzVerifyCMSSignature",
 		"FuzzParseCMPRequest",
 		"FuzzParseOCSPRequestSerial",
+		"FuzzParseTTLV",
 		"FuzzAWSIIDAttest",
 		"FuzzAzureIMDSAttest",
 	)

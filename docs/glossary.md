@@ -241,14 +241,17 @@ automatically.
 
 A service that encrypts and decrypts data *for* applications using keys the
 application never sees, so developers get strong encryption without handling key
-material. Also called "encryption-as-a-service." trstctl offers this plus **KMIP**
-for legacy clients. See [Secrets](features/secrets.md).
+material. Also called "encryption-as-a-service." trstctl has library code for this
+plus **KMIP** for legacy clients, but no served API/CLI surface yet. See
+[Secrets](features/secrets.md).
 
 ### KMIP
 
 The **Key Management Interoperability Protocol**, a long-standing standard that
 enterprise storage arrays, databases, and appliances speak to fetch encryption keys.
-trstctl can answer KMIP so that existing gear can use it as a key manager.
+trstctl has a bounded KMIP TTLV parser and authenticated library-level operation
+model. It does not yet mount a served KMIP listener, so existing gear cannot point at
+the running binary until that surface is wired.
 
 ### CBOM
 
