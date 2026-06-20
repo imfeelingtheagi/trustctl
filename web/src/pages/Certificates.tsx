@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError, UnauthorizedError, api, type Certificate } from "@/lib/api";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { DetailDrawer } from "@/components/DetailDrawer";
 import { EmptyState } from "@/components/EmptyState";
 import {
   ErrorState,
@@ -331,51 +333,14 @@ export function Certificates() {
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">No certificates match your search.</p>
           ) : (
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">Inventoried certificates</caption>
-              <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th scope="col" className="py-2 pr-4 font-medium">Subject</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Issuer</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Expires</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Band</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-                  <th scope="col" className="py-2 font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c) => {
-                  const band = expiryBandForDate(c.not_after);
-                  return (
-                  <tr key={c.id} className="border-b border-border align-top">
-                    <td className="py-2 pr-4">{c.subject}</td>
-                    <td className="py-2 pr-4">{c.issuer ?? "—"}</td>
-                    <td className="py-2 pr-4">
-                      {formatDate(c.not_after)}
-                    </td>
-                    <td className="py-2 pr-4"><StatusBadge vocabulary="expiry" value={band} /></td>
-                    <td className="py-2 pr-4">
-                      <div className="grid gap-1">
-                        <StatusBadge vocabulary="certificate" value={c.status} />
-                        {c.status === "revoked" && c.revocation_reason && (
-                          <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2">
-                      <button
-                        type="button"
-                        onClick={() => void openDetail(c)}
-                        className="min-h-9 rounded-md border border-border px-2.5 text-sm"
-                      >
-                        View details
-                      </button>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <DataGrid
+              ariaLabel="Inventoried certificates"
+              rows={filtered}
+              columns={certificateColumns}
+              getRowId={(c) => c.id}
+              onRowOpen={(c) => void openDetail(c)}
+              rowActionLabel={() => "View details"}
+            />
           )}
 
           <div className="mt-4 flex items-center gap-3">
@@ -395,27 +360,12 @@ export function Certificates() {
         </>
       )}
 
-      {detailID && (
-        <aside
-          role="dialog"
-          aria-labelledby="cert-detail-heading"
-          className="mt-6 border-y border-border py-4"
-        >
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <h2 id="cert-detail-heading" className="text-lg font-semibold">
-                Certificate details
-              </h2>
-              <p className="text-sm text-muted-foreground">Fetched from GET /api/v1/certificates/{detailID}.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDetailID(null)}
-              className="min-h-9 rounded-md border border-border px-2.5 text-sm"
-            >
-              Close
-            </button>
-          </div>
+      <DetailDrawer
+        open={!!detailID}
+        title="Certificate details"
+        description={detailID ? `Fetched from GET /api/v1/certificates/${detailID}.` : undefined}
+        onClose={() => setDetailID(null)}
+      >
           {detailLoading && <LoadingState>Loading certificate details...</LoadingState>}
           {detailError?.kind === "permission" && (
             <PermissionDeniedState>{detailError.message}</PermissionDeniedState>
@@ -498,8 +448,54 @@ export function Certificates() {
               </div>
             </dl>
           )}
-        </aside>
-      )}
+      </DetailDrawer>
     </section>
   );
 }
+
+const certificateColumns: Array<DataGridColumn<Certificate>> = [
+  {
+    id: "subject",
+    header: "Subject",
+    sortable: true,
+    cell: (c) => <span className="font-medium">{c.subject}</span>,
+  },
+  {
+    id: "issuer",
+    header: "Issuer",
+    cell: (c) => c.issuer ?? "—",
+  },
+  {
+    id: "profile",
+    header: "Profile",
+    cell: () => <span className="text-muted-foreground">Not served</span>,
+  },
+  {
+    id: "algorithm",
+    header: "Algorithm",
+    cell: (c) => c.key_algorithm || "—",
+  },
+  {
+    id: "expires",
+    header: "Expires",
+    sortable: true,
+    cell: (c) => formatDate(c.not_after),
+  },
+  {
+    id: "expiry-band",
+    header: "Band",
+    cell: (c) => <StatusBadge vocabulary="expiry" value={expiryBandForDate(c.not_after)} />,
+  },
+  {
+    id: "status",
+    header: "Status",
+    cell: (c) => (
+      <div className="grid gap-1">
+        <StatusBadge vocabulary="certificate" value={c.status} />
+        {c.status === "revoked" && c.revocation_reason && (
+          <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>
+        )}
+      </div>
+    ),
+  },
+];

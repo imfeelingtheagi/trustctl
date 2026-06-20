@@ -27,13 +27,13 @@ export type StatusDescriptor = {
 };
 
 export const lifecycleStatus: Record<string, StatusDescriptor> = {
-  requested: { label: "Requested", tone: "observe", order: 1 },
-  approved: { label: "Approved", tone: "operate", order: 2 },
-  issued: { label: "Issued", tone: "success", order: 3 },
-  deployed: { label: "Deployed", tone: "success", order: 4 },
-  renewing: { label: "Renewing", tone: "warning", order: 5 },
-  revoked: { label: "Revoked", tone: "critical", order: 6 },
-  retired: { label: "Retired", tone: "neutral", order: 7 },
+  requested: { label: "requested", tone: "observe", order: 1 },
+  approved: { label: "approved", tone: "operate", order: 2 },
+  issued: { label: "issued", tone: "success", order: 3 },
+  deployed: { label: "deployed", tone: "success", order: 4 },
+  renewing: { label: "renewing", tone: "warning", order: 5 },
+  revoked: { label: "revoked", tone: "critical", order: 6 },
+  retired: { label: "retired", tone: "neutral", order: 7 },
 };
 
 export const certificateStatus: Record<string, StatusDescriptor> = {

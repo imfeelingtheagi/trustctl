@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery } from "@/lib/api";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
@@ -25,8 +26,10 @@ const defaultFilters: FilterState = {
 };
 
 export function Audit() {
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
-  const [applied, setApplied] = useState<AuditQuery>(toAuditQuery(defaultFilters));
+  const [searchParams] = useSearchParams();
+  const initialFilters = filtersFromSearchParams(searchParams);
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [applied, setApplied] = useState<AuditQuery>(toAuditQuery(initialFilters));
   const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Notice | null>(null);
@@ -36,7 +39,9 @@ export function Audit() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void loadEvents(toAuditQuery(defaultFilters));
+    void loadEvents(toAuditQuery(initialFilters));
+    // The initial URL query seeds the audit view once for deep links.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadEvents(query: AuditQuery) {
@@ -264,6 +269,17 @@ function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
       </a>
     </section>
   );
+}
+
+function filtersFromSearchParams(searchParams: URLSearchParams): FilterState {
+  return {
+    type: searchParams.get("type") ?? "",
+    since: searchParams.get("since") ?? "",
+    until: searchParams.get("until") ?? "",
+    asOf: searchParams.get("as_of") ?? "",
+    q: searchParams.get("q") ?? "",
+    limit: searchParams.get("limit") ?? "50",
+  };
 }
 
 function HashChainPanel({ events }: { events: AuditEvent[] }) {

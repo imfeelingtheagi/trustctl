@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError, identityState, type Identity, type TransitionTo } from "@/lib/api";
+import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { DetailDrawer } from "@/components/DetailDrawer";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
-import { UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -12,12 +17,16 @@ interface Action {
   to: TransitionTo;
 }
 
-interface ApprovalAction {
-  label: string;
-  action: "issue" | "revoke";
-}
-
 const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "revoked", "retired"];
+const identityKinds = [
+  "x509_certificate",
+  "ssh_certificate",
+  "ssh_key",
+  "secret",
+  "api_key",
+  "workload_identity",
+] as const satisfies Identity["kind"][];
+type KindFilter = "all" | Identity["kind"];
 
 const kindCopy: Record<Identity["kind"], { title: string; description: string }> = {
   x509_certificate: {
@@ -76,15 +85,6 @@ function errorMessage(err: unknown): string {
   return `Action failed: ${apiProblemMessage(err)}`;
 }
 
-function approvalErrorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.isRateLimited) {
-    return err.retryAfterSeconds != null
-      ? `Approval rate limited — please retry in ${err.retryAfterSeconds}s.`
-      : "Approval rate limited — please retry shortly.";
-  }
-  return `Approval failed: ${apiProblemMessage(err)}`;
-}
-
 /** actionsFor returns the lifecycle actions valid from a state — the UI mirror
  * of the orchestrator's transition table (issue → deploy → renew, revoke, and
  * retire). */
@@ -113,19 +113,6 @@ function actionsFor(state: string): Action[] {
 
 function actionForTarget(state: string, target: TransitionTo): Action | undefined {
   return actionsFor(state).find((a) => a.to === target);
-}
-
-function approvalActionsFor(state: string): ApprovalAction[] {
-  switch (state) {
-    case "requested":
-      return [{ label: "Approve issue", action: "issue" }];
-    case "issued":
-    case "deployed":
-    case "renewing":
-      return [{ label: "Approve revoke", action: "revoke" }];
-    default:
-      return [];
-  }
 }
 
 function terminalMessage(state: string): string | null {
@@ -207,6 +194,11 @@ export function Identities() {
   const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string; reason?: string } | null>(null);
   const [pendingConfirmName, setPendingConfirmName] = useState("");
   const [pendingReason, setPendingReason] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const filteredItems = useMemo(
+    () => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter),
+    [items, kindFilter],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -265,26 +257,6 @@ export function Identities() {
     }
   }
 
-  async function approve(id: string, action: ApprovalAction["action"]) {
-    setBusyId(id);
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await api.approveIdentityAction(id, action);
-      setNotice(`${result.action} approval recorded for ${result.resource} (${result.approvals})`);
-      setDeniedTransitions((current) => {
-        const next = { ...current };
-        delete next[deniedKey(id, "issued")];
-        delete next[deniedKey(id, "revoked")];
-        return next;
-      });
-    } catch (err) {
-      setError(approvalErrorMessage(err));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
    * which is first parked in `pending` so the user must confirm it in a dialog that
    * names the credential (SURFACE-007). */
@@ -297,6 +269,77 @@ export function Identities() {
     }
     void act(id, to, reason);
   }
+
+  const identityColumns = useMemo<Array<DataGridColumn<Identity>>>(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        sortable: true,
+        cell: (identity) => <span className="font-medium">{identity.name}</span>,
+      },
+      {
+        id: "kind",
+        header: "Kind",
+        cell: (identity) => identity.kind ?? "unknown",
+      },
+      {
+        id: "owner",
+        header: "Owner",
+        cell: (identity) => identity.owner_id || "not served",
+      },
+      {
+        id: "state",
+        header: "State",
+        cell: (identity) => <StatusBadge vocabulary="lifecycle" value={identityState(identity)} />,
+      },
+      {
+        id: "delivery",
+        header: "Delivery evidence",
+        cell: (identity) => (
+          <span className="text-muted-foreground">{deliveryEvidence(identityState(identity))}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: (identity) => {
+          const state = identityState(identity);
+          const actions = actionsFor(state);
+          return (
+            <div className="flex flex-wrap gap-2">
+              {actions.map((a) => (
+                <div key={a.to} className="space-y-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isDestructive(a.to) ? "outline" : "default"}
+                    disabled={busyId === identity.id || Boolean(deniedTransitions[deniedKey(identity.id, a.to)])}
+                    aria-describedby={
+                      deniedTransitions[deniedKey(identity.id, a.to)] ? `denied-${identity.id}-${a.to}` : undefined
+                    }
+                    onClick={() => request(identity.id, identity.name, a.to, a.label)}
+                  >
+                    {a.label}
+                  </Button>
+                  {deniedTransitions[deniedKey(identity.id, a.to)] && (
+                    <p
+                      id={`denied-${identity.id}-${a.to}`}
+                      className="max-w-xs text-xs text-amber-700 dark:text-amber-300"
+                    >
+                      {deniedTransitions[deniedKey(identity.id, a.to)]}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {actions.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
+            </div>
+          );
+        },
+      },
+    ],
+    [busyId, deniedTransitions],
+  );
 
   return (
     <section aria-labelledby="identities-heading">
@@ -350,11 +393,6 @@ export function Identities() {
 
       <RevocationPublicationPanel />
 
-      {error && (
-        <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      )}
       {notice && (
         <p role="status" className="mb-3 text-sm text-green-700 dark:text-green-400">
           {notice}
@@ -430,7 +468,8 @@ export function Identities() {
         </div>
       )}
 
-      {!items && <p role="status">Loading identities…</p>}
+      {!items && !error && <LoadingState>Loading identities...</LoadingState>}
+      {error && <ErrorState title="Identity action failed">{error}</ErrorState>}
 
       {items && items.length === 0 && !showForm && (
         <EmptyState
@@ -443,111 +482,64 @@ export function Identities() {
       )}
 
       {items && items.length > 0 && (
-        <JITApprovalQueue
-          identities={items}
-          busyId={busyId}
-          onApprove={(id, action) => void approve(id, action)}
-        />
+        <PendingApprovalSummary rows={approvalRows(items)} />
       )}
 
       {items && items.length > 0 && (
-        <table id="manual-lifecycle-transitions" className="w-full text-left text-sm">
-          <caption className="sr-only">Credential identities and their lifecycle state</caption>
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th scope="col" className="py-2 pr-4 font-medium">Name</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
-              <th scope="col" className="py-2 pr-4 font-medium">State</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Delivery evidence</th>
-              <th scope="col" className="py-2 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i) => {
-              const state = identityState(i);
-              return (
-                <tr key={i.id} className="border-b border-border">
-                  <td className="py-2 pr-4">{i.name}</td>
-                  <td className="py-2 pr-4">{i.kind ?? "unknown"}</td>
-                  <td className="py-2 pr-4">
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{state}</span>
-                  </td>
-                  <td className="py-2 pr-4 text-muted-foreground">{deliveryEvidence(state)}</td>
-                  <td className="py-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDetail(i)}
-                      >
-                        View details
-                      </Button>
-                      {actionsFor(state).map((a) => (
-                        <div key={a.to} className="space-y-1">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={isDestructive(a.to) ? "outline" : "default"}
-                            disabled={busyId === i.id || Boolean(deniedTransitions[deniedKey(i.id, a.to)])}
-                            aria-describedby={
-                              deniedTransitions[deniedKey(i.id, a.to)] ? `denied-${i.id}-${a.to}` : undefined
-                            }
-                            onClick={() => request(i.id, i.name, a.to, a.label)}
-                          >
-                            {a.label}
-                          </Button>
-                          {deniedTransitions[deniedKey(i.id, a.to)] && (
-                            <p
-                              id={`denied-${i.id}-${a.to}`}
-                              className="max-w-xs text-xs text-amber-700 dark:text-amber-300"
-                            >
-                              {deniedTransitions[deniedKey(i.id, a.to)]}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {approvalActionsFor(state).map((a) => (
-                        <Button
-                          key={a.action}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busyId === i.id}
-                          onClick={() => void approve(i.id, a.action)}
-                        >
-                          {a.label}
-                        </Button>
-                      ))}
-                      {actionsFor(state).length === 0 && approvalActionsFor(state).length === 0 && (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div id="manual-lifecycle-transitions" className="space-y-3">
+          <label className="grid max-w-xs gap-1 text-sm font-medium" htmlFor="identity-kind-filter">
+            Kind
+            <select
+              id="identity-kind-filter"
+              value={kindFilter}
+              onChange={(event) => setKindFilter(event.target.value as KindFilter)}
+              className="rounded-md border border-border bg-background px-3 py-2"
+            >
+              <option value="all">All kinds</option>
+              {identityKinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind}
+                </option>
+              ))}
+            </select>
+          </label>
+          <DataGrid
+            ariaLabel="Credential identities and their lifecycle state"
+            rows={filteredItems}
+            columns={identityColumns}
+            getRowId={(identity) => identity.id}
+            state={filteredItems.length === 0 ? "empty" : "ready"}
+            stateTitle="No identities match this kind"
+            stateMessage="Choose another identity kind or clear the filter."
+            onRowOpen={openDetail}
+            rowActionLabel={() => "View details"}
+          />
+        </div>
       )}
 
-      {selectedId && (
+      <DetailDrawer
+        open={!!selectedId}
+        title="Identity detail"
+        description={detail ? `${detail.name} from the served identity detail API.` : "Served identity detail."}
+        onClose={() => setSelectedId(null)}
+      >
         <IdentityDetailPanel
           identity={detail}
           loading={detailLoading}
           error={detailError}
           busy={busyId === selectedId}
           deniedTransitions={deniedTransitions}
-          reason={transitionReasons[selectedId] ?? ""}
-          onReasonChange={(value) =>
+          reason={selectedId ? transitionReasons[selectedId] ?? "" : ""}
+          onReasonChange={(value) => {
+            if (!selectedId) return;
             setTransitionReasons((current) => ({ ...current, [selectedId]: value }))
-          }
+          }}
           onTransition={(to, label) => {
             if (!detail) return;
             request(detail.id, detail.name, to, label, transitionReasons[detail.id]);
           }}
         />
-      )}
+      </DetailDrawer>
     </section>
   );
 }
@@ -589,27 +581,19 @@ function LifecycleAutomationDisclosure() {
   );
 }
 
-function JITApprovalQueue({
-  identities,
-  busyId,
-  onApprove,
-}: {
-  identities: Identity[];
-  busyId: string | null;
-  onApprove: (id: string, action: ApprovalAction["action"]) => void;
-}) {
-  const rows = identities.flatMap((identity) =>
-    approvalActionsFor(identityState(identity)).map((action) => ({ identity, action })),
-  );
+function PendingApprovalSummary({ rows }: { rows: ApprovalQueueRow[] }) {
   return (
     <section aria-labelledby="jit-queue-heading" className="mb-4 border-y border-border py-4">
       <div className="mb-3">
         <h2 id="jit-queue-heading" className="text-sm font-semibold">
-          JIT request queue
+          JIT approvals moved to the inbox
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Requested identities are the served pending approval queue. The approval mutation records the distinct approver and returns the approval count; requester and time-bound grant fields are shown only when the served identity attributes carry them.
+          Requested identities are summarized here, but approval decisions now happen in the dedicated inbox so request and approve controls are not co-located for one operator.
         </p>
+        <Link className="mt-2 inline-flex text-sm font-medium text-primary underline" to="/approvals">
+          Open approvals inbox
+        </Link>
       </div>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No pending served approval actions.</p>
@@ -624,46 +608,30 @@ function JITApprovalQueue({
                 <th scope="col" className="py-2 pr-4 font-medium">Action</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Approvals count</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Time-bound grant</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Decision</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Decision surface</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ identity, action }) => {
-                const requester = stringAttr(identity, "requester") || "not served";
-                const grant = stringAttr(identity, "grant_expires_at") || "expiry not served on queue";
-                const approvals = stringAttr(identity, "approvals") || "returned after approval";
-                return (
-                  <tr key={`${identity.id}:${action.action}`} className="border-b border-border align-top">
-                    <td className="py-2 pl-3 pr-4">{`JIT ${identity.name}`}</td>
-                    <td className="py-2 pr-4">{requester}</td>
-                    <td className="py-2 pr-4">{action.action}</td>
-                    <td className="py-2 pr-4">{approvals}</td>
-                    <td className="py-2 pr-4">{grant}</td>
-                    <td className="py-2 pr-3">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId === identity.id}
-                        onClick={() => onApprove(identity.id, action.action)}
-                      >
-                        {`Approve ${action.action} for ${identity.name}`}
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map((row) => (
+                <tr key={`${row.identity.id}:${row.action}`} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4">{`JIT ${row.identity.name}`}</td>
+                  <td className="py-2 pr-4">{row.requester}</td>
+                  <td className="py-2 pr-4">{row.action}</td>
+                  <td className="py-2 pr-4">{row.approvals}</td>
+                  <td className="py-2 pr-4">{row.grantExpiresAt}</td>
+                  <td className="py-2 pr-3">
+                    <Link className="text-primary underline" to="/approvals">
+                      Review in approvals
+                    </Link>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
     </section>
   );
-}
-
-function stringAttr(identity: Identity, key: string): string {
-  const value = identity.attributes?.[key];
-  return typeof value === "string" ? value : "";
 }
 
 function RevocationPublicationPanel() {
@@ -714,15 +682,12 @@ function IdentityDetailPanel({
   const rows = identity ? attributeRows(identity) : [];
 
   return (
-    <aside
-      aria-labelledby="identity-detail-heading"
-      className="mt-6 rounded-md border border-border bg-card p-4 text-sm"
-    >
+    <section aria-labelledby="identity-detail-content-heading" className="text-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">Served identity detail</p>
-          <h2 id="identity-detail-heading" className="text-lg font-semibold">
-            Identity detail
+          <h2 id="identity-detail-content-heading" className="text-lg font-semibold">
+            Detail fields
           </h2>
         </div>
         {loading && <p role="status">Loading identity detail...</p>}
@@ -862,7 +827,7 @@ function IdentityDetailPanel({
           </section>
         </>
       )}
-    </aside>
+    </section>
   );
 }
 

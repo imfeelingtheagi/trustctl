@@ -70,6 +70,37 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything()));
   });
 
+  it("renders identities on the shared DataGrid with lifecycle badges and all six kind filters", async () => {
+    const fixtures = [
+      { id: "x509-1", name: "tls-api", kind: "x509_certificate", owner_id: "owner-x", status: "issued" },
+      { id: "ssh-cert-1", name: "ssh-user", kind: "ssh_certificate", owner_id: "owner-sshc", status: "requested" },
+      { id: "ssh-key-1", name: "deploy-key", kind: "ssh_key", owner_id: "owner-ssh", status: "deployed" },
+      { id: "secret-1", name: "db-password", kind: "secret", owner_id: "owner-sec", status: "revoked" },
+      { id: "api-key-1", name: "stripe-token", kind: "api_key", owner_id: "owner-api", status: "retired" },
+      { id: "workload-1", name: "payments-worker", kind: "workload_identity", owner_id: "owner-work", status: "renewing" },
+    ];
+    apiMock.identities.mockResolvedValue(fixtures);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const table = await screen.findByRole("table", { name: /credential identities/i });
+    expect(table).toBeInTheDocument();
+    expect(screen.getByText("issued")).toHaveAttribute("data-status-badge", "lifecycle");
+    expect(screen.getByText("owner-x")).toBeInTheDocument();
+
+    for (const identity of fixtures) {
+      await user.selectOptions(screen.getByLabelText("Kind"), identity.kind);
+      expect(await screen.findByText(identity.name)).toBeInTheDocument();
+      for (const other of fixtures.filter((fixture) => fixture.id !== identity.id)) {
+        expect(screen.queryByText(other.name)).not.toBeInTheDocument();
+      }
+    }
+
+    await user.selectOptions(screen.getByLabelText("Kind"), "all");
+    expect(await screen.findByText("tls-api")).toBeInTheDocument();
+    expect(screen.getByText("payments-worker")).toBeInTheDocument();
+  });
+
   it("loads kind-specific identity details and links owner plus issuer", async () => {
     const details = {
       "x509/1": {
@@ -109,6 +140,7 @@ describe("lifecycle actions from the UI", () => {
     await user.click(within(x509Row).getByRole("button", { name: /view details/i }));
 
     await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith("x509/1"));
+    expect(await screen.findByRole("dialog", { name: "Identity detail" })).toBeInTheDocument();
     expect(await screen.findByText("X.509 certificate identity")).toBeInTheDocument();
     expect(screen.getByText("Not after")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Owner owner-x" })).toHaveAttribute("href", "/owners?owner=owner-x");
@@ -268,30 +300,18 @@ describe("lifecycle actions from the UI", () => {
     expect(row).toHaveTextContent(/certs:request principals cannot self-issue/i);
   });
 
-  it("shows served self-approval denial details for dual-control approvals", async () => {
+  it("moves dual-control approval decisions out of identity rows", async () => {
     apiMock.identities.mockResolvedValue([
       { id: "req-1", name: "self-approval-svc", kind: "x509_certificate", status: "requested" },
     ]);
-    apiMock.approveIdentityAction.mockReset().mockRejectedValue(
-      new ApiError(
-        403,
-        JSON.stringify({
-          detail: "self-approval is denied; approval must come from a distinct principal",
-        }),
-      ),
-    );
-    const user = userEvent.setup();
     renderIdentities();
 
     const row = (await screen.findByText("self-approval-svc")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /approve issue/i }));
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/self-approval is denied/i);
-    expect(alert).toHaveTextContent(/distinct principal/i);
+    expect(within(row).queryByRole("button", { name: /approve issue/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /review in approvals/i })).toHaveAttribute("href", "/approvals");
   });
 
-  it("shows a JIT request queue and approves a pending action from it", async () => {
+  it("summarizes pending JIT approvals and links to the dedicated inbox", async () => {
     apiMock.identities.mockResolvedValue([
       {
         id: "jit-1",
@@ -305,19 +325,15 @@ describe("lifecycle actions from the UI", () => {
         },
       },
     ]);
-    const user = userEvent.setup();
     renderIdentities();
 
-    expect(await screen.findByText("JIT request queue")).toBeInTheDocument();
+    expect(await screen.findByText("JIT approvals moved to the inbox")).toBeInTheDocument();
     expect(screen.getAllByText("jit-db").length).toBeGreaterThan(0);
     expect(screen.getByText("alice")).toBeInTheDocument();
     expect(screen.getByText("1/2")).toBeInTheDocument();
     expect(screen.getByText("2026-06-19T18:00:00Z")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /approve issue for jit-db/i }));
-
-    await waitFor(() => expect(apiMock.approveIdentityAction).toHaveBeenCalledWith("jit-1", "issue"));
-    expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded");
+    expect(screen.getByRole("link", { name: /open approvals inbox/i })).toHaveAttribute("href", "/approvals");
+    expect(screen.queryByRole("button", { name: /approve issue for jit-db/i })).not.toBeInTheDocument();
   });
 
   it("labels outbox delivery state as unavailable instead of claiming synchronous deploy", async () => {
@@ -380,15 +396,13 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc" })));
   });
 
-  it("records a dual-control approval from the identity row", async () => {
+  it("does not record dual-control approval from the identity row", async () => {
     apiMock.identities.mockResolvedValue([{ id: "req-1", name: "needs-approval", status: "requested" }]);
-    const user = userEvent.setup();
     renderIdentities();
 
     const row = (await screen.findByText("needs-approval")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /approve issue/i }));
-
-    await waitFor(() => expect(apiMock.approveIdentityAction).toHaveBeenCalledWith("req-1", "issue"));
-    expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded");
+    expect(within(row).queryByRole("button", { name: /approve issue/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /review in approvals/i })).toHaveAttribute("href", "/approvals");
+    expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
   });
 });

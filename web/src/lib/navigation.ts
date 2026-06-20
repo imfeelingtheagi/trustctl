@@ -54,6 +54,7 @@ export const appRoutePaths = [
   "/policy",
   "/risk",
   "/incidents",
+  "/approvals",
   "/posture",
   "/graph",
   "/audit",
@@ -131,7 +132,7 @@ export const navGroups: NavGroup[] = [
     label: "Incidents & JIT",
     items: [
       { to: "/incidents", label: "Incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-      { to: "/identities", label: "Approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
+      { to: "/approvals", label: "Approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
     ],
   },
   {
@@ -194,7 +195,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F31", routes: ["/incidents"], component: "Incidents", kind: "observe", evidence: "compromised credential intake plus served graph blast-radius preview without remediation execute" },
   { featureId: "F32", routes: ["/incidents"], component: "Incidents", kind: "observe", evidence: "fleet reissue wave, health, resume, rollback, failed target, and audit receipt fixture" },
   { featureId: "F34", routes: ["/incidents"], component: "Incidents", kind: "observe", evidence: "break-glass declaration, quorum, offline issue, reconciliation, expiry, and checklist fixture without bypass control" },
-  { featureId: "F33", routes: ["/identities"], component: "Identities", kind: "operate", evidence: "JIT request queue and dual-control approval mutation" },
+  { featureId: "F33", routes: ["/approvals", "/identities"], component: "Approvals", kind: "operate", evidence: "dedicated JIT request queue and dual-control approval mutation" },
   { featureId: "F35", routes: ["/discovery", "/secrets"], component: "Discovery", kind: "observe", evidence: "native secret metadata table plus external discovery blocked disclosure" },
   { featureId: "F36", routes: ["/discovery"], component: "Discovery", kind: "observe", evidence: "api_key identity table with masked fingerprints plus scanner blocked disclosure" },
   { featureId: "F37", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "manual native-store rotate/delete through served secrets store" },

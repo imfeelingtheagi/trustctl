@@ -28,6 +28,7 @@ import { SSHTrust } from "@/pages/SSHTrust";
 import { Connectors } from "@/pages/Connectors";
 import { CodeSigning } from "@/pages/CodeSigning";
 import { Incidents } from "@/pages/Incidents";
+import { Approvals } from "@/pages/Approvals";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -75,6 +76,7 @@ export function AppRoutes() {
         <Route path="policy" element={<Policy />} />
         <Route path="risk" element={<Risk />} />
         <Route path="incidents" element={<Incidents />} />
+        <Route path="approvals" element={<Approvals />} />
         <Route path="posture" element={<Posture />} />
         <Route path="graph" element={<Graph />} />
         <Route path="audit" element={<Audit />} />
