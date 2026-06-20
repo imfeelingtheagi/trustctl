@@ -39,20 +39,7 @@ func TestOutboxTickShedUnderSaturationPreservesWork(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: freeTCPPort(t)})
-	if err != nil {
-		t.Fatalf("start bundled postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = stopPG() })
-
-	st, err := store.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(st.Close)
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	st := newServerTestStore(t)
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)

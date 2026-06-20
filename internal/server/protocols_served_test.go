@@ -44,8 +44,9 @@ type servedHarness struct {
 const servedTestTenant = "11111111-1111-1111-1111-111111111111"
 
 // newServedHarness boots the full server with the given protocol config and a real
-// signer, returning an httptest.Server serving the assembled handler. Each call uses
-// its own temp dir, embedded PG, and signer socket so siblings do not collide.
+// signer, returning an httptest.Server serving the assembled handler. PostgreSQL is
+// a shared package fixture reset per test; NATS, signer state, and sockets stay
+// per-test so process-boundary behavior remains isolated.
 func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*Deps)) *servedHarness {
 	t.Helper()
 	if testing.Short() {
@@ -55,19 +56,7 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	dir := t.TempDir()
 
 	// Embedded PostgreSQL + in-process NATS — the make-test spine.
-	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: dir, Port: freeTCPPort(t)})
-	if err != nil {
-		t.Fatalf("start bundled postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = stopPG() })
-	st, err := store.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(st.Close)
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	st := newServerTestStore(t)
 	if protocols.RAKeyFile == "" && (protocols.SCEP.Enabled || protocols.CMP.Enabled) {
 		protocols.RAKeyFile = filepath.Join(dir, "protocol-ra.key")
 	}

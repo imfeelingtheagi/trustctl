@@ -45,11 +45,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 
 	// One embedded datastore for the whole test; the served handler and the
 	// bootstrap (in external mode) both talk to it, so they share state.
-	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: freeTCPPort(t)})
-	if err != nil {
-		t.Fatalf("start bundled postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = stopPG() })
+	dsn := serverTestPostgresDSN(t)
 
 	// A long-lived store the test owns for direct seeding/migration. It is NEVER
 	// handed to Build, because server.Shutdown closes the store it is given — so each
@@ -62,6 +58,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	resetServerTestStore(t, st)
 
 	// withServed builds the production control-plane handler (server.Build -> the
 	// default authenticated resolver), runs fn against a live httptest server, then

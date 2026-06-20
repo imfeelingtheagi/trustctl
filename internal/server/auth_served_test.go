@@ -140,12 +140,7 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 		clientID = "trstctl-ui"
 	)
 
-	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: freeTCPPort(t)})
-	if err != nil {
-		t.Fatalf("start bundled postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = stopPG() })
-
+	dsn := serverTestPostgresDSN(t)
 	st, err := store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -154,6 +149,7 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	resetServerTestStore(t, st)
 
 	// Seed an owner in EACH tenant so a tenant-scoped read proves isolation: tenant A
 	// sees only ownerA, tenant B only ownerB.

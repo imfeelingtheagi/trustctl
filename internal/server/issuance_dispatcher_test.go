@@ -4,14 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
-	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
-
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -273,35 +268,7 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 		t.Skip("starts embedded PostgreSQL; skipped in -short")
 	}
 	ctx := context.Background()
-	dir, err := os.MkdirTemp("", "trstctl-issuance-dispatcher-pg")
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := freeTCPPort(t)
-	pg := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
-		Version(embeddedpostgres.V16).
-		Port(uint32(port)).
-		RuntimePath(dir + "/rt").
-		DataPath(dir + "/data").
-		BinariesPath(dir + "/bin").
-		Logger(io.Discard).
-		StartTimeout(60 * time.Second))
-	if err := pg.Start(); err != nil {
-		_ = os.RemoveAll(dir)
-		t.Fatalf("embedded postgres start: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = pg.Stop()
-		_ = os.RemoveAll(dir)
-	})
-	st, err := store.Open(ctx, fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port))
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(st.Close)
-	if err := st.Migrate(ctx); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	st := newServerTestStore(t)
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
 		t.Fatalf("open event log: %v", err)

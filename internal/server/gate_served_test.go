@@ -39,12 +39,7 @@ func TestServedIssuanceGateEnforced(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: freeTCPPort(t)})
-	if err != nil {
-		t.Fatalf("start bundled postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = stopPG() })
-
+	dsn := serverTestPostgresDSN(t)
 	st, err := store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -53,6 +48,7 @@ func TestServedIssuanceGateEnforced(t *testing.T) {
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	resetServerTestStore(t, st)
 
 	const tenantA = "11111111-1111-1111-1111-111111111111"
 

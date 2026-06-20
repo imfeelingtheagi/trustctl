@@ -9,7 +9,6 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/store"
 )
 
 // TestHeavyReadRoutesUseSeparatePool is the SPINE-005 acceptance: the heavy
@@ -25,23 +24,9 @@ func TestHeavyReadRoutesUseSeparatePool(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: freeTCPPort(t)})
-	if err != nil {
-		t.Fatalf("start bundled postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = stopPG() })
-
-	st, err := store.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	if err := st.Migrate(ctx); err != nil {
-		st.Close()
-		t.Fatalf("migrate: %v", err)
-	}
+	st := newServerTestStore(t)
 	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
 	if err != nil {
-		st.Close()
 		t.Fatalf("open event log: %v", err)
 	}
 
