@@ -9,23 +9,30 @@ package iis
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/pfx"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // defaultAppID is the HTTP.SYS application id IIS uses for its SSL bindings.
 const defaultAppID = "{4dc3e181-e14b-4a21-b022-59fc669b0914}"
 
+// defaultImportDir is the scoped transient-file directory used to pass PFX bytes
+// and the random import password to PowerShell without embedding either secret in
+// process arguments.
+const defaultImportDir = "C:/ProgramData/trstctl/iis-import"
+
 // Connector deploys certificates to an IIS host.
 type Connector struct {
 	binding    string // the HTTPS binding, "ip:port" (for example "0.0.0.0:443")
 	store      string // certificate store name (default "MY")
 	appID      string
+	importDir  string
 	powershell string
 	netsh      string
 }
@@ -41,10 +48,26 @@ func WithStore(name string) Option { return func(c *Connector) { c.store = name 
 // WithAppID sets the HTTP.SYS application id for the binding.
 func WithAppID(id string) Option { return func(c *Connector) { c.appID = id } }
 
+// WithImportDir sets the scoped directory used for transient PFX/password files.
+func WithImportDir(dir string) Option {
+	return func(c *Connector) {
+		if dir != "" {
+			c.importDir = cleanImportDir(dir)
+		}
+	}
+}
+
 // New returns a connector that binds the certificate to the HTTPS binding
 // "ip:port".
 func New(binding string, opts ...Option) *Connector {
-	c := &Connector{binding: binding, store: "MY", appID: defaultAppID, powershell: "powershell", netsh: "netsh"}
+	c := &Connector{
+		binding:    binding,
+		store:      "MY",
+		appID:      defaultAppID,
+		importDir:  defaultImportDir,
+		powershell: "powershell",
+		netsh:      "netsh",
+	}
 	for _, o := range opts {
 		o(c)
 	}
@@ -55,10 +78,12 @@ func New(binding string, opts ...Option) *Connector {
 func (c *Connector) Name() string { return "iis" }
 
 // Capabilities declares the least privilege the connector needs: run commands
-// (the certificate import and `netsh`). It never writes files or uses the
-// network — the certificate is delivered through the import command.
+// (the certificate import and `netsh`) and write only the scoped transient import
+// files used to keep PFX/password bytes out of process arguments. It never uses
+// the network.
 func (c *Connector) Capabilities() pluginhost.Grant {
-	return pluginhost.NewGrant(connector.CapExec)
+	return pluginhost.NewGrant(connector.CapExec, pluginhost.CapFSWrite).
+		WithPathPrefix(pluginhost.CapFSWrite, c.importDir+"/")
 }
 
 // Deploy imports the renewed certificate into the machine store and binds its
@@ -73,8 +98,25 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 	if err != nil {
 		return fmt.Errorf("iis: build PFX: %w", err)
 	}
+	defer secret.Wipe(pfxDER)
+	defer secret.Wipe(password)
 
-	if err := sb.Exec(c.powershell, "-Command", importCommand(pfxDER, password, c.store)); err != nil {
+	pfxPath, passwordPath := c.importPaths(dep.Fingerprint)
+	cleanupStaged := false
+	defer func() {
+		if cleanupStaged {
+			_ = sb.WriteFile(pfxPath, nil)
+			_ = sb.WriteFile(passwordPath, nil)
+		}
+	}()
+	if err := sb.WriteFile(pfxPath, pfxDER); err != nil {
+		return fmt.Errorf("iis: stage PFX: %w", err)
+	}
+	cleanupStaged = true
+	if err := sb.WriteFile(passwordPath, password); err != nil {
+		return fmt.Errorf("iis: stage PFX password: %w", err)
+	}
+	if err := sb.Exec(c.powershell, "-NoProfile", "-NonInteractive", "-Command", importCommand(pfxPath, passwordPath, c.store)); err != nil {
 		return fmt.Errorf("iis: import certificate: %w", err)
 	}
 
@@ -88,15 +130,38 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 	return nil
 }
 
-// importCommand builds the PowerShell command that adds the PFX to the
-// LocalMachine\<store> store without writing a temporary file (it constructs an
-// X509Certificate2 from the PFX bytes and adds it to the store).
-func importCommand(pfxDER []byte, password, store string) string {
-	b64 := base64.StdEncoding.EncodeToString(pfxDER)
+func (c *Connector) importPaths(fingerprint string) (pfxPath, passwordPath string) {
+	stem := fingerprint
+	if stem == "" {
+		stem = "deployment"
+	}
+	return c.importDir + "/" + stem + ".pfx", c.importDir + "/" + stem + ".pw"
+}
+
+// importCommand builds the PowerShell command that adds the staged PFX to the
+// LocalMachine\<store> store. The command carries only paths and store names; the
+// PFX bytes and transient password are read from files and removed in finally.
+func importCommand(pfxPath, passwordPath, store string) string {
 	return fmt.Sprintf(
-		"$b=[Convert]::FromBase64String('%s'); "+
-			"$c=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new($b,'%s','MachineKeySet,PersistKeySet'); "+
-			"$s=[System.Security.Cryptography.X509Certificates.X509Store]::new('%s','LocalMachine'); "+
-			"$s.Open('ReadWrite'); $s.Add($c); $s.Close()",
-		b64, password, store)
+		"$pfx=%s; $pwPath=%s; "+
+			"try { "+
+			"$pw=Get-Content -LiteralPath $pwPath -Raw; "+
+			"$sec=ConvertTo-SecureString -String $pw -AsPlainText -Force; "+
+			"Import-PfxCertificate -FilePath $pfx -CertStoreLocation %s -Password $sec | Out-Null "+
+			"} finally { "+
+			"Remove-Item -LiteralPath $pfx,$pwPath -Force -ErrorAction SilentlyContinue "+
+			"}",
+		psQuote(pfxPath), psQuote(passwordPath), psQuote("Cert:\\LocalMachine\\"+store))
+}
+
+func cleanImportDir(dir string) string {
+	dir = strings.TrimRight(dir, `/\`)
+	if dir == "" {
+		return defaultImportDir
+	}
+	return dir
+}
+
+func psQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }

@@ -1,6 +1,7 @@
 package gcpcm_test
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"testing"
@@ -42,10 +43,10 @@ func TestDeployUpdatesCertificate(t *testing.T) {
 	if !ok {
 		t.Fatalf("nothing updated under %q", certID)
 	}
-	if got.PEMCertificate != string(sampleCert) {
+	if !bytes.Equal(got.PEMCertificate, sampleCert) {
 		t.Errorf("pemCertificate = %q, want the full chain", got.PEMCertificate)
 	}
-	if got.PEMPrivateKey != string(sampleKey) {
+	if !bytes.Equal(got.PEMPrivateKey, sampleKey) {
 		t.Errorf("pemPrivateKey mismatch")
 	}
 }
@@ -95,7 +96,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 		}
 	}
 	got, ok := srv.Imported(certID)
-	if !ok || got.PEMCertificate != string(sampleCert) {
+	if !ok || !bytes.Equal(got.PEMCertificate, sampleCert) {
 		t.Errorf("after redeploy: ok=%v", ok)
 	}
 }

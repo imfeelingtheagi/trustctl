@@ -1,6 +1,7 @@
 package pfx_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -78,10 +79,10 @@ func TestEncodeTransientUsesAFreshPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pw1 == "" || pw1 == pw2 {
+	if len(pw1) == 0 || bytes.Equal(pw1, pw2) {
 		t.Errorf("transient passwords not fresh: %q vs %q", pw1, pw2)
 	}
-	if _, _, _, err := pkcs12.DecodeChain(blob1, pw1); err != nil {
+	if _, _, _, err := pkcs12.DecodeChain(blob1, string(pw1)); err != nil {
 		t.Errorf("returned password does not open the blob: %v", err)
 	}
 }

@@ -2,6 +2,8 @@ package iis_test
 
 import (
 	"context"
+	"encoding/base64"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -98,15 +100,62 @@ func TestIISIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestIISStagesPFXSecretsOutsideProcessArguments(t *testing.T) {
+	srv := iistest.New()
+	if err := deploy(t, srv, realCert, realKey); err != nil {
+		t.Fatalf("Deploy: %v", err)
+	}
+
+	var staged [][]byte
+	for _, writes := range srv.Writes() {
+		for _, data := range writes {
+			if len(data) > 0 {
+				staged = append(staged, data)
+			}
+		}
+	}
+	if len(staged) < 2 {
+		t.Fatalf("expected non-empty PFX and password file writes, got %d", len(staged))
+	}
+
+	var args string
+	for _, exec := range srv.Execs() {
+		args += strings.Join(exec, "\x00")
+	}
+	if strings.Contains(args, string(realKey)) {
+		t.Fatal("process arguments contain the private-key PEM")
+	}
+	for _, data := range staged {
+		if strings.Contains(args, string(data)) {
+			t.Fatal("process arguments contain staged secret file bytes")
+		}
+		if encoded := base64.StdEncoding.EncodeToString(data); encoded != "" && strings.Contains(args, encoded) {
+			t.Fatal("process arguments contain base64-encoded staged secret bytes")
+		}
+	}
+	for path, data := range srv.Files() {
+		if len(data) != 0 {
+			t.Fatalf("staged file %q retained %d secret bytes after cleanup", path, len(data))
+		}
+	}
+}
+
 // TestIISIsLeastPrivilege: the IIS connector runs commands (import + netsh) and
-// nothing else — no filesystem, no network.
+// writes only its scoped transient import files — no network and no arbitrary fs.
 func TestIISIsLeastPrivilege(t *testing.T) {
-	g := iis.New(binding).Capabilities()
+	const tempDir = "C:/secure/trstctl-iis"
+	g := iis.New(binding, iis.WithImportDir(tempDir)).Capabilities()
 	if !g.Has(connector.CapExec) {
 		t.Error("iis connector must be able to run commands")
 	}
-	if g.Has(pluginhost.CapFSWrite) {
-		t.Error("iis connector should not request filesystem write")
+	if !g.Has(pluginhost.CapFSWrite) {
+		t.Error("iis connector must write scoped transient import files")
+	}
+	if !g.Allows(pluginhost.CapFSWrite, tempDir+"/credential.pfx") {
+		t.Error("iis connector must be able to write inside its import temp dir")
+	}
+	if g.Allows(pluginhost.CapFSWrite, "C:/secure/other/credential.pfx") {
+		t.Error("iis connector must not write outside its import temp dir")
 	}
 	if g.Has(pluginhost.CapNetDial) {
 		t.Error("iis connector should not request network access")

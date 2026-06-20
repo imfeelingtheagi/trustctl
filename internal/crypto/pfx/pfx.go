@@ -21,6 +21,7 @@ import (
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
 
 	"trstctl.com/trstctl/internal/crypto/detrand"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // EncodeTransient packages the key and certificate chain into a PKCS#12 blob
@@ -28,13 +29,20 @@ import (
 // handing a PFX straight to an OS importer (for example Windows
 // PFXImportCertStore): the blob and password live only for that call and are
 // then discarded, so the password is never persisted or transmitted.
-func EncodeTransient(keyPEM, certChainPEM []byte) (pfxDER []byte, password string, err error) {
+func EncodeTransient(keyPEM, certChainPEM []byte) (pfxDER []byte, password []byte, err error) {
 	var b [16]byte
 	if _, err = rand.Read(b[:]); err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	password = hex.EncodeToString(b[:])
-	pfxDER, err = Encode(keyPEM, certChainPEM, password)
+	password = make([]byte, hex.EncodedLen(len(b)))
+	hex.Encode(password, b[:])
+	secret.Wipe(b[:])
+
+	pfxDER, err = Encode(keyPEM, certChainPEM, string(password))
+	if err != nil {
+		secret.Wipe(password)
+		return nil, nil, err
+	}
 	return pfxDER, password, err
 }
 

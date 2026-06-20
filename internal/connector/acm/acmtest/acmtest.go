@@ -99,24 +99,24 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var in struct {
-		Certificate      string
-		PrivateKey       string
-		CertificateChain string
-		CertificateArn   string
+		CertificateValue      string `json:"Certificate"`
+		PrivateKeyValue       string `json:"PrivateKey"`
+		CertificateChainValue string `json:"CertificateChain"`
+		CertificateArn        string `json:"CertificateArn"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		s.fail(w, http.StatusBadRequest, "SerializationException", err.Error())
 		return
 	}
-	cert, err1 := base64.StdEncoding.DecodeString(in.Certificate)
-	key, err2 := base64.StdEncoding.DecodeString(in.PrivateKey)
+	cert, err1 := base64.StdEncoding.DecodeString(in.CertificateValue)
+	key, err2 := base64.StdEncoding.DecodeString(in.PrivateKeyValue)
 	if err1 != nil || err2 != nil || len(cert) == 0 || len(key) == 0 {
 		s.fail(w, http.StatusBadRequest, "ValidationException", "Certificate and PrivateKey are required base64 blobs")
 		return
 	}
 	var chain []byte
-	if in.CertificateChain != "" {
-		chain, _ = base64.StdEncoding.DecodeString(in.CertificateChain)
+	if in.CertificateChainValue != "" {
+		chain, _ = base64.StdEncoding.DecodeString(in.CertificateChainValue)
 	}
 
 	s.mu.Lock()

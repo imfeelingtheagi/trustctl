@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 // defaultName is the local-certificate object name used when the deployment
@@ -100,8 +101,8 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 	body, err := json.Marshal(localCert{
 		Name:        name,
-		Certificate: string(dep.CertPEM),
-		PrivateKey:  string(dep.KeyPEM),
+		Certificate: secretjson.StringBytes(dep.CertPEM),
+		PrivateKey:  secretjson.StringBytes(dep.KeyPEM),
 	})
 	if err != nil {
 		return fmt.Errorf("fortigate: encode request: %w", err)
@@ -153,7 +154,7 @@ func certName(target string) string {
 // localCert is the FortiOS vpn.certificate/local object body. certificate and
 // private-key are PEM strings (the FortiOS schema field names).
 type localCert struct {
-	Name        string `json:"name"`
-	Certificate string `json:"certificate"`
-	PrivateKey  string `json:"private-key"`
+	Name        string                 `json:"name"`
+	Certificate secretjson.StringBytes `json:"certificate"`
+	PrivateKey  secretjson.StringBytes `json:"private-key"`
 }

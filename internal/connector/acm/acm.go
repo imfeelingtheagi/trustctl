@@ -23,7 +23,6 @@ package acm
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -39,6 +38,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 const (
@@ -115,8 +115,8 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	leaf, chain := splitLeafChain(dep.CertPEM)
 
 	reqBody, err := json.Marshal(importRequest{
-		Certificate:      base64.StdEncoding.EncodeToString(leaf),
-		PrivateKey:       base64.StdEncoding.EncodeToString(dep.KeyPEM),
+		Certificate:      secretjson.Base64Bytes(leaf),
+		PrivateKey:       secretjson.Base64Bytes(dep.KeyPEM),
 		CertificateChain: b64(chain),
 		CertificateArn:   dep.Target,
 	})
@@ -155,10 +155,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 // importRequest is the ACM ImportCertificate body. Certificate, PrivateKey, and
 // CertificateChain are blobs — base64-encoded in AWS JSON 1.1.
 type importRequest struct {
-	Certificate      string `json:"Certificate"`
-	PrivateKey       string `json:"PrivateKey"`
-	CertificateChain string `json:"CertificateChain,omitempty"`
-	CertificateArn   string `json:"CertificateArn,omitempty"`
+	Certificate      secretjson.Base64Bytes `json:"Certificate"`
+	PrivateKey       secretjson.Base64Bytes `json:"PrivateKey"`
+	CertificateChain secretjson.Base64Bytes `json:"CertificateChain,omitempty"`
+	CertificateArn   string                 `json:"CertificateArn,omitempty"`
 }
 
 // signV4 adds AWS Signature Version 4 headers to req over body. Digests and the
@@ -248,9 +248,6 @@ func splitLeafChain(certPEM []byte) (leaf, chain []byte) {
 	return leaf, chain
 }
 
-func b64(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(b)
+func b64(b []byte) secretjson.Base64Bytes {
+	return secretjson.Base64Bytes(b)
 }

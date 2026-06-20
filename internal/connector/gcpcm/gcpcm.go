@@ -31,7 +31,9 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 const (
@@ -116,8 +118,8 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 
 	body, err := json.Marshal(patchRequest{SelfManaged: selfManaged{
-		PEMCertificate: string(dep.CertPEM),
-		PEMPrivateKey:  string(dep.KeyPEM),
+		PEMCertificate: secretjson.StringBytes(dep.CertPEM),
+		PEMPrivateKey:  secretjson.StringBytes(dep.KeyPEM),
 	}})
 	if err != nil {
 		return fmt.Errorf("gcpcm: encode request: %w", err)
@@ -126,6 +128,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	endpoint := c.endpoint + "/v1/projects/" + c.project + "/locations/" + c.location +
 		"/certificates/" + url.PathEscape(dep.Target) + "?updateMask=self_managed"
 	op, err := c.call(ctx, sb, http.MethodPatch, endpoint, token, body)
+	secret.Wipe(body)
 	if err != nil {
 		return fmt.Errorf("gcpcm: update certificate %q: %w", dep.Target, err)
 	}
@@ -200,8 +203,8 @@ type patchRequest struct {
 }
 
 type selfManaged struct {
-	PEMCertificate string `json:"pemCertificate"`
-	PEMPrivateKey  string `json:"pemPrivateKey"`
+	PEMCertificate secretjson.StringBytes `json:"pemCertificate"`
+	PEMPrivateKey  secretjson.StringBytes `json:"pemPrivateKey"`
 }
 
 type operation struct {

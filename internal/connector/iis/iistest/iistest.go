@@ -18,13 +18,16 @@ type Server struct {
 	mu       sync.Mutex
 	imports  int
 	bindings map[string]string // ipport -> certhash (thumbprint)
+	files    map[string][]byte
+	writes   map[string][][]byte
+	execs    [][]string
 }
 
 var _ connector.Ops = (*Server)(nil)
 
 // New returns a server with no imported certificates and no bindings.
 func New() *Server {
-	return &Server{bindings: map[string]string{}}
+	return &Server{bindings: map[string]string{}, files: map[string][]byte{}, writes: map[string][][]byte{}}
 }
 
 // Exec models the commands the IIS connector runs: a PowerShell command that
@@ -34,6 +37,7 @@ func (s *Server) Exec(name string, args []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.execs = append(s.execs, append([]string{name}, args...))
 	if isStoreImport(args) {
 		s.imports++
 		return nil
@@ -59,10 +63,14 @@ func (s *Server) Exec(name string, args []string) error {
 	return nil
 }
 
-// WriteFile is unsupported: the IIS connector imports the certificate via a
-// command, not by writing a file.
+// WriteFile records the transient PFX/password files staged for PowerShell.
 func (s *Server) WriteFile(path string, data []byte) error {
-	return fmt.Errorf("iistest: the iis connector does not write files")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	copied := append([]byte(nil), data...)
+	s.files[path] = copied
+	s.writes[path] = append(s.writes[path], append([]byte(nil), data...))
+	return nil
 }
 
 // Send is unsupported: the IIS connector does not use the network.
@@ -85,11 +93,47 @@ func (s *Server) Binding(ipport string) (string, bool) {
 	return v, ok
 }
 
+// Files returns the staged files observed by the test double.
+func (s *Server) Files() map[string][]byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string][]byte, len(s.files))
+	for k, v := range s.files {
+		out[k] = append([]byte(nil), v...)
+	}
+	return out
+}
+
+// Writes returns every file payload written, grouped by path.
+func (s *Server) Writes() map[string][][]byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make(map[string][][]byte, len(s.writes))
+	for k, writes := range s.writes {
+		out[k] = make([][]byte, len(writes))
+		for i, v := range writes {
+			out[k][i] = append([]byte(nil), v...)
+		}
+	}
+	return out
+}
+
+// Execs returns the command invocations observed by the test double.
+func (s *Server) Execs() [][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([][]string, len(s.execs))
+	for i, e := range s.execs {
+		out[i] = append([]string(nil), e...)
+	}
+	return out
+}
+
 // isStoreImport reports whether the command adds a certificate to the Windows
 // store (the connector's PowerShell uses System.Security...X509Store).
 func isStoreImport(args []string) bool {
 	for _, a := range args {
-		if strings.Contains(a, "X509Store") {
+		if strings.Contains(a, "Import-PfxCertificate") {
 			return true
 		}
 	}

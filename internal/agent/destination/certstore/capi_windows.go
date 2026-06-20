@@ -5,12 +5,14 @@ package certstore
 import (
 	"encoding/pem"
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 
 	"trstctl.com/trstctl/internal/agent/destination"
 	"trstctl.com/trstctl/internal/crypto/pfx"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Windows is a CryptoAPI/CNG-backed certificate store. It installs certificates
@@ -140,10 +142,14 @@ func (w *Windows) ImportWithKey(ref destination.StoreRef, friendlyName string, c
 	if err != nil {
 		return fmt.Errorf("certstore: build PFX: %w", err)
 	}
-	pw, err := windows.UTF16PtrFromString(password)
+	defer secret.Wipe(pfxDER)
+	defer secret.Wipe(password)
+
+	pwbuf, err := utf16FromASCIISecret(password)
 	if err != nil {
 		return err
 	}
+	defer wipeUTF16(pwbuf)
 	blob := cryptDataBlob{cbData: uint32(len(pfxDER)), pbData: &pfxDER[0]}
 
 	keyset := uintptr(cryptUserKeyset)
@@ -152,7 +158,7 @@ func (w *Windows) ImportWithKey(ref destination.StoreRef, friendlyName string, c
 	}
 	r, _, e := procPFXImportCertStore.Call(
 		uintptr(unsafe.Pointer(&blob)),
-		uintptr(unsafe.Pointer(pw)),
+		uintptr(unsafe.Pointer(&pwbuf[0])),
 		keyset, // no CRYPT_EXPORTABLE: the key cannot be exported
 	)
 	if r == 0 {
@@ -184,6 +190,24 @@ func (w *Windows) ImportWithKey(ref destination.StoreRef, friendlyName string, c
 	}
 	defer procCertFreeCertificateContext.Call(uintptr(unsafe.Pointer(added)))
 	return setFriendlyName(added, friendlyName)
+}
+
+func utf16FromASCIISecret(src []byte) ([]uint16, error) {
+	out := make([]uint16, len(src)+1)
+	for i, b := range src {
+		if b == 0 || b > 0x7f {
+			return nil, fmt.Errorf("certstore: transient PFX password is not ASCII")
+		}
+		out[i] = uint16(b)
+	}
+	return out, nil
+}
+
+func wipeUTF16(v []uint16) {
+	for i := range v {
+		v[i] = 0
+	}
+	runtime.KeepAlive(v)
 }
 
 // keyBearingCert returns the certificate in store that has an associated

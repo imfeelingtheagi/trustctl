@@ -21,7 +21,6 @@ package azurekv
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +29,9 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 const (
@@ -96,13 +97,15 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 
 	bundle := pemBundle(dep.KeyPEM, dep.CertPEM)
+	defer secret.Wipe(bundle)
 	reqBody, err := json.Marshal(importRequest{
-		Value:  base64.StdEncoding.EncodeToString(bundle),
+		Value:  secretjson.Base64Bytes(bundle),
 		Policy: policy{SecretProps: secretProps{ContentType: pemContentType}},
 	})
 	if err != nil {
 		return fmt.Errorf("azurekv: encode request: %w", err)
 	}
+	defer secret.Wipe(reqBody)
 
 	endpoint := c.vaultURL + "/certificates/" + url.PathEscape(dep.Target) + "/import?api-version=" + c.apiVersion
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(reqBody))
@@ -130,8 +133,8 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 // importRequest is the Key Vault certificate import body.
 type importRequest struct {
-	Value  string `json:"value"`
-	Policy policy `json:"policy"`
+	Value  secretjson.Base64Bytes `json:"value"`
+	Policy policy                 `json:"policy"`
 }
 
 type policy struct {

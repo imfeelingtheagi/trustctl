@@ -86,7 +86,8 @@ var Analyzer = &analysis.Analyzer{
 func run(pass *analysis.Pass) (interface{}, error) {
 	inKeyMaterialScope := inScope(pass)
 	inSecretSurfaceScope := secretSurfacePkgs[pass.Pkg.Path()]
-	if !inKeyMaterialScope && !inSecretSurfaceScope {
+	inDeploymentConnectorScope := strings.HasPrefix(pass.Pkg.Path(), "trstctl.com/trstctl/internal/connector/")
+	if !inKeyMaterialScope && !inSecretSurfaceScope && !inDeploymentConnectorScope {
 		return nil, nil
 	}
 	for _, file := range pass.Files {
@@ -105,6 +106,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				if inSecretSurfaceScope && isSecretStringConversion(x) {
 					pass.Reportf(x.Pos(),
 						"secret-bearing API/auth code must not convert secret bytes to string; keep material in []byte (AN-8)")
+				}
+				if inDeploymentConnectorScope && isDeploymentKeyStringConversion(x) {
+					pass.Reportf(x.Pos(),
+						"deployment connector must not convert Deployment.KeyPEM to string/base64 string; use byte-backed encoders and wipe edge buffers (AN-8)")
 				}
 			}
 			return true
@@ -146,6 +151,34 @@ func isSecretConversionArg(expr ast.Expr) bool {
 	default:
 		return false
 	}
+}
+
+func isDeploymentKeyStringConversion(call *ast.CallExpr) bool {
+	if len(call.Args) != 1 || !isDeploymentKeyPEM(call.Args[0]) {
+		return false
+	}
+	if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "string" {
+		return true
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "EncodeToString" {
+		return false
+	}
+	stdEncoding, ok := sel.X.(*ast.SelectorExpr)
+	if !ok || stdEncoding.Sel.Name != "StdEncoding" {
+		return false
+	}
+	pkg, ok := stdEncoding.X.(*ast.Ident)
+	return ok && pkg.Name == "base64"
+}
+
+func isDeploymentKeyPEM(expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "KeyPEM" {
+		return false
+	}
+	base, ok := sel.X.(*ast.Ident)
+	return ok && base.Name == "dep"
 }
 
 // inScope reports whether the package is subject to AN-8: either it is a

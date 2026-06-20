@@ -1,6 +1,7 @@
 package projections_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -59,7 +60,7 @@ func TestGCPCMDeploysRenewedCertViaOutbox(t *testing.T) {
 	}
 
 	got, ok := srv.Imported(certID)
-	if !ok || got.PEMCertificate != string(gcpCert) || got.PEMPrivateKey != string(gcpKey) {
+	if !ok || !bytes.Equal(got.PEMCertificate, gcpCert) || !bytes.Equal(got.PEMPrivateKey, gcpKey) {
 		t.Fatalf("Certificate Manager did not receive the renewed credential after outbox delivery")
 	}
 
@@ -67,7 +68,7 @@ func TestGCPCMDeploysRenewedCertViaOutbox(t *testing.T) {
 		t.Fatalf("redeliver: %v", err)
 	}
 	got2, _ := srv.Imported(certID)
-	if got2 != got {
+	if !bytes.Equal(got2.PEMCertificate, got.PEMCertificate) || !bytes.Equal(got2.PEMPrivateKey, got.PEMPrivateKey) {
 		t.Error("redelivery changed the applied certificate")
 	}
 }

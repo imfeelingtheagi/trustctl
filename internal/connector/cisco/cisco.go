@@ -31,6 +31,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 // defaultName is the certificate name used when a Deployment carries no target.
@@ -106,8 +107,8 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 	body, err := json.Marshal(importRequest{
 		Name:        name,
-		Certificate: string(dep.CertPEM),
-		PrivateKey:  string(dep.KeyPEM),
+		Certificate: secretjson.StringBytes(dep.CertPEM),
+		PrivateKey:  secretjson.StringBytes(dep.KeyPEM),
 	})
 	if err != nil {
 		return fmt.Errorf("cisco: encode request: %w", err)
@@ -160,7 +161,7 @@ func (c *Connector) basicAuth() string {
 // certificate and key are carried as PEM strings on the wire; trstctl holds the
 // material as []byte (AN-8) until this final marshal.
 type importRequest struct {
-	Name        string `json:"name"`
-	Certificate string `json:"certificate"`
-	PrivateKey  string `json:"privateKey"`
+	Name        string                 `json:"name"`
+	Certificate secretjson.StringBytes `json:"certificate"`
+	PrivateKey  secretjson.StringBytes `json:"privateKey"`
 }

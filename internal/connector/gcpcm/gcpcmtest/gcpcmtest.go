@@ -4,7 +4,7 @@
 // accepts PATCH of a self-managed certificate, and — like the real API — returns
 // a long-running operation that is reported done only on a follow-up poll, so
 // the connector's operation-polling is exercised. It records the updated
-// certificate by id. No crypto/* (AN-3): the PEM fields are plain strings.
+// certificate by id. No crypto/* (AN-3): PEM content is treated as opaque bytes.
 package gcpcmtest
 
 import (
@@ -19,8 +19,8 @@ import (
 
 // Imported is the self-managed certificate the fake received.
 type Imported struct {
-	PEMCertificate string
-	PEMPrivateKey  string
+	PEMCertificate []byte
+	PEMPrivateKey  []byte
 }
 
 // Server is a fake Certificate Manager endpoint.
@@ -96,11 +96,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var in struct {
 			SelfManaged struct {
-				PEMCertificate string `json:"pemCertificate"`
-				PEMPrivateKey  string `json:"pemPrivateKey"`
+				PEMCertificateValue string `json:"pemCertificate"`
+				PEMPrivateKeyValue  string `json:"pemPrivateKey"`
 			} `json:"selfManaged"`
 		}
-		if err := json.Unmarshal(body, &in); err != nil || in.SelfManaged.PEMCertificate == "" || in.SelfManaged.PEMPrivateKey == "" {
+		if err := json.Unmarshal(body, &in); err != nil || in.SelfManaged.PEMCertificateValue == "" || in.SelfManaged.PEMPrivateKeyValue == "" {
 			s.fail(w, http.StatusBadRequest, "INVALID_ARGUMENT", "selfManaged.pemCertificate and pemPrivateKey are required")
 			return
 		}
@@ -110,7 +110,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.nextOp++
 		opName := fmt.Sprintf("projects/%s/locations/%s/operations/op-%d", project, location, s.nextOp)
 		s.ops[opName] = false
-		s.certs[id] = Imported{PEMCertificate: in.SelfManaged.PEMCertificate, PEMPrivateKey: in.SelfManaged.PEMPrivateKey}
+		s.certs[id] = Imported{
+			PEMCertificate: []byte(in.SelfManaged.PEMCertificateValue),
+			PEMPrivateKey:  []byte(in.SelfManaged.PEMPrivateKeyValue),
+		}
 		s.mu.Unlock()
 		s.writeJSON(w, operation{Name: opName, Done: false})
 
