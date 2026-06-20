@@ -48,12 +48,13 @@ type header struct {
 // record is one event as written to the backup. Sequence is intentionally omitted
 // — it is reassigned contiguously when the events are re-appended on restore.
 type record struct {
-	ID       string          `json:"id"`
-	Type     string          `json:"type"`
-	TenantID string          `json:"tenant_id"`
-	Time     time.Time       `json:"time"`
-	Data     json.RawMessage `json:"data,omitempty"`
-	Actor    *events.Actor   `json:"actor,omitempty"`
+	ID            string          `json:"id"`
+	Type          string          `json:"type"`
+	TenantID      string          `json:"tenant_id"`
+	SchemaVersion int             `json:"v,omitempty"`
+	Time          time.Time       `json:"time"`
+	Data          json.RawMessage `json:"data,omitempty"`
+	Actor         *events.Actor   `json:"actor,omitempty"`
 }
 
 // trailer is the final line of a backup stream — the integrity check over every
@@ -93,7 +94,7 @@ func WriteLogWithKey(ctx context.Context, log *events.Log, w io.Writer, key []by
 	n := 0
 	err := log.Replay(ctx, 0, func(e events.Event) error {
 		if err := enc.Encode(record{
-			ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time,
+			ID: e.ID, Type: e.Type, TenantID: e.TenantID, SchemaVersion: e.SchemaVersion, Time: e.Time,
 			Data: json.RawMessage(e.Data), Actor: e.Actor,
 		}); err != nil {
 			return err
@@ -169,7 +170,7 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 			return n, fmt.Errorf("backup: replay spooled record %d: %w", n+1, err)
 		}
 		if _, err := log.Append(ctx, events.Event{
-			ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID, Time: rec.Time,
+			ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID, SchemaVersion: rec.SchemaVersion, Time: rec.Time,
 			Data: []byte(rec.Data), Actor: rec.Actor,
 		}); err != nil {
 			return n, fmt.Errorf("backup: append record %d: %w", n+1, err)

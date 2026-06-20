@@ -1,13 +1,17 @@
 package projections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -32,6 +36,87 @@ func lifecycleTransitionPayload(identityID string, from, to orchestrator.State) 
 		To         orchestrator.State `json:"to"`
 	}{IdentityID: identityID, From: from, To: to})
 	return b
+}
+
+// TestBackupPreservesEventSchemaVersion is the DR regression for SCHEMA-001:
+// backup/restore must carry the event envelope's schema version. Profile v2
+// events contain the complete read-model row, while legacy v1 profile events are
+// audit-only. If restore drops v=2, a disaster-recovery rebuild silently loses
+// certificate_profiles.
+func TestBackupPreservesEventSchemaVersion(t *testing.T) {
+	srcStore := newStore(t)
+	srcLog := openLog(t)
+	ctx := events.ContextWithActor(context.Background(), events.Actor{Subject: "ra@a", Roles: []string{"ra-officer"}})
+	if err := srcStore.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "A"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srcLog.Append(ctx, events.Event{Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("A")}); err != nil {
+		t.Fatal(err)
+	}
+
+	orch := orchestrator.NewOrchestrator(srcLog, srcStore, orchestrator.NewOutbox(srcStore))
+	spec1 := mustProfileSpec(t, profile.CertificateProfile{Name: "web", MaxValidity: profile.Duration(24 * time.Hour)})
+	spec2 := mustProfileSpec(t, profile.CertificateProfile{Name: "web", MaxValidity: profile.Duration(48 * time.Hour)})
+	v1, err := orch.CreateProfile(ctx, tenantA, "web", spec1)
+	if err != nil {
+		t.Fatalf("CreateProfile v1: %v", err)
+	}
+	v2, err := orch.CreateProfile(ctx, tenantA, "web", spec2)
+	if err != nil {
+		t.Fatalf("CreateProfile v2: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if _, err := backup.WriteLog(context.Background(), srcLog, &buf); err != nil {
+		t.Fatalf("WriteLog: %v", err)
+	}
+	restoredLog := openLog(t)
+	if _, err := backup.RestoreLog(context.Background(), restoredLog, bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("RestoreLog: %v", err)
+	}
+
+	var profileVersions []int
+	if err := restoredLog.Replay(context.Background(), 0, func(ev events.Event) error {
+		if ev.Type == projections.EventProfileCreated || ev.Type == projections.EventProfileUpdated {
+			profileVersions = append(profileVersions, ev.SchemaVersion)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("Replay restored log: %v", err)
+	}
+	if len(profileVersions) != 2 {
+		t.Fatalf("restored %d profile events, want 2", len(profileVersions))
+	}
+	for _, got := range profileVersions {
+		if got != projections.ProfileEventSchemaVersion {
+			t.Fatalf("restored profile schema versions = %v, want all %d", profileVersions, projections.ProfileEventSchemaVersion)
+		}
+	}
+
+	dstStore := newStore(t)
+	if err := projections.New(dstStore).Rebuild(context.Background(), restoredLog); err != nil {
+		t.Fatalf("Rebuild restored log: %v", err)
+	}
+	got1, err := dstStore.GetProfileVersion(context.Background(), tenantA, "web", 1)
+	if err != nil {
+		t.Fatalf("GetProfileVersion v1 after restored rebuild: %v", err)
+	}
+	got2, err := dstStore.GetProfileVersion(context.Background(), tenantA, "web", 2)
+	if err != nil {
+		t.Fatalf("GetProfileVersion v2 after restored rebuild: %v", err)
+	}
+	active, err := dstStore.GetActiveProfile(context.Background(), tenantA, "web")
+	if err != nil {
+		t.Fatalf("GetActiveProfile after restored rebuild: %v", err)
+	}
+	if got1.ID != v1.ID || got1.Active {
+		t.Errorf("restored v1 = id %s active %v, want id %s inactive", got1.ID, got1.Active, v1.ID)
+	}
+	if got2.ID != v2.ID || !got2.Active || active.ID != v2.ID {
+		t.Errorf("restored v2/active = v2(%s active %v) active(%s), want v2 %s active", got2.ID, got2.Active, active.ID, v2.ID)
+	}
+	assertJSONEqual(t, got1.Spec, spec1)
+	assertJSONEqual(t, got2.Spec, spec2)
 }
 
 // TestReplayOldEventsNewProjector is the SCHEMA-001 acceptance: a stream of
