@@ -107,6 +107,8 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 		"tracks **78 capabilities**",
 		"served-state metadata",
 		"`served_state`",
+		"`api_surface`",
+		"`cli_surface`",
 		"`library`",
 		"`roadmap`",
 	} {

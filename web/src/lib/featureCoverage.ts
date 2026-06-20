@@ -12,6 +12,10 @@ export interface FeatureMapBacklogItem {
   phase: FeatureCoveragePhase;
   priority: number;
   served_state: FeatureServedState;
+  api_surface: string[];
+  api_na: string;
+  cli_surface: string[];
+  cli_na: string;
   backend_status: string;
   current_frontend_mapping: string;
   target_gui_mapping: string;
@@ -34,6 +38,10 @@ export interface FeatureCoverageItem {
   phase: FeatureCoveragePhase;
   priority: number;
   servedState: FeatureServedState;
+  apiSurface: string[];
+  apiNA: string;
+  cliSurface: string[];
+  cliNA: string;
   state: FeatureCoverageState;
   backendStatus: string;
   currentMapping: string;
@@ -73,6 +81,10 @@ export const featureCoverageItems: FeatureCoverageItem[] = backlog.items
     phase: item.phase,
     priority: item.priority,
     servedState: item.served_state,
+    apiSurface: item.api_surface,
+    apiNA: item.api_na,
+    cliSurface: item.cli_surface,
+    cliNA: item.cli_na,
     state: coverageStateFor(item),
     backendStatus: item.backend_status,
     currentMapping: item.current_frontend_mapping,

@@ -6,7 +6,10 @@ it exists, and *how* it works, for a reader who starts with [zero
 knowledge](glossary.md). The index is not a blanket GA-served claim for all 78
 rows: served-state metadata is enforced in `web/src/lib/feature-map-backlog.json`
 as `served_state`, with the allowed values `served`, `conditional`, `partial`,
-`library`, and `roadmap`.
+`library`, and `roadmap`. The same JSON records `api_surface`, `api_na`,
+`cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests
+verify that every named OpenAPI operation/CLI command exists, or that the row has
+an explicit N/A reason.
 
 This page is the answer to "where is feature X documented?" Each capability has a
 **primary page** that teaches it; some are also referenced from related pages and

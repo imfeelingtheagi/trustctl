@@ -97,6 +97,30 @@ function PhasePill({ phase }: { phase: FeatureCoveragePhase }) {
   );
 }
 
+function surfaceText(label: "API" | "CLI", values: string[], na: string) {
+  if (values.length === 0) return `N/A: ${na.replace(/^N\/A:\s*/i, "")}`;
+  const noun = label === "API" ? "operation" : "command";
+  const preview = values.slice(0, 4).join(", ");
+  const suffix = values.length > 4 ? `, +${values.length - 4} more` : "";
+  return `${values.length} ${noun}${values.length === 1 ? "" : "s"}: ${preview}${suffix}`;
+}
+
+function SurfaceLine({
+  label,
+  values,
+  na,
+}: {
+  label: "API" | "CLI";
+  values: string[];
+  na: string;
+}) {
+  return (
+    <p className="mt-2">
+      <span className="font-medium text-foreground">{label}:</span> {surfaceText(label, values, na)}
+    </p>
+  );
+}
+
 function FeatureRow({ item }: { item: FeatureCoverageItem }) {
   return (
     <tr data-testid="feature-row">
@@ -120,6 +144,8 @@ function FeatureRow({ item }: { item: FeatureCoverageItem }) {
         <p className="mt-2">
           <span className="font-medium text-foreground">Served state:</span> {servedStateCopy[item.servedState]}
         </p>
+        <SurfaceLine label="API" values={item.apiSurface} na={item.apiNA} />
+        <SurfaceLine label="CLI" values={item.cliSurface} na={item.cliNA} />
         <p className="mt-2">
           <span className="font-medium text-foreground">Current GUI:</span> {item.currentMapping}
         </p>
@@ -145,7 +171,18 @@ export function FeatureCoverage() {
       if (phaseFilter !== "all" && item.phase !== phaseFilter) return false;
       if (domainFilter !== "all" && item.domain !== domainFilter) return false;
       if (!needle) return true;
-      return [item.id, item.name, item.domain, item.backendStatus, item.currentMapping, item.targetMapping]
+      return [
+        item.id,
+        item.name,
+        item.domain,
+        item.backendStatus,
+        item.currentMapping,
+        item.targetMapping,
+        item.apiSurface.join(" "),
+        item.apiNA,
+        item.cliSurface.join(" "),
+        item.cliNA,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(needle);
