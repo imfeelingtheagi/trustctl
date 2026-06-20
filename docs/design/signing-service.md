@@ -137,16 +137,19 @@ lives upstream and around it:
   **dual-control**: the signer refuses every `Sign` against it unless the request
   carries a valid authorization token — an HMAC over the *exact* signing tuple
   (handle, purpose, hash, padding, and the digest itself) minted by an approval
-  authority that holds a secret the on-socket caller does not (the signer holds
-  only the verify side). Because the token commits to the digest it authorizes one
+  authority that holds a secret the on-socket caller does not. The signer holds
+  verifier material, while the control plane receives only the per-intent token
+  from `TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND` (or the explicitly eval-only
+  co-resident path). Because the token commits to the digest it authorizes one
   specific to-be-signed object and cannot be replayed onto different bytes, and
   because the approver secret is never exposed on the socket, a control-plane/socket
   compromise can no longer coerce a dual-control key into forging arbitrary trust.
   The dual-control opt-in and the per-`Sign` token travel as gRPC metadata (the
   wire proto is frozen); the flag is sealed with the key and re-enforced across a
-  restart; the authorizer (`internal/crypto.SignAuthorizer`) lives behind the AN-3
-  boundary with its secret in mlock'd memory (AN-8). A signer with no authorizer
-  fails closed on a dual-control key.
+  restart; the verifier (`internal/crypto.SignAuthorizer`) lives behind the AN-3
+  boundary with its secret in mlock'd memory (AN-8). A signer with no verifier or
+  a control plane with no independent token provider fails closed on a dual-control
+  key.
 
 What the signer guarantees is narrower and absolute: **the private key bytes
 never leave the process**, even under a full control-plane compromise. For a

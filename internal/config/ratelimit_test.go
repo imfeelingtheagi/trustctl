@@ -26,13 +26,14 @@ func TestRateLimitDefaults(t *testing.T) {
 // TestRateLimitEnvOverrides: the limiter is configurable from the environment.
 func TestRateLimitEnvOverrides(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_POSTGRES_MODE":       "external",
-		"TRSTCTL_POSTGRES_DSN":        "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":           "external",
-		"TRSTCTL_NATS_URL":            "nats://h:4222",
-		"TRSTCTL_RATE_LIMIT_ENABLED":  "false",
-		"TRSTCTL_RATE_LIMIT_REQUESTS": "50",
-		"TRSTCTL_RATE_LIMIT_WINDOW":   "30s",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_RATE_LIMIT_ENABLED":                  "false",
+		"TRSTCTL_RATE_LIMIT_REQUESTS":                 "50",
+		"TRSTCTL_RATE_LIMIT_WINDOW":                   "30s",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {

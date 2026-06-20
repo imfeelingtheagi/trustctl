@@ -19,6 +19,9 @@ func TestSignerDefaultsToChild(t *testing.T) {
 	if c.Signer.AuthSecretFile == "" {
 		t.Error("signer.auth_secret_file should have a default (SIGNER-001 content authorization)")
 	}
+	if !c.Signer.AllowCoResidentAuthorizer {
+		t.Error("single-node eval defaults should keep the co-resident authorizer explicitly marked as eval-only")
+	}
 	if c.CA.CertFile == "" {
 		t.Error("ca.cert_file should have a default (persisted issuing-CA cert)")
 	}
@@ -28,10 +31,11 @@ func TestSignerDefaultsToChild(t *testing.T) {
 // mode fails fast.
 func TestSignerExternalRequiresSocket(t *testing.T) {
 	base := map[string]string{
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://h:4222",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}
 
 	if _, err := config.Load(envFunc(base, map[string]string{"TRSTCTL_SIGNER_MODE": "external"})); err == nil {
@@ -44,19 +48,31 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 	})); err != nil {
 		t.Errorf("external signer with a socket should validate: %v", err)
 	}
-	noAuth := config.Default()
-	noAuth.Postgres.Mode = "external"
-	noAuth.Postgres.DSN = "postgres://u:p@h:5432/db?sslmode=require"
-	noAuth.NATS.Mode = "external"
-	noAuth.NATS.URL = "nats://h:4222"
-	noAuth.Signer.Mode = "external"
-	noAuth.Signer.Socket = "/run/trstctl/signer.sock"
-	noAuth.Signer.AuthSecretFile = ""
-	if err := noAuth.Validate(); err == nil {
-		t.Error("external signer without signer.auth_secret_file should fail validation")
-	}
 	if _, err := config.Load(envFunc(base, map[string]string{"TRSTCTL_SIGNER_MODE": "bogus"})); err == nil {
 		t.Error("an invalid signer.mode should fail validation")
+	}
+}
+
+func TestSignerCoResidentAuthorizerIsEvalOnly(t *testing.T) {
+	prod := config.Default()
+	prod.Postgres.Mode = config.PostgresExternal
+	prod.Postgres.DSN = "postgres://u:p@h:5432/db?sslmode=require"
+	prod.NATS.Mode = config.NATSExternal
+	prod.NATS.URL = "nats://h:4222"
+	prod.NATS.Replicas = config.DefaultExternalReplicas
+	prod.NATS.AllowSingleReplica = false
+	prod.Signer.Mode = config.SignerExternal
+	prod.Signer.Socket = "/run/trstctl/signer.sock"
+	prod.Signer.AuthSecretFile = ""
+	prod.Signer.AllowCoResidentAuthorizer = true
+	if err := prod.Validate(); err == nil {
+		t.Error("production-like external NATS must reject a co-resident signer authorizer")
+	}
+
+	prod.Signer.AllowCoResidentAuthorizer = false
+	prod.Signer.AuthTokenCommand = "/usr/local/bin/trstctl-sign-approve"
+	if err := prod.Validate(); err != nil {
+		t.Errorf("production-like signer with an external token command should validate: %v", err)
 	}
 }
 
@@ -66,10 +82,11 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 // reported as mTLS-enabled.
 func TestSignerExternalMTLSValidation(t *testing.T) {
 	base := map[string]string{
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://h:4222",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	}
 	full := map[string]string{
 		"TRSTCTL_SIGNER_MODE":              "external",

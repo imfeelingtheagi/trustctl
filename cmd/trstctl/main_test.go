@@ -188,10 +188,11 @@ func TestRun_CheckConfigDefault(t *testing.T) {
 // DSN password redacted.
 func TestRun_CheckConfigExternalTargets(t *testing.T) {
 	env := envFunc(map[string]string{
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://trstctl:s3cretpw@db.example.com:5432/trstctl?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://nats.example.com:4222",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://trstctl:s3cretpw@db.example.com:5432/trstctl?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://nats.example.com:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 	})
 	var stdout, stderr bytes.Buffer
 	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {

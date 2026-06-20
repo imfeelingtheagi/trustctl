@@ -19,16 +19,16 @@ import (
 //
 // SignIntent closes that residual for the crown-jewel key classes by binding a
 // Sign to an INDEPENDENT authorization that socket access alone cannot forge. An
-// approval authority (a dual-control officer, an out-of-band approver, or simply a
-// second process that holds the authorizer secret the on-socket attacker does not)
-// computes a keyed authorization token over the EXACT signing tuple — the key
-// handle, the asserted purpose, the hash/padding, and the digest itself. The
-// signer, configured with the same authorizer secret, recomputes and verifies the
-// token before it will use a dual-control key. Because the token commits to the
-// digest, it authorizes one specific to-be-signed object and cannot be replayed to
-// sign different bytes; because the secret is held by the approver and not exposed
-// on the socket, a control-plane/socket compromise can no longer coerce the CA key
-// into signing anything.
+// approval authority (a dual-control officer, an out-of-band approver, or an
+// approval service outside the digest-choosing control-plane process) computes a
+// keyed authorization token over the EXACT signing tuple — the key handle, the
+// asserted purpose, the hash/padding, and the digest itself. The signer,
+// configured with verifier material for the same secret, recomputes and verifies
+// the token before it will use a dual-control key. Because the token commits to
+// the digest, it authorizes one specific to-be-signed object and cannot be
+// replayed to sign different bytes; because production token minting is outside
+// the control-plane process, a control-plane/socket compromise cannot mint tokens
+// offline.
 //
 // The MAC lives behind the crypto boundary (AN-3): the authorizer key is a
 // secret.Buffer ([]byte, mlock'd — AN-8), and the token is HMAC-SHA256. The signer

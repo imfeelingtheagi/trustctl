@@ -109,6 +109,13 @@ const (
 	PurposeGeneric     = signerpb.KeyPurpose_KEY_PURPOSE_GENERIC
 )
 
+// SignTokenProvider mints the per-request authorization token for a
+// dual-control signer handle. In production this should be backed by an
+// independent approval authority; tests may use *crypto.SignAuthorizer directly.
+type SignTokenProvider interface {
+	Authorize(crypto.SignIntent) ([]byte, error)
+}
+
 // GenerateKey asks the signer to create an unconstrained key and returns a
 // RemoteSigner that signs through it. The private key never leaves the signer.
 // Used for ephemeral/test keys; for a purpose-bound key (e.g. the issuing CA)
@@ -159,7 +166,7 @@ func (c *Client) GenerateConstrainedKeyHandle(ctx context.Context, algorithm cry
 // returned signer is bound only after approval. The dual-control opt-in travels as
 // gRPC metadata (the wire proto is frozen); the signer must have been built with
 // the matching verify-only authorizer or this call is refused.
-func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose, authorizer *crypto.SignAuthorizer) (*RemoteSigner, error) {
+func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose, authorizer SignTokenProvider) (*RemoteSigner, error) {
 	mdCtx := metadata.AppendToOutgoingContext(ctx, mdRequireAuth, "1")
 	resp, err := c.svc.GenerateKey(mdCtx, &signerpb.GenerateKeyRequest{
 		Algorithm:       algorithmToProto(algorithm),
@@ -184,7 +191,7 @@ func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm cry
 // / multi-replica analogue of GenerateDualControlKeyHandle: the key already exists
 // (persisted, requireAuth sealed in), and the approval authority supplies the
 // Authorize secret so the bound signer can produce valid tokens.
-func (c *Client) SignerForDualControlHandle(ctx context.Context, handle string, declaredPurpose KeyPurpose, authorizer *crypto.SignAuthorizer) (*RemoteSigner, error) {
+func (c *Client) SignerForDualControlHandle(ctx context.Context, handle string, declaredPurpose KeyPurpose, authorizer SignTokenProvider) (*RemoteSigner, error) {
 	rs, err := c.SignerForHandleWithPurpose(ctx, handle, declaredPurpose)
 	if err != nil {
 		return nil, err
@@ -233,9 +240,10 @@ type RemoteSigner struct {
 	public    crypto.PublicKey
 	purpose   KeyPurpose
 	// authorizer, when non-nil, mints the dual-control authorization token attached
-	// to every Sign (RED-003). It is set only for a dual-control key; for a normal
-	// key it is nil and no token is sent.
-	authorizer *crypto.SignAuthorizer
+	// to every Sign (RED-003). It is set only for a dual-control key; production
+	// must source it from an independent approval authority, not from the digest
+	// choosing control-plane process.
+	authorizer SignTokenProvider
 }
 
 // Public returns the key's public key.

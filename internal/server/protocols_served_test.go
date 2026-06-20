@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/pem"
 	"io"
@@ -75,7 +76,12 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	}
 	t.Cleanup(kekW.Destroy)
 	ks := signing.NewKeyStore(filepath.Join(dir, "keys"), kekW)
-	signerSrv, err := signing.NewPersistentServer(ks)
+	authz, err := crypto.NewSignAuthorizer(bytes.Repeat([]byte{0x39}, 32))
+	if err != nil {
+		t.Fatalf("NewSignAuthorizer: %v", err)
+	}
+	t.Cleanup(authz.Destroy)
+	signerSrv, err := signing.NewPersistentServer(ks, signing.WithAuthorizer(authz))
 	if err != nil {
 		t.Fatalf("new signer: %v", err)
 	}
@@ -113,12 +119,13 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	t.Cleanup(func() { _ = client.Close() })
 
 	deps := Deps{
-		Store:      st,
-		Log:        log,
-		Signer:     signing.StaticProvider{C: client},
-		CACertFile: filepath.Join(dir, "issuing-ca.crt"),
-		KEK:        kekW,
-		Protocols:  protocols,
+		Store:          st,
+		Log:            log,
+		Signer:         signing.StaticProvider{C: client},
+		SignAuthorizer: authz,
+		CACertFile:     filepath.Join(dir, "issuing-ca.crt"),
+		KEK:            kekW,
+		Protocols:      protocols,
 	}
 	for _, o := range opts {
 		o(&deps)

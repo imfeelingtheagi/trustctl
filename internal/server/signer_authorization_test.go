@@ -3,6 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,5 +87,39 @@ func TestProvisionCAUsesDualControlSignerHandle(t *testing.T) {
 	_, err = raw.SignDigest(forgeDigest, crypto.SignOptions{Hash: crypto.SHA256})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("raw CA_SIGN against provisioned CA without token = %v, want PermissionDenied", status.Code(err))
+	}
+}
+
+func TestPrivilegedSignerHandleRequiresIndependentTokenProvider(t *testing.T) {
+	authz := testSignAuthorizer(t)
+	client := serveSignerWithAuthorizer(t, authz)
+	s := &Server{}
+
+	_, err := s.generatePrivilegedKeyHandle(context.Background(), client, crypto.ECDSAP256, "blocked-ca",
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
+	if !errors.Is(err, errPrivilegedSignerAuthorizationRequired) {
+		t.Fatalf("privileged key generation without token provider = %v, want %v", err, errPrivilegedSignerAuthorizationRequired)
+	}
+}
+
+func TestSignTokenCommandProviderReturnsExternalToken(t *testing.T) {
+	token := bytes.Repeat([]byte{0xA7}, 32)
+	script := filepath.Join(t.TempDir(), "approve-sign-intent.sh")
+	body := "#!/bin/sh\ncat >/dev/null\nprintf '%s' '" + base64.StdEncoding.EncodeToString(token) + "'\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatalf("write token command: %v", err)
+	}
+
+	got, err := newSignTokenCommand(script).Authorize(crypto.SignIntent{
+		KeyHandle: "issuing-ca",
+		Purpose:   int32(signing.PurposeCASign),
+		Hash:      crypto.SHA256,
+		Digest:    bytes.Repeat([]byte{0x11}, 32),
+	})
+	if err != nil {
+		t.Fatalf("Authorize via command: %v", err)
+	}
+	if !bytes.Equal(got, token) {
+		t.Fatalf("token command returned %x, want %x", got, token)
 	}
 }

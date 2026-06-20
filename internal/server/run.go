@@ -177,26 +177,22 @@ func loadRunSecrets(cfg *config.Config) (runSecrets, error) {
 }
 
 type runSigner struct {
-	signer SignerProvider
-	authz  *crypto.SignAuthorizer
-	close  func()
+	signer        SignerProvider
+	tokenProvider signing.SignTokenProvider
+	close         func()
 }
 
 func (r runSigner) Close() {
 	if r.close != nil {
 		r.close()
 	}
-	if r.authz != nil {
-		r.authz.Destroy()
+	if destroyer, ok := r.tokenProvider.(interface{ Destroy() }); ok {
+		destroyer.Destroy()
 	}
 }
 
 func openRunSigner(ctx context.Context, cfg *config.Config) (runSigner, error) {
-	authz, err := signing.LoadOrCreateAuthorizer(cfg.Signer.AuthSecretFile)
-	if err != nil {
-		return runSigner{}, fmt.Errorf("signer content authorizer: %w", err)
-	}
-	out := runSigner{authz: authz}
+	out := runSigner{}
 	var signerErr error
 	switch cfg.Signer.Mode {
 	case config.SignerExternal:
@@ -208,7 +204,27 @@ func openRunSigner(ctx context.Context, cfg *config.Config) (runSigner, error) {
 		out.Close()
 		return runSigner{}, signerErr
 	}
+	tokenProvider, err := buildSignTokenProvider(cfg)
+	if err != nil {
+		out.Close()
+		return runSigner{}, err
+	}
+	out.tokenProvider = tokenProvider
 	return out, nil
+}
+
+func buildSignTokenProvider(cfg *config.Config) (signing.SignTokenProvider, error) {
+	if cfg.Signer.AuthTokenCommand != "" {
+		return newSignTokenCommand(cfg.Signer.AuthTokenCommand), nil
+	}
+	if cfg.Signer.AllowCoResidentAuthorizer {
+		authz, err := signing.LoadOrCreateAuthorizer(cfg.Signer.AuthSecretFile)
+		if err != nil {
+			return nil, fmt.Errorf("eval signer content authorizer: %w", err)
+		}
+		return authz, nil
+	}
+	return nil, nil
 }
 
 func connectExternalSigner(ctx context.Context, cfg config.Signer) (SignerProvider, func(), error) {
@@ -268,7 +284,7 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		return Deps{}, fmt.Errorf("plugins: %w", err)
 	}
 	return Deps{
-		Store: st, Log: log, Signer: signer.signer, SignAuthorizer: signer.authz,
+		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		CACertFile: cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,

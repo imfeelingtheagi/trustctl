@@ -124,6 +124,11 @@ services:
       # and the KEK persist so the issuing CA is stable across restarts.
       TRSTCTL_SIGNER_MODE: external
       TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock
+      # EVAL ONLY — local Compose has no independent approval-token service, so the
+      # control plane may mint signer tokens from the shared secret. Production
+      # external NATS rejects this flag; use TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND with
+      # an independent approval authority instead.
+      TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER: "true"
       TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
       TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
       TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt

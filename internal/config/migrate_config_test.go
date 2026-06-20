@@ -20,11 +20,12 @@ func TestMigrateAutoDefaultsOn(t *testing.T) {
 // actually pending.
 func TestMigrateAutoEnvOverride(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://h:4222",
-		"TRSTCTL_MIGRATE_AUTO":  "false",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_MIGRATE_AUTO":                        "false",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -39,11 +40,12 @@ func TestMigrateAutoEnvOverride(t *testing.T) {
 // prior (default-on) value stands.
 func TestMigrateAutoMalformedEnvIgnored(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_POSTGRES_MODE": "external",
-		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":     "external",
-		"TRSTCTL_NATS_URL":      "nats://h:4222",
-		"TRSTCTL_MIGRATE_AUTO":  "yep",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_MIGRATE_AUTO":                        "yep",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {

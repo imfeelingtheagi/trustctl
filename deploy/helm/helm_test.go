@@ -103,6 +103,10 @@ func TestSignerIsIsolated(t *testing.T) {
 	if signer == nil {
 		t.Fatal("the control-plane pod has no 'signer' container (AN-4 co-located signer)")
 	}
+	cp := containerNamed(containers, "trstctl")
+	if cp == nil {
+		t.Fatal("control-plane container not found")
+	}
 	// (1) The signer exposes NO network ports — its ONLY channel is the in-memory UDS
 	// (the defining AN-4 property; a port here would mean the signer is reachable on
 	// the network, which must never happen).
@@ -124,6 +128,9 @@ func TestSignerIsIsolated(t *testing.T) {
 	}
 	requireSecretDefaultMode(t, pod, "kek", 0o440)
 	requireSecretDefaultMode(t, pod, "signer-auth", 0o440)
+	if hasMountPath(cp, "/etc/trstctl/signer-auth") {
+		t.Error("control-plane container must not mount the signer authorization secret; only the signer may verify signer tokens")
+	}
 	// (5) Hardened securityContext, as PARSED fields.
 	requireHardened(t, "signer", signer)
 
@@ -133,7 +140,9 @@ func TestSignerIsIsolated(t *testing.T) {
 	cmData := renderConfigMapData(t)
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MODE", "external")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_SOCKET", "")
-	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "")
+	if _, ok := cmData["TRSTCTL_SIGNER_AUTH_SECRET_FILE"]; ok {
+		t.Error("control-plane ConfigMap must not render TRSTCTL_SIGNER_AUTH_SECRET_FILE; that secret is signer-side verifier material")
+	}
 	if _, ok := cmData["TRSTCTL_SIGNER_MTLS_ADDRESS"]; ok {
 		t.Error("sidecar mode must not render TRSTCTL_SIGNER_MTLS_ADDRESS; it would conflict with the UDS signer socket")
 	}
@@ -182,6 +191,9 @@ func TestIsolatedSignerControlPlaneWiring(t *testing.T) {
 	if !hasVolumeNamed(pod, "signer-mtls") {
 		t.Error("isolated signer mode must render the signer-mtls Secret volume")
 	}
+	if hasVolumeNamed(pod, "signer-auth") {
+		t.Error("isolated control-plane pod must not mount signer-auth; the isolated signer Deployment owns that secret")
+	}
 	pinEnv := envNamed(cp, "TRSTCTL_SIGNER_MTLS_PEER_PIN")
 	if pinEnv == nil {
 		t.Fatal("isolated signer mode must inject TRSTCTL_SIGNER_MTLS_PEER_PIN from the control-plane mTLS Secret")
@@ -204,6 +216,9 @@ func TestIsolatedSignerControlPlaneWiring(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", "/etc/trstctl/signer-mtls/peer-ca.pem")
 	if _, ok := cmData["TRSTCTL_SIGNER_SOCKET"]; ok {
 		t.Error("isolated signer mode must not render TRSTCTL_SIGNER_SOCKET; socket and mTLS are mutually exclusive")
+	}
+	if _, ok := cmData["TRSTCTL_SIGNER_AUTH_SECRET_FILE"]; ok {
+		t.Error("isolated signer mode must not render TRSTCTL_SIGNER_AUTH_SECRET_FILE into the control-plane ConfigMap")
 	}
 
 	np := renderSimpleObj(t, "networkpolicy.yaml", v)

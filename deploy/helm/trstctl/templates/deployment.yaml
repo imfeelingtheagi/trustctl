@@ -162,9 +162,6 @@ spec:
             - name: kek
               mountPath: /etc/trstctl/kek
               readOnly: true
-            - name: signer-auth
-              mountPath: /etc/trstctl/signer-auth
-              readOnly: true
             {{- if eq .Values.signer.mode "isolated" }}
             - name: signer-mtls
               mountPath: /etc/trstctl/signer-mtls
@@ -193,10 +190,12 @@ spec:
           secret:
             secretName: {{ include "trstctl.kekSecretName" . }}
             defaultMode: 0440
+        {{- if eq .Values.signer.mode "sidecar" }}
         - name: signer-auth
           secret:
             secretName: {{ include "trstctl.signerAuthSecretName" . }}
             defaultMode: 0440
+        {{- end }}
         {{- if eq .Values.signer.mode "isolated" }}
         - name: signer-mtls
           secret:

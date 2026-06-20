@@ -34,10 +34,10 @@ type Server struct {
 
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
-	// (RED-003). It is a VERIFY-only authorizer: the signer can check a token but
-	// not mint one (minting is the approval authority's job, holding the secret the
-	// signer holds too but the on-socket caller does not). nil = dual-control keys
-	// cannot be created or used (the signer fails closed on them).
+	// (RED-003). The signer uses it as verifier material; production token minting
+	// belongs to an independent approval-token authority, not the control-plane
+	// process that chooses the digest. nil = dual-control keys cannot be created or
+	// used (the signer fails closed on them).
 	authorizer *crypto.SignAuthorizer
 
 	// signGate, when non-nil, is called inside Sign while it holds its in-flight

@@ -47,17 +47,18 @@ type SignerProvider interface {
 // Deps are the wired dependencies of the serving control plane. Tests inject an
 // embedded store/log and an in-process signer; production wires the real ones.
 type Deps struct {
-	Store          *store.Store
-	Log            *events.Log
-	Signer         SignerProvider // may be nil → issuance is unavailable (fail closed)
-	SignAuthorizer *crypto.SignAuthorizer
-	OutboxHandler  orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions     []api.Option         // auth/audit/etc.
-	SignTimeout    time.Duration        // per-issuance signer deadline (slow → fail closed)
-	CACommonName   string
-	CACertFile     string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
-	LeafProfile    crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
-	DefaultProfile string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	Store             *store.Store
+	Log               *events.Log
+	Signer            SignerProvider            // may be nil → issuance is unavailable (fail closed)
+	SignAuthorizer    *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
+	SignTokenProvider signing.SignTokenProvider // independent approval-token source for dual-control signer handles
+	OutboxHandler     orchestrator.Handler      // delivers outbox entries; defaults to a no-op success
+	APIOptions        []api.Option              // auth/audit/etc.
+	SignTimeout       time.Duration             // per-issuance signer deadline (slow → fail closed)
+	CACommonName      string
+	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	LeafProfile       crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
+	DefaultProfile    string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
 	// revoke path (EXC-WIRE-03). Empty uses policy.BaseModule (default-deny, permit
 	// revoke, require a bound profile to issue/deploy). The engine is fail-closed,
@@ -227,7 +228,7 @@ type Server struct {
 	signer    SignerProvider
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER []byte
-	signAuthz *crypto.SignAuthorizer
+	signAuthz signing.SignTokenProvider
 	signTO    time.Duration
 
 	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
@@ -350,11 +351,22 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}
+	signProvider := d.SignTokenProvider
+	if signProvider == nil && d.SignAuthorizer != nil {
+		signProvider = d.SignAuthorizer
+	}
+	if signProvider == nil {
+		if source, ok := d.Signer.(interface {
+			SignTokenProvider() signing.SignTokenProvider
+		}); ok {
+			signProvider = source.SignTokenProvider()
+		}
+	}
 	s := &Server{
 		store:       d.Store,
 		log:         d.Log,
 		signer:      d.Signer,
-		signAuthz:   d.SignAuthorizer,
+		signAuthz:   signProvider,
 		signTO:      d.SignTimeout,
 		obHandler:   d.OutboxHandler,
 		leafProfile: d.LeafProfile,
@@ -677,6 +689,8 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 // hand back the same key — so the CA is not silently rotated (R3.2).
 const issuingCAHandle = "issuing-ca"
 
+var errPrivilegedSignerAuthorizationRequired = errors.New("server: privileged signer handle requires an independent sign authorization token provider")
+
 // provisionCA establishes the issuing CA whose key lives inside the signer (AN-4;
 // the private key never enters the control plane's address space). It is stable
 // across restarts (R3.2): if a persisted CA cert exists at caCertFile AND the
@@ -737,17 +751,17 @@ func writeCertPEM(path string, der []byte) error {
 }
 
 func (s *Server) signerForPrivilegedHandle(ctx context.Context, c *signing.Client, handle string, purpose signing.KeyPurpose) (*signing.RemoteSigner, error) {
-	if s.signAuthz != nil {
-		return c.SignerForDualControlHandle(ctx, handle, purpose, s.signAuthz)
+	if s.signAuthz == nil {
+		return nil, errPrivilegedSignerAuthorizationRequired
 	}
-	return c.SignerForHandleWithPurpose(ctx, handle, purpose)
+	return c.SignerForDualControlHandle(ctx, handle, purpose, s.signAuthz)
 }
 
 func (s *Server) generatePrivilegedKeyHandle(ctx context.Context, c *signing.Client, algorithm crypto.Algorithm, handle string, allowedPurposes []signing.KeyPurpose, declaredPurpose signing.KeyPurpose) (*signing.RemoteSigner, error) {
-	if s.signAuthz != nil {
-		return c.GenerateDualControlKeyHandle(ctx, algorithm, handle, allowedPurposes, declaredPurpose, s.signAuthz)
+	if s.signAuthz == nil {
+		return nil, errPrivilegedSignerAuthorizationRequired
 	}
-	return c.GenerateConstrainedKeyHandle(ctx, algorithm, handle, allowedPurposes, declaredPurpose)
+	return c.GenerateDualControlKeyHandle(ctx, algorithm, handle, allowedPurposes, declaredPurpose, s.signAuthz)
 }
 
 // Handler returns the assembled HTTP handler (for httptest and for Run).

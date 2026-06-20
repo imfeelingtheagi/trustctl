@@ -126,6 +126,7 @@ func TestExternalModesValidWithConnection(t *testing.T) {
 	c.Postgres.DSN = "postgres://u:p@host:5432/db"
 	c.NATS.Mode = "external"
 	c.NATS.URL = "nats://host:4222"
+	c.Signer.AllowCoResidentAuthorizer = false
 	if err := c.Validate(); err != nil {
 		t.Fatalf("external config with connection strings should validate: %v", err)
 	}

@@ -627,7 +627,14 @@ type Signer struct {
 	Mode           string `json:"mode"`             // "child" (default) or "external"
 	Socket         string `json:"socket"`           // UDS path; in external mode use this OR the mTLS fields
 	KeyStoreDir    string `json:"key_store_dir"`    // sealed key persistence directory
-	AuthSecretFile string `json:"auth_secret_file"` // shared signer content-authorization secret (SIGNER-001)
+	AuthSecretFile string `json:"auth_secret_file"` // signer-side verifier secret path; do not expose to the control plane in production
+	// AuthTokenCommand is an independent approval-token authority. The control
+	// plane writes sign-intent JSON to stdin and reads a base64 token from stdout.
+	AuthTokenCommand string `json:"auth_token_command,omitempty"`
+	// AllowCoResidentAuthorizer is an evaluation-only escape hatch that lets the
+	// control plane load AuthSecretFile and mint signer tokens locally. Production-
+	// like external NATS deployments reject it.
+	AllowCoResidentAuthorizer bool `json:"allow_co_resident_authorizer,omitempty"`
 
 	// Cross-node mTLS transport for an external signer (SIGNER-005 / design §3,§5.2).
 	// When MTLSAddress is set in external mode the control plane dials the signer
@@ -782,7 +789,7 @@ func Default() *Config {
 		Secrets: Secrets{KEKFile: "data/secrets/kek.bin"},
 		// The signer runs as a supervised child by default (single binary); its
 		// keys are sealed under the data directory so a restart preserves the CA.
-		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys", AuthSecretFile: "data/signer/sign-auth.bin"},
+		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys", AuthSecretFile: "data/signer/sign-auth.bin", AllowCoResidentAuthorizer: true},
 		// The issuing CA certificate persists so it is stable across restarts. A
 		// baseline certificatePolicies OID is set so every served leaf carries a
 		// policy (RFC 5280 / BR-thin, PKIGOV-001); CDP/AIA URLs are left empty for the
@@ -891,6 +898,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
 	setString(getenv, "TRSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
 	setString(getenv, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", &c.Signer.AuthSecretFile)
+	setString(getenv, "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", &c.Signer.AuthTokenCommand)
+	setBool(getenv, "TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", &c.Signer.AllowCoResidentAuthorizer)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_ADDRESS", &c.Signer.MTLSAddress)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_SERVER_NAME", &c.Signer.MTLSServerName)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_CERT_FILE", &c.Signer.MTLSCertFile)
@@ -1184,6 +1193,12 @@ func validateOptionalServices(c *Config) []error {
 
 func validateSignerConfig(c *Config) []error {
 	var errs []error
+	if c.Signer.AuthTokenCommand != "" && c.Signer.AllowCoResidentAuthorizer {
+		errs = append(errs, errors.New("signer.auth_token_command and signer.allow_co_resident_authorizer are mutually exclusive"))
+	}
+	if c.Signer.AllowCoResidentAuthorizer && c.NATS.Mode == NATSExternal && !c.NATS.AllowSingleReplica {
+		errs = append(errs, errors.New("signer.allow_co_resident_authorizer is evaluation-only; production external NATS deployments must use signer.auth_token_command or another independent token provider"))
+	}
 	// The signer runs as a supervised child or connects to an external service. An
 	// external signer is reached over EITHER a co-located UDS (signer.socket) OR a
 	// cross-node mTLS channel (signer.mtls_address + the mTLS material, SIGNER-005);
@@ -1193,12 +1208,9 @@ func validateSignerConfig(c *Config) []error {
 	case SignerChild:
 		// ok — single-binary supervises the child
 		if c.Signer.AuthSecretFile == "" {
-			errs = append(errs, errors.New("signer.auth_secret_file is required so privileged signer handles can require content authorization"))
+			errs = append(errs, errors.New("signer.auth_secret_file is required so the child signer can verify content authorization tokens"))
 		}
 	case SignerExternal:
-		if c.Signer.AuthSecretFile == "" {
-			errs = append(errs, errors.New("signer.auth_secret_file is required so privileged signer handles can require content authorization"))
-		}
 		switch {
 		case c.Signer.Socket != "" && c.Signer.MTLSEnabled():
 			errs = append(errs, errors.New("signer.socket and signer.mtls_address are mutually exclusive (the signer has one listener)"))

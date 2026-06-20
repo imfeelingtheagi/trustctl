@@ -30,12 +30,13 @@ canonical architecture rules live in the root `AGENTS.md` contract.
   purpose refuses a Sign for another, sealed with the key, restored across restart) and
   **dual-control intent attestation for crown-jewel keys** (`attestation.go`, RED-003 — a
   key marked `requireAuth` refuses every Sign that does not carry a valid authorization
-  token over the *exact* signing tuple, including the digest, minted by an approval
-  authority holding a secret the on-socket caller does not). The token is bound to the
-  digest, so it cannot be replayed onto different bytes; a signer with no authorizer fails
-  closed on a dual-control key. The dual-control opt-in and the per-Sign token travel as
-  gRPC **metadata** (the wire proto is frozen — do not add fields), and the MAC routes
-  through `internal/crypto.SignAuthorizer` (AN-3), key in mlock'd memory (AN-8).
+  token over the *exact* signing tuple, including the digest, minted by an independent
+  approval authority). The token is bound to the digest, so it cannot be replayed onto
+  different bytes; a signer with no verifier fails closed on a dual-control key, and a
+  control plane with no independent token provider fails closed before binding privileged
+  handles. The dual-control opt-in and the per-Sign token travel as gRPC **metadata**
+  (the wire proto is frozen — do not add fields), and the MAC verifier routes through
+  `internal/crypto.SignAuthorizer` (AN-3), key in mlock'd memory (AN-8).
 
 ## Crypto routing
 

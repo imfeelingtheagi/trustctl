@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
@@ -58,7 +59,12 @@ func TestProvisionCAStableAcrossSignerRestart(t *testing.T) {
 func provisionOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, caCertFile string) []byte {
 	t.Helper()
 	ks := signing.NewKeyStore(keysDir, kekW)
-	srv, err := signing.NewPersistentServer(ks)
+	authz, err := crypto.NewSignAuthorizer(bytes.Repeat([]byte{0x5A}, 32))
+	if err != nil {
+		t.Fatalf("NewSignAuthorizer: %v", err)
+	}
+	defer authz.Destroy()
+	srv, err := signing.NewPersistentServer(ks, signing.WithAuthorizer(authz))
 	if err != nil {
 		t.Fatalf("NewPersistentServer: %v", err)
 	}
@@ -73,7 +79,7 @@ func provisionOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, ca
 	}
 	defer func() { _ = client.Close() }()
 
-	s := &Server{}
+	s := &Server{signAuthz: authz}
 	if err := s.provisionCA(ctx, client, "", caCertFile); err != nil {
 		t.Fatalf("provisionCA: %v", err)
 	}

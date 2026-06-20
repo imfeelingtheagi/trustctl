@@ -22,13 +22,14 @@ func TestAuditDefaults(t *testing.T) {
 // TestAuditEnvOverrides: the audit settings are configurable from the environment.
 func TestAuditEnvOverrides(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_POSTGRES_MODE":          "external",
-		"TRSTCTL_POSTGRES_DSN":           "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":              "external",
-		"TRSTCTL_NATS_URL":               "nats://h:4222",
-		"TRSTCTL_AUDIT_SIGNING_KEY_FILE": "/var/lib/trstctl/audit.pem",
-		"TRSTCTL_AUDIT_RETENTION":        "8760h",
-		"TRSTCTL_AUDIT_ARCHIVE_DIR":      "/var/lib/trstctl/audit-archive",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_AUDIT_SIGNING_KEY_FILE":              "/var/lib/trstctl/audit.pem",
+		"TRSTCTL_AUDIT_RETENTION":                     "8760h",
+		"TRSTCTL_AUDIT_ARCHIVE_DIR":                   "/var/lib/trstctl/audit-archive",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {

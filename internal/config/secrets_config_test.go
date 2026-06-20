@@ -18,11 +18,12 @@ func TestSecretsKEKDefault(t *testing.T) {
 // managed) key file via the environment.
 func TestSecretsKEKEnvOverride(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_POSTGRES_MODE":    "external",
-		"TRSTCTL_POSTGRES_DSN":     "postgres://u:p@h:5432/db?sslmode=require",
-		"TRSTCTL_NATS_MODE":        "external",
-		"TRSTCTL_NATS_URL":         "nats://h:4222",
-		"TRSTCTL_SECRETS_KEK_FILE": "/etc/trstctl/kek.bin",
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_SECRETS_KEK_FILE":                    "/etc/trstctl/kek.bin",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {

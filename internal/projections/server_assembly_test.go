@@ -1,6 +1,7 @@
 package projections_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/pem"
 	"io"
@@ -25,9 +26,14 @@ import (
 
 // staticSigner is a server.SignerProvider holding one client (a real signer
 // child in these tests).
-type staticSigner struct{ c *signing.Client }
+type staticSigner struct {
+	c     *signing.Client
+	authz *crypto.SignAuthorizer
+}
 
 func (s staticSigner) Client() *signing.Client { return s.c }
+
+func (s staticSigner) SignTokenProvider() signing.SignTokenProvider { return s.authz }
 
 func buildSignerBin(t *testing.T) string {
 	t.Helper()
@@ -50,11 +56,41 @@ func startSignerChild(t *testing.T) (server.SignerProvider, func()) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "s.sock")
-	client, stop, err := signing.StartChild(context.Background(), bin, socket)
+	authSecret := filepath.Join(dir, "sign-auth.bin")
+	client, stop, err := signing.StartChild(context.Background(), bin, socket, "--auth-secret", authSecret)
 	if err != nil {
 		t.Fatalf("StartChild: %v", err)
 	}
-	return staticSigner{client}, stop
+	authz, err := signing.LoadOrCreateAuthorizer(authSecret)
+	if err != nil {
+		stop()
+		t.Fatalf("LoadOrCreateAuthorizer: %v", err)
+	}
+	t.Cleanup(authz.Destroy)
+	return staticSigner{c: client, authz: authz}, stop
+}
+
+func TestStartSignerChildProvidesAuthorizationTokens(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts a real signer child; skipped in -short")
+	}
+	prov, stop := startSignerChild(t)
+	defer stop()
+	source, ok := prov.(interface {
+		SignTokenProvider() signing.SignTokenProvider
+	})
+	if !ok {
+		t.Fatal("test signer provider does not expose a sign token provider")
+	}
+	_, err := source.SignTokenProvider().Authorize(crypto.SignIntent{
+		KeyHandle: "issuing-ca",
+		Purpose:   int32(signing.PurposeCASign),
+		Hash:      crypto.SHA256,
+		Digest:    bytes.Repeat([]byte{0x22}, 32),
+	})
+	if err != nil {
+		t.Fatalf("test signer provider cannot mint authorization token: %v", err)
+	}
 }
 
 func req(t *testing.T, ts *httptest.Server, method, path, token, body string) (int, []byte) {

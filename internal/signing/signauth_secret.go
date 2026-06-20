@@ -26,7 +26,8 @@ func LoadOrCreateAuthorizer(path string) (*crypto.SignAuthorizer, error) {
 		return nil, fmt.Errorf("load sign authorizer secret: %w", err)
 	}
 	defer secret.Wipe(raw)
-	material := bytes.TrimSpace(raw)
+	material := append([]byte(nil), bytes.TrimSpace(raw)...)
+	defer secret.Wipe(material)
 	authz, err := crypto.NewSignAuthorizer(material)
 	if err != nil {
 		return nil, fmt.Errorf("load sign authorizer: %w", err)
