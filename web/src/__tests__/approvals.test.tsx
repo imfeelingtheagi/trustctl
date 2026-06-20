@@ -62,7 +62,7 @@ describe("dedicated approvals inbox", () => {
     renderAt("/approvals");
 
     expect(await screen.findByRole("heading", { name: "Approvals" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Approvals/i })).toHaveAttribute("href", "/approvals");
+    expect(screen.getByRole("link", { name: /^Approvals\s+Operate$/i })).toHaveAttribute("href", "/approvals");
     const row = (await screen.findByText("jit-db")).closest("tr")!;
     expect(within(row).getByText("dev@example.test")).toBeInTheDocument();
     expect(within(row).getByText("1/2")).toBeInTheDocument();

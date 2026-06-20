@@ -27,9 +27,16 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
+import { StatusBadge } from "@/components/StatusBadge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { navGroups, type NavIcon } from "@/lib/navigation";
+import {
+  navGroups,
+  navTreatmentForItem,
+  taskNavItems,
+  type NavIcon,
+  type NavTreatment,
+} from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 const iconMap: Record<NavIcon, typeof Activity> = {
@@ -54,6 +61,16 @@ const iconMap: Record<NavIcon, typeof Activity> = {
   spiffe: Network,
   ssh: Braces,
 };
+
+function NavTreatmentBadge({ treatment }: { treatment: NavTreatment }) {
+  return (
+    <StatusBadge
+      vocabulary="honesty"
+      value={treatment}
+      className="min-h-5 shrink-0 rounded px-1.5 py-0 text-[10px] leading-5"
+    />
+  );
+}
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -80,14 +97,47 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
   return (
     <nav aria-label="Primary" className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
+        <li>
+          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Needs action
+          </p>
+          <ul aria-label="Needs action worklists" className="space-y-1">
+            {taskNavItems.map(({ to, label, description, icon, treatment }) => {
+              const Icon = iconMap[icon];
+              return (
+                <li key={`task-${to}`}>
+                  <NavLink
+                    to={to}
+                    onClick={onNavigate}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex min-h-12 items-start gap-2 rounded-md px-3 py-2 text-sm",
+                        isActive ? "bg-muted font-medium" : "hover:bg-muted",
+                      )
+                    }
+                  >
+                    <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{label}</span>
+                      <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
+                    </span>
+                    <NavTreatmentBadge treatment={treatment} />
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </li>
         {navGroups.map((group) => (
           <li key={group.label}>
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {group.label}
             </p>
             <ul className="space-y-1">
-              {group.items.map(({ to, label, icon, end, mode }) => {
+              {group.items.map((item) => {
+                const { to, label, icon, end } = item;
                 const Icon = iconMap[icon];
+                const treatment = navTreatmentForItem(item);
                 return (
                   <li key={`${group.label}-${to}-${label}`}>
                     <NavLink
@@ -103,11 +153,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                     >
                       <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
-                      {mode === "disclosure" && (
-                        <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                          map
-                        </span>
-                      )}
+                      <NavTreatmentBadge treatment={treatment} />
                     </NavLink>
                   </li>
                 );

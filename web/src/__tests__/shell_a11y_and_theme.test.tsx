@@ -236,12 +236,38 @@ describe("app shell accessibility and theme", () => {
     }
   });
 
+  it("exposes task worklists and full operate observe disclose nav treatments", async () => {
+    renderShell();
+    await screen.findByText("u@example.test");
+    const nav = screen.getByRole("navigation", { name: /Primary/i });
+    const taskList = within(nav).getByRole("list", { name: "Needs action worklists" });
+
+    expect(within(nav).getByText("Needs action")).toBeInTheDocument();
+    expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist.*Operate/i })).toHaveAttribute(
+      "href",
+      "/certificates?expiry=30d",
+    );
+    expect(
+      within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox.*Operate/i }),
+    ).toHaveAttribute("href", "/approvals?status=pending");
+    expect(within(taskList).getByRole("link", { name: /Highest risk.*risk-prioritized rotation list.*Observe/i })).toHaveAttribute(
+      "href",
+      "/risk?sort=score",
+    );
+
+    expect(within(nav).getAllByText("Operate").length).toBeGreaterThan(0);
+    expect(within(nav).getAllByText("Observe").length).toBeGreaterThan(0);
+    expect(within(nav).getAllByText("Disclose").length).toBeGreaterThan(0);
+    expect(within(nav).getByRole("link", { name: /RBAC.*Disclose/i })).toBeInTheDocument();
+    expect(within(nav).queryByText(/^map$/i)).not.toBeInTheDocument();
+  });
+
   it("routes to the platform posture page from grouped navigation", async () => {
     const user = userEvent.setup();
     renderShell();
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("link", { name: /^Platform$/i }));
+    await user.click(screen.getByRole("link", { name: /^Platform\s+Observe$/i }));
 
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
     expect(screen.getByText(/Tenant boundary/i)).toBeInTheDocument();

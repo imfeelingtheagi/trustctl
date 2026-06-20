@@ -29,6 +29,17 @@ export interface NavItem {
   featureIds: string[];
 }
 
+export type NavTreatment = "operate" | "observe" | "disclose";
+
+export interface TaskNavItem {
+  to: string;
+  label: string;
+  description: string;
+  icon: NavIcon;
+  treatment: NavTreatment;
+  featureIds: string[];
+}
+
 export interface NavGroup {
   label: string;
   items: NavItem[];
@@ -62,6 +73,33 @@ export const appRoutePaths = [
   "/wizard",
   "/platform",
 ] as const;
+
+export const taskNavItems: TaskNavItem[] = [
+  {
+    to: "/certificates?expiry=30d",
+    label: "Expiring soon",
+    description: "30-day certificate worklist",
+    icon: "certificate",
+    treatment: "operate",
+    featureIds: ["F1"],
+  },
+  {
+    to: "/approvals?status=pending",
+    label: "Pending approvals",
+    description: "dual-control issue and revoke inbox",
+    icon: "policy",
+    treatment: "operate",
+    featureIds: ["F33"],
+  },
+  {
+    to: "/risk?sort=score",
+    label: "Highest risk",
+    description: "risk-prioritized rotation list",
+    icon: "risk",
+    treatment: "observe",
+    featureIds: ["F19"],
+  },
+];
 
 export const navGroups: NavGroup[] = [
   {
@@ -242,3 +280,10 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and platform-status unavailable state" },
   { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and runtime-status unavailable state" },
 ];
+
+const surfaceKindByFeature = new Map(realGuiSurfaces.map((surface) => [surface.featureId, surface.kind]));
+
+export function navTreatmentForItem(item: Pick<NavItem, "mode" | "featureIds">): NavTreatment {
+  if (item.mode === "disclosure") return "disclose";
+  return item.featureIds.some((featureId) => surfaceKindByFeature.get(featureId) === "operate") ? "operate" : "observe";
+}
