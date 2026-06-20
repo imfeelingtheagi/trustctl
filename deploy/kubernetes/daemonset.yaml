@@ -26,9 +26,10 @@ spec:
           # The agent ships inside the single multi-binary trstctl image (the
           # one the release pipeline builds and pushes); run it by overriding the
           # image's default `trstctl` entrypoint with trstctl-agent. There is no
-          # separate, un-built "-agent" image (OPS-002). Replace this placeholder
-          # with the immutable digest from a verified release before applying.
-          image: ghcr.io/imfeelingtheagi/trstctl@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          # separate, un-built "-agent" image (OPS-002). This file is a digest
+          # template: render it with scripts/release/render-kubernetes-agent-daemonset.sh
+          # and a verified release image before applying.
+          image: ghcr.io/imfeelingtheagi/trstctl@sha256:RELEASE_DIGEST_REQUIRED
           command: ["/usr/local/bin/trstctl-agent"]
           args:
             - "--k8s"

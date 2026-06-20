@@ -1838,6 +1838,7 @@ func TestOpsFleetRunbooksAreActionable(t *testing.T) {
 
 	for _, cited := range []string{
 		"deploy/kubernetes/daemonset.yaml",
+		"scripts/release/render-kubernetes-agent-daemonset.sh",
 		"deploy/windows/trstctl-agent.wxs",
 		"deploy/helm/trstctl/values.yaml",
 		"deploy/helm/trstctl/templates/signer-deployment.yaml",

@@ -867,6 +867,24 @@ jobs:
           kubectl -n trstctl create serviceaccount trstctl-e2e-admin
           kubectl create clusterrolebinding trstctl-e2e-admin --clusterrole=cluster-admin --serviceaccount=trstctl:trstctl-e2e-admin
 
+      - name: Validate packaged agent DaemonSet apply path
+        shell: bash
+        run: |
+          set -euo pipefail
+          ca_bundle="$(mktemp)"
+          rendered_agent_daemonset="$(mktemp)"
+          kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 --decode > "$ca_bundle"
+          kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
+            --from-literal=token=ci-dry-run-token \
+            --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
+          kubectl -n trstctl create configmap trstctl-ca-bundle \
+            --from-file=ca-bundle.pem="$ca_bundle" \
+            --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
+          scripts/release/render-kubernetes-agent-daemonset.sh \
+            "ghcr.io/imfeelingtheagi/trstctl@sha256:1111111111111111111111111111111111111111111111111111111111111111" \
+            > "$rendered_agent_daemonset"
+          kubectl apply --dry-run=server -f "$rendered_agent_daemonset"
+
       - name: Run the in-cluster e2e (secret write + cert-manager bridge)
         shell: bash
         run: |

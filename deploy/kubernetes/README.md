@@ -21,20 +21,27 @@ helm upgrade --install trstctl deploy/helm/trstctl \
   --set agentChannel.serverName=trstctl
 ```
 
-Then mint a one-time bootstrap token, store it in the Secret the DaemonSet mounts,
-and apply the agent manifests:
+Then choose the immutable release image, mint a one-time bootstrap token, store it
+in the Secret the DaemonSet mounts, create the CA bundle ConfigMap, render the
+DaemonSet with that release digest, and apply the agent manifests:
 
 ```sh
 export TRSTCTL_SERVER=https://cp.example.com
 export TRSTCTL_TOKEN=trst_...
+export TRSTCTL_AGENT_IMAGE='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
 
 TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+rendered_agent_daemonset="$(mktemp)"
 kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-literal=token="$TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n trstctl create configmap trstctl-ca-bundle \
+  --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/rbac.yaml
-kubectl apply -f deploy/kubernetes/daemonset.yaml
+scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
+kubectl apply -f "$rendered_agent_daemonset"
 ```
 
 The bootstrap token is single-use and short-lived. The DaemonSet mounts it from
@@ -43,11 +50,13 @@ The bootstrap token is single-use and short-lived. The DaemonSet mounts it from
 line. The enrollment URL must be an `https://` control-plane base URL
 (`https://trstctl:8443`); the agent appends `/enroll/bootstrap` itself.
 
+`TRSTCTL_AGENT_IMAGE` must be a real `.../trstctl@sha256:<64-hex-digest>` release
+image; the render script rejects tags, short digests, and the all-zero placeholder.
 Create `ConfigMap/trstctl-ca-bundle` with `ca-bundle.pem` before applying the
-DaemonSet. The PEM bundle may contain more than one certificate; the agent uses
-only this bundle to pin bootstrap HTTPS before posting the one-time token and for
-the steady-state mTLS channel. The DaemonSet intentionally treats the ConfigMap as
-required so a missing bundle fails before the pod can attempt enrollment.
+rendered DaemonSet. The PEM bundle may contain more than one certificate; the agent
+uses only this bundle to pin bootstrap HTTPS before posting the one-time token and
+for the steady-state mTLS channel. The DaemonSet intentionally treats the ConfigMap
+as required so a missing bundle fails before the pod can attempt enrollment.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
 validated in tests. The `ClusterRole` grants least privilege: write Secrets, and

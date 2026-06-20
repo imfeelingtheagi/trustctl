@@ -31,11 +31,18 @@ helm upgrade --install trstctl deploy/helm/trstctl \
 
 ## Commands: Kubernetes canary
 
-Mint one short-lived token, store it in the Secret the DaemonSet mounts, then
-apply the packaged manifests:
+Mint one short-lived token, store it in the Secret the DaemonSet mounts, render the
+DaemonSet with the immutable release image digest, then apply the packaged
+manifests:
+
+The render script reads `deploy/kubernetes/daemonset.yaml` as a template and
+refuses to produce a manifest unless `TRSTCTL_AGENT_IMAGE` is a real
+`.../trstctl@sha256:<release-image-digest>` reference.
 
 ```sh
+export TRSTCTL_AGENT_IMAGE='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
 TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+rendered_agent_daemonset="$(mktemp)"
 
 kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
@@ -45,7 +52,8 @@ kubectl -n trstctl create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/rbac.yaml
-kubectl apply -f deploy/kubernetes/daemonset.yaml
+scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
+kubectl apply -f "$rendered_agent_daemonset"
 kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
 ```
 

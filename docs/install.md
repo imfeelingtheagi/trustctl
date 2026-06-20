@@ -108,23 +108,31 @@ helm upgrade --install trstctl deploy/helm/trstctl \
   --set agentChannel.enabled=true \
   --set agentChannel.serverName=trstctl
 
+export TRSTCTL_AGENT_IMAGE='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
 TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+rendered_agent_daemonset="$(mktemp)"
 kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-literal=token="$TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n trstctl create configmap trstctl-ca-bundle \
+  --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/kubernetes/rbac.yaml
-kubectl apply -f deploy/kubernetes/daemonset.yaml
+scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
+kubectl apply -f "$rendered_agent_daemonset"
 ```
 
 The DaemonSet points at the in-namespace `trstctl` Service and reads the
 single-use bootstrap token from `Secret/trstctl-agent-bootstrap`. It also sets
 `--server-name=trstctl`, so the Helm value above is required for the
-agent-channel certificate SAN. Create `ConfigMap/trstctl-ca-bundle` with
-`ca-bundle.pem` before applying the DaemonSet; the agent uses that bundle to pin
-bootstrap HTTPS before posting the one-time token and to verify the steady-state
-mTLS channel. See `deploy/kubernetes/README.md` for the exact env and Secret
-wiring.
+agent-channel certificate SAN. `TRSTCTL_AGENT_IMAGE` must be an immutable
+`.../trstctl@sha256:<release-image-digest>` reference; the render script refuses
+tags and the all-zero placeholder. Create `ConfigMap/trstctl-ca-bundle` with
+`ca-bundle.pem` before applying the rendered DaemonSet; the agent uses that bundle
+to pin bootstrap HTTPS before posting the one-time token and to verify the
+steady-state mTLS channel. See `deploy/kubernetes/README.md` for the exact env and
+Secret wiring.
 
 ## Linux (control plane or agent)
 

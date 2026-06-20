@@ -183,6 +183,61 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	}
 }
 
+func TestAgentDaemonSetRequiresRenderedReleaseDigest(t *testing.T) {
+	ds := daemonSet(t)
+	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	containers, _ := podSpec["containers"].([]any)
+	if len(containers) == 0 {
+		t.Fatal("DaemonSet has no containers")
+	}
+	c := containers[0].(map[string]any)
+	image, _ := c["image"].(string)
+	if image == "" {
+		t.Fatal("DaemonSet agent container has no image")
+	}
+	zeroDigest := "sha256:" + strings.Repeat("0", 64)
+	if strings.Contains(image, zeroDigest) {
+		t.Fatalf("DaemonSet still carries the all-zero image digest placeholder; render it with a release digest before apply")
+	}
+	validReleaseImage := regexp.MustCompile(`^[a-z0-9./:_-]+/trstctl@sha256:[0-9a-f]{64}$`)
+	if validReleaseImage.MatchString(image) {
+		return
+	}
+	if image != "ghcr.io/imfeelingtheagi/trstctl@sha256:RELEASE_DIGEST_REQUIRED" {
+		t.Fatalf("DaemonSet image = %q, want a real release digest or the required-digest template marker", image)
+	}
+}
+
+func TestRenderAgentDaemonSetRequiresImmutableDigest(t *testing.T) {
+	root := filepath.Join("..", "..")
+	script := filepath.Join("scripts", "release", "render-kubernetes-agent-daemonset.sh")
+	goodImage := "ghcr.io/imfeelingtheagi/trstctl@sha256:" + strings.Repeat("1", 64)
+	cmd := exec.Command("bash", script, goodImage)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("render agent daemonset with digest: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "image: "+goodImage) {
+		t.Fatalf("rendered DaemonSet did not contain the requested digest image %q:\n%s", goodImage, out)
+	}
+	if strings.Contains(string(out), "RELEASE_DIGEST_REQUIRED") {
+		t.Fatalf("rendered DaemonSet still contains the digest marker:\n%s", out)
+	}
+
+	for _, bad := range []string{
+		"ghcr.io/imfeelingtheagi/trstctl:latest",
+		"ghcr.io/imfeelingtheagi/trstctl@sha256:" + strings.Repeat("0", 64),
+		"ghcr.io/imfeelingtheagi/trstctl@sha256:abc",
+	} {
+		cmd := exec.Command("bash", script, bad)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err == nil {
+			t.Fatalf("render accepted invalid image %q; output:\n%s", bad, out)
+		}
+	}
+}
+
 func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
 	body, err := os.ReadFile("README.md")
 	if err != nil {
@@ -194,10 +249,49 @@ func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
 		"create secret generic trstctl-agent-bootstrap",
 		"agentChannel.enabled=true",
 		"agentChannel.serverName=trstctl",
-		"kubectl apply -f deploy/kubernetes/daemonset.yaml",
+		"TRSTCTL_AGENT_IMAGE",
+		"scripts/release/render-kubernetes-agent-daemonset.sh",
+		"kubectl apply -f \"$rendered_agent_daemonset\"",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("deploy/kubernetes/README.md missing runnable bootstrap marker %q", want)
+		}
+	}
+	if strings.Contains(doc, "kubectl apply -f deploy/kubernetes/daemonset.yaml") {
+		t.Error("deploy/kubernetes/README.md still applies the raw digest-template DaemonSet instead of the rendered release manifest")
+	}
+}
+
+func TestAgentDaemonSetRenderPathIsWiredIntoCIAndRelease(t *testing.T) {
+	root := filepath.Join("..", "..")
+	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Validate packaged agent DaemonSet apply path",
+		"scripts/release/render-kubernetes-agent-daemonset.sh",
+		"kubectl apply --dry-run=server -f \"$rendered_agent_daemonset\"",
+		"trstctl-agent-bootstrap",
+		"trstctl-ca-bundle",
+	} {
+		if !strings.Contains(string(ci), want) {
+			t.Errorf("ci.yml missing Kubernetes agent apply-path guard marker %q", want)
+		}
+	}
+
+	release, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Render Kubernetes agent DaemonSet manifest",
+		"${GHCR_IMAGE}@${{ steps.build.outputs.digest }}",
+		"name: trstctl-agent-kubernetes",
+		"dist/kubernetes/trstctl-agent-daemonset.yaml",
+	} {
+		if !strings.Contains(string(release), want) {
+			t.Errorf("release.yml missing Kubernetes agent release-manifest marker %q", want)
 		}
 	}
 }
