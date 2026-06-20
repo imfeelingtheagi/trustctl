@@ -80,7 +80,7 @@
       "priority": 44,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Discovery at /discovery, /certificates, /agents - network scan blocked disclosure plus links to served ingest and agent enrollment; coverage ledger: /coverage",
       "target_gui_mapping": "Discovery source page for network ranges, scan scheduling, dry-run preview, findings import, scan history, and library-only/disabled disclosure until served scheduler exists.",
       "acceptance_test": "UI hides execution until a served scheduler exists, but displays documented capability, prerequisites, and blocked state without implying live server support.",
       "source_docs": [
@@ -141,7 +141,7 @@
       "priority": 45,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Discovery at /discovery - ssh_key/ssh_certificate identity table plus SSH scan findings blocked disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "SSH inventory page showing discovered authorized_keys, trusted CAs, host keys, standing access, weak trust, and agent source evidence.",
       "acceptance_test": "UI route exists with library-only/agent-required state, fixtures for discovered SSH keys, and no trust mutation controls unless explicit agent capability is present.",
       "source_docs": [
@@ -169,7 +169,7 @@
       "priority": 46,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Discovery at /discovery, /secrets, /certificates - cloud discovery blocked disclosure with sealed-secret credential-reference guidance; coverage ledger: /coverage",
       "target_gui_mapping": "Cloud discovery source UI for AWS/Azure/GCP account connectors, scoped credentials, dry-run, imported certificate preview, and scheduler status.",
       "acceptance_test": "UI must disclose library-only status until served scheduling is wired and must never ask for cloud credentials without a sealed secret path.",
       "source_docs": [
@@ -195,7 +195,7 @@
       "priority": 47,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Discovery at /discovery, /secrets - native secret metadata table plus external discovery blocked disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Secret inventory discovery UI showing stores, names, metadata, rotation posture, and findings without exposing values.",
       "acceptance_test": "UI tests prove discovered secret values are never rendered, stored in browser state, logged, or included in screenshots.",
       "source_docs": [
@@ -223,7 +223,7 @@
       "priority": 48,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Discovery at /discovery - api_key identity table with masked fingerprints plus scanner blocked disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "API key inventory UI with key name, owner, scope, last-seen, expiry, rotation age, source, and masked fingerprint only.",
       "acceptance_test": "UI tests prove token values cannot render and findings link to owner, risk, and rotation workflows.",
       "source_docs": [
@@ -251,7 +251,7 @@
       "priority": 49,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Posture at /posture - CT monitor library-only disclosure plus non-interactive triage preview; coverage ledger: /coverage",
       "target_gui_mapping": "CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings.",
       "acceptance_test": "UI route must show disabled/library-only state until scheduler is served; fixtures must cover unexpected issuance triage.",
       "source_docs": [
@@ -277,7 +277,7 @@
       "priority": 50,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Posture at /posture - drift library-only disclosure plus disabled remediation preview; coverage ledger: /coverage",
       "target_gui_mapping": "Drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, and remediation action.",
       "acceptance_test": "UI covers empty, drift-found, resolved, and agent-stale states; destructive actions require explicit confirmation.",
       "source_docs": [
@@ -335,7 +335,7 @@
       "priority": 51,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Posture at /posture, /risk - CBOM library-only disclosure plus weak-crypto preview linked to risk; coverage ledger: /coverage",
       "target_gui_mapping": "CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations.",
       "acceptance_test": "UI renders CBOM fixture data without credential values and links weak crypto findings into risk and remediation queues.",
       "source_docs": [
@@ -404,7 +404,7 @@
       "priority": 52,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy, /certificates - served issuer table plus m-of-n hierarchy ceremony blocked disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "CA hierarchy UI for roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution.",
       "acceptance_test": "UI must not show create-root controls unless served ceremony APIs exist; interim page shows library-only status and runbook links.",
       "source_docs": [
@@ -468,7 +468,7 @@
       "priority": 53,
       "served_state": "conditional",
       "backend_status": "conditional served via ACME; durable state caveat",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - ARI renewal-window disclosure plus durable-state caveat and protocol-status gate; coverage ledger: /coverage",
       "target_gui_mapping": "ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and durable-state caveat.",
       "acceptance_test": "UI shows ARI status only when ACME enabled and includes disabled/unavailable state otherwise.",
       "source_docs": [
@@ -532,7 +532,7 @@
       "priority": 54,
       "served_state": "library",
       "backend_status": "backend interfaces and doubles; native maturity varies",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus library-tier disclosure without key bytes; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
       "acceptance_test": "UI never exposes key material and displays only public metadata/health for configured backends.",
       "source_docs": [
@@ -559,7 +559,7 @@
       "priority": 22,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - ACME endpoint setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "ACME server admin UI for directory URL, tenant binding, accounts, orders, challenges, revocations, ARI, and client setup snippets.",
       "acceptance_test": "UI shows ACME enabled/disabled, directory URL copy, last order status fixture, and fail-closed state when no issuing CA exists.",
       "source_docs": [
@@ -586,7 +586,7 @@
       "priority": 55,
       "served_state": "library",
       "backend_status": "library/conditional via ACME validators",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - DNS-01 secret-reference disclosure with no raw provider-token controls; coverage ledger: /coverage",
       "target_gui_mapping": "DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist.",
       "acceptance_test": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
       "source_docs": [
@@ -613,7 +613,7 @@
       "priority": 56,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - built-in/plugin DNS provider disclosure with conformance and provenance gate; coverage ledger: /coverage",
       "target_gui_mapping": "DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state.",
       "acceptance_test": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
       "source_docs": [
@@ -640,7 +640,7 @@
       "priority": 57,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - CNAME validation isolation fixture preview; coverage ledger: /coverage",
       "target_gui_mapping": "Validation delegation UI with CNAME target suggestions, isolation status, preflight checks, and per-domain policy.",
       "acceptance_test": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
       "source_docs": [
@@ -666,7 +666,7 @@
       "priority": 58,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview; coverage ledger: /coverage",
       "target_gui_mapping": "CAA policy UI showing current CAA records, allowed issuers, fail-closed lookup errors, and recommended record changes.",
       "acceptance_test": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
       "source_docs": [
@@ -692,7 +692,7 @@
       "priority": 59,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - HTTP-01/DNS-01/TLS-ALPN-01 method policy preview; coverage ledger: /coverage",
       "target_gui_mapping": "Domain-validation policy UI for HTTP-01, DNS-01, TLS-ALPN-01 method choice, constraints, and challenge readiness.",
       "acceptance_test": "UI covers method selection preview and policy-denied challenge states.",
       "source_docs": [
@@ -718,7 +718,7 @@
       "priority": 60,
       "served_state": "library",
       "backend_status": "library-complete through ACME policy",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - wildcard DNS-01-only acknowledgement and blast-radius disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Wildcard issuance UI with explicit DNS-01 requirement, profile opt-in, blast-radius warning, and renewal readiness.",
       "acceptance_test": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
       "source_docs": [
@@ -744,7 +744,7 @@
       "priority": 23,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - EST endpoint setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "EST admin UI with server URL, CA chain, auth mode, tenant binding, enrollment logs, client snippets, and error diagnostics.",
       "acceptance_test": "UI shows enabled/disabled states and curl/client examples; test verifies no page claims EST is active when config is off.",
       "source_docs": [
@@ -771,7 +771,7 @@
       "priority": 24,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - SCEP endpoint setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "SCEP admin UI with endpoint, RA cert chain, tenant, challenge-password/MDM gate status, enrollment transcript, and CMS diagnostics.",
       "acceptance_test": "UI covers GetCACaps/GetCACert/PKIOperation status and malformed request error evidence.",
       "source_docs": [
@@ -797,7 +797,7 @@
       "priority": 25,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - CMP endpoint setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "CMP admin UI with endpoint, tenant, RA transport status, enrollment results, and interoperable client guidance.",
       "acceptance_test": "UI covers enabled/disabled and served-error states with endpoint copy and docs link.",
       "source_docs": [
@@ -858,7 +858,7 @@
       "priority": 61,
       "served_state": "library",
       "backend_status": "library-complete challenge gate",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Protocols at /protocols - MDM/Intune SCEP challenge fixtures plus backend-gap disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures.",
       "acceptance_test": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
       "source_docs": [
@@ -885,7 +885,7 @@
       "priority": 27,
       "served_state": "conditional",
       "backend_status": "conditional served over UDS",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - SPIFFE Workload API socket setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, and client integration snippets.",
       "acceptance_test": "UI shows disabled/misconfigured/enabled states and never exposes private key material from SVIDs.",
       "source_docs": [
@@ -911,7 +911,7 @@
       "priority": 62,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Workloads at /workloads - ephemeral credential lease fixture plus library-only disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Ephemeral issuance UI for TTL policy, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action.",
       "acceptance_test": "UI blocks live issuance until served endpoint exists and tests lease expiry visualization with fixtures.",
       "source_docs": [
@@ -937,7 +937,7 @@
       "priority": 63,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage; coverage ledger: /coverage",
       "target_gui_mapping": "Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons.",
       "acceptance_test": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
       "source_docs": [
@@ -1003,7 +1003,7 @@
       "priority": 64,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus library-only disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail.",
       "acceptance_test": "UI must not expose broker issuance as live until served; fixtures cover scoped AI agent identity lifecycle.",
       "source_docs": [
@@ -1029,7 +1029,7 @@
       "priority": 28,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - SSH CA endpoint/KRL setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation.",
       "acceptance_test": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
       "source_docs": [
@@ -1058,7 +1058,7 @@
       "priority": 65,
       "served_state": "conditional",
       "backend_status": "agent-side explicit opt-in",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: SSHTrust at /ssh - SSH trust rollout and rollback fixtures without live mutation controls; coverage ledger: /coverage",
       "target_gui_mapping": "SSH trust rollout UI showing candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation state.",
       "acceptance_test": "UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
       "source_docs": [
@@ -1086,7 +1086,7 @@
       "priority": 66,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: SSHTrust at /ssh - attestation-gated SSH user cert fixtures without live issue control; coverage ledger: /coverage",
       "target_gui_mapping": "SSH JIT UI requiring attestation evidence, approver, principal, TTL, source address, force-command constraints, and issued cert retrieval.",
       "acceptance_test": "UI blocks self-approval and tests attestation denied/approved/expired cases.",
       "source_docs": [
@@ -1149,7 +1149,7 @@
       "priority": 67,
       "served_state": "partial",
       "backend_status": "crypto boundary plus algorithms",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Posture at /posture - crypto-agility and PQC readiness fixtures with CBOM backend gate; coverage ledger: /coverage",
       "target_gui_mapping": "Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers.",
       "acceptance_test": "UI maps CBOM/risk data into crypto-agility dashboard and tests weak/PQC-ready fixture states.",
       "source_docs": [
@@ -1176,7 +1176,7 @@
       "priority": 68,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Posture at /posture - PQC migration wave fixture plus library-only orchestration disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off.",
       "acceptance_test": "UI shows roadmap/library status until served trigger exists and tests migration plan fixture states.",
       "source_docs": [
@@ -1202,7 +1202,7 @@
       "priority": 69,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Connectors at /connectors - connector registry, capability grant, outbox, dry-run, reachability, and rollback disclosure without live deploy; coverage ledger: /coverage",
       "target_gui_mapping": "Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state.",
       "acceptance_test": "UI shows connector capability grants, dry-run/test deploy, pending/succeeded/failed outbox delivery, and disabled state until dispatcher is wired.",
       "source_docs": [
@@ -1229,7 +1229,7 @@
       "priority": 70,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Connectors at /connectors - appliance connector reachability, masked target references, and rollback fixtures without live deploy; coverage ledger: /coverage",
       "target_gui_mapping": "Appliance connector UI for F5, NetScaler, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
       "acceptance_test": "UI tests appliance connector error states and confirms secret references are masked.",
       "source_docs": [
@@ -1259,7 +1259,7 @@
       "priority": 71,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, and audit disclosure without live signing; coverage ledger: /coverage",
       "target_gui_mapping": "Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence.",
       "acceptance_test": "UI must show library-only status until served API exists and tests approval-required signing request fixtures.",
       "source_docs": [
@@ -1285,7 +1285,7 @@
       "priority": 30,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Protocols at /protocols - TSA endpoint setup and protocol-status unavailable state; coverage ledger: /coverage",
       "target_gui_mapping": "TSA UI for endpoint, certificate, request test, OpenSSL verification, tenant binding, status, and audit trail.",
       "acceptance_test": "UI shows TSA enabled/disabled and verifies a fixture timestamp response status without exposing signing key material.",
       "source_docs": [
@@ -1312,7 +1312,7 @@
       "priority": 72,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Incidents at /incidents - compromised credential intake plus served graph blast-radius preview without remediation execute; coverage ledger: /coverage",
       "target_gui_mapping": "Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle.",
       "acceptance_test": "UI shows library-only state until served workflow exists; fixture covers preview and gated remediation.",
       "source_docs": [
@@ -1338,7 +1338,7 @@
       "priority": 73,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Incidents at /incidents - fleet reissue wave, health, resume, rollback, failed target, and audit receipt fixture; coverage ledger: /coverage",
       "target_gui_mapping": "Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts.",
       "acceptance_test": "UI must simulate staged plan with fixtures and block live run until served workflow exists.",
       "source_docs": [
@@ -1399,7 +1399,7 @@
       "priority": 74,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Incidents at /incidents - break-glass declaration, quorum, offline issue, reconciliation, expiry, and checklist fixture without bypass control; coverage ledger: /coverage",
       "target_gui_mapping": "Break-glass UI with emergency declaration, quorum, offline issue, verification, reconciliation, expiry, and post-incident audit checklist.",
       "acceptance_test": "UI requires high-risk confirmation and shows library-only state until served; tests no one-click bypass.",
       "source_docs": [
@@ -1425,7 +1425,7 @@
       "priority": 32,
       "served_state": "partial",
       "backend_status": "served store rotation plus library rotation engine",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; coverage ledger: /coverage",
       "target_gui_mapping": "Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status.",
       "acceptance_test": "UI calls served rotate path for native store and hides backend-specific rotation controls until served.",
       "source_docs": [
@@ -1456,7 +1456,7 @@
       "priority": 75,
       "served_state": "library",
       "backend_status": "library-level concept",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - ephemeral API-key request, approval, TTL, revocation, and copy-once disclosure without live issuance; coverage ledger: /coverage",
       "target_gui_mapping": "Ephemeral API key UI for scoped, time-bound key requests, approvals, expiry, revocation, and copy-once presentation.",
       "acceptance_test": "UI ensures token value is visible once only, cannot be recovered, and is never stored in localStorage/sessionStorage.",
       "source_docs": [
@@ -1483,7 +1483,7 @@
       "priority": 76,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only; coverage ledger: /coverage",
       "target_gui_mapping": "Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling.",
       "acceptance_test": "UI proves finding snippets are redacted and actions require proper scope.",
       "source_docs": [
@@ -1509,7 +1509,7 @@
       "priority": 33,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete; coverage ledger: /coverage",
       "target_gui_mapping": "Secrets store UI for create/list/read-with-confirmation/rotate/delete, version metadata, owner, access policy, and value reveal guard.",
       "acceptance_test": "Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
       "source_docs": [
@@ -1547,7 +1547,7 @@
       "priority": 34,
       "served_state": "conditional",
       "backend_status": "conditional served SDK path plus CLI",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store; coverage ledger: /coverage",
       "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, and least-privilege policy explanation.",
       "acceptance_test": "UI examples match CLI/API contract and never include real secret values in generated snippets.",
       "source_docs": [
@@ -1586,7 +1586,7 @@
       "priority": 77,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - dynamic backend, role, lease TTL, issue/revoke, health, and lease status disclosure without live lease issue; coverage ledger: /coverage",
       "target_gui_mapping": "Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow.",
       "acceptance_test": "UI shows library-only state until each backend is served and tests lease expiry/revocation fixtures.",
       "source_docs": [
@@ -1612,7 +1612,7 @@
       "priority": 78,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Transit/KMIP UI for keys, encrypt/decrypt test, HMAC/sign/verify, key versions, rewrap, audit, and appliance profile status.",
       "acceptance_test": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
       "source_docs": [
@@ -1639,7 +1639,7 @@
       "priority": 35,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "operate: Secrets at /secrets - PKI secret issue with reveal-once bundle; coverage ledger: /coverage",
       "target_gui_mapping": "PKI secret UI to issue short-lived cert plus private key, show lease/serial, download bundle once, revoke, and verify OCSP/CRL state.",
       "acceptance_test": "UI proves private key value is copy/download-once, no persistent browser storage, and disabled state when no issuing CA exists.",
       "source_docs": [
@@ -1669,7 +1669,7 @@
       "priority": 79,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - secret sync target mappings, masked credentials, push/drift/rollback/outbox disclosure without live sync; coverage ledger: /coverage",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt.",
       "acceptance_test": "UI marks sync as library-only until served and tests target credential masking.",
       "source_docs": [
@@ -1695,7 +1695,7 @@
       "priority": 36,
       "served_state": "conditional",
       "backend_status": "conditional served for machine login",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "operate: Secrets at /secrets - machine login exchange through served secrets login; coverage ledger: /coverage",
       "target_gui_mapping": "Machine auth-method UI for token methods, tenant binding, audience, expiry, issued sessions, revoked methods, and login test.",
       "acceptance_test": "UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
       "source_docs": [
@@ -1726,7 +1726,7 @@
       "priority": 37,
       "served_state": "conditional",
       "backend_status": "conditional served for one-time shares; broader approvals partial",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "operate: Secrets at /secrets - one-time share create/redeem; coverage ledger: /coverage",
       "target_gui_mapping": "One-time share UI plus approval workflow for sensitive secret changes, with redeem-once, expiry, recipient, and audit evidence.",
       "acceptance_test": "UI proves share token is shown once, second redeem fails, and approval state is visible without value leakage.",
       "source_docs": [
@@ -1817,7 +1817,7 @@
       "priority": 80,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and outbox delivery disclosure without live channel config; coverage ledger: /coverage",
       "target_gui_mapping": "Notification channel UI for Slack, Teams, email, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
       "acceptance_test": "UI uses secret references only and tests redaction of webhook/API keys in errors.",
       "source_docs": [
@@ -1843,7 +1843,7 @@
       "priority": 81,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Policy at /policy, /audit - served signed audit evidence export plus framework-mapped compliance posture disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats.",
       "acceptance_test": "UI clearly says evidence is not certification and links each control to backing records/tests.",
       "source_docs": [
@@ -2016,7 +2016,7 @@
       "priority": 82,
       "served_state": "served",
       "backend_status": "served binary",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Platform at /platform - token-safe CLI companion commands matching served API command groups; coverage ledger: /coverage",
       "target_gui_mapping": "CLI companion UI that shows equivalent CLI commands for current page/context, token-safe examples, and parity status.",
       "acceptance_test": "UI command snippets match internal/cli command table and redact bearer tokens.",
       "source_docs": [
@@ -2146,7 +2146,7 @@
       "priority": 83,
       "served_state": "served",
       "backend_status": "served/eval",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, and signer-supervision disclosure blocked on platform status; coverage ledger: /coverage",
       "target_gui_mapping": "System information UI showing binary version, build info, embedded UI asset version, run mode, datastore mode, and signer child/supervision status.",
       "acceptance_test": "UI displays build/runtime metadata from a served endpoint; if endpoint is absent, roadmap-disclosure card is shown.",
       "source_docs": [
@@ -2173,7 +2173,7 @@
       "priority": 12,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "observe: Platform at /platform - browser transport posture and platform-status gap; coverage ledger: /coverage",
       "target_gui_mapping": "Transport security status UI showing HTTPS/mTLS mode, cert issuer/expiry, agent channel address, signer transport, and insecure-dev warnings.",
       "acceptance_test": "UI warns on dev/plaintext loopback and shows production TLS status without leaking private cert/key data.",
       "source_docs": [
@@ -2239,7 +2239,7 @@
       "priority": 84,
       "served_state": "roadmap",
       "backend_status": "roadmap",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Platform at /platform - cross-cluster federation roadmap disclosure with no topology or replication controls; coverage ledger: /coverage",
       "target_gui_mapping": "Roadmap-disclosure page/card only until backend exists; later federation topology, replication health, conflict/replay status.",
       "acceptance_test": "UI must not claim federation is shipped; tests assert roadmap copy until backend route exists.",
       "source_docs": [
@@ -2263,7 +2263,7 @@
       "priority": 85,
       "served_state": "library",
       "backend_status": "library-complete",
-      "current_frontend_mapping": "roadmap-disclosure: /coverage lists backend status, target GUI mapping, acceptance criteria, and non-interactive state",
+      "current_frontend_mapping": "disclosure: Platform at /platform, /connectors - plugin provenance, digest pin, capability grant, conformance, runtime-status, and denial-reason disclosure without live activation; coverage ledger: /coverage",
       "target_gui_mapping": "Plugin admin UI for load/admit, provenance, signature, capability grants, conformance results, runtime status, and denial reasons.",
       "acceptance_test": "UI blocks unverified plugin activation and tests empty grants, denied capability, signature failure, and conformance failure states.",
       "source_docs": [

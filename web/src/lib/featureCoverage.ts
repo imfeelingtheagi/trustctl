@@ -63,7 +63,7 @@ export interface FeatureCoverageDomain {
 const backlog = featureMapBacklog as FeatureMapBacklog;
 
 export function coverageStateFor(item: FeatureMapBacklogItem): FeatureCoverageState {
-  if (item.current_frontend_mapping === "none" || /roadmap-disclosure/i.test(item.current_frontend_mapping)) {
+  if (item.current_frontend_mapping === "none" || /roadmap-disclosure|^disclosure:/i.test(item.current_frontend_mapping)) {
     return "disclose";
   }
   if (/issue|create|approve|actions|Wizard|Profiles|Assistant|MCP|Login/i.test(item.current_frontend_mapping)) {

@@ -26,8 +26,15 @@ describe("route-level served-feature parity", () => {
 
     const absentServedRows = featureCoverageItems
       .filter((item) => item.servedState === "library" || item.servedState === "roadmap")
-      .filter((item) => !/roadmap-disclosure/i.test(item.currentMapping));
+      .filter((item) => !/(roadmap-disclosure|^disclosure:)/i.test(item.currentMapping));
     expect(absentServedRows).toEqual([]);
+  });
+
+  it("keeps /coverage as the ledger, not the replacement GUI workflow", () => {
+    const coverageOnlyRows = featureCoverageItems
+      .filter((item) => surfacesFor(item.id).length > 0)
+      .filter((item) => /roadmap-disclosure:\s*\/coverage/i.test(item.currentMapping));
+    expect(coverageOnlyRows.map((item) => item.id)).toEqual([]);
   });
 
   it("keeps every served feature ID tied to a non-ledger GUI route", () => {

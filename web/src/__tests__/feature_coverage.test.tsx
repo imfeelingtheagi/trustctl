@@ -75,9 +75,9 @@ describe("feature coverage roadmap surface", () => {
     await user.click(screen.getByRole("button", { name: "Disclose" }));
 
     expect(screen.getAllByTestId("feature-row")).toHaveLength(featureCoverageTotals.disclose);
-    expect(screen.getByText("Native secret store")).toBeInTheDocument();
-    expect(screen.getByText("SSH certificate authority")).toBeInTheDocument();
-    expect(screen.getByText("SPIFFE Workload API")).toBeInTheDocument();
+    expect(screen.getByText("Secret sync / platform integrations")).toBeInTheDocument();
+    expect(screen.getByText("Agentless cloud certificate discovery")).toBeInTheDocument();
+    expect(screen.getByText("Plugin SDK with capability sandboxing")).toBeInTheDocument();
   });
 
   it("supports focused feature search by feature ID and keeps target mapping visible", async () => {

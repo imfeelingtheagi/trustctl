@@ -84,8 +84,9 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 		if item.ServedState != "library" && item.ServedState != "roadmap" {
 			continue
 		}
-		if !strings.Contains(strings.ToLower(item.CurrentFrontendMapping), "roadmap-disclosure") {
-			t.Errorf("%s is %s but current GUI mapping is not an explicit roadmap disclosure: %q", item.FeatureID, item.ServedState, item.CurrentFrontendMapping)
+		lower := strings.ToLower(item.CurrentFrontendMapping)
+		if !strings.Contains(lower, "roadmap-disclosure") && !strings.HasPrefix(lower, "disclosure:") {
+			t.Errorf("%s is %s but current GUI mapping is not an explicit disclosure: %q", item.FeatureID, item.ServedState, item.CurrentFrontendMapping)
 		}
 	}
 }
