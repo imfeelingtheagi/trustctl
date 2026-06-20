@@ -91,10 +91,15 @@ type Deps struct {
 	// outboxgc.DefaultRetention. At-least-once delivery (AN-6) is unaffected — only
 	// already-delivered rows are reclaimed.
 	OutboxRetention time.Duration
-	Logger          *slog.Logger    // structured access log sink (R2.2); nil discards
-	TraceExporter   observ.Exporter // completed-span sink (R2.2); nil is a no-op
-	Bulkhead        *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
-	RateLimiter     api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
+	// OutboxDeliveryTimeout is the per-message deadline for generic outbox
+	// deliveries. Zero uses the orchestrator default. Timed-out rows are retried via
+	// the normal outbox backoff/dead-letter path, and the served binary records a
+	// timeout metric labeled by tenant and destination.
+	OutboxDeliveryTimeout time.Duration
+	Logger                *slog.Logger    // structured access log sink (R2.2); nil discards
+	TraceExporter         observ.Exporter // completed-span sink (R2.2); nil is a no-op
+	Bulkhead              *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
+	RateLimiter           api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
 	// SecurityHeaders configures the web-hardening response headers + CORS policy
 	// applied to the whole served surface (SEC-003/WIRE-005). The zero value is
 	// safe (headers on, HSTS off, same-origin-only CORS); Run sets TLS from the
@@ -307,7 +312,8 @@ type Server struct {
 	mIdemPurged *observ.Counter
 
 	// Outbox GC telemetry (SPINE-003): delivered rows reclaimed by the purge sweep.
-	mOutboxPurged *observ.Counter
+	mOutboxPurged           *observ.Counter
+	mOutboxDeliveryTimeouts *observ.CounterVec
 
 	// Tailing projection worker + lag gauge (SPINE-009): a durable consumer that
 	// projects events appended out of band and surfaces projection lag.
@@ -370,6 +376,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		signTO:      d.SignTimeout,
 		obHandler:   d.OutboxHandler,
 		leafProfile: d.LeafProfile,
+		registry:    observ.NewRegistry(),
 	}
 	if s.signTO <= 0 {
 		s.signTO = 10 * time.Second
@@ -412,7 +419,17 @@ func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, erro
 }
 
 func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestrator.Orchestrator, *orchestrator.Idempotency, error) {
-	s.outbox = orchestrator.NewOutbox(d.Store)
+	s.mOutboxDeliveryTimeouts = s.registry.CounterVec(
+		"trstctl_outbox_delivery_timeouts_total",
+		"Outbox deliveries that exceeded their per-message deadline.",
+		[]string{"tenant_id", "destination"},
+	)
+	s.outbox = orchestrator.NewOutbox(d.Store,
+		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
+		orchestrator.WithDeliveryTimeoutObserver(func(m orchestrator.Message) {
+			s.mOutboxDeliveryTimeouts.WithLabelValues(m.TenantID, m.Destination).Inc()
+		}),
+	)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
 	idem := orchestrator.NewIdempotency(d.Store)
 	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
@@ -600,7 +617,9 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	if s.logger == nil {
 		s.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	s.registry = observ.NewRegistry()
+	if s.registry == nil {
+		s.registry = observ.NewRegistry()
+	}
 	s.tracer = observ.NewTracer(d.TraceExporter)
 	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()

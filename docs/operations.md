@@ -40,6 +40,13 @@ and destinations, with explicit in-flight caps per tenant and per destination, s
 one down connector or one noisy tenant cannot occupy every outbox worker while
 unrelated tenants wait behind it.
 
+Each delivery also has a per-message deadline. If a connector, plugin, webhook, or
+notification target does not return before that deadline, the row is marked
+pending again through the normal retry/backoff path, and the served binary increments
+`trstctl_outbox_delivery_timeouts_total{tenant_id,destination}`. That counter is the
+operator's direct signal that one destination is timing out without starving the
+rest of the outbox.
+
 ## Rate limiting (per tenant, PostgreSQL-backed)
 
 A **per-tenant token bucket**, persisted in PostgreSQL (no Redis — the limit holds
@@ -76,4 +83,6 @@ the test suite.
 Pair this with [Observability](observability.md): the `trstctl_http_requests_total`
 counter shows 429/503 shedding as it happens, and the alert rules fire on
 sustained error rate or latency. A rising 503 rate points at a saturated
-subsystem; a rising 429 rate points at a tenant over budget.
+subsystem; a rising 429 rate points at a tenant over budget. A rising
+`trstctl_outbox_delivery_timeouts_total` series points at a slow destination and
+includes the affected tenant and destination labels.

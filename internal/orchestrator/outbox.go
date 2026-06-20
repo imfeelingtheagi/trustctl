@@ -71,6 +71,8 @@ type Outbox struct {
 	backoff                   func(attempts int) time.Duration
 	maxAttempts               int
 	leaseTTL                  time.Duration
+	deliveryTimeout           time.Duration
+	deliveryTimeoutObserver   func(Message)
 	maxInFlightPerDestination int
 	maxInFlightPerTenant      int
 	workerID                  string
@@ -99,6 +101,22 @@ func WithLeaseTTL(n time.Duration) Option {
 			o.leaseTTL = n
 		}
 	}
+}
+
+// WithDeliveryTimeout sets the per-message deadline for the external call made
+// by Dispatch. A non-positive value leaves the production default.
+func WithDeliveryTimeout(n time.Duration) Option {
+	return func(o *Outbox) {
+		if n > 0 {
+			o.deliveryTimeout = n
+		}
+	}
+}
+
+// WithDeliveryTimeoutObserver records delivery deadline expirations without
+// coupling the orchestrator package to a concrete metrics implementation.
+func WithDeliveryTimeoutObserver(f func(Message)) Option {
+	return func(o *Outbox) { o.deliveryTimeoutObserver = f }
 }
 
 // WithMaxInFlightPerDestination caps concurrently processing rows for one
@@ -140,6 +158,7 @@ func NewOutbox(s *store.Store, opts ...Option) *Outbox {
 		backoff:                   func(attempts int) time.Duration { return time.Duration(attempts*attempts) * time.Second },
 		maxAttempts:               10,
 		leaseTTL:                  30 * time.Second,
+		deliveryTimeout:           25 * time.Second,
 		maxInFlightPerDestination: 1,
 		maxInFlightPerTenant:      2,
 		workerID:                  fmt.Sprintf("outbox-%d", time.Now().UTC().UnixNano()),
@@ -222,11 +241,32 @@ func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
 		seenTenants[claim.msg.TenantID] = true
 		seenDestinations[claim.msg.Destination] = true
 		processed++
-		if err := o.finalizeClaim(ctx, claim, h.Deliver(ctx, claim.msg)); err != nil {
+		if err := o.finalizeClaim(ctx, claim, o.deliver(ctx, h, claim)); err != nil {
 			return processed, err
 		}
 	}
 	return processed, nil
+}
+
+func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
+	deliverCtx := ctx
+	cancel := func() {}
+	if o.deliveryTimeout > 0 {
+		deliverCtx, cancel = context.WithTimeout(ctx, o.deliveryTimeout)
+	}
+	deliverErr := h.Deliver(deliverCtx, claim.msg)
+	timedOut := o.deliveryTimeout > 0 &&
+		ctx.Err() == nil &&
+		errors.Is(deliverCtx.Err(), context.DeadlineExceeded) &&
+		errors.Is(deliverErr, context.DeadlineExceeded)
+	cancel()
+	if timedOut {
+		if o.deliveryTimeoutObserver != nil {
+			o.deliveryTimeoutObserver(claim.msg)
+		}
+		return fmt.Errorf("outbox delivery timed out after %s: %w", o.deliveryTimeout, deliverErr)
+	}
+	return deliverErr
 }
 
 // claimOne recovers expired leases, then marks one fair due row processing in a

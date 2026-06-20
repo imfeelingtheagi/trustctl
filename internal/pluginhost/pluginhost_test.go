@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -147,6 +148,45 @@ func TestHostIsBulkheaded(t *testing.T) {
 	if !errors.Is(err, bulkhead.ErrRejected) {
 		t.Errorf("Invoke on a saturated host = %v, want ErrRejected", err)
 	}
+	close(release)
+}
+
+// TestPluginInvokeReturnsOnContextTimeoutWhileQueued proves a queued plugin call
+// observes its caller's deadline while waiting for the worker result. Without this
+// select on ctx.Done, a plugin/outbox delivery can keep the caller blocked until
+// the worker eventually runs or returns.
+func TestPluginInvokeReturnsOnContextTimeoutWhileQueued(t *testing.T) {
+	ctx := context.Background()
+	pool := bulkhead.New(bulkhead.Config{Name: "plugins", Workers: 1, Queue: 1})
+	h := pluginhost.New(pluginhost.WithPool(pool))
+	t.Cleanup(func() { _ = h.Close(ctx) })
+
+	p, err := h.Load(ctx, helloWASM, pluginhost.NewGrant())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close(ctx) })
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	if err := pool.Submit(func() { close(started); <-release }); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+
+	callCtx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err = h.Invoke(callCtx, p, "run")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		close(release)
+		t.Fatalf("Invoke err = %v, want context deadline exceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		close(release)
+		t.Fatalf("Invoke returned after %v, want it bounded by the caller deadline", elapsed)
+	}
+
 	close(release)
 }
 

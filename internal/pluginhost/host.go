@@ -148,6 +148,10 @@ func (h *Host) Invoke(ctx context.Context, p *Plugin, fn string) (uint64, error)
 	}); err != nil {
 		return 0, err
 	}
-	r := <-ch
-	return r.v, r.err
+	select {
+	case r := <-ch:
+		return r.v, r.err
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
 }

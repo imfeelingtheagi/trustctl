@@ -91,6 +91,7 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"TestOutboxDeliversAndMarksDelivered",
 		"TestDispatchOneSkipLockedDoesNotDoubleDeliver",
 		"TestOutboxLeasesDoNotStarveUnrelatedTenants",
+		"TestOutboxDeliveryTimeoutRetriesAndDrainsUnrelatedDestination",
 		"TestReconcileOutboxHealsCrashGapExactlyOnce",
 		"TestReconcileOutboxDoesNotDoubleEnqueueWithInlinePath",
 	} {
@@ -2731,6 +2732,8 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"s.mIdemPurged = s.registry.CounterVec(\"trstctl_idempotency_keys_purged_total\"",
 		"s.mOutboxPurged = s.registry.CounterVec(\"trstctl_outbox_delivered_purged_total\"",
+		"s.mOutboxDeliveryTimeouts = s.registry.CounterVec(",
+		"trstctl_outbox_delivery_timeouts_total",
 		"s.mOutboxReconcileLag = s.registry.Gauge(\"trstctl_outbox_reconciliation_lag_events\"",
 		"newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent))",
 		"func (s *Server) RunIdempotencyGC(",

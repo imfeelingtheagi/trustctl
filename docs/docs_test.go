@@ -283,7 +283,7 @@ func TestObservabilityDocIsReal(t *testing.T) {
 // server actually wires the bulkhead.
 func TestOperationsDocIsReal(t *testing.T) {
 	lower := strings.ToLower(read(t, "operations.md"))
-	for _, want := range []string{"bulkhead", "rate limit", "429", "retry-after", "drain", "fail"} {
+	for _, want := range []string{"bulkhead", "rate limit", "429", "retry-after", "drain", "fail", "trstctl_outbox_delivery_timeouts_total"} {
 		if !strings.Contains(lower, want) {
 			t.Errorf("operations.md should cover %q", want)
 		}
@@ -296,6 +296,9 @@ func TestOperationsDocIsReal(t *testing.T) {
 	}
 	if srv := read(t, "../internal/server/server.go"); !strings.Contains(srv, "bulkhead") {
 		t.Error("operations.md documents bulkheads but the server does not wire one")
+	}
+	if srv := read(t, "../internal/server/server.go"); !strings.Contains(srv, "trstctl_outbox_delivery_timeouts_total") {
+		t.Error("operations.md documents the outbox timeout metric but the server does not emit it")
 	}
 }
 

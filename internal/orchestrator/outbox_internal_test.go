@@ -3,6 +3,7 @@ package orchestrator_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -285,6 +286,87 @@ func TestOutboxLeasesDoNotStarveUnrelatedTenants(t *testing.T) {
 	}
 	if rec.Status != "delivered" {
 		t.Fatalf("tenant B fast row status = %q, want delivered", rec.Status)
+	}
+}
+
+// TestOutboxDeliveryTimeoutRetriesAndDrainsUnrelatedDestination proves that a
+// wedged external destination spends only one bounded message deadline on an
+// outbox worker. The timed-out row is returned to pending with backoff, while an
+// unrelated tenant/destination still drains in the same sweep.
+func TestOutboxDeliveryTimeoutRetriesAndDrainsUnrelatedDestination(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithBackoff(func(int) time.Duration { return time.Hour }),
+		orchestrator.WithDeliveryTimeout(25*time.Millisecond),
+		orchestrator.WithMaxInFlightPerDestination(1),
+		orchestrator.WithMaxInFlightPerTenant(1),
+		orchestrator.WithWorkerID("timeout-test"),
+	)
+
+	slowID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "connector.deploy", IdempotencyKey: "timeout-slow-1", Payload: []byte(`{}`),
+	})
+	fastID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantB, Destination: "notification.webhook", IdempotencyKey: "timeout-fast-1", Payload: []byte(`{}`),
+	})
+
+	slowEntered := make(chan struct{})
+	fastDelivered := make(chan struct{})
+	var slowOnce, fastOnce sync.Once
+	handler := orchestrator.HandlerFunc(func(ctx context.Context, m orchestrator.Message) error {
+		switch m.Destination {
+		case "connector.deploy":
+			slowOnce.Do(func() { close(slowEntered) })
+			<-ctx.Done()
+			return ctx.Err()
+		case "notification.webhook":
+			fastOnce.Do(func() { close(fastDelivered) })
+			return nil
+		default:
+			t.Fatalf("unexpected destination %q", m.Destination)
+			return nil
+		}
+	})
+
+	start := time.Now()
+	n, err := ob.Dispatch(ctx, handler)
+	if err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("Dispatch processed %d rows, want 2 (slow timeout plus unrelated fast delivery)", n)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("Dispatch took %v, want it bounded by the per-message delivery timeout", elapsed)
+	}
+
+	select {
+	case <-slowEntered:
+	default:
+		t.Fatal("slow destination was never invoked")
+	}
+	select {
+	case <-fastDelivered:
+	default:
+		t.Fatal("unrelated destination did not drain after the slow timeout")
+	}
+
+	slow, err := ob.Get(ctx, tenantA, slowID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slow.Status != "pending" || slow.Attempts != 1 || !strings.Contains(slow.LastError, "context deadline exceeded") {
+		t.Fatalf("slow row = {status:%q attempts:%d last_error:%q}, want pending/1/context deadline exceeded",
+			slow.Status, slow.Attempts, slow.LastError)
+	}
+
+	fast, err := ob.Get(ctx, tenantB, fastID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fast.Status != "delivered" {
+		t.Fatalf("fast row status = %q, want delivered", fast.Status)
 	}
 }
 
