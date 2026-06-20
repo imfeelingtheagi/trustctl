@@ -454,7 +454,7 @@ export function Platform() {
           </p>
         </div>
         <UnavailableState title="Plugin admin read API not served yet">
-          Plugin host management is available via the API and CLI today; console inspection and activation of tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons is coming soon.
+          The plugin runtime is served, but plugin administration is not. Tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons have no served API or CLI management surface yet.
         </UnavailableState>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[72rem]">

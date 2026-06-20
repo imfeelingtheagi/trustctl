@@ -103,7 +103,7 @@ export function Workloads() {
       />
 
       <UnavailableState title="Workload lease APIs are not served yet">
-        Lease state, attestation decisions, and broker issuance are available via the API and CLI today; console management is coming soon. No live issue, revoke, approve, or mint controls are rendered.
+        Lease state, attestation decisions, and broker issuance are not served by API or CLI yet. No live issue, revoke, approve, or mint controls are rendered.
       </UnavailableState>
 
       <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
@@ -189,7 +189,7 @@ export function Workloads() {
           </table>
         </div>
         <UnavailableState title="Attestation API is library-only">
-          Accepted, rejected, expired, and wrong-tenant attestation decisions are available via the API and CLI today; console management is coming soon, so this page cannot show live workload evidence yet.
+          Accepted, rejected, expired, and wrong-tenant attestation decisions are library-only. This page cannot show live workload evidence because no served attestation API or CLI command exists yet.
         </UnavailableState>
       </section>
 
@@ -218,7 +218,7 @@ export function Workloads() {
           </table>
         </div>
         <UnavailableState title="Broker issuance is library-only">
-          Agent-scoped broker issuance, expiry, and audit reads are available via the API and CLI today; console management is coming soon, so live broker credentials cannot be minted in the console yet.
+          Agent-scoped broker issuance, expiry, and audit reads are library-only. No served broker API or CLI command can mint live broker credentials yet.
         </UnavailableState>
       </section>
     </section>

@@ -44,7 +44,7 @@ export function CodeSigning() {
       />
 
       <UnavailableState title="Code-signing workflow is library-only">
-        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are available via the API and CLI today; console management is coming soon, so this console cannot submit signing work yet.
+        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are library-only. There is no served signing API or CLI workflow yet, so this console cannot submit signing work.
       </UnavailableState>
 
       <section aria-labelledby="requests-heading" className="grid gap-3 border-y border-border py-4">

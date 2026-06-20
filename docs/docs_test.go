@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/cli"
 )
 
 // requiredPages are the documentation pages S7.6 must deliver, as paths relative
@@ -48,6 +50,86 @@ func read(t *testing.T, rel string) string {
 		t.Fatalf("read %s: %v", rel, err)
 	}
 	return string(b)
+}
+
+func TestWebAvailabilityCopyIsBackedByOpenAPIAndCLI(t *testing.T) {
+	for _, file := range webClaimFiles(t) {
+		body := strings.ToLower(read(t, file))
+		for _, stale := range []string{
+			"available via the api and cli today",
+			"available via the api/cli today",
+		} {
+			if strings.Contains(body, stale) {
+				t.Errorf("%s contains unsupported API/CLI availability copy %q; use served/library/not-served wording unless OpenAPI and CLI both back the claim", file, stale)
+			}
+		}
+	}
+
+	paths := openAPIPaths(t)
+	commands := cliCommandNames()
+	for _, claim := range []struct {
+		name string
+		path string
+		cmd  string
+	}{
+		{"native secret store", "/api/v1/secrets/store", "secrets store list"},
+		{"PKI secret issuance", "/api/v1/secrets/pki", "secrets pki"},
+		{"audit export", "/api/v1/audit/export", "audit export"},
+		{"graph blast-radius", "/api/v1/graph/blast-radius/{id}", "graph blast-radius"},
+	} {
+		if !paths[claim.path] {
+			t.Errorf("served availability anchor %s missing OpenAPI path %s", claim.name, claim.path)
+		}
+		if !commands[claim.cmd] {
+			t.Errorf("served availability anchor %s missing CLI command %q", claim.name, claim.cmd)
+		}
+	}
+}
+
+func webClaimFiles(t *testing.T) []string {
+	t.Helper()
+	var files []string
+	for _, root := range []string{"../web/src/pages", "../web/src/__tests__"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if strings.HasSuffix(path, ".tsx") || strings.HasSuffix(path, ".ts") {
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	return files
+}
+
+func openAPIPaths(t *testing.T) map[string]bool {
+	t.Helper()
+	var doc struct {
+		Paths map[string]json.RawMessage `json:"paths"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
+		t.Fatalf("parse OpenAPI golden: %v", err)
+	}
+	out := make(map[string]bool, len(doc.Paths))
+	for p := range doc.Paths {
+		out[p] = true
+	}
+	return out
+}
+
+func cliCommandNames() map[string]bool {
+	out := map[string]bool{}
+	for _, command := range cli.Commands() {
+		out[strings.Join(command.Name, " ")] = true
+	}
+	return out
 }
 
 // allMarkdown returns every Markdown file under the docs directory.

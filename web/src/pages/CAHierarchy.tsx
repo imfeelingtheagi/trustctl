@@ -94,7 +94,7 @@ export function CAHierarchy() {
       />
 
       <UnavailableState title="CA hierarchy ceremony API not served yet">
-        Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are available via the API and CLI today; console management is coming soon. This page renders no create-root, rotate-root, or ceremony execution controls.
+        Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are library-tier only. There is no served API or CLI ceremony route yet, so this page renders no create-root, rotate-root, or ceremony execution controls.
       </UnavailableState>
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
@@ -196,7 +196,7 @@ export function CAHierarchy() {
           </table>
         </div>
         <UnavailableState title="HSM/KMS lifecycle API not served yet">
-          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary and are available via the API and CLI today; console management for this custody workflow is coming soon.
+          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary as library-tier workflows. There is no served API or CLI lifecycle surface for this custody workflow yet.
         </UnavailableState>
       </section>
     </section>

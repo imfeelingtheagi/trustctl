@@ -42,7 +42,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("expired")).toBeInTheDocument();
     expect(screen.getByText("wrong-tenant")).toBeInTheDocument();
     expect(screen.getByText("Attestation API is library-only")).toBeInTheDocument();
-    expect(screen.getByText(/cannot show live workload evidence yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no served attestation API or CLI command exists yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/eyJ[a-z0-9_-]+/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
   });
@@ -54,7 +54,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("spiffe://tenant/ai/build-agent")).toBeInTheDocument();
     expect(screen.getByText("mcp:read-only, secrets:read:ci, certs:issue:short")).toBeInTheDocument();
     expect(screen.getByText("credential lease audit event")).toBeInTheDocument();
-    expect(screen.getByText(/live broker credentials cannot be minted in the console yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No served broker API or CLI command can mint live broker credentials yet/i)).toBeInTheDocument();
     expect(screen.getAllByText(/broker issuance is library-only/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /issue broker credential|approve agent|mint token/i })).not.toBeInTheDocument();
   });

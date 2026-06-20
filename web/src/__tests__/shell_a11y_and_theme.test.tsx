@@ -361,7 +361,7 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getByText("connector-f5.wasm")).toBeInTheDocument();
     expect(screen.getByText("net.dial:f5.example.test")).toBeInTheDocument();
     expect(screen.getByText(/unsigned plugin would fail closed/i)).toBeInTheDocument();
-    expect(screen.getByText(/Plugin host management is available via the API and CLI today/i)).toBeInTheDocument();
+    expect(screen.getByText(/The plugin runtime is served, but plugin administration is not/i)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Cross-cluster federation roadmap" })).toBeInTheDocument();
     expect(screen.getAllByText("roadmap only").length).toBeGreaterThan(0);

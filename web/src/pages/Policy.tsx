@@ -189,7 +189,7 @@ export function Policy() {
           </p>
         </div>
         <UnavailableState title="Notification channels are library-only">
-          Notification channels are available via the API and CLI today; console management is coming soon. Channel config reads, test delivery, retry state, and delivery receipts are not shown in the console yet, so this page cannot operate notification integrations.
+          Notification channels are library-only. Channel config reads, test delivery, retry state, and delivery receipts are not served by API or CLI yet, so this page cannot operate notification integrations.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[70rem]">
@@ -256,7 +256,7 @@ export function Policy() {
           </p>
         )}
         <UnavailableState title="Framework-mapped compliance posture is not served yet">
-          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are available via the API and CLI today; console management is coming soon. The signed audit export above is real evidence, not a compliance certificate.
+          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not served by API or CLI yet. The signed audit export above is real evidence, not a compliance certificate.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[62rem]">
@@ -293,7 +293,7 @@ export function Policy() {
           </p>
         </div>
         <UnavailableState title="Policy authoring and dry-run API not served yet">
-          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are available via the API and CLI today; console management is coming soon. Until then, lifecycle mutations remain the real enforcement path.
+          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not served by API or CLI yet. Until then, lifecycle mutations remain the real enforcement path.
         </UnavailableState>
       </section>
     </section>

@@ -30,7 +30,7 @@ const ephemeralKeyRows = [
     scope: "api:ingest write, owner:partner-a",
     ttl: "30 minutes",
     approval: "owner and security approval required",
-    status: "revocation and expiry ledger available via the API/CLI today",
+    status: "revocation and expiry ledger is library-only",
   },
 ];
 
@@ -64,7 +64,7 @@ const dynamicSecretRows = [
     role: "s3-audit-writer",
     lease: "TTL 10 minutes",
     health: "renewal window not served",
-    status: "copy-once generated credential available via the API/CLI today",
+    status: "copy-once generated credential is library-only",
   },
 ];
 
@@ -74,7 +74,7 @@ const transitRows = [
     operation: "encrypt/decrypt test",
     version: "v4 active, v3 decrypt-only",
     posture: "test plaintext is local-only and never sent from this disclosure",
-    audit: "rewrap and audit receipts available via the API/CLI today",
+    audit: "rewrap and audit receipts are library-only",
   },
   {
     key: "artifact-integrity",
@@ -104,7 +104,7 @@ const syncRows = [
     target: "GitLab CI",
     mapping: "deploy/key -> masked protected variable",
     credential: "secret://sync/gitlab/prod:****",
-    status: "push status available via the API/CLI today",
+    status: "push status not served",
     rollback: "restore previous variable version",
   },
   {
@@ -564,7 +564,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Scheduled rotation and downstream sync not served yet">
-          The broader rotation engine, downstream sync, and delivery receipts are available via the API and CLI today; console management is coming soon. This page exposes only the served per-secret rotate/delete controls.
+          The broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet. This page exposes only the served per-secret rotate/delete controls.
         </UnavailableState>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -753,7 +753,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Secret-change approvals not served yet">
-          Request/approve state for sensitive secret mutations is available via the API and CLI today; console management is coming soon. This page exposes the served one-time share path and no fake approval queue.
+          Request/approve state for sensitive secret mutations is not served yet. This page exposes the served one-time share path and no fake approval queue.
         </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-2">
           <form aria-label="Create one-time share" onSubmit={(event) => void submitShare(event)} className="grid content-start gap-3">
@@ -822,7 +822,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Ephemeral API-key issuance is library-only">
-          Lease issue, revoke, expiry, approval, and copy-once presentation are available via the API and CLI today; console management is coming soon, so this page can't mint short-lived API keys yet.
+          Lease issue, revoke, expiry, approval, and copy-once presentation are library-only. There is no served API or CLI command that can mint short-lived API keys yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
@@ -861,7 +861,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Secret-scanning triage is library-only">
-          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are available via the API and CLI today; console triage is coming soon.
+          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. There is no served API or CLI triage path yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
@@ -900,7 +900,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Dynamic secret leases are not served">
-          Backend health, role catalogs, lease issue/revoke, and lease status are available via the API and CLI today; console management is coming soon, so this page can't request generated credentials yet.
+          Backend health, role catalogs, lease issue/revoke, and lease status are library-only. This page cannot request generated credentials because no served dynamic-secret API or CLI command exists yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">
@@ -939,7 +939,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Transit and KMIP operations are library-only">
-          Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are available via the API and CLI today; console operations are coming soon.
+          Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are library-only. No served transit or KMIP API/CLI surface exists yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
@@ -978,7 +978,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Secret sync is not served">
-          Target mappings, push attempts, drift status, rollback receipts, and delivery state are available via the API and CLI today; console sync management is coming soon.
+          Target mappings, push attempts, drift status, rollback receipts, and delivery state are library-only. No served secret-sync API/CLI surface exists yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[72rem]">

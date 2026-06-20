@@ -86,7 +86,7 @@ export function Incidents() {
       />
 
       <UnavailableState title="Incident execution is not served">
-        Incident records, remediation state, evidence bundles, and break-glass reconciliation are available via the API and CLI today; console management is coming soon. Deployment receipts are not surfaced in the console yet, so fleet reissue cannot run from here.
+        Incident records, remediation state, evidence bundles, and break-glass reconciliation are library-only. No served incident-execution API or CLI command exists yet, and deployment receipts are not surfaced in the console, so fleet reissue cannot run from here.
       </UnavailableState>
 
       <section aria-labelledby="compromise-heading" className="grid gap-3 border-y border-border py-4">
