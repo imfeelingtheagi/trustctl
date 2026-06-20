@@ -80,11 +80,11 @@ describe("served secrets surface", () => {
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
     expect(screen.getByText("Scheduled rotation and downstream sync not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-SECRETSYNC/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/broader rotation engine, downstream sync, and delivery receipts are available via the API and CLI today/i)).toBeInTheDocument();
     expect(screen.getByText("Auth-method administration not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-TENANT-ADMIN/)).toBeInTheDocument();
+    expect(screen.getByText(/revoked methods aren't available in the console yet/i)).toBeInTheDocument();
     expect(screen.getByText("Secret-change approvals not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-POLICY-AUTHOR/)).toBeInTheDocument();
+    expect(screen.getByText(/Request\/approve state for sensitive secret mutations is available via the API and CLI today/i)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
@@ -180,7 +180,9 @@ describe("served secrets surface", () => {
     expect(screen.getByText("postgres")).toBeInTheDocument();
     expect(screen.getByText("readonly-reporting")).toBeInTheDocument();
     expect(screen.getByText("aws-sts")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-DYNSECRET|BACKEND-SECRETSCAN/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Secret-scanning triage is library-only")).toBeInTheDocument();
+    expect(screen.getByText("Dynamic secret leases are not served")).toBeInTheDocument();
+    expect(screen.getByText(/Backend health, role catalogs, lease issue\/revoke, and lease status are available via the API and CLI today/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /issue api key|mint key|triage leak|rotate leaked|issue lease|revoke lease/i })).not.toBeInTheDocument();
   });
 
@@ -193,7 +195,8 @@ describe("served secrets surface", () => {
     expect(screen.getByText("encrypt/decrypt test")).toBeInTheDocument();
     expect(screen.getByText("HMAC, sign, verify")).toBeInTheDocument();
     expect(screen.getByText(/test plaintext is local-only/)).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-TRANSIT-KMIP/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Transit and KMIP operations are library-only")).toBeInTheDocument();
+    expect(screen.getByText(/rewrap, and audit operations are available via the API and CLI today/i)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
     for (const target of [
@@ -209,7 +212,8 @@ describe("served secrets surface", () => {
       expect(screen.getByText(target)).toBeInTheDocument();
     }
     expect(screen.getByText("secret://sync/github/prod:****")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-SECRETSYNC|BACKEND-OUTBOX-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Secret sync is not served")).toBeInTheDocument();
+    expect(screen.getByText(/rollback receipts, and delivery state are available via the API and CLI today/i)).toBeInTheDocument();
     expect(screen.queryByText(/raw target token|BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /encrypt|decrypt|sign|verify|rewrap|sync|push|rollback/i })).not.toBeInTheDocument();
   });

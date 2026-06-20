@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
+import { PageHeader } from "@/components/PageHeader";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -440,7 +441,7 @@ export function Identities() {
                   {deniedTransitions[deniedKey(identity.id, a.to)] && (
                     <p
                       id={`denied-${identity.id}-${a.to}`}
-                      className="max-w-xs text-xs text-amber-700 dark:text-amber-300"
+                      className="max-w-xs text-xs text-status-warning"
                     >
                       {deniedTransitions[deniedKey(identity.id, a.to)]}
                     </p>
@@ -458,14 +459,15 @@ export function Identities() {
 
   return (
     <section aria-labelledby="identities-heading">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 id="identities-heading" className="text-2xl font-semibold">
-          Identities
-        </h1>
-        <Button type="button" onClick={() => setShowForm((s) => !s)}>
-          New identity
-        </Button>
-      </div>
+      <PageHeader
+        titleId="identities-heading"
+        title="Identities"
+        actions={
+          <Button type="button" onClick={() => setShowForm((s) => !s)}>
+            New identity
+          </Button>
+        }
+      />
 
       {showForm && (
         <NewIdentityForm
@@ -477,7 +479,7 @@ export function Identities() {
       )}
 
       <section aria-labelledby="issuance-guardrails" className="mb-4 border-y border-border py-4">
-        <h2 id="issuance-guardrails" className="text-sm font-semibold">
+        <h2 id="issuance-guardrails" className="text-title font-semibold">
           Issuance guardrails
         </h2>
         <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
@@ -509,7 +511,7 @@ export function Identities() {
       <RevocationPublicationPanel />
 
       {notice && (
-        <p role="status" className="mb-3 text-sm text-green-700 dark:text-green-400">
+        <p role="status" className="mb-3 text-sm text-status-success">
           {notice}
         </p>
       )}
@@ -520,36 +522,36 @@ export function Identities() {
           aria-modal="true"
           aria-labelledby="confirm-title"
           aria-describedby="confirm-desc"
-          className="mb-4 rounded-md border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950"
+          className="mb-4 rounded-panel border border-destructive/40 bg-destructive/10 p-4"
         >
-          <h2 id="confirm-title" className="text-sm font-semibold text-red-700 dark:text-red-300">
+          <h2 id="confirm-title" className="text-title font-semibold text-destructive">
             {pending.label} “{pending.name}”?
           </h2>
-          <p id="confirm-desc" className="mt-1 text-sm text-red-700 dark:text-red-300">
+          <p id="confirm-desc" className="mt-1 text-sm text-destructive">
             {pending.to === "revoked"
               ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
               : `Retiring “${pending.name}” discards the credential record. This cannot be undone.`}
           </p>
           <BlastRadiusImpactPanel state={pendingImpact} />
           <div className="mt-3 grid gap-3">
-            <label className="block text-sm font-medium text-red-800 dark:text-red-200" htmlFor="destructive-confirm-name">
+            <label className="block text-sm font-medium text-destructive" htmlFor="destructive-confirm-name">
               Type credential name to confirm
             </label>
             <input
               id="destructive-confirm-name"
               value={pendingConfirmName}
               onChange={(e) => setPendingConfirmName(e.target.value)}
-              className="rounded-md border border-red-300 bg-background px-3 py-2 text-sm text-foreground"
+              className="rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
               placeholder={pending.name}
             />
-            <label className="block text-sm font-medium text-red-800 dark:text-red-200" htmlFor="destructive-reason">
+            <label className="block text-sm font-medium text-destructive" htmlFor="destructive-reason">
               {pending.to === "revoked" ? "Revocation reason" : "Transition reason"}
             </label>
             <textarea
               id="destructive-reason"
               value={pendingReason}
               onChange={(e) => setPendingReason(e.target.value)}
-              className="min-h-20 rounded-md border border-red-300 bg-background px-3 py-2 text-sm text-foreground"
+              className="min-h-20 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm text-foreground"
               placeholder={pending.to === "revoked" ? "e.g. key compromise CAB-1234" : "e.g. record cleanup approved in CAB-1234"}
             />
           </div>
@@ -558,7 +560,7 @@ export function Identities() {
               type="button"
               size="sm"
               variant="outline"
-              className="border-red-400 text-red-700 hover:bg-red-100 dark:text-red-300"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10"
               disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
               onClick={() => {
                 const p = pending;
@@ -598,12 +600,12 @@ export function Identities() {
           aria-modal="true"
           aria-labelledby="bulk-revoke-title"
           aria-describedby="bulk-revoke-desc"
-          className="mb-4 rounded-md border border-red-300 bg-red-50 p-4 text-sm dark:border-red-800 dark:bg-red-950"
+          className="mb-4 rounded-panel border border-destructive/40 bg-destructive/10 p-4 text-sm"
         >
-          <h2 id="bulk-revoke-title" className="font-semibold text-red-700 dark:text-red-300">
+          <h2 id="bulk-revoke-title" className="text-title font-semibold text-destructive">
             Revoke {selectedRows.length} selected identities?
           </h2>
-          <p id="bulk-revoke-desc" className="mt-1 text-red-700 dark:text-red-300">
+          <p id="bulk-revoke-desc" className="mt-1 text-destructive">
             This sends one idempotent revoke request per selected identity and reports accepted or failed for each item. Connector and downstream delivery still complete asynchronously through the outbox.
           </p>
           <div className="mt-3 flex gap-2">
@@ -611,7 +613,7 @@ export function Identities() {
               type="button"
               size="sm"
               variant="outline"
-              className="border-red-400 text-red-700 hover:bg-red-100 dark:text-red-300"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10"
               disabled={bulkBusy}
               onClick={() => void runBulkRevoke()}
             >
@@ -725,7 +727,7 @@ export function Identities() {
 function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   if (state.loading) {
     return (
-      <div className="mt-3 rounded-md border border-red-200 bg-background/80 p-3 text-sm text-red-700 dark:border-red-900 dark:text-red-300">
+      <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">
         Loading blast-radius impact from served graph...
       </div>
     );
@@ -733,7 +735,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
 
   if (state.error) {
     return (
-      <div className="mt-3 rounded-md border border-red-200 bg-background/80 p-3 text-sm text-red-700 dark:border-red-900 dark:text-red-300">
+      <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">
         {state.error}
       </div>
     );
@@ -746,7 +748,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   return (
     <section
       aria-labelledby="destructive-blast-radius-heading"
-      className="mt-3 rounded-md border border-red-200 bg-background/80 p-3 text-sm text-red-700 dark:border-red-900 dark:text-red-300"
+      className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive"
     >
       <h3 id="destructive-blast-radius-heading" className="font-semibold">
         Blast-radius impact
@@ -758,7 +760,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
       {byKind.length > 0 && (
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
           {byKind.map(([kind, value]) => (
-            <div key={kind} className="rounded-md border border-red-100 px-2 py-1 dark:border-red-900">
+            <div key={kind} className="rounded-control border border-destructive/20 px-2 py-1">
               <dt className="font-medium">{kind}</dt>
               <dd>{displayValue(value)}</dd>
             </div>
@@ -780,11 +782,11 @@ function LifecycleAutomationDisclosure() {
     <section aria-labelledby="lifecycle-automation-heading" className="mb-4 border-y border-border py-4">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div>
-          <h2 id="lifecycle-automation-heading" className="text-sm font-semibold">
+          <h2 id="lifecycle-automation-heading" className="text-title font-semibold">
             Lifecycle automation
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Renewal is manual today. Auto-renewal, rotation schedules, pending runs, dry-run results, and rollback evidence need `BACKEND-LIFECYCLE-AUTOMATION` plus `BACKEND-OUTBOX-STATUS`.
+            Renewal is manual today. Auto-renewal, rotation schedules, pending runs, dry-run results, and rollback evidence aren't managed from the console yet, and delivery status isn't shown here yet either.
           </p>
           <a className="mt-3 inline-flex text-sm font-medium text-primary underline" href="#manual-lifecycle-transitions">
             Use manual lifecycle transitions
@@ -810,7 +812,7 @@ function PendingApprovalSummary({ rows }: { rows: ApprovalQueueRow[] }) {
   return (
     <section aria-labelledby="jit-queue-heading" className="mb-4 border-y border-border py-4">
       <div className="mb-3">
-        <h2 id="jit-queue-heading" className="text-sm font-semibold">
+        <h2 id="jit-queue-heading" className="text-title font-semibold">
           JIT approvals moved to the inbox
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -823,28 +825,28 @@ function PendingApprovalSummary({ rows }: { rows: ApprovalQueueRow[] }) {
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No pending served approval actions.</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[48rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">Pending JIT approval requests</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Credential</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Requester</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Action</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Approvals count</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Time-bound grant</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Decision surface</th>
+              <tr>
+                <th scope="col">Credential</th>
+                <th scope="col">Requester</th>
+                <th scope="col">Action</th>
+                <th scope="col">Approvals count</th>
+                <th scope="col">Time-bound grant</th>
+                <th scope="col">Decision surface</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`${row.identity.id}:${row.action}`} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4">{`JIT ${row.identity.name}`}</td>
-                  <td className="py-2 pr-4">{row.requester}</td>
-                  <td className="py-2 pr-4">{row.action}</td>
-                  <td className="py-2 pr-4">{row.approvals}</td>
-                  <td className="py-2 pr-4">{row.grantExpiresAt}</td>
-                  <td className="py-2 pr-3">
+                <tr key={`${row.identity.id}:${row.action}`} className="align-top">
+                  <td>{`JIT ${row.identity.name}`}</td>
+                  <td>{row.requester}</td>
+                  <td>{row.action}</td>
+                  <td>{row.approvals}</td>
+                  <td>{row.grantExpiresAt}</td>
+                  <td>
                     <Link className="text-primary underline" to="/approvals">
                       Review in approvals
                     </Link>
@@ -862,7 +864,7 @@ function PendingApprovalSummary({ rows }: { rows: ApprovalQueueRow[] }) {
 function RevocationPublicationPanel() {
   return (
     <section aria-labelledby="revocation-publication-heading" className="mb-4 border-y border-border py-4">
-      <h2 id="revocation-publication-heading" className="text-sm font-semibold">
+      <h2 id="revocation-publication-heading" className="text-title font-semibold">
         Revocation publication
       </h2>
       <div className="mt-2 grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
@@ -875,7 +877,7 @@ function RevocationPublicationPanel() {
           CRL: <code className="rounded bg-muted px-1 font-mono text-xs">/crl/{"{tenant}"}</code>
         </p>
         <p>
-          Live propagation health is not served yet. Freshness, scheduler, and responder health need `BACKEND-PROTOCOL-STATUS`.
+          Live propagation health is not served yet. Freshness, scheduler, and responder health aren't surfaced in the console yet.
         </p>
       </div>
     </section>
@@ -911,7 +913,7 @@ function IdentityDetailPanel({
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">Served identity detail</p>
-          <h2 id="identity-detail-content-heading" className="text-lg font-semibold">
+          <h2 id="identity-detail-content-heading" className="text-title font-semibold">
             Detail fields
           </h2>
         </div>
@@ -919,7 +921,7 @@ function IdentityDetailPanel({
       </div>
 
       {error && (
-        <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="mb-3 text-sm text-destructive">
           {error}
         </p>
       )}
@@ -1095,7 +1097,7 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
         Issue
       </Button>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}

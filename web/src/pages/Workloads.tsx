@@ -1,4 +1,5 @@
 import { UnavailableState } from "@/components/StatePrimitives";
+import { PageHeader } from "@/components/PageHeader";
 
 interface LeaseRow {
   credential: string;
@@ -95,22 +96,19 @@ const brokerRows: BrokerRow[] = [
 export function Workloads() {
   return (
     <section aria-labelledby="workload-heading" className="grid gap-6">
-      <div>
-        <h1 id="workload-heading" className="text-2xl font-semibold">
-          Workload identity
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Library-only workload workflows are rendered as safe disclosure fixtures. Served SPIFFE and PKI-secret paths can issue credentials, but there is no served lease ledger, attestation API, or broker issuance API yet.
-        </p>
-      </div>
+      <PageHeader
+        titleId="workload-heading"
+        title="Workload identity"
+        description="Library-only workload workflows are rendered as safe disclosure fixtures. Served SPIFFE and PKI-secret paths can issue credentials, but there is no served lease ledger, attestation API, or broker issuance API yet."
+      />
 
       <UnavailableState title="Workload lease APIs are not served yet">
-        `BACKEND-EPHEMERAL`, `BACKEND-ATTEST`, and `BACKEND-BROKER` must serve lease state, attestation decisions, and broker issuance before this page can operate. No live issue, revoke, approve, or mint controls are rendered.
+        Lease state, attestation decisions, and broker issuance are available via the API and CLI today; console management is coming soon. No live issue, revoke, approve, or mint controls are rendered.
       </UnavailableState>
 
       <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="lease-heading" className="text-lg font-semibold">
+          <h2 id="lease-heading" className="text-title font-semibold">
             Ephemeral credential leases
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -131,26 +129,26 @@ export function Workloads() {
             <p className="text-muted-foreground">credential is no longer trusted by policy</p>
           </li>
         </ol>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[56rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">Ephemeral credential lease fixture</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Credential class</th>
-                <th scope="col" className="py-2 pr-4 font-medium">TTL policy</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Attestation evidence</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Lease expiry</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Revoke-now posture</th>
+              <tr>
+                <th scope="col">Credential class</th>
+                <th scope="col">TTL policy</th>
+                <th scope="col">Attestation evidence</th>
+                <th scope="col">Lease expiry</th>
+                <th scope="col">Revoke-now posture</th>
               </tr>
             </thead>
             <tbody>
               {leaseRows.map((row) => (
-                <tr key={row.credential} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.credential}</td>
-                  <td className="py-2 pr-4">{row.ttl}</td>
-                  <td className="py-2 pr-4">{row.evidence}</td>
-                  <td className="py-2 pr-4">{row.expiry}</td>
-                  <td className="py-2 pr-3">{row.revoke}</td>
+                <tr key={row.credential} className="align-top">
+                  <td className="font-medium">{row.credential}</td>
+                  <td>{row.ttl}</td>
+                  <td>{row.evidence}</td>
+                  <td>{row.expiry}</td>
+                  <td>{row.revoke}</td>
                 </tr>
               ))}
             </tbody>
@@ -160,67 +158,67 @@ export function Workloads() {
 
       <section aria-labelledby="attestation-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="attestation-heading" className="text-lg font-semibold">
+          <h2 id="attestation-heading" className="text-title font-semibold">
             Workload attestation chain
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Attestation proves the workload and its platform. This preview keeps raw tokens and signed evidence out of the browser and shows only decision fixtures.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[54rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[54rem]">
             <caption className="sr-only">Workload attestation fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Evidence</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Fixture</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Decision</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Reason</th>
+              <tr>
+                <th scope="col">Evidence</th>
+                <th scope="col">Fixture</th>
+                <th scope="col">Decision</th>
+                <th scope="col">Reason</th>
               </tr>
             </thead>
             <tbody>
               {attestationRows.map((row) => (
-                <tr key={`${row.evidence}:${row.fixture}`} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.evidence}</td>
-                  <td className="py-2 pr-4">{row.fixture}</td>
-                  <td className="py-2 pr-4">{row.result}</td>
-                  <td className="py-2 pr-3">{row.reason}</td>
+                <tr key={`${row.evidence}:${row.fixture}`} className="align-top">
+                  <td className="font-medium">{row.evidence}</td>
+                  <td>{row.fixture}</td>
+                  <td>{row.result}</td>
+                  <td>{row.reason}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <UnavailableState title="Attestation API is library-only">
-          `BACKEND-ATTEST` must serve accepted/rejected/expired/wrong-tenant decisions before this page can show live workload evidence.
+          Accepted, rejected, expired, and wrong-tenant attestation decisions are available via the API and CLI today; console management is coming soon, so this page cannot show live workload evidence yet.
         </UnavailableState>
       </section>
 
       <section aria-labelledby="broker-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="broker-heading" className="text-lg font-semibold">
+          <h2 id="broker-heading" className="text-title font-semibold">
             AI-agent / NHI broker
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             A broker turns an agent identity plus policy into a short credential lease. Broker issuance is library-only, so this fixture shows scope and audit shape only.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[42rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[42rem]">
             <caption className="sr-only">AI agent broker lifecycle fixture</caption>
             <tbody>
               {brokerRows.map((row) => (
-                <tr key={row.field} className="border-b border-border align-top">
-                  <th scope="row" className="py-2 pl-3 pr-4 text-left font-medium">
+                <tr key={row.field} className="align-top">
+                  <th scope="row" className="text-left font-medium text-foreground">
                     {row.field}
                   </th>
-                  <td className="py-2 pr-3">{row.value}</td>
+                  <td>{row.value}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <UnavailableState title="Broker issuance is library-only">
-          `BACKEND-BROKER` must serve agent-scoped broker issuance, expiry, and audit reads before live broker credentials can be minted in the console.
+          Agent-scoped broker issuance, expiry, and audit reads are available via the API and CLI today; console management is coming soon, so live broker credentials cannot be minted in the console yet.
         </UnavailableState>
       </section>
     </section>

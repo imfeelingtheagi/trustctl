@@ -105,8 +105,8 @@ describe("agent fleet surface", () => {
     expect(screen.getByText("ag-1")).toBeInTheDocument();
     expect(screen.getAllByText("0.4.0").length).toBeGreaterThan(0);
     expect(screen.getByText("Scan, drift, and renewal fields not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-DISCOVERY-SCAN/)).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-DRIFT/)).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-AGENT-RENEWAL/)).toBeInTheDocument();
+    expect(screen.getByText(/Discovery scanning and drift detection run in the agent today/i)).toBeInTheDocument();
+    expect(screen.getByText(/agent-driven certificate renewal runs there too/i)).toBeInTheDocument();
+    expect(screen.getByText(/console views for capabilities, last scan, drift summary, and renewal state are coming soon/i)).toBeInTheDocument();
   });
 });

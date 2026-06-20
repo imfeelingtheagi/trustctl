@@ -47,7 +47,7 @@ describe("policy governance surface", () => {
       "/audit?type=issuance.profile_evaluated",
     );
     expect(screen.getByText("Policy authoring and dry-run API not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-POLICY-AUTHOR/)).toBeInTheDocument();
+    expect(screen.getByText(/lifecycle mutations remain the real enforcement path/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /dry run/i })).not.toBeInTheDocument();
   });
 
@@ -61,7 +61,8 @@ describe("policy governance surface", () => {
     expect(screen.getByText("secret://notify/slack/prod:****")).toBeInTheDocument();
     expect(screen.getByText("secret://notify/webhook/prod:****")).toBeInTheDocument();
     expect(screen.getByText(/response body redacted/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-NOTIFY|BACKEND-OUTBOX-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Notification channels are library-only")).toBeInTheDocument();
+    expect(screen.getByText(/cannot operate notification integrations/i)).toBeInTheDocument();
     expect(screen.queryByText(/xoxb-|pagerduty_api_key|webhook-token-/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /test delivery|configure channel|send notification/i })).not.toBeInTheDocument();
   });
@@ -79,7 +80,7 @@ describe("policy governance surface", () => {
     expect(screen.getByText("CNSA 2.0")).toBeInTheDocument();
     expect(screen.getAllByText(/evidence, not certification/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Framework-mapped compliance posture is not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-COMPLIANCE/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/not a compliance certificate/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Export audit evidence" }));
 

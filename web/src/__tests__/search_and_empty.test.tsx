@@ -229,8 +229,8 @@ describe("certificate inventory gap closure", () => {
     expect(dialog).toHaveTextContent(/certificate chain not served yet/i);
     expect(dialog).toHaveTextContent("Credential activity timeline");
     expect(dialog).toHaveTextContent("Delivery status not exposed yet");
-    expect(dialog).toHaveTextContent(/FE-PTR-OUTBOX/);
-    expect(dialog).toHaveTextContent(/BACKEND-OUTBOX-STATUS/);
+    expect(dialog).toHaveTextContent(/isn't shown in the console yet/i);
+    expect(dialog).toHaveTextContent(/No delivery status request is made/i);
     expect(dialog).toHaveTextContent(/last_error/);
     expect(dialog).toHaveTextContent("Delivered / failed");
     expect(document.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();

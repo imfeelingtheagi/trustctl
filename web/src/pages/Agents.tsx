@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
@@ -67,25 +68,22 @@ export function Agents() {
 
   return (
     <section aria-labelledby="agents-heading" className="grid gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 id="agents-heading" className="text-2xl font-semibold">
-            Agents
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Tenant-scoped in-network agents from the served `GET /api/v1/agents` API, plus one-time bootstrap-token minting.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        titleId="agents-heading"
+        title="Agents"
+        description="Tenant-scoped in-network agents from the served `GET /api/v1/agents` API, plus one-time bootstrap-token minting."
+        actions={
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+            Refresh
+          </Button>
+        }
+      />
 
       <section aria-labelledby="enrollment-heading" className="border-y border-border py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="enrollment-heading" className="text-lg font-semibold">
+            <h2 id="enrollment-heading" className="text-title font-semibold">
               Enrollment token
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -149,38 +147,38 @@ export function Agents() {
       {!loading && !error && agents.length > 0 && (
         <section aria-labelledby="fleet-heading" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div>
-            <h2 id="fleet-heading" className="mb-3 text-lg font-semibold">
+            <h2 id="fleet-heading" className="mb-3 text-title font-semibold">
               Agent fleet
             </h2>
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full min-w-[52rem] text-left text-sm">
+            <div className="ui-panel overflow-x-auto">
+              <table className="ui-table min-w-[52rem]">
                 <caption className="sr-only">Registered in-network agents</caption>
                 <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th scope="col" className="py-2 pl-3 pr-4 font-medium">Name</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Version</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Last seen</th>
-                    <th scope="col" className="py-2 pr-3 font-medium">Action</th>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Version</th>
+                    <th scope="col">Last seen</th>
+                    <th scope="col">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {agents.map((agent) => {
                     const freshness = heartbeatFreshness(agent.last_seen_at);
                     return (
-                      <tr key={agent.id} className="border-b border-border align-top">
-                        <td className="py-2 pl-3 pr-4 font-medium">{agent.name}</td>
-                        <td className="py-2 pr-4">
+                      <tr key={agent.id} className="align-top">
+                        <td className="font-medium">{agent.name}</td>
+                        <td>
                           <StatusBadge vocabulary="agent" value={agent.status} />
                         </td>
-                        <td className="py-2 pr-4 font-mono text-xs">{agent.version || "-"}</td>
-                        <td className="py-2 pr-4">
+                        <td className="font-mono text-xs">{agent.version || "-"}</td>
+                        <td>
                           <p>{formatDate(agent.last_seen_at)}</p>
-                          <p className={freshness.stale ? "text-xs font-medium text-amber-700" : "text-xs text-muted-foreground"}>
+                          <p className={freshness.stale ? "text-xs font-medium text-status-warning" : "text-xs text-muted-foreground"}>
                             {freshness.label}
                           </p>
                         </td>
-                        <td className="py-2 pr-3">
+                        <td>
                           <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
                             View details
                           </Button>
@@ -203,7 +201,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
   return (
     <aside aria-labelledby="agent-detail-heading" className="grid content-start gap-3 border-y border-border py-4">
       <div>
-        <h2 id="agent-detail-heading" className="text-lg font-semibold">
+        <h2 id="agent-detail-heading" className="text-title font-semibold">
           {agent.name}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">Served agent fields from `GET /api/v1/agents`.</p>
@@ -227,7 +225,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
         </div>
       </dl>
       <UnavailableState title="Scan, drift, and renewal fields not served yet">
-        Capabilities, last scan, drift summary, and certificate-renewal state need `BACKEND-DISCOVERY-SCAN`, `BACKEND-DRIFT`, and `BACKEND-AGENT-RENEWAL`. This page shows only the fields the served Agent schema carries.
+        Discovery scanning and drift detection run in the agent today, and agent-driven certificate renewal runs there too; console views for capabilities, last scan, drift summary, and renewal state are coming soon. This page shows only the fields the served Agent schema carries.
       </UnavailableState>
     </aside>
   );

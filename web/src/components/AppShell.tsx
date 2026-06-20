@@ -27,16 +27,9 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
-import { StatusBadge } from "@/components/StatusBadge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import {
-  navGroups,
-  navTreatmentForItem,
-  taskNavItems,
-  type NavIcon,
-  type NavTreatment,
-} from "@/lib/navigation";
+import { navGroups, navTreatmentForItem, taskNavItems, type NavIcon, type NavTreatment } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 const iconMap: Record<NavIcon, typeof Activity> = {
@@ -62,13 +55,34 @@ const iconMap: Record<NavIcon, typeof Activity> = {
   ssh: Braces,
 };
 
-function NavTreatmentBadge({ treatment }: { treatment: NavTreatment }) {
+function NavCount({ n }: { n: number }) {
+  if (!n) return null;
   return (
-    <StatusBadge
-      vocabulary="honesty"
-      value={treatment}
-      className="min-h-5 shrink-0 rounded px-1.5 py-0 text-[10px] leading-5"
-    />
+    <span
+      aria-hidden="true"
+      className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 text-[10px] font-medium leading-5 text-muted-foreground"
+    >
+      {n}
+    </span>
+  );
+}
+
+function treatmentLabel(treatment: NavTreatment): string {
+  return treatment[0].toUpperCase() + treatment.slice(1);
+}
+
+function TreatmentBadge({ treatment }: { treatment: NavTreatment }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-control px-1.5 py-0.5 text-[10px] font-semibold leading-4",
+        treatment === "operate" && "bg-operate/10 text-operate",
+        treatment === "observe" && "bg-observe/10 text-observe",
+        treatment === "disclose" && "bg-disclose/10 text-disclose",
+      )}
+    >
+      {treatmentLabel(treatment)}
+    </span>
   );
 }
 
@@ -111,20 +125,22 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       cn(
-                        "flex min-h-12 items-start gap-2 rounded-md px-3 py-2 text-sm",
-                        isActive ? "bg-muted font-medium" : "hover:bg-muted",
+                        "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
+                        isActive
+                          ? "bg-brand-accent/10 font-medium text-brand-accent"
+                          : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
                       )
                     }
                   >
                     <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{label}</span>
-                      <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
-                    </span>
-                    <NavTreatmentBadge treatment={treatment} />
-                  </NavLink>
-                </li>
-              );
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{label}</span>
+                        <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
+                      </span>
+                      <TreatmentBadge treatment={treatment} />
+                    </NavLink>
+                  </li>
+                );
             })}
           </ul>
         </li>
@@ -146,14 +162,17 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                       onClick={onNavigate}
                       className={({ isActive }) =>
                         cn(
-                          "flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-sm",
-                          isActive ? "bg-muted font-medium" : "hover:bg-muted",
+                          "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
+                          isActive
+                            ? "bg-brand-accent/10 font-medium text-brand-accent"
+                            : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
                         )
                       }
                     >
                       <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
-                      <NavTreatmentBadge treatment={treatment} />
+                      <TreatmentBadge treatment={treatment} />
+                      <NavCount n={item.featureIds.length} />
                     </NavLink>
                   </li>
                 );
@@ -216,7 +235,7 @@ export function AppShell() {
         Skip to main content
       </a>
 
-      <header className="flex h-14 items-center justify-between border-b border-border px-4">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur">
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
             <button
@@ -234,7 +253,21 @@ export function AppShell() {
               )}
             </button>
           )}
-          <span className="truncate text-base font-semibold">trstctl</span>
+          <span
+            aria-hidden="true"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-brand-accent text-brand-accent-foreground shadow-elevation1"
+          >
+            <svg viewBox="0 0 32 32" className="h-4 w-4" fill="none">
+              <path d="M8 11h16M16 6v20M11 21l5 4 5-4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="16" cy="16" r="4.2" stroke="currentColor" strokeWidth="1.8" />
+            </svg>
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-sm font-semibold tracking-tight">trstctl</span>
+            <span className="hidden truncate text-[10px] font-medium uppercase tracking-wider text-brand-accent sm:block">
+              control plane
+            </span>
+          </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <Button
@@ -244,7 +277,7 @@ export function AppShell() {
             size="sm"
             aria-label="Open command palette"
             onClick={() => setCommandPaletteOpen(true)}
-            className="hidden min-w-48 justify-between px-2 text-muted-foreground md:inline-flex"
+            className="hidden min-w-56 justify-between gap-2 px-2.5 text-muted-foreground hover:text-foreground md:inline-flex"
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-left">Search or jump</span>
@@ -262,12 +295,12 @@ export function AppShell() {
                 variant="ghost"
                 size="sm"
                 disabled
-                aria-label="Tenant switcher blocked on BACKEND-TENANT-ADMIN"
+                aria-label="Tenant switching isn't available yet"
                 className="h-6 px-2 text-[11px]"
               >
-                Switch blocked
+                Switch unavailable
               </Button>
-              <span className="hidden text-[10px] uppercase text-muted-foreground xl:inline">BACKEND-TENANT-ADMIN</span>
+              <span className="hidden text-[10px] uppercase text-muted-foreground xl:inline">Tenant switching isn't available yet</span>
             </div>
           )}
           <Button
@@ -316,7 +349,7 @@ export function AppShell() {
       <div className="flex min-w-0">
         {isDesktop && (
           <PrimaryNav
-            className="max-h-[calc(100vh-3.5rem)] w-72 shrink-0 overflow-y-auto border-r border-border"
+            className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-r border-border bg-muted/20"
             id="desktop-primary-nav"
           />
         )}

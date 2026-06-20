@@ -20,7 +20,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("00:00 issued")).toBeInTheDocument();
     expect(screen.getByText("00:45 renew window")).toBeInTheDocument();
     expect(screen.getByText("01:00 expires")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-EPHEMERAL/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Workload lease APIs are not served yet")).toBeInTheDocument();
     expect(screen.getByText("X.509-SVID")).toBeInTheDocument();
     expect(screen.getByText("JWT-SVID")).toBeInTheDocument();
     expect(screen.getByText("PKI secret bundle")).toBeInTheDocument();
@@ -41,7 +41,8 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getAllByText("rejected").length).toBeGreaterThan(0);
     expect(screen.getByText("expired")).toBeInTheDocument();
     expect(screen.getByText("wrong-tenant")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-ATTEST/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Attestation API is library-only")).toBeInTheDocument();
+    expect(screen.getByText(/cannot show live workload evidence yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/eyJ[a-z0-9_-]+/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
   });
@@ -53,7 +54,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("spiffe://tenant/ai/build-agent")).toBeInTheDocument();
     expect(screen.getByText("mcp:read-only, secrets:read:ci, certs:issue:short")).toBeInTheDocument();
     expect(screen.getByText("credential lease audit event")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-BROKER/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/live broker credentials cannot be minted in the console yet/i)).toBeInTheDocument();
     expect(screen.getAllByText(/broker issuance is library-only/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /issue broker credential|approve agent|mint token/i })).not.toBeInTheDocument();
   });

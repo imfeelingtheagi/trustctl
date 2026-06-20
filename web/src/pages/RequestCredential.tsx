@@ -3,6 +3,7 @@ import { Send } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -206,26 +207,23 @@ export function RequestCredential() {
   const requestGridState: DataGridState = requestError ? "error" : requests == null ? "loading" : myRequests.length ? "ready" : "empty";
 
   return (
-    <section aria-labelledby="request-credential-heading" className="grid gap-5">
-      <div>
-        <h1 id="request-credential-heading" className="text-2xl font-semibold">
-          Request a credential
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Submit a profile-bound X.509 request as the session requester. Approval and issuance stay separate lifecycle steps.
-        </p>
-      </div>
+    <section aria-labelledby="request-credential-heading" className="grid gap-6">
+      <PageHeader
+        title="Request a credential"
+        titleId="request-credential-heading"
+        description="Submit a profile-bound X.509 request as the session requester. Approval and issuance stay separate lifecycle steps."
+      />
 
       {notice && (
-        <p role="status" className="rounded-md border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+        <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-body text-status-success">
           {notice}
         </p>
       )}
 
-      <section aria-labelledby="new-request-heading" className="border-y border-border py-4">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
+      <section aria-labelledby="new-request-heading">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
           <form aria-labelledby="new-request-heading" className="grid gap-4" onSubmit={submit}>
-            <h2 id="new-request-heading" className="text-lg font-semibold">
+            <h2 id="new-request-heading" className="text-title font-semibold">
               New request
             </h2>
 
@@ -238,13 +236,13 @@ export function RequestCredential() {
             )}
 
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-1 text-sm font-medium" htmlFor="request-profile">
+              <label className="grid gap-1 text-body font-medium" htmlFor="request-profile">
                 Profile
                 <select
                   id="request-profile"
                   value={selectedProfileKey}
                   onChange={(event) => setSelectedProfileKey(event.target.value)}
-                  className="min-h-9 rounded-md border border-border bg-background px-3 py-2"
+                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                   disabled={activeProfiles.length === 0}
                   required
                 >
@@ -256,37 +254,37 @@ export function RequestCredential() {
                 </select>
               </label>
 
-              <label className="grid gap-1 text-sm font-medium" htmlFor="request-owner">
+              <label className="grid gap-1 text-body font-medium" htmlFor="request-owner">
                 Owner id
                 <input
                   id="request-owner"
                   value={ownerId}
                   onChange={(event) => setOwnerId(event.target.value)}
-                  className="min-h-9 rounded-md border border-border bg-background px-3 py-2"
+                  className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                   required
                 />
               </label>
             </div>
 
-            <label className="grid gap-1 text-sm font-medium" htmlFor="request-name">
+            <label className="grid gap-1 text-body font-medium" htmlFor="request-name">
               Credential name
               <input
                 id="request-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="min-h-9 rounded-md border border-border bg-background px-3 py-2"
+                className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 placeholder="payments-api"
                 required
               />
             </label>
 
-            <label className="grid gap-1 text-sm font-medium" htmlFor="request-purpose">
+            <label className="grid gap-1 text-body font-medium" htmlFor="request-purpose">
               Business purpose
               <textarea
                 id="request-purpose"
                 value={purpose}
                 onChange={(event) => setPurpose(event.target.value)}
-                className="min-h-20 rounded-md border border-border bg-background px-3 py-2"
+                className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                 placeholder="service TLS for staging"
               />
             </label>
@@ -301,19 +299,19 @@ export function RequestCredential() {
             </div>
           </form>
 
-          <div className="grid content-start gap-3 rounded-md border border-border p-3 text-sm">
-            <h2 className="text-base font-semibold">Request boundary</h2>
+          <div className="ui-panel grid content-start gap-3 p-comfortable text-body">
+            <h2 className="text-title font-semibold">Request boundary</h2>
             <dl className="grid gap-2">
               <div>
-                <dt className="text-muted-foreground">Requester</dt>
+                <dt className="text-caption text-muted-foreground">Requester</dt>
                 <dd>{requester || "session principal not served"}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Mutation</dt>
-                <dd>POST /api/v1/identities with Idempotency-Key</dd>
+                <dt className="text-caption text-muted-foreground">Mutation</dt>
+                <dd className="font-mono text-caption">POST /api/v1/identities with Idempotency-Key</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Result</dt>
+                <dt className="text-caption text-muted-foreground">Result</dt>
                 <dd>accepted request; approval and issuance remain separate states</dd>
               </div>
             </dl>

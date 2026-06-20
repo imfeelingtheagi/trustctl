@@ -66,7 +66,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy();
 
     expect(await screen.findByText("CA hierarchy ceremony API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-CA-HIERARCHY/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/renders no create-root, rotate-root, or ceremony execution controls/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Key ceremony runbook" })).toHaveAttribute(
       "href",
       "/docs/runbooks/key-ceremony.md",

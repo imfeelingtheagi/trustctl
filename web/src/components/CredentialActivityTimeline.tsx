@@ -14,9 +14,9 @@ export function CredentialActivityTimeline({ credentialLabel }: { credentialLabe
       </p>
       <div className="mt-3">
         <UnavailableState title="Delivery status not exposed yet">
-          FE-PTR-OUTBOX / BACKEND-OUTBOX-STATUS must serve operation states, delivery attempts, delivered/failed
-          results, and `last_error` before this drawer can render a live timeline. No outbox status request is made
-          from this view.
+          Per-operation delivery status — operation states, delivery attempts, delivered/failed results, and
+          `last_error` — isn't shown in the console yet, so this drawer can't render a live timeline. No delivery
+          status request is made from this view.
         </UnavailableState>
       </div>
       <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-4">

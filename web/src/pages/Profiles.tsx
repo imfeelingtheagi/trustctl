@@ -3,6 +3,7 @@ import { Eye, GitCompare, Plus } from "lucide-react";
 import { api, ApiError, type Profile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
 type ProfileSpec = Record<string, unknown>;
@@ -82,22 +83,18 @@ export function Profiles() {
   }
 
   return (
-    <section aria-labelledby="profiles-heading" className="grid gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 id="profiles-heading" className="text-2xl font-semibold">
-            Profiles
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Profiles are versioned rulebooks for certificate issuance: key strength, EKUs,
-            maximum validity, enrollment protocols, and SAN DNS constraints.
-          </p>
-        </div>
-        <Button type="button" onClick={() => setShowForm((s) => !s)}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          New profile
-        </Button>
-      </div>
+    <section aria-labelledby="profiles-heading" className="grid gap-6">
+      <PageHeader
+        titleId="profiles-heading"
+        title="Profiles"
+        description="Profiles are versioned rulebooks for certificate issuance: key strength, EKUs, maximum validity, enrollment protocols, and SAN DNS constraints."
+        actions={
+          <Button type="button" onClick={() => setShowForm((s) => !s)}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            New profile
+          </Button>
+        }
+      />
 
       {showForm && (
         <ProfileForm
@@ -119,23 +116,23 @@ export function Profiles() {
       )}
 
       {items && items.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-border" role="region" aria-label="Certificate profile versions">
-          <table className="w-full min-w-[58rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto" role="region" aria-label="Certificate profile versions">
+          <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">Certificate profile versions</caption>
-            <thead className="bg-muted text-xs uppercase text-muted-foreground">
+            <thead>
               <tr>
-                <th scope="col" className="px-4 py-3 font-medium">Name</th>
-                <th scope="col" className="px-4 py-3 font-medium">Versions</th>
-                <th scope="col" className="px-4 py-3 font-medium">Active version</th>
-                <th scope="col" className="px-4 py-3 font-medium">Created by</th>
-                <th scope="col" className="px-4 py-3 font-medium">Evidence</th>
+                <th scope="col">Name</th>
+                <th scope="col">Versions</th>
+                <th scope="col">Active version</th>
+                <th scope="col">Created by</th>
+                <th scope="col">Evidence</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {profileGroups.map((group) => (
                 <tr key={group.name} className="align-top">
-                  <td className="px-4 py-3 font-medium">{group.name}</td>
-                  <td className="px-4 py-3">
+                  <td className="font-medium">{group.name}</td>
+                  <td>
                     <div className="flex flex-wrap gap-2">
                       {group.versions.map((p) => (
                         <Button
@@ -153,9 +150,9 @@ export function Profiles() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3">v{group.active.version}</td>
-                  <td className="px-4 py-3">{group.active.created_by ?? "-"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td>v{group.active.version}</td>
+                  <td>{group.active.created_by ?? "-"}</td>
+                  <td className="text-muted-foreground">
                     Prior versions stay resolvable for audit; issuing through a bound profile uses the recorded version.
                   </td>
                 </tr>
@@ -427,7 +424,7 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
   return (
     <section aria-labelledby="profile-detail-heading" className="grid gap-4 border-y border-border py-4">
       <div>
-        <h2 id="profile-detail-heading" className="text-lg font-semibold">
+        <h2 id="profile-detail-heading" className="text-title font-semibold">
           {profile.name} version {profile.version}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -472,23 +469,23 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
               {diffRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No spec differences.</p>
               ) : (
-                <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="w-full min-w-[36rem] text-left text-xs">
-                    <thead className="bg-muted text-muted-foreground">
+                <div className="ui-panel overflow-x-auto">
+                  <table className="ui-table min-w-[36rem]">
+                    <thead>
                       <tr>
-                        <th scope="col" className="px-3 py-2 font-medium">Change</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Path</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Selected</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Compared</th>
+                        <th scope="col">Change</th>
+                        <th scope="col">Path</th>
+                        <th scope="col">Selected</th>
+                        <th scope="col">Compared</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border">
+                    <tbody>
                       {diffRows.map((row) => (
                         <tr key={`${row.kind}:${row.path}`}>
-                          <td className="px-3 py-2 font-medium">{row.kind}</td>
-                          <td className="px-3 py-2 font-mono">{row.path}</td>
-                          <td className="px-3 py-2 font-mono">{row.before}</td>
-                          <td className="px-3 py-2 font-mono">{row.after}</td>
+                          <td className="font-medium">{row.kind}</td>
+                          <td className="font-mono">{row.path}</td>
+                          <td className="font-mono">{row.before}</td>
+                          <td className="font-mono">{row.after}</td>
                         </tr>
                       ))}
                     </tbody>

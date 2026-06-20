@@ -58,7 +58,7 @@ describe("assistant console workflow", () => {
     expect(screen.getByRole("link", { name: /Assistant/i })).toHaveAttribute("href", "/assistant");
     expect(screen.getByText("AI runtime boundary")).toBeInTheDocument();
     expect(screen.getByText("AI model and runtime status not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-PLATFORM-STATUS/)).toBeInTheDocument();
+    expect(screen.getByText(/no model configured means nothing phones home/i)).toBeInTheDocument();
     expect(screen.getByText("Structured query preview")).toBeInTheDocument();
     expect(screen.getByText(/Tenant\/RBAC filtering is applied/)).toBeInTheDocument();
 

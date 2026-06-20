@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
+import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { realGuiSurfaces } from "@/lib/navigation";
@@ -111,7 +112,7 @@ const cliCommands = [
 const runtimeRows = [
   {
     field: "Binary version",
-    visible: "blocked on BACKEND-PLATFORM-STATUS",
+    visible: "not shown in the console yet",
     meaning: "Build info exists in the binary, but no console status JSON is served.",
   },
   {
@@ -145,7 +146,7 @@ const federationRows = [
   {
     topic: "Event-log replication",
     state: "not shipped",
-    caveat: "conflict handling and replay checkpoints need BACKEND-FEDERATION",
+    caveat: "conflict handling and replay checkpoints are on the roadmap",
   },
   {
     topic: "Tenant placement",
@@ -174,7 +175,7 @@ const pluginAdminRows = [
     provenance: "trusted-key set required",
     grants: "fs.write:/etc/nginx/certs, process.exec:nginx",
     conformance: "fixture: grant-limited",
-    runtime: "denial reasons need BACKEND-PLUGINHOST",
+    runtime: "console management is coming soon",
   },
 ];
 
@@ -214,18 +215,15 @@ export function Platform() {
 
   return (
     <section aria-labelledby="platform-heading" className="grid gap-6">
-      <div>
-        <h1 id="platform-heading" className="text-2xl font-semibold">
-          Platform
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Tenant context, access-control evidence, browser transport posture, auth status, and a static API-spec view.
-        </p>
-      </div>
+      <PageHeader
+        titleId="platform-heading"
+        title="Platform"
+        description="Tenant context, access-control evidence, browser transport posture, auth status, and a static API-spec view."
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <section className="border-y border-border py-4" aria-labelledby="tenant-heading">
-          <h2 id="tenant-heading" className="text-lg font-semibold">
+        <section className="ui-panel p-comfortable" aria-labelledby="tenant-heading">
+          <h2 id="tenant-heading" className="text-title font-semibold">
             Tenant boundary
           </h2>
           <dl className="mt-3 grid gap-2 text-sm">
@@ -243,17 +241,17 @@ export function Platform() {
           </p>
         </section>
 
-        <section className="border-y border-border py-4" aria-labelledby="transport-heading">
-          <h2 id="transport-heading" className="text-lg font-semibold">
+        <section className="ui-panel p-comfortable" aria-labelledby="transport-heading">
+          <h2 id="transport-heading" className="text-title font-semibold">
             Transport
           </h2>
           <p className="mt-3 text-sm font-medium">{transport.label}</p>
           <p className="mt-1 text-sm text-muted-foreground">{transport.detail}</p>
-          {transport.warning && <p className="mt-2 text-sm font-medium text-amber-700">{transport.warning}</p>}
+          {transport.warning && <p className="mt-2 text-sm font-medium text-status-warning">{transport.warning}</p>}
         </section>
 
-        <section className="border-y border-border py-4" aria-labelledby="auth-heading">
-          <h2 id="auth-heading" className="text-lg font-semibold">
+        <section className="ui-panel p-comfortable" aria-labelledby="auth-heading">
+          <h2 id="auth-heading" className="text-title font-semibold">
             Auth session
           </h2>
           <dl className="mt-3 grid gap-2 text-sm">
@@ -267,38 +265,38 @@ export function Platform() {
             </div>
           </dl>
           <p className="mt-3 text-sm text-muted-foreground">
-            OIDC enabled/disabled, issuer, audience, and API-token fallback status need `BACKEND-PLATFORM-STATUS`; this page never offers a fake token-injection login.
+            OIDC enabled/disabled, issuer, audience, and API-token fallback status aren't shown in the console yet; this page never offers a fake token-injection login.
           </p>
         </section>
       </div>
 
       <section aria-labelledby="access-heading">
-        <h2 id="access-heading" className="mb-3 text-lg font-semibold">
+        <h2 id="access-heading" className="mb-3 text-title font-semibold">
           Access control and required scopes
         </h2>
-        <div className="mb-3 rounded-md border border-border p-3 text-sm">
+        <div className="mb-3 ui-panel p-comfortable text-sm">
           <p className="font-medium">Current scope inventory is not served yet.</p>
           <p className="mt-1 text-muted-foreground">
-            `BACKEND-TENANT-ADMIN` must expose roles/scopes before the console can list the exact grants on this session. Until then, the UI can show the live principal and the required-scope map used by served workflows.
+            Roles and scopes aren't exposed to the console yet, so it can't list the exact grants on this session. Until then, the UI can show the live principal and the required-scope map used by served workflows.
           </p>
         </div>
-        <table className="w-full text-left text-sm">
+        <table className="ui-table">
           <caption className="sr-only">Required permission scopes by feature</caption>
           <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th scope="col" className="py-2 pr-4 font-medium">Feature</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Required scope</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Route</th>
-              <th scope="col" className="py-2 font-medium">Denied-action copy</th>
+            <tr>
+              <th scope="col">Feature</th>
+              <th scope="col">Required scope</th>
+              <th scope="col">Route</th>
+              <th scope="col">Denied-action copy</th>
             </tr>
           </thead>
           <tbody>
             {requiredScopes.map((item) => (
-              <tr key={item.scope} className="border-b border-border align-top">
-                <td className="py-2 pr-4">{item.feature}</td>
-                <td className="py-2 pr-4 font-mono text-xs">{item.scope}</td>
-                <td className="py-2 pr-4">{item.route}</td>
-                <td className="py-2">{item.denial}</td>
+              <tr key={item.scope} className="align-top">
+                <td>{item.feature}</td>
+                <td className="font-mono text-xs">{item.scope}</td>
+                <td>{item.route}</td>
+                <td>{item.denial}</td>
               </tr>
             ))}
           </tbody>
@@ -308,35 +306,35 @@ export function Platform() {
       <section aria-labelledby="api-spec-heading">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="api-spec-heading" className="text-lg font-semibold">
+            <h2 id="api-spec-heading" className="text-title font-semibold">
               Static API spec view
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {staticAPIRoutes.length} served REST paths copied from the pinned OpenAPI golden. This is a static spec view until `BACKEND-OPENAPI-SERVED` publishes a live `/api/v1/openapi.json`.
+              {staticAPIRoutes.length} served REST paths copied from the pinned OpenAPI golden. This is a static spec view until a live `/api/v1/openapi.json` is published.
             </p>
           </div>
-          <span className="rounded-md border border-border px-2 py-1 text-xs font-medium">Spec view</span>
+          <span className="rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">Spec view</span>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[60rem] text-left text-sm">
+        <div className="overflow-x-auto rounded-panel border border-border">
+          <table className="ui-table min-w-[60rem]">
             <caption className="sr-only">Static served REST API paths</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Group</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Methods</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Path</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Auth mode</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Curl</th>
+              <tr>
+                <th scope="col">Group</th>
+                <th scope="col">Methods</th>
+                <th scope="col">Path</th>
+                <th scope="col">Auth mode</th>
+                <th scope="col">Curl</th>
               </tr>
             </thead>
             <tbody>
               {staticAPIRoutes.map((route) => (
-                <tr key={route.path} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4">{route.group}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{route.methods.join(", ")}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{route.path}</td>
-                  <td className="py-2 pr-4">{route.auth}</td>
-                  <td className="py-2 pr-3">
+                <tr key={route.path} className="align-top">
+                  <td>{route.group}</td>
+                  <td className="font-mono text-xs">{route.methods.join(", ")}</td>
+                  <td className="font-mono text-xs">{route.path}</td>
+                  <td>{route.auth}</td>
+                  <td>
                     <div className="flex flex-wrap items-center gap-2">
                       <code className="max-w-md break-all rounded bg-muted px-2 py-1 text-xs">{curlFor(route)}</code>
                       <Button type="button" size="sm" variant="outline" onClick={() => void copyCurl(route)}>
@@ -354,29 +352,29 @@ export function Platform() {
 
       <section aria-labelledby="cli-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="cli-heading" className="text-lg font-semibold">
+          <h2 id="cli-heading" className="text-title font-semibold">
             CLI companion
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and the examples avoid inline Authorization headers.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[66rem] text-left text-sm">
+        <div className="overflow-x-auto rounded-panel border border-border">
+          <table className="ui-table min-w-[66rem]">
             <caption className="sr-only">CLI companion commands</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Context</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Token-safe command</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Parity note</th>
+              <tr>
+                <th scope="col">Context</th>
+                <th scope="col">Token-safe command</th>
+                <th scope="col">Parity note</th>
               </tr>
             </thead>
             <tbody>
               {cliCommands.map((row) => (
-                <tr key={row.context} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.context}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.command}</td>
-                  <td className="py-2 pr-3">{row.parity}</td>
+                <tr key={row.context} className="align-top">
+                  <td className="font-medium">{row.context}</td>
+                  <td className="font-mono text-xs">{row.command}</td>
+                  <td>{row.parity}</td>
                 </tr>
               ))}
             </tbody>
@@ -386,7 +384,7 @@ export function Platform() {
 
       <section aria-labelledby="runtime-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="runtime-heading" className="text-lg font-semibold">
+          <h2 id="runtime-heading" className="text-title font-semibold">
             Single-binary runtime
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -394,24 +392,24 @@ export function Platform() {
           </p>
         </div>
         <UnavailableState title="Runtime status JSON not served yet">
-          `BACKEND-PLATFORM-STATUS` must serve binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision before this page can show live runtime state.
+          Binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision aren't shown in the console yet, so this page can't show live runtime state.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[58rem] text-left text-sm">
+        <div className="overflow-x-auto rounded-panel border border-border">
+          <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">Single-binary runtime status fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Field</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Console visibility</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Meaning</th>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Console visibility</th>
+                <th scope="col">Meaning</th>
               </tr>
             </thead>
             <tbody>
               {runtimeRows.map((row) => (
-                <tr key={row.field} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.field}</td>
-                  <td className="py-2 pr-4">{row.visible}</td>
-                  <td className="py-2 pr-3">{row.meaning}</td>
+                <tr key={row.field} className="align-top">
+                  <td className="font-medium">{row.field}</td>
+                  <td>{row.visible}</td>
+                  <td>{row.meaning}</td>
                 </tr>
               ))}
             </tbody>
@@ -420,26 +418,26 @@ export function Platform() {
       </section>
 
       <section aria-labelledby="surfaces-heading">
-        <h2 id="surfaces-heading" className="mb-3 text-lg font-semibold">
+        <h2 id="surfaces-heading" className="mb-3 text-title font-semibold">
           Registered real surfaces
         </h2>
-        <table className="w-full text-left text-sm">
+        <table className="ui-table">
           <caption className="sr-only">Real GUI route registry</caption>
           <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th scope="col" className="py-2 pr-4 font-medium">Feature</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Routes</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
-              <th scope="col" className="py-2 font-medium">Evidence</th>
+            <tr>
+              <th scope="col">Feature</th>
+              <th scope="col">Routes</th>
+              <th scope="col">Kind</th>
+              <th scope="col">Evidence</th>
             </tr>
           </thead>
           <tbody>
             {nonLedgerSurfaces.map((surface) => (
-              <tr key={surface.featureId} className="border-b border-border align-top">
-                <td className="py-2 pr-4 font-mono text-xs">{surface.featureId}</td>
-                <td className="py-2 pr-4">{surface.routes.join(", ")}</td>
-                <td className="py-2 pr-4">{surface.kind}</td>
-                <td className="py-2">{surface.evidence}</td>
+              <tr key={surface.featureId} className="align-top">
+                <td className="font-mono text-xs">{surface.featureId}</td>
+                <td>{surface.routes.join(", ")}</td>
+                <td>{surface.kind}</td>
+                <td>{surface.evidence}</td>
               </tr>
             ))}
           </tbody>
@@ -448,7 +446,7 @@ export function Platform() {
 
       <section aria-labelledby="plugin-admin-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="plugin-admin-heading" className="text-lg font-semibold">
+          <h2 id="plugin-admin-heading" className="text-title font-semibold">
             Plugin SDK and capability sandbox
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -456,28 +454,28 @@ export function Platform() {
           </p>
         </div>
         <UnavailableState title="Plugin admin read API not served yet">
-          `BACKEND-PLUGINHOST` must expose tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons before this page can inspect or activate plugins.
+          Plugin host management is available via the API and CLI today; console inspection and activation of tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons is coming soon.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[72rem] text-left text-sm">
+        <div className="overflow-x-auto rounded-panel border border-border">
+          <table className="ui-table min-w-[72rem]">
             <caption className="sr-only">Plugin SDK capability sandbox fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Plugin</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Provenance</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Capability grants</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Conformance</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Runtime status</th>
+              <tr>
+                <th scope="col">Plugin</th>
+                <th scope="col">Provenance</th>
+                <th scope="col">Capability grants</th>
+                <th scope="col">Conformance</th>
+                <th scope="col">Runtime status</th>
               </tr>
             </thead>
             <tbody>
               {pluginAdminRows.map((row) => (
-                <tr key={row.plugin} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-mono text-xs">{row.plugin}</td>
-                  <td className="py-2 pr-4">{row.provenance}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.grants}</td>
-                  <td className="py-2 pr-4">{row.conformance}</td>
-                  <td className="py-2 pr-3">{row.runtime}</td>
+                <tr key={row.plugin} className="align-top">
+                  <td className="font-mono text-xs">{row.plugin}</td>
+                  <td>{row.provenance}</td>
+                  <td className="font-mono text-xs">{row.grants}</td>
+                  <td>{row.conformance}</td>
+                  <td>{row.runtime}</td>
                 </tr>
               ))}
             </tbody>
@@ -487,7 +485,7 @@ export function Platform() {
 
       <section aria-labelledby="federation-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="federation-heading" className="text-lg font-semibold">
+          <h2 id="federation-heading" className="text-title font-semibold">
             Cross-cluster federation roadmap
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -495,24 +493,24 @@ export function Platform() {
           </p>
         </div>
         <UnavailableState title="Federation is roadmap-only">
-          `BACKEND-FEDERATION` has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or replication status panel.
+          Cross-cluster federation is on the roadmap and has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or replication status panel.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[52rem] text-left text-sm">
+        <div className="overflow-x-auto rounded-panel border border-border">
+          <table className="ui-table min-w-[52rem]">
             <caption className="sr-only">Federation roadmap fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Topic</th>
-                <th scope="col" className="py-2 pr-4 font-medium">State</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Caveat</th>
+              <tr>
+                <th scope="col">Topic</th>
+                <th scope="col">State</th>
+                <th scope="col">Caveat</th>
               </tr>
             </thead>
             <tbody>
               {federationRows.map((row) => (
-                <tr key={row.topic} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.topic}</td>
-                  <td className="py-2 pr-4">{row.state}</td>
-                  <td className="py-2 pr-3">{row.caveat}</td>
+                <tr key={row.topic} className="align-top">
+                  <td className="font-medium">{row.topic}</td>
+                  <td>{row.state}</td>
+                  <td>{row.caveat}</td>
                 </tr>
               ))}
             </tbody>
@@ -522,13 +520,13 @@ export function Platform() {
 
       <div className="grid gap-3 lg:grid-cols-3">
         <UnavailableState title="Tenant admin endpoint not served yet">
-          Tenant list, tenant switching, per-tenant limits, and exact role/scope inventory are blocked on `BACKEND-TENANT-ADMIN`. The session tenant remains fixed by the backend.
+          Tenant list, tenant switching, per-tenant limits, and exact role/scope inventory aren't available yet. The session tenant remains fixed by the backend.
         </UnavailableState>
         <UnavailableState title="Platform status endpoint not served yet">
-          Build info, datastore mode, signer-child state, OIDC config, and feature flags are blocked on `BACKEND-PLATFORM-STATUS`.
+          Build info, datastore mode, signer-child state, OIDC config, and feature flags aren't shown in the console yet.
         </UnavailableState>
         <UnavailableState title="Live OpenAPI endpoint not served yet">
-          Runtime OpenAPI publication is blocked on `BACKEND-OPENAPI-SERVED`; the table above is a static spec view from the pinned golden.
+          Runtime OpenAPI publication isn't available yet; the table above is a static spec view from the pinned golden.
         </UnavailableState>
       </div>
     </section>

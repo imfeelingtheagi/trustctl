@@ -3,6 +3,7 @@ import { Cloud, Database, Fingerprint, KeyRound, Network, RefreshCw, Server } fr
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { api, ApiError, type Identity, type SecretMeta } from "@/lib/api";
 
 type Notice = { kind: "permission" | "error"; message: string };
@@ -91,32 +92,29 @@ export function Discovery() {
 
   return (
     <section aria-labelledby="discovery-heading" className="grid gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 id="discovery-heading" className="text-2xl font-semibold">
-            Discovery
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Discovery scanners are library-complete but not served as control-plane APIs. This page is read-only: it names the backend gaps and shows only metadata that is already served.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        titleId="discovery-heading"
+        title="Discovery"
+        description="Discovery scanners are library-complete but not served as control-plane APIs. This page is read-only: it names the backend gaps and shows only metadata that is already served."
+        actions={
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+            Refresh
+          </Button>
+        }
+      />
 
       <UnavailableState title="Discovery scan API not served yet">
-        `BACKEND-DISCOVERY-SCAN` must expose scan sources, schedules, dry-run previews, runs, findings, and agent source evidence before the GUI can offer scan execution. `BACKEND-SECRETSCAN` is also required before leaked-token scanner findings can appear here.
+        Discovery scanning is available via the agent and library today; console management is coming soon. Scan sources, schedules, dry-run previews, runs, findings, and agent source evidence are not surfaced here, so the GUI cannot offer scan execution. Leaked-token scanner findings are also coming soon.
       </UnavailableState>
 
       <div className="grid gap-3 lg:grid-cols-2">
         {sourceCards.map(({ feature, title, icon: Icon, body, next, href, link }) => (
-          <section key={title} aria-labelledby={`${feature}-heading`} className="grid gap-3 rounded-md border border-border p-3 text-sm">
+          <section key={title} aria-labelledby={`${feature}-heading`} className="ui-panel grid gap-3 p-comfortable text-sm">
             <div className="flex items-start gap-3">
               <Icon className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <div>
-                <h2 id={`${feature}-heading`} className="font-semibold">
+                <h2 id={`${feature}-heading`} className="text-title font-semibold">
                   {title}
                 </h2>
                 <p className="mt-1 text-muted-foreground">{body}</p>
@@ -134,7 +132,7 @@ export function Discovery() {
 
       <section aria-labelledby="ssh-inventory-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="ssh-inventory-heading" className="text-lg font-semibold">
+          <h2 id="ssh-inventory-heading" className="text-title font-semibold">
             SSH identity inventory
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -144,18 +142,18 @@ export function Discovery() {
         {renderNotice(identityError)}
         {!loading && !identityError && sshIdentities.length === 0 && (
           <EmptyState title="No SSH identities in served inventory">
-            Enroll agents or create SSH identities elsewhere; discovery scan findings need `BACKEND-DISCOVERY-SCAN`.
+            Enroll agents or create SSH identities elsewhere; discovery scan findings in the console are coming soon.
           </EmptyState>
         )}
         {!loading && !identityError && sshIdentities.length > 0 && <SSHIdentityTable identities={sshIdentities} />}
         <UnavailableState title="SSH discovery findings not served yet">
-          Weak trust flags, discovered host keys, authorized_keys entries, trusted CAs, and agent source paths need `BACKEND-DISCOVERY-SCAN`. No browser control can rewrite sshd trust from this page.
+          SSH discovery is available via the agent and library today; console management is coming soon. Weak trust flags, discovered host keys, authorized_keys entries, trusted CAs, and agent source paths are not surfaced here. No browser control can rewrite sshd trust from this page.
         </UnavailableState>
       </section>
 
       <section aria-labelledby="api-key-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="api-key-heading" className="text-lg font-semibold">
+          <h2 id="api-key-heading" className="text-title font-semibold">
             API key and token inventory
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -165,18 +163,18 @@ export function Discovery() {
         {renderNotice(identityError)}
         {!loading && !identityError && apiKeyIdentities.length === 0 && (
           <EmptyState title="No API-key identities in served inventory">
-            Scan-based key discovery and leaked-token ingestion need `BACKEND-SECRETSCAN`.
+            Scan-based key discovery and leaked-token ingestion in the console are coming soon.
           </EmptyState>
         )}
         {!loading && !identityError && apiKeyIdentities.length > 0 && <APIKeyTable identities={apiKeyIdentities} />}
         <UnavailableState title="Scanner findings not served yet">
-          `BACKEND-SECRETSCAN` must mount findings from gitleaks, trufflehog, and external secret-store enumerators before the GUI can show discovered tokens.
+          Secret scanning is available via the agent and library today; console management is coming soon. Findings from gitleaks, trufflehog, and external secret-store enumerators are not surfaced here, so the GUI cannot show discovered tokens yet.
         </UnavailableState>
       </section>
 
       <section aria-labelledby="secret-store-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="secret-store-heading" className="text-lg font-semibold">
+          <h2 id="secret-store-heading" className="text-title font-semibold">
             Native secret metadata
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -186,12 +184,12 @@ export function Discovery() {
         {renderNotice(secretError)}
         {!loading && !secretError && secrets.length === 0 && (
           <EmptyState title="No native secrets in served store">
-            Create sealed secrets on `/secrets`; external-store discovery is still waiting for `BACKEND-DISCOVERY-SCAN`.
+            Create sealed secrets on `/secrets`; external-store discovery in the console is coming soon.
           </EmptyState>
         )}
         {!loading && !secretError && secrets.length > 0 && <SecretMetadataTable secrets={secrets} />}
         <UnavailableState title="External secret-store discovery not served yet">
-          Kubernetes, GitHub, cloud-provider, and other external store enumeration needs `BACKEND-DISCOVERY-SCAN`. This page shows only native-store metadata.
+          External-store discovery is available via the agent and library today; console management is coming soon. Kubernetes, GitHub, cloud-provider, and other external store enumeration is not surfaced here. This page shows only native-store metadata.
         </UnavailableState>
       </section>
     </section>
@@ -200,28 +198,28 @@ export function Discovery() {
 
 function SSHIdentityTable({ identities }: { identities: Identity[] }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[48rem] text-left text-sm">
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[48rem]">
         <caption className="sr-only">Served SSH identity inventory</caption>
         <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th scope="col" className="py-2 pl-3 pr-4 font-medium">Name</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Owner</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Expires</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Fingerprint</th>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Kind</th>
+            <th scope="col">Owner</th>
+            <th scope="col">Status</th>
+            <th scope="col">Expires</th>
+            <th scope="col">Fingerprint</th>
           </tr>
         </thead>
         <tbody>
           {identities.map((identity) => (
-            <tr key={identity.id} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{identity.name}</td>
-              <td className="py-2 pr-4">{identity.kind}</td>
-              <td className="py-2 pr-4 font-mono text-xs">{identity.owner_id}</td>
-              <td className="py-2 pr-4">{identity.status}</td>
-              <td className="py-2 pr-4">{formatDate(identity.not_after)}</td>
-              <td className="py-2 pr-3 font-mono text-xs">{maskFingerprint(stringAttr(identity, "fingerprint"))}</td>
+            <tr key={identity.id} className="align-top">
+              <td className="font-medium">{identity.name}</td>
+              <td>{identity.kind}</td>
+              <td className="font-mono text-xs">{identity.owner_id}</td>
+              <td>{identity.status}</td>
+              <td>{formatDate(identity.not_after)}</td>
+              <td className="font-mono text-xs">{maskFingerprint(stringAttr(identity, "fingerprint"))}</td>
             </tr>
           ))}
         </tbody>
@@ -232,28 +230,28 @@ function SSHIdentityTable({ identities }: { identities: Identity[] }) {
 
 function APIKeyTable({ identities }: { identities: Identity[] }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[48rem] text-left text-sm">
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[48rem]">
         <caption className="sr-only">Served API key identity inventory</caption>
         <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th scope="col" className="py-2 pl-3 pr-4 font-medium">Name</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Owner</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Expires</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Scopes</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Masked fingerprint</th>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Owner</th>
+            <th scope="col">Status</th>
+            <th scope="col">Expires</th>
+            <th scope="col">Scopes</th>
+            <th scope="col">Masked fingerprint</th>
           </tr>
         </thead>
         <tbody>
           {identities.map((identity) => (
-            <tr key={identity.id} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{identity.name}</td>
-              <td className="py-2 pr-4 font-mono text-xs">{identity.owner_id}</td>
-              <td className="py-2 pr-4">{identity.status}</td>
-              <td className="py-2 pr-4">{formatDate(identity.not_after)}</td>
-              <td className="py-2 pr-4">{scopes(identity)}</td>
-              <td className="py-2 pr-3 font-mono text-xs">
+            <tr key={identity.id} className="align-top">
+              <td className="font-medium">{identity.name}</td>
+              <td className="font-mono text-xs">{identity.owner_id}</td>
+              <td>{identity.status}</td>
+              <td>{formatDate(identity.not_after)}</td>
+              <td>{scopes(identity)}</td>
+              <td className="font-mono text-xs">
                 <Fingerprint className="mr-1 inline h-3 w-3" aria-hidden="true" />
                 {maskFingerprint(stringAttr(identity, "fingerprint"))}
               </td>
@@ -267,27 +265,27 @@ function APIKeyTable({ identities }: { identities: Identity[] }) {
 
 function SecretMetadataTable({ secrets }: { secrets: SecretMeta[] }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[38rem] text-left text-sm">
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[38rem]">
         <caption className="sr-only">Served native secret metadata</caption>
         <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th scope="col" className="py-2 pl-3 pr-4 font-medium">Name</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Version</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Updated</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Created</th>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Version</th>
+            <th scope="col">Updated</th>
+            <th scope="col">Created</th>
           </tr>
         </thead>
         <tbody>
           {secrets.map((secret) => (
-            <tr key={secret.name} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">
+            <tr key={secret.name} className="align-top">
+              <td className="font-medium">
                 <Database className="mr-1 inline h-3 w-3" aria-hidden="true" />
                 {secret.name}
               </td>
-              <td className="py-2 pr-4">v{secret.version}</td>
-              <td className="py-2 pr-4">{formatDate(secret.updated_at)}</td>
-              <td className="py-2 pr-3">{formatDate(secret.created_at)}</td>
+              <td>v{secret.version}</td>
+              <td>{formatDate(secret.updated_at)}</td>
+              <td>{formatDate(secret.created_at)}</td>
             </tr>
           ))}
         </tbody>

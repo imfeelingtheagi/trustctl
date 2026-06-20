@@ -4,6 +4,7 @@ import { api, ApiError, type AIAnswer } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
 
@@ -48,8 +49,10 @@ function ToggleTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium",
-        active ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted",
+        "inline-flex h-9 items-center gap-2 rounded-control border px-3 text-body font-medium transition-colors",
+        active
+          ? "border-brand-accent bg-brand-accent text-brand-accent-foreground shadow-elevation1"
+          : "border-border hover:border-brand-accent/40 hover:bg-muted/60",
       )}
       aria-pressed={active}
     >
@@ -63,27 +66,27 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
   if (!answer) return null;
   const citations = answer.citations ?? [];
   return (
-    <section aria-label="Assistant answer" className="mt-5 rounded-md border border-border p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium">
-        {tool && <span className="rounded border border-border px-2 py-1">Tool: {tool}</span>}
-        <span className="rounded border border-border px-2 py-1">
+    <section aria-label="Assistant answer" className="mt-5 ui-panel p-comfortable">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium">
+        {tool && <span className="rounded-control border border-border px-2 py-1">Tool: {tool}</span>}
+        <span className="rounded-control border border-border px-2 py-1">
           {answer.grounded ? "Grounded" : "No cited evidence"}
         </span>
-        <span className="rounded border border-border px-2 py-1">
+        <span className="rounded-control border border-border px-2 py-1">
           {answer.sufficient ? "Sufficient" : "Insufficient"}
         </span>
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-6" data-testid="assistant-answer">
+      <p className="whitespace-pre-wrap text-body" data-testid="assistant-answer">
         {answer.text}
       </p>
       <div className="mt-4">
-        <h3 className="text-sm font-semibold">Cited evidence</h3>
+        <h3 className="text-body font-semibold">Cited evidence</h3>
         {citations.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No citations returned.</p>
+          <p className="mt-2 text-body text-muted-foreground">No citations returned.</p>
         ) : (
-          <ul className="mt-2 space-y-1 text-sm">
+          <ul className="mt-2 space-y-1 text-body">
             {citations.map((citation) => (
-              <li key={citation} className="rounded border border-border px-2 py-1 font-mono text-xs">
+              <li key={citation} className="rounded-control border border-border px-2 py-1 font-mono text-caption">
                 {citation}
               </li>
             ))}
@@ -96,17 +99,17 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
 
 function AssistantRuntimeDisclosure() {
   return (
-    <section aria-labelledby="assistant-runtime-heading" className="mb-5 grid gap-3 border-y border-border py-4">
+    <section aria-labelledby="assistant-runtime-heading" className="mb-6 grid gap-3 border-b border-border pb-6">
       <div>
-        <h2 id="assistant-runtime-heading" className="text-lg font-semibold">
+        <h2 id="assistant-runtime-heading" className="text-title font-semibold">
           AI runtime boundary
         </h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+        <p className="mt-1 max-w-3xl text-body text-muted-foreground">
           Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
         </p>
       </div>
       <UnavailableState title="AI model and runtime status not served yet">
-        `BACKEND-PLATFORM-STATUS` must expose enabled state, model mode, egress posture, redaction/refusal counters, and last model error. Until then the console states the safe default: no model configured means nothing phones home, and every model path must cross the redaction boundary before egress.
+        Enabled state, model mode, egress posture, redaction/refusal counters, and last model error are not shown in the console yet. Until then the console states the safe default: no model configured means nothing phones home, and every model path must cross the redaction boundary before egress.
       </UnavailableState>
     </section>
   );
@@ -114,21 +117,21 @@ function AssistantRuntimeDisclosure() {
 
 function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: string }) {
   return (
-    <section aria-labelledby="query-preview-heading" className="mb-4 rounded-md border border-border p-3 text-sm">
+    <section aria-labelledby="query-preview-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="query-preview-heading" className="font-semibold">
         Structured query preview
       </h3>
       <dl className="mt-2 grid gap-2 md:grid-cols-3">
         <div>
-          <dt className="text-muted-foreground">Surfaces</dt>
+          <dt className="text-caption text-muted-foreground">Surfaces</dt>
           <dd>{surfaces.join(", ") || "none selected"}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Subject</dt>
+          <dt className="text-caption text-muted-foreground">Subject</dt>
           <dd>{subject.trim() || "not scoped"}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Limit</dt>
+          <dt className="text-caption text-muted-foreground">Limit</dt>
           <dd>25 cited records</dd>
         </div>
       </dl>
@@ -141,7 +144,7 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
 
 function RCAWorkspaceDisclosure() {
   return (
-    <section aria-labelledby="rca-workspace-heading" className="mb-4 rounded-md border border-border p-3 text-sm">
+    <section aria-labelledby="rca-workspace-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="rca-workspace-heading" className="font-semibold">
         RCA evidence workspace
       </h3>
@@ -154,12 +157,12 @@ function RCAWorkspaceDisclosure() {
 
 function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
   return (
-    <section aria-labelledby="mcp-boundary-heading" className="mb-4 rounded-md border border-border p-3 text-sm">
+    <section aria-labelledby="mcp-boundary-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="mcp-boundary-heading" className="font-semibold">
         MCP permission boundary
       </h3>
       <p className="mt-2 text-muted-foreground">
-        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Runtime status, tool audit event ids, and enabled-state reads need `BACKEND-PLATFORM-STATUS`.
+        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Runtime status, tool audit event ids, and enabled-state reads are not shown in the console yet.
       </p>
     </section>
   );
@@ -253,21 +256,18 @@ export function Assistant() {
 
   return (
     <section aria-labelledby="assistant-heading">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 id="assistant-heading" className="text-2xl font-semibold">
-            Assistant
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Grounded query, root-cause analysis, and read-only MCP tools.
-          </p>
-        </div>
-        {tools.data && (
-          <span className="rounded-md border border-border px-3 py-2 text-xs font-medium">
-            {tools.data.read_only ? "Read-only tools" : "Tool policy unavailable"}
-          </span>
-        )}
-      </div>
+      <PageHeader
+        title="Assistant"
+        titleId="assistant-heading"
+        description="Grounded query, root-cause analysis, and read-only MCP tools."
+        actions={
+          tools.data ? (
+            <span className="rounded-control border border-border bg-card px-3 py-2 text-caption font-medium shadow-elevation1">
+              {tools.data.read_only ? "Read-only tools" : "Tool policy unavailable"}
+            </span>
+          ) : undefined
+        }
+      />
       <AssistantRuntimeDisclosure />
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Assistant workflow">
@@ -295,7 +295,7 @@ export function Assistant() {
       </div>
 
       {error && (
-        <p role="alert" className="mb-4 rounded-md border border-destructive/40 p-3 text-sm">
+        <p role="alert" className="mb-4 rounded-control border border-destructive/40 bg-destructive/10 p-3 text-body text-destructive">
           {error}
         </p>
       )}
@@ -309,20 +309,20 @@ export function Assistant() {
             <QueryPreview surfaces={surfaces} subject={subject} />
             <form onSubmit={runQuery} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
-                <label className="space-y-2 text-sm font-medium">
+                <label className="space-y-2 text-body font-medium">
                   Question
                   <textarea
-                    className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm"
+                    className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="Which certificates should rotate first?"
                     required
                   />
                 </label>
-                <label className="space-y-2 text-sm font-medium">
+                <label className="space-y-2 text-body font-medium">
                   Subject
                   <input
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="Optional"
@@ -330,10 +330,10 @@ export function Assistant() {
                 </label>
               </div>
               <fieldset className="space-y-2">
-                <legend className="text-sm font-medium">Evidence surfaces</legend>
+                <legend className="text-body font-medium">Evidence surfaces</legend>
                 <div className="flex flex-wrap gap-3">
                   {surfaceOptions.map((surface) => (
-                    <label key={surface.value} className="inline-flex items-center gap-2 text-sm">
+                    <label key={surface.value} className="inline-flex items-center gap-2 text-body">
                       <input
                         type="checkbox"
                         checked={surfaces.includes(surface.value)}
@@ -363,20 +363,20 @@ export function Assistant() {
             <RCAWorkspaceDisclosure />
             <form onSubmit={runRCA} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
-                <label className="space-y-2 text-sm font-medium">
+                <label className="space-y-2 text-body font-medium">
                   Question
                   <textarea
-                    className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm"
+                    className="min-h-24 w-full rounded-control border border-border bg-background p-3 text-body font-normal"
                     value={rcaQuestion}
                     onChange={(e) => setRCAQuestion(e.target.value)}
                     placeholder="Why did this identity become high risk?"
                     required
                   />
                 </label>
-                <label className="space-y-2 text-sm font-medium">
+                <label className="space-y-2 text-body font-medium">
                   Subject
                   <input
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                     value={rcaSubject}
                     onChange={(e) => setRCASubject(e.target.value)}
                     placeholder="Optional"
@@ -400,18 +400,18 @@ export function Assistant() {
           </CardHeader>
           <CardContent>
             <MCPBoundary readOnly={tools.data?.read_only} />
-            {tools.loading && <p role="status">Loading tools...</p>}
-            {tools.error && <p role="alert">Could not load tools: {tools.error}</p>}
+            {tools.loading && <p role="status" className="text-body text-muted-foreground">Loading tools...</p>}
+            {tools.error && <p role="alert" className="text-body text-destructive">Could not load tools: {tools.error}</p>}
             {tools.data && tools.data.tools.length === 0 && (
-              <p className="text-sm text-muted-foreground">No MCP tools are available for this tenant.</p>
+              <p className="text-body text-muted-foreground">No MCP tools are available for this tenant.</p>
             )}
             {tools.data && tools.data.tools.length > 0 && (
               <form onSubmit={runTool} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
-                  <label className="space-y-2 text-sm font-medium">
+                  <label className="space-y-2 text-body font-medium">
                     Tool
                     <select
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       value={selectedTool}
                       onChange={(e) => setSelectedTool(e.target.value)}
                     >
@@ -422,10 +422,10 @@ export function Assistant() {
                       ))}
                     </select>
                   </label>
-                  <label className="space-y-2 text-sm font-medium">
+                  <label className="space-y-2 text-body font-medium">
                     Subject
                     <input
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      className="w-full rounded-control border border-border bg-background px-3 py-2 text-body font-normal"
                       value={toolSubject}
                       onChange={(e) => setToolSubject(e.target.value)}
                       placeholder="Optional"

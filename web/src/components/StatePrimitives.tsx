@@ -2,7 +2,15 @@ import type { ReactNode } from "react";
 
 export function LoadingState({ children }: { children: ReactNode }) {
   return (
-    <p role="status" data-state-primitive="loading" className="text-sm text-muted-foreground">
+    <p
+      role="status"
+      data-state-primitive="loading"
+      className="flex items-center gap-2 text-sm text-muted-foreground"
+    >
+      <span
+        aria-hidden="true"
+        className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-brand-accent"
+      />
       {children}
     </p>
   );
@@ -13,10 +21,10 @@ export function ErrorState({ title, children }: { title: string; children?: Reac
     <div
       role="alert"
       data-state-primitive="error"
-      className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+      className="rounded-control border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
     >
-      <p className="font-medium">{title}</p>
-      {children && <div className="mt-1 text-red-700">{children}</div>}
+      <p className="font-medium text-destructive">{title}</p>
+      {children && <div className="mt-1 text-muted-foreground">{children}</div>}
     </div>
   );
 }
@@ -26,10 +34,10 @@ export function PermissionDeniedState({ children }: { children: ReactNode }) {
     <div
       role="alert"
       data-state-primitive="permission-denied"
-      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+      className="rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm"
     >
-      <p className="font-medium">Permission denied</p>
-      <div className="mt-1">{children}</div>
+      <p className="font-medium text-status-warning">Permission denied</p>
+      <div className="mt-1 text-muted-foreground">{children}</div>
     </div>
   );
 }
@@ -38,7 +46,7 @@ export function UnavailableState({ title, children }: { title: string; children?
   return (
     <div
       data-state-primitive="unavailable"
-      className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
+      className="rounded-control border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
     >
       <p className="font-medium text-foreground">{title}</p>
       {children && <div className="mt-1">{children}</div>}

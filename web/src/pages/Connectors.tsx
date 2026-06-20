@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 
 const coreConnectors = [
@@ -104,48 +105,45 @@ const outboxStates = [
 export function Connectors() {
   return (
     <section aria-labelledby="connectors-heading" className="grid gap-6">
-      <div>
-        <h1 id="connectors-heading" className="text-2xl font-semibold">
-          Deployment connectors
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Connector deployment is an outbox-backed worker path. This console shows destination shape, capability grants, masked target secret references, dry-run posture, reachability, and rollback evidence without performing a live deploy.
-        </p>
-      </div>
+      <PageHeader
+        titleId="connectors-heading"
+        title="Deployment connectors"
+        description="Connector deployment is an outbox-backed worker path. This console shows destination shape, capability grants, masked target secret references, dry-run posture, reachability, and rollback evidence without performing a live deploy."
+      />
 
       <UnavailableState title="Connector routing is not served">
-        `BACKEND-CONNECTORS` and `BACKEND-OUTBOX-STATUS` must expose signed plugin inventory, worker queue state, delivery attempts, and rollback receipts. `connector.deploy` can be acknowledged by the outbox, but it is not routed unless a signed connector plugin is loaded.
+        Connector deployment runs in the outbox worker today; console management is coming soon. Signed plugin inventory, worker queue state, delivery attempts, rollback receipts, and live delivery status are not surfaced here. `connector.deploy` can be acknowledged by the outbox, but it is not routed unless a signed connector plugin is loaded.
       </UnavailableState>
 
       <section aria-labelledby="core-connectors-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="core-connectors-heading" className="text-lg font-semibold">
+          <h2 id="core-connectors-heading" className="text-title font-semibold">
             Core deployment targets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Each target needs a bounded worker, explicit capability grant, masked credential reference, dry-run or test-deploy preflight, and rollback plan before it can receive a certificate. Raw token hidden is the rule: only sealed secret references appear here.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[72rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[72rem]">
             <caption className="sr-only">Core connector deployment fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Target</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Capability grant</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Masked secret reference</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Dry-run / test-deploy preflight</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Rollback evidence</th>
+              <tr>
+                <th scope="col">Target</th>
+                <th scope="col">Capability grant</th>
+                <th scope="col">Masked secret reference</th>
+                <th scope="col">Dry-run / test-deploy preflight</th>
+                <th scope="col">Rollback evidence</th>
               </tr>
             </thead>
             <tbody>
               {coreConnectors.map((connector) => (
-                <tr key={connector.target} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{connector.target}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{connector.grant}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{connector.secretRef}:****</td>
-                  <td className="py-2 pr-4">{connector.dryRun}</td>
-                  <td className="py-2 pr-3">{connector.rollback}</td>
+                <tr key={connector.target} className="align-top">
+                  <td className="font-medium">{connector.target}</td>
+                  <td className="font-mono text-xs">{connector.grant}</td>
+                  <td className="font-mono text-xs">{connector.secretRef}:****</td>
+                  <td>{connector.dryRun}</td>
+                  <td>{connector.rollback}</td>
                 </tr>
               ))}
             </tbody>
@@ -155,29 +153,29 @@ export function Connectors() {
 
       <section aria-labelledby="appliance-connectors-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="appliance-connectors-heading" className="text-lg font-semibold">
+          <h2 id="appliance-connectors-heading" className="text-title font-semibold">
             Appliance and network targets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Appliance connectors require target secret references, reachability checks, scoped API grants, and rollback commands because a failed deploy can break load balancers or edge firewalls.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[48rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">Appliance connector fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Target</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Reachability fixture</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Rollback fixture</th>
+              <tr>
+                <th scope="col">Target</th>
+                <th scope="col">Reachability fixture</th>
+                <th scope="col">Rollback fixture</th>
               </tr>
             </thead>
             <tbody>
               {applianceConnectors.map((connector) => (
-                <tr key={connector.target} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{connector.target}</td>
-                  <td className="py-2 pr-4">{connector.reachability}</td>
-                  <td className="py-2 pr-3">{connector.rollback}</td>
+                <tr key={connector.target} className="align-top">
+                  <td className="font-medium">{connector.target}</td>
+                  <td>{connector.reachability}</td>
+                  <td>{connector.rollback}</td>
                 </tr>
               ))}
             </tbody>
@@ -187,7 +185,7 @@ export function Connectors() {
 
       <section aria-labelledby="outbox-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="outbox-heading" className="text-lg font-semibold">
+          <h2 id="outbox-heading" className="text-title font-semibold">
             Outbox delivery posture
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -196,7 +194,7 @@ export function Connectors() {
         </div>
         <dl className="grid gap-2 md:grid-cols-4">
           {outboxStates.map((item) => (
-            <div key={item.state} className="rounded-md border border-border p-3">
+            <div key={item.state} className="ui-panel p-3">
               <dt className="font-mono text-xs font-semibold">{item.state}</dt>
               <dd className="mt-1 text-sm text-muted-foreground">{item.meaning}</dd>
             </div>

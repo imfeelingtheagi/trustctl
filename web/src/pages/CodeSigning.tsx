@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 
 const signingRequests = [
@@ -36,50 +37,47 @@ const auditReceipts = [
 export function CodeSigning() {
   return (
     <section aria-labelledby="codesign-heading" className="grid gap-6">
-      <div>
-        <h1 id="codesign-heading" className="text-2xl font-semibold">
-          Code signing
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Code-signing requests bind an artifact digest to an approval, policy decision, signer mode, signature receipt, and immutable audit trail. This page is read-only until a served signing workflow exists.
-        </p>
-      </div>
+      <PageHeader
+        titleId="codesign-heading"
+        title="Code signing"
+        description="Code-signing requests bind an artifact digest to an approval, policy decision, signer mode, signature receipt, and immutable audit trail. This page is read-only until a served signing workflow exists."
+      />
 
       <UnavailableState title="Code-signing workflow is library-only">
-        `BACKEND-CODESIGN` must serve signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links before this console can submit signing work.
+        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are available via the API and CLI today; console management is coming soon, so this console cannot submit signing work yet.
       </UnavailableState>
 
       <section aria-labelledby="requests-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="requests-heading" className="text-lg font-semibold">
+          <h2 id="requests-heading" className="text-title font-semibold">
             Signing request ledger
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             A valid request names the artifact, digest, signing mode, approval posture, policy result, and downloadable signature receipt. No private key or artifact bytes are exposed.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[72rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[72rem]">
             <caption className="sr-only">Code signing request fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Artifact</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Artifact digest</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Mode</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Approval</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Policy decision</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Signature receipt</th>
+              <tr>
+                <th scope="col">Artifact</th>
+                <th scope="col">Artifact digest</th>
+                <th scope="col">Mode</th>
+                <th scope="col">Approval</th>
+                <th scope="col">Policy decision</th>
+                <th scope="col">Signature receipt</th>
               </tr>
             </thead>
             <tbody>
               {signingRequests.map((request) => (
-                <tr key={request.digest} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{request.artifact}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{request.digest}</td>
-                  <td className="py-2 pr-4">{request.mode}</td>
-                  <td className="py-2 pr-4">{request.approval}</td>
-                  <td className="py-2 pr-4">{request.decision}</td>
-                  <td className="py-2 pr-3">{request.output}</td>
+                <tr key={request.digest} className="align-top">
+                  <td className="font-medium">{request.artifact}</td>
+                  <td className="font-mono text-xs">{request.digest}</td>
+                  <td>{request.mode}</td>
+                  <td>{request.approval}</td>
+                  <td>{request.decision}</td>
+                  <td>{request.output}</td>
                 </tr>
               ))}
             </tbody>
@@ -89,7 +87,7 @@ export function CodeSigning() {
 
       <section aria-labelledby="audit-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="audit-heading" className="text-lg font-semibold">
+          <h2 id="audit-heading" className="text-title font-semibold">
             Audit and key boundary
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -98,7 +96,7 @@ export function CodeSigning() {
         </div>
         <ul className="grid gap-2 md:grid-cols-3">
           {auditReceipts.map((receipt) => (
-            <li key={receipt} className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+            <li key={receipt} className="ui-panel p-3 text-sm text-muted-foreground">
               {receipt}
             </li>
           ))}

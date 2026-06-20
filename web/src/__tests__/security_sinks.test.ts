@@ -70,6 +70,28 @@ describe("SPA security sinks (SURFACE-I01)", () => {
     expect(offenders, `XSS sink(s) found in web/src:\n${offenders.join("\n")}`).toEqual([]);
   });
 
+  it("never leaks internal BACKEND-*/FE-PTR-* ticket IDs into user-facing pages or components", () => {
+    // User-facing copy must not expose internal engineering ticket IDs. This locks
+    // the cleanup so the IDs can never leak back into the product UI. Scans every
+    // source file under src/pages and src/components with the same recursive fs
+    // walk used above (test files are already excluded by sourceFiles).
+    const ticketId = /BACKEND-[A-Z-]+|FE-PTR-[A-Z-]+/;
+    const surfaceFiles = [
+      ...sourceFiles(path.join(SRC, "pages")),
+      ...sourceFiles(path.join(SRC, "components")),
+    ];
+    expect(surfaceFiles.length, "expected to scan pages and components source files").toBeGreaterThan(5);
+    const offenders: string[] = [];
+    for (const f of surfaceFiles) {
+      const body = readFileSync(f, "utf8");
+      const match = body.match(ticketId);
+      if (match) {
+        offenders.push(`${path.relative(SRC, f)}: ${match[0]}`);
+      }
+    }
+    expect(offenders, `internal ticket ID(s) found in user-facing UI:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
   it("stores no auth token in localStorage/sessionStorage (only the theme uses storage)", () => {
     const offenders: string[] = [];
     for (const f of files) {

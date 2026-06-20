@@ -24,7 +24,8 @@ describe("code signing disclosure surface", () => {
     expect(screen.getByText(/policy denied: missing build attestation/)).toBeInTheDocument();
     expect(screen.getByText(/signature download: pending backend artifact store/)).toBeInTheDocument();
     expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/BACKEND-CODESIGN/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Code-signing workflow is library-only")).toBeInTheDocument();
+    expect(screen.getByText(/cannot submit signing work yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /sign|approve|download signature|submit/i })).not.toBeInTheDocument();
   });

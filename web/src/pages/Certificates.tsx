@@ -12,6 +12,7 @@ import {
   UnavailableState,
 } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
+import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
@@ -192,24 +193,20 @@ export function Certificates() {
 
   return (
     <section aria-labelledby="certs-heading">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 id="certs-heading" className="text-2xl font-semibold">
-            Certificates
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Inventory is loaded from the served certificate API with tenant-scoped
-            pagination, expiry filtering, detail fetches, and explicit ingest.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowIngest((v) => !v)}
-          className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-        >
-          {showIngest ? "Close ingest" : "Add certificate"}
-        </button>
-      </div>
+      <PageHeader
+        titleId="certs-heading"
+        title="Certificates"
+        description="Inventory is loaded from the served certificate API with tenant-scoped pagination, expiry filtering, detail fetches, and explicit ingest."
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowIngest((v) => !v)}
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+          >
+            {showIngest ? "Close ingest" : "Add certificate"}
+          </button>
+        }
+      />
 
       {showIngest && (
         <form
@@ -218,7 +215,7 @@ export function Certificates() {
           className="mb-6 grid gap-4 border-y border-border py-4"
         >
           <div>
-            <h2 id="ingest-heading" className="text-lg font-semibold">
+            <h2 id="ingest-heading" className="text-title font-semibold">
               Add certificate
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -273,7 +270,7 @@ export function Certificates() {
           {ingestError?.kind === "error" && (
             <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>
           )}
-          {ingestSuccess && <p role="status" className="text-sm text-emerald-700">{ingestSuccess}</p>}
+          {ingestSuccess && <p role="status" className="text-sm text-status-success">{ingestSuccess}</p>}
           <div>
             <button
               type="submit"

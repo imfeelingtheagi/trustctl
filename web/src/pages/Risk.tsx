@@ -6,6 +6,7 @@ import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
+import { PageHeader } from "@/components/PageHeader";
 import { riskBand } from "@/lib/statusVocab";
 
 const privilegeLabel = ["Low", "Standard", "High", "Critical"];
@@ -148,20 +149,20 @@ export function Risk() {
 
   return (
     <section aria-labelledby="risk-heading">
-      <h1 id="risk-heading" className="mb-4 text-2xl font-semibold">
-        Credential risk
-      </h1>
-      <p className="mb-4 text-sm text-muted-foreground">Ranked by composite score — what to rotate first.</p>
+      <PageHeader
+        titleId="risk-heading"
+        title="Credential risk"
+        description="Ranked by composite score — what to rotate first."
+      />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
-          The served risk endpoint currently scores certificate inventory records only.
-          BACKEND-RISK-ALLKINDS tracks risk scoring for SSH certificates, SSH keys,
-          secrets, API keys, tokens, and workload identities.
+          Risk scoring covers certificates today; scoring for SSH certificates, SSH
+          keys, secrets, API keys, tokens, and workload identities is coming soon.
         </UnavailableState>
       </div>
       {data && ignoredCount > 0 && (
-        <p className="mb-3 text-sm text-amber-700 dark:text-amber-300">
-          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on BACKEND-RISK-ALLKINDS before this page displays them.
+        <p className="mb-3 text-sm text-status-warning">
+          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on console support for other credential kinds, which is coming soon.
         </p>
       )}
 
@@ -191,7 +192,7 @@ export function Risk() {
 
       {expandedRisk && (
         <section aria-labelledby="risk-detail-heading" className="mt-4 rounded-panel border border-border bg-card p-4 shadow-elevation1">
-          <h2 id="risk-detail-heading" className="mb-2 text-sm font-semibold">
+          <h2 id="risk-detail-heading" className="mb-2 text-title font-semibold">
             Six-factor breakdown for {expandedRisk.subject}
           </h2>
           <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
@@ -322,7 +323,7 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
 function RiskLegend() {
   return (
     <section aria-labelledby="risk-band-legend" className="mb-4 rounded-panel border border-border bg-card p-3 shadow-elevation1">
-      <h2 id="risk-band-legend" className="text-sm font-semibold">
+      <h2 id="risk-band-legend" className="text-title font-semibold">
         Risk band legend
       </h2>
       <div className="mt-2 flex flex-wrap gap-2 text-sm">

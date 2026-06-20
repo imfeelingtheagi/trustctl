@@ -143,8 +143,8 @@ describe("app shell accessibility and theme", () => {
 
     const tenant = screen.getByLabelText("Tenant context");
     expect(tenant).toHaveTextContent("t1");
-    expect(tenant).toHaveTextContent("BACKEND-TENANT-ADMIN");
-    expect(screen.getByRole("button", { name: /Tenant switcher blocked on BACKEND-TENANT-ADMIN/i })).toBeDisabled();
+    expect(tenant).toHaveTextContent(/Tenant switching isn't available yet/i);
+    expect(screen.getByRole("button", { name: /Tenant switching isn't available yet/i })).toBeDisabled();
   });
 
   it("opens the command palette from Cmd-K, searches inventory, and navigates on Enter", async () => {
@@ -289,7 +289,7 @@ describe("app shell accessibility and theme", () => {
     await screen.findByRole("heading", { name: "Platform" });
 
     expect(screen.getByText("Current scope inventory is not served yet.")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-TENANT-ADMIN/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Roles and scopes aren't exposed to the console yet/i)).toBeInTheDocument();
     expect(screen.getByText("certs:issue")).toBeInTheDocument();
     expect(screen.getByText("graph:read")).toBeInTheDocument();
     expect(screen.getByText("secrets:write")).toBeInTheDocument();
@@ -310,7 +310,7 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getByText("/api/v1/secrets/store/{name}")).toBeInTheDocument();
     expect(screen.getByText("/api/v1/graph/query")).toBeInTheDocument();
     expect(screen.getByText("Spec view")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-OPENAPI-SERVED/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/static spec view until a live `\/api\/v1\/openapi\.json` is published/i)).toBeInTheDocument();
     const firstCurl = screen.getAllByText(/^curl -X GET/)[0].textContent || "";
     expect(firstCurl).not.toMatch(/Authorization|Bearer|token/i);
 
@@ -330,7 +330,7 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
     expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
     expect(screen.getByText(/OIDC enabled\/disabled, issuer, audience/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-PLATFORM-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/API-token fallback status aren't shown in the console yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
   });
@@ -354,19 +354,19 @@ describe("app shell accessibility and theme", () => {
 
     expect(screen.getByRole("heading", { name: "Single-binary runtime" })).toBeInTheDocument();
     expect(screen.getByText("Runtime status JSON not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-PLATFORM-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/signer child supervision aren't shown in the console yet/i)).toBeInTheDocument();
     expect(screen.getByText("Signer supervision")).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Plugin SDK and capability sandbox" })).toBeInTheDocument();
     expect(screen.getByText("connector-f5.wasm")).toBeInTheDocument();
     expect(screen.getByText("net.dial:f5.example.test")).toBeInTheDocument();
     expect(screen.getByText(/unsigned plugin would fail closed/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-PLUGINHOST/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Plugin host management is available via the API and CLI today/i)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Cross-cluster federation roadmap" })).toBeInTheDocument();
     expect(screen.getAllByText("roadmap only").length).toBeGreaterThan(0);
     expect(screen.getByText("Federation is roadmap-only")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-FEDERATION/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Cross-cluster federation is on the roadmap and has no served endpoint today/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /activate|enable plugin|install plugin|join cluster|federate/i })).not.toBeInTheDocument();
   });
 

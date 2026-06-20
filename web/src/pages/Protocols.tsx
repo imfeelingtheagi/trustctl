@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 
@@ -234,7 +235,7 @@ const dnsProviderDisclosures: DnsProviderDisclosure[] = [
     feature: "F69",
     reference: "secret://dns/cloudflare/prod",
     posture: "Scoped secret reference for _acme-challenge writes only. Raw DNS provider tokens are never typed into this console.",
-    status: "Disabled in console until BACKEND-PROTOCOL-STATUS reports ACME enabled and a served DNS preflight read exists.",
+    status: "Disabled in console until live ACME status and a DNS preflight read are surfaced here.",
   },
   {
     label: "Built-in provider",
@@ -347,24 +348,21 @@ export function Protocols() {
 
   return (
     <section aria-labelledby="protocols-heading" className="grid gap-6">
-      <div>
-        <h1 id="protocols-heading" className="text-2xl font-semibold">
-          Protocols
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Served-gated enrollment endpoints with exact paths, tenant-binding configuration, client setup commands, and honest gaps for live status reads.
-        </p>
-      </div>
+      <PageHeader
+        titleId="protocols-heading"
+        title="Protocols"
+        description="Served-gated enrollment endpoints with exact paths, tenant-binding configuration, client setup commands, and honest gaps for live status reads."
+      />
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
-        <h2 id="protocol-status-heading" className="text-lg font-semibold">
+        <h2 id="protocol-status-heading" className="text-title font-semibold">
           Protocol status source
         </h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <UnavailableState title="Live enabled-state is not served yet">
-            `BACKEND-PROTOCOL-STATUS` must expose enabled/disabled state, tenant binding, public endpoint, and responder health before this console can claim a protocol is active. The protocol servers themselves are served-gated and default off.
+            Live protocol status — enabled/disabled state, tenant binding, public endpoint, and responder health — isn't surfaced in the console yet, so this console can't claim a protocol is active. The protocol servers themselves are served-gated and default off.
           </UnavailableState>
-          <div className="rounded-md border border-border p-3 text-sm">
+          <div className="ui-panel p-3 text-sm">
             <p className="font-medium">Fail-closed startup and issuance posture</p>
             <p className="mt-1 text-muted-foreground">
               Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.
@@ -375,7 +373,7 @@ export function Protocols() {
 
       <section aria-labelledby="mdm-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="mdm-heading" className="text-lg font-semibold">
+          <h2 id="mdm-heading" className="text-title font-semibold">
             Intune / MDM enrollment
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -383,7 +381,7 @@ export function Protocols() {
           </p>
         </div>
         <UnavailableState title="MDM gate is library-only">
-          `BACKEND-MDM` must serve Intune/MDM profile state, challenge rotation, and enrollment failure reads. `BACKEND-PROTOCOL-STATUS` must also report SCEP enabled-state before this page can claim an MDM flow is active.
+          Intune/MDM profile state, challenge rotation, and enrollment failures run in the library/API today — console management is coming soon. Live SCEP enabled-state also isn't surfaced here yet, so this page can't claim an MDM flow is active.
         </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
           <FixtureTable
@@ -391,7 +389,7 @@ export function Protocols() {
             caption="MDM SCEP challenge fixtures"
             rows={mdmFixtures}
           />
-          <div className="rounded-md border border-border p-3 text-sm">
+          <div className="ui-panel p-3 text-sm">
             <p className="font-medium">Intune profile guidance</p>
             <p className="mt-1 text-muted-foreground">
               Intune should point its SCEP profile at `/scep`, include the tenant binding in the deployment profile, and require challenge validation before device certificates are issued.
@@ -407,36 +405,36 @@ export function Protocols() {
       <section aria-labelledby="ari-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="ari-heading" className="text-lg font-semibold">
+            <h2 id="ari-heading" className="text-title font-semibold">
               ACME Renewal Information (ARI)
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               ARI tells ACME clients when to renew and how to pace retries. This console only renders the safe model until ACME enabled-state and durable ARI state are served.
             </p>
           </div>
-          <span className="inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+          <span className="inline-flex rounded-control border border-status-warning/30 bg-status-warning/10 px-2 py-1 text-caption font-medium text-status-warning">
             ACME enabled state unknown to console
           </span>
         </div>
         <UnavailableState title="ARI live renewal windows are not served yet">
-          Disabled in console until `BACKEND-PROTOCOL-STATUS` reports ACME enabled and a served ARI read exposes durable renewal guidance.
+          Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[48rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">ACME ARI disclosure model</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Signal</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Console posture</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Backend gate</th>
+              <tr>
+                <th scope="col">Signal</th>
+                <th scope="col">Console posture</th>
+                <th scope="col">Backend gate</th>
               </tr>
             </thead>
             <tbody>
               {ariSignals.map((row) => (
-                <tr key={row.signal} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.signal}</td>
-                  <td className="py-2 pr-4">{row.current}</td>
-                  <td className="py-2 pr-3">{row.gate}</td>
+                <tr key={row.signal} className="align-top">
+                  <td className="font-medium">{row.signal}</td>
+                  <td>{row.current}</td>
+                  <td>{row.gate}</td>
                 </tr>
               ))}
             </tbody>
@@ -446,7 +444,7 @@ export function Protocols() {
 
       <section aria-labelledby="dns-validation-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="dns-validation-heading" className="text-lg font-semibold">
+          <h2 id="dns-validation-heading" className="text-title font-semibold">
             ACME DNS validation
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -454,27 +452,27 @@ export function Protocols() {
           </p>
         </div>
 
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[58rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">DNS provider and plugin disclosure</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Surface</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Reference</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Guardrail</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Console status</th>
+              <tr>
+                <th scope="col">Surface</th>
+                <th scope="col">Reference</th>
+                <th scope="col">Guardrail</th>
+                <th scope="col">Console status</th>
               </tr>
             </thead>
             <tbody>
               {dnsProviderDisclosures.map((row) => (
-                <tr key={row.label} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4">
+                <tr key={row.label} className="align-top">
+                  <td>
                     <p className="font-medium">{row.label}</p>
-                    <p className="text-xs text-muted-foreground">{row.feature}</p>
+                    <p className="text-caption text-muted-foreground">{row.feature}</p>
                   </td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.reference}</td>
-                  <td className="py-2 pr-4">{row.posture}</td>
-                  <td className="py-2 pr-3">{row.status}</td>
+                  <td className="font-mono text-xs">{row.reference}</td>
+                  <td>{row.posture}</td>
+                  <td>{row.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -500,47 +498,47 @@ export function Protocols() {
         </div>
 
         <UnavailableState title="DNS validation controls are protocol-status gated">
-          `BACKEND-PROTOCOL-STATUS` must serve ACME enabled-state, DNS provider health, challenge history, and preflight results before this console can run DNS checks. Wildcard issuance requires explicit operator acknowledgement, DNS-01 only, profile opt-in, and blast-radius review.
+          Live ACME status, DNS provider health, challenge history, and preflight results aren't surfaced in the console yet, so it can't run DNS checks. Wildcard issuance requires explicit operator acknowledgement, DNS-01 only, profile opt-in, and blast-radius review.
         </UnavailableState>
       </section>
 
       <section aria-labelledby="protocol-table-heading">
-        <h2 id="protocol-table-heading" className="mb-3 text-lg font-semibold">
+        <h2 id="protocol-table-heading" className="mb-3 text-title font-semibold">
           Endpoint register
         </h2>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[56rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">Served-gated enrollment protocol endpoints</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Protocol</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Public route</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Tenant binding</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Auth and profile gate</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Console status</th>
+              <tr>
+                <th scope="col">Protocol</th>
+                <th scope="col">Public route</th>
+                <th scope="col">Tenant binding</th>
+                <th scope="col">Auth and profile gate</th>
+                <th scope="col">Console status</th>
               </tr>
             </thead>
             <tbody>
               {protocolSurfaces.map((protocol) => (
-                <tr key={protocol.id} className="border-b border-border align-top">
-                  <td className="py-3 pl-3 pr-4">
+                <tr key={protocol.id} className="align-top">
+                  <td>
                     <p className="font-medium">{protocol.name}</p>
-                    <p className="text-xs text-muted-foreground">{protocol.feature}</p>
+                    <p className="text-caption text-muted-foreground">{protocol.feature}</p>
                   </td>
-                  <td className="py-3 pr-4 font-mono text-xs">{protocol.route}</td>
-                  <td className="py-3 pr-4">
+                  <td className="font-mono text-xs">{protocol.route}</td>
+                  <td>
                     <ul className="grid gap-1">
                       {protocol.env.map((env) => (
                         <li key={env} className="font-mono text-xs">{env}</li>
                       ))}
                     </ul>
                   </td>
-                  <td className="py-3 pr-4">
+                  <td>
                     <p>{protocol.auth}</p>
                     <p className="mt-1 text-muted-foreground">{protocol.profile}</p>
                   </td>
-                  <td className="py-3 pr-3">
-                    <span className="inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+                  <td>
+                    <span className="inline-flex rounded-control border border-status-warning/30 bg-status-warning/10 px-2 py-1 text-caption font-medium text-status-warning">
                       Status unknown to console
                     </span>
                   </td>
@@ -552,7 +550,7 @@ export function Protocols() {
       </section>
 
       <section aria-labelledby="client-setup-heading" className="grid gap-4">
-        <h2 id="client-setup-heading" className="text-lg font-semibold">
+        <h2 id="client-setup-heading" className="text-title font-semibold">
           Client setup
         </h2>
         {protocolSurfaces.map((protocol) => (
@@ -568,7 +566,7 @@ export function Protocols() {
                 {protocol.snippets.map((snippet) => {
                   const copiedKey = `${protocol.id}:${snippet.label}`;
                   return (
-                    <div key={snippet.label} className="rounded-md border border-border p-3">
+                    <div key={snippet.label} className="ui-panel p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-medium">{snippet.label}</p>
                         <Button
@@ -592,8 +590,8 @@ export function Protocols() {
                 <UnavailableState title={`${protocol.deferredRead} not served yet`}>
                   {protocol.diagnostics} This remains blocked until a served admin/status read exists; the page does not invent order, challenge, or transcript data.
                 </UnavailableState>
-                <p className="rounded-md border border-border p-3 text-sm text-muted-foreground">
-                  Live tenant binding and endpoint health also need `BACKEND-PROTOCOL-STATUS`.
+                <p className="ui-panel p-3 text-sm text-muted-foreground">
+                  Live tenant binding and endpoint health also aren't surfaced in the console yet.
                 </p>
               </div>
             </div>
@@ -615,25 +613,25 @@ function FixtureTable({
 }) {
   return (
     <section aria-labelledby={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="grid gap-2">
-      <h3 id={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="text-base font-semibold">
+      <h3 id={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="text-title font-semibold">
         {title}
       </h3>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full min-w-[24rem] text-left text-sm">
+      <div className="ui-panel overflow-x-auto">
+        <table className="ui-table min-w-[24rem]">
           <caption className="sr-only">{caption}</caption>
           <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th scope="col" className="py-2 pl-3 pr-4 font-medium">Scenario</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Record</th>
-              <th scope="col" className="py-2 pr-3 font-medium">Preview result</th>
+            <tr>
+              <th scope="col">Scenario</th>
+              <th scope="col">Record</th>
+              <th scope="col">Preview result</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.scenario} className="border-b border-border align-top">
-                <td className="py-2 pl-3 pr-4 font-medium">{row.scenario}</td>
-                <td className="py-2 pr-4 font-mono text-xs">{row.record}</td>
-                <td className="py-2 pr-3">{row.result}</td>
+              <tr key={row.scenario} className="align-top">
+                <td className="font-medium">{row.scenario}</td>
+                <td className="font-mono text-xs">{row.record}</td>
+                <td>{row.result}</td>
               </tr>
             ))}
           </tbody>

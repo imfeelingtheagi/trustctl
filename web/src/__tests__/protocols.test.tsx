@@ -34,7 +34,8 @@ describe("served-gated protocol surface", () => {
     expect(screen.getAllByText("GET /directory + POST /acme/...").length).toBeGreaterThan(0);
     expect(screen.getByText("TRSTCTL_PROTOCOLS_ACME_ENABLED")).toBeInTheDocument();
     expect(screen.getByText("TRSTCTL_PROTOCOLS_ACME_TENANT_ID")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-PROTOCOL-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Live enabled-state is not served yet")).toBeInTheDocument();
+    expect(screen.getAllByText(/isn't surfaced in the console yet/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/protocol servers themselves are served-gated and default off/i)).toBeInTheDocument();
     expect(screen.getByText(/issuance refuses requests when no issuing CA\/profile/i)).toBeInTheDocument();
     expect(screen.getAllByText("Status unknown to console").length).toBeGreaterThanOrEqual(4);
@@ -104,7 +105,7 @@ describe("served-gated protocol surface", () => {
 
     expect(screen.getByRole("heading", { name: "ACME Renewal Information (ARI)" })).toBeInTheDocument();
     expect(screen.getByText("ACME enabled state unknown to console")).toBeInTheDocument();
-    expect(screen.getByText(/Disabled in console until BACKEND-PROTOCOL-STATUS reports ACME enabled/i)).toBeInTheDocument();
+    expect(screen.getByText(/Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance/i)).toBeInTheDocument();
     expect(screen.getByText(/ARI recommendations must survive process restart/i)).toBeInTheDocument();
     expect(screen.getByText(/client renewal windows and Retry-After guidance/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();
@@ -146,8 +147,9 @@ describe("served-gated protocol surface", () => {
 
     expect(screen.getByRole("heading", { name: "Intune / MDM enrollment" })).toBeInTheDocument();
     expect(screen.getByText(/conditional on SCEP being served and enabled/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-MDM/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/BACKEND-PROTOCOL-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("MDM gate is library-only")).toBeInTheDocument();
+    expect(screen.getByText(/run in the library\/API today — console management is coming soon/i)).toBeInTheDocument();
+    expect(screen.getByText(/Live SCEP enabled-state also isn't surfaced here yet/i)).toBeInTheDocument();
     expect(screen.getByText("challenge-required")).toBeInTheDocument();
     expect(screen.getByText("challenge-missing")).toBeInTheDocument();
     expect(screen.getByText("scep-disabled")).toBeInTheDocument();

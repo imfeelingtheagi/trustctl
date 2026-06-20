@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileKey2, KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { api, ApiError, type Issuer } from "@/lib/api";
@@ -80,30 +81,27 @@ export function CAHierarchy() {
 
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 id="ca-heading" className="text-2xl font-semibold">
-            CA hierarchy
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Issuers are visible through the served API. Root, intermediate, rotation, cross-sign, and HSM/KMS lifecycle workflows remain library-tier and require purpose-bound m-of-n ceremonies before they can be exposed safely.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        titleId="ca-heading"
+        title="CA hierarchy"
+        description="Issuers are visible through the served API. Root, intermediate, rotation, cross-sign, and HSM/KMS lifecycle workflows remain library-tier and require purpose-bound m-of-n ceremonies before they can be exposed safely."
+        actions={
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+            Refresh
+          </Button>
+        }
+      />
 
       <UnavailableState title="CA hierarchy ceremony API not served yet">
-        `BACKEND-CA-HIERARCHY` must serve ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests before the GUI can operate hierarchy changes. This page renders no create-root, rotate-root, or ceremony execution controls.
+        Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are available via the API and CLI today; console management is coming soon. This page renders no create-root, rotate-root, or ceremony execution controls.
       </UnavailableState>
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="issuer-heading" className="text-lg font-semibold">
+            <h2 id="issuer-heading" className="text-title font-semibold">
               Served issuer visibility
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -125,7 +123,7 @@ export function CAHierarchy() {
         <div className="flex items-start gap-3">
           <FileKey2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="ceremony-heading" className="text-lg font-semibold">
+            <h2 id="ceremony-heading" className="text-title font-semibold">
               m-of-n key ceremony model
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -133,25 +131,25 @@ export function CAHierarchy() {
             </p>
           </div>
         </div>
-        <a className="text-sm font-medium text-primary underline" href="/docs/runbooks/key-ceremony.md">
+        <a className="text-sm font-medium text-brand-accent underline" href="/docs/runbooks/key-ceremony.md">
           Key ceremony runbook
         </a>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[48rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">CA ceremony purpose model</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Operation</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Purpose string</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Guardrail</th>
+              <tr>
+                <th scope="col">Operation</th>
+                <th scope="col">Purpose string</th>
+                <th scope="col">Guardrail</th>
               </tr>
             </thead>
             <tbody>
               {ceremonySteps.map((step) => (
-                <tr key={step.operation} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{step.operation}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{step.purpose}</td>
-                  <td className="py-2 pr-3">{step.guardrail}</td>
+                <tr key={step.operation} className="align-top">
+                  <td className="font-medium">{step.operation}</td>
+                  <td className="font-mono text-xs">{step.purpose}</td>
+                  <td>{step.guardrail}</td>
                 </tr>
               ))}
             </tbody>
@@ -166,7 +164,7 @@ export function CAHierarchy() {
         <div className="flex items-start gap-3">
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="custody-heading" className="text-lg font-semibold">
+            <h2 id="custody-heading" className="text-title font-semibold">
               Key custody and HSM/KMS
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -174,31 +172,31 @@ export function CAHierarchy() {
             </p>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[48rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[48rem]">
             <caption className="sr-only">Key custody metadata preview</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Backend</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Public handle</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Purpose</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Serving status</th>
+              <tr>
+                <th scope="col">Backend</th>
+                <th scope="col">Public handle</th>
+                <th scope="col">Purpose</th>
+                <th scope="col">Serving status</th>
               </tr>
             </thead>
             <tbody>
               {custodyRows.map((row) => (
-                <tr key={row.backend} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.backend}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.handle}</td>
-                  <td className="py-2 pr-4">{row.purpose}</td>
-                  <td className="py-2 pr-3">{row.status}</td>
+                <tr key={row.backend} className="align-top">
+                  <td className="font-medium">{row.backend}</td>
+                  <td className="font-mono text-xs">{row.handle}</td>
+                  <td>{row.purpose}</td>
+                  <td>{row.status}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <UnavailableState title="HSM/KMS lifecycle API not served yet">
-          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain library-tier behind the AN-3 crypto boundary. `BACKEND-CA-HIERARCHY` is the GUI blocker for this custody workflow.
+          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary and are available via the API and CLI today; console management for this custody workflow is coming soon.
         </UnavailableState>
       </section>
     </section>
@@ -207,29 +205,29 @@ export function CAHierarchy() {
 
 function IssuerTable({ issuers }: { issuers: Issuer[] }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[52rem] text-left text-sm">
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[52rem]">
         <caption className="sr-only">Served issuer list</caption>
         <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th scope="col" className="py-2 pl-3 pr-4 font-medium">Name</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Internal</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Chain</th>
-            <th scope="col" className="py-2 pr-4 font-medium">Public key</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Certificates</th>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Kind</th>
+            <th scope="col">Internal</th>
+            <th scope="col">Chain</th>
+            <th scope="col">Public key</th>
+            <th scope="col">Certificates</th>
           </tr>
         </thead>
         <tbody>
           {issuers.map((issuer) => (
-            <tr key={issuer.id} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{issuer.name}</td>
-              <td className="py-2 pr-4">{issuer.kind}</td>
-              <td className="py-2 pr-4">{issuer.internal ? "internal" : "external"}</td>
-              <td className="py-2 pr-4">{issuer.chain?.length ? issuer.chain.join(" -> ") : "-"}</td>
-              <td className="max-w-sm break-all py-2 pr-4 font-mono text-xs">{issuer.public_key || "-"}</td>
-              <td className="py-2 pr-3">
-                <a className="text-primary underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
+            <tr key={issuer.id} className="align-top">
+              <td className="font-medium">{issuer.name}</td>
+              <td>{issuer.kind}</td>
+              <td>{issuer.internal ? "internal" : "external"}</td>
+              <td>{issuer.chain?.length ? issuer.chain.join(" -> ") : "-"}</td>
+              <td className="max-w-sm break-all font-mono text-xs">{issuer.public_key || "-"}</td>
+              <td>
+                <a className="text-brand-accent underline" href={`/certificates?issuer=${encodeURIComponent(issuer.id)}`}>
                   Certificates for {issuer.name}
                 </a>
               </td>

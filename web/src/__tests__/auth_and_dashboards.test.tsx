@@ -80,13 +80,9 @@ describe("auth + dashboards", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
-  it("shows the action-first dashboard once authenticated", async () => {
-    const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  it("shows the dashboard once authenticated", async () => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     apiMock.certificates.mockResolvedValue([{ id: "c1", tenant_id: "t1", subject: "CN=svc", status: "active", fingerprint: "fp1" }]);
-    apiMock.certificatePage.mockResolvedValue({
-      items: [{ id: "c1", tenant_id: "t1", subject: "CN=svc", status: "active", fingerprint: "fp1", not_after: soon }],
-    });
     apiMock.identities.mockResolvedValue([
       { id: "req-1", name: "svc-approval", kind: "x509_certificate", status: "requested" },
       { id: "ret-1", name: "svc-retired", kind: "x509_certificate", status: "retired" },
@@ -95,61 +91,33 @@ describe("auth + dashboards", () => {
       { credential_id: "c1", subject: "CN=svc", kind: "certificate", score: 92, exposure: 2, owner_active: false },
       { credential_id: "c2", subject: "CN=worker", kind: "certificate", score: 74, exposure: 1, owner_active: true },
     ]);
-    apiMock.auditEvents.mockResolvedValue([
-      { sequence: 1, type: "identity.issued", tenant_id: "t1", time: "2026-06-18T12:00:00Z" },
-      { sequence: 2, type: "identity.renewed", tenant_id: "t1", time: "2026-06-18T13:00:00Z" },
-      { sequence: 3, type: "identity.revoked", tenant_id: "t1", time: "2026-06-18T14:00:00Z" },
-    ]);
 
     renderAt("/");
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: /Overview/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument());
     expect(screen.getByText("u@example.test")).toBeInTheDocument(); // the session principal
-    const triage = await screen.findByRole("region", { name: /Operator triage/i });
-    const quickActions = screen.getByRole("region", { name: "Quick actions" });
 
-    expect(within(quickActions).getByRole("link", { name: "Issue or request credential" })).toHaveAttribute("href", "/request");
-    expect(within(quickActions).getByRole("link", { name: "Open approvals" })).toHaveAttribute("href", "/approvals");
-    expect(within(quickActions).getByRole("link", { name: "Export audit evidence" })).toHaveAttribute("href", "/audit");
-    expect(within(triage).queryByText(/GUI coverage/i)).not.toBeInTheDocument();
-    expect(within(triage).getByRole("link", { name: /Review 1 expiring soon certificate/i })).toHaveAttribute(
-      "href",
-      "/certificates?expiry=30d",
-    );
-    expect(within(triage).getByRole("link", { name: /Review 1 pending approval/i })).toHaveAttribute(
-      "href",
-      "/approvals",
-    );
-    expect(within(triage).getByRole("link", { name: /Review 2 high-risk credentials/i })).toHaveAttribute(
-      "href",
-      "/risk?sort=score",
-    );
-    expect(within(triage).getByRole("link", { name: /Review 1 orphaned credential/i })).toHaveAttribute(
-      "href",
-      "/risk?q=orphaned",
-    );
-    await waitFor(() =>
-      expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 50, expiringBefore: expect.any(String) }),
-    );
+    const dash = screen.getByRole("region", { name: "Dashboard" });
+    expect(within(dash).getByRole("link", { name: /Issue credential/i })).toHaveAttribute("href", "/request");
+    expect(within(dash).getByText(/Identities \(NHI\)/)).toBeInTheDocument();
+    expect(within(dash).getByText(/High-risk/)).toBeInTheDocument();
+    expect(within(dash).getByText(/Issuance trend/)).toBeInTheDocument();
+    expect(within(dash).getByText(/Algorithm mix/)).toBeInTheDocument();
+    expect(within(dash).getByText(/Rotate first/)).toBeInTheDocument();
+    // Rotate-first uses served risk data (highest score first).
+    expect(await within(dash).findByText("CN=svc")).toBeInTheDocument();
     expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" });
-    expect(within(triage).getByText("Delivery status not served")).toBeInTheDocument();
-    expect(within(triage).getByText(/FE-PTR-OUTBOX/)).toBeInTheDocument();
-    expect(within(triage).queryByText(/failed deliveries: \d/i)).not.toBeInTheDocument();
-    expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 200 });
-    const trend = screen.getByRole("region", { name: "Lifecycle trend" });
-    expect(within(trend).getByText(/Issued 1, renewed 1, revoked 1/)).toBeInTheDocument();
-    expect(within(trend).getByRole("img", { name: /Lifecycle trend chart: issued 1, renewed 1, revoked 1/i })).toBeInTheDocument();
   });
 
-  it("renders an empty lifecycle trend from an empty served audit window", async () => {
+  it("falls back to demo data when the backend serves nothing", async () => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
-    apiMock.auditEvents.mockResolvedValue([]);
+    // certificates/identities/risk default to [] in beforeEach -> demo fallback.
 
     renderAt("/");
 
-    const trend = await screen.findByRole("region", { name: "Lifecycle trend" });
-    expect(within(trend).getByText("No lifecycle events in the served audit window.")).toBeInTheDocument();
-    expect(within(trend).getByRole("img", { name: /Lifecycle trend chart: issued 0, renewed 0, revoked 0/i })).toBeInTheDocument();
+    const dash = await screen.findByRole("region", { name: "Dashboard" });
+    expect(within(dash).getByText(/Issuance trend/)).toBeInTheDocument();
+    expect(await within(dash).findByText("legacy-gw.acme.io")).toBeInTheDocument();
   });
 
   it("renders the certificate inventory in a table", async () => {

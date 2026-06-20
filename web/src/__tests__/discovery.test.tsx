@@ -86,8 +86,8 @@ describe("discovery and inventory surface", () => {
 
     expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
     expect(screen.getByText("Discovery scan API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-DISCOVERY-SCAN/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/BACKEND-SECRETSCAN/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Discovery scanning is available via the agent and library today/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Leaked-token scanner findings are also coming soon/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Open certificate ingest" })).toHaveAttribute("href", "/certificates");
     expect(screen.getByRole("link", { name: "Open agent enrollment" })).toHaveAttribute("href", "/agents");
     expect(screen.getByText(/Cloud credentials must be sealed references/)).toBeInTheDocument();

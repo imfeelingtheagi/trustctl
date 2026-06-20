@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Bell, FileWarning, Radar, ShieldAlert } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 
@@ -9,7 +11,7 @@ const ctRows = [
     domain: "example.com",
     checkpoint: "RFC 6962 log index + STH",
     signal: "Unexpected SAN outside approved issuer profile",
-    status: "Would create an outbox-backed alert when BACKEND-CT is served",
+    status: "Would create an outbox-backed alert once console CT monitoring ships",
   },
   {
     domain: "api.example.com",
@@ -109,24 +111,21 @@ const pqcMigrationRows = [
 export function Posture() {
   return (
     <section aria-labelledby="posture-heading" className="grid gap-6">
-      <div>
-        <h1 id="posture-heading" className="text-2xl font-semibold">
-          Posture
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          CT monitoring, drift detection, and CBOM scanning are library-complete today. This page is a technical preview of the evidence model, not a live scanner.
-        </p>
-      </div>
+      <PageHeader
+        titleId="posture-heading"
+        title="Posture"
+        description="CT monitoring, drift detection, and CBOM scanning are library-complete today. This page is a technical preview of the evidence model, not a live scanner."
+      />
 
       <UnavailableState title="Posture collector APIs not served yet">
-        `BACKEND-CT`, `BACKEND-DRIFT`, and `BACKEND-CBOM` must expose watchlists, scan triggers, findings, and cited evidence before the GUI can operate these collectors.
+        CT monitoring, drift detection, and CBOM scanning run in the agent and library today. Console management of watchlists, scan triggers, findings, and cited evidence is coming soon.
       </UnavailableState>
 
       <section aria-labelledby="ct-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">
           <Radar className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="ct-heading" className="text-lg font-semibold">
+            <h2 id="ct-heading" className="text-title font-semibold">
               Certificate Transparency monitoring
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -135,15 +134,15 @@ export function Posture() {
           </div>
         </div>
         <UnavailableState title="CT findings API not served yet">
-          `BACKEND-CT` must serve domain watchlists, log checkpoints, poll state, and unexpected-certificate findings. There is no live Add watchlist or Poll CT control here.
+          CT monitoring is available via the agent and library today; console management is coming soon. Domain watchlists, log checkpoints, poll state, and unexpected-certificate findings are not surfaced here, and there is no live Add watchlist or Poll CT control.
         </UnavailableState>
         <PreviewTable title="Non-interactive CT triage preview" headers={["Domain", "Checkpoint", "Suspicious certificate", "Triage status"]}>
           {ctRows.map((row) => (
-            <tr key={row.domain} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{row.domain}</td>
-              <td className="py-2 pr-4">{row.checkpoint}</td>
-              <td className="py-2 pr-4">{row.signal}</td>
-              <td className="py-2 pr-3">{row.status}</td>
+            <tr key={row.domain} className="align-top">
+              <td className="font-medium">{row.domain}</td>
+              <td>{row.checkpoint}</td>
+              <td>{row.signal}</td>
+              <td>{row.status}</td>
             </tr>
           ))}
         </PreviewTable>
@@ -153,7 +152,7 @@ export function Posture() {
         <div className="flex items-start gap-3">
           <FileWarning className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="drift-heading" className="text-lg font-semibold">
+            <h2 id="drift-heading" className="text-title font-semibold">
               Drift detection
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -162,20 +161,22 @@ export function Posture() {
           </div>
         </div>
         <UnavailableState title="Drift findings API not served yet">
-          `BACKEND-DRIFT` must serve per-agent findings, timestamps, severity, and remediation eligibility. Preview remediation buttons are disabled because no served remediation workflow exists.
+          Drift detection runs in the agent and library today; console management is coming soon. Per-agent findings, timestamps, severity, and remediation eligibility are not surfaced here, and preview remediation buttons are disabled because no served remediation workflow exists.
         </UnavailableState>
         <PreviewTable title="Non-interactive drift remediation preview" headers={["Finding", "Severity", "Evidence", "Remediation"]}>
           {driftRows.map((row) => (
-            <tr key={row.id} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{row.type}</td>
-              <td className="py-2 pr-4">{row.severity}</td>
-              <td className="py-2 pr-4">{row.evidence}</td>
-              <td className="py-2 pr-3">
+            <tr key={row.id} className="align-top">
+              <td className="font-medium">{row.type}</td>
+              <td>
+                <StatusBadge value={row.severity} vocabulary="risk" />
+              </td>
+              <td>{row.evidence}</td>
+              <td>
                 <Button type="button" size="sm" variant="outline" disabled aria-describedby={`${row.id}-blocked`} aria-label={`Remediation blocked for ${row.type.toLowerCase()}`}>
                   Remediation blocked
                 </Button>
                 <p id={`${row.id}-blocked`} className="mt-1 text-xs text-muted-foreground">
-                  {row.remediation}; waits for `BACKEND-DRIFT`.
+                  {row.remediation}; console remediation is coming soon.
                 </p>
               </td>
             </tr>
@@ -187,7 +188,7 @@ export function Posture() {
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="cbom-heading" className="text-lg font-semibold">
+            <h2 id="cbom-heading" className="text-title font-semibold">
               CBOM and cryptographic observability
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -196,15 +197,15 @@ export function Posture() {
           </div>
         </div>
         <UnavailableState title="CBOM findings API not served yet">
-          `BACKEND-CBOM` must serve scan triggers, asset-level findings, graph links, and posture timestamps. No Run CBOM scan control is rendered until then.
+          CBOM scanning is available via the agent and library today; console management is coming soon. Scan triggers, asset-level findings, graph links, and posture timestamps are not surfaced here, so no Run CBOM scan control is rendered.
         </UnavailableState>
         <PreviewTable title="Non-interactive CBOM preview" headers={["Asset", "Algorithms", "Posture", "Next evidence"]}>
           {cbomRows.map((row) => (
-            <tr key={row.asset} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{row.asset}</td>
-              <td className="py-2 pr-4">{row.algorithms}</td>
-              <td className="py-2 pr-4">{row.posture}</td>
-              <td className="py-2 pr-3">
+            <tr key={row.asset} className="align-top">
+              <td className="font-medium">{row.asset}</td>
+              <td>{row.algorithms}</td>
+              <td>{row.posture}</td>
+              <td>
                 {row.posture === "Weak crypto preview" ? (
                   <a className="text-primary underline" href="/risk">
                     {row.next}
@@ -225,7 +226,7 @@ export function Posture() {
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="crypto-agility-heading" className="text-lg font-semibold">
+            <h2 id="crypto-agility-heading" className="text-title font-semibold">
               Crypto-agility and PQC readiness
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -234,15 +235,15 @@ export function Posture() {
           </div>
         </div>
         <UnavailableState title="Algorithm inventory not served yet">
-          `BACKEND-CBOM` must serve asset-level algorithm inventory, allowed/disallowed state, PQC readiness, hybrid policy, and migration blockers before this page can operate crypto-agility changes.
+          CBOM algorithm inventory is available via the agent and library today; console management is coming soon. Asset-level inventory, allowed/disallowed state, PQC readiness, hybrid policy, and migration blockers are not surfaced here, so this page cannot operate crypto-agility changes.
         </UnavailableState>
         <PreviewTable title="Crypto-agility readiness fixtures" headers={["Asset", "Inventory fixture", "Readiness", "Blocker"]}>
           {cryptoAgilityRows.map((row) => (
-            <tr key={row.asset} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{row.asset}</td>
-              <td className="py-2 pr-4">{row.inventory}</td>
-              <td className="py-2 pr-4">{row.readiness}</td>
-              <td className="py-2 pr-3">{row.blocker}</td>
+            <tr key={row.asset} className="align-top">
+              <td className="font-medium">{row.asset}</td>
+              <td>{row.inventory}</td>
+              <td>{row.readiness}</td>
+              <td>{row.blocker}</td>
             </tr>
           ))}
         </PreviewTable>
@@ -252,7 +253,7 @@ export function Posture() {
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h2 id="pqc-migration-heading" className="text-lg font-semibold">
+            <h2 id="pqc-migration-heading" className="text-title font-semibold">
               PQC migration orchestration
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -261,24 +262,24 @@ export function Posture() {
           </div>
         </div>
         <UnavailableState title="PQC migration orchestration is library-only">
-          `BACKEND-PQC-MIGRATION` must serve candidate assets, dry-run results, migration waves, rollback, resume, and policy sign-off before this console can trigger migration work.
+          PQC migration orchestration is available via the library today; console management is coming soon. Candidate assets, dry-run results, migration waves, rollback, resume, and policy sign-off are not surfaced here, so this console cannot trigger migration work.
         </UnavailableState>
         <PreviewTable title="PQC migration plan fixture" headers={["Wave", "Action", "Rollback", "Sign-off"]}>
           {pqcMigrationRows.map((row) => (
-            <tr key={row.wave} className="border-b border-border align-top">
-              <td className="py-2 pl-3 pr-4 font-medium">{row.wave}</td>
-              <td className="py-2 pr-4">{row.action}</td>
-              <td className="py-2 pr-4">{row.rollback}</td>
-              <td className="py-2 pr-3">{row.signoff}</td>
+            <tr key={row.wave} className="align-top">
+              <td className="font-medium">{row.wave}</td>
+              <td>{row.action}</td>
+              <td>{row.rollback}</td>
+              <td>{row.signoff}</td>
             </tr>
           ))}
         </PreviewTable>
       </section>
 
-      <section aria-labelledby="alert-heading" className="flex items-start gap-3 rounded-md border border-border p-3 text-sm">
+      <section aria-labelledby="alert-heading" className="ui-panel flex items-start gap-3 p-comfortable text-sm">
         <Bell className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
-          <h2 id="alert-heading" className="font-semibold">
+          <h2 id="alert-heading" className="text-title font-semibold">
             Alert routing is not configured here
           </h2>
           <p className="mt-1 text-muted-foreground">
@@ -300,13 +301,13 @@ function PreviewTable({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[52rem] text-left text-sm">
+    <div className="overflow-x-auto rounded-panel border border-border">
+      <table className="ui-table min-w-[52rem]">
         <caption className="sr-only">{title}</caption>
         <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            {headers.map((header, index) => (
-              <th key={header} scope="col" className={index === 0 ? "py-2 pl-3 pr-4 font-medium" : index === headers.length - 1 ? "py-2 pr-3 font-medium" : "py-2 pr-4 font-medium"}>
+          <tr>
+            {headers.map((header) => (
+              <th key={header} scope="col">
                 {header}
               </th>
             ))}

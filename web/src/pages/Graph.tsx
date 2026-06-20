@@ -19,6 +19,7 @@ import {
   graphNodeKindLabel,
   graphNodeKindStyle,
 } from "@/components/GraphView";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -157,9 +158,11 @@ export function Graph() {
 
   return (
     <section aria-labelledby="graph-heading">
-      <h1 id="graph-heading" className="mb-4 text-2xl font-semibold">
-        Graph
-      </h1>
+      <PageHeader
+        titleId="graph-heading"
+        title="Graph"
+        description="Tenant-scoped credential graph from the served API: explore nodes and edges, compute blast radius and reachability, and run read-only graph queries."
+      />
 
       {loading && <LoadingState>Loading graph...</LoadingState>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
@@ -217,8 +220,8 @@ export function Graph() {
             </div>
           )}
 
-          <section aria-labelledby="graph-controls" className="my-5 rounded-md border border-border p-4">
-            <h2 id="graph-controls" className="mb-3 text-sm font-semibold">
+          <section aria-labelledby="graph-controls" className="ui-panel my-5 p-comfortable">
+            <h2 id="graph-controls" className="mb-3 text-title font-semibold">
               Explore nodes
             </h2>
             <div className="grid gap-3 md:grid-cols-3">
@@ -287,61 +290,61 @@ export function Graph() {
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="space-y-5">
-              <table className="w-full text-left text-sm">
-            <caption className="sr-only">Credential graph nodes</caption>
-            <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pr-4 font-medium">Name</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
-                <th scope="col" className="py-2 pr-4 font-medium">ID</th>
-                <th scope="col" className="py-2 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredNodes.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-4 text-muted-foreground">No graph nodes match the current filters.</td>
-                </tr>
-              )}
-              {filteredNodes.map((node) => (
-                <tr key={node.id} className="border-b border-border">
-                  <td className="py-2 pr-4" data-testid="graph-node-name">{node.name || "-"}</td>
-                  <td className="py-2 pr-4">{node.kind}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{node.id}</td>
-                  <td className="py-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
-                      Select {node.name || node.id}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+              <table className="ui-table">
+                <caption className="sr-only">Credential graph nodes</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Kind</th>
+                    <th scope="col">ID</th>
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredNodes.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-muted-foreground">No graph nodes match the current filters.</td>
+                    </tr>
+                  )}
+                  {filteredNodes.map((node) => (
+                    <tr key={node.id}>
+                      <td data-testid="graph-node-name">{node.name || "-"}</td>
+                      <td>{node.kind}</td>
+                      <td className="font-mono text-xs">{node.id}</td>
+                      <td>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
+                          Select {node.name || node.id}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
 
               <section aria-labelledby="graph-edges-heading">
-                <h2 id="graph-edges-heading" className="mb-2 text-sm font-semibold">Edges</h2>
-                <table className="w-full text-left text-sm">
+                <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">Edges</h2>
+                <table className="ui-table">
                   <caption className="sr-only">Credential graph edges</caption>
                   <thead>
-                    <tr className="border-b border-border text-muted-foreground">
-                      <th scope="col" className="py-2 pr-4 font-medium">From</th>
-                      <th scope="col" className="py-2 pr-4 font-medium">Type</th>
-                      <th scope="col" className="py-2 pr-4 font-medium">To</th>
-                      <th scope="col" className="py-2 font-medium">Explanation</th>
+                    <tr>
+                      <th scope="col">From</th>
+                      <th scope="col">Type</th>
+                      <th scope="col">To</th>
+                      <th scope="col">Explanation</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.edges.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="py-4 text-muted-foreground">No graph edges returned.</td>
+                        <td colSpan={4} className="text-muted-foreground">No graph edges returned.</td>
                       </tr>
                     )}
                     {data.edges.map((edge) => (
-                      <tr key={`${edge.from}-${edge.type}-${edge.to}`} className="border-b border-border">
-                        <td className="py-2 pr-4">{nodeByID.get(edge.from)?.name ?? edge.from}</td>
-                        <td className="py-2 pr-4 font-mono text-xs">{edge.type}</td>
-                        <td className="py-2 pr-4">{nodeByID.get(edge.to)?.name ?? edge.to}</td>
-                        <td className="py-2 text-muted-foreground">{edgeExplanation(edge.type)}</td>
+                      <tr key={`${edge.from}-${edge.type}-${edge.to}`}>
+                        <td>{nodeByID.get(edge.from)?.name ?? edge.from}</td>
+                        <td className="font-mono text-xs">{edge.type}</td>
+                        <td>{nodeByID.get(edge.to)?.name ?? edge.to}</td>
+                        <td className="text-muted-foreground">{edgeExplanation(edge.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -355,8 +358,8 @@ export function Graph() {
           {impact && <ImpactPanel impact={impact} />}
           {reachable && <ReachablePanel reachable={reachable} />}
 
-          <section aria-labelledby="graph-query-heading" className="mt-6 rounded-md border border-border p-4">
-            <h2 id="graph-query-heading" className="text-sm font-semibold">
+          <section aria-labelledby="graph-query-heading" className="ui-panel mt-6 p-comfortable">
+            <h2 id="graph-query-heading" className="text-title font-semibold">
               Graph query
             </h2>
             <form
@@ -410,15 +413,15 @@ export function Graph() {
 function NodeDetail({ node }: { node: GraphNode | null }) {
   if (!node) {
     return (
-      <aside className="rounded-md border border-border p-4 text-sm text-muted-foreground">
+      <aside className="ui-panel p-comfortable text-sm text-muted-foreground">
         Select a graph node to inspect its attributes and drilldown links.
       </aside>
     );
   }
   const attrRows = Object.entries(node.attrs ?? {});
   return (
-    <aside aria-labelledby="graph-node-detail-heading" className="rounded-md border border-border p-4 text-sm">
-      <h2 id="graph-node-detail-heading" className="text-lg font-semibold">Node detail</h2>
+    <aside aria-labelledby="graph-node-detail-heading" className="ui-panel p-comfortable text-sm">
+      <h2 id="graph-node-detail-heading" className="text-title font-semibold">Node detail</h2>
       <dl className="mt-3 grid gap-2">
         <div>
           <dt className="font-medium text-muted-foreground">Name</dt>
@@ -471,8 +474,8 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
 
 function ImpactPanel({ impact }: { impact: GraphImpact }) {
   return (
-    <section aria-labelledby="blast-radius-heading" className="mt-6 rounded-md border border-border p-4">
-      <h2 id="blast-radius-heading" className="text-sm font-semibold">
+    <section aria-labelledby="blast-radius-heading" className="ui-panel mt-6 p-comfortable">
+      <h2 id="blast-radius-heading" className="text-title font-semibold">
         Blast-radius paths and by-kind summary
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
@@ -493,8 +496,8 @@ function ImpactPanel({ impact }: { impact: GraphImpact }) {
 
 function ReachablePanel({ reachable }: { reachable: GraphReachable }) {
   return (
-    <section aria-labelledby="reachable-heading" className="mt-6 rounded-md border border-border p-4">
-      <h2 id="reachable-heading" className="text-sm font-semibold">
+    <section aria-labelledby="reachable-heading" className="ui-panel mt-6 p-comfortable">
+      <h2 id="reachable-heading" className="text-title font-semibold">
         Reachable nodes
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">

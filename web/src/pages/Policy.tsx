@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
@@ -33,7 +34,7 @@ const notificationChannels = [
     reference: "secret://notify/slack/prod:****",
     events: "certificate.expiring, approval.requested",
     delivery: "duplicate-safe delivery needs outbox status",
-    status: "config and test delivery blocked on BACKEND-NOTIFY",
+    status: "config and test delivery are coming soon to the console",
   },
   {
     channel: "Microsoft Teams",
@@ -46,7 +47,7 @@ const notificationChannels = [
     channel: "Email",
     reference: "secret://notify/smtp/prod:****",
     events: "audit.export.ready, policy.denied",
-    delivery: "retry and bounce state need BACKEND-OUTBOX-STATUS",
+    delivery: "retry and bounce state are not shown in the console yet",
     status: "recipient list is not served",
   },
   {
@@ -88,7 +89,7 @@ const complianceRows = [
     framework: "PCI DSS",
     controls: "certificate inventory, key custody, audit evidence",
     state: "evidence-only",
-    caveat: "framework-mapped posture needs BACKEND-COMPLIANCE",
+    caveat: "framework-mapped posture is coming soon to the console",
   },
   {
     framework: "HIPAA",
@@ -137,18 +138,15 @@ export function Policy() {
 
   return (
     <section aria-labelledby="policy-heading" className="grid gap-6">
-      <div>
-        <h1 id="policy-heading" className="text-2xl font-semibold">
-          Policy
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Served issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted.
-        </p>
-      </div>
+      <PageHeader
+        titleId="policy-heading"
+        title="Policy"
+        description="Served issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted."
+      />
 
       <section aria-labelledby="policy-gate-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="policy-gate-heading" className="text-lg font-semibold">
+          <h2 id="policy-gate-heading" className="text-title font-semibold">
             Served enforcement path
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -156,21 +154,21 @@ export function Policy() {
           </p>
         </div>
         <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[54rem] text-left text-sm">
+          <table className="ui-table min-w-[54rem]">
             <caption className="sr-only">Policy decision outcomes</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Outcome</th>
-                <th scope="col" className="py-2 pr-4 font-medium">ELI5 technical meaning</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Audit evidence</th>
+              <tr>
+                <th scope="col">Outcome</th>
+                <th scope="col">ELI5 technical meaning</th>
+                <th scope="col">Audit evidence</th>
               </tr>
             </thead>
             <tbody>
               {policyOutcomes.map((outcome) => (
-                <tr key={outcome.state} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{outcome.state}</td>
-                  <td className="py-2 pr-4">{outcome.meaning}</td>
-                  <td className="py-2 pr-3 font-mono text-xs">{outcome.evidence}</td>
+                <tr key={outcome.state} className="align-top">
+                  <td className="font-medium">{outcome.state}</td>
+                  <td>{outcome.meaning}</td>
+                  <td className="font-mono text-xs">{outcome.evidence}</td>
                 </tr>
               ))}
             </tbody>
@@ -183,7 +181,7 @@ export function Policy() {
 
       <section aria-labelledby="notifications-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="notifications-heading" className="text-lg font-semibold">
+          <h2 id="notifications-heading" className="text-title font-semibold">
             Notification integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -191,34 +189,34 @@ export function Policy() {
           </p>
         </div>
         <UnavailableState title="Notification channels are library-only">
-          `BACKEND-NOTIFY` and `BACKEND-OUTBOX-STATUS` must serve channel config reads, test delivery, retry state, and delivery receipts before this page can operate notification integrations.
+          Notification channels are available via the API and CLI today; console management is coming soon. Channel config reads, test delivery, retry state, and delivery receipts are not shown in the console yet, so this page cannot operate notification integrations.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[70rem] text-left text-sm">
+          <table className="ui-table min-w-[70rem]">
             <caption className="sr-only">Notification channel fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Channel</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Secret reference</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Events</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Delivery posture</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Status</th>
+              <tr>
+                <th scope="col">Channel</th>
+                <th scope="col">Secret reference</th>
+                <th scope="col">Events</th>
+                <th scope="col">Delivery posture</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
               {notificationChannels.map((row) => (
-                <tr key={row.channel} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.channel}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.reference}</td>
-                  <td className="py-2 pr-4">{row.events}</td>
-                  <td className="py-2 pr-4">{row.delivery}</td>
-                  <td className="py-2 pr-3">{row.status}</td>
+                <tr key={row.channel} className="align-top">
+                  <td className="font-medium">{row.channel}</td>
+                  <td className="font-mono text-xs">{row.reference}</td>
+                  <td>{row.events}</td>
+                  <td>{row.delivery}</td>
+                  <td>{row.status}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="rounded-md border border-border p-3 text-sm">
+        <div className="ui-panel p-comfortable text-sm">
           <p className="font-medium">Redacted failure fixtures</p>
           <ul className="mt-2 grid gap-1 text-muted-foreground">
             {notificationFailures.map((failure) => (
@@ -232,7 +230,7 @@ export function Policy() {
 
       <section aria-labelledby="compliance-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="compliance-heading" className="text-lg font-semibold">
+          <h2 id="compliance-heading" className="text-title font-semibold">
             Compliance posture and reports
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -258,26 +256,26 @@ export function Policy() {
           </p>
         )}
         <UnavailableState title="Framework-mapped compliance posture is not served yet">
-          `BACKEND-COMPLIANCE` must serve PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state. The signed audit export above is real evidence, not a compliance certificate.
+          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are available via the API and CLI today; console management is coming soon. The signed audit export above is real evidence, not a compliance certificate.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[62rem] text-left text-sm">
+          <table className="ui-table min-w-[62rem]">
             <caption className="sr-only">Compliance control mapping fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Framework</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Control evidence</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Control state</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Caveat</th>
+              <tr>
+                <th scope="col">Framework</th>
+                <th scope="col">Control evidence</th>
+                <th scope="col">Control state</th>
+                <th scope="col">Caveat</th>
               </tr>
             </thead>
             <tbody>
               {complianceRows.map((row) => (
-                <tr key={row.framework} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.framework}</td>
-                  <td className="py-2 pr-4">{row.controls}</td>
-                  <td className="py-2 pr-4">{row.state}</td>
-                  <td className="py-2 pr-3">{row.caveat}</td>
+                <tr key={row.framework} className="align-top">
+                  <td className="font-medium">{row.framework}</td>
+                  <td>{row.controls}</td>
+                  <td>{row.state}</td>
+                  <td>{row.caveat}</td>
                 </tr>
               ))}
             </tbody>
@@ -287,7 +285,7 @@ export function Policy() {
 
       <section aria-labelledby="policy-dry-run-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="policy-dry-run-heading" className="text-lg font-semibold">
+          <h2 id="policy-dry-run-heading" className="text-title font-semibold">
             Policy authoring and dry run
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -295,7 +293,7 @@ export function Policy() {
           </p>
         </div>
         <UnavailableState title="Policy authoring and dry-run API not served yet">
-          `BACKEND-POLICY-AUTHOR` must serve active policy read, candidate validation, dry-run input, allow/deny output, and trace rows before this page can expose an editor or evaluator. Until then, lifecycle mutations remain the real enforcement path.
+          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are available via the API and CLI today; console management is coming soon. Until then, lifecycle mutations remain the real enforcement path.
         </UnavailableState>
       </section>
     </section>

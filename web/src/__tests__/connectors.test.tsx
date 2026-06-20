@@ -34,7 +34,7 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText(/dry-run|test-deploy/i).length).toBeGreaterThan(0);
     expect(screen.getByText("acked")).toBeInTheDocument();
     expect(screen.getByText("held")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-CONNECTORS|BACKEND-OUTBOX-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Connector deployment runs in the outbox worker today/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /deploy|dry run|test deploy|rollback/i })).not.toBeInTheDocument();
   });

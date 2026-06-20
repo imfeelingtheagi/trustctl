@@ -18,7 +18,7 @@ describe("posture collector disclosures", () => {
     expect(screen.getByRole("heading", { name: "Posture" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
     expect(screen.getByText("CT findings API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-CT/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CT monitoring is available via the agent and library today/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Unexpected SAN outside approved issuer profile")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add watchlist|poll ct|start monitoring/i })).not.toBeInTheDocument();
   });
@@ -28,7 +28,7 @@ describe("posture collector disclosures", () => {
 
     expect(screen.getByRole("heading", { name: "Drift detection" })).toBeInTheDocument();
     expect(screen.getByText("Drift findings API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-DRIFT/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Drift detection runs in the agent and library today/i).length).toBeGreaterThan(0);
 
     for (const button of screen.getAllByRole("button", { name: /remediation blocked/i })) {
       expect(button).toBeDisabled();
@@ -42,7 +42,7 @@ describe("posture collector disclosures", () => {
 
     expect(screen.getByRole("heading", { name: "CBOM and cryptographic observability" })).toBeInTheDocument();
     expect(screen.getByText("CBOM findings API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-CBOM/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CBOM scanning is available via the agent and library today/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/RSA-2048, EC-256, and TLS 1.2/)).toBeInTheDocument();
     expect(screen.getByText(/3DES\/DES\/RC4\/NULL\/EXPORT\/MD5/)).toBeInTheDocument();
     expect(screen.getByText("ML-DSA, ML-KEM, SLH-DSA")).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe("posture collector disclosures", () => {
 
     expect(screen.getByRole("heading", { name: "Crypto-agility and PQC readiness" })).toBeInTheDocument();
     expect(screen.getByText("Algorithm inventory not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-CBOM/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CBOM algorithm inventory is available via the agent and library today/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Weak legacy edge")).toBeInTheDocument();
     expect(screen.getByText("PQC-ready workload")).toBeInTheDocument();
     expect(screen.getByText("ML-DSA / ML-KEM / SLH-DSA")).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("posture collector disclosures", () => {
 
     expect(screen.getByRole("heading", { name: "PQC migration orchestration" })).toBeInTheDocument();
     expect(screen.getByText("PQC migration orchestration is library-only")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-PQC-MIGRATION/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/PQC migration orchestration is available via the library today/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Wave 0: inventory")).toBeInTheDocument();
     expect(screen.getByText("Wave 1: hybrid canary")).toBeInTheDocument();
     expect(screen.getByText("Wave 2: workload rotation")).toBeInTheDocument();

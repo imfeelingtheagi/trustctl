@@ -218,8 +218,8 @@ describe("lifecycle actions from the UI", () => {
     const dialog = await screen.findByRole("dialog", { name: "Identity detail" });
     expect(within(dialog).getByText("Credential activity timeline")).toBeInTheDocument();
     expect(within(dialog).getByText("Delivery status not exposed yet")).toBeInTheDocument();
-    expect(within(dialog).getByText(/FE-PTR-OUTBOX/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/BACKEND-OUTBOX-STATUS/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/isn't shown in the console yet/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/No delivery status request is made/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/last_error/)).toBeInTheDocument();
     for (const state of ["Accepted", "Issuing", "Deploying", "Delivered / failed"]) {
       expect(within(dialog).getByText(state)).toBeInTheDocument();
@@ -412,7 +412,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText("Revocation publication")).toBeInTheDocument();
     expect(screen.getByText("/ocsp/{tenant}")).toBeInTheDocument();
     expect(screen.getByText("/crl/{tenant}")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-PROTOCOL-STATUS/)).toBeInTheDocument();
+    expect(screen.getByText(/Freshness, scheduler, and responder health aren't surfaced in the console yet/i)).toBeInTheDocument();
     expect(screen.getByText(/live propagation health is not served yet/i)).toBeInTheDocument();
   });
 
@@ -518,8 +518,8 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText("Alert before")).toBeInTheDocument();
     expect(screen.getByText("Dry run")).toBeInTheDocument();
     expect(screen.getByText("Rollback")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-LIFECYCLE-AUTOMATION/)).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-OUTBOX-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/aren't managed from the console yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/delivery status isn't shown here yet either/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /use manual lifecycle transitions/i })).toHaveAttribute(
       "href",
       "#manual-lifecycle-transitions",

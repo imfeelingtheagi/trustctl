@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,7 @@ export function Approvals() {
         id: "audit",
         header: "Evidence",
         cell: (row) => (
-          <Link className="text-primary underline" to={approvalAuditHref(row)}>
+          <Link className="text-brand-accent underline" to={approvalAuditHref(row)}>
             Audit trail
           </Link>
         ),
@@ -123,17 +124,14 @@ export function Approvals() {
   );
 
   return (
-    <section aria-labelledby="approvals-heading" className="space-y-5">
-      <div>
-        <h1 id="approvals-heading" className="text-2xl font-semibold">
-          Approvals
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Dual-control issue and revoke decisions for a distinct approver. The queue is built from served identities; quorum and requester details appear when identity attributes carry them.
-        </p>
-      </div>
+    <section aria-labelledby="approvals-heading" className="space-y-6">
+      <PageHeader
+        title="Approvals"
+        titleId="approvals-heading"
+        description="Dual-control issue and revoke decisions for a distinct approver. The queue is built from served identities; quorum and requester details appear when identity attributes carry them."
+      />
 
-      {notice && <p role="status" className="text-sm text-status-success">{notice}</p>}
+      {notice && <p role="status" className="text-body text-status-success">{notice}</p>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
       {error?.kind === "error" && <ErrorState title="Approvals unavailable">{error.message}</ErrorState>}
       {!identities && !error && <LoadingState>Loading approvals...</LoadingState>}

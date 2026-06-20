@@ -520,7 +520,7 @@ describe("operational console surface", () => {
     renderAt("/risk");
 
     expect(await screen.findByText("Certificates only today")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-RISK-ALLKINDS/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Risk scoring covers certificates today/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/1 non-certificate risk record is waiting/i)).toBeInTheDocument();
     expect(screen.queryByText("ssh-key-prod")).not.toBeInTheDocument();
     expect(screen.getByText(/No certificate risk scores match/i)).toBeInTheDocument();

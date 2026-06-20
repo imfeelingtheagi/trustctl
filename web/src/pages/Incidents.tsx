@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type GraphImpact, type GraphNode } from "@/lib/api";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 
 const compromisedCredential = {
@@ -78,22 +79,19 @@ export function Incidents() {
 
   return (
     <section aria-labelledby="incidents-heading" className="grid gap-6">
-      <div>
-        <h1 id="incidents-heading" className="text-2xl font-semibold">
-          Incidents
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Incident handling starts with a compromised credential, reads graph impact, plans reissue-before-revoke remediation, captures approvals, and seals evidence. This page does not execute remediation.
-        </p>
-      </div>
+      <PageHeader
+        titleId="incidents-heading"
+        title="Incidents"
+        description="Incident handling starts with a compromised credential, reads graph impact, plans reissue-before-revoke remediation, captures approvals, and seals evidence. This page does not execute remediation."
+      />
 
       <UnavailableState title="Incident execution is not served">
-        `BACKEND-INCIDENT` must serve incident records, remediation state, evidence bundles, and break-glass reconciliation. `BACKEND-CONNECTORS` must serve deployment receipts before fleet reissue can run from the console.
+        Incident records, remediation state, evidence bundles, and break-glass reconciliation are available via the API and CLI today; console management is coming soon. Deployment receipts are not surfaced in the console yet, so fleet reissue cannot run from here.
       </UnavailableState>
 
       <section aria-labelledby="compromise-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="compromise-heading" className="text-lg font-semibold">
+          <h2 id="compromise-heading" className="text-title font-semibold">
             Credential compromise workflow
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -125,7 +123,7 @@ export function Incidents() {
 
       <section aria-labelledby="plan-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="plan-heading" className="text-lg font-semibold">
+          <h2 id="plan-heading" className="text-title font-semibold">
             Reissue-before-revoke plan
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -147,33 +145,33 @@ export function Incidents() {
 
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="fleet-heading" className="text-lg font-semibold">
+          <h2 id="fleet-heading" className="text-title font-semibold">
             Fleet re-issuance for CA compromise
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             CA compromise reissue is staged by issuer, batch, health check, resume point, rollback plan, failed target list, and audit receipt before revocation completes.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[56rem] text-left text-sm">
+        <div className="overflow-x-auto rounded-panel border border-border">
+          <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">Fleet reissuance fixture</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Batch</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Affected issuer scope</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Percent complete</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Health / resume</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Failed targets / rollback</th>
+              <tr>
+                <th scope="col">Batch</th>
+                <th scope="col">Affected issuer scope</th>
+                <th scope="col">Percent complete</th>
+                <th scope="col">Health / resume</th>
+                <th scope="col">Failed targets / rollback</th>
               </tr>
             </thead>
             <tbody>
               {fleetStages.map((stage) => (
-                <tr key={stage.batch} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{stage.batch}</td>
-                  <td className="py-2 pr-4">{stage.scope}</td>
-                  <td className="py-2 pr-4">{stage.status}</td>
-                  <td className="py-2 pr-4">{stage.health}</td>
-                  <td className="py-2 pr-3">{stage.failed}</td>
+                <tr key={stage.batch} className="align-top">
+                  <td className="font-medium">{stage.batch}</td>
+                  <td>{stage.scope}</td>
+                  <td>{stage.status}</td>
+                  <td>{stage.health}</td>
+                  <td>{stage.failed}</td>
                 </tr>
               ))}
             </tbody>
@@ -186,7 +184,7 @@ export function Incidents() {
 
       <section aria-labelledby="break-glass-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="break-glass-heading" className="text-lg font-semibold">
+          <h2 id="break-glass-heading" className="text-title font-semibold">
             Break-glass procedures
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -207,8 +205,8 @@ export function Incidents() {
 
 function BlastRadiusPreview({ impact }: { impact: GraphImpact }) {
   return (
-    <section aria-labelledby="incident-blast-heading" className="rounded-md border border-border p-3">
-      <h3 id="incident-blast-heading" className="text-sm font-semibold">
+    <section aria-labelledby="incident-blast-heading" className="ui-panel p-comfortable">
+      <h3 id="incident-blast-heading" className="text-title font-semibold">
         Blast-radius preview
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">

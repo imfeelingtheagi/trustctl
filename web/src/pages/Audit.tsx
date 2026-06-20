@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 
@@ -125,20 +126,17 @@ export function Audit() {
   );
 
   return (
-    <section aria-labelledby="audit-heading" className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 id="audit-heading" className="text-2xl font-semibold">
-            Audit
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tenant-scoped immutable event evidence from the served audit API.
-          </p>
-        </div>
-        <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
-          Export evidence
-        </Button>
-      </div>
+    <section aria-labelledby="audit-heading" className="space-y-6">
+      <PageHeader
+        titleId="audit-heading"
+        title="Audit"
+        description="Tenant-scoped immutable event evidence from the served audit API."
+        actions={
+          <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
+            Export evidence
+          </Button>
+        }
+      />
 
       {exportError && <ErrorState title="Evidence export unavailable">{exportError}</ErrorState>}
       {bundle && <EvidenceBundle bundle={bundle} />}
@@ -265,8 +263,8 @@ function AuditFilterInput({
 function EvidenceBundle({ bundle }: { bundle: AuditBundle }) {
   const payload = `${bundle.format}: ${bundle.bundle}`;
   return (
-    <section aria-labelledby="evidence-bundle-heading" className="rounded-md border border-border p-4 text-sm">
-      <h2 id="evidence-bundle-heading" className="font-semibold">
+    <section aria-labelledby="evidence-bundle-heading" className="ui-panel p-comfortable text-sm">
+      <h2 id="evidence-bundle-heading" className="text-title font-semibold">
         Signed evidence bundle ready
       </h2>
       <dl className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -315,8 +313,8 @@ function HashChainPanel({ events }: { events: AuditEvent[] }) {
         ? "Every listed event includes a hash, so this window has tamper-evident links back to the append-only log projection."
         : `${hashed} of ${events.length} listed events include a hash; export the evidence bundle for server-signed verification.`;
   return (
-    <section aria-labelledby="hash-chain-heading" className="rounded-md border border-border p-4 text-sm">
-      <h2 id="hash-chain-heading" className="font-semibold">
+    <section aria-labelledby="hash-chain-heading" className="ui-panel p-comfortable text-sm">
+      <h2 id="hash-chain-heading" className="text-title font-semibold">
         Hash-chain status
       </h2>
       <p className="mt-1 text-muted-foreground">{message}</p>
@@ -327,14 +325,14 @@ function HashChainPanel({ events }: { events: AuditEvent[] }) {
 function EventDetail({ event }: { event: AuditEvent | null }) {
   if (!event) {
     return (
-      <aside className="rounded-md border border-border p-4 text-sm text-muted-foreground">
+      <aside className="ui-panel p-comfortable text-sm text-muted-foreground">
         Select an audit event to inspect its immutable sequence, hash, actor, and data payload.
       </aside>
     );
   }
   return (
-    <aside aria-labelledby="audit-event-detail-heading" className="rounded-md border border-border p-4 text-sm">
-      <h2 id="audit-event-detail-heading" className="text-lg font-semibold">
+    <aside aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
+      <h2 id="audit-event-detail-heading" className="text-title font-semibold">
         Event detail
       </h2>
       <dl className="mt-3 grid gap-2">

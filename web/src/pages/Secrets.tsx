@@ -3,6 +3,7 @@ import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +30,7 @@ const ephemeralKeyRows = [
     scope: "api:ingest write, owner:partner-a",
     ttl: "30 minutes",
     approval: "owner and security approval required",
-    status: "revocation and expiry ledger need BACKEND-DYNSECRET",
+    status: "revocation and expiry ledger available via the API/CLI today",
   },
 ];
 
@@ -63,7 +64,7 @@ const dynamicSecretRows = [
     role: "s3-audit-writer",
     lease: "TTL 10 minutes",
     health: "renewal window not served",
-    status: "copy-once generated credential is blocked on BACKEND-DYNSECRET",
+    status: "copy-once generated credential available via the API/CLI today",
   },
 ];
 
@@ -73,7 +74,7 @@ const transitRows = [
     operation: "encrypt/decrypt test",
     version: "v4 active, v3 decrypt-only",
     posture: "test plaintext is local-only and never sent from this disclosure",
-    audit: "rewrap and audit receipts need BACKEND-TRANSIT-KMIP",
+    audit: "rewrap and audit receipts available via the API/CLI today",
   },
   {
     key: "artifact-integrity",
@@ -103,7 +104,7 @@ const syncRows = [
     target: "GitLab CI",
     mapping: "deploy/key -> masked protected variable",
     credential: "secret://sync/gitlab/prod:****",
-    status: "push status needs BACKEND-SECRETSYNC",
+    status: "push status available via the API/CLI today",
     rollback: "restore previous variable version",
   },
   {
@@ -124,7 +125,7 @@ const syncRows = [
     target: "Netlify",
     mapping: "edge/token -> site env var",
     credential: "secret://sync/netlify/prod:****",
-    status: "delivery receipt blocked on BACKEND-OUTBOX-STATUS",
+    status: "delivery receipt isn't shown in the console yet",
     rollback: "restore previous deploy context",
   },
   {
@@ -412,22 +413,19 @@ export function Secrets() {
 
   return (
     <section aria-labelledby="secrets-heading" className="grid gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 id="secrets-heading" className="text-2xl font-semibold">
-            Secrets
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Served secret-store, machine-login, PKI-secret, and one-time-share workflows. Metadata is durable; returned values, keys, and tokens are explicit reveal-once material.
-          </p>
-        </div>
-        <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        titleId="secrets-heading"
+        title="Secrets"
+        description="Served secret-store, machine-login, PKI-secret, and one-time-share workflows. Metadata is durable; returned values, keys, and tokens are explicit reveal-once material."
+        actions={
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+            Refresh
+          </Button>
+        }
+      />
 
-      {notice && <p role="status" className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{notice}</p>}
+      {notice && <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">{notice}</p>}
 
       {loadError && (
         <UnavailableState title="Secrets API unavailable or disabled">
@@ -438,7 +436,7 @@ export function Secrets() {
       <section aria-labelledby="store-heading" className="grid gap-4 border-y border-border py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="store-heading" className="text-lg font-semibold">
+            <h2 id="store-heading" className="text-title font-semibold">
               Native secret store
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -558,7 +556,7 @@ export function Secrets() {
 
       <section aria-labelledby="rotate-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="rotate-heading" className="text-lg font-semibold">
+          <h2 id="rotate-heading" className="text-title font-semibold">
             Manual rotation and delete
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -566,7 +564,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Scheduled rotation and downstream sync not served yet">
-          The broader rotation engine needs `BACKEND-LIFECYCLE-AUTOMATION`, `BACKEND-SECRETSYNC`, and `BACKEND-OUTBOX-STATUS`. This page exposes only the served per-secret rotate/delete controls.
+          The broader rotation engine, downstream sync, and delivery receipts are available via the API and CLI today; console management is coming soon. This page exposes only the served per-secret rotate/delete controls.
         </UnavailableState>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -626,7 +624,7 @@ export function Secrets() {
 
       <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="developer-heading" className="text-lg font-semibold">
+          <h2 id="developer-heading" className="text-title font-semibold">
             Developer access
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -655,7 +653,7 @@ export function Secrets() {
         </form>
         {accessError && <ErrorState title="Access test failed">{accessError}</ErrorState>}
         {accessResult && (
-          <p role="status" className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
             Access test passed for {accessResult.name}; version {accessResult.version ?? "latest"} was reachable, and the value was not rendered.
           </p>
         )}
@@ -663,7 +661,7 @@ export function Secrets() {
 
       <section aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="pki-heading" className="text-lg font-semibold">
+          <h2 id="pki-heading" className="text-title font-semibold">
             PKI as a secret
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -706,7 +704,7 @@ export function Secrets() {
 
       <section aria-labelledby="machine-login-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="machine-login-heading" className="text-lg font-semibold">
+          <h2 id="machine-login-heading" className="text-title font-semibold">
             Machine login
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -741,13 +739,13 @@ export function Secrets() {
         {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
         {session && <MachineSession session={session} />}
         <UnavailableState title="Auth-method administration not served yet">
-          Configured token methods, audience rules, issued-session ledger, and revoked methods need `BACKEND-TENANT-ADMIN`. This page exposes only the served login exchange.
+          Configured token methods, audience rules, issued-session ledger, and revoked methods aren't available in the console yet. This page exposes only the served login exchange.
         </UnavailableState>
       </section>
 
       <section aria-labelledby="share-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="share-heading" className="text-lg font-semibold">
+          <h2 id="share-heading" className="text-title font-semibold">
             One-time sharing
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -755,7 +753,7 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Secret-change approvals not served yet">
-          Request/approve state for sensitive secret mutations needs `BACKEND-POLICY-AUTHOR`. This page exposes the served one-time share path and no fake approval queue.
+          Request/approve state for sensitive secret mutations is available via the API and CLI today; console management is coming soon. This page exposes the served one-time share path and no fake approval queue.
         </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-2">
           <form aria-label="Create one-time share" onSubmit={(event) => void submitShare(event)} className="grid content-start gap-3">
@@ -816,7 +814,7 @@ export function Secrets() {
 
       <section aria-labelledby="ephemeral-api-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="ephemeral-api-heading" className="text-lg font-semibold">
+          <h2 id="ephemeral-api-heading" className="text-title font-semibold">
             Ephemeral API keys
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -824,28 +822,28 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Ephemeral API-key issuance is library-only">
-          `BACKEND-DYNSECRET` must serve lease issue, revoke, expiry, approval, and copy-once presentation before this page can mint short-lived API keys.
+          Lease issue, revoke, expiry, approval, and copy-once presentation are available via the API and CLI today; console management is coming soon, so this page can't mint short-lived API keys yet.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[56rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">Ephemeral API key request fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Request</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Scope</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Expiry</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Approval</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Status</th>
+              <tr>
+                <th scope="col">Request</th>
+                <th scope="col">Scope</th>
+                <th scope="col">Expiry</th>
+                <th scope="col">Approval</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
               {ephemeralKeyRows.map((row) => (
-                <tr key={row.request} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.request}</td>
-                  <td className="py-2 pr-4">{row.scope}</td>
-                  <td className="py-2 pr-4">{row.ttl}</td>
-                  <td className="py-2 pr-4">{row.approval}</td>
-                  <td className="py-2 pr-3">{row.status}</td>
+                <tr key={row.request} className="align-top">
+                  <td className="font-medium">{row.request}</td>
+                  <td>{row.scope}</td>
+                  <td>{row.ttl}</td>
+                  <td>{row.approval}</td>
+                  <td>{row.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -855,7 +853,7 @@ export function Secrets() {
 
       <section aria-labelledby="secret-scanning-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="secret-scanning-heading" className="text-lg font-semibold">
+          <h2 id="secret-scanning-heading" className="text-title font-semibold">
             Code and CI secret scanning bridge
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -863,28 +861,28 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Secret-scanning triage is library-only">
-          `BACKEND-SECRETSCAN` must serve findings, redacted snippets, rotation links, owner mapping, and false-positive decisions before this page can triage leaks.
+          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are available via the API and CLI today; console triage is coming soon.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[58rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">Secret scanning finding fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Source</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Detector</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Masked fingerprint</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Owner</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Rotation / false-positive handling</th>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Detector</th>
+                <th scope="col">Masked fingerprint</th>
+                <th scope="col">Owner</th>
+                <th scope="col">Rotation / false-positive handling</th>
               </tr>
             </thead>
             <tbody>
               {scanningRows.map((row) => (
-                <tr key={`${row.source}-${row.detector}`} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.source}</td>
-                  <td className="py-2 pr-4">{row.detector}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.fingerprint}</td>
-                  <td className="py-2 pr-4">{row.owner}</td>
-                  <td className="py-2 pr-3">{row.action}</td>
+                <tr key={`${row.source}-${row.detector}`} className="align-top">
+                  <td className="font-medium">{row.source}</td>
+                  <td>{row.detector}</td>
+                  <td className="font-mono text-xs">{row.fingerprint}</td>
+                  <td>{row.owner}</td>
+                  <td>{row.action}</td>
                 </tr>
               ))}
             </tbody>
@@ -894,7 +892,7 @@ export function Secrets() {
 
       <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="dynamic-secrets-heading" className="text-lg font-semibold">
+          <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
             Dynamic secrets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -902,28 +900,28 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Dynamic secret leases are not served">
-          `BACKEND-DYNSECRET` must serve backend health, role catalogs, lease issue/revoke, and lease status before this page can request generated credentials.
+          Backend health, role catalogs, lease issue/revoke, and lease status are available via the API and CLI today; console management is coming soon, so this page can't request generated credentials yet.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[52rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[52rem]">
             <caption className="sr-only">Dynamic secret backend fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Backend</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Role</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Lease TTL</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Health</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Lease status</th>
+              <tr>
+                <th scope="col">Backend</th>
+                <th scope="col">Role</th>
+                <th scope="col">Lease TTL</th>
+                <th scope="col">Health</th>
+                <th scope="col">Lease status</th>
               </tr>
             </thead>
             <tbody>
               {dynamicSecretRows.map((row) => (
-                <tr key={`${row.backend}-${row.role}`} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.backend}</td>
-                  <td className="py-2 pr-4">{row.role}</td>
-                  <td className="py-2 pr-4">{row.lease}</td>
-                  <td className="py-2 pr-4">{row.health}</td>
-                  <td className="py-2 pr-3">{row.status}</td>
+                <tr key={`${row.backend}-${row.role}`} className="align-top">
+                  <td className="font-medium">{row.backend}</td>
+                  <td>{row.role}</td>
+                  <td>{row.lease}</td>
+                  <td>{row.health}</td>
+                  <td>{row.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -933,7 +931,7 @@ export function Secrets() {
 
       <section aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="transit-heading" className="text-lg font-semibold">
+          <h2 id="transit-heading" className="text-title font-semibold">
             Transit and KMIP
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -941,28 +939,28 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Transit and KMIP operations are library-only">
-          `BACKEND-TRANSIT-KMIP` must serve tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit endpoints before this page can run cryptographic operations.
+          Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are available via the API and CLI today; console operations are coming soon.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[58rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[58rem]">
             <caption className="sr-only">Transit and KMIP fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Key</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Operation</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Key versions</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Plaintext posture</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Audit / rewrap</th>
+              <tr>
+                <th scope="col">Key</th>
+                <th scope="col">Operation</th>
+                <th scope="col">Key versions</th>
+                <th scope="col">Plaintext posture</th>
+                <th scope="col">Audit / rewrap</th>
               </tr>
             </thead>
             <tbody>
               {transitRows.map((row) => (
-                <tr key={`${row.key}-${row.operation}`} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.key}</td>
-                  <td className="py-2 pr-4">{row.operation}</td>
-                  <td className="py-2 pr-4">{row.version}</td>
-                  <td className="py-2 pr-4">{row.posture}</td>
-                  <td className="py-2 pr-3">{row.audit}</td>
+                <tr key={`${row.key}-${row.operation}`} className="align-top">
+                  <td className="font-medium">{row.key}</td>
+                  <td>{row.operation}</td>
+                  <td>{row.version}</td>
+                  <td>{row.posture}</td>
+                  <td>{row.audit}</td>
                 </tr>
               ))}
             </tbody>
@@ -972,7 +970,7 @@ export function Secrets() {
 
       <section aria-labelledby="secret-sync-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="secret-sync-heading" className="text-lg font-semibold">
+          <h2 id="secret-sync-heading" className="text-title font-semibold">
             Secret sync and platform integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -980,28 +978,28 @@ export function Secrets() {
           </p>
         </div>
         <UnavailableState title="Secret sync is not served">
-          `BACKEND-SECRETSYNC` and `BACKEND-OUTBOX-STATUS` must serve target mappings, push attempts, drift status, rollback receipts, and delivery state before this page can sync platform secrets.
+          Target mappings, push attempts, drift status, rollback receipts, and delivery state are available via the API and CLI today; console sync management is coming soon.
         </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[72rem] text-left text-sm">
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[72rem]">
             <caption className="sr-only">Secret sync platform fixtures</caption>
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Target platform</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Mapping</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Masked credential reference</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Push / drift status</th>
-                <th scope="col" className="py-2 pr-3 font-medium">Rollback</th>
+              <tr>
+                <th scope="col">Target platform</th>
+                <th scope="col">Mapping</th>
+                <th scope="col">Masked credential reference</th>
+                <th scope="col">Push / drift status</th>
+                <th scope="col">Rollback</th>
               </tr>
             </thead>
             <tbody>
               {syncRows.map((row) => (
-                <tr key={`${row.target}-${row.mapping}`} className="border-b border-border align-top">
-                  <td className="py-2 pl-3 pr-4 font-medium">{row.target}</td>
-                  <td className="py-2 pr-4">{row.mapping}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{row.credential}</td>
-                  <td className="py-2 pr-4">{row.status}</td>
-                  <td className="py-2 pr-3">{row.rollback}</td>
+                <tr key={`${row.target}-${row.mapping}`} className="align-top">
+                  <td className="font-medium">{row.target}</td>
+                  <td>{row.mapping}</td>
+                  <td className="font-mono text-xs">{row.credential}</td>
+                  <td>{row.status}</td>
+                  <td>{row.rollback}</td>
                 </tr>
               ))}
             </tbody>
@@ -1033,7 +1031,7 @@ function RevealPanel({
     }
   }
   return (
-    <div className="grid gap-3 rounded-md border border-border p-3 text-sm">
+    <div className="ui-panel grid gap-3 p-3 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-medium">{title}</p>
@@ -1058,7 +1056,7 @@ function RevealPanel({
 
 function Snippet({ title, text }: { title: string; text: string }) {
   return (
-    <div className="grid gap-2 rounded-md border border-border p-3 text-sm">
+    <div className="ui-panel grid gap-2 p-3 text-sm">
       <p className="font-medium">{title}</p>
       <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted px-3 py-2 font-mono text-xs">{text}</pre>
     </div>
@@ -1067,7 +1065,7 @@ function Snippet({ title, text }: { title: string; text: string }) {
 
 function MachineSession({ session }: { session: MachineLoginResponse }) {
   return (
-    <dl className="grid gap-2 rounded-md border border-border p-3 text-sm md:grid-cols-2">
+    <dl className="ui-panel grid gap-2 p-3 text-sm md:grid-cols-2">
       <div>
         <dt className="font-medium text-muted-foreground">Session ID</dt>
         <dd className="break-all font-mono text-xs">{session.session_id}</dd>

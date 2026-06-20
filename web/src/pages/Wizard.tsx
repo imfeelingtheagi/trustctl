@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { api, type Agent, type Issuer } from "@/lib/api";
+import { PageHeader } from "@/components/PageHeader";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 type Step = 1 | 2 | 3 | 4;
@@ -23,53 +25,56 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   return (
     <section aria-labelledby="wizard-heading" className="mx-auto max-w-2xl">
-      <h1 id="wizard-heading" className="mb-1 text-2xl font-semibold">
-        Set up trstctl
-      </h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Three steps to your first certificate.
-      </p>
+      <PageHeader
+        title="Set up trstctl"
+        titleId="wizard-heading"
+        description="Three steps to your first certificate."
+      />
 
       <ol className="mb-8 flex gap-2" aria-label="Setup progress">
         {steps.map((s) => {
           const state = step > s.n ? "done" : step === s.n ? "current" : "upcoming";
           return (
-            <li key={s.n} className="flex flex-1 items-center gap-2 text-sm" aria-current={step === s.n ? "step" : undefined}>
+            <li key={s.n} className="flex flex-1 items-center gap-2 text-body" aria-current={step === s.n ? "step" : undefined}>
               <span
                 className={
                   state === "done"
-                    ? "flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-accent text-brand-accent-foreground shadow-elevation1"
                     : state === "current"
-                      ? "flex h-6 w-6 items-center justify-center rounded-full border-2 border-primary font-medium"
-                      : "flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground"
+                      ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand-accent font-semibold text-brand-accent"
+                      : "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground"
                 }
               >
                 {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : s.n}
               </span>
-              <span className={state === "upcoming" ? "text-muted-foreground" : ""}>{s.label}</span>
+              <span className={state === "upcoming" ? "text-muted-foreground" : "font-medium"}>{s.label}</span>
             </li>
           );
         })}
       </ol>
 
-      {step === 1 && (
-        <ConnectCAStep
-          onConnected={(iss) => {
-            setIssuer(iss);
-            setStep(2);
-          }}
-        />
-      )}
-      {step === 2 && (
-        <InstallAgentStep
-          pollMs={pollMs}
-          agent={agent}
-          onAgent={setAgent}
-          onContinue={() => setStep(3)}
-        />
-      )}
-      {step === 3 && <IssueCertStep issuer={issuer} onIssued={() => setStep(4)} />}
-      {step === 4 && <DoneStep />}
+      <Card>
+        <CardContent className="pt-comfortable">
+          {step === 1 && (
+            <ConnectCAStep
+              onConnected={(iss) => {
+                setIssuer(iss);
+                setStep(2);
+              }}
+            />
+          )}
+          {step === 2 && (
+            <InstallAgentStep
+              pollMs={pollMs}
+              agent={agent}
+              onAgent={setAgent}
+              onContinue={() => setStep(3)}
+            />
+          )}
+          {step === 3 && <IssueCertStep issuer={issuer} onIssued={() => setStep(4)} />}
+          {step === 4 && <DoneStep />}
+        </CardContent>
+      </Card>
     </section>
   );
 }
@@ -95,26 +100,26 @@ function ConnectCAStep({ onConnected }: { onConnected: (iss: Issuer) => void }) 
 
   return (
     <form onSubmit={submit} aria-labelledby="step-ca-heading" className="space-y-4">
-      <h2 id="step-ca-heading" className="text-lg font-semibold">
+      <h2 id="step-ca-heading" className="text-title font-semibold">
         Connect a Certificate Authority
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         trstctl brokers issuance to your CA. Give this issuer a name to get started.
       </p>
       <div className="space-y-1">
-        <label htmlFor="ca-name" className="block text-sm font-medium">
+        <label htmlFor="ca-name" className="block text-body font-medium">
           Certificate Authority name
         </label>
         <input
           id="ca-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
           placeholder="e.g. Internal Issuing CA"
         />
       </div>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-body text-destructive">
           {error}
         </p>
       )}
@@ -179,29 +184,29 @@ function InstallAgentStep({
 
   return (
     <section aria-labelledby="step-agent-heading" className="space-y-4">
-      <h2 id="step-agent-heading" className="text-lg font-semibold">
+      <h2 id="step-agent-heading" className="text-title font-semibold">
         Install an agent
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         Run this on a host inside your network. The agent generates its key locally and enrolls with
         the one-time token — private keys never leave the host.
       </p>
-      <pre className="overflow-x-auto rounded-md border border-border bg-muted p-3 text-xs">
+      <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption">
         <code>{command}</code>
       </pre>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-body text-destructive">
           {error}
         </p>
       )}
 
       {agent ? (
-        <p className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+        <p className="flex items-center gap-2 text-body font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Agent {agent.name} registered.
         </p>
       ) : (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <p className="flex items-center gap-2 text-body text-muted-foreground" role="status">
           {checking && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           Waiting for the agent to register…
         </p>
@@ -240,27 +245,27 @@ function IssueCertStep({ issuer, onIssued }: { issuer: Issuer | null; onIssued: 
 
   return (
     <form onSubmit={submit} aria-labelledby="step-cert-heading" className="space-y-4">
-      <h2 id="step-cert-heading" className="text-lg font-semibold">
+      <h2 id="step-cert-heading" className="text-title font-semibold">
         Issue your first cert
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         Name the service this certificate belongs to. trstctl creates the owner and identity and
         issues it through the CA you connected.
       </p>
       <div className="space-y-1">
-        <label htmlFor="svc-name" className="block text-sm font-medium">
+        <label htmlFor="svc-name" className="block text-body font-medium">
           Service name
         </label>
         <input
           id="svc-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
           placeholder="e.g. payments-api"
         />
       </div>
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-body text-destructive">
           {error}
         </p>
       )}
@@ -275,17 +280,17 @@ function IssueCertStep({ issuer, onIssued }: { issuer: Issuer | null; onIssued: 
 function DoneStep() {
   return (
     <section aria-labelledby="step-done-heading" className="space-y-4">
-      <h2 id="step-done-heading" className="flex items-center gap-2 text-lg font-semibold">
-        <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
+      <h2 id="step-done-heading" className="flex items-center gap-2 text-title font-semibold">
+        <CheckCircle2 className="h-5 w-5 text-status-success" aria-hidden="true" />
         Your first certificate has been issued
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         You're set up. trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.
       </p>
       <div className="flex gap-2">
         <Link
           to="/certificates"
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          className="inline-flex items-center justify-center gap-2 rounded-control bg-primary px-4 py-2 text-body font-medium text-primary-foreground shadow-elevation1 transition-[filter] hover:brightness-110 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Track and renew certificates
         </Link>

@@ -47,7 +47,8 @@ describe("incident response disclosure surface", () => {
     expect(screen.getByText("payments service")).toBeInTheDocument();
     expect(screen.getByText("ledger database")).toBeInTheDocument();
     expect(screen.getByText("Reissue-before-revoke plan")).toBeInTheDocument();
-    expect(screen.getAllByText(/BACKEND-INCIDENT|BACKEND-CONNECTORS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Incident execution is not served")).toBeInTheDocument();
+    expect(screen.getByText(/fleet reissue cannot run from here/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /execute|revoke|deploy|bypass|break glass/i })).not.toBeInTheDocument();
   });
 

@@ -17,6 +17,7 @@ import {
   type FeatureCoveragePhase,
   type FeatureCoverageState,
 } from "@/lib/featureCoverage";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -141,25 +142,22 @@ export function FeatureCoverage() {
 
   return (
     <section aria-labelledby="coverage-heading" className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-4xl">
-          <p className="mb-2 inline-flex items-center gap-2 rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
+      <PageHeader
+        titleId="coverage-heading"
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
             <Map aria-hidden="true" className="h-3.5 w-3.5" />
             GUI feature-map harness
-          </p>
-          <h1 id="coverage-heading" className="text-2xl font-semibold">
-            Backend-to-GUI coverage
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            This page maps every documented trstctl backend capability to a GUI outcome. It does
-            not pretend unfinished systems are live. Each item is marked as operable, observable,
-            or explicitly disclosed so there are no silent product gaps.
-          </p>
-        </div>
-        <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-          Source: <span className="font-mono">feature-map-backlog.json</span>
-        </div>
-      </div>
+          </span>
+        }
+        title="Backend-to-GUI coverage"
+        description="This page maps every documented trstctl backend capability to a GUI outcome. It does not pretend unfinished systems are live. Each item is marked as operable, observable, or explicitly disclosed so there are no silent product gaps."
+        actions={
+          <div className="rounded-control border border-border px-3 py-2 text-caption text-muted-foreground">
+            Source: <span className="font-mono">feature-map-backlog.json</span>
+          </div>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard icon={ListFilter} label="Feature backlog" value={featureCoverageTotals.features} helper="documented features represented here" />

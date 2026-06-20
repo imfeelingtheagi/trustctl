@@ -1,36 +1,36 @@
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
 export function Owners() {
   const { data, loading, error } = useResource(api.owners);
   return (
     <section aria-labelledby="owners-heading">
-      <h1 id="owners-heading" className="mb-4 text-2xl font-semibold">
-        Owners
-      </h1>
-      {loading && <p role="status">Loading owners…</p>}
-      {error && <p role="alert">Could not load owners: {error}</p>}
+      <PageHeader titleId="owners-heading" title="Owners" />
+      {loading && <LoadingState>Loading owners…</LoadingState>}
+      {error && <ErrorState title="Could not load owners">{error}</ErrorState>}
       {data && (
-        <table className="w-full text-left text-sm">
+        <table className="ui-table">
           <caption className="sr-only">Credential owners</caption>
           <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th scope="col" className="py-2 pr-4 font-medium">Name</th>
-              <th scope="col" className="py-2 pr-4 font-medium">Kind</th>
-              <th scope="col" className="py-2 font-medium">Email</th>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Kind</th>
+              <th scope="col">Email</th>
             </tr>
           </thead>
           <tbody>
             {data.length === 0 && (
               <tr>
-                <td colSpan={3} className="py-4 text-muted-foreground">No owners yet.</td>
+                <td colSpan={3} className="text-muted-foreground">No owners yet.</td>
               </tr>
             )}
             {data.map((o) => (
-              <tr key={o.id} className="border-b border-border">
-                <td className="py-2 pr-4">{o.name}</td>
-                <td className="py-2 pr-4">{o.kind}</td>
-                <td className="py-2">{o.email ?? "—"}</td>
+              <tr key={o.id}>
+                <td>{o.name}</td>
+                <td>{o.kind}</td>
+                <td>{o.email ?? "—"}</td>
               </tr>
             ))}
           </tbody>
