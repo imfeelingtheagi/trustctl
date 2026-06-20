@@ -1,0 +1,240 @@
+package transport
+
+import (
+	"encoding/json"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+
+	"trstctl.com/trstctl/internal/protocol"
+)
+
+type agentContract struct {
+	Schema   string                  `json:"$schema,omitempty"`
+	Contract string                  `json:"contract"`
+	Codec    agentContractCodec      `json:"codec"`
+	Metadata agentContractMetadata   `json:"metadata"`
+	Service  agentContractService    `json:"service"`
+	Messages map[string]agentMessage `json:"messages"`
+}
+
+type agentContractCodec struct {
+	Name           string `json:"name"`
+	ContentSubtype string `json:"content_subtype"`
+}
+
+type agentContractMetadata struct {
+	AgentVersionKey       string   `json:"agent_version_key"`
+	AgentProtocolKey      string   `json:"agent_protocol_key"`
+	AgentCapabilitiesKey  string   `json:"agent_capabilities_key"`
+	ServerProtocolKey     string   `json:"server_protocol_key"`
+	ServerCapabilitiesKey string   `json:"server_capabilities_key"`
+	Capabilities          []string `json:"capabilities"`
+}
+
+type agentContractService struct {
+	Name     string                `json:"name"`
+	Metadata string                `json:"metadata"`
+	Methods  []agentContractMethod `json:"methods"`
+}
+
+type agentContractMethod struct {
+	Name       string `json:"name"`
+	FullMethod string `json:"full_method"`
+	Request    string `json:"request"`
+	Response   string `json:"response"`
+}
+
+type agentMessage struct {
+	Fields []agentField `json:"fields"`
+}
+
+type agentField struct {
+	Name     string `json:"name"`
+	GoType   string `json:"go_type"`
+	Presence string `json:"presence"`
+}
+
+type agentWireFixture struct {
+	Codec string          `json:"codec"`
+	Calls []agentWireCall `json:"calls"`
+}
+
+type agentWireCall struct {
+	Name         string `json:"name"`
+	FullMethod   string `json:"full_method"`
+	RequestJSON  string `json:"request_json"`
+	ResponseJSON string `json:"response_json"`
+}
+
+func TestAgentSteadyStateContractMatchesCommittedSchema(t *testing.T) {
+	raw, err := os.ReadFile("agent_service_schema.json")
+	if err != nil {
+		t.Fatalf("read committed agent service schema: %v", err)
+	}
+	var expected agentContract
+	if err := json.Unmarshal(raw, &expected); err != nil {
+		t.Fatalf("decode committed agent service schema: %v", err)
+	}
+	expected.Schema = ""
+	got := currentAgentContract()
+	if !reflect.DeepEqual(got, expected) {
+		t.Fatalf("agent service schema drifted\nwant:\n%s\n\ngot:\n%s", prettyJSON(expected), prettyJSON(got))
+	}
+}
+
+func TestAgentSteadyStateWireGoldenFixtures(t *testing.T) {
+	raw, err := os.ReadFile("testdata/agent_service_wire.golden.json")
+	if err != nil {
+		t.Fatalf("read committed agent wire fixture: %v", err)
+	}
+	var fixture agentWireFixture
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatalf("decode committed agent wire fixture: %v", err)
+	}
+	if fixture.Codec != AgentCodecName {
+		t.Fatalf("fixture codec = %q, want %q", fixture.Codec, AgentCodecName)
+	}
+	expected := map[string]struct {
+		fullMethod string
+		request    any
+		response   any
+	}{
+		methodHeartbeat: {
+			fullMethod: fullMethodHeartbeat,
+			request: HeartbeatRequest{
+				AgentID:    "edge-1",
+				Version:    "v1.2.3",
+				Status:     "active",
+				CertSerial: "01:23",
+				Inventory:  map[string]int64{"certificates": 2, "keys": 3},
+			},
+			response: HeartbeatResponse{TenantID: "11111111-1111-1111-1111-111111111111", NextHeartbeatSeconds: 30},
+		},
+		methodRenew: {
+			fullMethod: fullMethodRenew,
+			request:    RenewRequest{CSRDER: []byte{0x30, 0x03, 0x02, 0x01, 0x01}},
+			response:   RenewResponse{CertChainPEM: []byte("-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n"), NotAfterUnix: 1893456000},
+		},
+	}
+	seen := map[string]bool{}
+	for _, call := range fixture.Calls {
+		want, ok := expected[call.Name]
+		if !ok {
+			t.Fatalf("fixture contains unexpected call %q", call.Name)
+		}
+		seen[call.Name] = true
+		if call.FullMethod != want.fullMethod {
+			t.Fatalf("%s full_method = %q, want %q", call.Name, call.FullMethod, want.fullMethod)
+		}
+		if got := marshalAgentJSON(t, want.request); got != call.RequestJSON {
+			t.Fatalf("%s request JSON drifted\nwant %s\ngot  %s", call.Name, call.RequestJSON, got)
+		}
+		if got := marshalAgentJSON(t, want.response); got != call.ResponseJSON {
+			t.Fatalf("%s response JSON drifted\nwant %s\ngot  %s", call.Name, call.ResponseJSON, got)
+		}
+	}
+	for name := range expected {
+		if !seen[name] {
+			t.Fatalf("fixture missing call %q", name)
+		}
+	}
+}
+
+func currentAgentContract() agentContract {
+	methods := make([]agentContractMethod, 0, len(agentServiceDesc.Methods))
+	for _, method := range agentServiceDesc.Methods {
+		msg := methodMessageTypes(method.MethodName)
+		methods = append(methods, agentContractMethod{
+			Name:       method.MethodName,
+			FullMethod: "/" + agentServiceDesc.ServiceName + "/" + method.MethodName,
+			Request:    msg.request,
+			Response:   msg.response,
+		})
+	}
+	return agentContract{
+		Contract: agentServiceDesc.ServiceName,
+		Codec:    agentContractCodec{Name: AgentCodecName, ContentSubtype: AgentCodecName},
+		Metadata: agentContractMetadata{
+			AgentVersionKey:       protocol.MetadataAgentVersion,
+			AgentProtocolKey:      protocol.MetadataAgentProtocol,
+			AgentCapabilitiesKey:  protocol.MetadataAgentCapabilities,
+			ServerProtocolKey:     protocol.MetadataServerProtocol,
+			ServerCapabilitiesKey: protocol.MetadataServerCapabilities,
+			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew},
+		},
+		Service: agentContractService{
+			Name:     agentServiceDesc.ServiceName,
+			Metadata: agentServiceDesc.Metadata.(string),
+			Methods:  methods,
+		},
+		Messages: map[string]agentMessage{
+			"HeartbeatRequest":  {Fields: jsonFieldsOf(HeartbeatRequest{})},
+			"HeartbeatResponse": {Fields: jsonFieldsOf(HeartbeatResponse{})},
+			"RenewRequest":      {Fields: jsonFieldsOf(RenewRequest{})},
+			"RenewResponse":     {Fields: jsonFieldsOf(RenewResponse{})},
+		},
+	}
+}
+
+func methodMessageTypes(method string) struct{ request, response string } {
+	switch method {
+	case methodHeartbeat:
+		return struct{ request, response string }{"HeartbeatRequest", "HeartbeatResponse"}
+	case methodRenew:
+		return struct{ request, response string }{"RenewRequest", "RenewResponse"}
+	default:
+		return struct{ request, response string }{"", ""}
+	}
+}
+
+func jsonFieldsOf(v any) []agentField {
+	t := reflect.TypeOf(v)
+	fields := make([]agentField, 0, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		name, opts, _ := strings.Cut(sf.Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			name = sf.Name
+		}
+		presence := "required"
+		if strings.Contains(opts, "omitempty") {
+			presence = "optional"
+		}
+		fields = append(fields, agentField{Name: name, GoType: schemaGoType(sf.Type), Presence: presence})
+	}
+	return fields
+}
+
+func schemaGoType(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Int64:
+		return "int64"
+	case reflect.Slice:
+		if t.Elem().Kind() == reflect.Uint8 {
+			return "bytes_base64"
+		}
+	case reflect.Map:
+		if t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.Int64 {
+			return "map<string,int64>"
+		}
+	}
+	return t.String()
+}
+
+func marshalAgentJSON(t *testing.T, v any) string {
+	t.Helper()
+	data, err := jsonCodec{}.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", v, err)
+	}
+	return string(data.Materialize())
+}
+
+func prettyJSON(v any) string {
+	data, _ := json.MarshalIndent(v, "", "  ")
+	return string(data)
+}

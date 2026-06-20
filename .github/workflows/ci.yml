@@ -404,6 +404,9 @@ jobs:
       - name: buf breaking (against main)
         run: buf breaking --against '.git#branch=main'
 
+      - name: Agent JSON contract gate
+        run: go test ./internal/agent/transport ./internal/protocol -count=1
+
   acme-conformance:
     name: acme conformance (Pebble differential)
     runs-on: ubuntu-latest

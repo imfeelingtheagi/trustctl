@@ -1,0 +1,17 @@
+{
+  "codec": "agent.json",
+  "calls": [
+    {
+      "name": "Heartbeat",
+      "full_method": "/trstctl.agent.v1.AgentService/Heartbeat",
+      "request_json": "{\"agent_id\":\"edge-1\",\"version\":\"v1.2.3\",\"status\":\"active\",\"cert_serial\":\"01:23\",\"inventory\":{\"certificates\":2,\"keys\":3}}",
+      "response_json": "{\"tenant_id\":\"11111111-1111-1111-1111-111111111111\",\"next_heartbeat_seconds\":30}"
+    },
+    {
+      "name": "Renew",
+      "full_method": "/trstctl.agent.v1.AgentService/Renew",
+      "request_json": "{\"csr_der\":\"MAMCAQE=\"}",
+      "response_json": "{\"cert_chain_pem\":\"LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCmZpeHR1cmUKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=\",\"not_after_unix\":1893456000}"
+    }
+  ]
+}

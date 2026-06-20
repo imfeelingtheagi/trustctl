@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract": "trstctl.agent.v1.AgentService",
+  "codec": {
+    "name": "agent.json",
+    "content_subtype": "agent.json"
+  },
+  "metadata": {
+    "agent_version_key": "x-trstctl-agent-version",
+    "agent_protocol_key": "x-trstctl-agent-protocol",
+    "agent_capabilities_key": "x-trstctl-agent-capabilities",
+    "server_protocol_key": "x-trstctl-server-protocol",
+    "server_capabilities_key": "x-trstctl-server-capabilities",
+    "capabilities": [
+      "heartbeat",
+      "renew"
+    ]
+  },
+  "service": {
+    "name": "trstctl.agent.v1.AgentService",
+    "metadata": "trstctl.agent.v1",
+    "methods": [
+      {
+        "name": "Heartbeat",
+        "full_method": "/trstctl.agent.v1.AgentService/Heartbeat",
+        "request": "HeartbeatRequest",
+        "response": "HeartbeatResponse"
+      },
+      {
+        "name": "Renew",
+        "full_method": "/trstctl.agent.v1.AgentService/Renew",
+        "request": "RenewRequest",
+        "response": "RenewResponse"
+      }
+    ]
+  },
+  "messages": {
+    "HeartbeatRequest": {
+      "fields": [
+        {
+          "name": "agent_id",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "version",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "status",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "cert_serial",
+          "go_type": "string",
+          "presence": "optional"
+        },
+        {
+          "name": "inventory",
+          "go_type": "map<string,int64>",
+          "presence": "optional"
+        }
+      ]
+    },
+    "HeartbeatResponse": {
+      "fields": [
+        {
+          "name": "tenant_id",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "next_heartbeat_seconds",
+          "go_type": "int64",
+          "presence": "required"
+        }
+      ]
+    },
+    "RenewRequest": {
+      "fields": [
+        {
+          "name": "csr_der",
+          "go_type": "bytes_base64",
+          "presence": "required"
+        }
+      ]
+    },
+    "RenewResponse": {
+      "fields": [
+        {
+          "name": "cert_chain_pem",
+          "go_type": "bytes_base64",
+          "presence": "required"
+        },
+        {
+          "name": "not_after_unix",
+          "go_type": "int64",
+          "presence": "required"
+        }
+      ]
+    }
+  }
+}

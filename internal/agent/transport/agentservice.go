@@ -3,7 +3,9 @@ package transport
 // This file defines the served agent steady-state RPC contract (WIRE-004): the
 // two methods an enrolled agent calls on the control plane over the mutual-TLS
 // channel, plus a self-contained gRPC wire codec so the contract needs no protoc
-// toolchain in the build.
+// toolchain in the build. Its committed compatibility contract is
+// agent_service_schema.json plus testdata/agent_service_wire.golden.json; tests fail
+// if service names, method names, JSON tags, metadata keys, or encoded bytes drift.
 //
 // Wire format. The two agent methods carry plain Go structs encoded as JSON under
 // a registered gRPC codec named "agent.json" (content-subtype "agent.json"). gRPC
