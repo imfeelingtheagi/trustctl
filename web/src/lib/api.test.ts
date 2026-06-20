@@ -118,6 +118,21 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
 
+  it("uses a distinct Idempotency-Key for each identity transition mutation", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-bulk; path=/";
+    mockFetch(202, JSON.stringify({ id: "id-1", name: "svc", status: "revoked" }));
+
+    await api.transitionIdentity("id-1", "revoked", "bulk revoke via UI");
+    await api.transitionIdentity("id-2", "revoked", "bulk revoke via UI");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    const firstHeaders = calls[0][1]?.headers as Record<string, string>;
+    const secondHeaders = calls[1][1]?.headers as Record<string, string>;
+    expect(firstHeaders["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(secondHeaders["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(firstHeaders["Idempotency-Key"]).not.toBe(secondHeaders["Idempotency-Key"]);
+  });
+
   it("mints an enrollment token through the served mutation with Idempotency-Key", async () => {
     document.cookie = "trstctl_csrf=csrf-token-agent; path=/";
     mockFetch(201, JSON.stringify({ token: "BOOT-TOKEN-XYZ", enroll_path: "/enroll/bootstrap" }));

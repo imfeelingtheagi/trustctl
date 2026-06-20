@@ -190,6 +190,46 @@ describe("shared DataGrid", () => {
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
+
+  it("persists column metadata and saved views without storing row values", async () => {
+    localStorage.clear();
+    const user = userEvent.setup();
+    const first = render(
+      <MemoryRouter>
+        <PersistentGridHarness />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /columns/i }));
+    await user.click(screen.getByLabelText("Status"));
+    expect(screen.queryByRole("columnheader", { name: /status/i })).not.toBeInTheDocument();
+
+    first.unmount();
+    render(
+      <MemoryRouter>
+        <PersistentGridHarness />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("columnheader", { name: /status/i })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Owner view filter"), "platform");
+    await user.click(screen.getByRole("button", { name: /name/i }));
+    await user.type(screen.getByLabelText("Saved view name"), "Platform focus");
+    await user.click(screen.getByRole("button", { name: "Save view" }));
+
+    const stored = localStorage.getItem("trstctl-grid-view:test-grid") ?? "";
+    expect(stored).toContain("Platform focus");
+    expect(stored).toContain("platform");
+    expect(stored).not.toContain("payments-api");
+    expect(stored).not.toContain("worker");
+
+    await user.selectOptions(screen.getByLabelText("Owner view filter"), "all");
+    expect(screen.getByText("worker")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Restore view Platform focus" }));
+    expect(screen.queryByText("worker")).not.toBeInTheDocument();
+    expect(screen.getByText("payments-api")).toBeInTheDocument();
+  });
 });
 
 function ToolbarGridHarness() {
@@ -210,6 +250,54 @@ function ToolbarGridHarness() {
           filters={<span>Owner filter</span>}
           bulkActions={<ButtonLike>Bulk rotate</ButtonLike>}
           columnChooser={columnChooser}
+        />
+      )}
+    />
+  );
+}
+
+function PersistentGridHarness() {
+  const [owner, setOwner] = useState("all");
+  const [sort, setSort] = useState<DataGridSort>({ columnId: "name", direction: "asc" });
+  const filtered = rows.filter((row) => owner === "all" || row.owner === owner);
+  const sorted = [...filtered].sort((left, right) => {
+    const dir = sort.direction === "asc" ? 1 : -1;
+    return left.name.localeCompare(right.name) * dir;
+  });
+
+  return (
+    <DataGrid
+      ariaLabel="Persistent credential rows"
+      rows={sorted}
+      columns={columns}
+      getRowId={(row) => row.id}
+      sort={sort}
+      onSort={setSort}
+      viewStorageKey="test-grid"
+      viewMetadata={{ owner }}
+      onViewRestore={(metadata, restoredSort) => {
+        setOwner(typeof metadata.owner === "string" ? metadata.owner : "all");
+        if (restoredSort) setSort(restoredSort);
+      }}
+      toolbar={({ columnChooser, savedViews }) => (
+        <DataGridToolbar
+          filters={
+            <label className="grid gap-1 text-sm font-medium">
+              Owner view filter
+              <select
+                aria-label="Owner view filter"
+                value={owner}
+                onChange={(event) => setOwner(event.target.value)}
+                className="rounded-control border border-border bg-background px-2 py-1"
+              >
+                <option value="all">All</option>
+                <option value="platform">Platform</option>
+                <option value="security">Security</option>
+              </select>
+            </label>
+          }
+          columnChooser={columnChooser}
+          savedViews={savedViews}
         />
       )}
     />

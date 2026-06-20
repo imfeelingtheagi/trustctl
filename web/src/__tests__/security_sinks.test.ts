@@ -7,7 +7,9 @@ import path from "node:path";
 // dangerouslySetInnerHTML, no raw innerHTML assignment, no eval) and stores no auth
 // token in localStorage/sessionStorage (only the theme). This guard re-runs that
 // scan in CI (cd web && npm test) so a future component cannot quietly reintroduce a
-// sink. It changes NO behavior; it fails if a sink or a token-in-storage appears.
+// sink. It changes NO behavior; it fails if a sink or token-in-storage appears.
+// The only non-theme storage exception is grid view metadata: column ids, sort,
+// and non-sensitive filter metadata, never row payloads or auth material.
 
 const SRC = path.resolve(__dirname, "..");
 
@@ -77,9 +79,9 @@ describe("SPA security sinks (SURFACE-I01)", () => {
       if (/\bsessionStorage\b/.test(body)) {
         offenders.push(`${rel}: uses sessionStorage`);
       }
-      // localStorage is allowed ONLY in the ThemeProvider (the theme preference).
-      if (/\blocalStorage\b/.test(body) && !rel.includes("ThemeProvider")) {
-        offenders.push(`${rel}: uses localStorage outside ThemeProvider (auth state must live in an HttpOnly cookie, not web storage)`);
+      // localStorage is allowed only for the theme preference and DataGrid view metadata.
+      if (/\blocalStorage\b/.test(body) && !rel.includes("ThemeProvider") && !rel.includes("gridViews")) {
+        offenders.push(`${rel}: uses localStorage outside approved metadata modules (auth state must live in an HttpOnly cookie, not web storage)`);
       }
       // Belt-and-braces: never write a token/secret into web storage.
       if (/\.setItem\([^)]*\b(token|secret|password|bearer|trst_)\b/i.test(body)) {

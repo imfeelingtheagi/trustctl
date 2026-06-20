@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery } from "@/lib/api";
-import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { DataGridToolbar } from "@/components/DataGridToolbar";
+import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 
 type Notice = { kind: "permission" | "error"; message: string };
@@ -76,6 +77,53 @@ export function Audit() {
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
+  const auditColumns = useMemo<Array<DataGridColumn<AuditEvent>>>(
+    () => [
+      {
+        id: "sequence",
+        header: "Sequence",
+        sortable: true,
+        className: "font-mono text-xs",
+        cell: (event) => event.sequence,
+      },
+      {
+        id: "type",
+        header: "Type",
+        sortable: true,
+        cell: (event) => event.type,
+      },
+      {
+        id: "actor",
+        header: "Actor",
+        cell: (event) => actorLabel(event.actor),
+      },
+      {
+        id: "tenant",
+        header: "Tenant",
+        className: "font-mono text-xs",
+        cell: (event) => event.tenant_id,
+      },
+      {
+        id: "resource",
+        header: "Resource",
+        cell: (event) => resourceLabel(event),
+      },
+      {
+        id: "time",
+        header: "Time",
+        sortable: true,
+        cell: (event) => event.time,
+      },
+      {
+        id: "hash",
+        header: "Hash",
+        className: "font-mono text-xs",
+        cell: (event) => shortHash(event.hash),
+      },
+    ],
+    [],
+  );
+
   return (
     <section aria-labelledby="audit-heading" className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -92,149 +140,125 @@ export function Audit() {
         </Button>
       </div>
 
-      <form
-        className="rounded-md border border-border p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void loadEvents(toAuditQuery(filters));
-        }}
-      >
-        <div className="grid gap-3 lg:grid-cols-6">
-          <label className="grid gap-1 text-sm font-medium" htmlFor="audit-type">
-            Type
-            <input
-              id="audit-type"
-              value={filters.type}
-              onChange={(event) => updateFilter("type", event.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-              placeholder="identity.issued"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="audit-q">
-            Search
-            <input
-              id="audit-q"
-              value={filters.q}
-              onChange={(event) => updateFilter("q", event.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-              placeholder="resource, actor, reason"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="audit-since">
-            Since
-            <input
-              id="audit-since"
-              value={filters.since}
-              onChange={(event) => updateFilter("since", event.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-              placeholder="2026-06-17T00:00:00Z"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="audit-until">
-            Until
-            <input
-              id="audit-until"
-              value={filters.until}
-              onChange={(event) => updateFilter("until", event.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-              placeholder="2026-06-18T00:00:00Z"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="audit-as-of">
-            As of sequence
-            <input
-              id="audit-as-of"
-              type="number"
-              min="1"
-              value={filters.asOf}
-              onChange={(event) => updateFilter("asOf", event.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="audit-limit">
-            Limit
-            <input
-              id="audit-limit"
-              type="number"
-              min="1"
-              max="100"
-              value={filters.limit}
-              onChange={(event) => updateFilter("limit", event.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2"
-            />
-          </label>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button type="submit" disabled={loading}>
-            Apply filters
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setFilters(defaultFilters);
-              void loadEvents(toAuditQuery(defaultFilters));
-            }}
-          >
-            Reset
-          </Button>
-        </div>
-      </form>
-
-      {loading && <LoadingState>Loading audit events...</LoadingState>}
-      {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
-      {error?.kind === "error" && <ErrorState title="Audit unavailable">{error.message}</ErrorState>}
       {exportError && <ErrorState title="Evidence export unavailable">{exportError}</ErrorState>}
       {bundle && <EvidenceBundle bundle={bundle} />}
 
-      {events && (
-        <>
-          <HashChainPanel events={events} />
-          {events.length === 0 ? (
-            <EmptyState title="No audit events match these filters">
-              The served audit API returned an empty window. Widen the time range, remove the type filter, or lower the as-of sequence.
-            </EmptyState>
-          ) : (
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
-              <table className="w-full text-left text-sm">
-                <caption className="sr-only">Tenant audit events</caption>
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th scope="col" className="py-2 pr-4 font-medium">Sequence</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Type</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Actor</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Tenant</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Resource</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Time</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Hash</th>
-                    <th scope="col" className="py-2 font-medium">Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((event) => (
-                    <tr key={eventKey(event)} className="border-b border-border align-top">
-                      <td className="py-2 pr-4 font-mono text-xs">{event.sequence}</td>
-                      <td className="py-2 pr-4">{event.type}</td>
-                      <td className="py-2 pr-4">{actorLabel(event.actor)}</td>
-                      <td className="py-2 pr-4 font-mono text-xs">{event.tenant_id}</td>
-                      <td className="py-2 pr-4">{resourceLabel(event)}</td>
-                      <td className="py-2 pr-4">{event.time}</td>
-                      <td className="py-2 pr-4 font-mono text-xs">{shortHash(event.hash)}</td>
-                      <td className="py-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => setSelected(event)}>
-                          View event {event.sequence}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <EventDetail event={selected} />
-            </div>
-          )}
-        </>
-      )}
+      {events && <HashChainPanel events={events} />}
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void loadEvents(toAuditQuery(filters));
+          }}
+        >
+          <DataGrid
+            ariaLabel="Tenant audit events"
+            rows={events ?? []}
+            columns={auditColumns}
+            getRowId={eventKey}
+            state={
+              loading
+                ? "loading"
+                : error?.kind === "permission"
+                  ? "permission-denied"
+                  : error?.kind === "error"
+                    ? "error"
+                    : events && events.length === 0
+                      ? "empty"
+                      : "ready"
+            }
+            stateTitle={
+              error?.kind === "error"
+                ? "Audit unavailable"
+                : events && events.length === 0
+                  ? "No audit events match these filters"
+                  : undefined
+            }
+            stateMessage={
+              error?.message ??
+              (events && events.length === 0
+                ? "The served audit API returned an empty window. Widen the time range, remove the type filter, or lower the as-of sequence."
+                : undefined)
+            }
+            toolbar={({ columnChooser }) => (
+              <DataGridToolbar
+                searchLabel="Search"
+                searchPlaceholder="resource, actor, reason"
+                searchValue={filters.q}
+                onSearchChange={(value) => updateFilter("q", value)}
+                filters={
+                  <>
+                    <AuditFilterInput id="audit-type" label="Type" value={filters.type} onChange={(value) => updateFilter("type", value)} placeholder="identity.issued" />
+                    <AuditFilterInput id="audit-since" label="Since" value={filters.since} onChange={(value) => updateFilter("since", value)} placeholder="2026-06-17T00:00:00Z" />
+                    <AuditFilterInput id="audit-until" label="Until" value={filters.until} onChange={(value) => updateFilter("until", value)} placeholder="2026-06-18T00:00:00Z" />
+                    <AuditFilterInput id="audit-as-of" label="As of sequence" type="number" value={filters.asOf} onChange={(value) => updateFilter("asOf", value)} />
+                    <AuditFilterInput id="audit-limit" label="Limit" type="number" value={filters.limit} onChange={(value) => updateFilter("limit", value)} min="1" max="100" />
+                  </>
+                }
+                columnChooser={columnChooser}
+                actions={
+                  <>
+                    <Button type="submit" disabled={loading}>
+                      Apply filters
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setFilters(defaultFilters);
+                        void loadEvents(toAuditQuery(defaultFilters));
+                      }}
+                    >
+                      Reset
+                    </Button>
+                  </>
+                }
+              />
+            )}
+            onRowOpen={setSelected}
+            rowActionLabel={(event) => `View event ${event.sequence}`}
+          />
+        </form>
+        <EventDetail event={selected} />
+      </div>
     </section>
+  );
+}
+
+function AuditFilterInput({
+  id,
+  label,
+  max,
+  min,
+  onChange,
+  placeholder,
+  type = "text",
+  value,
+}: {
+  id: string;
+  label: string;
+  max?: string;
+  min?: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: "number" | "text";
+  value: string;
+}) {
+  return (
+    <label className="grid gap-1 text-sm font-medium" htmlFor={id}>
+      {label}
+      <input
+        id={id}
+        type={type}
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-sm"
+        placeholder={placeholder}
+      />
+    </label>
   );
 }
 

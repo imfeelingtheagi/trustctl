@@ -9,6 +9,7 @@ export type DataGridToolbarProps = {
   onSearchChange?: (value: string) => void;
   filters?: ReactNode;
   bulkActions?: ReactNode;
+  savedViews?: ReactNode;
   columnChooser?: ReactNode;
   actions?: ReactNode;
   className?: string;
@@ -21,6 +22,7 @@ export function DataGridToolbar({
   onSearchChange,
   filters,
   bulkActions,
+  savedViews,
   columnChooser,
   actions,
   className,
@@ -48,6 +50,7 @@ export function DataGridToolbar({
       )}
       {filters && <div className="flex flex-wrap items-end gap-2">{filters}</div>}
       {bulkActions && <div className="flex flex-wrap items-center gap-2">{bulkActions}</div>}
+      {savedViews}
       {columnChooser}
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

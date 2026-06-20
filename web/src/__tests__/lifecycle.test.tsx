@@ -247,6 +247,37 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
+  it("bulk revokes selected identities with count confirmation and per-item results", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "dep-1", name: "bulk-ok", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" },
+      { id: "dep-2", name: "bulk-fail", kind: "x509_certificate", owner_id: "owner-2", status: "deployed" },
+      { id: "req-1", name: "not-selected", kind: "x509_certificate", owner_id: "owner-3", status: "requested" },
+    ]);
+    apiMock.transitionIdentity.mockImplementation(async (id: string) => {
+      if (id === "dep-2") throw new ApiError(500, JSON.stringify({ detail: "connector queue unavailable" }));
+      return { id, name: id, status: "revoked" };
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    await user.click(await screen.findByLabelText("Select bulk-ok"));
+    await user.click(screen.getByLabelText("Select bulk-fail"));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Bulk revoke selected" }));
+
+    const dialog = await screen.findByRole("alertdialog", { name: /Revoke 2 selected identities/i });
+    expect(within(dialog).getByText(/2 selected identities/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Confirm bulk revoke" }));
+
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "revoked", "bulk revoke via UI");
+    expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-2", "revoked", "bulk revoke via UI");
+    expect(await screen.findByText("bulk-ok accepted")).toBeInTheDocument();
+    expect(screen.getByText(/bulk-fail failed: connector queue unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/accepted 1; failed 1/i)).toBeInTheDocument();
+  });
+
   it("shows served OCSP and CRL publication endpoints without fake health", async () => {
     apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "revocation-docs", status: "deployed" }]);
 

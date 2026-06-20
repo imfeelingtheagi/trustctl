@@ -27,6 +27,7 @@ const identityKinds = [
   "workload_identity",
 ] as const satisfies Identity["kind"][];
 type KindFilter = "all" | Identity["kind"];
+type BulkResult = { id: string; name: string; status: "accepted" | "failed"; message: string };
 
 const kindCopy: Record<Identity["kind"], { title: string; description: string }> = {
   x509_certificate: {
@@ -195,9 +196,17 @@ export function Identities() {
   const [pendingConfirmName, setPendingConfirmName] = useState("");
   const [pendingReason, setPendingReason] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
   const filteredItems = useMemo(
     () => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter),
     [items, kindFilter],
+  );
+  const selectedRows = useMemo(
+    () => filteredItems.filter((identity) => selectedIds.has(identity.id)),
+    [filteredItems, selectedIds],
   );
 
   const load = useCallback(async () => {
@@ -268,6 +277,35 @@ export function Identities() {
       return;
     }
     void act(id, to, reason);
+  }
+
+  async function runBulkRevoke() {
+    const rows = selectedRows;
+    setBulkBusy(true);
+    setBulkResults([]);
+    const results: BulkResult[] = [];
+    for (const identity of rows) {
+      if (!actionForTarget(identityState(identity), "revoked")) {
+        results.push({
+          id: identity.id,
+          name: identity.name,
+          status: "failed",
+          message: "revoke is not valid from this lifecycle state",
+        });
+        continue;
+      }
+      try {
+        await api.transitionIdentity(identity.id, "revoked", "bulk revoke via UI");
+        results.push({ id: identity.id, name: identity.name, status: "accepted", message: "accepted" });
+      } catch (err) {
+        results.push({ id: identity.id, name: identity.name, status: "failed", message: apiProblemMessage(err) });
+      }
+    }
+    setBulkResults(results);
+    setSelectedIds(new Set());
+    setBulkConfirmOpen(false);
+    setBulkBusy(false);
+    await load();
   }
 
   const identityColumns = useMemo<Array<DataGridColumn<Identity>>>(
@@ -468,6 +506,67 @@ export function Identities() {
         </div>
       )}
 
+      {selectedRows.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2 text-sm">
+          <span className="font-medium">{selectedRows.length} selected</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => setBulkConfirmOpen(true)}>
+            Bulk revoke selected
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            Clear selection
+          </Button>
+        </div>
+      )}
+
+      {bulkConfirmOpen && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="bulk-revoke-title"
+          aria-describedby="bulk-revoke-desc"
+          className="mb-4 rounded-md border border-red-300 bg-red-50 p-4 text-sm dark:border-red-800 dark:bg-red-950"
+        >
+          <h2 id="bulk-revoke-title" className="font-semibold text-red-700 dark:text-red-300">
+            Revoke {selectedRows.length} selected identities?
+          </h2>
+          <p id="bulk-revoke-desc" className="mt-1 text-red-700 dark:text-red-300">
+            This sends one idempotent revoke request per selected identity and reports accepted or failed for each item. Connector and downstream delivery still complete asynchronously through the outbox.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-red-400 text-red-700 hover:bg-red-100 dark:text-red-300"
+              disabled={bulkBusy}
+              onClick={() => void runBulkRevoke()}
+            >
+              Confirm bulk revoke
+            </Button>
+            <Button type="button" size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setBulkConfirmOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {bulkResults.length > 0 && (
+        <div role="status" className="mb-3 rounded-md border border-border p-3 text-sm">
+          <p className="font-medium">
+            Bulk revoke results: accepted {bulkResults.filter((result) => result.status === "accepted").length}; failed{" "}
+            {bulkResults.filter((result) => result.status === "failed").length}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {bulkResults.map((result) => (
+              <li key={result.id}>
+                {result.name} {result.status}
+                {result.status === "failed" ? `: ${result.message}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {!items && !error && <LoadingState>Loading identities...</LoadingState>}
       {error && <ErrorState title="Identity action failed">{error}</ErrorState>}
 
@@ -508,6 +607,11 @@ export function Identities() {
             rows={filteredItems}
             columns={identityColumns}
             getRowId={(identity) => identity.id}
+            selection={{
+              selectedIds,
+              onSelectedIdsChange: setSelectedIds,
+              getRowLabel: (identity) => identity.name,
+            }}
             state={filteredItems.length === 0 ? "empty" : "ready"}
             stateTitle="No identities match this kind"
             stateMessage="Choose another identity kind or clear the filter."
