@@ -2896,7 +2896,8 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 	check("release.yml image signing", release,
 		"permissions:",
 		"id-token: write",
-		"needs: test",
+		"needs: [test, required-checks]",
+		"scripts/ci/verify-required-checks.sh",
 		"provenance: true",
 		"Generate CycloneDX SBOM",
 		"cosign sign \"${GHCR_IMAGE}@${digest}\"",
@@ -3546,9 +3547,16 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"TRSTCTL_REQUIRE_BUILT_UI",
 		"run: make test",
 	)
+	check("release.yml required-checks job", job("required-checks"),
+		"name: required checks / live CI preflight",
+		"checks: read",
+		"statuses: read",
+		"TRSTCTL_REQUIRED_CHECKS_ATTEMPTS",
+		"scripts/ci/verify-required-checks.sh",
+	)
 	for _, name := range []string{"image", "agent-windows", "helm-chart"} {
 		check("release.yml "+name+" job", job(name),
-			"needs: test",
+			"needs: [test, required-checks]",
 		)
 	}
 

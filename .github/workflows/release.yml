@@ -30,12 +30,10 @@ jobs:
   # built, signed, or published (TEST-005). The release triggers on a tag push (or
   # manual dispatch), which can point at a commit whose CI was red, never finished,
   # or was bypassed (TEST-006) — so "CI ran on main earlier" is not a guarantee for
-  # this ref. For a root-of-trust product, nothing ships off an untested SHA: the
-  # publishing jobs below `needs: test`, so a failing suite fails the release before
-  # any artifact is built or pushed. This mirrors the Linux build/test leg of ci.yml
-  # (the same `make build` + `make test` against embedded Postgres + in-process
-  # NATS) and is the release-time quality gate the audit's anti-vacuous-green
-  # discipline requires (never ship off an unverified ref; ratchet up, never down).
+  # this ref. For a root-of-trust product, nothing ships off an untested SHA. The
+  # publishing jobs below also need `required-checks`, which verifies that the
+  # branch-protection required CI/security contexts are green for this commit before
+  # any artifact is emitted (TEST-003).
   test:
     name: re-run test suite (gate the release)
     runs-on: ubuntu-latest
@@ -71,12 +69,34 @@ jobs:
       - name: Test (race + coverage floors against the tagged ref)
         run: make test
 
+  required-checks:
+    name: required checks / live CI preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 25 # TEST-003 (waits for full CI/security contexts on the tag SHA)
+    permissions:
+      contents: read
+      checks: read
+      statuses: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify required CI/security checks are green for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRSTCTL_REQUIRED_CHECKS_ATTEMPTS: "60"
+          TRSTCTL_REQUIRED_CHECKS_SLEEP_SECONDS: "20"
+        run: scripts/ci/verify-required-checks.sh
+
   image:
     name: build / sign / publish
     runs-on: ubuntu-latest
     timeout-minutes: 40 # TEST-004 (multi-arch build + sign + SBOM)
-    # Do not build/sign/publish off an untested ref (TEST-005): block on the suite.
-    needs: test
+    # Do not build/sign/publish off an untested ref (TEST-005) or a commit whose
+    # broader required CI/security surface is red or missing (TEST-003).
+    needs: [test, required-checks]
     env:
       # Surface the Docker Hub mirror credentials as env vars so they can be used
       # in an `if:` condition — the `secrets` context is not allowed there.
@@ -229,8 +249,10 @@ jobs:
     name: agent / windows sign + publish
     runs-on: ubuntu-latest
     timeout-minutes: 30 # TEST-004
-    # Do not build/sign/publish the privileged agent off an untested ref (TEST-005).
-    needs: test
+    # Do not build/sign/publish the privileged agent off an untested ref (TEST-005)
+    # or a commit whose broader required CI/security surface is red or missing
+    # (TEST-003).
+    needs: [test, required-checks]
     env:
       # Surface the signing identity as env so it can drive an `if:` gate (the
       # `secrets` context is not allowed in `if:`) and feed the Makefile.
@@ -313,13 +335,13 @@ jobs:
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
   # We push the packaged chart as an OCI artifact to GHCR and cosign-sign it keyless
   # (the same OIDC identity that signs the image), so `cosign verify` validates the
-  # chart with the documented identity regexp. Gated on the test suite like every
-  # other publishing job (never ship off an untested ref, TEST-005).
+  # chart with the documented identity regexp. Gated on the test suite and required
+  # CI/security contexts like every other publishing job (TEST-003/005).
   helm-chart:
     name: helm chart / package + sign
     runs-on: ubuntu-latest
     timeout-minutes: 20 # TEST-004
-    needs: test
+    needs: [test, required-checks]
     env:
       CHART_OCI: oci://ghcr.io/${{ github.repository }}/charts
     steps:

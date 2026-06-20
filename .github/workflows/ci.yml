@@ -7,6 +7,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
   schedule:
     # 03:17 UTC daily — the longer nightly fuzz pass.
     - cron: "17 3 * * *"
@@ -74,8 +75,26 @@ jobs:
           bash scripts/ci/coverage-critical_selftest.sh
           bash scripts/ci/coverage-server-lifecycle_selftest.sh
           bash scripts/ci/check-base-pinned_selftest.sh
+          bash scripts/ci/verify-branch-protection_selftest.sh
+          bash scripts/ci/verify-required-checks_selftest.sh
           bash scripts/ci/profile-zlint_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
+
+  branch-protection-drift:
+    name: branch protection / live policy drift
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # TEST-001 (live policy must match the committed gate)
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Verify live branch protection matches the committed policy
+        env:
+          GH_TOKEN: ${{ secrets.TRSTCTL_BRANCH_PROTECTION_READ_TOKEN || github.token }}
+        run: scripts/ci/verify-branch-protection.sh
 
   # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
   # that touches untrusted input" (CLAUDE.md §6) is only a safety net if it RUNS:

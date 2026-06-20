@@ -10,8 +10,8 @@ review which paths, and how an admin applies and verifies the rules — so the g
 > server-side — invisible to the repository and to a reviewer. A job that *runs* but
 > is **not required** is theater: a red build could merge, and an admin could
 > force-push, with no in-repo trace. Codifying the policy here (plus
-> [`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/CODEOWNERS)
-> and [`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/branch-protection.json))
+> [`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS)
+> and [`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json))
 > makes the gate auditable. Two reality-tests keep the codified policy honest:
 > `docs/codeowners_test.go` (every security-critical path is owned) and
 > `docs/branch_protection_test.go` (the required-check list matches the real CI job
@@ -20,7 +20,7 @@ review which paths, and how an admin applies and verifies the rules — so the g
 ## The policy for `main`
 
 The canonical, machine-applicable form lives in
-[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/branch-protection.json).
+[`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json).
 In words, merging to `main` requires:
 
 - **All required status checks green** (and the branch up to date — `strict`). The
@@ -77,15 +77,33 @@ here (the sync-test deliberately omits matrix-expanded names so it stays robust)
 
 ### Release-time gate
 
-A version tag does **not** ship off an unverified commit: `release.yml` re-runs the
-full suite (`make build` + `make test`) against the **exact tagged ref** in a `test`
-job, and every build/sign/publish job `needs: test` (TEST-005). So even a tag placed
-on a commit whose PR checks were skipped cannot publish a signed artifact without the
-suite going green on that ref.
+A version tag does **not** ship off an unverified commit. `release.yml` has two
+release blockers before any image, Windows agent, or Helm chart is built, signed, or
+published:
+
+- `test` re-runs the release-local suite (`make build`, embedded-UI verification,
+  and `make test`) against the **exact tagged ref** (TEST-005).
+- `required-checks` runs `scripts/ci/verify-required-checks.sh`, reads the required
+  contexts from `.github/branch-protection.json`, and verifies the tag commit has
+  every required CI/security check green (TEST-003).
+
+Every build/sign/publish job `needs: [test, required-checks]`, so a tag placed on a
+commit whose broader CI/security surface was skipped, red, pending, or missing cannot
+publish a signed artifact.
+
+### Drift detection
+
+The scheduled/manual CI job `branch protection / live policy drift` runs
+`scripts/ci/verify-branch-protection.sh` against the GitHub API and fails if the live
+`main` protection differs from `.github/branch-protection.json` (TEST-001). That
+turns branch protection into a watched control instead of a one-time admin click.
+If the default GitHub workflow token cannot read branch-protection settings, set the
+repository secret `TRSTCTL_BRANCH_PROTECTION_READ_TOKEN` to a token with read access
+to administration/branch-protection settings.
 
 ## Code ownership
 
-[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/CODEOWNERS)
+[`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS)
 assigns mandatory reviewers. The security-critical paths — the AN-3 crypto boundary
 (`internal/crypto`), the AN-4 isolated signer (`internal/signing`, `cmd/trstctl-signer`,
 `proto`), the AN-1 multi-tenant store (`internal/store`), and the architecture linter
@@ -98,7 +116,7 @@ covered.
 
 ```bash
 # Apply the codified protection to main (requires admin on the repo):
-gh api -X PUT repos/imfeelingtheagi/trstctl/branches/main/protection \
+gh api -X PUT repos/ctlplne/trstctl/branches/main/protection \
   -H "Accept: application/vnd.github+json" \
   --input .github/branch-protection.json
 
@@ -111,7 +129,7 @@ gh api -X PUT repos/imfeelingtheagi/trstctl/branches/main/protection \
 ```bash
 # The applied protection should match the codified policy (required checks,
 # enforce-admins, linear history, code-owner review).
-gh api repos/imfeelingtheagi/trstctl/branches/main/protection | jq '{
+gh api repos/ctlplne/trstctl/branches/main/protection | jq '{
   contexts: .required_status_checks.contexts,
   enforce_admins: .enforce_admins.enabled,
   linear: .required_linear_history.enabled,
@@ -126,4 +144,4 @@ in-repo file is the intended policy; re-apply it.
 
 [Supply chain & build integrity](supply-chain.md) ·
 [Vulnerability management](security/vulnerability-management.md) ·
-[`SECURITY.md`](https://github.com/imfeelingtheagi/trstctl/blob/main/SECURITY.md)
+[`SECURITY.md`](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md)

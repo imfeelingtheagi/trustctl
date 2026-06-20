@@ -182,3 +182,67 @@ func TestBranchProtectionDocExistsAndLinked(t *testing.T) {
 		t.Error("supply-chain.md should link to the branch-protection policy so it is discoverable")
 	}
 }
+
+func TestReleaseRequiresRequiredCheckPreflight(t *testing.T) {
+	release := read(t, "../.github/workflows/release.yml")
+	for _, want := range []string{
+		"required-checks:",
+		"name: required checks / live CI preflight",
+		"checks: read",
+		"statuses: read",
+		"TRSTCTL_REQUIRED_CHECKS_ATTEMPTS",
+		"run: scripts/ci/verify-required-checks.sh",
+	} {
+		if !strings.Contains(release, want) {
+			t.Errorf("release.yml must contain %q so TEST-003 release publishing checks the full required CI/security surface", want)
+		}
+	}
+
+	for _, job := range []string{"image:", "agent-windows:", "helm-chart:"} {
+		start := strings.Index(release, "\n  "+job)
+		if start < 0 {
+			t.Fatalf("release.yml is missing publishing job %s", job)
+		}
+		body := release[start+1:]
+		if next := regexp.MustCompile(`(?m)^  [A-Za-z0-9_-]+:`).FindAllStringIndex(body, 2); len(next) == 2 {
+			body = body[:next[1][0]]
+		}
+		if !strings.Contains(body, "needs: [test, required-checks]") {
+			t.Errorf("publishing job %s must need both release-local tests and required-checks preflight (TEST-003)", job)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	if !strings.Contains(ci, "bash scripts/ci/verify-required-checks_selftest.sh") {
+		t.Error("ci.yml must self-test the required-check verifier so the release preflight cannot silently weaken")
+	}
+}
+
+func TestBranchProtectionDriftCheckIsScheduled(t *testing.T) {
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"workflow_dispatch:",
+		"branch-protection-drift:",
+		"name: branch protection / live policy drift",
+		"if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+		"secrets.TRSTCTL_BRANCH_PROTECTION_READ_TOKEN || github.token",
+		"run: scripts/ci/verify-branch-protection.sh",
+		"bash scripts/ci/verify-branch-protection_selftest.sh",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("ci.yml must contain %q so TEST-001 live branch protection drift is watched", want)
+		}
+	}
+
+	body := read(t, "branch-protection.md")
+	for _, want := range []string{
+		"branch protection / live policy drift",
+		"scripts/ci/verify-branch-protection.sh",
+		"TRSTCTL_BRANCH_PROTECTION_READ_TOKEN",
+		"TEST-001",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("branch-protection.md must document %q for TEST-001 live enforcement evidence", want)
+		}
+	}
+}
