@@ -9,7 +9,15 @@ import { AppShell } from "@/components/AppShell";
 import { Platform } from "@/pages/Platform";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { me: vi.fn(), certificates: vi.fn(), owners: vi.fn(), risk: vi.fn() },
+  apiMock: {
+    me: vi.fn(),
+    certificates: vi.fn(),
+    certificatePage: vi.fn(),
+    identities: vi.fn(),
+    owners: vi.fn(),
+    risk: vi.fn(),
+    secretPage: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
@@ -25,7 +33,10 @@ function renderShell(initialEntries = ["/"]) {
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<h1>Overview</h1>} />
+              <Route path="certificates" element={<h1>Certificates</h1>} />
+              <Route path="identities" element={<h1>Identities</h1>} />
               <Route path="platform" element={<Platform />} />
+              <Route path="secrets" element={<h1>Secrets</h1>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -46,6 +57,28 @@ function resizeViewport(width: number) {
 describe("app shell accessibility and theme", () => {
   beforeEach(() => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        {
+          id: "cert-1",
+          subject: "payments-api",
+          fingerprint: "SHA256:abc123",
+          status: "active",
+          tenant_id: "t1",
+        },
+      ],
+    });
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "id-1",
+        kind: "workload_identity",
+        name: "payments-worker",
+        owner_id: "owner-1",
+        status: "issued",
+        tenant_id: "t1",
+      },
+    ]);
+    apiMock.secretPage.mockResolvedValue({ items: [{ name: "payments/db/password", version: 3 }] });
     document.documentElement.classList.remove("dark");
     localStorage.clear();
     resizeViewport(1024);
@@ -104,6 +137,73 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
   });
 
+  it("shows tenant context without a fake tenant switch", async () => {
+    renderShell();
+    await screen.findByText("u@example.test");
+
+    const tenant = screen.getByLabelText("Tenant context");
+    expect(tenant).toHaveTextContent("t1");
+    expect(tenant).toHaveTextContent("BACKEND-TENANT-ADMIN");
+    expect(screen.getByRole("button", { name: /Tenant switcher blocked on BACKEND-TENANT-ADMIN/i })).toBeDisabled();
+  });
+
+  it("opens the command palette from Cmd-K, searches inventory, and navigates on Enter", async () => {
+    const user = userEvent.setup();
+    const { container } = renderShell();
+    await screen.findByText("u@example.test");
+
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    let palette = await screen.findByRole("dialog", { name: "Command palette" });
+    let search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    expect(search).toHaveFocus();
+    await user.type(search, "payments");
+
+    await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalled());
+    expect(within(palette).getByRole("button", { name: /payments-api.*Certificate/i })).toBeInTheDocument();
+    expect(within(palette).getByRole("button", { name: /payments-worker.*Identity/i })).toBeInTheDocument();
+    expect(within(palette).getByRole("button", { name: /payments\/db\/password.*Secret/i })).toBeInTheDocument();
+
+    const close = within(palette).getByRole("button", { name: "Close command palette" });
+    close.focus();
+    await user.tab({ shift: true });
+    const focusableButtons = within(palette).getAllByRole("button");
+    expect(focusableButtons[focusableButtons.length - 1]).toHaveFocus();
+
+    expect(await axe(container)).toHaveNoViolations();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open command palette" }));
+    palette = await screen.findByRole("dialog", { name: "Command palette" });
+    search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    await user.type(search, "platform");
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
+  });
+
+  it("opens the keyboard shortcuts overlay from ? and the help button", async () => {
+    const user = userEvent.setup();
+    const { container } = renderShell();
+    await screen.findByText("u@example.test");
+
+    await user.keyboard("?");
+
+    let overlay = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
+    expect(within(overlay).getByText("Open command palette")).toBeInTheDocument();
+    expect(within(overlay).getByText("Show keyboard shortcuts")).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open keyboard shortcuts" }));
+    overlay = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
+    expect(within(overlay).getByText("Close open overlay")).toBeInTheDocument();
+  });
+
   it("exposes grouped non-certificate navigation domains", async () => {
     renderShell();
     await screen.findByText("u@example.test");
@@ -153,7 +253,7 @@ describe("app shell accessibility and theme", () => {
     await screen.findByRole("heading", { name: "Platform" });
 
     expect(screen.getByText("Tenant ID from session")).toBeInTheDocument();
-    expect(screen.getByText("t1")).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getByText("t1")).toBeInTheDocument();
     expect(screen.getByText(/browser never chooses a tenant id/i)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
