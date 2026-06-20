@@ -199,6 +199,34 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText(/spiffe:\/\/example.test\/payments/)).toBeInTheDocument();
   });
 
+  it("renders the per-credential activity timeline disclosure in the identity drawer (FE-022)", async () => {
+    const identity = {
+      id: "dep-1",
+      name: "timeline-svc",
+      kind: "x509_certificate",
+      owner_id: "owner-1",
+      status: "deployed",
+    };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("timeline-svc")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /view details/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(within(dialog).getByText("Credential activity timeline")).toBeInTheDocument();
+    expect(within(dialog).getByText("Delivery status not exposed yet")).toBeInTheDocument();
+    expect(within(dialog).getByText(/FE-PTR-OUTBOX/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/BACKEND-OUTBOX-STATUS/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/last_error/)).toBeInTheDocument();
+    for (const state of ["Accepted", "Issuing", "Deploying", "Delivered / failed"]) {
+      expect(within(dialog).getByText(state)).toBeInTheDocument();
+    }
+    expect(apiMock).not.toHaveProperty("outboxStatus");
+  });
+
   it("disables invalid state-machine targets and sends the captured transition reason", async () => {
     const identity = { id: "req-1", name: "request-state-machine", kind: "x509_certificate", owner_id: "owner-1", status: "requested" };
     apiMock.identities.mockResolvedValue([identity]);

@@ -4,6 +4,7 @@ import { api, ApiError, identityState, type GraphImpact, type Identity, type Tra
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
@@ -1005,6 +1006,8 @@ function IdentityDetailPanel({
               </p>
             )}
           </section>
+
+          <CredentialActivityTimeline credentialLabel={identity.name} />
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">

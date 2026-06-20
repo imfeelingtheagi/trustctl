@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { ApiError, UnauthorizedError, api, type Certificate } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { EmptyState } from "@/components/EmptyState";
 import {
   ErrorState,
@@ -467,6 +468,9 @@ export function Certificates() {
                     issuer evidence until a chain field is served.
                   </UnavailableState>
                 </dd>
+              </div>
+              <div className="md:col-span-2">
+                <CredentialActivityTimeline credentialLabel={detail.subject} />
               </div>
             </dl>
           )}

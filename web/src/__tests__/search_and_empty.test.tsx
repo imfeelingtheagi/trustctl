@@ -227,6 +227,12 @@ describe("certificate inventory gap closure", () => {
     expect(dialog).toHaveTextContent("CN=Issuing CA");
     expect(screen.getByRole("link", { name: "owner-1" })).toHaveAttribute("href", "/owners?owner=owner-1");
     expect(dialog).toHaveTextContent(/certificate chain not served yet/i);
+    expect(dialog).toHaveTextContent("Credential activity timeline");
+    expect(dialog).toHaveTextContent("Delivery status not exposed yet");
+    expect(dialog).toHaveTextContent(/FE-PTR-OUTBOX/);
+    expect(dialog).toHaveTextContent(/BACKEND-OUTBOX-STATUS/);
+    expect(dialog).toHaveTextContent(/last_error/);
+    expect(dialog).toHaveTextContent("Delivered / failed");
     expect(document.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();
   });
 
