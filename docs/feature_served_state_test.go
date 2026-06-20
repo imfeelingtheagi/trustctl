@@ -110,6 +110,8 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 		"`served_state`",
 		"`api_surface`",
 		"`cli_surface`",
+		"`facet_evidence`",
+		"FeatureFacetCoverage",
 		"`library`",
 		"`roadmap`",
 	} {

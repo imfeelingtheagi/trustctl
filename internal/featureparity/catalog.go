@@ -12,13 +12,56 @@ type Catalog struct {
 }
 
 type Item struct {
-	FeatureID   string   `json:"feature_id"`
-	Feature     string   `json:"feature"`
-	ServedState string   `json:"served_state"`
-	APISurface  []string `json:"api_surface"`
-	APINA       string   `json:"api_na"`
-	CLISurface  []string `json:"cli_surface"`
-	CLINA       string   `json:"cli_na"`
+	FeatureID      string               `json:"feature_id"`
+	Feature        string               `json:"feature"`
+	ServedState    string               `json:"served_state"`
+	BackendStatus  string               `json:"backend_status"`
+	CurrentMapping string               `json:"current_frontend_mapping"`
+	AcceptanceTest string               `json:"acceptance_test"`
+	SourceDocs     []string             `json:"source_docs"`
+	SourceBackend  []string             `json:"source_backend"`
+	SourceFrontend []string             `json:"source_frontend"`
+	APISurface     []string             `json:"api_surface"`
+	APINA          string               `json:"api_na"`
+	CLISurface     []string             `json:"cli_surface"`
+	CLINA          string               `json:"cli_na"`
+	FacetEvidence  FeatureFacetEvidence `json:"facet_evidence"`
+}
+
+type FeatureFacetEvidence struct {
+	Served    FacetCell `json:"served"`
+	UI        FacetCell `json:"ui"`
+	CLI       FacetCell `json:"cli"`
+	API       FacetCell `json:"api"`
+	Test      FacetCell `json:"test"`
+	Docs      FacetCell `json:"docs"`
+	RBAC      FacetCell `json:"rbac"`
+	Audit     FacetCell `json:"audit"`
+	Telemetry FacetCell `json:"telemetry"`
+	A11y      FacetCell `json:"a11y"`
+	I18n      FacetCell `json:"i18n"`
+}
+
+type FacetCell struct {
+	Evidence []string `json:"evidence,omitempty"`
+	Refs     []string `json:"refs,omitempty"`
+	NA       string   `json:"na,omitempty"`
+}
+
+func (f FeatureFacetEvidence) Cells() map[string]FacetCell {
+	return map[string]FacetCell{
+		"served":    f.Served,
+		"ui":        f.UI,
+		"cli":       f.CLI,
+		"api":       f.API,
+		"test":      f.Test,
+		"docs":      f.Docs,
+		"rbac":      f.RBAC,
+		"audit":     f.Audit,
+		"telemetry": f.Telemetry,
+		"a11y":      f.A11y,
+		"i18n":      f.I18n,
+	}
 }
 
 func Load() (Catalog, error) {

@@ -9,7 +9,11 @@ as `served_state`, with the allowed values `served`, `conditional`, `partial`,
 `library`, and `roadmap`. The same JSON records `api_surface`, `api_na`,
 `cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests
 verify that every named OpenAPI operation/CLI command exists, or that the row has
-an explicit N/A reason.
+an explicit N/A reason. It also records `facet_evidence` for the served, UI, CLI,
+API, test, docs, RBAC, audit, telemetry, a11y, and i18n facets. The
+`FeatureFacetCoverage` test fails if any row is missing evidence or an explicit
+N/A, and GA-ish rows (`served`, `conditional`, `partial`) must carry concrete
+evidence for the facets that always apply to the shipped operator surface.
 
 This page is the answer to "where is feature X documented?" Each capability has a
 **primary page** that teaches it; some are also referenced from related pages and
