@@ -33,6 +33,9 @@ func TestACMEQuotaRejectsFlood(t *testing.T) {
 	rec = httptest.NewRecorder()
 	nonceSrv.newNonce(rec, httptest.NewRequest(http.MethodGet, "http://ca.test/acme/new-nonce", nil))
 	assertRateLimited(t, rec)
+	if got := len(nonceSrv.nonces); got != 1 {
+		t.Fatalf("nonce flood retained %d nonces, want quota-bound 1", got)
+	}
 
 	orderSrv := New(nil, AcceptAll{}).WithQuota(QuotaConfig{
 		MaxNonces:                  10,
@@ -57,6 +60,15 @@ func TestACMEQuotaRejectsFlood(t *testing.T) {
 	rec = httptest.NewRecorder()
 	orderSrv.newOrder(rec, httptest.NewRequest(http.MethodPost, "http://ca.test/acme/new-order", nil), msg, acct)
 	assertRateLimited(t, rec)
+	if got := len(orderSrv.orders); got != 1 {
+		t.Fatalf("order flood retained %d orders, want quota-bound 1", got)
+	}
+	if got := len(orderSrv.authzs); got != 1 {
+		t.Fatalf("order flood retained %d authzs, want quota-bound 1", got)
+	}
+	if got := len(orderSrv.challenges); got != 3 {
+		t.Fatalf("order flood retained %d challenges, want quota-bound 3", got)
+	}
 }
 
 func TestACMEQuotaJanitorExpiresPendingState(t *testing.T) {
