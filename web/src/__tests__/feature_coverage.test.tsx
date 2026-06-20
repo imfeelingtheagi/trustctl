@@ -48,6 +48,8 @@ describe("feature coverage roadmap surface", () => {
     expect(
       screen.getByRole("table", { name: /Feature coverage map with backend status, GUI mapping, and acceptance criteria/i }),
     ).toBeInTheDocument();
+    expect(screen.getAllByText("Served state:").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Library-only").length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${featureCoverageTotals.features}`).length).toBeGreaterThanOrEqual(1);
 
     expect(await screen.findAllByTestId("feature-row")).toHaveLength(featureCoverageItems.length);

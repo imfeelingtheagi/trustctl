@@ -7,46 +7,29 @@ import {
 } from "@/lib/navigation";
 import { featureCoverageItems } from "@/lib/featureCoverage";
 
-const servedFeatureIds = [
-  "F1",
-  "F3",
-  "F4",
-  "F5",
-  "F8",
-  "F9",
-  "F12",
-  "F15",
-  "F19",
-  "F21",
-  "F22",
-  "F23",
-  "F24",
-  "F28",
-  "F33",
-  "F40",
-  "F43",
-  "F47",
-  "F51",
-  "F53",
-  "F54",
-  "F55",
-  "F58",
-  "F59",
-  "F60",
-  "F63",
-  "F64",
-  "F67",
-  "F75",
-  "F76",
-  "F77",
-  "F78",
-];
+const servedFeatureIds = featureCoverageItems
+  .filter((item) => item.servedState === "served" || item.servedState === "conditional")
+  .map((item) => item.id);
 
 function surfacesFor(featureId: string): RealGuiSurface[] {
   return realGuiSurfaces.filter((surface) => surface.featureId === featureId);
 }
 
 describe("route-level served-feature parity", () => {
+  it("requires every feature-map row to declare explicit served maturity metadata", () => {
+    expect(featureCoverageItems).toHaveLength(78);
+    expect(featureCoverageItems.filter((item) => item.servedState === "served")).toHaveLength(13);
+    expect(featureCoverageItems.filter((item) => item.servedState === "conditional")).toHaveLength(19);
+    expect(featureCoverageItems.filter((item) => item.servedState === "partial")).toHaveLength(9);
+    expect(featureCoverageItems.filter((item) => item.servedState === "library")).toHaveLength(36);
+    expect(featureCoverageItems.filter((item) => item.servedState === "roadmap")).toHaveLength(1);
+
+    const absentServedRows = featureCoverageItems
+      .filter((item) => item.servedState === "library" || item.servedState === "roadmap")
+      .filter((item) => !/roadmap-disclosure/i.test(item.currentMapping));
+    expect(absentServedRows).toEqual([]);
+  });
+
   it("keeps every served feature ID tied to a non-ledger GUI route", () => {
     const backlogIds = new Set(featureCoverageItems.map((item) => item.id));
     const missingFromBacklog = servedFeatureIds.filter((featureId) => !backlogIds.has(featureId));

@@ -2,6 +2,7 @@ import featureMapBacklog from "@/lib/feature-map-backlog.json";
 
 export type FeatureCoverageState = "operate" | "observe" | "disclose";
 export type FeatureCoveragePhase = "P0" | "P1" | "P2" | "P3";
+export type FeatureServedState = "served" | "conditional" | "partial" | "library" | "roadmap";
 
 export interface FeatureMapBacklogItem {
   id: string;
@@ -10,6 +11,7 @@ export interface FeatureMapBacklogItem {
   domain: string;
   phase: FeatureCoveragePhase;
   priority: number;
+  served_state: FeatureServedState;
   backend_status: string;
   current_frontend_mapping: string;
   target_gui_mapping: string;
@@ -31,6 +33,7 @@ export interface FeatureCoverageItem {
   domain: string;
   phase: FeatureCoveragePhase;
   priority: number;
+  servedState: FeatureServedState;
   state: FeatureCoverageState;
   backendStatus: string;
   currentMapping: string;
@@ -69,6 +72,7 @@ export const featureCoverageItems: FeatureCoverageItem[] = backlog.items
     domain: item.domain,
     phase: item.phase,
     priority: item.priority,
+    servedState: item.served_state,
     state: coverageStateFor(item),
     backendStatus: item.backend_status,
     currentMapping: item.current_frontend_mapping,
