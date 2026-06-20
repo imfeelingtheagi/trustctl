@@ -38,6 +38,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -61,7 +62,7 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // is opaque to this package, is never logged, and is sealed at rest by the caller
 // (AN-8).
 type Credentials struct {
-	BearerToken string
+	BearerToken []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient,
@@ -100,6 +101,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // subscriptionID/resourceGroup, authorized by creds. The endpoint defaults to the
 // public Azure Resource Manager host.
 func New(subscriptionID, resourceGroup, zone string, creds Credentials, opts ...Option) *Provider {
+	creds.BearerToken = secrettext.Clone(creds.BearerToken)
 	p := &Provider{
 		subscriptionID: subscriptionID,
 		resourceGroup:  resourceGroup,
@@ -178,7 +180,7 @@ func (p *Provider) do(ctx context.Context, method, name string, body []byte, all
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.creds.BearerToken)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.creds.BearerToken))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

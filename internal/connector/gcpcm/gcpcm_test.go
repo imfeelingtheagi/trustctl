@@ -25,7 +25,7 @@ var (
 )
 
 func newConn(endpoint string) *gcpcm.Connector {
-	return gcpcm.New(project, location, gcpcm.StaticToken(token),
+	return gcpcm.New(project, location, gcpcm.StaticToken([]byte(token)),
 		gcpcm.WithEndpoint(endpoint), gcpcm.WithPollInterval(0))
 }
 
@@ -71,7 +71,7 @@ func TestDeployFailsOnBadToken(t *testing.T) {
 	srv := gcpcmtest.New(token)
 	defer srv.Close()
 
-	c := gcpcm.New(project, location, gcpcm.StaticToken("wrong-token"), gcpcm.WithEndpoint(srv.URL()), gcpcm.WithPollInterval(0))
+	c := gcpcm.New(project, location, gcpcm.StaticToken([]byte("wrong-token")), gcpcm.WithEndpoint(srv.URL()), gcpcm.WithPollInterval(0))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certID, sampleCert, sampleKey)); err == nil {
 		t.Fatal("expected deploy to fail on a bad token, got nil")
@@ -104,7 +104,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 // Least privilege: net.dial to the Certificate Manager host only — no fs, no
 // exec, no other host.
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
-	c := gcpcm.New(project, location, gcpcm.StaticToken(token)) // default GCP endpoint
+	c := gcpcm.New(project, location, gcpcm.StaticToken([]byte(token))) // default GCP endpoint
 	grant := c.Capabilities()
 	if grant.Has(pluginhost.CapFSWrite) {
 		t.Error("connector must not request fs.write")
@@ -126,7 +126,7 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 
 // The connector satisfies the shared connector conformance suite.
 func TestGCPCMPassesConformance(t *testing.T) {
-	c := gcpcm.New(project, location, gcpcm.StaticToken(token))
+	c := gcpcm.New(project, location, gcpcm.StaticToken([]byte(token)))
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {

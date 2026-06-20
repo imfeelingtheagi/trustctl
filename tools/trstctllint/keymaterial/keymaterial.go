@@ -76,6 +76,18 @@ var secretConversionSelectors = map[string]bool{
 	"req.Value":      true,
 }
 
+var providerCredentialNames = map[string]bool{
+	"SecretAccessKey": true,
+	"SessionToken":    true,
+	"BearerToken":     true,
+	"APIKey":          true,
+	"APIToken":        true,
+	"ClientToken":     true,
+	"ClientSecret":    true,
+	"AccessToken":     true,
+	"apiKey":          true,
+}
+
 // Analyzer enforces AN-8.
 var Analyzer = &analysis.Analyzer{
 	Name: "keymaterial",
@@ -87,7 +99,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inKeyMaterialScope := inScope(pass)
 	inSecretSurfaceScope := secretSurfacePkgs[pass.Pkg.Path()]
 	inDeploymentConnectorScope := strings.HasPrefix(pass.Pkg.Path(), "trstctl.com/trstctl/internal/connector/")
-	if !inKeyMaterialScope && !inSecretSurfaceScope && !inDeploymentConnectorScope {
+	inProviderCredentialScope := providerCredentialScope(pass.Pkg.Path())
+	if !inKeyMaterialScope && !inSecretSurfaceScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
 		return nil, nil
 	}
 	for _, file := range pass.Files {
@@ -101,6 +114,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				if inSecretSurfaceScope && secretSurfaceFieldName(pass, x) && isStringBacked(pass, x.Type) {
 					pass.Reportf(x.Type.Pos(),
 						"secret-bearing API/auth field must not use string; use byte-backed JSON/credential handling (AN-8)")
+				}
+				if inProviderCredentialScope && !isTestFile(pass, x) && providerCredentialName(x) && isStringBacked(pass, x.Type) {
+					pass.Reportf(x.Type.Pos(),
+						"provider credential field must not use string; use byte-backed credential handling and edge-only header strings (AN-8)")
 				}
 			case *ast.CallExpr:
 				if inSecretSurfaceScope && isSecretStringConversion(x) {
@@ -116,6 +133,27 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		})
 	}
 	return nil, nil
+}
+
+func providerCredentialScope(pkg string) bool {
+	return strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/kms/") ||
+		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/dns/") ||
+		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/notify/") ||
+		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/connector/") ||
+		strings.HasPrefix(pkg, "trstctl.com/trstctl/internal/ca/")
+}
+
+func providerCredentialName(field *ast.Field) bool {
+	for _, name := range field.Names {
+		if providerCredentialNames[name.Name] {
+			return true
+		}
+	}
+	return false
+}
+
+func isTestFile(pass *analysis.Pass, n ast.Node) bool {
+	return strings.HasSuffix(pass.Fset.Position(n.Pos()).Filename, "_test.go")
 }
 
 func secretSurfaceFieldName(pass *analysis.Pass, field *ast.Field) bool {

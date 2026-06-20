@@ -33,6 +33,7 @@ import (
 
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // defaultEndpoint is the public OpsGenie Alert API create-alert endpoint.
@@ -50,7 +51,7 @@ type HTTPDoer interface {
 // Channel is an OpsGenie Alert API notification channel bound to one API key. The key is
 // opaque to this package, never logged, and sealed at rest by the caller (AN-8).
 type Channel struct {
-	apiKey                 string // OpsGenie Alert API key; carried as Authorization: GenieKey <key>; never logged (AN-8)
+	apiKey                 []byte // OpsGenie Alert API key; carried as Authorization: GenieKey <key>; never logged (AN-8)
 	endpoint               string // create-alert URL
 	doer                   HTTPDoer
 	skipEndpointValidation bool
@@ -76,9 +77,9 @@ func WithHTTPClient(d HTTPDoer) Option {
 // New returns an OpsGenie channel that creates alerts authenticated with apiKey. The
 // endpoint defaults to the public Alert API create-alert endpoint. The default delivery
 // path accepts only public HTTPS endpoints and uses the shared SSRF-safe HTTP client.
-func New(apiKey string, opts ...Option) *Channel {
+func New(apiKey []byte, opts ...Option) *Channel {
 	c := &Channel{
-		apiKey:   apiKey,
+		apiKey:   secrettext.Clone(apiKey),
 		endpoint: defaultEndpoint,
 		doer:     netsec.SafeClient(10 * time.Second),
 	}
@@ -116,7 +117,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	}
 	// The API key is attached here and nowhere else; it is never written to logs or error
 	// text (AN-8).
-	req.Header.Set("Authorization", "GenieKey "+c.apiKey)
+	req.Header.Set("Authorization", secrettext.Prefixed("GenieKey ", c.apiKey))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.doer.Do(req)

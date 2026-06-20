@@ -208,7 +208,7 @@ func optsFor(alg string) crypto.SignOptions {
 
 func TestAzureKVConforms(t *testing.T) {
 	f := newFakeKV(t)
-	b := azurekv.New(testVault, azurekv.Credentials{BearerToken: testToken},
+	b := azurekv.New(testVault, azurekv.Credentials{BearerToken: []byte(testToken)},
 		azurekv.WithEndpoint(f.srv.URL), azurekv.WithHTTPClient(f.srv.Client()))
 	if err := crypto.ConformBackend(b, []crypto.Algorithm{crypto.RSA2048, crypto.ECDSAP256}); err != nil {
 		t.Fatalf("Azure Key Vault backend failed conformance: %v", err)
@@ -217,7 +217,7 @@ func TestAzureKVConforms(t *testing.T) {
 
 func TestBadTokenRejected(t *testing.T) {
 	f := newFakeKV(t)
-	b := azurekv.New(testVault, azurekv.Credentials{BearerToken: "wrong-token"},
+	b := azurekv.New(testVault, azurekv.Credentials{BearerToken: []byte("wrong-token")},
 		azurekv.WithEndpoint(f.srv.URL), azurekv.WithHTTPClient(f.srv.Client()))
 	_, err := b.GenerateKey(crypto.ECDSAP256)
 	if err == nil {
@@ -246,7 +246,7 @@ func (d *recordingDoer) Do(req *http.Request) (*http.Response, error) {
 func TestCredentialsNeverLogged(t *testing.T) {
 	f := newFakeKV(t)
 	doer := &recordingDoer{inner: f.srv.Client().Transport}
-	b := azurekv.New(testVault, azurekv.Credentials{BearerToken: testToken},
+	b := azurekv.New(testVault, azurekv.Credentials{BearerToken: []byte(testToken)},
 		azurekv.WithEndpoint(f.srv.URL), azurekv.WithHTTPClient(doer))
 
 	signer, err := b.GenerateKey(crypto.ECDSAP256)

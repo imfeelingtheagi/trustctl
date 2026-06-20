@@ -24,6 +24,7 @@ import (
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -40,7 +41,7 @@ const (
 type backend struct {
 	name    string
 	baseURL string
-	apiKey  string
+	apiKey  []byte
 	product string
 	client  *http.Client
 }
@@ -69,8 +70,8 @@ func WithProduct(product string) Option {
 // New builds the DigiCert plugin for the CertCentral API at baseURL (for example
 // https://www.digicert.com) authenticating with apiKey. The returned
 // *catemplate.Plugin is a ca.CA.
-func New(name, baseURL, apiKey string, opts ...Option) *catemplate.Plugin {
-	b := &backend{name: name, baseURL: baseURL, apiKey: apiKey, product: defaultProduct, client: http.DefaultClient}
+func New(name, baseURL string, apiKey []byte, opts ...Option) *catemplate.Plugin {
+	b := &backend{name: name, baseURL: baseURL, apiKey: secrettext.Clone(apiKey), product: defaultProduct, client: http.DefaultClient}
 	for _, o := range opts {
 		o(b)
 	}
@@ -178,7 +179,7 @@ func (b *backend) downloadChain(ctx context.Context, certID int) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("X-DC-DEVKEY", b.apiKey)
+	httpReq.Header.Set("X-DC-DEVKEY", secrettext.String(b.apiKey))
 	resp, err := b.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("digicert: download certificate: %w", err)
@@ -213,7 +214,7 @@ func (b *backend) do(ctx context.Context, method, url string, body, out any) err
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("X-DC-DEVKEY", b.apiKey)
+	httpReq.Header.Set("X-DC-DEVKEY", secrettext.String(b.apiKey))
 	httpReq.Header.Set("Accept", "application/json")
 	if body != nil {
 		httpReq.Header.Set("Content-Type", "application/json")

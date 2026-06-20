@@ -9,6 +9,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // TokenProvider supplies the Google OAuth2 bearer token the connector presents to
@@ -18,16 +22,16 @@ import (
 // Acquiring a token is identity-plane work, separate from the capability-gated
 // deployment call.
 type TokenProvider interface {
-	Token(ctx context.Context) (string, error)
+	Token(ctx context.Context) ([]byte, error)
 }
 
 // staticToken is a fixed bearer token.
-type staticToken string
+type staticToken []byte
 
 // StaticToken returns a TokenProvider that always yields tok.
-func StaticToken(tok string) TokenProvider { return staticToken(tok) }
+func StaticToken(tok []byte) TokenProvider { return staticToken(secrettext.Clone(tok)) }
 
-func (s staticToken) Token(context.Context) (string, error) { return string(s), nil }
+func (s staticToken) Token(context.Context) ([]byte, error) { return secrettext.Clone(s), nil }
 
 const (
 	defaultMetadataBase = "http://metadata.google.internal"
@@ -44,7 +48,7 @@ type MetadataToken struct {
 	now     func() time.Time
 
 	mu     sync.Mutex
-	cached string
+	cached []byte
 	exp    time.Time
 }
 
@@ -97,49 +101,51 @@ func NewMetadataToken(opts ...MetadataOption) *MetadataToken {
 
 // Token returns a cached token if still valid, otherwise fetches a new one from
 // the metadata server.
-func (m *MetadataToken) Token(ctx context.Context) (string, error) {
+func (m *MetadataToken) Token(ctx context.Context) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.cached != "" && m.now().Before(m.exp) {
-		return m.cached, nil
+	if len(m.cached) > 0 && m.now().Before(m.exp) {
+		return secrettext.Clone(m.cached), nil
 	}
 
 	endpoint := m.base + "/computeMetadata/v1/instance/service-accounts/" + m.account + "/token"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Metadata-Flavor", "Google") // required; guards against DNS-rebinding to the metadata IP
 
 	resp, err := m.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("metadata server: %w", err)
+		return nil, fmt.Errorf("metadata server: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if err != nil {
-			return "", fmt.Errorf("metadata server: status %d: read response: %w", resp.StatusCode, err)
+			return nil, fmt.Errorf("metadata server: status %d: read response: %w", resp.StatusCode, err)
 		}
-		return "", fmt.Errorf("metadata server: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		return nil, fmt.Errorf("metadata server: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 
 	var tr struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
+		AccessToken secretjson.StringBytes `json:"access_token"`
+		ExpiresIn   int                    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&tr); err != nil {
-		return "", fmt.Errorf("metadata server: decode: %w", err)
+		return nil, fmt.Errorf("metadata server: decode: %w", err)
 	}
-	if tr.AccessToken == "" {
-		return "", fmt.Errorf("metadata server: empty access_token")
+	if len(tr.AccessToken) == 0 {
+		return nil, fmt.Errorf("metadata server: empty access_token")
 	}
 
 	ttl := tr.ExpiresIn
 	if ttl > 60 {
 		ttl -= 60
 	}
-	m.cached = tr.AccessToken
+	secret.Wipe(m.cached)
+	m.cached = secrettext.Clone(tr.AccessToken)
+	secret.Wipe(tr.AccessToken)
 	m.exp = m.now().Add(time.Duration(ttl) * time.Second)
-	return m.cached, nil
+	return secrettext.Clone(m.cached), nil
 }

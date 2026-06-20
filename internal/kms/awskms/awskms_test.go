@@ -239,7 +239,7 @@ func verifySigV4(r *http.Request, body []byte, ak, sk string) bool {
 
 func TestAWSKMSConforms(t *testing.T) {
 	f := newFakeKMS(t)
-	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK},
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
 		awskms.WithEndpoint(f.srv.URL), awskms.WithHTTPClient(f.srv.Client()))
 	if err := crypto.ConformBackend(b, []crypto.Algorithm{crypto.RSA2048, crypto.ECDSAP256, crypto.ECDSAP384}); err != nil {
 		t.Fatalf("AWS KMS backend failed conformance: %v", err)
@@ -248,7 +248,7 @@ func TestAWSKMSConforms(t *testing.T) {
 
 func TestAWSKMSBadCredentialsRejected(t *testing.T) {
 	f := newFakeKMS(t)
-	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: "wrong"},
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte("wrong")},
 		awskms.WithEndpoint(f.srv.URL), awskms.WithHTTPClient(f.srv.Client()))
 	_, err := b.GenerateKey(crypto.ECDSAP256)
 	if err == nil {
@@ -279,7 +279,7 @@ func TestSigV4SignerRoutesThroughCloudhttpBound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK},
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
 		awskms.WithEndpoint(srv.URL), awskms.WithHTTPClient(srv.Client()))
 
 	_, err := b.GenerateKey(crypto.ECDSAP256)

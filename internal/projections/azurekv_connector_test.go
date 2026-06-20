@@ -36,7 +36,7 @@ func TestAzureKVDeploysRenewedCertViaOutbox(t *testing.T) {
 	reg := connector.NewRegistry(func(string) connector.Ops {
 		return connector.NewHTTPOps(srv.Client())
 	})
-	reg.Register(azurekv.New(srv.URL(), azurekv.StaticToken(tok)))
+	reg.Register(azurekv.New(srv.URL(), azurekv.StaticToken([]byte(tok))))
 
 	payload, err := connector.EncodeDeploy("azure-keyvault", connector.NewDeployment(name, kvCert, kvKey))
 	if err != nil {

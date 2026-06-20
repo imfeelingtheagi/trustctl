@@ -31,7 +31,7 @@ func TestMetadataTokenAcquiresAndCaches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Token: %v", err)
 	}
-	if tok != "meta-tok" {
+	if string(tok) != "meta-tok" {
 		t.Errorf("token = %q, want meta-tok", tok)
 	}
 	if gotPath != "/computeMetadata/v1/instance/service-accounts/default/token" {

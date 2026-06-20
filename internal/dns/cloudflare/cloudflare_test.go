@@ -31,7 +31,7 @@ func newProvider(t *testing.T, srv *fakeCF, creds cloudflare.Credentials) *cloud
 }
 
 func goodCreds() cloudflare.Credentials {
-	return cloudflare.Credentials{APIToken: testToken}
+	return cloudflare.Credentials{APIToken: []byte(testToken)}
 }
 
 // TestCloudflarePassesConformance drives the full present -> validate -> cleanup ->
@@ -83,7 +83,7 @@ func TestPresentCleanupIdempotent(t *testing.T) {
 func TestBadTokenRejected(t *testing.T) {
 	srv := newFakeCF(testToken)
 	defer srv.Close()
-	p := newProvider(t, srv, cloudflare.Credentials{APIToken: "wrong-token"})
+	p := newProvider(t, srv, cloudflare.Credentials{APIToken: []byte("wrong-token")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {
@@ -100,7 +100,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	srv := newFakeCF(testToken)
 	defer srv.Close()
 	const secret = "ultra-secret-api-token"
-	p := newProvider(t, srv, cloudflare.Credentials{APIToken: secret})
+	p := newProvider(t, srv, cloudflare.Credentials{APIToken: []byte(secret)})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {

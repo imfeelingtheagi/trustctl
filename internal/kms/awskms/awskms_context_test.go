@@ -84,7 +84,7 @@ func TestSignContextHonorsCallerDeadline(t *testing.T) {
 	doer := newSignThenBlockDoer(t)
 	// A large op-timeout so the FLOOR does not mask the caller's own deadline —
 	// this test proves the caller's context is what bounds the call.
-	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK},
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
 		awskms.WithEndpoint("https://kms.us-east-1.amazonaws.com"),
 		awskms.WithHTTPClient(doer), awskms.WithOpTimeout(time.Hour))
 	signer, err := b.GenerateKey(crypto.ECDSAP256)
@@ -130,7 +130,7 @@ func TestSignContextHonorsCallerDeadline(t *testing.T) {
 // an unbounded context.Background()).
 func TestSignOpTimeoutFloorBoundsContextLessCall(t *testing.T) {
 	doer := newSignThenBlockDoer(t)
-	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK},
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
 		awskms.WithEndpoint("https://kms.us-east-1.amazonaws.com"),
 		awskms.WithHTTPClient(doer), awskms.WithOpTimeout(150*time.Millisecond))
 	signer, err := b.GenerateKey(crypto.ECDSAP256)

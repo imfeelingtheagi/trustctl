@@ -27,13 +27,13 @@ func TestClientCredentialsAcquiresAndCaches(t *testing.T) {
 	}))
 	defer aad.Close()
 
-	p := azurekv.NewClientCredentials(aad.URL, "client-123", "s3cr3t", azurekv.WithHTTPClient(aad.Client()))
+	p := azurekv.NewClientCredentials(aad.URL, "client-123", []byte("s3cr3t"), azurekv.WithHTTPClient(aad.Client()))
 
 	tok, err := p.Token(context.Background())
 	if err != nil {
 		t.Fatalf("Token: %v", err)
 	}
-	if tok != "abc.def.ghi" {
+	if string(tok) != "abc.def.ghi" {
 		t.Errorf("token = %q, want abc.def.ghi", tok)
 	}
 	if gotGrant != "client_credentials" || gotClient != "client-123" || gotSecret != "s3cr3t" {
@@ -61,7 +61,7 @@ func TestClientCredentialsTokenEndpointError(t *testing.T) {
 	}))
 	defer aad.Close()
 
-	p := azurekv.NewClientCredentials(aad.URL, "client", "bad", azurekv.WithHTTPClient(aad.Client()))
+	p := azurekv.NewClientCredentials(aad.URL, "client", []byte("bad"), azurekv.WithHTTPClient(aad.Client()))
 	if _, err := p.Token(context.Background()); err == nil {
 		t.Fatal("expected an error from a 401 token endpoint, got nil")
 	}

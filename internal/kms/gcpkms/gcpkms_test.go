@@ -200,7 +200,7 @@ func optsFor(alg crypto.Algorithm, hash crypto.Hash) crypto.SignOptions {
 
 func TestGCPKMSConforms(t *testing.T) {
 	f := newFakeKMS(t)
-	b := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: testToken},
+	b := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: []byte(testToken)},
 		gcpkms.WithEndpoint(f.srv.URL), gcpkms.WithHTTPClient(f.srv.Client()))
 	if err := crypto.ConformBackend(b, []crypto.Algorithm{crypto.RSA2048, crypto.ECDSAP256}); err != nil {
 		t.Fatalf("GCP KMS backend failed conformance: %v", err)
@@ -209,7 +209,7 @@ func TestGCPKMSConforms(t *testing.T) {
 
 func TestBadTokenRejected(t *testing.T) {
 	f := newFakeKMS(t)
-	b := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: "wrong-token"},
+	b := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: []byte("wrong-token")},
 		gcpkms.WithEndpoint(f.srv.URL), gcpkms.WithHTTPClient(f.srv.Client()))
 	_, err := b.GenerateKey(crypto.ECDSAP256)
 	if err == nil {
@@ -224,7 +224,7 @@ func TestBadTokenRejected(t *testing.T) {
 // access token, even when the remote rejects the call.
 func TestCredentialsNeverLogged(t *testing.T) {
 	f := newFakeKMS(t)
-	b := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: testToken},
+	b := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: []byte(testToken)},
 		gcpkms.WithEndpoint(f.srv.URL), gcpkms.WithHTTPClient(f.srv.Client()))
 
 	// A successful round trip first, to exercise the signing path.
@@ -237,7 +237,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	}
 
 	// Now force an error and confirm the token does not leak into it.
-	bad := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: testToken},
+	bad := gcpkms.New(testParent, gcpkms.Credentials{BearerToken: []byte(testToken)},
 		gcpkms.WithEndpoint(f.srv.URL), gcpkms.WithHTTPClient(f.srv.Client()))
 	if _, err := bad.GenerateKey(crypto.Algorithm("bogus-alg")); err == nil {
 		t.Fatal("GenerateKey accepted an unsupported algorithm")

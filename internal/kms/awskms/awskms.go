@@ -24,6 +24,8 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -35,8 +37,8 @@ const (
 // for temporary (STS/role) credentials. They are opaque here, never logged.
 type Credentials struct {
 	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
+	SecretAccessKey []byte
+	SessionToken    []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam (tests inject the double's client).
@@ -88,6 +90,8 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 
 // New returns an AWS KMS backend for region, signing with creds.
 func New(region string, creds Credentials, opts ...Option) *Backend {
+	creds.SecretAccessKey = secrettext.Clone(creds.SecretAccessKey)
+	creds.SessionToken = secrettext.Clone(creds.SessionToken)
 	b := &Backend{region: region, creds: creds, doer: http.DefaultClient, now: time.Now, opTimeout: defaultOpTimeout}
 	b.setEndpoint(fmt.Sprintf("https://kms.%s.amazonaws.com", region))
 	for _, o := range opts {
@@ -257,11 +261,11 @@ func (b *Backend) signV4(req *http.Request, body []byte, t time.Time) {
 	amzDate := t.Format("20060102T150405Z")
 	dateStamp := t.Format("20060102")
 	req.Header.Set("X-Amz-Date", amzDate)
-	if b.creds.SessionToken != "" {
-		req.Header.Set("X-Amz-Security-Token", b.creds.SessionToken)
+	if len(b.creds.SessionToken) > 0 {
+		req.Header.Set("X-Amz-Security-Token", secrettext.String(b.creds.SessionToken))
 	}
 	signed := []string{"content-type", "host", "x-amz-date", "x-amz-target"}
-	if b.creds.SessionToken != "" {
+	if len(b.creds.SessionToken) > 0 {
 		signed = append(signed, "x-amz-security-token")
 	}
 	sort.Strings(signed)
@@ -281,14 +285,39 @@ func (b *Backend) signV4(req *http.Request, body []byte, t time.Time) {
 	stringToSign := strings.Join([]string{
 		"AWS4-HMAC-SHA256", amzDate, credScope, crypto.SHA256Hex([]byte(canonicalRequest)),
 	}, "\n")
-	kDate := crypto.HMACSHA256([]byte("AWS4"+b.creds.SecretAccessKey), []byte(dateStamp))
-	kRegion := crypto.HMACSHA256(kDate, []byte(b.region))
-	kService := crypto.HMACSHA256(kRegion, []byte(service))
-	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
+	kSigning := sigV4SigningKey(b.creds.SecretAccessKey, dateStamp, b.region, service, nil)
+	defer secret.Wipe(kSigning)
 	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+
 		"Credential="+b.creds.AccessKeyID+"/"+credScope+", "+
 		"SignedHeaders="+signedHeaders+", Signature="+signature)
+}
+
+func sigV4SigningKey(secretAccessKey []byte, dateStamp, region, service string, observe func(string, []byte)) []byte {
+	seed := make([]byte, 0, len("AWS4")+len(secretAccessKey))
+	seed = append(seed, "AWS4"...)
+	seed = append(seed, secretAccessKey...)
+	if observe != nil {
+		observe("seed", seed)
+	}
+	kDate := crypto.HMACSHA256(seed, []byte(dateStamp))
+	secret.Wipe(seed)
+	if observe != nil {
+		observe("date", kDate)
+	}
+	kRegion := crypto.HMACSHA256(kDate, []byte(region))
+	secret.Wipe(kDate)
+	if observe != nil {
+		observe("region", kRegion)
+	}
+	kService := crypto.HMACSHA256(kRegion, []byte(service))
+	secret.Wipe(kRegion)
+	if observe != nil {
+		observe("service", kService)
+	}
+	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
+	secret.Wipe(kService)
+	return kSigning
 }
 
 func hashOf(opts crypto.SignOptions) crypto.Hash {

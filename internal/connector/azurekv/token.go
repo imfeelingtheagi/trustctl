@@ -10,6 +10,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // TokenProvider supplies the Entra ID (AAD) bearer token the connector presents
@@ -19,17 +23,17 @@ import (
 // token is identity-plane work (like sourcing a credential), separate from the
 // capability-gated deployment call.
 type TokenProvider interface {
-	Token(ctx context.Context) (string, error)
+	Token(ctx context.Context) ([]byte, error)
 }
 
 // staticToken is a fixed bearer token.
-type staticToken string
+type staticToken []byte
 
 // StaticToken returns a TokenProvider that always yields tok. Use it when the
 // platform already holds a valid token, or in tests.
-func StaticToken(tok string) TokenProvider { return staticToken(tok) }
+func StaticToken(tok []byte) TokenProvider { return staticToken(secrettext.Clone(tok)) }
 
-func (s staticToken) Token(context.Context) (string, error) { return string(s), nil }
+func (s staticToken) Token(context.Context) ([]byte, error) { return secrettext.Clone(s), nil }
 
 // DefaultScope is the OAuth2 scope for the Azure Key Vault data plane.
 const DefaultScope = "https://vault.azure.net/.default"
@@ -40,13 +44,13 @@ const DefaultScope = "https://vault.azure.net/.default"
 type ClientCredentials struct {
 	tokenURL     string
 	clientID     string
-	clientSecret string
+	clientSecret []byte
 	scope        string
 	client       *http.Client
 	now          func() time.Time
 
 	mu     sync.Mutex
-	cached string
+	cached []byte
 	exp    time.Time
 }
 
@@ -76,11 +80,11 @@ func WithScope(scope string) CredentialOption {
 // NewClientCredentials builds a client-credentials token provider. tokenURL is
 // the Entra ID token endpoint
 // (https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token).
-func NewClientCredentials(tokenURL, clientID, clientSecret string, opts ...CredentialOption) *ClientCredentials {
+func NewClientCredentials(tokenURL, clientID string, clientSecret []byte, opts ...CredentialOption) *ClientCredentials {
 	p := &ClientCredentials{
 		tokenURL:     tokenURL,
 		clientID:     clientID,
-		clientSecret: clientSecret,
+		clientSecret: secrettext.Clone(clientSecret),
 		scope:        DefaultScope,
 		client:       http.DefaultClient,
 		now:          time.Now,
@@ -92,54 +96,56 @@ func NewClientCredentials(tokenURL, clientID, clientSecret string, opts ...Crede
 }
 
 // Token returns a cached token if still valid, otherwise acquires a new one.
-func (p *ClientCredentials) Token(ctx context.Context) (string, error) {
+func (p *ClientCredentials) Token(ctx context.Context) ([]byte, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.cached != "" && p.now().Before(p.exp) {
-		return p.cached, nil
+	if len(p.cached) > 0 && p.now().Before(p.exp) {
+		return secrettext.Clone(p.cached), nil
 	}
 
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", p.clientID)
-	form.Set("client_secret", p.clientSecret)
+	form.Set("client_secret", secrettext.String(p.clientSecret))
 	form.Set("scope", p.scope)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("token endpoint: %w", err)
+		return nil, fmt.Errorf("token endpoint: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if err != nil {
-			return "", fmt.Errorf("token endpoint: status %d: read response: %w", resp.StatusCode, err)
+			return nil, fmt.Errorf("token endpoint: status %d: read response: %w", resp.StatusCode, err)
 		}
-		return "", fmt.Errorf("token endpoint: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		return nil, fmt.Errorf("token endpoint: status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 
 	var tr struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
+		AccessToken secretjson.StringBytes `json:"access_token"`
+		ExpiresIn   int                    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&tr); err != nil {
-		return "", fmt.Errorf("token endpoint: decode: %w", err)
+		return nil, fmt.Errorf("token endpoint: decode: %w", err)
 	}
-	if tr.AccessToken == "" {
-		return "", fmt.Errorf("token endpoint: empty access_token")
+	if len(tr.AccessToken) == 0 {
+		return nil, fmt.Errorf("token endpoint: empty access_token")
 	}
 
 	ttl := tr.ExpiresIn
 	if ttl > 60 {
 		ttl -= 60 // refresh a minute before expiry
 	}
-	p.cached = tr.AccessToken
+	secret.Wipe(p.cached)
+	p.cached = secrettext.Clone(tr.AccessToken)
+	secret.Wipe(tr.AccessToken)
 	p.exp = p.now().Add(time.Duration(ttl) * time.Second)
-	return p.cached, nil
+	return secrettext.Clone(p.cached), nil
 }

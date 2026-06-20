@@ -3,7 +3,15 @@
 // Go strings.
 package secretjson
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"unicode/utf16"
+	"unicode/utf8"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
+)
 
 // StringBytes marshals src as a JSON string, escaping the source bytes directly.
 // It is intended for PEM/API fields whose wire schema is a string while trstctl's
@@ -14,6 +22,18 @@ type StringBytes []byte
 // string.
 func (b StringBytes) MarshalJSON() ([]byte, error) {
 	return QuoteBytes(b), nil
+}
+
+// UnmarshalJSON decodes a JSON string into byte-backed material without
+// materializing the string as a Go string.
+func (b *StringBytes) UnmarshalJSON(src []byte) error {
+	out, err := UnquoteBytes(src)
+	if err != nil {
+		return err
+	}
+	secret.Wipe(*b)
+	*b = out
+	return nil
 }
 
 // Base64Bytes marshals src as a base64-encoded JSON string without constructing a
@@ -71,4 +91,94 @@ func appendQuoted(dst, src []byte) []byte {
 	}
 	dst = append(dst, '"')
 	return dst
+}
+
+// UnquoteBytes decodes a JSON string literal into bytes without constructing a
+// Go string for the decoded value.
+func UnquoteBytes(src []byte) ([]byte, error) {
+	if len(src) < 2 || src[0] != '"' || src[len(src)-1] != '"' {
+		return nil, errors.New("secretjson: expected JSON string")
+	}
+	out := make([]byte, 0, len(src)-2)
+	for i := 1; i < len(src)-1; i++ {
+		c := src[i]
+		if c == '\\' {
+			if i+1 >= len(src)-1 {
+				return nil, errors.New("secretjson: incomplete escape")
+			}
+			i++
+			switch esc := src[i]; esc {
+			case '"', '\\', '/':
+				out = append(out, esc)
+			case 'b':
+				out = append(out, '\b')
+			case 'f':
+				out = append(out, '\f')
+			case 'n':
+				out = append(out, '\n')
+			case 'r':
+				out = append(out, '\r')
+			case 't':
+				out = append(out, '\t')
+			case 'u':
+				r, n, err := readJSONRune(src, i)
+				if err != nil {
+					return nil, err
+				}
+				out = utf8.AppendRune(out, r)
+				i += n
+			default:
+				return nil, fmt.Errorf("secretjson: invalid escape %q", esc)
+			}
+			continue
+		}
+		if c < 0x20 {
+			return nil, errors.New("secretjson: unescaped control byte")
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func readJSONRune(src []byte, slashU int) (rune, int, error) {
+	r1, err := readHexRune(src, slashU+1)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !utf16.IsSurrogate(r1) {
+		return r1, 4, nil
+	}
+	if slashU+11 >= len(src) || src[slashU+5] != '\\' || src[slashU+6] != 'u' {
+		return 0, 0, errors.New("secretjson: incomplete surrogate pair")
+	}
+	r2, err := readHexRune(src, slashU+7)
+	if err != nil {
+		return 0, 0, err
+	}
+	decoded := utf16.DecodeRune(r1, r2)
+	if decoded == utf8.RuneError {
+		return 0, 0, errors.New("secretjson: invalid surrogate pair")
+	}
+	return decoded, 10, nil
+}
+
+func readHexRune(src []byte, start int) (rune, error) {
+	if start+4 > len(src) {
+		return 0, errors.New("secretjson: short unicode escape")
+	}
+	var r rune
+	for _, c := range src[start : start+4] {
+		r <<= 4
+		switch {
+		case c >= '0' && c <= '9':
+			r |= rune(c - '0')
+		case c >= 'a' && c <= 'f':
+			r |= rune(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			r |= rune(c-'A') + 10
+		default:
+			return 0, fmt.Errorf("secretjson: invalid unicode escape byte %q", c)
+		}
+	}
+	return r, nil
 }

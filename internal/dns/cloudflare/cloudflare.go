@@ -37,6 +37,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -50,7 +51,7 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // Credentials is the Cloudflare API token used to authenticate requests. The token is
 // opaque to this package, never logged, and sealed at rest by the caller (AN-8).
 type Credentials struct {
-	APIToken string
+	APIToken []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
@@ -85,6 +86,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // New returns a Cloudflare provider that manages TXT records in zoneID, authenticating
 // with creds. The endpoint defaults to the public Cloudflare API host.
 func New(zoneID string, creds Credentials, opts ...Option) *Provider {
+	creds.APIToken = secrettext.Clone(creds.APIToken)
 	p := &Provider{
 		zoneID: zoneID,
 		creds:  creds,
@@ -188,7 +190,7 @@ func (p *Provider) do(ctx context.Context, method, path string, body []byte, out
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.creds.APIToken)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.creds.APIToken))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

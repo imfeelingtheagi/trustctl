@@ -42,6 +42,7 @@ import (
 
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // defaultName is the certificate object name used when the deployment target does
@@ -60,7 +61,7 @@ const (
 type Connector struct {
 	baseURL string // PAN-OS management base, e.g. https://fw.example (no trailing slash)
 	host    string // host of baseURL, for the net.dial grant
-	apiKey  string // PAN-OS API key (AN-8-adjacent: never logged)
+	apiKey  []byte // PAN-OS API key (AN-8-adjacent: never logged)
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -73,10 +74,10 @@ type Option func(*Connector)
 // New returns a PAN-OS connector for the appliance at baseURL, authenticating
 // with the PAN-OS API key. baseURL is the endpoint; the net.dial grant host is
 // derived from it.
-func New(baseURL string, apiKey string, opts ...Option) *Connector {
+func New(baseURL string, apiKey []byte, opts ...Option) *Connector {
 	c := &Connector{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
+		apiKey:  secrettext.Clone(apiKey),
 	}
 	if u, err := url.Parse(baseURL); err == nil {
 		c.host = u.Host
@@ -143,7 +144,7 @@ func (c *Connector) importPart(ctx context.Context, sb connector.Sandbox, catego
 	}
 	req.Header.Set("Content-Type", "application/x-pem-file")
 	// PAN-OS API key. Never logged, never placed in an error.
-	req.Header.Set("X-PAN-KEY", c.apiKey)
+	req.Header.Set("X-PAN-KEY", secrettext.String(c.apiKey))
 
 	resp, err := sb.Request(req)
 	if err != nil {

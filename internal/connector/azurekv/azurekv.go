@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -95,6 +96,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("azurekv: acquire token: %w", err)
 	}
+	defer secret.Wipe(token)
 
 	bundle := pemBundle(dep.KeyPEM, dep.CertPEM)
 	defer secret.Wipe(bundle)
@@ -113,7 +115,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
 
 	resp, err := sb.Request(req)
 	if err != nil {

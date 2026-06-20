@@ -147,7 +147,7 @@ func newProvider(t *testing.T, f *fakeNS1, creds ns1.Credentials) *ns1.Provider 
 		ns1.WithHTTPClient(f.Client()))
 }
 
-func goodCreds() ns1.Credentials { return ns1.Credentials{APIKey: testAPIKey} }
+func goodCreds() ns1.Credentials { return ns1.Credentials{APIKey: []byte(testAPIKey)} }
 
 // TestNS1PassesConformance drives the full present -> validate -> cleanup ->
 // assert-fails-after cycle through the shared DNS-01 conformance harness, against the
@@ -199,7 +199,7 @@ func TestPresentCleanupIdempotent(t *testing.T) {
 func TestBadKeyRejected(t *testing.T) {
 	f := newFakeNS1(testAPIKey)
 	defer f.Close()
-	p := newProvider(t, f, ns1.Credentials{APIKey: "wrong-key"})
+	p := newProvider(t, f, ns1.Credentials{APIKey: []byte("wrong-key")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {
@@ -216,7 +216,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	f := newFakeNS1(testAPIKey)
 	defer f.Close()
 	const secret = "ultra-secret-ns1-api-key"
-	p := newProvider(t, f, ns1.Credentials{APIKey: secret})
+	p := newProvider(t, f, ns1.Credentials{APIKey: []byte(secret)})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {

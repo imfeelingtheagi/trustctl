@@ -38,7 +38,7 @@ func TestPluginIssuesEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 
-	p := digicert.New("digicert", srv.URL(), srv.APIKey(), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	p := digicert.New("digicert", srv.URL(), []byte(srv.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if p.Name() != "digicert" {
 		t.Errorf("Name = %q", p.Name())
 	}
@@ -79,7 +79,7 @@ func TestPluginPassesConformance(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 
-	p := digicert.New("digicert", srv.URL(), srv.APIKey())
+	p := digicert.New("digicert", srv.URL(), []byte(srv.APIKey()))
 	report := catemplate.Conformance(context.Background(), p)
 	if !report.OK() {
 		t.Fatalf("DigiCert plugin failed conformance: %+v", report.Checks)
@@ -95,7 +95,7 @@ func TestRejectsBadAPIKey(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 
-	p := digicert.New("digicert", srv.URL(), "wrong-key")
+	p := digicert.New("digicert", srv.URL(), []byte("wrong-key"))
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: digicertCSR(t, "svc.digicert.test"), DNSNames: []string{"svc.digicert.test"}, TTL: 24 * time.Hour,
 	}); err == nil {

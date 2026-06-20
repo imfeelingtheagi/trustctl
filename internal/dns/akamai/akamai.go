@@ -41,8 +41,10 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -71,9 +73,9 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // are opaque to this package, never logged, and sealed at rest by the caller (AN-8).
 // The API host is not part of the credentials — it comes from the endpoint.
 type Credentials struct {
-	ClientToken  string
-	ClientSecret string
-	AccessToken  string
+	ClientToken  []byte
+	ClientSecret []byte
+	AccessToken  []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
@@ -126,6 +128,9 @@ func WithClock(fn func() time.Time) Option {
 // requests with EdgeGrid credentials creds. The endpoint defaults to a placeholder
 // and should be set with WithEndpoint.
 func New(zone string, creds Credentials, opts ...Option) *Provider {
+	creds.ClientToken = secrettext.Clone(creds.ClientToken)
+	creds.ClientSecret = secrettext.Clone(creds.ClientSecret)
+	creds.AccessToken = secrettext.Clone(creds.AccessToken)
 	p := &Provider{
 		zone:  strings.TrimSuffix(zone, "."),
 		creds: creds,
@@ -238,6 +243,7 @@ func (p *Provider) signEdgeGrid(req *http.Request, body []byte, t time.Time, non
 	timestamp := t.Format(edgeGridTimeFormat)
 	authData := edgeGridAuthData(p.creds.ClientToken, p.creds.AccessToken, timestamp, nonce)
 	dataToSign := edgeGridDataToSign(req.Method, p.host, edgeGridRelativeURL(req.URL), body, authData)
+	defer secret.Wipe(dataToSign)
 	signature := edgeGridSign(p.creds.ClientSecret, timestamp, dataToSign)
 	req.Header.Set("Authorization", authData+signature)
 }
@@ -253,13 +259,32 @@ func (p *Provider) signEdgeGrid(req *http.Request, body []byte, t time.Time, non
 // also the final field of the data-to-sign string and INCLUDES the trailing
 // "signature=" (with an empty value): the signature is computed over everything up
 // to and including that marker, then appended after it.
-func edgeGridAuthData(clientToken, accessToken, timestamp, nonce string) string {
-	return authScheme + " " +
-		"client_token=" + clientToken + ";" +
-		"access_token=" + accessToken + ";" +
-		"timestamp=" + timestamp + ";" +
-		"nonce=" + nonce + ";" +
-		"signature="
+func edgeGridAuthData(clientToken, accessToken []byte, timestamp, nonce string) string {
+	buf := make([]byte, 0,
+		len(authScheme)+1+
+			len("client_token=")+len(clientToken)+1+
+			len("access_token=")+len(accessToken)+1+
+			len("timestamp=")+len(timestamp)+1+
+			len("nonce=")+len(nonce)+1+
+			len("signature="))
+	buf = append(buf, authScheme...)
+	buf = append(buf, ' ')
+	buf = append(buf, "client_token="...)
+	buf = append(buf, clientToken...)
+	buf = append(buf, ';')
+	buf = append(buf, "access_token="...)
+	buf = append(buf, accessToken...)
+	buf = append(buf, ';')
+	buf = append(buf, "timestamp="...)
+	buf = append(buf, timestamp...)
+	buf = append(buf, ';')
+	buf = append(buf, "nonce="...)
+	buf = append(buf, nonce...)
+	buf = append(buf, ';')
+	buf = append(buf, "signature="...)
+	out := string(buf)
+	secret.Wipe(buf)
+	return out
 }
 
 // edgeGridRelativeURL returns the path+query portion of u that EdgeGrid signs.
@@ -282,32 +307,49 @@ func edgeGridContentHash(method string, body []byte) string {
 
 // edgeGridDataToSign assembles the tab-joined data-to-sign string. The canonicalized
 // headers field is empty because the provider signs no request headers.
-func edgeGridDataToSign(method, host, relativeURL string, body []byte, authData string) string {
-	return strings.Join([]string{
-		method,
-		"https", // scheme
-		host,
-		relativeURL,
-		"", // canonicalized headers: no signed headers
-		edgeGridContentHash(method, body),
-		authData,
-	}, "\t")
+func edgeGridDataToSign(method, host, relativeURL string, body []byte, authData string) []byte {
+	contentHash := edgeGridContentHash(method, body)
+	buf := make([]byte, 0, len(method)+len(host)+len(relativeURL)+len(contentHash)+len(authData)+6)
+	buf = append(buf, method...)
+	buf = append(buf, '\t')
+	buf = append(buf, "https"...)
+	buf = append(buf, '\t')
+	buf = append(buf, host...)
+	buf = append(buf, '\t')
+	buf = append(buf, relativeURL...)
+	buf = append(buf, '\t')
+	buf = append(buf, '\t')
+	buf = append(buf, contentHash...)
+	buf = append(buf, '\t')
+	buf = append(buf, authData...)
+	return buf
 }
 
 // edgeGridSigningKey derives the EdgeGrid signing key:
 // base64( HMAC-SHA256(key=clientSecret, data=timestamp) ).
-func edgeGridSigningKey(clientSecret, timestamp string) string {
-	return base64.StdEncoding.EncodeToString(
-		crypto.HMACSHA256([]byte(clientSecret), []byte(timestamp)))
+func edgeGridSigningKey(clientSecret []byte, timestamp string, observe func(string, []byte)) []byte {
+	mac := crypto.HMACSHA256(clientSecret, []byte(timestamp))
+	if observe != nil {
+		observe("timestamp-mac", mac)
+	}
+	key := make([]byte, base64.StdEncoding.EncodedLen(len(mac)))
+	base64.StdEncoding.Encode(key, mac)
+	secret.Wipe(mac)
+	if observe != nil {
+		observe("signing-key", key)
+	}
+	return key
 }
 
 // edgeGridSign computes the request signature:
 // base64( HMAC-SHA256(key=signingKey, data=dataToSign) ), where signingKey is the
 // base64 string from edgeGridSigningKey used as the HMAC key bytes.
-func edgeGridSign(clientSecret, timestamp, dataToSign string) string {
-	signingKey := edgeGridSigningKey(clientSecret, timestamp)
-	return base64.StdEncoding.EncodeToString(
-		crypto.HMACSHA256([]byte(signingKey), []byte(dataToSign)))
+func edgeGridSign(clientSecret []byte, timestamp string, dataToSign []byte) string {
+	signingKey := edgeGridSigningKey(clientSecret, timestamp, nil)
+	defer secret.Wipe(signingKey)
+	mac := crypto.HMACSHA256(signingKey, dataToSign)
+	defer secret.Wipe(mac)
+	return base64.StdEncoding.EncodeToString(mac)
 }
 
 // do signs req with EdgeGrid and runs it through the shared cloudhttp round-trip

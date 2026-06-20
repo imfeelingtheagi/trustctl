@@ -35,8 +35,10 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -55,8 +57,8 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // package, never logged, and sealed at rest by the caller (AN-8).
 type Credentials struct {
 	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
+	SecretAccessKey []byte
+	SessionToken    []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient,
@@ -92,6 +94,8 @@ func WithHTTPClient(d HTTPDoer) Option {
 // New returns a Route 53 provider that manages TXT records in hostedZoneID, signing
 // with creds. The endpoint defaults to the global Route 53 service host.
 func New(hostedZoneID string, creds Credentials, opts ...Option) *Provider {
+	creds.SecretAccessKey = secrettext.Clone(creds.SecretAccessKey)
+	creds.SessionToken = secrettext.Clone(creds.SessionToken)
 	p := &Provider{
 		zoneID: normalizeZoneID(hostedZoneID),
 		creds:  creds,
@@ -206,12 +210,12 @@ func (p *Provider) signV4(req *http.Request, body []byte, t time.Time) {
 	dateStamp := t.Format("20060102")
 
 	req.Header.Set("X-Amz-Date", amzDate)
-	if p.creds.SessionToken != "" {
-		req.Header.Set("X-Amz-Security-Token", p.creds.SessionToken)
+	if len(p.creds.SessionToken) > 0 {
+		req.Header.Set("X-Amz-Security-Token", secrettext.String(p.creds.SessionToken))
 	}
 
 	signed := []string{"content-type", "host", "x-amz-date"}
-	if p.creds.SessionToken != "" {
+	if len(p.creds.SessionToken) > 0 {
 		signed = append(signed, "x-amz-security-token")
 	}
 	sort.Strings(signed)
@@ -243,16 +247,41 @@ func (p *Provider) signV4(req *http.Request, body []byte, t time.Time) {
 		crypto.SHA256Hex([]byte(canonicalRequest)),
 	}, "\n")
 
-	kDate := crypto.HMACSHA256([]byte("AWS4"+p.creds.SecretAccessKey), []byte(dateStamp))
-	kRegion := crypto.HMACSHA256(kDate, []byte(sigV4Region))
-	kService := crypto.HMACSHA256(kRegion, []byte(service))
-	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
+	kSigning := sigV4SigningKey(p.creds.SecretAccessKey, dateStamp, sigV4Region, service, nil)
+	defer secret.Wipe(kSigning)
 	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
 
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+
 		"Credential="+p.creds.AccessKeyID+"/"+credScope+", "+
 		"SignedHeaders="+signedHeaders+", "+
 		"Signature="+signature)
+}
+
+func sigV4SigningKey(secretAccessKey []byte, dateStamp, region, service string, observe func(string, []byte)) []byte {
+	seed := make([]byte, 0, len("AWS4")+len(secretAccessKey))
+	seed = append(seed, "AWS4"...)
+	seed = append(seed, secretAccessKey...)
+	if observe != nil {
+		observe("seed", seed)
+	}
+	kDate := crypto.HMACSHA256(seed, []byte(dateStamp))
+	secret.Wipe(seed)
+	if observe != nil {
+		observe("date", kDate)
+	}
+	kRegion := crypto.HMACSHA256(kDate, []byte(region))
+	secret.Wipe(kDate)
+	if observe != nil {
+		observe("region", kRegion)
+	}
+	kService := crypto.HMACSHA256(kRegion, []byte(service))
+	secret.Wipe(kRegion)
+	if observe != nil {
+		observe("service", kService)
+	}
+	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
+	secret.Wipe(kService)
+	return kSigning
 }
 
 // quote wraps a TXT value in the double quotes Route 53 stores it under.

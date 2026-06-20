@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // defaultEndpoint is the public NS1 API base URL.
@@ -47,7 +48,7 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // Credentials are the NS1 API credentials used to authenticate requests. The API key
 // is opaque to this package, never logged, and sealed at rest by the caller (AN-8).
 type Credentials struct {
-	APIKey string
+	APIKey []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
@@ -82,6 +83,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // New returns an NS1 provider that manages TXT records in zone, authenticating with
 // creds. The endpoint defaults to the public NS1 API host.
 func New(zone string, creds Credentials, opts ...Option) *Provider {
+	creds.APIKey = secrettext.Clone(creds.APIKey)
 	p := &Provider{
 		zone:  strings.TrimSuffix(zone, "."),
 		creds: creds,
@@ -164,7 +166,7 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, _ string) error {
 // and the error text (which never carries the API key, AN-8) are unchanged. The NS1
 // records API returns no body the provider reads, so out is nil.
 func (p *Provider) do(req *http.Request) error {
-	req.Header.Set(apiKeyHeader, p.creds.APIKey)
+	req.Header.Set(apiKeyHeader, secrettext.String(p.creds.APIKey))
 	if err := cloudhttp.JSON(p.doer, req, nil); err != nil {
 		var se *cloudhttp.StatusError
 		if errors.As(err, &se) {

@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -116,6 +117,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	if err != nil {
 		return fmt.Errorf("gcpcm: acquire token: %w", err)
 	}
+	defer secret.Wipe(token)
 
 	body, err := json.Marshal(patchRequest{SelfManaged: selfManaged{
 		PEMCertificate: secretjson.StringBytes(dep.CertPEM),
@@ -137,7 +139,7 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 
 // awaitOperation polls op until it reports done. An operation with no name (for
 // example a synchronous response) is treated as already complete.
-func (c *Connector) awaitOperation(ctx context.Context, sb connector.Sandbox, token string, op operation) error {
+func (c *Connector) awaitOperation(ctx context.Context, sb connector.Sandbox, token []byte, op operation) error {
 	for polls := 0; ; polls++ {
 		if op.Name == "" || op.Done {
 			return nil
@@ -162,7 +164,7 @@ func (c *Connector) awaitOperation(ctx context.Context, sb connector.Sandbox, to
 // Empty 2xx bodies are treated as synchronous completion; malformed JSON is a
 // hard error because accepting it would hide a broken Certificate Manager
 // response behind a zero operation.
-func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, endpoint, token string, body []byte) (operation, error) {
+func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, endpoint string, token []byte, body []byte) (operation, error) {
 	var rdr io.Reader
 	if body != nil {
 		rdr = bytes.NewReader(body)
@@ -174,7 +176,7 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, endp
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
 
 	resp, err := sb.Request(req)
 	if err != nil {

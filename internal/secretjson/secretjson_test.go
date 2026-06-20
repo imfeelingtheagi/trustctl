@@ -30,3 +30,15 @@ func TestBase64BytesMarshalsAsBase64JSONString(t *testing.T) {
 		t.Fatalf("json = %s, want %s", got, want)
 	}
 }
+
+func TestStringBytesUnmarshalsJSONString(t *testing.T) {
+	var body struct {
+		Token secretjson.StringBytes `json:"token"`
+	}
+	if err := json.Unmarshal([]byte(`{"token":"tok\u0065n\nvalue"}`), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(body.Token), "token\nvalue"; got != want {
+		t.Fatalf("token = %q, want %q", got, want)
+	}
+}

@@ -28,7 +28,7 @@ func TestDeployImportsCertificate(t *testing.T) {
 	srv := azurekvtest.New(token)
 	defer srv.Close()
 
-	c := azurekv.New(srv.URL(), azurekv.StaticToken(token))
+	c := azurekv.New(srv.URL(), azurekv.StaticToken([]byte(token)))
 	ops := connector.NewHTTPOps(srv.Client())
 
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certName, sampleCert, sampleKey)); err != nil {
@@ -52,7 +52,7 @@ func TestDeployFailsOnBadToken(t *testing.T) {
 	srv := azurekvtest.New(token)
 	defer srv.Close()
 
-	c := azurekv.New(srv.URL(), azurekv.StaticToken("wrong-token"))
+	c := azurekv.New(srv.URL(), azurekv.StaticToken([]byte("wrong-token")))
 	ops := connector.NewHTTPOps(srv.Client())
 	if _, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certName, sampleCert, sampleKey)); err == nil {
 		t.Fatal("expected deploy to fail on a bad token, got nil")
@@ -67,7 +67,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 	srv := azurekvtest.New(token)
 	defer srv.Close()
 
-	c := azurekv.New(srv.URL(), azurekv.StaticToken(token))
+	c := azurekv.New(srv.URL(), azurekv.StaticToken([]byte(token)))
 	ops := connector.NewHTTPOps(srv.Client())
 	dep := connector.NewDeployment(certName, sampleCert, sampleKey)
 	for i := 0; i < 2; i++ {
@@ -84,7 +84,7 @@ func TestDeployIsIdempotent(t *testing.T) {
 // Least privilege: net.dial to the vault host only — no fs, no exec, no other
 // host.
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
-	c := azurekv.New("https://myvault.vault.azure.net", azurekv.StaticToken(token))
+	c := azurekv.New("https://myvault.vault.azure.net", azurekv.StaticToken([]byte(token)))
 	grant := c.Capabilities()
 	if grant.Has(pluginhost.CapFSWrite) {
 		t.Error("Key Vault connector must not request fs.write")
@@ -106,7 +106,7 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 
 // The connector satisfies the shared connector conformance suite.
 func TestAzureKVPassesConformance(t *testing.T) {
-	c := azurekv.New("https://example.vault.azure.net", azurekv.StaticToken(token))
+	c := azurekv.New("https://example.vault.azure.net", azurekv.StaticToken([]byte(token)))
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {

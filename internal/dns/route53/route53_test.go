@@ -30,7 +30,7 @@ func newProvider(t *testing.T, srv *r53test.Server, creds route53.Credentials) *
 }
 
 func goodCreds() route53.Credentials {
-	return route53.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK}
+	return route53.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)}
 }
 
 // TestRoute53PassesConformance drives the full present -> validate -> cleanup ->
@@ -82,7 +82,7 @@ func TestPresentCleanupIdempotent(t *testing.T) {
 func TestBadCredentialsRejected(t *testing.T) {
 	srv := r53test.New(testAK, testSK)
 	defer srv.Close()
-	p := newProvider(t, srv, route53.Credentials{AccessKeyID: testAK, SecretAccessKey: "wrong-secret"})
+	p := newProvider(t, srv, route53.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte("wrong-secret")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {
@@ -99,7 +99,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	srv := r53test.New(testAK, testSK)
 	defer srv.Close()
 	const secret = "ultra-secret-key-material"
-	p := newProvider(t, srv, route53.Credentials{AccessKeyID: testAK, SecretAccessKey: secret})
+	p := newProvider(t, srv, route53.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(secret)})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {

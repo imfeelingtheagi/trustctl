@@ -36,7 +36,7 @@ func TestGCPCMDeploysRenewedCertViaOutbox(t *testing.T) {
 	reg := connector.NewRegistry(func(string) connector.Ops {
 		return connector.NewHTTPOps(srv.Client())
 	})
-	reg.Register(gcpcm.New("my-project", "global", gcpcm.StaticToken(tok),
+	reg.Register(gcpcm.New("my-project", "global", gcpcm.StaticToken([]byte(tok)),
 		gcpcm.WithEndpoint(srv.URL()), gcpcm.WithPollInterval(0)))
 
 	payload, err := connector.EncodeDeploy("gcp-certificate-manager", connector.NewDeployment(certID, gcpCert, gcpKey))

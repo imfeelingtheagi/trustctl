@@ -277,9 +277,9 @@ func fixedClock() time.Time {
 
 func goodCreds() akamai.Credentials {
 	return akamai.Credentials{
-		ClientToken:  testClientToken,
-		ClientSecret: testClientSecret,
-		AccessToken:  testAccessToken,
+		ClientToken:  []byte(testClientToken),
+		ClientSecret: []byte(testClientSecret),
+		AccessToken:  []byte(testAccessToken),
 	}
 }
 
@@ -356,9 +356,9 @@ func TestBadSecretRejected(t *testing.T) {
 	srv := newFakeAkamai(testClientToken, testAccessToken, testClientSecret)
 	defer srv.Close()
 	bad := akamai.Credentials{
-		ClientToken:  testClientToken,
-		ClientSecret: "wrong-client-secret",
-		AccessToken:  testAccessToken,
+		ClientToken:  []byte(testClientToken),
+		ClientSecret: []byte("wrong-client-secret"),
+		AccessToken:  []byte(testAccessToken),
 	}
 	p := newProvider(t, srv, bad)
 
@@ -378,9 +378,9 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	defer srv.Close()
 	const secret = "ultra-secret-edgegrid-material"
 	creds := akamai.Credentials{
-		ClientToken:  "ct-secret-token-value",
-		ClientSecret: secret,
-		AccessToken:  "at-secret-token-value",
+		ClientToken:  []byte("ct-secret-token-value"),
+		ClientSecret: []byte(secret),
+		AccessToken:  []byte("at-secret-token-value"),
 	}
 	p := newProvider(t, srv, creds)
 
@@ -388,7 +388,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error from the mismatched secret")
 	}
-	for _, leak := range []string{secret, creds.ClientToken, creds.AccessToken} {
+	for _, leak := range []string{secret, string(creds.ClientToken), string(creds.AccessToken)} {
 		if strings.Contains(err.Error(), leak) {
 			t.Fatalf("error leaked a credential (%q): %v", leak, err)
 		}

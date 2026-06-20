@@ -29,6 +29,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const defaultEndpoint = "https://cloudkms.googleapis.com/v1"
@@ -42,7 +43,7 @@ const defaultOpTimeout = 30 * time.Second
 // BearerToken is a short-lived access token minted by the caller (service account or
 // workload identity); it is opaque here and never logged.
 type Credentials struct {
-	BearerToken string
+	BearerToken []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam (tests inject the double's client).
@@ -87,6 +88,7 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 // New returns a Cloud KMS backend that creates keys under parent (a key-ring resource name
 // like "projects/P/locations/L/keyRings/R"), authenticating with creds.
 func New(parent string, creds Credentials, opts ...Option) *Backend {
+	creds.BearerToken = secrettext.Clone(creds.BearerToken)
 	b := &Backend{
 		parent:    strings.Trim(parent, "/"),
 		endpoint:  defaultEndpoint,
@@ -252,7 +254,7 @@ func (b *Backend) call(ctx context.Context, method, path string, in any, out any
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Authorization", "Bearer "+b.creds.BearerToken)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.creds.BearerToken))
 	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("gcp-kms: %w", err)
 	}

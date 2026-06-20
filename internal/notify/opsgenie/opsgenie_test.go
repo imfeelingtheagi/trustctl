@@ -20,7 +20,7 @@ const testKey = "genie-key-do-not-log"
 
 func newChannel(t *testing.T, srv *fakeOG, apiKey string) *opsgenie.Channel {
 	t.Helper()
-	return opsgenie.New(apiKey,
+	return opsgenie.New([]byte(apiKey),
 		opsgenie.WithEndpoint(srv.URL()),
 		opsgenie.WithHTTPClient(srv.Client()))
 }
@@ -123,7 +123,7 @@ func TestDefaultClientRejectsUnsafeEndpoints(t *testing.T) {
 		"https://10.0.0.5/v2/alerts",
 		"https://169.254.169.254/latest/meta-data/",
 	} {
-		ch := opsgenie.New(testKey, opsgenie.WithEndpoint(target))
+		ch := opsgenie.New([]byte(testKey), opsgenie.WithEndpoint(target))
 		err := ch.Notify(context.Background(), alert)
 		if err == nil {
 			t.Fatalf("default OpsGenie client delivered to unsafe endpoint %s", target)

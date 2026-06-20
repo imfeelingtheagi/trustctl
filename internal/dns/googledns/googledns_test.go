@@ -193,7 +193,7 @@ func newProvider(t *testing.T, srv *fakeCloudDNS, creds googledns.Credentials) *
 }
 
 func goodCreds() googledns.Credentials {
-	return googledns.Credentials{BearerToken: testToken}
+	return googledns.Credentials{BearerToken: []byte(testToken)}
 }
 
 // TestGoogleDNSPassesConformance drives the full present -> validate -> cleanup ->
@@ -246,7 +246,7 @@ func TestPresentCleanupIdempotent(t *testing.T) {
 func TestBadTokenRejected(t *testing.T) {
 	srv := newFakeCloudDNS(testToken)
 	defer srv.Close()
-	p := newProvider(t, srv, googledns.Credentials{BearerToken: "wrong-token"})
+	p := newProvider(t, srv, googledns.Credentials{BearerToken: []byte("wrong-token")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {
@@ -264,7 +264,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	defer srv.Close()
 	const secret = "ya29.ultra-secret-token-material"
 	// Point the double at a different token so the request fails and surfaces an error.
-	p := newProvider(t, srv, googledns.Credentials{BearerToken: secret})
+	p := newProvider(t, srv, googledns.Credentials{BearerToken: []byte(secret)})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {

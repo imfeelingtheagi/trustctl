@@ -28,6 +28,7 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // apiVersion is the Key Vault data-plane REST API version exercised here.
@@ -41,7 +42,7 @@ const defaultOpTimeout = 30 * time.Second
 // Credentials carry the AAD access (bearer) token used to authenticate requests. The token
 // is supplied by the caller (no OAuth flow is performed here); it is opaque and never logged.
 type Credentials struct {
-	BearerToken string
+	BearerToken []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam (tests inject the double's client).
@@ -86,6 +87,7 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 // New returns an Azure Key Vault backend for vaultURL (e.g. https://my-vault.vault.azure.net),
 // authenticating with creds.
 func New(vaultURL string, creds Credentials, opts ...Option) *Backend {
+	creds.BearerToken = secrettext.Clone(creds.BearerToken)
 	b := &Backend{
 		vaultURL:  strings.TrimRight(vaultURL, "/"),
 		creds:     creds,
@@ -248,7 +250,7 @@ func (b *Backend) call(ctx context.Context, method, path string, body []byte, ou
 	}
 	req.Header.Set("Accept", "application/json")
 	// Bearer auth: the AAD access token authenticates every request.
-	req.Header.Set("Authorization", "Bearer "+b.creds.BearerToken)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.creds.BearerToken))
 	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("azure-key-vault: %w", err)
 	}

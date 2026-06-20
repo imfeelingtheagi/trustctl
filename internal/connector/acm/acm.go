@@ -39,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const (
@@ -50,15 +51,13 @@ const (
 // Credentials are the AWS access credentials used to sign requests. SessionToken
 // is set for temporary (STS/role) credentials.
 //
-// SecretAccessKey is the long-lived signing secret; it is held as []byte, never a
-// string, so it can be wiped and is not freely copied by the GC (AN-8). The
-// AccessKeyID and SessionToken are non-secret identifiers (the access-key id is a
-// public handle; the session token is sent verbatim in a header), so they stay
-// strings.
+// SecretAccessKey and SessionToken are authority-bearing AWS credential material;
+// they are held as []byte, never string, so they can be wiped and are not freely
+// copied by the GC (AN-8). AccessKeyID is a public handle.
 type Credentials struct {
 	AccessKeyID     string
 	SecretAccessKey []byte
-	SessionToken    string
+	SessionToken    []byte
 }
 
 // Connector imports renewed certificates into AWS Certificate Manager.
@@ -84,6 +83,8 @@ func WithEndpoint(endpoint string) Option {
 // New returns an ACM connector for region, signing with creds. The endpoint
 // defaults to the regional ACM service host.
 func New(region string, creds Credentials, opts ...Option) *Connector {
+	creds.SecretAccessKey = secrettext.Clone(creds.SecretAccessKey)
+	creds.SessionToken = secrettext.Clone(creds.SessionToken)
 	c := &Connector{region: region, creds: creds, now: time.Now}
 	c.setEndpoint(fmt.Sprintf("https://acm.%s.amazonaws.com", region))
 	for _, o := range opts {
@@ -168,12 +169,12 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 	dateStamp := t.Format("20060102")
 
 	req.Header.Set("X-Amz-Date", amzDate)
-	if c.creds.SessionToken != "" {
-		req.Header.Set("X-Amz-Security-Token", c.creds.SessionToken)
+	if len(c.creds.SessionToken) > 0 {
+		req.Header.Set("X-Amz-Security-Token", secrettext.String(c.creds.SessionToken))
 	}
 
 	signed := []string{"content-type", "host", "x-amz-date", "x-amz-target"}
-	if c.creds.SessionToken != "" {
+	if len(c.creds.SessionToken) > 0 {
 		signed = append(signed, "x-amz-security-token")
 	}
 	sort.Strings(signed)
@@ -214,8 +215,12 @@ func (c *Connector) signV4(req *http.Request, body []byte, t time.Time) {
 	kDate := crypto.HMACSHA256(seed, []byte(dateStamp))
 	secret.Wipe(seed)
 	kRegion := crypto.HMACSHA256(kDate, []byte(c.region))
+	secret.Wipe(kDate)
 	kService := crypto.HMACSHA256(kRegion, []byte(service))
+	secret.Wipe(kRegion)
 	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
+	secret.Wipe(kService)
+	defer secret.Wipe(kSigning)
 	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
 
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+

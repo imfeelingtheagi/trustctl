@@ -145,7 +145,7 @@ func newProvider(t *testing.T, f *fakeUltraDNS, creds ultradns.Credentials) *ult
 }
 
 func goodCreds() ultradns.Credentials {
-	return ultradns.Credentials{BearerToken: testToken}
+	return ultradns.Credentials{BearerToken: []byte(testToken)}
 }
 
 // TestUltraDNSPassesConformance drives the full present -> validate -> cleanup ->
@@ -198,7 +198,7 @@ func TestPresentCleanupIdempotent(t *testing.T) {
 func TestBadTokenRejected(t *testing.T) {
 	f := newFake(testToken)
 	defer f.Close()
-	p := newProvider(t, f, ultradns.Credentials{BearerToken: "wrong-token"})
+	p := newProvider(t, f, ultradns.Credentials{BearerToken: []byte("wrong-token")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")
 	if err == nil {
@@ -215,7 +215,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	f := newFake(testToken)
 	defer f.Close()
 	const secret = "ultra-secret-bearer-material"
-	p := newProvider(t, f, ultradns.Credentials{BearerToken: secret})
+	p := newProvider(t, f, ultradns.Credentials{BearerToken: []byte(secret)})
 
 	// A mismatched token drives the failure path (the double expects testToken).
 	err := p.PresentTXT(context.Background(), "_acme-challenge.example.com", "v")

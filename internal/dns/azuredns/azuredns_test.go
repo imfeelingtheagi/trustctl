@@ -187,7 +187,7 @@ func newProvider(t *testing.T, f *fakeAzure, creds azuredns.Credentials) *azured
 }
 
 func goodCreds() azuredns.Credentials {
-	return azuredns.Credentials{BearerToken: testToken}
+	return azuredns.Credentials{BearerToken: []byte(testToken)}
 }
 
 // TestAzureDNSPassesConformance drives the full present -> validate -> cleanup ->
@@ -240,7 +240,7 @@ func TestPresentCleanupIdempotent(t *testing.T) {
 func TestBadTokenRejected(t *testing.T) {
 	f := newFakeAzure(testToken, testZone)
 	defer f.Close()
-	p := newProvider(t, f, azuredns.Credentials{BearerToken: "wrong-token"})
+	p := newProvider(t, f, azuredns.Credentials{BearerToken: []byte("wrong-token")})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.host.example", "v")
 	if err == nil {
@@ -260,7 +260,7 @@ func TestCredentialsNeverLogged(t *testing.T) {
 	// The double is configured to expect a *different* token, so the provider's
 	// secret token travels on the wire and the request fails — exercising the error
 	// path with the real secret in play.
-	p := newProvider(t, f, azuredns.Credentials{BearerToken: secret})
+	p := newProvider(t, f, azuredns.Credentials{BearerToken: []byte(secret)})
 
 	err := p.PresentTXT(context.Background(), "_acme-challenge.host.example", "v")
 	if err == nil {

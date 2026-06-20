@@ -121,7 +121,7 @@ func writeXML(w http.ResponseWriter, doc string) {
 
 func newConnector(t *testing.T, f *fakePANOS, apiKey string) *paloalto.Connector {
 	t.Helper()
-	return paloalto.New(f.URL(), apiKey)
+	return paloalto.New(f.URL(), []byte(apiKey))
 }
 
 // TestPaloAltoConformance: the connector satisfies the shared connector
@@ -129,7 +129,7 @@ func newConnector(t *testing.T, f *fakePANOS, apiKey string) *paloalto.Connector
 // through the sandbox, denies ungranted operations). The conformance suite drives
 // the connector against the SDK's in-memory Ops, so it does not touch the double.
 func TestPaloAltoConformance(t *testing.T) {
-	c := paloalto.New("https://fw.example", testAPIKey)
+	c := paloalto.New("https://fw.example", []byte(testAPIKey))
 	rep := connector.Conformance(context.Background(), c)
 	if !rep.OK() {
 		for _, ch := range rep.Checks {
@@ -265,7 +265,7 @@ func TestKeyNeverLogged(t *testing.T) {
 // TestCapabilitiesAreLeastPrivilege: net.dial to the appliance host only — no
 // fs, no exec, no other host.
 func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
-	c := paloalto.New("https://fw.example", testAPIKey)
+	c := paloalto.New("https://fw.example", []byte(testAPIKey))
 	grant := c.Capabilities()
 	if grant.Has(pluginhost.CapFSWrite) {
 		t.Error("PAN-OS connector must not request fs.write")

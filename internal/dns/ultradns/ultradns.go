@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 const txtTTL = 60
@@ -44,7 +45,7 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // Credentials carry the OAuth2 bearer token UltraDNS authenticates with. The token
 // is opaque to this package, never logged, and sealed at rest by the caller (AN-8).
 type Credentials struct {
-	BearerToken string
+	BearerToken []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient,
@@ -79,6 +80,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // New returns an UltraDNS provider that manages TXT records in zone, authenticating
 // with creds. The endpoint defaults to the public UltraDNS API host.
 func New(zone string, creds Credentials, opts ...Option) *Provider {
+	creds.BearerToken = secrettext.Clone(creds.BearerToken)
 	p := &Provider{
 		zone:  zone,
 		creds: creds,
@@ -148,7 +150,7 @@ func (p *Provider) newRequest(ctx context.Context, method, name string, body io.
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.creds.BearerToken)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.creds.BearerToken))
 	req.Header.Set("Accept", "application/json")
 	return req, nil
 }

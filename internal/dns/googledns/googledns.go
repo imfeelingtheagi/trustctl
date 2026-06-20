@@ -37,6 +37,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // defaultEndpoint is the public Cloud DNS API base URL (v1).
@@ -54,7 +55,7 @@ var _ acme.DNSProvider = (*Provider)(nil)
 // rest by the caller (AN-8). The caller is responsible for obtaining and refreshing
 // it; this package does not implement the OAuth flow.
 type Credentials struct {
-	BearerToken string
+	BearerToken []byte
 }
 
 // HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
@@ -91,6 +92,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // of project project, authenticating with creds. The endpoint defaults to the public
 // Cloud DNS API.
 func New(project, zone string, creds Credentials, opts ...Option) *Provider {
+	creds.BearerToken = secrettext.Clone(creds.BearerToken)
 	p := &Provider{
 		project: project,
 		zone:    zone,
@@ -174,7 +176,7 @@ func (p *Provider) change(ctx context.Context, body changeBody) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.creds.BearerToken)
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.creds.BearerToken))
 
 	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
 	// and drain (CODE-006); the non-2xx *StatusError is translated to the package's

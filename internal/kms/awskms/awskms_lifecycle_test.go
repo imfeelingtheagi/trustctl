@@ -21,7 +21,7 @@ import (
 func TestAWSKMSRemoteKeyLifecycle(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeKMS(t)
-	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: testSK},
+	b := awskms.New("us-east-1", awskms.Credentials{AccessKeyID: testAK, SecretAccessKey: []byte(testSK)},
 		awskms.WithEndpoint(f.srv.URL), awskms.WithHTTPClient(f.srv.Client()))
 
 	// The backend must satisfy the remote-lifecycle contract.
