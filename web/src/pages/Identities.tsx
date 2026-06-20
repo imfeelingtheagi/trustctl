@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, ApiError, identityState, type Identity, type TransitionTo } from "@/lib/api";
+import { api, ApiError, identityState, type GraphImpact, type Identity, type TransitionTo } from "@/lib/api";
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -28,6 +28,19 @@ const identityKinds = [
 ] as const satisfies Identity["kind"][];
 type KindFilter = "all" | Identity["kind"];
 type BulkResult = { id: string; name: string; status: "accepted" | "failed"; message: string };
+type BlastRadiusState = {
+  error: string | null;
+  impact: GraphImpact | null;
+  loading: boolean;
+  nodeId: string | null;
+};
+
+const emptyBlastRadiusState: BlastRadiusState = {
+  error: null,
+  impact: null,
+  loading: false,
+  nodeId: null,
+};
 
 const kindCopy: Record<Identity["kind"], { title: string; description: string }> = {
   x509_certificate: {
@@ -172,6 +185,24 @@ function displayValue(value: unknown): string {
   }
 }
 
+function stringAttribute(identity: Identity, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = identity.attributes?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+export function graphNodeIdForIdentity(identity: Identity): string | null {
+  const explicit = stringAttribute(identity, ["graph_node_id", "graph_node", "graph_id"]);
+  if (explicit) return explicit;
+
+  const credentialID = stringAttribute(identity, ["credential_id", "certificate_id"]);
+  if (credentialID) return credentialID.startsWith("cert:") ? credentialID : `cert:${credentialID}`;
+
+  return identity.kind === "x509_certificate" && identity.id ? `cert:${identity.id}` : null;
+}
+
 function attributeRows(identity: Identity): Array<[string, string]> {
   return Object.entries(identity.attributes ?? {})
     .slice(0, 8)
@@ -200,6 +231,8 @@ export function Identities() {
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [pendingImpact, setPendingImpact] = useState<BlastRadiusState>(emptyBlastRadiusState);
+  const impactRequestRef = useRef(0);
   const filteredItems = useMemo(
     () => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter),
     [items, kindFilter],
@@ -269,14 +302,57 @@ export function Identities() {
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
    * which is first parked in `pending` so the user must confirm it in a dialog that
    * names the credential (SURFACE-007). */
-  function request(id: string, name: string, to: TransitionTo, label: string, reason?: string) {
+  function clearPending() {
+    impactRequestRef.current += 1;
+    setPending(null);
+    setPendingConfirmName("");
+    setPendingImpact(emptyBlastRadiusState);
+  }
+
+  function loadBlastRadius(identity: Identity) {
+    const nodeId = graphNodeIdForIdentity(identity);
+    const requestID = impactRequestRef.current + 1;
+    impactRequestRef.current = requestID;
+
+    if (!nodeId) {
+      setPendingImpact({
+        nodeId: null,
+        impact: null,
+        loading: false,
+        error: "Blast-radius impact unavailable: no served graph node mapping for this identity.",
+      });
+      return;
+    }
+
+    setPendingImpact({ nodeId, impact: null, loading: true, error: null });
+    api
+      .graphBlastRadius(nodeId)
+      .then((impact) => {
+        if (impactRequestRef.current === requestID) {
+          setPendingImpact({ nodeId, impact, loading: false, error: null });
+        }
+      })
+      .catch((err) => {
+        if (impactRequestRef.current === requestID) {
+          setPendingImpact({
+            nodeId,
+            impact: null,
+            loading: false,
+            error: `Blast-radius impact unavailable: ${apiProblemMessage(err)}`,
+          });
+        }
+      });
+  }
+
+  function request(identity: Identity, to: TransitionTo, label: string, reason?: string) {
     if (isDestructive(to)) {
       setPendingConfirmName("");
       setPendingReason(reason?.trim() || (to === "revoked" ? "operator requested revocation" : "operator requested retirement"));
-      setPending({ id, name, to, label, reason });
+      setPending({ id: identity.id, name: identity.name, to, label, reason });
+      loadBlastRadius(identity);
       return;
     }
-    void act(id, to, reason);
+    void act(identity.id, to, reason);
   }
 
   async function runBulkRevoke() {
@@ -356,7 +432,7 @@ export function Identities() {
                     aria-describedby={
                       deniedTransitions[deniedKey(identity.id, a.to)] ? `denied-${identity.id}-${a.to}` : undefined
                     }
-                    onClick={() => request(identity.id, identity.name, a.to, a.label)}
+                    onClick={() => request(identity, a.to, a.label)}
                   >
                     {a.label}
                   </Button>
@@ -453,6 +529,7 @@ export function Identities() {
               ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
               : `Retiring “${pending.name}” discards the credential record. This cannot be undone.`}
           </p>
+          <BlastRadiusImpactPanel state={pendingImpact} />
           <div className="mt-3 grid gap-3">
             <label className="block text-sm font-medium text-red-800 dark:text-red-200" htmlFor="destructive-confirm-name">
               Type credential name to confirm
@@ -484,8 +561,7 @@ export function Identities() {
               disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
               onClick={() => {
                 const p = pending;
-                setPending(null);
-                setPendingConfirmName("");
+                clearPending();
                 void act(p.id, p.to, pendingReason);
               }}
             >
@@ -495,10 +571,7 @@ export function Identities() {
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => {
-                setPending(null);
-                setPendingConfirmName("");
-              }}
+              onClick={clearPending}
             >
               Cancel
             </Button>
@@ -640,10 +713,57 @@ export function Identities() {
           }}
           onTransition={(to, label) => {
             if (!detail) return;
-            request(detail.id, detail.name, to, label, transitionReasons[detail.id]);
+            request(detail, to, label, transitionReasons[detail.id]);
           }}
         />
       </DetailDrawer>
+    </section>
+  );
+}
+
+function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
+  if (state.loading) {
+    return (
+      <div className="mt-3 rounded-md border border-red-200 bg-background/80 p-3 text-sm text-red-700 dark:border-red-900 dark:text-red-300">
+        Loading blast-radius impact from served graph...
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div className="mt-3 rounded-md border border-red-200 bg-background/80 p-3 text-sm text-red-700 dark:border-red-900 dark:text-red-300">
+        {state.error}
+      </div>
+    );
+  }
+
+  if (!state.impact) return null;
+
+  const affected = state.impact.affected.length;
+  const byKind = Object.entries(state.impact.by_kind ?? {});
+  return (
+    <section
+      aria-labelledby="destructive-blast-radius-heading"
+      className="mt-3 rounded-md border border-red-200 bg-background/80 p-3 text-sm text-red-700 dark:border-red-900 dark:text-red-300"
+    >
+      <h3 id="destructive-blast-radius-heading" className="font-semibold">
+        Blast-radius impact
+      </h3>
+      <p className="mt-1">
+        Served graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream
+        affected node{affected === 1 ? "" : "s"} before this destructive action.
+      </p>
+      {byKind.length > 0 && (
+        <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+          {byKind.map(([kind, value]) => (
+            <div key={kind} className="rounded-md border border-red-100 px-2 py-1 dark:border-red-900">
+              <dt className="font-medium">{kind}</dt>
+              <dd>{displayValue(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </section>
   );
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { Identities } from "@/pages/Identities";
+import { Identities, graphNodeIdForIdentity } from "@/pages/Identities";
 // The real ApiError class (the vi.mock below spreads the real module and only
 // replaces `api`), used to simulate a 429 with a Retry-After hint (SURFACE-007).
 import { ApiError } from "@/lib/api";
@@ -16,6 +16,7 @@ const { apiMock } = vi.hoisted(() => ({
     issueCertificate: vi.fn(),
     transitionIdentity: vi.fn(),
     approveIdentityAction: vi.fn(),
+    graphBlastRadius: vi.fn(),
   },
 }));
 
@@ -42,7 +43,43 @@ describe("lifecycle actions from the UI", () => {
     apiMock.getIdentity.mockReset();
     apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", status: "x" });
     apiMock.approveIdentityAction.mockReset().mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({
+      node: { id: "cert:demo", kind: "credential", name: "demo" },
+      affected: [],
+      by_kind: {},
+    });
     apiMock.identities.mockReset();
+  });
+
+  it("maps served identity data to graph node IDs conservatively", () => {
+    expect(
+      graphNodeIdForIdentity({
+        id: "dep-1",
+        name: "tls-api",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "deployed",
+      }),
+    ).toBe("cert:dep-1");
+    expect(
+      graphNodeIdForIdentity({
+        id: "dep-2",
+        name: "tls-api",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "deployed",
+        attributes: { graph_node_id: "credential:dep-2" },
+      }),
+    ).toBe("credential:dep-2");
+    expect(
+      graphNodeIdForIdentity({
+        id: "api-1",
+        name: "api-key",
+        kind: "api_key",
+        owner_id: "owner-1",
+        status: "deployed",
+      }),
+    ).toBeNull();
   });
 
   it("offers the state-appropriate action and calls the transition endpoint", async () => {
@@ -232,6 +269,67 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() =>
       expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "key compromise CAB-9001"),
     );
+  });
+
+  it("shows served blast-radius impact before destructive confirmation (FE-083)", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "dep-9", name: "to-revoke", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" },
+    ]);
+    apiMock.graphBlastRadius.mockResolvedValue({
+      node: { id: "cert:dep-9", kind: "credential", name: "to-revoke certificate" },
+      affected: [
+        { id: "workload:api", kind: "workload", name: "payments-api" },
+        { id: "workload:worker", kind: "workload", name: "payments-worker" },
+        { id: "resource:db", kind: "resource", name: "payments-db" },
+      ],
+      by_kind: { workload: 2, resource: 1 },
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("to-revoke")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+
+    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-9"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(await within(dialog).findByText("Blast-radius impact")).toBeInTheDocument();
+    expect(within(dialog).getByText(/cert:dep-9/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/3 downstream affected nodes/i)).toBeInTheDocument();
+    expect(within(dialog).getByText("workload")).toBeInTheDocument();
+    expect(within(dialog).getByText("2")).toBeInTheDocument();
+    expect(within(dialog).getByText("resource")).toBeInTheDocument();
+    expect(within(dialog).getByText("1")).toBeInTheDocument();
+  });
+
+  it("does not invent blast-radius impact when no graph node mapping is served (FE-083)", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "api-9", name: "api-key", kind: "api_key", owner_id: "owner-1", status: "deployed" },
+    ]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("api-key")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+
+    expect(apiMock.graphBlastRadius).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/no served graph node mapping/i)).toBeInTheDocument();
+  });
+
+  it("degrades blast-radius impact when the served graph request fails (FE-083)", async () => {
+    apiMock.identities.mockResolvedValue([
+      { id: "dep-404", name: "missing-graph-node", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" },
+    ]);
+    apiMock.graphBlastRadius.mockRejectedValue(new ApiError(404, JSON.stringify({ detail: "graph node not found" })));
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("missing-graph-node")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+
+    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-404"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(await within(dialog).findByText(/Blast-radius impact unavailable: graph node not found/i)).toBeInTheDocument();
   });
 
   it("cancelling the confirmation does not revoke (SURFACE-007)", async () => {
