@@ -12,6 +12,7 @@ import (
 	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
@@ -90,15 +91,62 @@ func newHierarchyHarness(t *testing.T) (*Manager, *store.Store) {
 
 func approvedCeremony(t *testing.T, m *Manager, purpose string) string {
 	t.Helper()
+	return ceremonyWithApprovals(t, m, purpose, 1, 1)
+}
+
+func ceremonyWithApprovals(t *testing.T, m *Manager, purpose string, threshold, approvals int) string {
+	t.Helper()
 	ctx := context.Background()
-	id, err := m.StartCeremony(ctx, testTenant, purpose, 1)
+	id, err := m.StartCeremony(ctx, testTenant, purpose, threshold)
 	if err != nil {
 		t.Fatalf("StartCeremony(%q): %v", purpose, err)
 	}
-	if _, err := m.Approve(ctx, testTenant, id, "custodian-1"); err != nil {
-		t.Fatalf("Approve(%q): %v", purpose, err)
+	for i := range approvals {
+		custodian := fmt.Sprintf("custodian-%d", i+1)
+		if _, err := m.Approve(ctx, testTenant, id, custodian); err != nil {
+			t.Fatalf("Approve(%q, %s): %v", purpose, custodian, err)
+		}
 	}
 	return id
+}
+
+func consumeCeremonyDirectly(t *testing.T, s *store.Store, ceremonyID, purpose string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := s.WithTenant(ctx, testTenant, func(tx pgx.Tx) error {
+		_, err := s.ConsumeKeyCeremonyTx(ctx, tx, testTenant, ceremonyID, purpose)
+		return err
+	}); err != nil {
+		t.Fatalf("direct ConsumeKeyCeremonyTx(%q): %v", purpose, err)
+	}
+}
+
+type caOperationProbe struct {
+	newRoot            int
+	createIntermediate int
+	crossSign          int
+}
+
+func (p *caOperationProbe) install(m *Manager) {
+	base := m.caOps
+	m.caOps = caOperations{
+		newRoot: func(spec cryptoca.CASpec) (*cryptoca.CA, error) {
+			p.newRoot++
+			return base.newRoot(spec)
+		},
+		createIntermediate: func(parent *cryptoca.CA, spec cryptoca.CASpec) (*cryptoca.CA, error) {
+			p.createIntermediate++
+			return base.createIntermediate(parent, spec)
+		},
+		crossSign: func(ca *cryptoca.CA, certDER []byte) ([]byte, error) {
+			p.crossSign++
+			return base.crossSign(ca, certDER)
+		},
+	}
+}
+
+func (p caOperationProbe) total() int {
+	return p.newRoot + p.createIntermediate + p.crossSign
 }
 
 func TestPurposeRootCanonicalizesSetOrdering(t *testing.T) {
@@ -150,6 +198,111 @@ func TestCompletedCeremonyCannotBeReused(t *testing.T) {
 	}
 	if len(authorities) != 1 || authorities[0].CommonName != "root-a" {
 		t.Fatalf("authorities after reuse attempt = %+v, want only root-a", authorities)
+	}
+}
+
+func TestNoCAOperationBeforeCeremonyQuorum(t *testing.T) {
+	type caOperationCase struct {
+		name  string
+		setup func(t *testing.T, m *Manager) (purpose string, run func(ceremonyID string) error)
+	}
+
+	cases := []caOperationCase{
+		{
+			name: "create root",
+			setup: func(t *testing.T, m *Manager) (string, func(string) error) {
+				spec := CASpec{CommonName: "guarded-root", MaxPathLen: 1, TTL: time.Hour}
+				return PurposeRoot(spec), func(ceremonyID string) error {
+					_, err := m.CreateRoot(context.Background(), testTenant, ceremonyID, spec)
+					return err
+				}
+			},
+		},
+		{
+			name: "create intermediate",
+			setup: func(t *testing.T, m *Manager) (string, func(string) error) {
+				parent := createRootForTest(t, m, "guarded-parent")
+				spec := CASpec{CommonName: "guarded-intermediate", MaxPathLen: 0, TTL: time.Hour}
+				return PurposeIntermediate(parent.ID, spec), func(ceremonyID string) error {
+					_, err := m.CreateIntermediate(context.Background(), testTenant, ceremonyID, parent.ID, spec)
+					return err
+				}
+			},
+		},
+		{
+			name: "rotate root",
+			setup: func(t *testing.T, m *Manager) (string, func(string) error) {
+				root := createRootForTest(t, m, "guarded-rotate-root")
+				return PurposeRotate(root.ID), func(ceremonyID string) error {
+					_, err := m.Rotate(context.Background(), testTenant, root.ID, ceremonyID)
+					return err
+				}
+			},
+		},
+		{
+			name: "cross sign",
+			setup: func(t *testing.T, m *Manager) (string, func(string) error) {
+				signer := createRootForTest(t, m, "guarded-cross-signer")
+				target, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "guarded-cross-target", MaxPathLen: 1, TTL: time.Hour})
+				if err != nil {
+					t.Fatalf("target root: %v", err)
+				}
+				t.Cleanup(target.Destroy)
+				targetDER := target.CertificateDER()
+				return PurposeCrossSign(signer.ID, targetDER), func(ceremonyID string) error {
+					_, err := m.CrossSign(context.Background(), testTenant, ceremonyID, signer.ID, targetDER)
+					return err
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name+"/below quorum", func(t *testing.T) {
+			m, _ := newHierarchyHarness(t)
+			purpose, run := tc.setup(t, m)
+			var probe caOperationProbe
+			probe.install(m)
+
+			ceremonyID := ceremonyWithApprovals(t, m, purpose, 2, 1)
+			if err := run(ceremonyID); !errors.Is(err, ErrQuorumNotMet) {
+				t.Fatalf("operation before quorum err = %v, want ErrQuorumNotMet", err)
+			}
+			if probe.total() != 0 {
+				t.Fatalf("CA operation count before quorum = %+v, want no key/sign call", probe)
+			}
+		})
+
+		t.Run(tc.name+"/purpose mismatch", func(t *testing.T) {
+			m, _ := newHierarchyHarness(t)
+			purpose, run := tc.setup(t, m)
+			var probe caOperationProbe
+			probe.install(m)
+
+			ceremonyID := ceremonyWithApprovals(t, m, purpose+":wrong-purpose", 1, 1)
+			if err := run(ceremonyID); !errors.Is(err, store.ErrKeyCeremonyPurposeMismatch) {
+				t.Fatalf("operation with wrong purpose err = %v, want ErrKeyCeremonyPurposeMismatch", err)
+			}
+			if probe.total() != 0 {
+				t.Fatalf("CA operation count with wrong purpose = %+v, want no key/sign call", probe)
+			}
+		})
+
+		t.Run(tc.name+"/already consumed", func(t *testing.T) {
+			m, s := newHierarchyHarness(t)
+			purpose, run := tc.setup(t, m)
+			ceremonyID := ceremonyWithApprovals(t, m, purpose, 1, 1)
+			consumeCeremonyDirectly(t, s, ceremonyID, purpose)
+
+			var probe caOperationProbe
+			probe.install(m)
+			if err := run(ceremonyID); !errors.Is(err, store.ErrKeyCeremonyNotPending) {
+				t.Fatalf("operation with consumed ceremony err = %v, want ErrKeyCeremonyNotPending", err)
+			}
+			if probe.total() != 0 {
+				t.Fatalf("CA operation count with consumed ceremony = %+v, want no key/sign call", probe)
+			}
+		})
 	}
 }
 

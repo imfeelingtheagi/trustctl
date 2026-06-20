@@ -91,14 +91,31 @@ type CASpec struct {
 type Manager struct {
 	store *store.Store
 	log   *events.Log
+	caOps caOperations
 
 	mu  sync.Mutex
 	cas map[string]*cryptoca.CA // CA id -> live CA
 }
 
+type caOperations struct {
+	newRoot            func(cryptoca.CASpec) (*cryptoca.CA, error)
+	createIntermediate func(*cryptoca.CA, cryptoca.CASpec) (*cryptoca.CA, error)
+	crossSign          func(*cryptoca.CA, []byte) ([]byte, error)
+}
+
+func defaultCAOperations() caOperations {
+	return caOperations{
+		newRoot: cryptoca.NewRoot,
+		createIntermediate: func(parent *cryptoca.CA, spec cryptoca.CASpec) (*cryptoca.CA, error) {
+			return parent.CreateIntermediate(spec)
+		},
+		crossSign: func(ca *cryptoca.CA, certDER []byte) ([]byte, error) { return ca.CrossSign(certDER) },
+	}
+}
+
 // NewManager wires a hierarchy Manager over the store and event log.
 func NewManager(s *store.Store, log *events.Log) *Manager {
-	return &Manager{store: s, log: log, cas: map[string]*cryptoca.CA{}}
+	return &Manager{store: s, log: log, caOps: defaultCAOperations(), cas: map[string]*cryptoca.CA{}}
 }
 
 // StartCeremony begins an m-of-n key ceremony requiring threshold approvals. The
@@ -166,14 +183,16 @@ func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian s
 
 // CreateRoot creates a self-signed root CA, gated by ceremonyID reaching quorum.
 func (m *Manager) CreateRoot(ctx context.Context, tenantID, ceremonyID string, spec CASpec) (store.CAAuthority, error) {
-	root, err := cryptoca.NewRoot(toCryptoSpec(spec))
-	if err != nil {
-		return store.CAAuthority{}, fmt.Errorf("hierarchy: create root: %w", err)
-	}
+	var root *cryptoca.CA
 	var rec store.CAAuthority
 	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeRoot(spec)); err != nil {
 			return err
+		}
+		var err error
+		root, err = m.caOps.newRoot(toCryptoSpec(spec))
+		if err != nil {
+			return fmt.Errorf("hierarchy: create root: %w", err)
 		}
 		inserted, err := m.store.InsertCAAuthorityTx(ctx, tx, record(tenantID, root, "root", nil, nil, spec.EKUs))
 		if err != nil {
@@ -182,7 +201,9 @@ func (m *Manager) CreateRoot(ctx context.Context, tenantID, ceremonyID string, s
 		rec = inserted
 		return nil
 	}); err != nil {
-		root.Destroy()
+		if root != nil {
+			root.Destroy()
+		}
 		return store.CAAuthority{}, err
 	}
 	m.put(rec.ID, root)
@@ -199,15 +220,17 @@ func (m *Manager) CreateIntermediate(ctx context.Context, tenantID, ceremonyID, 
 	if err != nil {
 		return store.CAAuthority{}, err
 	}
-	inter, err := parent.CreateIntermediate(toCryptoSpec(spec))
-	if err != nil {
-		return store.CAAuthority{}, fmt.Errorf("hierarchy: create intermediate: %w", err)
-	}
+	var inter *cryptoca.CA
 	pid := parentCAID
 	var rec store.CAAuthority
 	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeIntermediate(parentCAID, spec)); err != nil {
 			return err
+		}
+		var err error
+		inter, err = m.caOps.createIntermediate(parent, toCryptoSpec(spec))
+		if err != nil {
+			return fmt.Errorf("hierarchy: create intermediate: %w", err)
 		}
 		inserted, err := m.store.InsertCAAuthorityTx(ctx, tx, record(tenantID, inter, "intermediate", &pid, nil, spec.EKUs))
 		if err != nil {
@@ -216,7 +239,9 @@ func (m *Manager) CreateIntermediate(ctx context.Context, tenantID, ceremonyID, 
 		rec = inserted
 		return nil
 	}); err != nil {
-		inter.Destroy()
+		if inter != nil {
+			inter.Destroy()
+		}
 		return store.CAAuthority{}, err
 	}
 	m.put(rec.ID, inter)
@@ -254,32 +279,34 @@ func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string)
 	spec := CASpec{CommonName: old.CommonName, PermittedDNSDomains: old.PermittedDNSNames, MaxPathLen: old.MaxPathLen, EKUs: old.EKUs}
 
 	var fresh *cryptoca.CA
-	switch old.Kind {
-	case "root":
-		spec.TTL = rootRotateTTL
-		fresh, err = cryptoca.NewRoot(toCryptoSpec(spec))
-	case "intermediate":
-		if old.ParentID == nil {
-			return store.CAAuthority{}, fmt.Errorf("hierarchy: intermediate %s has no parent to re-sign under", caID)
-		}
-		var parent *cryptoca.CA
-		if parent, err = m.get(*old.ParentID); err == nil {
-			spec.TTL = caRotateTTL
-			fresh, err = parent.CreateIntermediate(toCryptoSpec(spec))
-		}
-	default:
+	if old.Kind != "root" && old.Kind != "intermediate" {
 		return store.CAAuthority{}, fmt.Errorf("hierarchy: cannot rotate CA of kind %q", old.Kind)
-	}
-	if err != nil {
-		return store.CAAuthority{}, fmt.Errorf("hierarchy: rotate: %w", err)
 	}
 
 	replaces := caID
-	rec := record(tenantID, fresh, old.Kind, old.ParentID, &replaces, old.EKUs)
+	var rec store.CAAuthority
 	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeRotate(caID)); err != nil {
 			return err
 		}
+		switch old.Kind {
+		case "root":
+			spec.TTL = rootRotateTTL
+			fresh, err = m.caOps.newRoot(toCryptoSpec(spec))
+		case "intermediate":
+			if old.ParentID == nil {
+				return fmt.Errorf("hierarchy: intermediate %s has no parent to re-sign under", caID)
+			}
+			var parent *cryptoca.CA
+			if parent, err = m.get(*old.ParentID); err == nil {
+				spec.TTL = caRotateTTL
+				fresh, err = m.caOps.createIntermediate(parent, toCryptoSpec(spec))
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("hierarchy: rotate: %w", err)
+		}
+		rec = record(tenantID, fresh, old.Kind, old.ParentID, &replaces, old.EKUs)
 		inserted, err := m.store.InsertCAAuthorityTx(ctx, tx, rec)
 		if err != nil {
 			return err
@@ -287,7 +314,9 @@ func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string)
 		rec = inserted
 		return m.store.SupersedeCAAuthorityTx(ctx, tx, tenantID, caID)
 	}); err != nil {
-		fresh.Destroy()
+		if fresh != nil {
+			fresh.Destroy()
+		}
 		return store.CAAuthority{}, err
 	}
 	m.put(rec.ID, fresh)
@@ -310,12 +339,17 @@ func (m *Manager) CrossSign(ctx context.Context, tenantID, ceremonyID, caID stri
 	if err != nil {
 		return nil, err
 	}
-	cross, err := ca.CrossSign(otherCertDER)
-	if err != nil {
-		return nil, fmt.Errorf("hierarchy: cross-sign: %w", err)
-	}
+	var cross []byte
 	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeCrossSign(caID, otherCertDER))
+		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeCrossSign(caID, otherCertDER)); err != nil {
+			return err
+		}
+		var err error
+		cross, err = m.caOps.crossSign(ca, otherCertDER)
+		if err != nil {
+			return fmt.Errorf("hierarchy: cross-sign: %w", err)
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
