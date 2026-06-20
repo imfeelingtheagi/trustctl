@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
 import { Login } from "@/pages/Login";
 import { Dashboard } from "@/pages/Dashboard";
 import { Certificates } from "@/pages/Certificates";
@@ -35,10 +36,11 @@ import { RequestCredential } from "@/pages/RequestCredential";
  * when there is none. */
 function RequireAuth({ children }: { children: ReactElement }) {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
   if (loading) {
     return (
       <p role="status" className="p-6">
-        Loading…
+        {t("app.loading")}
       </p>
     );
   }
@@ -93,12 +95,14 @@ export function AppRoutes() {
 
 export function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+    <IntlProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
+    </IntlProvider>
   );
 }

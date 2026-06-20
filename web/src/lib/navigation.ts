@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/i18n/messages";
+
 export type NavIcon =
   | "activity"
   | "audit"
@@ -22,7 +24,7 @@ export type NavIcon =
 
 export interface NavItem {
   to: string;
-  label: string;
+  labelKey: MessageKey;
   icon: NavIcon;
   end?: boolean;
   mode: "real" | "disclosure";
@@ -33,15 +35,15 @@ export type NavTreatment = "operate" | "observe" | "disclose";
 
 export interface TaskNavItem {
   to: string;
-  label: string;
-  description: string;
+  labelKey: MessageKey;
+  descriptionKey: MessageKey;
   icon: NavIcon;
   treatment: NavTreatment;
   featureIds: string[];
 }
 
 export interface NavGroup {
-  label: string;
+  labelKey: MessageKey;
   items: NavItem[];
 }
 
@@ -78,24 +80,24 @@ export const appRoutePaths = [
 export const taskNavItems: TaskNavItem[] = [
   {
     to: "/certificates?expiry=30d",
-    label: "Expiring soon",
-    description: "30-day certificate worklist",
+    labelKey: "nav.task.expiringSoon.label",
+    descriptionKey: "nav.task.expiringSoon.description",
     icon: "certificate",
     treatment: "operate",
     featureIds: ["F1"],
   },
   {
     to: "/approvals?status=pending",
-    label: "Pending approvals",
-    description: "dual-control issue and revoke inbox",
+    labelKey: "nav.task.pendingApprovals.label",
+    descriptionKey: "nav.task.pendingApprovals.description",
     icon: "policy",
     treatment: "operate",
     featureIds: ["F33"],
   },
   {
     to: "/risk?sort=score",
-    label: "Highest risk",
-    description: "risk-prioritized rotation list",
+    labelKey: "nav.task.highestRisk.label",
+    descriptionKey: "nav.task.highestRisk.description",
     icon: "risk",
     treatment: "observe",
     featureIds: ["F19"],
@@ -104,92 +106,92 @@ export const taskNavItems: TaskNavItem[] = [
 
 export const navGroups: NavGroup[] = [
   {
-    label: "Overview",
+    labelKey: "nav.group.overview",
     items: [
-      { to: "/", label: "Dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
-      { to: "/coverage", label: "Coverage roadmap", icon: "graph", mode: "real", featureIds: ["F12"] },
-      { to: "/wizard", label: "Set up", icon: "rocket", mode: "real", featureIds: ["F3", "F4"] },
-      { to: "/request", label: "Request credential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
+      { to: "/", labelKey: "nav.item.dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
+      { to: "/coverage", labelKey: "nav.item.coverageRoadmap", icon: "graph", mode: "real", featureIds: ["F12"] },
+      { to: "/wizard", labelKey: "nav.item.setUp", icon: "rocket", mode: "real", featureIds: ["F3", "F4"] },
+      { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
     ],
   },
   {
-    label: "Inventory & Discovery",
+    labelKey: "nav.group.inventoryDiscovery",
     items: [
-      { to: "/certificates", label: "Certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
-      { to: "/identities", label: "Identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
-      { to: "/owners", label: "Owners", icon: "owner", mode: "real", featureIds: ["F59"] },
-      { to: "/agents", label: "Agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
-      { to: "/discovery", label: "Discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
-      { to: "/workloads", label: "Workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
+      { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
+      { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
+      { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
+      { to: "/agents", labelKey: "nav.item.agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
+      { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
+      { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
     ],
   },
   {
-    label: "Issuance & CAs",
+    labelKey: "nav.group.issuanceCas",
     items: [
-      { to: "/profiles", label: "Profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
-      { to: "/identities", label: "Issuance", icon: "key", mode: "real", featureIds: ["F4", "F6", "F33"] },
-      { to: "/ca-hierarchy", label: "CA hierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
+      { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
+      { to: "/identities", labelKey: "nav.item.issuance", icon: "key", mode: "real", featureIds: ["F4", "F6", "F33"] },
+      { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
     ],
   },
   {
-    label: "Protocols",
+    labelKey: "nav.group.protocols",
     items: [
-      { to: "/protocols", label: "ACME and DNS", icon: "protocol", mode: "real", featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"] },
-      { to: "/protocols", label: "Enrollment protocols", icon: "protocol", mode: "real", featureIds: ["F22", "F23", "F55", "F56"] },
-      { to: "/protocols", label: "SPIFFE", icon: "spiffe", mode: "real", featureIds: ["F24"] },
-      { to: "/protocols", label: "SSH CA", icon: "ssh", mode: "real", featureIds: ["F43"] },
-      { to: "/ssh", label: "SSH trust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
-      { to: "/codesign", label: "Code signing", icon: "protocol", mode: "real", featureIds: ["F50"] },
-      { to: "/protocols", label: "TSA", icon: "protocol", mode: "real", featureIds: ["F51"] },
+      { to: "/protocols", labelKey: "nav.item.acmeAndDns", icon: "protocol", mode: "real", featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"] },
+      { to: "/protocols", labelKey: "nav.item.enrollmentProtocols", icon: "protocol", mode: "real", featureIds: ["F22", "F23", "F55", "F56"] },
+      { to: "/protocols", labelKey: "nav.item.spiffe", icon: "spiffe", mode: "real", featureIds: ["F24"] },
+      { to: "/protocols", labelKey: "nav.item.sshCa", icon: "ssh", mode: "real", featureIds: ["F43"] },
+      { to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
+      { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "protocol", mode: "real", featureIds: ["F50"] },
+      { to: "/protocols", labelKey: "nav.item.tsa", icon: "protocol", mode: "real", featureIds: ["F51"] },
     ],
   },
   {
-    label: "Secrets",
+    labelKey: "nav.group.secrets",
     items: [
-      { to: "/secrets", label: "Native secrets", icon: "secret", mode: "real", featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"] },
-      { to: "/secrets", label: "PKI secrets", icon: "secret", mode: "real", featureIds: ["F67"] },
-      { to: "/secrets", label: "Machine login", icon: "key", mode: "real", featureIds: ["F58"] },
-      { to: "/secrets", label: "Secret sharing", icon: "secret", mode: "real", featureIds: ["F60"] },
+      { to: "/secrets", labelKey: "nav.item.nativeSecrets", icon: "secret", mode: "real", featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"] },
+      { to: "/secrets", labelKey: "nav.item.pkiSecrets", icon: "secret", mode: "real", featureIds: ["F67"] },
+      { to: "/secrets", labelKey: "nav.item.machineLogin", icon: "key", mode: "real", featureIds: ["F58"] },
+      { to: "/secrets", labelKey: "nav.item.secretSharing", icon: "secret", mode: "real", featureIds: ["F60"] },
     ],
   },
   {
-    label: "Connectors & Plugins",
+    labelKey: "nav.group.connectorsPlugins",
     items: [
-      { to: "/connectors", label: "Connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
-      { to: "/platform", label: "Plugins", icon: "connector", mode: "real", featureIds: ["F20"] },
+      { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
+      { to: "/platform", labelKey: "nav.item.plugins", icon: "connector", mode: "real", featureIds: ["F20"] },
     ],
   },
   {
-    label: "Risk & Insight",
+    labelKey: "nav.group.riskInsight",
     items: [
-      { to: "/risk", label: "Risk", icon: "risk", mode: "real", featureIds: ["F19"] },
-      { to: "/posture", label: "Posture", icon: "risk", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
-      { to: "/graph", label: "Graph", icon: "graph", mode: "real", featureIds: ["F21"] },
-      { to: "/assistant", label: "Assistant", icon: "bot", mode: "real", featureIds: ["F75", "F77", "F78"] },
+      { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
+      { to: "/posture", labelKey: "nav.item.posture", icon: "risk", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
+      { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
+      { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F77", "F78"] },
     ],
   },
   {
-    label: "Incidents & JIT",
+    labelKey: "nav.group.incidentsJit",
     items: [
-      { to: "/incidents", label: "Incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-      { to: "/approvals", label: "Approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
+      { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
+      { to: "/approvals", labelKey: "nav.item.approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
     ],
   },
   {
-    label: "Governance",
+    labelKey: "nav.group.governance",
     items: [
-      { to: "/audit", label: "Audit", icon: "audit", mode: "real", featureIds: ["F9"] },
-      { to: "/owners", label: "Ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
-      { to: "/coverage?feature=F8", label: "RBAC", icon: "policy", mode: "disclosure", featureIds: ["F8"] },
-      { to: "/policy", label: "Policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+      { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
+      { to: "/owners", labelKey: "nav.item.ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
+      { to: "/coverage?feature=F8", labelKey: "nav.item.rbac", icon: "policy", mode: "disclosure", featureIds: ["F8"] },
+      { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
     ],
   },
   {
-    label: "Platform",
+    labelKey: "nav.group.platform",
     items: [
-      { to: "/platform", label: "Platform", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"] },
-      { to: "/login", label: "SSO", icon: "key", mode: "real", featureIds: ["F13"] },
-      { to: "/platform", label: "API and distribution", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F14", "F41"] },
+      { to: "/platform", labelKey: "nav.item.platform", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"] },
+      { to: "/login", labelKey: "nav.item.sso", icon: "key", mode: "real", featureIds: ["F13"] },
+      { to: "/platform", labelKey: "nav.item.apiDistribution", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F14", "F41"] },
     ],
   },
 ];

@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { appRoutePaths, navGroups } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 
 interface RouteCommand {
   id: string;
@@ -28,7 +30,7 @@ export interface CommandPaletteProps {
 }
 
 function titleFromPath(path: string): string {
-  if (path === "/") return "Dashboard";
+  if (path === "/") return "nav.item.dashboard";
   return path
     .slice(1)
     .split("-")
@@ -40,28 +42,27 @@ function basePath(to: string): string {
   return to.split("?")[0] || "/";
 }
 
-function routeCommands(): RouteCommand[] {
-  const labels = new Map<string, { label: string; group: string }>();
+function routeCommands(t: (key: MessageKey, values?: Record<string, string | number>) => string): RouteCommand[] {
+  const labels = new Map<string, { labelKey: MessageKey; groupKey: MessageKey }>();
   for (const group of navGroups) {
     for (const item of group.items) {
       const path = basePath(item.to);
       if (!labels.has(path)) {
-        labels.set(path, { label: item.label, group: group.label });
+        labels.set(path, { labelKey: item.labelKey, groupKey: group.labelKey });
       }
     }
   }
   return appRoutePaths.map((path) => {
     const nav = labels.get(path);
+    const fallback = titleFromPath(path);
     return {
       id: `route:${path}`,
-      label: nav?.label ?? titleFromPath(path),
-      description: `Route · ${nav?.group ?? path}`,
+      label: nav ? t(nav.labelKey) : fallback === "nav.item.dashboard" ? t(fallback) : fallback,
+      description: t("command.routeDescription", { group: nav ? t(nav.groupKey) : path }),
       to: path,
     };
   });
 }
-
-const commands = routeCommands();
 
 function matchesRoute(command: RouteCommand, query: string): boolean {
   const needle = query.trim().toLowerCase();
@@ -91,12 +92,14 @@ function focusableElements(panel: HTMLElement): HTMLElement[] {
 }
 
 export function CommandPalette({ open, onClose, returnFocusRef }: CommandPaletteProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const trimmed = query.trim();
   const search = useGlobalSearch(query, { enabled: open && trimmed.length > 0 });
+  const commands = useMemo(() => routeCommands(t), [t]);
   const filteredRoutes = useMemo(
     () =>
       commands
@@ -173,15 +176,15 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
         <div className="flex items-start justify-between gap-3 border-b border-border p-comfortable">
           <div>
             <h2 id={titleId} className="text-heading font-semibold">
-              Command palette
+              {t("command.title")}
             </h2>
             <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-              Jump to routes or search served certificate, identity, and secret metadata.
+              {t("command.description")}
             </p>
           </div>
           <Button type="button" size="sm" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" aria-hidden="true" />
-            <span>Close command palette</span>
+            <span>{t("command.close")}</span>
           </Button>
         </div>
         <div className="border-b border-border p-comfortable">
@@ -193,43 +196,43 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
             <input
               ref={inputRef}
               type="search"
-              aria-label="Search routes and inventory"
+              aria-label={t("command.searchLabel")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={onInputKeyDown}
-              placeholder="Search routes, certificates, identities, or secrets"
+              placeholder={t("command.searchPlaceholder")}
               className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
           {search.unavailableSources.length > 0 && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Some search sources are unavailable: {search.unavailableSources.join(", ")}.
+              {t("command.sourcesUnavailable", { sources: search.unavailableSources.join(", ") })}
             </p>
           )}
         </div>
         <div className="max-h-[24rem] overflow-y-auto p-2">
-          {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">Searching served inventory...</p>}
+          {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}
           {filteredRoutes.length > 0 && (
-            <PaletteSection title="Routes">
+            <PaletteSection title={t("command.routes")}>
               {filteredRoutes.map((command) => (
                 <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => activate(command)} />
               ))}
             </PaletteSection>
           )}
           {search.results.length > 0 && (
-            <PaletteSection title="Inventory">
+            <PaletteSection title={t("command.inventory")}>
               {search.results.map((result) => (
                 <PaletteButton
                   key={result.id}
                   label={result.label}
-                  description={`${kindLabel(result.kind)} · ${result.description}`}
+                  description={`${kindLabel(result.kind, t)} · ${result.description}`}
                   onClick={() => activate(result)}
                 />
               ))}
             </PaletteSection>
           )}
           {!search.loading && choices.length === 0 && (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No routes or inventory matched.</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("command.noResults")}</p>
           )}
         </div>
       </div>
@@ -255,6 +258,7 @@ function PaletteButton({
   label: string;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -268,18 +272,18 @@ function PaletteButton({
         <span className="block truncate font-medium">{label}</span>
         <span className="block truncate text-xs text-muted-foreground">{description}</span>
       </span>
-      <span className="shrink-0 text-xs text-muted-foreground">Enter</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{t("command.enter")}</span>
     </button>
   );
 }
 
-function kindLabel(kind: GlobalSearchResult["kind"]): string {
+function kindLabel(kind: GlobalSearchResult["kind"], t: (key: MessageKey) => string): string {
   switch (kind) {
     case "certificate":
-      return "Certificate";
+      return t("search.kind.certificate");
     case "identity":
-      return "Identity";
+      return t("search.kind.identity");
     case "secret":
-      return "Secret";
+      return t("search.kind.secret");
   }
 }

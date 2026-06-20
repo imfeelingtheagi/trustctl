@@ -31,6 +31,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { navGroups, navTreatmentForItem, taskNavItems, type NavIcon, type NavTreatment } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 
 const iconMap: Record<NavIcon, typeof Activity> = {
   activity: Activity,
@@ -67,11 +69,14 @@ function NavCount({ n }: { n: number }) {
   );
 }
 
-function treatmentLabel(treatment: NavTreatment): string {
-  return treatment[0].toUpperCase() + treatment.slice(1);
-}
+const treatmentLabelKeys: Record<NavTreatment, MessageKey> = {
+  disclose: "nav.treatment.disclose",
+  observe: "nav.treatment.observe",
+  operate: "nav.treatment.operate",
+};
 
 function TreatmentBadge({ treatment }: { treatment: NavTreatment }) {
+  const { t } = useTranslation();
   return (
     <span
       className={cn(
@@ -81,7 +86,7 @@ function TreatmentBadge({ treatment }: { treatment: NavTreatment }) {
         treatment === "disclose" && "bg-disclose/10 text-disclose",
       )}
     >
-      {treatmentLabel(treatment)}
+      {t(treatmentLabelKeys[treatment])}
     </span>
   );
 }
@@ -108,16 +113,19 @@ type PrimaryNavProps = {
 };
 
 function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
+  const { t } = useTranslation();
   return (
-    <nav aria-label="Primary" className={cn("p-3", className)} id={id}>
+    <nav aria-label={t("shell.primaryNavigation")} className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
         <li>
           <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Needs action
+            {t("nav.section.needsAction")}
           </p>
-          <ul aria-label="Needs action worklists" className="space-y-1">
-            {taskNavItems.map(({ to, label, description, icon, treatment }) => {
+          <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
+            {taskNavItems.map(({ to, labelKey, descriptionKey, icon, treatment }) => {
               const Icon = iconMap[icon];
+              const label = t(labelKey);
+              const description = t(descriptionKey);
               return (
                 <li key={`task-${to}`}>
                   <NavLink
@@ -145,17 +153,18 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
           </ul>
         </li>
         {navGroups.map((group) => (
-          <li key={group.label}>
+          <li key={group.labelKey}>
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.label}
+              {t(group.labelKey)}
             </p>
             <ul className="space-y-1">
               {group.items.map((item) => {
-                const { to, label, icon, end } = item;
+                const { to, labelKey, icon, end } = item;
+                const label = t(labelKey);
                 const Icon = iconMap[icon];
                 const treatment = navTreatmentForItem(item);
                 return (
-                  <li key={`${group.label}-${to}-${label}`}>
+                  <li key={`${group.labelKey}-${to}-${labelKey}`}>
                     <NavLink
                       to={to}
                       end={end}
@@ -196,6 +205,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * navigable for WCAG 2.1 AA. */
 export function AppShell() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
   const shortcutsButtonRef = useRef<HTMLButtonElement>(null);
@@ -232,7 +242,7 @@ export function AppShell() {
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
       >
-        Skip to main content
+        {t("app.skipToMain")}
       </a>
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur">
@@ -242,7 +252,7 @@ export function AppShell() {
               type="button"
               aria-controls={mobileNavId}
               aria-expanded={mobileNavOpen}
-              aria-label={mobileNavOpen ? "Close primary navigation" : "Open primary navigation"}
+              aria-label={t(mobileNavOpen ? "shell.closePrimaryNavigation" : "shell.openPrimaryNavigation")}
               onClick={() => setMobileNavOpen((open) => !open)}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -263,9 +273,9 @@ export function AppShell() {
             </svg>
           </span>
           <span className="min-w-0 leading-tight">
-            <span className="block truncate text-sm font-semibold tracking-tight">trstctl</span>
+            <span className="block truncate text-sm font-semibold tracking-tight">{t("app.brand.name")}</span>
             <span className="hidden truncate text-[10px] font-medium uppercase tracking-wider text-brand-accent sm:block">
-              control plane
+              {t("app.brand.subtitle")}
             </span>
           </span>
         </div>
@@ -275,32 +285,32 @@ export function AppShell() {
             type="button"
             variant="outline"
             size="sm"
-            aria-label="Open command palette"
+            aria-label={t("shell.openCommandPalette")}
             onClick={() => setCommandPaletteOpen(true)}
             className="hidden min-w-56 justify-between gap-2 px-2.5 text-muted-foreground hover:text-foreground md:inline-flex"
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate text-left">Search or jump</span>
+            <span className="min-w-0 flex-1 truncate text-left">{t("shell.searchOrJump")}</span>
             <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">Cmd K</kbd>
           </Button>
           {user && (
             <div
-              aria-label="Tenant context"
+              aria-label={t("shell.tenantContext")}
               className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex"
             >
-              <span className="text-muted-foreground">Tenant</span>
+              <span className="text-muted-foreground">{t("shell.tenant")}</span>
               <strong className="max-w-32 truncate font-semibold">{user.tenant_id}</strong>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 disabled
-                aria-label="Tenant switching isn't available yet"
+                aria-label={t("shell.tenantSwitchUnavailableLabel")}
                 className="h-6 px-2 text-[11px]"
               >
-                Switch unavailable
+                {t("shell.tenantSwitchUnavailable")}
               </Button>
-              <span className="hidden text-[10px] uppercase text-muted-foreground xl:inline">Tenant switching isn't available yet</span>
+              <span className="hidden text-[10px] uppercase text-muted-foreground xl:inline">{t("shell.tenantSwitchUnavailableLabel")}</span>
             </div>
           )}
           <Button
@@ -308,7 +318,7 @@ export function AppShell() {
             type="button"
             size="icon"
             variant="ghost"
-            aria-label="Open keyboard shortcuts"
+            aria-label={t("shell.openKeyboardShortcuts")}
             onClick={() => setShortcutsOpen(true)}
           >
             <CircleHelp className="h-4 w-4" aria-hidden="true" />
@@ -325,16 +335,16 @@ export function AppShell() {
       {!isDesktop && mobileNavOpen && (
         <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm">
           <div
-            aria-label="Primary navigation"
+            aria-label={t("shell.primaryNavigationDialog")}
             aria-modal="true"
             className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-border bg-background shadow-xl"
             role="dialog"
           >
             <div className="flex h-14 items-center justify-between border-b border-border px-4">
-              <span className="text-sm font-semibold">Navigation</span>
+              <span className="text-sm font-semibold">{t("shell.navigation")}</span>
               <button
                 type="button"
-                aria-label="Close primary navigation"
+                aria-label={t("shell.closePrimaryNavigation")}
                 onClick={() => setMobileNavOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
               >

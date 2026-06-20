@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { AuthProvider } from "@/auth/AuthProvider";
+import { AuthProvider, beginLogin, useAuth } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -35,6 +35,13 @@ function renderAt(path: string) {
       </AuthProvider>
     </ThemeProvider>,
   );
+}
+
+function AuthProbe() {
+  const auth = useAuth();
+  if (auth.loading) return <p role="status">loading</p>;
+  if (auth.error) return <p role="alert">{auth.error}</p>;
+  return <p>{auth.user?.subject ?? "anonymous"}</p>;
 }
 
 describe("auth + dashboards", () => {
@@ -78,6 +85,32 @@ describe("auth + dashboards", () => {
     expect(screen.getAllByTestId("feature-row")).toHaveLength(78);
     expect(localStorage.getItem("token")).toBeNull();
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("surfaces non-auth session failures and can begin OIDC login", async () => {
+    apiMock.me.mockRejectedValue(new Error("backend offline"));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Error: backend offline");
+
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, assign },
+    });
+
+    try {
+      beginLogin();
+      expect(assign).toHaveBeenCalledWith("/auth/login");
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
   });
 
   it("shows the dashboard once authenticated", async () => {

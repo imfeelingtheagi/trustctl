@@ -67,7 +67,7 @@ describe("route-level served-feature parity", () => {
   });
 
   it("keeps grouped navigation attached to registered routes or explicit roadmap links", () => {
-    const allItems = navGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })));
+    const allItems = navGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.labelKey })));
     expect(allItems.length).toBeGreaterThan(20);
 
     for (const item of allItems) {

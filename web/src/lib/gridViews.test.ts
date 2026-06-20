@@ -48,7 +48,7 @@ describe("grid view storage safety (SEC-005)", () => {
           visibleColumnIds: ["subject"],
           metadata: {
             description: "operator display preference",
-            rowPayload: { subject: "CN=svc", bearer: "Bearer abc" },
+            rowPayload: { subject: "CN=svc", bearer: "Bearer abc" } as never,
             secret: "should-not-persist",
           },
         },
