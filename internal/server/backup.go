@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -96,13 +98,21 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return backup.FullManifest{}, fmt.Errorf("create full backup dir: %w", err)
 	}
+	enc, err := fullBackupEncryptionFromConfig(cfg)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	defer enc.wipe()
+	if !enc.enabled() && !enc.allowUnencrypted {
+		return backup.FullManifest{}, errors.New("full backup requires TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE because the artifact captures signer/audit secrets; set TRSTCTL_BACKUP_ALLOW_UNENCRYPTED=true only for an explicit lab override")
+	}
 
 	var artifacts []backup.Artifact
 	eventsPath := filepath.Join(dir, "events.jsonl")
 	if _, err := RunBackup(ctx, cfg, eventsPath); err != nil {
 		return backup.FullManifest{}, err
 	}
-	a, err := fileArtifact("event-log", "event-log", eventsPath, eventsPath, true, true, false, true)
+	a, err := fileArtifact("event-log", "event-log", eventsPath, eventsPath, true, true, false, true, dir, nil)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
@@ -125,7 +135,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err := pgFile.Close(); err != nil {
 		return backup.FullManifest{}, fmt.Errorf("close postgres state backup: %w", err)
 	}
-	a, err = fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true)
+	a, err = fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true, dir, nil)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
@@ -145,19 +155,20 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		{"ca-certificate", "ca-certificate", cfg.CA.CertFile, filepath.Join(dir, "files", "issuing-ca.crt"), true, false, true},
 		{"kek-reference", "kek-reference", cfg.Secrets.KEKFile, "", false, true, true},
 	} {
-		a, err := fileArtifact(spec.name, spec.role, spec.src, spec.dst, spec.capture, false, spec.sensitive, spec.required)
+		a, err := fileArtifact(spec.name, spec.role, spec.src, spec.dst, spec.capture, false, spec.sensitive, spec.required, dir, enc)
 		if err != nil {
 			return backup.FullManifest{}, err
 		}
 		artifacts = append(artifacts, a)
 	}
-	keyStoreArtifact, err := dirArtifact("signer-keystore", "signer-keystore", cfg.Signer.KeyStoreDir, filepath.Join(dir, "files", "signer-keystore"), true, true, true)
+	keyStoreArtifact, err := dirArtifact("signer-keystore", "signer-keystore", cfg.Signer.KeyStoreDir, filepath.Join(dir, "files", "signer-keystore"), true, true, true, dir, enc)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
 	artifacts = append(artifacts, keyStoreArtifact)
 
 	manifest := backup.NewFullManifest(artifacts)
+	manifest.Encryption = enc.manifestEncryption()
 	if err := backup.WriteFullManifest(filepath.Join(dir, backup.FullManifestName), manifest); err != nil {
 		return backup.FullManifest{}, err
 	}
@@ -169,6 +180,10 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 // It requires external Postgres and NATS (the recovered datastores), and the
 // event store must be empty. It returns the number of events restored.
 func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, error) {
+	return restoreEventLog(ctx, cfg, path, false)
+}
+
+func restoreEventLog(ctx context.Context, cfg *config.Config, path string, resumeIfMatching bool) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
 		return 0, errors.New("restore requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
@@ -207,6 +222,19 @@ func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, erro
 	}
 	n, err := backup.RestoreLogWithKey(ctx, log, f, key)
 	if err != nil {
+		if resumeIfMatching && errors.Is(err, backup.ErrRestoreTargetNotEmpty) {
+			if _, seekErr := f.Seek(0, 0); seekErr != nil {
+				return n, fmt.Errorf("rewind backup file for resume verification: %w", seekErr)
+			}
+			n, err = backup.VerifyLogMatchesWithKey(ctx, log, f, key)
+			if err != nil {
+				return n, fmt.Errorf("resume full restore event log: %w", err)
+			}
+			if err := projections.New(st).Rebuild(ctx, log); err != nil {
+				return n, fmt.Errorf("rebuild read model from resumed log: %w", err)
+			}
+			return n, nil
+		}
 		return n, err
 	}
 	if err := projections.New(st).Rebuild(ctx, log); err != nil {
@@ -221,6 +249,14 @@ func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, erro
 func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup.PostgresStateSummary, error) {
 	manifest, err := backup.ReadFullManifest(filepath.Join(dir, backup.FullManifestName))
 	if err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	enc, err := fullBackupEncryptionFromConfig(cfg)
+	if err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	defer enc.wipe()
+	if err := requireFullBackupEncryptionForRestore(manifest, enc); err != nil {
 		return backup.PostgresStateSummary{}, err
 	}
 	if err := requireExistingFile(cfg.Secrets.KEKFile, "deployment KEK"); err != nil {
@@ -241,21 +277,15 @@ func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup
 		{"signer-auth-secret", filepath.Join(dir, "files", "signer-auth-secret.bin"), cfg.Signer.AuthSecretFile},
 		{"ca-certificate", filepath.Join(dir, "files", "issuing-ca.crt"), cfg.CA.CertFile},
 	} {
-		if err := verifyFileArtifact(manifest, spec.name, spec.src); err != nil {
+		if err := restoreFileArtifact(manifest, spec.name, dir, spec.src, spec.dst, enc.key); err != nil {
 			return backup.PostgresStateSummary{}, err
 		}
-		if err := backup.CopyFile(spec.src, spec.dst, 0o600); err != nil {
-			return backup.PostgresStateSummary{}, fmt.Errorf("restore %s: %w", spec.dst, err)
-		}
 	}
-	if err := verifyDirArtifact(manifest, "signer-keystore", filepath.Join(dir, "files", "signer-keystore")); err != nil {
-		return backup.PostgresStateSummary{}, err
-	}
-	if err := backup.CopyTree(filepath.Join(dir, "files", "signer-keystore"), cfg.Signer.KeyStoreDir); err != nil {
+	if err := restoreDirArtifact(manifest, "signer-keystore", dir, filepath.Join(dir, "files", "signer-keystore"), cfg.Signer.KeyStoreDir, enc.key); err != nil {
 		return backup.PostgresStateSummary{}, fmt.Errorf("restore signer keystore: %w", err)
 	}
 
-	if _, err := RunRestore(ctx, cfg, filepath.Join(dir, "events.jsonl")); err != nil {
+	if _, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true); err != nil {
 		return backup.PostgresStateSummary{}, err
 	}
 	st, err := store.Open(ctx, cfg.Postgres.DSN)
@@ -312,7 +342,61 @@ func RunRebuild(ctx context.Context, cfg *config.Config) (int, error) {
 	return n, nil
 }
 
-func fileArtifact(name, role, src, dst string, capture, requireCaptured, sensitive, required bool) (backup.Artifact, error) {
+type fullBackupEncryption struct {
+	key              []byte
+	keyID            string
+	allowUnencrypted bool
+}
+
+func fullBackupEncryptionFromConfig(cfg *config.Config) (*fullBackupEncryption, error) {
+	enc := &fullBackupEncryption{allowUnencrypted: cfg.Backup.AllowUnencrypted}
+	if cfg.Backup.EncryptionKeyFile == "" {
+		return enc, nil
+	}
+	key, err := os.ReadFile(cfg.Backup.EncryptionKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("read full-backup encryption key: %w", err)
+	}
+	if len(key) == 0 {
+		return nil, fmt.Errorf("read full-backup encryption key: key file is empty")
+	}
+	keyID, err := backup.BackupArtifactKeyID(key)
+	if err != nil {
+		secret.Wipe(key)
+		return nil, err
+	}
+	enc.key = key
+	enc.keyID = keyID
+	return enc, nil
+}
+
+func (e *fullBackupEncryption) enabled() bool {
+	return e != nil && len(e.key) > 0
+}
+
+func (e *fullBackupEncryption) wipe() {
+	if e != nil {
+		secret.Wipe(e.key)
+	}
+}
+
+func (e *fullBackupEncryption) manifestEncryption() backup.FullBackupEncryption {
+	if e.enabled() {
+		return backup.FullBackupEncryption{
+			Mode:                        "operator-key-file",
+			Algorithm:                   backup.FullBackupArtifactEncryptionAlgorithm,
+			KeyID:                       e.keyID,
+			SensitiveArtifactsEncrypted: true,
+		}
+	}
+	return backup.FullBackupEncryption{
+		Mode:                        "explicit-plaintext-override",
+		SensitiveArtifactsEncrypted: false,
+		AllowUnencryptedSensitiveArtifactsOverride: true,
+	}
+}
+
+func fileArtifact(name, role, src, dst string, capture, requireCaptured, sensitive, required bool, backupDir string, enc *fullBackupEncryption) (backup.Artifact, error) {
 	a := backup.Artifact{Name: name, Role: role, SourcePath: src, Sensitive: sensitive, Required: required}
 	if src == "" {
 		if required {
@@ -331,13 +415,32 @@ func fileArtifact(name, role, src, dst string, capture, requireCaptured, sensiti
 	a.SHA256 = sum
 	a.Bytes = n
 	if capture {
+		if sensitive && enc != nil && enc.enabled() {
+			target := dst + ".enc"
+			plainSHA, plainBytes, storedSHA, storedBytes, err := backup.WriteEncryptedFile(src, target, enc.key, backup.FullBackupArtifactAAD(name), 0o600)
+			if err != nil {
+				return a, fmt.Errorf("backup: encrypt %s: %w", name, err)
+			}
+			a.PlaintextSHA256 = plainSHA
+			a.PlaintextBytes = plainBytes
+			a.SHA256 = storedSHA
+			a.Bytes = storedBytes
+			a.Encryption = &backup.ArtifactEncryption{
+				Algorithm: backup.FullBackupArtifactEncryptionAlgorithm,
+				KeyID:     enc.keyID,
+				AAD:       backup.FullBackupArtifactAAD(name),
+			}
+			a.Captured = true
+			a.Path = backupManifestPath(backupDir, target)
+			return a, nil
+		}
 		if src != dst {
 			if err := backup.CopyFile(src, dst, 0o600); err != nil {
 				return a, fmt.Errorf("backup: copy %s: %w", name, err)
 			}
 		}
 		a.Captured = true
-		a.Path = filepath.ToSlash(dst)
+		a.Path = backupManifestPath(backupDir, dst)
 	} else {
 		if requireCaptured {
 			return a, fmt.Errorf("backup: required artifact %s was not captured", name)
@@ -347,7 +450,7 @@ func fileArtifact(name, role, src, dst string, capture, requireCaptured, sensiti
 	return a, nil
 }
 
-func dirArtifact(name, role, src, dst string, capture, sensitive, required bool) (backup.Artifact, error) {
+func dirArtifact(name, role, src, dst string, capture, sensitive, required bool, backupDir string, enc *fullBackupEncryption) (backup.Artifact, error) {
 	a := backup.Artifact{Name: name, Role: role, SourcePath: src, Sensitive: sensitive, Required: required}
 	if src == "" {
 		if required {
@@ -366,13 +469,41 @@ func dirArtifact(name, role, src, dst string, capture, sensitive, required bool)
 	a.SHA256 = sum
 	a.Bytes = n
 	if capture {
+		if sensitive && enc != nil && enc.enabled() {
+			target := dst + ".enc"
+			plainSHA, plainBytes, storedSHA, storedBytes, err := backup.WriteEncryptedTree(src, target, enc.key, backup.FullBackupArtifactAAD(name))
+			if err != nil {
+				return a, fmt.Errorf("backup: encrypt %s: %w", name, err)
+			}
+			a.PlaintextSHA256 = plainSHA
+			a.PlaintextBytes = plainBytes
+			a.SHA256 = storedSHA
+			a.Bytes = storedBytes
+			a.Encryption = &backup.ArtifactEncryption{
+				Algorithm: backup.FullBackupArtifactEncryptionAlgorithm,
+				KeyID:     enc.keyID,
+				AAD:       backup.FullBackupArtifactAAD(name),
+			}
+			a.Captured = true
+			a.Path = backupManifestPath(backupDir, target)
+			return a, nil
+		}
 		if err := backup.CopyTree(src, dst); err != nil {
 			return a, fmt.Errorf("backup: copy %s: %w", name, err)
 		}
 		a.Captured = true
-		a.Path = filepath.ToSlash(dst)
+		a.Path = backupManifestPath(backupDir, dst)
 	}
 	return a, nil
+}
+
+func backupManifestPath(baseDir, path string) string {
+	if baseDir != "" {
+		if rel, err := filepath.Rel(baseDir, path); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(path)
 }
 
 func requireExistingFile(path, name string) error {
@@ -404,17 +535,134 @@ func verifyFileArtifact(m backup.FullManifest, name, path string) error {
 	return nil
 }
 
-func verifyDirArtifact(m backup.FullManifest, name, path string) error {
+func restoreFileArtifact(m backup.FullManifest, name, backupDir, fallbackSrc, dst string, encryptionKey []byte) error {
 	a, ok := manifestArtifact(m, name)
 	if !ok {
 		return fmt.Errorf("restore: manifest missing artifact %s", name)
 	}
+	src := artifactPath(backupDir, a, fallbackSrc)
+	if err := verifyStoredFileArtifact(a, name, src); err != nil {
+		return err
+	}
+	if a.Encryption != nil {
+		if len(encryptionKey) == 0 {
+			return fmt.Errorf("restore: artifact %s is encrypted but no full-backup encryption key is configured", name)
+		}
+		if err := validateArtifactEncryption(a, name); err != nil {
+			return err
+		}
+		sum, n, err := backup.RestoreEncryptedFile(src, dst, encryptionKey, a.Encryption.AAD, 0o600)
+		if err != nil {
+			return fmt.Errorf("restore %s: %w", dst, err)
+		}
+		if sum != a.PlaintextSHA256 || n != a.PlaintextBytes {
+			return fmt.Errorf("restore: artifact %s plaintext hash/size mismatch", name)
+		}
+		return nil
+	}
+	if err := backup.CopyFile(src, dst, 0o600); err != nil {
+		return fmt.Errorf("restore %s: %w", dst, err)
+	}
+	return nil
+}
+
+func restoreDirArtifact(m backup.FullManifest, name, backupDir, fallbackSrc, dst string, encryptionKey []byte) error {
+	a, ok := manifestArtifact(m, name)
+	if !ok {
+		return fmt.Errorf("restore: manifest missing artifact %s", name)
+	}
+	src := artifactPath(backupDir, a, fallbackSrc)
+	if err := verifyStoredDirArtifact(a, name, src); err != nil {
+		return err
+	}
+	if a.Encryption != nil {
+		if len(encryptionKey) == 0 {
+			return fmt.Errorf("restore: artifact %s is encrypted but no full-backup encryption key is configured", name)
+		}
+		if err := validateArtifactEncryption(a, name); err != nil {
+			return err
+		}
+		sum, n, err := backup.RestoreEncryptedTree(src, dst, encryptionKey, a.Encryption.AAD)
+		if err != nil {
+			return err
+		}
+		if sum != a.PlaintextSHA256 || n != a.PlaintextBytes {
+			return fmt.Errorf("restore: artifact %s plaintext hash/size mismatch", name)
+		}
+		return nil
+	}
+	if err := backup.CopyTree(src, dst); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyStoredFileArtifact(a backup.Artifact, name, path string) error {
+	sum, n, err := backup.HashFile(path)
+	if err != nil {
+		return fmt.Errorf("restore: hash artifact %s: %w", name, err)
+	}
+	if sum != a.SHA256 || n != a.Bytes {
+		return fmt.Errorf("restore: artifact %s hash/size mismatch", name)
+	}
+	return nil
+}
+
+func verifyStoredDirArtifact(a backup.Artifact, name, path string) error {
 	sum, n, err := backup.HashTree(path)
 	if err != nil {
 		return fmt.Errorf("restore: hash artifact %s: %w", name, err)
 	}
 	if sum != a.SHA256 || n != a.Bytes {
 		return fmt.Errorf("restore: artifact %s hash/size mismatch", name)
+	}
+	return nil
+}
+
+func artifactPath(backupDir string, a backup.Artifact, fallback string) string {
+	if a.Path == "" {
+		return fallback
+	}
+	path := filepath.FromSlash(a.Path)
+	if filepath.IsAbs(path) {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+		return fallback
+	}
+	return filepath.Join(backupDir, path)
+}
+
+func validateArtifactEncryption(a backup.Artifact, name string) error {
+	if a.Encryption.Algorithm != backup.FullBackupArtifactEncryptionAlgorithm {
+		return fmt.Errorf("restore: artifact %s uses unsupported encryption algorithm %q", name, a.Encryption.Algorithm)
+	}
+	if a.Encryption.AAD == "" || a.Encryption.KeyID == "" {
+		return fmt.Errorf("restore: artifact %s encryption metadata is incomplete", name)
+	}
+	if a.PlaintextSHA256 == "" || a.PlaintextBytes < 0 {
+		return fmt.Errorf("restore: artifact %s missing plaintext digest metadata", name)
+	}
+	return nil
+}
+
+func requireFullBackupEncryptionForRestore(m backup.FullManifest, enc *fullBackupEncryption) error {
+	for _, a := range m.Artifacts {
+		if !a.Sensitive || !a.Captured {
+			continue
+		}
+		if a.Encryption != nil {
+			if !enc.enabled() {
+				return fmt.Errorf("restore: sensitive artifact %s is encrypted; set TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", a.Name)
+			}
+			if a.Encryption.KeyID != enc.keyID {
+				return fmt.Errorf("restore: full-backup encryption key does not match artifact %s", a.Name)
+			}
+			continue
+		}
+		if enc == nil || !enc.allowUnencrypted {
+			return fmt.Errorf("restore: sensitive artifact %s is unencrypted; set TRSTCTL_BACKUP_ALLOW_UNENCRYPTED=true for an explicit legacy/lab restore", a.Name)
+		}
 	}
 	return nil
 }

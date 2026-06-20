@@ -21,25 +21,50 @@ const (
 
 // Artifact describes one file or directory covered by a full DR backup manifest.
 type Artifact struct {
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-	Path       string `json:"path"`
-	SourcePath string `json:"source_path,omitempty"`
-	SHA256     string `json:"sha256,omitempty"`
-	Bytes      int64  `json:"bytes,omitempty"`
-	Exists     bool   `json:"exists"`
-	Captured   bool   `json:"captured"`
-	Sensitive  bool   `json:"sensitive"`
-	Required   bool   `json:"required"`
+	Name            string              `json:"name"`
+	Role            string              `json:"role"`
+	Path            string              `json:"path"`
+	SourcePath      string              `json:"source_path,omitempty"`
+	SHA256          string              `json:"sha256,omitempty"`
+	Bytes           int64               `json:"bytes,omitempty"`
+	PlaintextSHA256 string              `json:"plaintext_sha256,omitempty"`
+	PlaintextBytes  int64               `json:"plaintext_bytes,omitempty"`
+	Encryption      *ArtifactEncryption `json:"encryption,omitempty"`
+	Exists          bool                `json:"exists"`
+	Captured        bool                `json:"captured"`
+	Sensitive       bool                `json:"sensitive"`
+	Required        bool                `json:"required"`
+}
+
+// ArtifactEncryption describes how a captured artifact is encrypted inside the
+// full backup directory. The per-file nonce lives inside the artifact envelope;
+// the manifest names the algorithm, key identity, and AAD binding so restore can
+// reject a misplaced or wrong-key blob before it is copied into the deployment.
+type ArtifactEncryption struct {
+	Algorithm string `json:"algorithm"`
+	KeyID     string `json:"key_id"`
+	AAD       string `json:"aad"`
+}
+
+// FullBackupEncryption summarizes the encryption posture of the whole backup set:
+// which operational-secret artifacts were sealed, which operator key identity
+// sealed them, and whether a plaintext override was explicitly used.
+type FullBackupEncryption struct {
+	Mode                                       string `json:"mode"`
+	Algorithm                                  string `json:"algorithm,omitempty"`
+	KeyID                                      string `json:"key_id,omitempty"`
+	SensitiveArtifactsEncrypted                bool   `json:"sensitive_artifacts_encrypted"`
+	AllowUnencryptedSensitiveArtifactsOverride bool   `json:"allow_unencrypted_sensitive_artifacts_override,omitempty"`
 }
 
 // FullManifest is the buyer/auditor-facing inventory of a full DR artifact.
 type FullManifest struct {
-	Format          string              `json:"format"`
-	Version         int                 `json:"version"`
-	CreatedAt       time.Time           `json:"created_at"`
-	Artifacts       []Artifact          `json:"artifacts"`
-	RecoveryClasses map[string][]string `json:"recovery_classes"`
+	Format          string               `json:"format"`
+	Version         int                  `json:"version"`
+	CreatedAt       time.Time            `json:"created_at"`
+	Artifacts       []Artifact           `json:"artifacts"`
+	Encryption      FullBackupEncryption `json:"encryption,omitempty"`
+	RecoveryClasses map[string][]string  `json:"recovery_classes"`
 }
 
 func NewFullManifest(artifacts []Artifact) FullManifest {

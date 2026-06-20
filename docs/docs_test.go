@@ -222,20 +222,20 @@ func TestOperationsDocIsReal(t *testing.T) {
 // binary actually implements the flags it cites.
 func TestDisasterRecoveryDocIsReal(t *testing.T) {
 	body := read(t, "disaster-recovery.md")
-	for _, want := range []string{"--backup", "--restore", "--full-backup-dir", "--full-restore-dir", "manifest.json", "postgres-state.jsonl", "RPO", "RTO", "event log", "rebuild"} {
+	for _, want := range []string{"--backup", "--restore", "--full-backup-dir", "--full-restore-dir", "--backup-encryption-key-file", "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", "manifest.json", "postgres-state.jsonl", "RPO", "RTO", "event log", "rebuild"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("disaster-recovery.md should cover %q", want)
 		}
 	}
 	// The documented flags exist in the binary.
 	main := read(t, "../cmd/trstctl/main.go")
-	for _, flag := range []string{`"backup"`, `"restore"`, `"full-backup-dir"`, `"full-restore-dir"`} {
+	for _, flag := range []string{`"backup"`, `"restore"`, `"full-backup-dir"`, `"full-restore-dir"`, `"backup-encryption-key-file"`, `"allow-unencrypted-full-backup"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("disaster-recovery.md documents a flag the binary does not define: %s", flag)
 		}
 	}
 	serverBackup := read(t, "../internal/server/backup.go")
-	for _, want := range []string{"RunFullBackup", "RunFullRestore", "WritePostgresState", "RestorePostgresState", "Rebuild"} {
+	for _, want := range []string{"RunFullBackup", "RunFullRestore", "WritePostgresState", "RestorePostgresState", "RestoreEncryptedFile", "VerifyLogMatchesWithKey", "Rebuild"} {
 		if !strings.Contains(serverBackup, want) {
 			t.Errorf("restore should wire %s into the served backup path", want)
 		}

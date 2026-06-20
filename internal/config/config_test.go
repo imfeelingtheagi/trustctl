@@ -335,3 +335,20 @@ func TestEventStreamReplicasConfigurable(t *testing.T) {
 		t.Error("NATS.SyncAlways must be settable via env")
 	}
 }
+
+func TestFullBackupEncryptionConfigurable(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE": "/secure/backup.key",
+		"TRSTCTL_BACKUP_ALLOW_UNENCRYPTED":   "true",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Backup.EncryptionKeyFile != "/secure/backup.key" {
+		t.Errorf("Backup.EncryptionKeyFile = %q", cfg.Backup.EncryptionKeyFile)
+	}
+	if !cfg.Backup.AllowUnencrypted {
+		t.Error("Backup.AllowUnencrypted must be settable via env")
+	}
+}

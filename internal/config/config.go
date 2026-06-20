@@ -65,6 +65,7 @@ type Config struct {
 	Lifecycle Lifecycle `json:"lifecycle"`
 	Telemetry Telemetry `json:"telemetry"`
 	Audit     Audit     `json:"audit"`
+	Backup    Backup    `json:"backup"`
 	RateLimit RateLimit `json:"rate_limit"`
 	Migrate   Migrate   `json:"migrate"`
 	Secrets   Secrets   `json:"secrets"`
@@ -534,6 +535,19 @@ func (a Audit) RetentionDuration() (time.Duration, error) {
 	return time.ParseDuration(a.Retention)
 }
 
+// Backup configures full disaster-recovery artifact handling. Event-log backups
+// are already integrity-protected by the audit key; full backups additionally
+// contain operational secrets (audit signing key, signer auth verifier, sealed
+// signer keystore), so production backups require an operator-held encryption key.
+// The key file is raw bytes (normally 32 random bytes) and is NOT copied into the
+// backup set. AllowUnencrypted is a break-glass override for lab/export cases; it
+// is recorded in the manifest so an auditor can see that the locked box was not
+// used.
+type Backup struct {
+	EncryptionKeyFile string `json:"encryption_key_file,omitempty"`
+	AllowUnencrypted  bool   `json:"allow_unencrypted,omitempty"`
+}
+
 // RateLimit configures the PostgreSQL-backed per-tenant rate limiter (R2.3 /
 // AN-7): each tenant may make Requests calls per Window (a token bucket admitting
 // a burst of Requests, refilling steadily over Window). It sheds excess load with
@@ -881,6 +895,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
+	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
 	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
 	setInt(getenv, "TRSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
 	setString(getenv, "TRSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)

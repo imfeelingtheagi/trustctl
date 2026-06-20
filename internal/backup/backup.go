@@ -18,6 +18,7 @@ package backup
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -25,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -36,6 +38,11 @@ const (
 	trailerTag = "trstctl-event-log-backup-trailer"
 	version    = 1
 )
+
+// ErrRestoreTargetNotEmpty means a restore was pointed at a log that already
+// contains events. Plain --restore keeps failing closed on this error; full DR
+// restore can catch it and perform an explicit byte-for-byte resume check.
+var ErrRestoreTargetNotEmpty = errors.New("backup: restore target log is not empty (restore into a fresh event store)")
 
 // header is the first line of a backup stream — a self-describing, versioned
 // envelope so a restore can refuse a stranger's file or a future format.
@@ -137,7 +144,7 @@ func RestoreLog(ctx context.Context, log *events.Log, r io.Reader) (int, error) 
 // target log.
 func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []byte) (int, error) {
 	if !empty(ctx, log) {
-		return 0, errors.New("backup: restore target log is not empty (restore into a fresh event store)")
+		return 0, ErrRestoreTargetNotEmpty
 	}
 
 	// Parse and verify the stream while spooling record lines to disk. We still
@@ -148,14 +155,8 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 		return 0, err
 	}
 	defer spool.cleanup()
-	if h.Format != formatTag {
-		return 0, fmt.Errorf("backup: not a trstctl event-log backup (format %q)", h.Format)
-	}
-	if h.Version != version {
-		return 0, fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)
-	}
-	if tr.Records != spool.records {
-		return 0, fmt.Errorf("backup: integrity: trailer claims %d records but stream has %d", tr.Records, spool.records)
+	if err := validateVerifiedStream(h, tr, spool.records); err != nil {
+		return 0, err
 	}
 	if err := spool.rewind(); err != nil {
 		return 0, err
@@ -181,6 +182,94 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 		return n, fmt.Errorf("backup: replay spooled stream: %w", err)
 	}
 	return n, nil
+}
+
+// VerifyLogMatchesWithKey verifies a backup stream and compares it to a log that
+// is already populated, without appending anything. Full restore uses this as its
+// resume proof after an interrupted first attempt: same backup + same log means it
+// can continue to PostgreSQL import; any different stream is a new restore and
+// fails closed.
+func VerifyLogMatchesWithKey(ctx context.Context, log *events.Log, r io.Reader, key []byte) (int, error) {
+	h, spool, tr, err := readAndVerify(r, key)
+	if err != nil {
+		return 0, err
+	}
+	defer spool.cleanup()
+	if err := validateVerifiedStream(h, tr, spool.records); err != nil {
+		return 0, err
+	}
+	if err := spool.rewind(); err != nil {
+		return 0, err
+	}
+	sc := bufio.NewScanner(bufio.NewReader(spool.file))
+	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+	n := 0
+	if err := log.Replay(ctx, 0, func(e events.Event) error {
+		if !sc.Scan() {
+			if err := sc.Err(); err != nil {
+				return fmt.Errorf("backup: resume compare stream: %w", err)
+			}
+			return fmt.Errorf("backup: resume mismatch: target log has more events than backup")
+		}
+		var rec record
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			return fmt.Errorf("backup: resume decode record %d: %w", n+1, err)
+		}
+		if !eventMatchesRecord(e, rec) {
+			return fmt.Errorf("backup: resume mismatch at event %d", n+1)
+		}
+		n++
+		return nil
+	}); err != nil {
+		return n, err
+	}
+	if sc.Scan() {
+		return n, fmt.Errorf("backup: resume mismatch: backup has more events than target log")
+	}
+	if err := sc.Err(); err != nil {
+		return n, fmt.Errorf("backup: resume compare stream: %w", err)
+	}
+	if n != tr.Records {
+		return n, fmt.Errorf("backup: resume mismatch: matched %d events but trailer claims %d", n, tr.Records)
+	}
+	return n, nil
+}
+
+func validateVerifiedStream(h header, tr trailer, records int) error {
+	if h.Format != formatTag {
+		return fmt.Errorf("backup: not a trstctl event-log backup (format %q)", h.Format)
+	}
+	if h.Version != version {
+		return fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)
+	}
+	if tr.Records != records {
+		return fmt.Errorf("backup: integrity: trailer claims %d records but stream has %d", tr.Records, records)
+	}
+	return nil
+}
+
+func eventMatchesRecord(e events.Event, rec record) bool {
+	if e.ID != rec.ID || e.Type != rec.Type || e.TenantID != rec.TenantID || e.SchemaVersion != rec.SchemaVersion {
+		return false
+	}
+	if !e.Time.Equal(rec.Time) {
+		return false
+	}
+	if !rawJSONEqual(e.Data, rec.Data) {
+		return false
+	}
+	return reflect.DeepEqual(e.Actor, rec.Actor)
+}
+
+func rawJSONEqual(a, b []byte) bool {
+	if bytes.Equal(a, b) {
+		return true
+	}
+	var ca, cb bytes.Buffer
+	if json.Compact(&ca, a) != nil || json.Compact(&cb, b) != nil {
+		return false
+	}
+	return bytes.Equal(ca.Bytes(), cb.Bytes())
 }
 
 // readAndVerify streams the backup, recomputes the SHA-256 (and, when key is set,

@@ -79,18 +79,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 }
 
 type rootFlags struct {
-	showVersion    bool
-	checkConfig    bool
-	healthCheck    bool
-	readyCheck     bool
-	backupPath     string
-	restorePath    string
-	fullBackupDir  string
-	fullRestoreDir string
-	rebuild        bool
-	migrateStatus  bool
-	migrate        bool
-	fipsRequired   bool
+	showVersion          bool
+	checkConfig          bool
+	healthCheck          bool
+	readyCheck           bool
+	backupPath           string
+	restorePath          string
+	fullBackupDir        string
+	fullRestoreDir       string
+	backupKeyFile        string
+	allowPlainFullBackup bool
+	rebuild              bool
+	migrateStatus        bool
+	migrate              bool
+	fipsRequired         bool
 }
 
 func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
@@ -105,6 +107,8 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 	fs.StringVar(&flags.restorePath, "restore", "", "restore the event log from FILE, rebuild the read model, then exit")
 	fs.StringVar(&flags.fullBackupDir, "full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
 	fs.StringVar(&flags.fullRestoreDir, "full-restore-dir", "", "restore a full DR artifact directory, rebuild projections, import independent PostgreSQL state, then exit")
+	fs.StringVar(&flags.backupKeyFile, "backup-encryption-key-file", "", "raw key file used to encrypt/decrypt sensitive full-backup artifacts")
+	fs.BoolVar(&flags.allowPlainFullBackup, "allow-unencrypted-full-backup", false, "explicit lab override: allow sensitive full-backup artifacts to remain plaintext")
 	fs.BoolVar(&flags.rebuild, "rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
 	fs.BoolVar(&flags.migrateStatus, "migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
 	fs.BoolVar(&flags.migrate, "migrate", false, "apply pending database migrations under an advisory lock, then exit")
@@ -126,6 +130,12 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 }
 
 func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags, stdout io.Writer) (bool, error) {
+	if flags.backupKeyFile != "" {
+		cfg.Backup.EncryptionKeyFile = flags.backupKeyFile
+	}
+	if flags.allowPlainFullBackup {
+		cfg.Backup.AllowUnencrypted = true
+	}
 	if flags.checkConfig {
 		_, _ = io.WriteString(stdout, configSummary(cfg))
 		return true, nil

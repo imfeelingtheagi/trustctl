@@ -20,10 +20,10 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | --- | --- | --- |
 | **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
 | **PostgreSQL independent state** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, secret rows, policy bindings, and queued outbox work. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
-| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` and records its hash in `manifest.json`. |
+| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` as an AES-256-GCM encrypted artifact when `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` is set, and records both ciphertext and plaintext hashes in `manifest.json`. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
-| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles (SIGNER-001). Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE`; keep custody equivalent to the signer key store. |
-| **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | The full backup copies the signer's key-store directory (`--keystore`) and hashes the tree in `manifest.json`; it holds only ciphertext. |
+| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles (SIGNER-001). Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
+| **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | The full backup encrypts the signer's key-store directory (`--keystore`) file-by-file and hashes the encrypted tree in `manifest.json`; the KEK is still restored separately. |
 | **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | The full backup captures `TRSTCTL_CA_CERT_FILE`. |
 
 The signer's CA key is now **persisted, sealed at rest** (R3.2) — it survives a
@@ -37,9 +37,12 @@ Use the full DR command for production drills and release gates:
 
 ```bash
 # Requires external Postgres and external NATS.
-scripts/dr/full-backup.sh /backups/trstctl-$(date +%F)
+TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE=/secure/trstctl-full-backup.key \
+  scripts/dr/full-backup.sh /backups/trstctl-$(date +%F)
 # equivalent:
-trstctl --full-backup-dir=/backups/trstctl-$(date +%F)
+trstctl \
+  --backup-encryption-key-file=/secure/trstctl-full-backup.key \
+  --full-backup-dir=/backups/trstctl-$(date +%F)
 # -> "wrote full backup with <N> artifacts to ..."
 ```
 
@@ -49,15 +52,27 @@ The artifact directory contains:
   `trstctl --backup`.
 - `postgres-state.jsonl`: all tables classified as
   `RecoveredFromPostgresBackup`, written as JSONL with its own SHA-256 trailer.
-- `files/`: the audit signing key, signer authorization secret, CA certificate,
-  and sealed signer key store.
+- `files/`: the CA certificate in plaintext, plus `.enc` AES-256-GCM envelopes
+  for the audit signing key, signer authorization secret, and sealed signer key
+  store files.
 - `manifest.json`: artifact hashes, byte counts, sensitivity flags, source paths,
-  and recovery classes for every persistent table.
+  encryption metadata, plaintext hashes for encrypted artifacts, and recovery
+  classes for every persistent table.
 
-The deployment KEK is **not copied into the artifact**. The manifest records its
-configured path as a sensitive reference, and operators restore that file from a
-separate key-custody backup before running full restore. This keeps ciphertext and
-the key that opens it out of the same folder.
+**Full-backup encryption (RESIL-001).** Full backups contain operational secrets,
+so the production path requires `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` (or the
+equivalent `--backup-encryption-key-file`). The file is raw operator-held key
+material and is **not copied into the artifact**. Each sensitive artifact is
+encrypted with AES-256-GCM via the `internal/crypto` boundary (AN-3), bound to its
+manifest role as associated data, and recorded with ciphertext + plaintext hashes.
+If a lab export truly must be plaintext, set
+`TRSTCTL_BACKUP_ALLOW_UNENCRYPTED=true` or pass
+`--allow-unencrypted-full-backup`; the manifest records that explicit override.
+
+The deployment KEK is also **not copied into the artifact**. The manifest records
+its configured path as a sensitive reference, and operators restore that file from
+separate key custody before running full restore. This keeps ciphertext and the
+key that opens it out of the same folder.
 
 ## Event-log-only backup
 
@@ -96,17 +111,28 @@ PostgreSQL instance:
 
 ```bash
 # Restore TRSTCTL_SECRETS_KEK_FILE from separate key custody first.
-scripts/dr/full-restore.sh /backups/trstctl-2026-05-31
+TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE=/secure/trstctl-full-backup.key \
+  scripts/dr/full-restore.sh /backups/trstctl-2026-05-31
 # equivalent:
-trstctl --full-restore-dir=/backups/trstctl-2026-05-31
+trstctl \
+  --backup-encryption-key-file=/secure/trstctl-full-backup.key \
+  --full-restore-dir=/backups/trstctl-2026-05-31
 # -> "restored full backup from ... (<N> independent PostgreSQL rows)"
 ```
 
 `--full-restore-dir` verifies the manifest hashes for captured keys/certs and the
-signer key-store tree, restores the event log, rebuilds the read model from that
-log, verifies `postgres-state.jsonl`, and imports every independent PostgreSQL row.
-The ordering matters: projections are rebuilt before independent rows are imported,
-so any independent rows that reference rebuilt state can resolve normally.
+signer key-store tree, decrypts encrypted sensitive artifacts with the backup
+encryption key, restores the event log, rebuilds the read model from that log,
+verifies `postgres-state.jsonl`, and imports every independent PostgreSQL row. The
+ordering matters: projections are rebuilt before independent rows are imported, so
+any independent rows that reference rebuilt state can resolve normally.
+
+Full restore is resumable after the event-log phase (RESIL-002). If a first run
+restores `events.jsonl` and then fails later, retrying the same full artifact makes
+trstctl verify that the already-present event log is byte-for-byte equivalent to
+the same integrity-checked backup stream. Only then does it rebuild projections
+and continue to `postgres-state.jsonl`. A different backup stream still fails
+closed instead of being treated as a resume.
 
 The event-log-only command is still available for a projection-only recovery or a
 manual datastore restore:
@@ -218,10 +244,12 @@ drain).
 1. Provision fresh PostgreSQL and NATS (empty).
 2. Point trstctl at them (`TRSTCTL_POSTGRES_*`, `TRSTCTL_NATS_*`).
 3. Restore the KEK file from separate key custody to `TRSTCTL_SECRETS_KEK_FILE`.
-4. Run `trstctl --full-restore-dir=<latest full artifact>` — this restores
-   captured key/cert files, restores the log, rebuilds the read model, and imports
-   independent PostgreSQL state.
-5. Start the control plane; confirm `/readyz` is green and spot-check inventory,
+4. Restore the full-backup encryption key outside the artifact directory and set
+   `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE`.
+5. Run `trstctl --full-restore-dir=<latest full artifact>` — this decrypts and
+   restores captured key/cert files, restores or resumes the log, rebuilds the read
+   model, and imports independent PostgreSQL state.
+6. Start the control plane; confirm `/readyz` is green and spot-check inventory,
    token auth, rebuilt CA revocation/CRL responder state, approvals, secrets, and
    pending outbox work.
 
@@ -234,9 +262,9 @@ The issuing CA key lives in the out-of-process signer (AN-4) and is now
 1. Provision a fresh signer host/container.
 2. **Restore the signer's sealed key store** (`--keystore` directory), the
    **KEK** (`TRSTCTL_SECRETS_KEK_FILE`), and the signer authorization secret
-   (`TRSTCTL_SIGNER_AUTH_SECRET_FILE`) from backup. Keep them from separate
-   backups — the KEK opens sealed keys, and the authorization secret lets the
-   signer verify dual-control tokens for restored privileged handles.
+   (`TRSTCTL_SIGNER_AUTH_SECRET_FILE`) from backup. The key store and authorization
+   secret are decrypted from the full backup with
+   `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE`; the KEK still comes from separate custody.
 3. Start `trstctl-signer --keystore <dir> --kek <kek> --auth-secret <sign-auth>`;
    it reloads the sealed CA key and enforces content authorization. Restore
    `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA certificate.

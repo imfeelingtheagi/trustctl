@@ -1442,6 +1442,9 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"events.jsonl",
 		"postgres-state.jsonl",
 		"HMAC-SHA256",
+		"TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE",
+		"AES-256-GCM",
+		"Full restore is resumable after the event-log phase",
 		"TestBackupRestoreDRDrillReproducesState",
 		"TestFullBackupRestoreIncludesPostgresState",
 		"replicaCount: 2",
@@ -1471,14 +1474,25 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"TestBackupManifestHasNoPhantomTables",
 		"TestManifestClassesAreDisjoint",
 		"TestLogRebuildSetMatchesProjections",
+		"TestFullRestoreResumesAfterLogRestore",
+		"TestFullRestoreRejectsDifferentManifestOnResume",
 	} {
 		if !anyTestDeclaresUnder(t, "../internal/backup", testName) {
 			t.Errorf("RESIL-101: internal/backup no longer declares %s; backup integrity/classification proof weakened", testName)
 		}
 	}
+	for _, testName := range []string{
+		"TestFullBackupEncryptsSensitiveArtifacts",
+		"TestFullRestoreDecryptsEncryptedArtifact",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/server", testName) {
+			t.Errorf("RESIL-101: internal/server no longer declares %s; full-backup encryption proof weakened", testName)
+		}
+	}
 	backupLog := read(t, "../internal/backup/backup.go")
 	for _, want := range []string{
 		"func RestoreLogWithKey(",
+		"func VerifyLogMatchesWithKey(",
 		"backup: restore target log is not empty",
 		"readAndVerify(r, key)",
 		"newRestoreSpool()",
@@ -1491,9 +1505,15 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		}
 	}
 	manifest := read(t, "../internal/backup/full_manifest.go")
-	for _, want := range []string{"trstctl-full-backup", "WriteFullManifest", "ReadFullManifest", "RecoveryClasses"} {
+	for _, want := range []string{"trstctl-full-backup", "ArtifactEncryption", "FullBackupEncryption", "PlaintextSHA256", "WriteFullManifest", "ReadFullManifest", "RecoveryClasses"} {
 		if !strings.Contains(manifest, want) {
 			t.Errorf("RESIL-101: full_manifest.go no longer contains %q; full-backup manifest evidence weakened", want)
+		}
+	}
+	artifactCrypto := read(t, "../internal/backup/encrypted_artifact.go")
+	for _, want := range []string{"FullBackupArtifactEncryptionAlgorithm", "AES-256-GCM", "WriteEncryptedFile", "RestoreEncryptedFile", "WriteEncryptedTree", "RestoreEncryptedTree", "AESGCMSeal", "AESGCMOpen"} {
+		if !strings.Contains(artifactCrypto, want) {
+			t.Errorf("RESIL-101: encrypted_artifact.go no longer contains %q; full-backup encryption evidence weakened", want)
 		}
 	}
 	postgresState := read(t, "../internal/backup/postgres_state.go")

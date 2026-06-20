@@ -3,6 +3,7 @@ package backup_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -99,7 +100,7 @@ func TestRestoreRefusesNonEmptyLog(t *testing.T) {
 
 	dst := openLog(t)
 	appendEvent(t, dst, ctx, "owner.created", `{}`)
-	if _, err := backup.RestoreLog(ctx, dst, &buf); err == nil {
+	if _, err := backup.RestoreLog(ctx, dst, &buf); !errors.Is(err, backup.ErrRestoreTargetNotEmpty) {
 		t.Fatal("restore into a non-empty log must error")
 	}
 }
@@ -238,5 +239,61 @@ func TestKeyedBackupRequiresValidMAC(t *testing.T) {
 		if _, err := backup.RestoreLogWithKey(ctx, dst, bytes.NewReader(keyless), key); err == nil {
 			t.Fatal("a key-requiring restore must reject a backup that carries no HMAC")
 		}
+	}
+}
+
+// TestFullRestoreResumesAfterLogRestore pins RESIL-002: when a full restore has
+// already loaded the event log but fails later while importing independent
+// PostgreSQL state, a retry must prove the existing log is byte-for-byte the same
+// backup stream and then continue instead of demanding a freshly empty log.
+func TestFullRestoreResumesAfterLogRestore(t *testing.T) {
+	ctx := context.Background()
+	src := openLog(t)
+	appendEvent(t, src, ctx, "owner.created", `{"name":"payments"}`)
+	appendEvent(t, src, ctx, "certificate.recorded", `{"serial":"01"}`)
+
+	var stream bytes.Buffer
+	if _, err := backup.WriteLog(ctx, src, &stream); err != nil {
+		t.Fatalf("WriteLog: %v", err)
+	}
+
+	target := openLog(t)
+	if _, err := backup.RestoreLog(ctx, target, bytes.NewReader(stream.Bytes())); err != nil {
+		t.Fatalf("initial RestoreLog: %v", err)
+	}
+	n, err := backup.VerifyLogMatchesWithKey(ctx, target, bytes.NewReader(stream.Bytes()), nil)
+	if err != nil {
+		t.Fatalf("resume equivalence check rejected matching log: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("matched %d events, want 2", n)
+	}
+}
+
+// TestFullRestoreRejectsDifferentManifestOnResume is the fail-closed half of the
+// same resume path. ELI5: if the partially restored event log belongs to backup A,
+// retrying with backup B is not a resume; it is a different restore and must stop.
+func TestFullRestoreRejectsDifferentManifestOnResume(t *testing.T) {
+	ctx := context.Background()
+	srcA := openLog(t)
+	appendEvent(t, srcA, ctx, "owner.created", `{"name":"payments"}`)
+	var streamA bytes.Buffer
+	if _, err := backup.WriteLog(ctx, srcA, &streamA); err != nil {
+		t.Fatalf("WriteLog A: %v", err)
+	}
+
+	srcB := openLog(t)
+	appendEvent(t, srcB, ctx, "owner.created", `{"name":"billing"}`)
+	var streamB bytes.Buffer
+	if _, err := backup.WriteLog(ctx, srcB, &streamB); err != nil {
+		t.Fatalf("WriteLog B: %v", err)
+	}
+
+	target := openLog(t)
+	if _, err := backup.RestoreLog(ctx, target, bytes.NewReader(streamA.Bytes())); err != nil {
+		t.Fatalf("initial RestoreLog: %v", err)
+	}
+	if _, err := backup.VerifyLogMatchesWithKey(ctx, target, bytes.NewReader(streamB.Bytes()), nil); err == nil {
+		t.Fatal("resume equivalence check accepted a different backup stream")
 	}
 }
