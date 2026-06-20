@@ -61,6 +61,24 @@ describe("first-run wizard", () => {
     expect(await screen.findByText(/first certificate (has been )?issued/i)).toBeInTheDocument();
   });
 
+  it("does not promise automatic renewal after setup and links to the track/renew worklist", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.type(screen.getByLabelText(/name/i), "Let's Encrypt");
+    await user.click(screen.getByRole("button", { name: /connect/i }));
+    await user.click(await screen.findByRole("button", { name: /check (for agent|now)/i }));
+    await waitFor(() => expect(screen.getByText(/edge-01/)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /continue|next/i }));
+    await user.type(await screen.findByLabelText(/name/i), "payments");
+    await user.click(screen.getByRole("button", { name: /issue/i }));
+
+    expect(await screen.findByText(/alert before expiry/i)).toBeInTheDocument();
+    expect(screen.getByText(/manual, one-click action/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/rotate.*automatically|renew.*automatically/i);
+    expect(screen.getByRole("link", { name: /track and renew certificates/i })).toHaveAttribute("href", "/certificates");
+  });
+
   it("surfaces a failure to connect the CA without advancing", async () => {
     apiMock.createIssuer.mockRejectedValueOnce(new Error("boom"));
     const user = userEvent.setup();

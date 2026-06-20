@@ -280,14 +280,14 @@ function DoneStep() {
         Your first certificate has been issued
       </h2>
       <p className="text-sm text-muted-foreground">
-        You're set up. trstctl will now track, rotate, and renew this credential automatically.
+        You're set up. trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.
       </p>
       <div className="flex gap-2">
         <Link
           to="/certificates"
           className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          View certificates
+          Track and renew certificates
         </Link>
       </div>
     </section>

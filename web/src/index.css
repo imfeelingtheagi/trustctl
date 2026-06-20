@@ -10,11 +10,47 @@
     --card-foreground: 222 47% 11%;
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --primary: 221 83% 53%;
+    --primary: 244 60% 60%;
     --primary-foreground: 0 0% 100%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
+    --brand-accent: 244 60% 60%;
+    --brand-accent-foreground: 0 0% 100%;
+    --console-accent: 199 89% 48%;
+    --operate: 244 60% 60%;
+    --operate-foreground: 0 0% 100%;
+    --observe: 173 80% 32%;
+    --observe-foreground: 0 0% 100%;
+    --disclose: 271 81% 56%;
+    --disclose-foreground: 0 0% 100%;
+    --risk-critical: 0 72% 51%;
+    --risk-high: 24 95% 53%;
+    --risk-medium: 45 93% 47%;
+    --risk-low: 173 80% 32%;
+    --risk-none: 215 16% 47%;
+    --status-success: 158 64% 38%;
+    --status-warning: 32 95% 44%;
+    --status-neutral: 215 16% 47%;
+    --status-info: 199 89% 48%;
+    --density-compact: 0.75rem;
+    --density-default: 1rem;
+    --density-comfortable: 1.25rem;
+    --radius-control: 0.375rem;
+    --radius-panel: 0.5rem;
+    --font-size-caption: 0.75rem;
+    --font-size-body: 0.875rem;
+    --font-size-title: 1rem;
+    --font-size-heading: 1.25rem;
+    --font-size-display: 1.5rem;
+    --line-height-caption: 1rem;
+    --line-height-body: 1.25rem;
+    --line-height-title: 1.5rem;
+    --line-height-heading: 1.75rem;
+    --line-height-display: 2rem;
+    --elevation-1: 0 1px 2px 0 hsl(222 47% 11% / 0.06);
+    --elevation-2: 0 8px 22px -14px hsl(222 47% 11% / 0.35);
+    --elevation-3: 0 22px 60px -30px hsl(222 47% 11% / 0.45);
   }
 
   .dark {
@@ -24,11 +60,32 @@
     --card-foreground: 210 40% 96%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
-    --primary: 217 91% 60%;
+    --primary: 199 89% 48%;
     --primary-foreground: 222 47% 11%;
     --destructive: 0 63% 45%;
     --destructive-foreground: 210 40% 96%;
     --border: 217 33% 20%;
+    --brand-accent: 199 89% 48%;
+    --brand-accent-foreground: 222 47% 8%;
+    --console-accent: 199 89% 48%;
+    --operate: 199 89% 48%;
+    --operate-foreground: 222 47% 8%;
+    --observe: 173 80% 42%;
+    --observe-foreground: 222 47% 8%;
+    --disclose: 271 91% 65%;
+    --disclose-foreground: 222 47% 8%;
+    --risk-critical: 0 72% 62%;
+    --risk-high: 24 95% 58%;
+    --risk-medium: 45 93% 56%;
+    --risk-low: 173 80% 42%;
+    --risk-none: 215 20% 65%;
+    --status-success: 158 64% 48%;
+    --status-warning: 32 95% 54%;
+    --status-neutral: 215 20% 65%;
+    --status-info: 199 89% 58%;
+    --elevation-1: 0 1px 2px 0 hsl(222 47% 2% / 0.45);
+    --elevation-2: 0 12px 30px -18px hsl(222 47% 2% / 0.8);
+    --elevation-3: 0 28px 70px -34px hsl(222 47% 2% / 0.9);
   }
 
   * {

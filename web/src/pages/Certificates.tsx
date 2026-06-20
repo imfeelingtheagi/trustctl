@@ -7,6 +7,8 @@ import {
   PermissionDeniedState,
   UnavailableState,
 } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
+import { expiryBandForDate } from "@/lib/statusVocab";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -44,35 +46,6 @@ function noticeForError(err: unknown, action: string): Notice {
 function formatDate(value?: string): string {
   if (!value) return "-";
   return new Date(value).toLocaleDateString();
-}
-
-function expiryBand(c: Certificate): { label: string; className: string } {
-  if (!c.not_after) return { label: "No expiry", className: "bg-muted text-muted-foreground" };
-  const days = Math.ceil((new Date(c.not_after).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-  if (days < 0) return { label: "Expired", className: "bg-red-100 text-red-800" };
-  if (days < 7) return { label: "<7d critical", className: "bg-red-100 text-red-800" };
-  if (days <= 30) return { label: "7-30d watch", className: "bg-amber-100 text-amber-800" };
-  if (days <= 90) return { label: "30-90d planned", className: "bg-blue-100 text-blue-800" };
-  return { label: ">90d healthy", className: "bg-emerald-100 text-emerald-800" };
-}
-
-function statusChip(c: Certificate): { label: string; className: string } {
-  switch (c.status) {
-    case "revoked":
-      return { label: "revoked", className: "bg-red-100 text-red-800" };
-    case "superseded":
-      return { label: "superseded", className: "bg-slate-200 text-slate-800" };
-    default:
-      return { label: "active", className: "bg-emerald-100 text-emerald-800" };
-  }
-}
-
-function Chip({ label, className }: { label: string; className: string }) {
-  return (
-    <span className={`inline-flex min-h-7 items-center rounded-md px-2 py-1 text-xs font-medium ${className}`}>
-      {label}
-    </span>
-  );
 }
 
 export function Certificates() {
@@ -372,8 +345,7 @@ export function Certificates() {
               </thead>
               <tbody>
                 {filtered.map((c) => {
-                  const band = expiryBand(c);
-                  const status = statusChip(c);
+                  const band = expiryBandForDate(c.not_after);
                   return (
                   <tr key={c.id} className="border-b border-border align-top">
                     <td className="py-2 pr-4">{c.subject}</td>
@@ -381,10 +353,10 @@ export function Certificates() {
                     <td className="py-2 pr-4">
                       {formatDate(c.not_after)}
                     </td>
-                    <td className="py-2 pr-4"><Chip label={band.label} className={band.className} /></td>
+                    <td className="py-2 pr-4"><StatusBadge vocabulary="expiry" value={band} /></td>
                     <td className="py-2 pr-4">
                       <div className="grid gap-1">
-                        <Chip label={status.label} className={status.className} />
+                        <StatusBadge vocabulary="certificate" value={c.status} />
                         {c.status === "revoked" && c.revocation_reason && (
                           <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>
                         )}

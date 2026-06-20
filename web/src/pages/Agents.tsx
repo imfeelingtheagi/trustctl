@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Copy, Loader2, RefreshCw, X } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 
@@ -170,7 +171,7 @@ export function Agents() {
                       <tr key={agent.id} className="border-b border-border align-top">
                         <td className="py-2 pl-3 pr-4 font-medium">{agent.name}</td>
                         <td className="py-2 pr-4">
-                          <StatusChip status={agent.status} />
+                          <StatusBadge vocabulary="agent" value={agent.status} />
                         </td>
                         <td className="py-2 pr-4 font-mono text-xs">{agent.version || "-"}</td>
                         <td className="py-2 pr-4">
@@ -229,23 +230,6 @@ function AgentDetail({ agent }: { agent: Agent }) {
         Capabilities, last scan, drift summary, and certificate-renewal state need `BACKEND-DISCOVERY-SCAN`, `BACKEND-DRIFT`, and `BACKEND-AGENT-RENEWAL`. This page shows only the fields the served Agent schema carries.
       </UnavailableState>
     </aside>
-  );
-}
-
-function StatusChip({ status }: { status: string }) {
-  const normalized = status.toLowerCase();
-  const classes =
-    normalized === "online"
-      ? "border-green-200 bg-green-50 text-green-800"
-      : normalized === "degraded"
-        ? "border-amber-200 bg-amber-50 text-amber-800"
-        : normalized === "offline"
-          ? "border-slate-300 bg-slate-50 text-slate-700"
-          : "border-border bg-muted text-muted-foreground";
-  return (
-    <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-medium ${classes}`}>
-      {status}
-    </span>
   );
 }
 

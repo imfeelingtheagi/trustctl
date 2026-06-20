@@ -2,7 +2,9 @@ import { Fragment, useMemo, useState } from "react";
 import { api, type CredentialRisk } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
+import { riskBand } from "@/lib/statusVocab";
 
 const privilegeLabel = ["Low", "Standard", "High", "Critical"];
 const factorKeys = ["age", "rotation", "privilege", "exposure", "owner", "sensitivity"] as const;
@@ -116,11 +118,17 @@ export function Risk() {
               {rows.map((c) => {
                 const top = topFactor(c);
                 const isExpanded = expanded === c.credential_id;
+                const band = riskBand(c.score);
                 return (
                   <Fragment key={c.credential_id}>
                     <tr key={c.credential_id} className="border-b border-border">
                       <td className="py-2 pr-4" data-testid="risk-subject">{c.subject}</td>
-                      <td className="py-2 pr-4 font-medium">{Math.round(c.score)}</td>
+                      <td className="py-2 pr-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{Math.round(c.score)}</span>
+                          <StatusBadge vocabulary="risk" value={band} />
+                        </div>
+                      </td>
                       <td className="py-2 pr-4">{factorLabels[top]} {factorPercent(c.components[top])}</td>
                       <td className="py-2 pr-4">{c.exposure}</td>
                       <td className="py-2 pr-4">{c.owner_active ? "active" : "orphaned"}</td>
