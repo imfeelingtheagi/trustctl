@@ -1200,6 +1200,20 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "bearerFormat": "trstctl API token",
+        "description": "Hashed API token resolved to a tenant-scoped principal with named trstctl permissions.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "SessionCookie": {
+        "description": "Verified OIDC browser session; mutating requests also require the double-submit CSRF token.",
+        "in": "cookie",
+        "name": "trstctl_session",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -1262,7 +1276,16 @@
             "description": "server error"
           }
         },
-        "summary": "List in-network agents"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List in-network agents",
+        "x-trstctl-permission": "agents:read"
       }
     },
     "/api/v1/agents/enrollment-tokens": {
@@ -1300,7 +1323,16 @@
             "description": "server error"
           }
         },
-        "summary": "Mint a one-time agent bootstrap token"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Mint a one-time agent bootstrap token",
+        "x-trstctl-permission": "agents:write"
       }
     },
     "/api/v1/ai/query": {
@@ -1348,7 +1380,16 @@
             "description": "server error"
           }
         },
-        "summary": "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/ai/rca": {
@@ -1396,7 +1437,16 @@
             "description": "server error"
           }
         },
-        "summary": "Answer a grounded root-cause / NL question from cited tenant records (read-only)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Answer a grounded root-cause / NL question from cited tenant records (read-only)",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/audit/events": {
@@ -1484,7 +1534,16 @@
             "description": "server error"
           }
         },
-        "summary": "Query the audit log"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Query the audit log",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/audit/export": {
@@ -1572,7 +1631,16 @@
             "description": "server error"
           }
         },
-        "summary": "Export a signed audit evidence bundle"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export a signed audit evidence bundle",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/certificates": {
@@ -1636,7 +1704,16 @@
             "description": "server error"
           }
         },
-        "summary": "Query the certificate inventory"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Query the certificate inventory",
+        "x-trstctl-permission": "certs:read"
       },
       "post": {
         "operationId": "ingestCertificate",
@@ -1682,7 +1759,16 @@
             "description": "server error"
           }
         },
-        "summary": "Ingest a certificate into the inventory"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Ingest a certificate into the inventory",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/certificates/{id}": {
@@ -1731,7 +1817,16 @@
             "description": "server error"
           }
         },
-        "summary": "Get an inventoried certificate"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an inventoried certificate",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/graph": {
@@ -1769,7 +1864,16 @@
             "description": "server error"
           }
         },
-        "summary": "Get the credential graph"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get the credential graph",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/graph/blast-radius/{id}": {
@@ -1818,7 +1922,16 @@
             "description": "server error"
           }
         },
-        "summary": "Blast radius of compromising a node"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Blast radius of compromising a node",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/graph/query": {
@@ -1856,7 +1969,16 @@
             "description": "server error"
           }
         },
-        "summary": "Run a Cypher-style graph query"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run a Cypher-style graph query",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/graph/reachable/{id}": {
@@ -1905,7 +2027,16 @@
             "description": "server error"
           }
         },
-        "summary": "Nodes reachable from a node (reachability query)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Nodes reachable from a node (reachability query)",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/identities": {
@@ -1961,7 +2092,16 @@
             "description": "server error"
           }
         },
-        "summary": "List identities"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List identities",
+        "x-trstctl-permission": "identities:read"
       },
       "post": {
         "operationId": "createIdentity",
@@ -2007,7 +2147,16 @@
             "description": "server error"
           }
         },
-        "summary": "Create an identity"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an identity",
+        "x-trstctl-permission": "identities:write"
       }
     },
     "/api/v1/identities/{id}": {
@@ -2056,7 +2205,16 @@
             "description": "server error"
           }
         },
-        "summary": "Get an identity"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an identity",
+        "x-trstctl-permission": "identities:read"
       }
     },
     "/api/v1/identities/{id}/approvals": {
@@ -2115,7 +2273,16 @@
             "description": "server error"
           }
         },
-        "summary": "Approve a pending privileged action (dual control)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve a pending privileged action (dual control)",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/identities/{id}/transitions": {
@@ -2174,7 +2341,16 @@
             "description": "server error"
           }
         },
-        "summary": "Apply a lifecycle transition"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply a lifecycle transition",
+        "x-trstctl-permission": "identities:write"
       }
     },
     "/api/v1/issuers": {
@@ -2230,7 +2406,16 @@
             "description": "server error"
           }
         },
-        "summary": "List issuers"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List issuers",
+        "x-trstctl-permission": "issuers:read"
       },
       "post": {
         "operationId": "createIssuer",
@@ -2276,7 +2461,16 @@
             "description": "server error"
           }
         },
-        "summary": "Create an issuer"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an issuer",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/issuers/{id}": {
@@ -2325,7 +2519,16 @@
             "description": "server error"
           }
         },
-        "summary": "Get an issuer"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an issuer",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/mcp/tools": {
@@ -2363,7 +2566,16 @@
             "description": "server error"
           }
         },
-        "summary": "List the read-only, tenant-scoped MCP tools an AI agent may call"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the read-only, tenant-scoped MCP tools an AI agent may call",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/mcp/tools/{tool}": {
@@ -2422,7 +2634,16 @@
             "description": "server error"
           }
         },
-        "summary": "Invoke one read-only MCP tool (grounded, cited, rate-limited)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Invoke one read-only MCP tool (grounded, cited, rate-limited)",
+        "x-trstctl-permission": "graph:read"
       }
     },
     "/api/v1/owners": {
@@ -2478,7 +2699,16 @@
             "description": "server error"
           }
         },
-        "summary": "List owners"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List owners",
+        "x-trstctl-permission": "owners:read"
       },
       "post": {
         "operationId": "createOwner",
@@ -2524,7 +2754,16 @@
             "description": "server error"
           }
         },
-        "summary": "Create an owner"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an owner",
+        "x-trstctl-permission": "owners:write"
       }
     },
     "/api/v1/owners/{id}": {
@@ -2566,7 +2805,16 @@
             "description": "server error"
           }
         },
-        "summary": "Delete an owner"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an owner",
+        "x-trstctl-permission": "owners:write"
       },
       "get": {
         "operationId": "getOwner",
@@ -2613,7 +2861,16 @@
             "description": "server error"
           }
         },
-        "summary": "Get an owner"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an owner",
+        "x-trstctl-permission": "owners:read"
       },
       "put": {
         "operationId": "updateOwner",
@@ -2670,7 +2927,16 @@
             "description": "server error"
           }
         },
-        "summary": "Replace an owner"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace an owner",
+        "x-trstctl-permission": "owners:write"
       }
     },
     "/api/v1/profiles": {
@@ -2708,7 +2974,16 @@
             "description": "server error"
           }
         },
-        "summary": "List active certificate profiles"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List active certificate profiles",
+        "x-trstctl-permission": "profiles:read"
       },
       "post": {
         "operationId": "createProfile",
@@ -2754,7 +3029,16 @@
             "description": "server error"
           }
         },
-        "summary": "Create a certificate profile version"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a certificate profile version",
+        "x-trstctl-permission": "profiles:write"
       }
     },
     "/api/v1/profiles/{name}/versions/{version}": {
@@ -2812,7 +3096,16 @@
             "description": "server error"
           }
         },
-        "summary": "Get a certificate-profile version"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a certificate-profile version",
+        "x-trstctl-permission": "profiles:read"
       }
     },
     "/api/v1/risk/credentials": {
@@ -2850,7 +3143,16 @@
             "description": "server error"
           }
         },
-        "summary": "Rank credentials by composite risk score"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rank credentials by composite risk score",
+        "x-trstctl-permission": "risk:read"
       }
     },
     "/api/v1/secrets/login": {
@@ -2898,7 +3200,8 @@
             "description": "server error"
           }
         },
-        "summary": "Exchange a machine credential for a scoped workload session"
+        "summary": "Exchange a machine credential for a scoped workload session",
+        "x-trstctl-public-rationale": "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
       }
     },
     "/api/v1/secrets/pki": {
@@ -2946,7 +3249,16 @@
             "description": "server error"
           }
         },
-        "summary": "Issue a dynamic PKI secret (short-lived cert + key)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue a dynamic PKI secret (short-lived cert + key)",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/shares": {
@@ -2994,7 +3306,16 @@
             "description": "server error"
           }
         },
-        "summary": "Create a one-time secret share (returns a bearer token)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a one-time secret share (returns a bearer token)",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/shares/redeem": {
@@ -3042,7 +3363,16 @@
             "description": "server error"
           }
         },
-        "summary": "Redeem a one-time secret share exactly once"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Redeem a one-time secret share exactly once",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/store": {
@@ -3098,7 +3428,16 @@
             "description": "server error"
           }
         },
-        "summary": "List application secret names (no values)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List application secret names (no values)",
+        "x-trstctl-permission": "secrets:read"
       },
       "post": {
         "operationId": "createSecret",
@@ -3144,7 +3483,16 @@
             "description": "server error"
           }
         },
-        "summary": "Create an application secret (sealed at rest)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an application secret (sealed at rest)",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/store/{name}": {
@@ -3186,7 +3534,16 @@
             "description": "server error"
           }
         },
-        "summary": "Delete an application secret"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an application secret",
+        "x-trstctl-permission": "secrets:write"
       },
       "get": {
         "operationId": "getSecret",
@@ -3233,7 +3590,16 @@
             "description": "server error"
           }
         },
-        "summary": "Read an application secret value"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read an application secret value",
+        "x-trstctl-permission": "secrets:read"
       },
       "put": {
         "operationId": "rotateSecret",
@@ -3290,7 +3656,16 @@
             "description": "server error"
           }
         },
-        "summary": "Rotate an application secret (new value, bumped version)"
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rotate an application secret (new value, bumped version)",
+        "x-trstctl-permission": "secrets:write"
       }
     }
   }

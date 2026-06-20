@@ -72,6 +72,19 @@ func TestServedESTEndToEnd(t *testing.T) {
 	if nresp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("EST enroll without a token returned %d, want 401 (auth gate missing)", nresp.StatusCode)
 	}
+
+	readOnlyToken := seedAPITokenWithScopes(t, h.store, servedTestTenant, []string{"certs:read"})
+	readonly, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/.well-known/est/simpleenroll", bytes.NewReader([]byte(body)))
+	readonly.Header.Set("Content-Type", "application/pkcs10")
+	readonly.Header.Set("Authorization", "Bearer "+readOnlyToken)
+	rresp, err := h.ts.Client().Do(readonly)
+	if err != nil {
+		t.Fatalf("EST read-only-token enroll: %v", err)
+	}
+	_ = rresp.Body.Close()
+	if rresp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("EST enroll with a token lacking certs:request returned %d, want 401", rresp.StatusCode)
+	}
 }
 
 // TestServedSCEPEndToEnd is the EXC-WIRE-02 acceptance proof for SCEP: the SERVED SCEP
@@ -165,13 +178,17 @@ func TestServedCMPEndToEnd(t *testing.T) {
 // seedAPIToken creates a tenant-scoped API token in the store and returns its raw
 // secret (for the Authorization: Bearer header the served EST auth gate validates).
 func seedAPIToken(t *testing.T, st *store.Store, tenant string) string {
+	return seedAPITokenWithScopes(t, st, tenant, []string{"certs:request"})
+}
+
+func seedAPITokenWithScopes(t *testing.T, st *store.Store, tenant string, scopes []string) string {
 	t.Helper()
 	raw, hash, err := auth.GenerateAPIToken()
 	if err != nil {
 		t.Fatalf("generate api token: %v", err)
 	}
 	if _, err := st.CreateAPIToken(context.Background(), store.APITokenRecord{
-		TenantID: tenant, TokenHash: hash, Subject: "est-device", Scopes: []string{"certs:request"},
+		TenantID: tenant, TokenHash: hash, Subject: "est-device", Scopes: scopes,
 	}); err != nil {
 		t.Fatalf("seed api token: %v", err)
 	}

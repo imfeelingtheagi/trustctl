@@ -29,11 +29,14 @@ type PathItem map[string]*Operation
 
 // Operation describes one endpoint.
 type Operation struct {
-	OperationID string              `json:"operationId"`
-	Summary     string              `json:"summary,omitempty"`
-	Parameters  []Parameter         `json:"parameters,omitempty"`
-	RequestBody *RequestBody        `json:"requestBody,omitempty"`
-	Responses   map[string]Response `json:"responses"`
+	OperationID      string                `json:"operationId"`
+	Summary          string                `json:"summary,omitempty"`
+	Parameters       []Parameter           `json:"parameters,omitempty"`
+	RequestBody      *RequestBody          `json:"requestBody,omitempty"`
+	Responses        map[string]Response   `json:"responses"`
+	Security         []map[string][]string `json:"security,omitempty"`
+	XPermission      string                `json:"x-trstctl-permission,omitempty"`
+	XPublicRationale string                `json:"x-trstctl-public-rationale,omitempty"`
 }
 
 // Parameter is a path or query parameter.
@@ -62,9 +65,20 @@ type MediaType struct {
 	Schema *Schema `json:"schema,omitempty"`
 }
 
-// Components holds reusable schemas.
+// Components holds reusable schemas and security schemes.
 type Components struct {
-	Schemas map[string]*Schema `json:"schemas"`
+	Schemas         map[string]*Schema        `json:"schemas"`
+	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
+}
+
+// SecurityScheme is the OpenAPI security-scheme subset used by guarded routes.
+type SecurityScheme struct {
+	Type         string `json:"type"`
+	Scheme       string `json:"scheme,omitempty"`
+	BearerFormat string `json:"bearerFormat,omitempty"`
+	Name         string `json:"name,omitempty"`
+	In           string `json:"in,omitempty"`
+	Description  string `json:"description,omitempty"`
 }
 
 // Schema is a (deliberately small) JSON Schema: a $ref, or an inline type.
@@ -94,8 +108,24 @@ func buildSpec(routes []route) *Document {
 			Version:     "v1",
 			Description: "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
 		},
-		Paths:      map[string]PathItem{},
-		Components: Components{Schemas: componentSchemas()},
+		Paths: map[string]PathItem{},
+		Components: Components{
+			Schemas: componentSchemas(),
+			SecuritySchemes: map[string]SecurityScheme{
+				"BearerAuth": {
+					Type:         "http",
+					Scheme:       "bearer",
+					BearerFormat: "trstctl API token",
+					Description:  "Hashed API token resolved to a tenant-scoped principal with named trstctl permissions.",
+				},
+				"SessionCookie": {
+					Type:        "apiKey",
+					In:          "cookie",
+					Name:        sessionCookieName,
+					Description: "Verified OIDC browser session; mutating requests also require the double-submit CSRF token.",
+				},
+			},
+		},
 	}
 	for _, r := range routes {
 		if r.path == specPath {
@@ -112,6 +142,12 @@ func buildSpec(routes []route) *Document {
 			doc.Paths[docPath] = pi
 		}
 		op := &Operation{OperationID: r.opID, Summary: r.summary, Responses: map[string]Response{}}
+		if r.perm != "" {
+			op.Security = []map[string][]string{{"BearerAuth": {}}, {"SessionCookie": {}}}
+			op.XPermission = string(r.perm)
+		} else if rationale := publicRationaleForRoute(r); rationale != "" {
+			op.XPublicRationale = rationale
+		}
 		for _, pp := range r.pathParams {
 			op.Parameters = append(op.Parameters, Parameter{Name: pp.name, In: "path", Required: true, Description: pp.desc, Schema: schemaForParam(pp)})
 		}

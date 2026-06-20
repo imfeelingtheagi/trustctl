@@ -202,10 +202,15 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) { a.mux.ServeHTTP(w, r) }
 
 // Route is a served (method, path) pair, exposed so documentation tooling and
-// tests can confirm the spec covers every route.
+// tests can confirm the spec covers every route and that each route has an
+// authorization contract.
 type Route struct {
-	Method string
-	Path   string
+	Method          string
+	Path            string
+	OperationID     string
+	Permission      authz.Permission
+	PublicRationale string
+	Mutation        bool
 }
 
 // Routes returns the served routes. Paths are reported in their OpenAPI-template
@@ -217,7 +222,14 @@ func (a *API) Routes() []Route {
 	rs := a.routes()
 	out := make([]Route, 0, len(rs))
 	for _, r := range rs {
-		out = append(out, Route{Method: r.method, Path: openapiPath(r.path)})
+		out = append(out, Route{
+			Method:          r.method,
+			Path:            openapiPath(r.path),
+			OperationID:     r.opID,
+			Permission:      r.perm,
+			PublicRationale: publicRationaleForRoute(r),
+			Mutation:        r.mutation,
+		})
 	}
 	return out
 }
@@ -226,6 +238,20 @@ func (a *API) Routes() []Route {
 // trailing-wildcard segment ("{name...}") to "{name}". It is the single place that
 // mapping lives, shared by Routes and buildSpec.
 func openapiPath(p string) string { return strings.ReplaceAll(p, "...}", "}") }
+
+func publicRationaleForRoute(r route) string {
+	if r.perm != "" {
+		return ""
+	}
+	switch r.opID {
+	case "machineLogin":
+		return "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
+	case "getOpenAPISpec":
+		return "public static API contract: the document contains no tenant data or credential material."
+	default:
+		return ""
+	}
+}
 
 // param is an OpenAPI query parameter descriptor.
 type param struct {

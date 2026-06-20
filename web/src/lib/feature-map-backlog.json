@@ -146,11 +146,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: ingestCertificate, listCertificates, getCertificate",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: ingestCertificate, listCertificates, getCertificate",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -386,11 +389,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listAgents, createEnrollmentToken",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -1113,11 +1119,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listRiskScores",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -1362,11 +1371,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -1611,11 +1623,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createProfile, listProfiles, getProfileVersion",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createProfile, listProfiles, getProfileVersion",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -1734,7 +1749,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -1872,11 +1895,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: transitionIdentity, searchAudit",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: transitionIdentity, searchAudit",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -2089,7 +2115,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -2198,7 +2232,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F69; current mapping is disclosure: Protocols at /protocols - DNS-01 secret-reference disclosure with no raw provider-token controls; coverage ledger: /coverage."
@@ -2295,7 +2337,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F70; current mapping is disclosure: Protocols at /protocols - built-in/plugin DNS provider disclosure with conformance and provenance gate; coverage ledger: /coverage."
@@ -2391,7 +2441,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F71; current mapping is disclosure: Protocols at /protocols - CNAME validation isolation fixture preview; coverage ledger: /coverage."
@@ -2487,7 +2545,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F72; current mapping is disclosure: Protocols at /protocols - CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview; coverage ledger: /coverage."
@@ -2583,7 +2649,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F73; current mapping is disclosure: Protocols at /protocols - HTTP-01/DNS-01/TLS-ALPN-01 method policy preview; coverage ledger: /coverage."
@@ -2679,7 +2753,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F74; current mapping is disclosure: Protocols at /protocols - wildcard DNS-01-only acknowledgement and blast-radius disclosure; coverage ledger: /coverage."
@@ -2781,7 +2863,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps est route/RPC patterns to the certs:request permission, tenant mapping, principal mapping, and admin enablement authority.",
+            "served EST rejects tokens that are missing certs:request, so a tenant-valid token alone cannot enroll certificates."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -2892,7 +2982,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps scep route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "scep is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -3003,7 +3101,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps cmp route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "cmp is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -3139,11 +3245,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listAgents, createEnrollmentToken",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -3256,7 +3365,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps scep route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "scep is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F56; current mapping is disclosure: Protocols at /protocols - MDM/Intune SCEP challenge fixtures plus backend-gap disclosure; coverage ledger: /coverage."
@@ -3355,7 +3472,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -3463,7 +3588,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F25; current mapping is disclosure: Workloads at /workloads - ephemeral credential lease fixture plus library-only disclosure; coverage ledger: /coverage."
@@ -3559,7 +3692,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F30; current mapping is disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage; coverage ledger: /coverage."
@@ -3694,11 +3835,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createIdentity, listIdentities, getIdentity, transitionIdentity, approveIdentityAction",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIdentity, listIdentities, getIdentity, transitionIdentity, approveIdentityAction",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -3912,7 +4056,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps ssh route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "ssh is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -4123,7 +4275,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "protocol authz manifest maps ssh route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "ssh is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F45; current mapping is disclosure: SSHTrust at /ssh - attestation-gated SSH user cert fixtures without live issue control; coverage ledger: /coverage."
@@ -4251,11 +4411,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listIdentities, transitionIdentity, searchAudit",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listIdentities, transitionIdentity, searchAudit",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -4860,7 +5023,15 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "protocol authz manifest maps tsa route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
+            "tsa is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+          ],
+          "refs": [
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/tsa/http_test.go"
+          ]
         },
         "audit": {
           "evidence": [
@@ -5188,11 +5359,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: approveIdentityAction, transitionIdentity",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: approveIdentityAction, transitionIdentity",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -5421,11 +5595,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: rotateSecret",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -5766,11 +5943,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -5919,11 +6099,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -6248,11 +6431,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: issuePKISecret",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: issuePKISecret",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -6481,11 +6667,15 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: machineLogin",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: machineLogin",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
+            "machineLogin is a public credential exchange, not an RBAC-guarded route; the presented machine credential authenticates the workload and yields a tenant-scoped session."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -6627,11 +6817,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createShare, redeemShare, approveIdentityAction",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createShare, redeemShare, approveIdentityAction",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -6811,11 +7004,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -7161,11 +7357,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listOwners, createOwner, listCertificates, createSecret, aiQuery",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, createOwner, listCertificates, createSecret, aiQuery",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -7305,11 +7504,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: searchAudit, exportAudit",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: searchAudit, exportAudit",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -7516,11 +7718,15 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: aiQuery, aiRCA, approveIdentityAction, callMCPTool, createEnrollmentToken, createIdentity, createIssuer, createOwner, createProfile, createSecret, createShare, deleteOwner, deleteSecret, exportAudit, getCertificate, getGraph, getIdentity, getIssuer, getOwner, getProfileVersion, getSecret, graphBlastRadius, graphQuery, graphReachable, ingestCertificate, issuePKISecret, listAgents, listCertificates, listIdentities, listIssuers, listMCPTools, listOwners, listProfiles, listRiskScores, listSecrets, machineLogin, redeemShare, rotateSecret, searchAudit, transitionIdentity, updateOwner",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, aiRCA, approveIdentityAction, callMCPTool, createEnrollmentToken, createIdentity, createIssuer, createOwner, createProfile, createSecret, createShare, deleteOwner, deleteSecret, exportAudit, getCertificate, getGraph, getIdentity, getIssuer, getOwner, getProfileVersion, getSecret, graphBlastRadius, graphQuery, graphReachable, ingestCertificate, issuePKISecret, listAgents, listCertificates, listIdentities, listIssuers, listMCPTools, listOwners, listProfiles, listRiskScores, listSecrets, machineLogin, redeemShare, rotateSecret, searchAudit, transitionIdentity, updateOwner",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
+            "machineLogin is a public credential exchange, not an RBAC-guarded route; the presented machine credential authenticates the workload and yields a tenant-scoped session."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -8269,11 +8475,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listOwners, listCertificates, listSecrets, searchAudit",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -8604,11 +8813,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: getGraph, graphReachable, graphBlastRadius, graphQuery",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: getGraph, graphReachable, graphBlastRadius, graphQuery",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -8740,11 +8952,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: aiQuery, graphQuery",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, graphQuery",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -8875,11 +9090,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: aiQuery, aiRCA",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, aiRCA",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -9007,11 +9225,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: aiRCA",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiRCA",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },
@@ -9143,11 +9364,14 @@
         },
         "rbac": {
           "evidence": [
-            "guarded API surface: listMCPTools, callMCPTool",
-            "internal/api routes register permission metadata and are wrapped by guard(perm, handler)."
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listMCPTools, callMCPTool",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
+            "internal/featureparity/authz_manifest.go",
             "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
             "internal/api/failclosed_guard_test.go"
           ]
         },

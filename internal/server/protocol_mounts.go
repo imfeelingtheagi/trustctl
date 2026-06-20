@@ -235,29 +235,37 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 	wrap := func(h http.Handler) http.Handler { return bulkheadHandler(bulk, bulkhead.SubsystemAPI, h) }
 	if sp.acme != nil {
-		mux.Handle("/directory", wrap(sp.acme))
-		mux.Handle("/acme/", wrap(sp.acme))
+		for _, pattern := range protocolHTTPMountPatterns("acme") {
+			mux.Handle(pattern, wrap(sp.acme))
+		}
 	}
 	if sp.est != nil {
-		mux.Handle("/.well-known/est/", wrap(tenantCtxHandler(sp.est, func(ctx context.Context) context.Context {
-			return est.WithTenant(ctx, sp.estTenant)
-		})))
+		h := tenantCtxHandler(sp.est, func(ctx context.Context) context.Context { return est.WithTenant(ctx, sp.estTenant) })
+		for _, pattern := range protocolHTTPMountPatterns("est") {
+			mux.Handle(pattern, wrap(h))
+		}
 	}
 	if sp.scep != nil {
 		h := tenantCtxHandler(sp.scep, func(ctx context.Context) context.Context { return scep.WithTenant(ctx, sp.scepTenant) })
-		mux.Handle("/scep", wrap(h))
-		mux.Handle("/scep/", wrap(h))
+		for _, pattern := range protocolHTTPMountPatterns("scep") {
+			mux.Handle(pattern, wrap(h))
+		}
 	}
 	if sp.cmp != nil {
-		mux.Handle("/cmp", wrap(tenantCtxHandler(sp.cmp, func(ctx context.Context) context.Context {
-			return cmp.WithTenant(ctx, sp.cmpTenant)
-		})))
+		h := tenantCtxHandler(sp.cmp, func(ctx context.Context) context.Context { return cmp.WithTenant(ctx, sp.cmpTenant) })
+		for _, pattern := range protocolHTTPMountPatterns("cmp") {
+			mux.Handle(pattern, wrap(h))
+		}
 	}
 	if sp.tsa != nil {
-		mux.Handle("/tsa", wrap(sp.tsa.Handler()))
+		for _, pattern := range protocolHTTPMountPatterns("tsa") {
+			mux.Handle(pattern, wrap(sp.tsa.Handler()))
+		}
 	}
 	if sp.ssh != nil {
-		mux.Handle("/ssh/", wrap(sp.ssh))
+		for _, pattern := range protocolHTTPMountPatterns("ssh") {
+			mux.Handle(pattern, wrap(sp.ssh))
+		}
 	}
 }
 

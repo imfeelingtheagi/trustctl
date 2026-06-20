@@ -111,6 +111,7 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 		"`api_surface`",
 		"`cli_surface`",
 		"`facet_evidence`",
+		"feature-authz manifests",
 		"FeatureFacetCoverage",
 		"`library`",
 		"`roadmap`",

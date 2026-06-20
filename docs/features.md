@@ -13,7 +13,11 @@ an explicit N/A reason. It also records `facet_evidence` for the served, UI, CLI
 API, test, docs, RBAC, audit, telemetry, a11y, and i18n facets. The
 `FeatureFacetCoverage` test fails if any row is missing evidence or an explicit
 N/A, and GA-ish rows (`served`, `conditional`, `partial`) must carry concrete
-evidence for the facets that always apply to the shipped operator surface.
+evidence for the facets that always apply to the shipped operator surface. RBAC is
+tracked through feature-authz manifests: `/api/v1` rows bind each OpenAPI operation
+to a route permission or public credential-exchange rationale, while protocol rows
+bind ACME/EST/SCEP/CMP/SSH/SPIFFE/TSA mounts to either `certs:request` or an
+explicit protocol-public rationale plus tenant/principal mapping.
 
 This page is the answer to "where is feature X documented?" Each capability has a
 **primary page** that teaches it; some are also referenced from related pages and

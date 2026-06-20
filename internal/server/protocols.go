@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -362,8 +363,18 @@ func (a servedEnrollAuth) Authenticate(r *http.Request) bool {
 	if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
 		return false
 	}
-	// AN-1: the token's tenant must match the endpoint's tenant.
-	return a.tenantID == "" || rec.TenantID == a.tenantID
+	// AN-1: the token's tenant must match the endpoint's tenant, then AN-5/S8.1
+	// authz requires enrollment authority. A valid token without certs:request is
+	// authenticated but not authorized to mint via EST.
+	if a.tenantID != "" && rec.TenantID != a.tenantID {
+		return false
+	}
+	tenantID := a.tenantID
+	if tenantID == "" {
+		tenantID = rec.TenantID
+	}
+	principal := auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal()
+	return principal.Can(authz.CertsRequest, authz.Scope{TenantID: tenantID})
 }
 
 // auditIssued emits the served protocol issuance as an AN-2 event so a
