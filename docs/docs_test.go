@@ -154,10 +154,16 @@ func TestGettingStartedMatchesProduct(t *testing.T) {
 	if _, err := os.Stat(filepath.FromSlash("../deploy/docker/docker-compose.yml")); err != nil {
 		t.Fatalf("the Compose file getting-started cites must exist: %v", err)
 	}
-	for _, step := range []string{"connect a ca", "install an agent", "first cert"} {
+	for _, step := range []string{"use the internal ca", "install an agent", "first cert"} {
 		if !strings.Contains(lower, step) {
 			t.Errorf("getting-started should walk the wizard step %q", step)
 		}
+	}
+	if strings.Contains(body, `{"kind":"x509_ca","name":"Primary CA"}`) {
+		t.Error("getting-started must not show a name-only x509_ca issuer payload; served X.509 issuers require a certificate chain")
+	}
+	if !strings.Contains(lower, "external x.509 issuers require a certificate chain") {
+		t.Error("getting-started should say external X.509 issuers require a certificate chain")
 	}
 }
 

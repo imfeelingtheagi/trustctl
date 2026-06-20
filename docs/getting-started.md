@@ -76,10 +76,12 @@ steps, each a single screen.
 
 ## 3. Run the wizard (about 10 minutes)
 
-### Connect a CA
+### Use the internal CA
 
-In **Connect a CA**, give your issuer a name and continue. trstctl brokers
-issuance to the CA you connect; this first issuer is all you need to proceed.
+In **Use the internal CA**, continue with the signer-backed X.509 CA that the
+server provisioned at boot. This first certificate flow does not create an
+external issuer. External X.509 issuers require a certificate chain and are added
+after setup from the issuers/API surface.
 
 ### Install an agent
 
@@ -99,11 +101,11 @@ for how to get the `trstctl-agent` binary on Linux, macOS, and Windows.
 
 In **Issue your first cert**, name the service the certificate belongs to and
 click **Issue**. trstctl creates the owner and identity and issues the
-certificate through the CA you connected. You will see a confirmation and a link
-to the certificate inventory.
+certificate through the internal signer-backed CA. You will see a confirmation
+and a link to the certificate inventory.
 
 That is your first certificate — discovered, owned, and tracked. trstctl will now
-rotate and renew it automatically.
+track it and alert before expiry. Renewal is a manual, one-click action today.
 
 !!! note "Measured issuance time"
     Issuance is fast. In trstctl's end-to-end integration test — the assembled
@@ -144,13 +146,13 @@ token you minted above (see the [CLI reference](cli.md)):
 export TRSTCTL_SERVER=https://localhost:8443
 export TRSTCTL_TOKEN=trst_...
 
-# Create an owner, an issuer, and an identity; the *id of each is in its JSON.
+# Create an owner and an identity; the id of each is in its JSON.
 owner=$(echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f - | jq -r .id)
-issuer=$(echo '{"kind":"x509_ca","name":"Primary CA"}' | trstctl-cli issuers create -f - | jq -r .id)
-ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\",\"issuer_id\":\"$issuer\"}" \
+ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\"}" \
           | trstctl-cli identities create -f - | jq -r .id)
 
-# Transition it to "issued": the running outbox dispatcher mints the certificate.
+# Transition it to "issued": the running outbox dispatcher mints the certificate
+# through the internal signer-backed CA.
 echo '{"to":"issued"}' | trstctl-cli identities transition "$ident" -f -
 sleep 2
 

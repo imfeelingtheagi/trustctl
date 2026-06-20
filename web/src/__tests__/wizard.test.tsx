@@ -28,21 +28,23 @@ function renderWizard() {
 
 describe("first-run wizard", () => {
   beforeEach(() => {
-    apiMock.createIssuer.mockReset().mockResolvedValue({ id: "iss-1", kind: "acme", name: "Let's Encrypt" });
+    apiMock.createIssuer.mockReset();
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({ token: "BOOT-TOKEN-XYZ" });
     apiMock.agents.mockReset().mockResolvedValue([{ id: "ag-1", name: "edge-01", status: "online" }]);
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
   });
 
-  it("walks connect-CA → install-agent → issue-first-cert and issues a certificate", async () => {
+  it("walks internal-CA → install-agent → issue-first-cert and issues a certificate", async () => {
     const user = userEvent.setup();
     renderWizard();
 
-    // Step 1 — connect a CA.
-    expect(screen.getByRole("heading", { name: /connect a (certificate authority|ca)/i })).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/name/i), "Let's Encrypt");
-    await user.click(screen.getByRole("button", { name: /connect/i }));
-    await waitFor(() => expect(apiMock.createIssuer).toHaveBeenCalledTimes(1));
+    // Step 1 — use the already-provisioned internal signer-backed CA. The wizard
+    // must not post a name-only x509_ca issuer, because the served API rejects X.509
+    // issuers without a certificate chain.
+    expect(screen.getByRole("heading", { name: /use the internal certificate authority/i })).toBeInTheDocument();
+    expect(screen.getByText(/signer-backed internal x\.509 ca/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
+    expect(apiMock.createIssuer).not.toHaveBeenCalled();
 
     // Step 2 — install an agent: a one-time token is minted and shown in the
     // install command, then the wizard detects the agent's registration.
@@ -57,7 +59,7 @@ describe("first-run wizard", () => {
     await user.type(screen.getByLabelText(/name/i), "payments");
     await user.click(screen.getByRole("button", { name: /issue/i }));
 
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "payments" })));
+    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
     expect(await screen.findByText(/first certificate (has been )?issued/i)).toBeInTheDocument();
   });
 
@@ -65,8 +67,7 @@ describe("first-run wizard", () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.type(screen.getByLabelText(/name/i), "Let's Encrypt");
-    await user.click(screen.getByRole("button", { name: /connect/i }));
+    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
     await user.click(await screen.findByRole("button", { name: /check (for agent|now)/i }));
     await waitFor(() => expect(screen.getByText(/edge-01/)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /continue|next/i }));
@@ -79,16 +80,19 @@ describe("first-run wizard", () => {
     expect(screen.getByRole("link", { name: /track and renew certificates/i })).toHaveAttribute("href", "/certificates");
   });
 
-  it("surfaces a failure to connect the CA without advancing", async () => {
-    apiMock.createIssuer.mockRejectedValueOnce(new Error("boom"));
+  it("surfaces a failure to issue without creating an issuer", async () => {
+    apiMock.issueCertificate.mockRejectedValueOnce(new Error("boom"));
     const user = userEvent.setup();
     renderWizard();
 
-    await user.type(screen.getByLabelText(/name/i), "bad");
-    await user.click(screen.getByRole("button", { name: /connect/i }));
+    await user.click(screen.getByRole("button", { name: /use internal ca/i }));
+    await user.click(await screen.findByRole("button", { name: /check (for agent|now)/i }));
+    await waitFor(() => expect(screen.getByText(/edge-01/)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /continue|next/i }));
+    await user.type(await screen.findByLabelText(/name/i), "payments");
+    await user.click(screen.getByRole("button", { name: /issue/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/boom|could not|failed/i);
-    // Still on step 1 — the agent step never started.
-    expect(apiMock.createEnrollmentToken).not.toHaveBeenCalled();
+    expect(apiMock.createIssuer).not.toHaveBeenCalled();
   });
 });

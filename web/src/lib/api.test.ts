@@ -14,6 +14,21 @@ function mockFetch(status: number, body: string, headers: Record<string, string>
   );
 }
 
+function mockFetchSequence(responses: Array<{ status: number; body: string; headers?: Record<string, string> }>) {
+  const queue = [...responses];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      const next = queue.shift();
+      if (!next) throw new Error("unexpected fetch call");
+      return new Response(next.status === 204 ? null : next.body, {
+        status: next.status,
+        headers: new Headers(next.headers ?? {}),
+      });
+    }),
+  );
+}
+
 afterEach(() => {
   document.cookie = "trstctl_csrf=; Max-Age=0; path=/";
   vi.unstubAllGlobals();
@@ -144,6 +159,54 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+
+  it("issues the first wizard certificate without posting a fake issuer_id", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-first-cert; path=/";
+    mockFetchSequence([
+      {
+        status: 201,
+        body: JSON.stringify({ id: "owner-1", tenant_id: "tenant-1", kind: "workload", name: "payments" }),
+      },
+      {
+        status: 201,
+        body: JSON.stringify({
+          id: "identity-1",
+          tenant_id: "tenant-1",
+          kind: "x509_certificate",
+          name: "payments",
+          owner_id: "owner-1",
+          status: "requested",
+        }),
+      },
+      {
+        status: 202,
+        body: JSON.stringify({
+          id: "identity-1",
+          tenant_id: "tenant-1",
+          kind: "x509_certificate",
+          name: "payments",
+          owner_id: "owner-1",
+          status: "issued",
+        }),
+      },
+    ]);
+
+    await api.issueCertificate({ name: "payments" });
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.map((call) => call[0])).toEqual([
+      "/api/v1/owners",
+      "/api/v1/identities",
+      "/api/v1/identities/identity-1/transitions",
+    ]);
+    expect(JSON.parse(calls[1][1]?.body as string)).toEqual({
+      kind: "x509_certificate",
+      name: "payments",
+      owner_id: "owner-1",
+    });
+    expect(JSON.stringify(calls[1][1]?.body)).not.toContain("issuer_id");
+    expect((calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { api, type Agent, type Issuer } from "@/lib/api";
+import { api, type Agent } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 type Step = 1 | 2 | 3 | 4;
 
 const steps = [
-  { n: 1, label: "Connect a CA" },
+  { n: 1, label: "Use internal CA" },
   { n: 2, label: "Install an agent" },
   { n: 3, label: "Issue your first cert" },
 ];
@@ -20,7 +20,6 @@ const steps = [
  * checks for a freshly-registered agent (tunable for tests). */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const [step, setStep] = useState<Step>(1);
-  const [issuer, setIssuer] = useState<Issuer | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
 
   return (
@@ -56,12 +55,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
       <Card>
         <CardContent className="pt-comfortable">
           {step === 1 && (
-            <ConnectCAStep
-              onConnected={(iss) => {
-                setIssuer(iss);
-                setStep(2);
-              }}
-            />
+            <InternalCAStep onReady={() => setStep(2)} />
           )}
           {step === 2 && (
             <InstallAgentStep
@@ -71,7 +65,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
               onContinue={() => setStep(3)}
             />
           )}
-          {step === 3 && <IssueCertStep issuer={issuer} onIssued={() => setStep(4)} />}
+          {step === 3 && <IssueCertStep onIssued={() => setStep(4)} />}
           {step === 4 && <DoneStep />}
         </CardContent>
       </Card>
@@ -79,53 +73,23 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   );
 }
 
-function ConnectCAStep({ onConnected }: { onConnected: (iss: Issuer) => void }) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
+function InternalCAStep({ onReady }: { onReady: () => void }) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      const iss = await api.createIssuer({ kind: "x509_ca", name: name.trim() || "Primary CA" });
-      onConnected(iss);
-    } catch (err) {
-      setError(`Could not connect the CA: ${String(err instanceof Error ? err.message : err)}`);
-    } finally {
-      setBusy(false);
-    }
+    onReady();
   }
 
   return (
     <form onSubmit={submit} aria-labelledby="step-ca-heading" className="space-y-4">
       <h2 id="step-ca-heading" className="text-title font-semibold">
-        Connect a Certificate Authority
+        Use the internal Certificate Authority
       </h2>
       <p className="text-body text-muted-foreground">
-        trstctl brokers issuance to your CA. Give this issuer a name to get started.
+        A fresh trstctl server provisions a signer-backed internal X.509 CA at boot.
+        The first certificate uses that CA directly; external CA issuer routing is configured after setup.
       </p>
-      <div className="space-y-1">
-        <label htmlFor="ca-name" className="block text-body font-medium">
-          Certificate Authority name
-        </label>
-        <input
-          id="ca-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
-          placeholder="e.g. Internal Issuing CA"
-        />
-      </div>
-      {error && (
-        <p role="alert" className="text-body text-destructive">
-          {error}
-        </p>
-      )}
-      <Button type="submit" disabled={busy}>
-        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-        Connect CA
+      <Button type="submit">
+        Use internal CA
       </Button>
     </form>
   );
@@ -224,7 +188,7 @@ function InstallAgentStep({
   );
 }
 
-function IssueCertStep({ issuer, onIssued }: { issuer: Issuer | null; onIssued: () => void }) {
+function IssueCertStep({ onIssued }: { onIssued: () => void }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,7 +198,7 @@ function IssueCertStep({ issuer, onIssued }: { issuer: Issuer | null; onIssued: 
     setError(null);
     setBusy(true);
     try {
-      await api.issueCertificate({ name: name.trim() || "first-service", issuerId: issuer?.id });
+      await api.issueCertificate({ name: name.trim() || "first-service" });
       onIssued();
     } catch (err) {
       setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);
@@ -250,7 +214,7 @@ function IssueCertStep({ issuer, onIssued }: { issuer: Issuer | null; onIssued: 
       </h2>
       <p className="text-body text-muted-foreground">
         Name the service this certificate belongs to. trstctl creates the owner and identity and
-        issues it through the CA you connected.
+        issues it through the signer-backed internal CA.
       </p>
       <div className="space-y-1">
         <label htmlFor="svc-name" className="block text-body font-medium">
