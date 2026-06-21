@@ -124,12 +124,188 @@ func openAPIPaths(t *testing.T) map[string]bool {
 	return out
 }
 
+type openAPISchema struct {
+	Properties map[string]openAPISchema `json:"properties"`
+	Required   []string                 `json:"required"`
+	Enum       []string                 `json:"enum"`
+}
+
+func openAPIComponentSchemas(t *testing.T) map[string]openAPISchema {
+	t.Helper()
+	var doc struct {
+		Components struct {
+			Schemas map[string]openAPISchema `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
+		t.Fatalf("parse OpenAPI golden: %v", err)
+	}
+	return doc.Components.Schemas
+}
+
+func openAPIOperationIDs(t *testing.T) map[string]bool {
+	t.Helper()
+	var doc struct {
+		Paths map[string]map[string]struct {
+			OperationID string `json:"operationId"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &doc); err != nil {
+		t.Fatalf("parse OpenAPI golden: %v", err)
+	}
+	out := map[string]bool{}
+	for _, methods := range doc.Paths {
+		for _, op := range methods {
+			if op.OperationID != "" {
+				out[op.OperationID] = true
+			}
+		}
+	}
+	return out
+}
+
+func assertRequiredFields(t *testing.T, schemas map[string]openAPISchema, name string, fields []string) {
+	t.Helper()
+	schema, ok := schemas[name]
+	if !ok {
+		t.Fatalf("OpenAPI schema %s missing", name)
+	}
+	required := map[string]bool{}
+	for _, field := range schema.Required {
+		required[field] = true
+	}
+	for _, field := range fields {
+		if !required[field] {
+			t.Errorf("OpenAPI schema %s should require %s", name, field)
+		}
+	}
+}
+
+func assertOptionalField(t *testing.T, schemas map[string]openAPISchema, name, field string) {
+	t.Helper()
+	schema, ok := schemas[name]
+	if !ok {
+		t.Fatalf("OpenAPI schema %s missing", name)
+	}
+	if _, ok := schema.Properties[field]; !ok {
+		t.Errorf("OpenAPI schema %s should define optional field %s", name, field)
+	}
+	for _, required := range schema.Required {
+		if required == field {
+			t.Errorf("OpenAPI schema %s should keep %s optional for the internal-CA first-run flow", name, field)
+		}
+	}
+}
+
+func assertEnumContains(t *testing.T, schemas map[string]openAPISchema, name, field, value string) {
+	t.Helper()
+	schema, ok := schemas[name]
+	if !ok {
+		t.Fatalf("OpenAPI schema %s missing", name)
+	}
+	property, ok := schema.Properties[field]
+	if !ok {
+		t.Fatalf("OpenAPI schema %s missing property %s", name, field)
+	}
+	for _, got := range property.Enum {
+		if got == value {
+			return
+		}
+	}
+	t.Errorf("OpenAPI schema %s property %s should include enum value %q", name, field, value)
+}
+
 func cliCommandNames() map[string]bool {
 	out := map[string]bool{}
 	for _, command := range cli.Commands() {
 		out[strings.Join(command.Name, " ")] = true
 	}
 	return out
+}
+
+func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *testing.T) {
+	apiTS := read(t, "../web/src/lib/api.ts")
+	wizardTS := read(t, "../web/src/pages/Wizard.tsx")
+	wizardTest := read(t, "../web/src/__tests__/wizard.test.tsx")
+	issuerStore := read(t, "../internal/store/issuer.go")
+
+	if !strings.Contains(apiTS, "firstCertificateIdentityRequest") {
+		t.Fatal("web API client should expose a firstCertificateIdentityRequest helper so DOCS-003 can pin the wizard payload to the OpenAPI IdentityRequest contract")
+	}
+	for _, want := range []string{
+		`kind: "workload"`,
+		`kind: "x509_certificate"`,
+		"owner_id: ownerId",
+		`"first issuance via UI"`,
+	} {
+		if !strings.Contains(apiTS, want) {
+			t.Errorf("first-certificate helper/client should contain %q", want)
+		}
+	}
+	if strings.Contains(apiTS, `kind: "x509_ca"`) || strings.Contains(apiTS, `"kind":"x509_ca"`) {
+		t.Error("wizard convenience client must not create a name-only x509_ca issuer")
+	}
+	if !strings.Contains(wizardTS, `api.issueCertificate({ name: name.trim() || "first-service" })`) {
+		t.Error("wizard should call the first-certificate convenience API with only the service name")
+	}
+	if strings.Contains(wizardTS, "api.createIssuer") {
+		t.Error("wizard should not post an issuer payload during first-run setup")
+	}
+	for _, want := range []string{
+		"createIssuer).not.toHaveBeenCalled",
+		`issueCertificate).toHaveBeenCalledWith({ name: "payments" })`,
+	} {
+		if !strings.Contains(wizardTest, want) {
+			t.Errorf("wizard test should pin the served first-run contract with %q", want)
+		}
+	}
+
+	schemas := openAPIComponentSchemas(t)
+	assertRequiredFields(t, schemas, "OwnerRequest", []string{"kind", "name"})
+	assertRequiredFields(t, schemas, "IdentityRequest", []string{"kind", "name", "owner_id"})
+	assertOptionalField(t, schemas, "IdentityRequest", "issuer_id")
+	assertRequiredFields(t, schemas, "TransitionRequest", []string{"to"})
+	assertEnumContains(t, schemas, "IdentityRequest", "kind", "x509_certificate")
+	assertEnumContains(t, schemas, "TransitionRequest", "to", "issued")
+	if !strings.Contains(issuerStore, "must carry a certificate chain") {
+		t.Error("issuer store validator should still reject name-only X.509 issuers; otherwise revisit the wizard docs contract")
+	}
+}
+
+func TestFeatureLedgerSurfacesAreBackedByOpenAPIAndCLI(t *testing.T) {
+	var ledger struct {
+		Items []struct {
+			ID         string   `json:"id"`
+			APISurface []string `json:"api_surface"`
+			CLISurface []string `json:"cli_surface"`
+			APINA      string   `json:"api_na"`
+			CLINA      string   `json:"cli_na"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../web/src/lib/feature-map-backlog.json")), &ledger); err != nil {
+		t.Fatalf("parse feature ledger: %v", err)
+	}
+
+	operations := openAPIOperationIDs(t)
+	commands := cliCommandNames()
+	for _, row := range ledger.Items {
+		for _, op := range row.APISurface {
+			if op == "" || row.APINA != "" {
+				continue
+			}
+			if !operations[op] {
+				t.Errorf("%s claims OpenAPI operationId %q, but the generated OpenAPI golden does not expose it", row.ID, op)
+			}
+		}
+		for _, cmd := range row.CLISurface {
+			if cmd == "" || row.CLINA != "" {
+				continue
+			}
+			if !commands[cmd] {
+				t.Errorf("%s claims CLI command %q, but internal/cli.Commands does not expose it", row.ID, cmd)
+			}
+		}
+	}
 }
 
 // allMarkdown returns every Markdown file under the docs directory.

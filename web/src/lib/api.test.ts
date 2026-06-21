@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { api, ApiError, UnauthorizedError } from "@/lib/api";
+import { api, ApiError, firstCertificateIdentityRequest, UnauthorizedError } from "@/lib/api";
 
 // Unit tests for the typed REST client's error handling, focused on the SURFACE-007
 // 429/Retry-After path. We stub global fetch so no network is touched.
@@ -159,6 +159,23 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+
+  it("builds the internal-CA first certificate identity request without an issuer", () => {
+    expect(firstCertificateIdentityRequest({ name: "payments" }, "owner-1")).toEqual({
+      kind: "x509_certificate",
+      name: "payments",
+      owner_id: "owner-1",
+    });
+  });
+
+  it("keeps an explicit issuer only when the caller provides one", () => {
+    expect(firstCertificateIdentityRequest({ name: "payments", issuerId: "issuer-1" }, "owner-1")).toEqual({
+      kind: "x509_certificate",
+      name: "payments",
+      owner_id: "owner-1",
+      issuer_id: "issuer-1",
+    });
   });
 
   it("issues the first wizard certificate without posting a fake issuer_id", async () => {

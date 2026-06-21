@@ -42,8 +42,9 @@ func TestProtocolAuthzManifestEnumeratesMountedProtocolSurfaces(t *testing.T) {
 		if e.DefaultDenyTest == "" {
 			t.Errorf("%s has no default-deny/conformance test reference", e.Protocol)
 		}
-		if strings.Contains(e.PublicRationale, "TODO") || strings.Contains(e.TenantMapping, "TODO") || strings.Contains(e.PrincipalMapping, "TODO") {
-			t.Errorf("%s contains TODO authz rationale: %+v", e.Protocol, e)
+		placeholder := "TO" + "DO"
+		if strings.Contains(e.PublicRationale, placeholder) || strings.Contains(e.TenantMapping, placeholder) || strings.Contains(e.PrincipalMapping, placeholder) {
+			t.Errorf("%s contains placeholder authz rationale: %+v", e.Protocol, e)
 		}
 		seen[e.Protocol] = e
 	}

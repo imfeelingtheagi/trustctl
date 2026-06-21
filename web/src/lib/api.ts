@@ -69,6 +69,11 @@ export type CredentialRisk = GenCredentialRisk;
 export type Approval = GenApproval;
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
+export type IssueCertificateInput = {
+  name: string;
+  ownerId?: string;
+  issuerId?: string;
+};
 export type {
   AuditBundle,
   GraphImpact,
@@ -227,6 +232,15 @@ function postRead<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+export function firstCertificateIdentityRequest(input: IssueCertificateInput, ownerId: string): IdentityRequest {
+  return {
+    kind: "x509_certificate",
+    name: input.name,
+    owner_id: ownerId,
+    ...(input.issuerId ? { issuer_id: input.issuerId } : {}),
+  };
+}
+
 /** Api is the client surface the UI depends on; it is mockable in tests. The
  * request inputs are the OpenAPI-generated request bodies (OwnerRequest,
  * IssuerRequest, IdentityRequest, TransitionRequest) so a mutation cannot send a
@@ -252,7 +266,7 @@ export interface Api {
   approveIdentityAction(id: string, action: ApprovalRequest["action"]): Promise<Approval>;
   /** issueCertificate is the one-call convenience the wizard and the "issue"
    * action use: it ensures an owner, creates the identity, and issues it. */
-  issueCertificate(input: { name: string; ownerId?: string; issuerId?: string }): Promise<Identity>;
+  issueCertificate(input: IssueCertificateInput): Promise<Identity>;
   agents(): Promise<Agent[]>;
   createEnrollmentToken(): Promise<EnrollmentToken>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
@@ -311,12 +325,7 @@ export const api: Api = {
       const owner = await api.createOwner({ kind: "workload", name: input.name });
       ownerId = owner.id;
     }
-    const identity = await api.createIdentity({
-      kind: "x509_certificate",
-      name: input.name,
-      owner_id: ownerId,
-      issuer_id: input.issuerId,
-    });
+    const identity = await api.createIdentity(firstCertificateIdentityRequest(input, ownerId));
     return api.transitionIdentity(identity.id, "issued", "first issuance via UI");
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
