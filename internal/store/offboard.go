@@ -30,6 +30,7 @@ var TenantScopedTables = []string{
 	"discovery_schedules",
 	"discovery_sources",
 	"incident_executions",
+	"privacy_retention_runs",
 	"privacy_subject_erasures",
 	"connector_delivery_receipts",
 	"lifecycle_rotation_runs",

@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/leader"
 	"trstctl.com/trstctl/internal/logging"
 	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/signing"
@@ -284,6 +285,10 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 	if err != nil {
 		return Deps{}, fmt.Errorf("audit retention: %w", err)
 	}
+	privacyRetentionEnabled, privacyRetentionInterval, privacyRetentionPolicy, err := privacyRetentionFromConfig(cfg.Privacy.Retention)
+	if err != nil {
+		return Deps{}, err
+	}
 	renewBefore, err := cfg.Lifecycle.RenewBeforeDuration()
 	if err != nil {
 		return Deps{}, fmt.Errorf("lifecycle renew before: %w", err)
@@ -298,8 +303,10 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
 		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
-		LifecycleRenewBefore: renewBefore,
-		Logger:               logger, RateLimiter: rateLimiter,
+		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
+		PrivacyRetentionPolicy: privacyRetentionPolicy,
+		LifecycleRenewBefore:   renewBefore,
+		Logger:                 logger, RateLimiter: rateLimiter,
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       cfg.Protocols, Plugins: pluginCfg, OIDC: cfg.Auth.OIDC,
 		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret,
@@ -320,6 +327,45 @@ func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, err
 		return nil, fmt.Errorf("rate limit window: %w", err)
 	}
 	return ratelimit.FromRate(st, cfg.RateLimit.Requests, window), nil
+}
+
+func privacyRetentionFromConfig(cfg config.PrivacyRetention) (bool, time.Duration, privacy.RetentionPolicy, error) {
+	policy := privacy.DefaultRetentionPolicy()
+	if !cfg.Enabled {
+		return false, 0, policy, nil
+	}
+	interval, err := cfg.IntervalDuration()
+	if err != nil {
+		return false, 0, policy, fmt.Errorf("privacy retention interval: %w", err)
+	}
+	if interval <= 0 {
+		interval = privacy.DefaultRetentionInterval
+	}
+	for _, f := range []struct {
+		name  string
+		value string
+		set   func(time.Duration)
+	}{
+		{"owners", cfg.Owners, func(d time.Duration) { policy.OwnerInactiveAfter = d }},
+		{"identities", cfg.Identities, func(d time.Duration) { policy.IdentityTerminalAfter = d }},
+		{"certificates", cfg.Certificates, func(d time.Duration) { policy.CertificateTerminalAfter = d }},
+		{"ssh_keys", cfg.SSHKeys, func(d time.Duration) { policy.SSHStaleAfter = d }},
+		{"access", cfg.Access, func(d time.Duration) { policy.AccessTerminalAfter = d }},
+		{"approvals", cfg.Approvals, func(d time.Duration) { policy.ApprovalActorAfter = d }},
+		{"profiles", cfg.Profiles, func(d time.Duration) { policy.ProfileActorAfter = d }},
+		{"attestations", cfg.Attestations, func(d time.Duration) { policy.AttestationEvidenceAfter = d }},
+		{"agents", cfg.Agents, func(d time.Duration) { policy.AgentStaleAfter = d }},
+	} {
+		if f.value == "" {
+			continue
+		}
+		d, err := time.ParseDuration(f.value)
+		if err != nil {
+			return false, 0, policy, fmt.Errorf("privacy retention %s: %w", f.name, err)
+		}
+		f.set(d)
+	}
+	return true, interval, policy.WithDefaults(), nil
 }
 
 func leafProfileFromConfig(cfg *config.Config) crypto.LeafProfile {
@@ -362,6 +408,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 		workers := []runtimeWorker{
 			startRuntimeWorker(workCtx, srv.RunDispatcher),
 			startRuntimeWorker(workCtx, srv.RunRetention),
+			startRuntimeWorker(workCtx, srv.RunPrivacyRetention),
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),

@@ -31,6 +31,7 @@ import (
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/outboxgc"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/signing"
@@ -82,6 +83,12 @@ type Deps struct {
 	AuditSigningKey   *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
 	AuditRetention    time.Duration    // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
 	AuditArchiveDir   string           // cold-storage directory for signed audit archive bundles (R4.4)
+	// PrivacyRetention enables the non-audit PII retention worker (PRIVACY-003).
+	// It emits privacy.retention.enforced events and projects pseudonymization from
+	// the event's cutoffs, so operational retention remains replayable (AN-2).
+	PrivacyRetentionEnabled  bool
+	PrivacyRetentionInterval time.Duration
+	PrivacyRetentionPolicy   privacy.RetentionPolicy
 	// IdempotencyRetention bounds how long a completed idempotency key is kept
 	// before the background GC sweep reclaims it (SPINE-002). Zero uses
 	// idemgc.DefaultRetention. AN-5 holds within the window.
@@ -315,6 +322,14 @@ type Server struct {
 	mRetFailures *observ.Counter
 	mRetLastOK   *observ.Gauge
 
+	// Non-audit personal-data retention worker (PRIVACY-003); nil unless enabled.
+	privacyRetention         *orchestrator.PrivacyRetentionWorker
+	privacyRetentionInterval time.Duration
+	mPrivacyRetRuns          *observ.Counter
+	mPrivacyRetRows          *observ.Counter
+	mPrivacyRetFailures      *observ.Counter
+	mPrivacyRetLastOK        *observ.Gauge
+
 	// Signer telemetry (SF.3): the out-of-process signer can't serve its own
 	// /metrics (AN-4), so the control plane samples its health/restarts here.
 	mSigner *observ.SignerMetrics
@@ -434,7 +449,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if err := s.configureIssuanceSurfaces(ctx, d, orch, idem); err != nil {
 		return nil, err
 	}
-	if err := s.configureObservability(ctx, d, proj, auditSvc); err != nil {
+	if err := s.configureObservability(ctx, d, proj, auditSvc, orch); err != nil {
 		return nil, err
 	}
 	s.configureRootMux(d, a)
@@ -517,6 +532,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
 	}
+	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
 	if err := s.configurePolicyGate(d, &defaults); err != nil {
 		return nil, nil, err
 	}
@@ -661,7 +677,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	return nil
 }
 
-func (s *Server) configureObservability(ctx context.Context, d Deps, proj *projections.Projector, auditSvc *audit.Service) error {
+func (s *Server) configureObservability(ctx context.Context, d Deps, proj *projections.Projector, auditSvc *audit.Service, orch *orchestrator.Orchestrator) error {
 	s.logger = d.Logger
 	if s.logger == nil {
 		s.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -701,6 +717,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mLifecycleLastOK = s.registry.Gauge("trstctl_lifecycle_scheduler_last_success_timestamp_seconds", "Unix timestamp of the last successful lifecycle scheduler sweep.")
 	s.mLifecycleFailures = s.registry.CounterVec("trstctl_lifecycle_scheduler_failures_total", "Lifecycle scheduler sweeps that failed.", nil).WithLabelValues()
 	s.configureRetentionWorker(d, auditSvc)
+	s.configurePrivacyRetentionWorker(d, orch)
 	s.readiness = observ.NewReadiness(s.tracer, s.readinessChecks(ctx, d)...)
 	return nil
 }
@@ -715,6 +732,22 @@ func (s *Server) configureRetentionWorker(d Deps, auditSvc *audit.Service) {
 	s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
 	s.mRetFailures = s.registry.CounterVec("trstctl_audit_retention_failures_total", "Audit retention runs that failed.", nil).WithLabelValues()
 	s.mRetLastOK = s.registry.Gauge("trstctl_audit_retention_last_success_timestamp_seconds", "Unix timestamp of the last successful audit retention run.")
+}
+
+func (s *Server) configurePrivacyRetentionWorker(d Deps, orch *orchestrator.Orchestrator) {
+	if !d.PrivacyRetentionEnabled {
+		return
+	}
+	interval := d.PrivacyRetentionInterval
+	if interval <= 0 {
+		interval = privacy.DefaultRetentionInterval
+	}
+	s.privacyRetention = orchestrator.NewPrivacyRetentionWorker(orch, d.Store, d.PrivacyRetentionPolicy)
+	s.privacyRetentionInterval = interval
+	s.mPrivacyRetRuns = s.registry.CounterVec("trstctl_privacy_retention_runs_total", "Non-audit PII retention runs recorded.", nil).WithLabelValues()
+	s.mPrivacyRetRows = s.registry.CounterVec("trstctl_privacy_retention_rows_anonymized_total", "Rows pseudonymized by non-audit PII retention.", nil).WithLabelValues()
+	s.mPrivacyRetFailures = s.registry.CounterVec("trstctl_privacy_retention_failures_total", "Non-audit PII retention runs that failed.", nil).WithLabelValues()
+	s.mPrivacyRetLastOK = s.registry.Gauge("trstctl_privacy_retention_last_success_timestamp_seconds", "Unix timestamp of the last successful non-audit PII retention run.")
 }
 
 func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
@@ -1056,6 +1089,30 @@ func (s *Server) RunRetention(ctx context.Context) {
 			return
 		case <-t.C:
 			_, _ = s.RunRetentionOnce(ctx)
+		}
+	}
+}
+
+// RunPrivacyRetention runs the non-audit PII retention worker on its configured
+// cadence until ctx is cancelled. It sweeps once on start so overdue terminal
+// personal data is pseudonymized promptly after boot.
+func (s *Server) RunPrivacyRetention(ctx context.Context) {
+	if s.privacyRetention == nil {
+		return
+	}
+	_, _ = s.RunPrivacyRetentionOnce(ctx)
+	interval := s.privacyRetentionInterval
+	if interval <= 0 {
+		interval = privacy.DefaultRetentionInterval
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			_, _ = s.RunPrivacyRetentionOnce(ctx)
 		}
 	}
 }
@@ -1519,6 +1576,36 @@ func (s *Server) RunRetentionOnce(ctx context.Context) (audit.Summary, error) {
 	if sum.RecordsArchived > 0 {
 		s.logger.Info("audit retention archived and pruned records",
 			slog.Int("records", sum.RecordsArchived), slog.Int("tenants", sum.TenantsProcessed))
+	}
+	return sum, nil
+}
+
+// RunPrivacyRetentionOnce performs one non-audit PII retention pass and records
+// its outcome as metrics. A nil worker is a no-op.
+func (s *Server) RunPrivacyRetentionOnce(ctx context.Context) (orchestrator.PrivacyRetentionSummary, error) {
+	if s.privacyRetention == nil {
+		return orchestrator.PrivacyRetentionSummary{}, nil
+	}
+	sum, err := s.privacyRetention.RunOnce(ctx)
+	if err != nil {
+		if s.mPrivacyRetFailures != nil {
+			s.mPrivacyRetFailures.Inc()
+		}
+		s.logger.Error("privacy retention run failed", slog.String("error", err.Error()))
+		return sum, err
+	}
+	if s.mPrivacyRetLastOK != nil {
+		s.mPrivacyRetLastOK.Set(float64(time.Now().Unix()))
+	}
+	if s.mPrivacyRetRuns != nil {
+		s.mPrivacyRetRuns.Add(float64(sum.RunsRecorded))
+	}
+	if s.mPrivacyRetRows != nil {
+		s.mPrivacyRetRows.Add(float64(sum.RowsAnonymized))
+	}
+	if sum.RowsAnonymized > 0 {
+		s.logger.Info("privacy retention pseudonymized stale personal data",
+			slog.Int("rows", sum.RowsAnonymized), slog.Int("tenants", sum.TenantsProcessed))
 	}
 	return sum, nil
 }

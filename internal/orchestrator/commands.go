@@ -156,6 +156,35 @@ func (o *Orchestrator) ErasePrivacySubject(ctx context.Context, tenantID, subjec
 	return erasure, nil
 }
 
+// EnforcePrivacyRetention records one non-audit PII retention pass for a tenant.
+// The event carries only cutoffs and aggregate counts; projection logic performs
+// the tenant-scoped pseudonymization from those deterministic boundaries.
+func (o *Orchestrator) EnforcePrivacyRetention(ctx context.Context, tenantID string, policy privacy.RetentionPolicy, now time.Time) (store.PrivacyRetentionRun, error) {
+	runID := uuid.NewString()
+	run, err := o.store.SelectPrivacyRetention(ctx, tenantID, runID, policy, now)
+	if err != nil {
+		return store.PrivacyRetentionRun{}, err
+	}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		run.RequestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+	}
+	payload, err := json.Marshal(projections.PrivacyRetentionEnforced{
+		RunID:          run.RunID,
+		RequestedByRef: run.RequestedByRef,
+		Cutoffs:        run.Cutoffs,
+		Counts:         run.Counts,
+	})
+	if err != nil {
+		return store.PrivacyRetentionRun{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventPrivacyRetentionEnforced, tenantID, payload)
+	if err != nil {
+		return store.PrivacyRetentionRun{}, err
+	}
+	run.EnforcedAt = ev.Time
+	return run, nil
+}
+
 // CreateIssuer records an issuer.created event and returns the new issuer. The
 // caller is expected to have validated it (the structural issuer rules).
 func (o *Orchestrator) CreateIssuer(ctx context.Context, tenantID string, in store.Issuer) (store.Issuer, error) {

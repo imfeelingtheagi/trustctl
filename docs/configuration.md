@@ -153,6 +153,33 @@ endpoints are wired into the serving binary, so they return real data — not an
 error — out of the box. Protect the signing key file and back it up; distribute
 its public half to auditors out of band.
 
+## Privacy Retention
+
+Non-audit personal data is retained by class, then pseudonymized after the
+operational need ends. This is separate from audit retention: the immutable event
+trail remains the source of truth, while tenant read surfaces stop carrying stale
+names, emails, subjects, SANs, comments, profile authors, approval actors, and
+free-form evidence. The worker emits `privacy.retention.enforced` and projects the
+anonymization from that event, so rebuilds replay the same result.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_PRIVACY_RETENTION_ENABLED` | `true` | Runs the leader-only non-audit PII retention worker. Set `false` only when an external privacy job enforces the same policy. |
+| `TRSTCTL_PRIVACY_RETENTION_INTERVAL` | `24h` | Worker cadence. It also runs once on startup. |
+| `TRSTCTL_PRIVACY_RETENTION_OWNERS` | `17520h` (730 days) | Pseudonymize owner name/email when the owner is older than this and no identity references it. |
+| `TRSTCTL_PRIVACY_RETENTION_IDENTITIES` | `9528h` (397 days) | Pseudonymize terminal or expired identity metadata. |
+| `TRSTCTL_PRIVACY_RETENTION_CERTIFICATES` | `9528h` (397 days) | Pseudonymize expired/revoked/superseded certificate subject, SAN, deployment location, and source metadata. |
+| `TRSTCTL_PRIVACY_RETENTION_SSH_KEYS` | `4320h` (180 days) | Clear orphaned stale SSH key comments and locations. |
+| `TRSTCTL_PRIVACY_RETENTION_ACCESS` | `2160h` (90 days) | Pseudonymize offboarded tenant members and expired/revoked API-token subjects. |
+| `TRSTCTL_PRIVACY_RETENTION_APPROVALS` | `9528h` (397 days) | Pseudonymize old requester/approver subject values while preserving resource/action evidence. |
+| `TRSTCTL_PRIVACY_RETENTION_PROFILES` | `9528h` (397 days) | Pseudonymize old certificate-profile author values. |
+| `TRSTCTL_PRIVACY_RETENTION_ATTESTATIONS` | `9528h` (397 days) | Clear stale free-form attestation evidence JSON. |
+| `TRSTCTL_PRIVACY_RETENTION_AGENTS` | `4320h` (180 days) | Pseudonymize stale agent names while preserving agent id, status, version, and heartbeat timestamps. |
+
+Operators can trigger and inspect the same served path with
+`POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`, or
+the matching `trstctl privacy retention run/list` CLI commands.
+
 ## Secrets (credentials at rest)
 
 Upstream CA and connector credentials — API keys, passwords, client secrets — are

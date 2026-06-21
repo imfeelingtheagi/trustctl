@@ -380,6 +380,24 @@ func componentSchemas() map[string]*Schema {
 		"counts":           {Type: "object"},
 		"erased_at":        timestamp(),
 	}, "subject_ref", "selectors", "counts", "erased_at")
+	privacyRetentionCutoffs := object(map[string]*Schema{
+		"owner_inactive_before":       timestamp(),
+		"identity_terminal_before":    timestamp(),
+		"certificate_terminal_before": timestamp(),
+		"ssh_stale_before":            timestamp(),
+		"access_terminal_before":      timestamp(),
+		"approval_actor_before":       timestamp(),
+		"profile_actor_before":        timestamp(),
+		"attestation_evidence_before": timestamp(),
+		"agent_stale_before":          timestamp(),
+	}, "owner_inactive_before", "identity_terminal_before", "certificate_terminal_before", "ssh_stale_before", "access_terminal_before", "approval_actor_before", "profile_actor_before", "attestation_evidence_before", "agent_stale_before")
+	privacyRetentionRun := object(map[string]*Schema{
+		"run_id":           uuid(),
+		"requested_by_ref": str(),
+		"cutoffs":          ref("PrivacyRetentionCutoffs"),
+		"counts":           {Type: "object"},
+		"enforced_at":      timestamp(),
+	}, "run_id", "cutoffs", "counts", "enforced_at")
 	privacyCatalogEntry := object(map[string]*Schema{
 		"id": str(), "location": str(), "category": str(), "purpose": str(),
 		"retention_class": str(), "erasure": str(), "owner": str(),
@@ -583,6 +601,9 @@ func componentSchemas() map[string]*Schema {
 		"PrivacyErasureSelectors":      privacyErasureSelectors,
 		"PrivacySubjectErasure":        privacySubjectErasure,
 		"PrivacySubjectErasureList":    list("PrivacySubjectErasure"),
+		"PrivacyRetentionCutoffs":      privacyRetentionCutoffs,
+		"PrivacyRetentionRun":          privacyRetentionRun,
+		"PrivacyRetentionRunList":      list("PrivacyRetentionRun"),
 		"PrivacyCatalogEntry":          privacyCatalogEntry,
 		"PrivacyCatalog":               privacyCatalog,
 		"GraphNode":                    graphNode,

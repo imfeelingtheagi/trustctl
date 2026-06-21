@@ -73,6 +73,8 @@ import type {
   PKISecret,
   PKISecretRequest,
   PrivacyCatalog,
+  PrivacyRetentionRun,
+  PrivacyRetentionRunList,
   PrivacySubjectErasure,
   PrivacySubjectErasureList,
   PrivacySubjectErasureRequest,
@@ -149,6 +151,8 @@ export type {
   PKISecret,
   PKISecretRequest,
   PrivacyCatalog,
+  PrivacyRetentionRun,
+  PrivacyRetentionRunList,
   PrivacySubjectErasure,
   PrivacySubjectErasureList,
   PrivacySubjectErasureRequest,
@@ -367,6 +371,8 @@ export interface Api {
   revokeAPIToken(id: string): Promise<void>;
   erasePrivacySubject(input: PrivacySubjectErasureRequest): Promise<PrivacySubjectErasure>;
   privacySubjectErasures(options?: { limit?: number; cursor?: string }): Promise<PrivacySubjectErasureList>;
+  enforcePrivacyRetention(): Promise<PrivacyRetentionRun>;
+  privacyRetentionRuns(options?: { limit?: number; cursor?: string }): Promise<PrivacyRetentionRunList>;
   privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
@@ -472,6 +478,9 @@ export const api: Api = {
     mutate<PrivacySubjectErasure>("POST", "/api/v1/privacy/subject-erasures", input),
   privacySubjectErasures: (options) =>
     req<PrivacySubjectErasureList>(`/api/v1/privacy/subject-erasures${pageQueryString(options)}`),
+  enforcePrivacyRetention: () => mutate<PrivacyRetentionRun>("POST", "/api/v1/privacy/retention-runs"),
+  privacyRetentionRuns: (options) =>
+    req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options) =>
     req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),

@@ -65,6 +65,7 @@ type Config struct {
 	Lifecycle Lifecycle `json:"lifecycle"`
 	Telemetry Telemetry `json:"telemetry"`
 	Audit     Audit     `json:"audit"`
+	Privacy   Privacy   `json:"privacy"`
 	Backup    Backup    `json:"backup"`
 	RateLimit RateLimit `json:"rate_limit"`
 	Migrate   Migrate   `json:"migrate"`
@@ -557,6 +558,39 @@ func (a Audit) RetentionDuration() (time.Duration, error) {
 	return time.ParseDuration(a.Retention)
 }
 
+// Privacy configures personal-data controls outside the audit log.
+type Privacy struct {
+	Retention PrivacyRetention `json:"retention"`
+}
+
+// PrivacyRetention configures non-audit PII retention. Empty windows use the
+// product's conservative class defaults; explicit values are Go durations.
+type PrivacyRetention struct {
+	Enabled      bool   `json:"enabled,omitempty"`
+	Interval     string `json:"interval,omitempty"`
+	Owners       string `json:"owners,omitempty"`
+	Identities   string `json:"identities,omitempty"`
+	Certificates string `json:"certificates,omitempty"`
+	SSHKeys      string `json:"ssh_keys,omitempty"`
+	Access       string `json:"access,omitempty"`
+	Approvals    string `json:"approvals,omitempty"`
+	Profiles     string `json:"profiles,omitempty"`
+	Attestations string `json:"attestations,omitempty"`
+	Agents       string `json:"agents,omitempty"`
+}
+
+// IntervalDuration parses the worker cadence. Empty means the server should use
+// the privacy package default; disabled retention returns zero.
+func (r PrivacyRetention) IntervalDuration() (time.Duration, error) {
+	if !r.Enabled {
+		return 0, nil
+	}
+	if r.Interval == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(r.Interval)
+}
+
 // Backup configures full disaster-recovery artifact handling. Event-log backups
 // are already integrity-protected by the audit key; full backups additionally
 // contain operational secrets (audit signing key, signer auth verifier, sealed
@@ -818,6 +852,19 @@ func Default() *Config {
 		// The audit export key persists under the data directory so signed evidence
 		// bundles verify across restarts; retention is indefinite by default.
 		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
+		Privacy: Privacy{Retention: PrivacyRetention{
+			Enabled:      true,
+			Interval:     "24h",
+			Owners:       "17520h",
+			Identities:   "9528h",
+			Certificates: "9528h",
+			SSHKeys:      "4320h",
+			Access:       "2160h",
+			Approvals:    "9528h",
+			Profiles:     "9528h",
+			Attestations: "9528h",
+			Agents:       "4320h",
+		}},
 		// Per-tenant rate limiting is on by default so the product ships with
 		// backpressure; the budget is generous and tunable.
 		RateLimit: RateLimit{Enabled: true, Requests: 600, Window: "1m"},
@@ -936,6 +983,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	applyPrivacyEnv(getenv, &c.Privacy)
 	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
 	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
 	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
@@ -1039,6 +1087,20 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBoolPtr(getenv, "TRSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
 	setString(getenv, "TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
 	setString(getenv, "TRSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
+}
+
+func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
+	setBool(getenv, "TRSTCTL_PRIVACY_RETENTION_ENABLED", &privacy.Retention.Enabled)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_INTERVAL", &privacy.Retention.Interval)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_OWNERS", &privacy.Retention.Owners)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_IDENTITIES", &privacy.Retention.Identities)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_CERTIFICATES", &privacy.Retention.Certificates)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_SSH_KEYS", &privacy.Retention.SSHKeys)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_ACCESS", &privacy.Retention.Access)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_APPROVALS", &privacy.Retention.Approvals)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_PROFILES", &privacy.Retention.Profiles)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_ATTESTATIONS", &privacy.Retention.Attestations)
+	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_AGENTS", &privacy.Retention.Agents)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -1245,6 +1307,34 @@ func validateOptionalServices(c *Config) []error {
 		errs = append(errs, fmt.Errorf("audit.retention %q is invalid: %w", c.Audit.Retention, err))
 	} else if d < 0 {
 		errs = append(errs, errors.New("audit.retention must not be negative"))
+	}
+	if d, err := c.Privacy.Retention.IntervalDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("privacy.retention.interval %q is invalid: %w", c.Privacy.Retention.Interval, err))
+	} else if c.Privacy.Retention.Enabled && d < 0 {
+		errs = append(errs, errors.New("privacy.retention.interval must not be negative"))
+	}
+	for _, f := range []struct {
+		name  string
+		value string
+	}{
+		{"owners", c.Privacy.Retention.Owners},
+		{"identities", c.Privacy.Retention.Identities},
+		{"certificates", c.Privacy.Retention.Certificates},
+		{"ssh_keys", c.Privacy.Retention.SSHKeys},
+		{"access", c.Privacy.Retention.Access},
+		{"approvals", c.Privacy.Retention.Approvals},
+		{"profiles", c.Privacy.Retention.Profiles},
+		{"attestations", c.Privacy.Retention.Attestations},
+		{"agents", c.Privacy.Retention.Agents},
+	} {
+		if f.value == "" {
+			continue
+		}
+		if d, err := time.ParseDuration(f.value); err != nil {
+			errs = append(errs, fmt.Errorf("privacy.retention.%s %q is invalid: %w", f.name, f.value, err))
+		} else if d <= 0 {
+			errs = append(errs, fmt.Errorf("privacy.retention.%s must be positive", f.name))
+		}
 	}
 	// Rate limiting, when enabled, needs a positive per-tenant budget and a valid,
 	// positive window.

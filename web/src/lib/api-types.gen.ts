@@ -547,6 +547,31 @@ export interface PrivacyErasureSelectors {
   ssh_key_ids?: string[];
 }
 
+export interface PrivacyRetentionCutoffs {
+  access_terminal_before: string;
+  agent_stale_before: string;
+  approval_actor_before: string;
+  attestation_evidence_before: string;
+  certificate_terminal_before: string;
+  identity_terminal_before: string;
+  owner_inactive_before: string;
+  profile_actor_before: string;
+  ssh_stale_before: string;
+}
+
+export interface PrivacyRetentionRun {
+  counts: Record<string, unknown>;
+  cutoffs: PrivacyRetentionCutoffs;
+  enforced_at: string;
+  requested_by_ref?: string;
+  run_id: string;
+}
+
+export interface PrivacyRetentionRunList {
+  items: PrivacyRetentionRun[];
+  next_cursor?: string;
+}
+
 export interface PrivacySubjectErasure {
   counts: Record<string, unknown>;
   erased_at: string;

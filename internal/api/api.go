@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -59,6 +60,7 @@ type API struct {
 	approvals               ApprovalRecorder
 	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	privacyRetentionPolicy  privacy.RetentionPolicy
 	mux                     *http.ServeMux
 	spec                    *Document
 }
@@ -85,6 +87,7 @@ type config struct {
 	approvals               ApprovalRecorder
 	secrets                 *secretsService
 	ai                      *aiSurface
+	privacyRetentionPolicy  privacy.RetentionPolicy
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -139,6 +142,12 @@ func WithRateLimiter(rl RateLimiter) Option {
 	return func(c *config) { c.rateLimiter = rl }
 }
 
+// WithPrivacyRetentionPolicy sets the policy used by the served manual privacy
+// retention endpoint. The background worker receives its copy through server.Deps.
+func WithPrivacyRetentionPolicy(policy privacy.RetentionPolicy) Option {
+	return func(c *config) { c.privacyRetentionPolicy = policy.WithDefaults() }
+}
+
 // WithMutationGate wires the served policy / RA-separation / dual-control gate onto
 // the mutating lifecycle path (EXC-WIRE-03). When set, a served issue/deploy/revoke
 // transition is denied unless the default-deny policy explicitly allows it, a
@@ -160,7 +169,11 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai}
+	policy := cfg.privacyRetentionPolicy
+	if policy == (privacy.RetentionPolicy{}) {
+		policy = privacy.DefaultRetentionPolicy()
+	}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -347,6 +360,10 @@ func (a *API) routes() []route {
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque subject-erasure cursor from a prior page"},
 	}
+	privacyRetentionQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque retention-run cursor from a prior page"},
+	}
 	return []route{
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
@@ -405,6 +422,8 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/privacy/subject-erasures", opID: "erasePrivacySubject", summary: "Erase direct subject personal data from tenant read surfaces", handler: a.erasePrivacySubject, reqSchema: "PrivacySubjectErasureRequest", resSchema: "PrivacySubjectErasure", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
 		{method: "GET", path: "/api/v1/privacy/subject-erasures", opID: "listPrivacySubjectErasures", summary: "List subject-erasure evidence", handler: a.listPrivacySubjectErasures, query: privacyErasureQuery, resSchema: "PrivacySubjectErasureList", successCode: "200", perm: authz.PrivacyRead},
+		{method: "POST", path: "/api/v1/privacy/retention-runs", opID: "enforcePrivacyRetention", summary: "Run non-audit personal-data retention", handler: a.enforcePrivacyRetention, resSchema: "PrivacyRetentionRun", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
+		{method: "GET", path: "/api/v1/privacy/retention-runs", opID: "listPrivacyRetentionRuns", summary: "List non-audit retention evidence", handler: a.listPrivacyRetentionRuns, query: privacyRetentionQuery, resSchema: "PrivacyRetentionRunList", successCode: "200", perm: authz.PrivacyRead},
 		{method: "GET", path: "/api/v1/privacy/catalog", opID: "getPrivacyCatalog", summary: "Get the maintained personal-data catalog", handler: a.getPrivacyCatalog, resSchema: "PrivacyCatalog", successCode: "200", perm: authz.PrivacyRead},
 
 		{method: "GET", path: "/api/v1/graph", opID: "getGraph", summary: "Get the credential graph", handler: a.getGraph, resSchema: "GraphResponse", successCode: "200", perm: authz.GraphRead},

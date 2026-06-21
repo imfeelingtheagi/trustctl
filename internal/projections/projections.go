@@ -51,6 +51,7 @@ const (
 	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
 	EventIncidentExecutionRecorded = "incident.execution.recorded"
 	EventPrivacySubjectErased      = "privacy.subject.erased"
+	EventPrivacyRetentionEnforced  = "privacy.retention.enforced"
 	EventTenantMemberUpserted      = "tenant.member.upserted"
 	EventTenantMemberOffboarded    = "tenant.member.offboarded"
 	EventAPITokenCreated           = "api_token.created"
@@ -168,6 +169,15 @@ type PrivacySubjectErased struct {
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
 	Reason         string                        `json:"reason,omitempty"`
 	Selectors      store.PrivacyErasureSelectors `json:"selectors"`
+	Counts         map[string]int                `json:"counts,omitempty"`
+}
+
+// PrivacyRetentionEnforced is the payload of a privacy.retention.enforced event.
+// It carries policy cutoffs and counts, not the personal values being removed.
+type PrivacyRetentionEnforced struct {
+	RunID          string                        `json:"run_id"`
+	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
+	Cutoffs        store.PrivacyRetentionCutoffs `json:"cutoffs"`
 	Counts         map[string]int                `json:"counts,omitempty"`
 }
 
@@ -521,6 +531,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventLifecycleRotationRecorded: {1: true},
 	EventIncidentExecutionRecorded: {1: true},
 	EventPrivacySubjectErased:      {1: true},
+	EventPrivacyRetentionEnforced:  {1: true},
 	EventTenantMemberUpserted:      {1: true},
 	EventTenantMemberOffboarded:    {1: true},
 	EventAPITokenCreated:           {1: true},
@@ -869,6 +880,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Selectors:      pl.Selectors,
 			Counts:         pl.Counts,
 			ErasedAt:       e.Time,
+		})
+	case EventPrivacyRetentionEnforced:
+		var pl PrivacyRetentionEnforced
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RunID == "" {
+			return fmt.Errorf("projections: %s requires run_id", e.Type)
+		}
+		return p.store.ApplyPrivacyRetentionEnforcedTx(ctx, tx, store.PrivacyRetentionRun{
+			TenantID:       e.TenantID,
+			RunID:          pl.RunID,
+			RequestedByRef: pl.RequestedByRef,
+			Cutoffs:        pl.Cutoffs,
+			Counts:         pl.Counts,
+			EnforcedAt:     e.Time,
 		})
 	case EventTenantMemberUpserted:
 		var pl TenantMemberUpserted

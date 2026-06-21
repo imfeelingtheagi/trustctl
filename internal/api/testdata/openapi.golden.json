@@ -1969,6 +1969,103 @@
         },
         "type": "object"
       },
+      "PrivacyRetentionCutoffs": {
+        "properties": {
+          "access_terminal_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "agent_stale_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "approval_actor_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "attestation_evidence_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "certificate_terminal_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "identity_terminal_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_inactive_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "profile_actor_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "ssh_stale_before": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_inactive_before",
+          "identity_terminal_before",
+          "certificate_terminal_before",
+          "ssh_stale_before",
+          "access_terminal_before",
+          "approval_actor_before",
+          "profile_actor_before",
+          "attestation_evidence_before",
+          "agent_stale_before"
+        ],
+        "type": "object"
+      },
+      "PrivacyRetentionRun": {
+        "properties": {
+          "counts": {
+            "type": "object"
+          },
+          "cutoffs": {
+            "$ref": "#/components/schemas/PrivacyRetentionCutoffs"
+          },
+          "enforced_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requested_by_ref": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "cutoffs",
+          "counts",
+          "enforced_at"
+        ],
+        "type": "object"
+      },
+      "PrivacyRetentionRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrivacyRetentionRun"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "PrivacySubjectErasure": {
         "properties": {
           "counts": {
@@ -5687,6 +5784,116 @@
         ],
         "summary": "Get the maintained personal-data catalog",
         "x-trstctl-permission": "privacy:read"
+      }
+    },
+    "/api/v1/privacy/retention-runs": {
+      "get": {
+        "operationId": "listPrivacyRetentionRuns",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque retention-run cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyRetentionRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List non-audit retention evidence",
+        "x-trstctl-permission": "privacy:read"
+      },
+      "post": {
+        "operationId": "enforcePrivacyRetention",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyRetentionRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run non-audit personal-data retention",
+        "x-trstctl-permission": "privacy:write"
       }
     },
     "/api/v1/privacy/subject-erasures": {

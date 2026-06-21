@@ -35,6 +35,31 @@ type privacyCatalogResponse struct {
 	Items []privacy.CatalogEntry `json:"items"`
 }
 
+type privacyRetentionCutoffsResponse struct {
+	OwnerInactiveBefore       time.Time `json:"owner_inactive_before"`
+	IdentityTerminalBefore    time.Time `json:"identity_terminal_before"`
+	CertificateTerminalBefore time.Time `json:"certificate_terminal_before"`
+	SSHStaleBefore            time.Time `json:"ssh_stale_before"`
+	AccessTerminalBefore      time.Time `json:"access_terminal_before"`
+	ApprovalActorBefore       time.Time `json:"approval_actor_before"`
+	ProfileActorBefore        time.Time `json:"profile_actor_before"`
+	AttestationEvidenceBefore time.Time `json:"attestation_evidence_before"`
+	AgentStaleBefore          time.Time `json:"agent_stale_before"`
+}
+
+type privacyRetentionRunResponse struct {
+	RunID          string                          `json:"run_id"`
+	RequestedByRef string                          `json:"requested_by_ref,omitempty"`
+	Cutoffs        privacyRetentionCutoffsResponse `json:"cutoffs"`
+	Counts         map[string]int                  `json:"counts"`
+	EnforcedAt     time.Time                       `json:"enforced_at"`
+}
+
+type privacyRetentionRunListResponse struct {
+	Items      []privacyRetentionRunResponse `json:"items"`
+	NextCursor string                        `json:"next_cursor,omitempty"`
+}
+
 func toPrivacySubjectErasureResponse(e store.PrivacySubjectErasure) privacySubjectErasureResponse {
 	counts := e.Counts
 	if counts == nil {
@@ -47,6 +72,30 @@ func toPrivacySubjectErasureResponse(e store.PrivacySubjectErasure) privacySubje
 		Selectors:      e.Selectors,
 		Counts:         counts,
 		ErasedAt:       e.ErasedAt,
+	}
+}
+
+func toPrivacyRetentionRunResponse(r store.PrivacyRetentionRun) privacyRetentionRunResponse {
+	counts := r.Counts
+	if counts == nil {
+		counts = map[string]int{}
+	}
+	return privacyRetentionRunResponse{
+		RunID:          r.RunID,
+		RequestedByRef: r.RequestedByRef,
+		Cutoffs: privacyRetentionCutoffsResponse{
+			OwnerInactiveBefore:       r.Cutoffs.OwnerInactiveBefore,
+			IdentityTerminalBefore:    r.Cutoffs.IdentityTerminalBefore,
+			CertificateTerminalBefore: r.Cutoffs.CertificateTerminalBefore,
+			SSHStaleBefore:            r.Cutoffs.SSHStaleBefore,
+			AccessTerminalBefore:      r.Cutoffs.AccessTerminalBefore,
+			ApprovalActorBefore:       r.Cutoffs.ApprovalActorBefore,
+			ProfileActorBefore:        r.Cutoffs.ProfileActorBefore,
+			AttestationEvidenceBefore: r.Cutoffs.AttestationEvidenceBefore,
+			AgentStaleBefore:          r.Cutoffs.AgentStaleBefore,
+		},
+		Counts:     counts,
+		EnforcedAt: r.EnforcedAt,
 	}
 }
 
@@ -68,6 +117,18 @@ func (a *API) erasePrivacySubject(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, toPrivacySubjectErasureResponse(erasure), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) enforcePrivacyRetention(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		run, err := a.orch.EnforcePrivacyRetention(ctx, tenantID, a.privacyRetentionPolicy, time.Now().UTC())
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toPrivacyRetentionRunResponse(run), nil
 	})
 }
 
@@ -104,6 +165,41 @@ func (a *API) listPrivacySubjectErasures(w http.ResponseWriter, r *http.Request)
 		next = encodeStringCursor(erasures[len(erasures)-1].SubjectRef)
 	}
 	a.writeJSON(w, http.StatusOK, privacySubjectErasureListResponse{Items: items, NextCursor: next})
+}
+
+func (a *API) listPrivacyRetentionRuns(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, err := pageLimit(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	after := ""
+	if c := r.URL.Query().Get("cursor"); c != "" {
+		after, err = decodeStringCursor(c)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid cursor"))
+			return
+		}
+	}
+	runs, err := a.store.ListPrivacyRetentionRunsPage(r.Context(), tenantID, after, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]privacyRetentionRunResponse, 0, len(runs))
+	for _, run := range runs {
+		items = append(items, toPrivacyRetentionRunResponse(run))
+	}
+	next := ""
+	if len(runs) == limit {
+		next = encodeStringCursor(runs[len(runs)-1].RunID)
+	}
+	a.writeJSON(w, http.StatusOK, privacyRetentionRunListResponse{Items: items, NextCursor: next})
 }
 
 func (a *API) getPrivacyCatalog(w http.ResponseWriter, r *http.Request) {
