@@ -137,6 +137,17 @@ func TestTailWorkerDurableCursorResumes(t *testing.T) {
 	done2 := make(chan struct{})
 	go func() { defer close(done2); _ = w2.Run(ctx2) }()
 
+	lagAfterRestart, err := w2.Lag(ctx)
+	if err != nil {
+		t.Fatalf("worker #2 lag after restart: %v", err)
+	}
+	if lagAfterRestart != 0 {
+		t.Fatalf("worker #2 lag after restart with no new events = %d, want 0", lagAfterRestart)
+	}
+	if got := w2.Applied(); got != headBefore {
+		t.Fatalf("worker #2 applied watermark after restart = %d, want persisted checkpoint/head %d", got, headBefore)
+	}
+
 	// Append one MORE event; only this one should be newly applied by worker #2.
 	if _, err := log.Append(ctx, events.Event{Type: projections.EventOwnerCreated, TenantID: tenantA, Data: ownerCreated("00000000-0000-0000-0000-0000000000d2", "two")}); err != nil {
 		t.Fatal(err)

@@ -2,6 +2,7 @@ package projections
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -27,7 +28,7 @@ type TailWorker struct {
 	log       *events.Log
 	proj      *Projector
 	sampler   LagSampler
-	applied   atomic.Uint64 // highest stream sequence successfully projected by this worker
+	applied   atomic.Uint64 // highest stream sequence known applied to the read model
 	lagPeriod time.Duration
 }
 
@@ -41,8 +42,9 @@ func NewTailWorker(log *events.Log, proj *Projector, sampler LagSampler, lagPeri
 	return &TailWorker{log: log, proj: proj, sampler: sampler, lagPeriod: lagPeriod}
 }
 
-// Applied returns the highest stream sequence this worker has projected. It backs
-// the lag computation and lets a test assert the worker caught up to a given event.
+// Applied returns the highest stream sequence known applied to the read model. It
+// backs the lag computation and is initialized from the persisted projection
+// checkpoint, so a clean restart does not report historical events as lag.
 func (w *TailWorker) Applied() uint64 { return w.applied.Load() }
 
 // Lag returns the current projection lag: the stream head sequence minus the highest
@@ -50,6 +52,9 @@ func (w *TailWorker) Applied() uint64 { return w.applied.Load() }
 // assert the lag returns to zero after the worker drains, and the server can sample
 // it into a metric (SPINE-009).
 func (w *TailWorker) Lag(ctx context.Context) (uint64, error) {
+	if err := w.syncAppliedCheckpoint(ctx); err != nil {
+		return 0, err
+	}
 	last, err := w.log.LastSequence(ctx)
 	if err != nil {
 		return 0, err
@@ -67,6 +72,9 @@ func (w *TailWorker) Lag(ctx context.Context) (uint64, error) {
 // goroutine; a tail error (e.g. a poison event leaving the cursor stuck) is returned
 // so the caller can log it and the lag metric surfaces the stall.
 func (w *TailWorker) Run(ctx context.Context) error {
+	if err := w.syncAppliedCheckpoint(ctx); err != nil {
+		return err
+	}
 	if w.sampler != nil {
 		go w.sampleLagLoop(ctx)
 	}
@@ -85,6 +93,26 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		w.applied.Store(e.Sequence)
 		return nil
 	})
+}
+
+// syncAppliedCheckpoint folds the durable projection checkpoint into the
+// process-local watermark. The read model lives in PostgreSQL and survives a clean
+// restart; without this max(), a fresh worker starts at zero and its lag metric
+// counts already-projected historical events as if they were still pending.
+func (w *TailWorker) syncAppliedCheckpoint(ctx context.Context) error {
+	checkpoint, err := w.proj.store.ProjectionCheckpoint(ctx)
+	if err != nil {
+		return fmt.Errorf("projections: read tail checkpoint: %w", err)
+	}
+	for {
+		applied := w.applied.Load()
+		if checkpoint <= applied {
+			return nil
+		}
+		if w.applied.CompareAndSwap(applied, checkpoint) {
+			return nil
+		}
+	}
 }
 
 // sampleLagLoop periodically samples projection lag into the sampler until ctx is
