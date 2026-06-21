@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -24,14 +24,16 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version information and exit")
 	service := flag.String("service", "", "Windows service control: install | uninstall | run")
 	enrollURL := flag.String("enroll-url", "", "control-plane enrollment base URL")
-	token := flag.String("bootstrap-token", "", "one-time bootstrap token")
+	token := flag.String("bootstrap-token", "", "development-only inline bootstrap token; use --bootstrap-token-file")
 	tokenFile := flag.String("bootstrap-token-file", "", "file containing the one-time bootstrap token")
+	allowInlineToken := flag.Bool("allow-insecure-dev-bootstrap-token-arg", false, "allow inline bootstrap tokens in process arguments for local development only")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
 	serverName := flag.String("server-name", "", "expected control-plane server name (defaults to --name)")
@@ -86,12 +88,13 @@ func main() {
 	sshStop()
 
 	o := agentOptions{
-		enrollURL: *enrollURL, token: *token, caBundle: *caBundle,
+		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle,
 		tokenFile: *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
+		allowInsecureDevBootstrapTokenArg: *allowInlineToken,
 	}
-	if o.token != "" && o.tokenFile != "" {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: use only one of --bootstrap-token or --bootstrap-token-file")
+	if o.inlineToken != "" && !o.allowInsecureDevBootstrapTokenArg {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: inline bootstrap tokens are development-only because process arguments expose bearer credentials; write the token to a 0600 file and use --bootstrap-token-file")
 		os.Exit(2)
 	}
 
@@ -129,8 +132,9 @@ func main() {
 }
 
 type agentOptions struct {
-	enrollURL, token, tokenFile, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
-	rotateEvery                                                                                  time.Duration
+	enrollURL, inlineToken, tokenFile, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
+	rotateEvery                                                                                        time.Duration
+	allowInsecureDevBootstrapTokenArg                                                                  bool
 }
 
 // runAgent bootstraps the agent, connects to the control plane over mTLS, and
@@ -145,6 +149,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(token)
 	enrollClient, err := enrollmentHTTPClient(caPEM)
 	if err != nil {
 		return fmt.Errorf("build enrollment TLS trust: %w", err)
@@ -228,32 +233,35 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	}
 }
 
-func bootstrapToken(o agentOptions) (string, error) {
-	if o.token != "" && o.tokenFile != "" {
-		return "", fmt.Errorf("use only one of --bootstrap-token or --bootstrap-token-file")
+func bootstrapToken(o agentOptions) ([]byte, error) {
+	if o.inlineToken != "" && o.tokenFile != "" {
+		return nil, fmt.Errorf("use only one bootstrap token source; prefer --bootstrap-token-file")
+	}
+	if o.inlineToken != "" {
+		if !o.allowInsecureDevBootstrapTokenArg {
+			return nil, fmt.Errorf("inline bootstrap tokens are development-only because process arguments expose bearer credentials; write the token to a 0600 file and use --bootstrap-token-file")
+		}
+		return []byte(o.inlineToken), nil
 	}
 	if o.tokenFile == "" {
-		return o.token, nil
+		return nil, nil
 	}
 	data, err := os.ReadFile(o.tokenFile)
 	if err != nil {
-		return "", fmt.Errorf("read bootstrap token file: %w", err)
+		return nil, fmt.Errorf("read bootstrap token file: %w", err)
 	}
-	defer func() {
-		for i := range data {
-			data[i] = 0
-		}
-	}()
-	token := strings.TrimSpace(string(data))
-	if token == "" {
-		return "", fmt.Errorf("bootstrap token file %s is empty", o.tokenFile)
+	defer secret.Wipe(data)
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("bootstrap token file %s is empty", o.tokenFile)
 	}
+	token := append([]byte(nil), trimmed...)
 	return token, nil
 }
 
-func bootstrapTokenForRun(o agentOptions) (string, error) {
+func bootstrapTokenForRun(o agentOptions) ([]byte, error) {
 	if agentIdentityFilesExist(o) {
-		return "", nil
+		return nil, nil
 	}
 	return bootstrapToken(o)
 }

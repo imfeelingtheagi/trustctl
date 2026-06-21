@@ -79,7 +79,7 @@ func TestEnrollmentURLNormalization(t *testing.T) {
 			}))
 
 			enroller := agent.NewHTTPEnroller(enrollURL+tc.suffix, pinnedClientFromPEM(t, trustPEM))
-			if _, err := enroller.EnrollBootstrap(context.Background(), "tok", []byte("csr")); err != nil {
+			if _, err := enroller.EnrollBootstrap(context.Background(), []byte("tok"), []byte("csr")); err != nil {
 				t.Fatalf("EnrollBootstrap: %v", err)
 			}
 			if gotPath != tc.wantPath {
@@ -127,7 +127,7 @@ func newBootstrapAgent(t *testing.T, token string, caPEM []byte, enroller agent.
 	t.Helper()
 	dir := t.TempDir()
 	return agent.New(agent.Config{
-		CommonName: "agent-http", BootstrapToken: token,
+		CommonName: "agent-http", BootstrapToken: []byte(token),
 		KeyPath: filepath.Join(dir, "a.key"), CertPath: filepath.Join(dir, "a.crt"),
 		ServerName: "localhost", ServerCAPEM: caPEM, RefreshBefore: time.Hour,
 	}, enroller)

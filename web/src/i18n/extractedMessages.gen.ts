@@ -278,7 +278,7 @@ export const extractedMessages = [
     defaultMessage: "Action",
     sources: [
       "src/components/DataGrid.tsx:352",
-      "src/pages/Agents.tsx:162",
+      "src/pages/Agents.tsx:163",
       "src/pages/Graph.tsx:300",
       "src/pages/Identities.tsx:835",
     ],
@@ -329,14 +329,14 @@ export const extractedMessages = [
     key: "source.agent.fleet.ac46d1b700",
     defaultMessage: "Agent fleet",
     sources: [
-      "src/pages/Agents.tsx:150",
+      "src/pages/Agents.tsx:151",
     ],
   },
   {
     key: "source.agent.id.510bce732d",
     defaultMessage: "Agent ID",
     sources: [
-      "src/pages/Agents.tsx:211",
+      "src/pages/Agents.tsx:212",
     ],
   },
   {
@@ -911,7 +911,8 @@ export const extractedMessages = [
     key: "source.bootstrap.token.2996dc8b78",
     defaultMessage: "Bootstrap token",
     sources: [
-      "src/pages/Agents.tsx:117",
+      "src/pages/Agents.tsx:118",
+      "src/pages/Wizard.tsx:168",
     ],
   },
   {
@@ -1189,7 +1190,7 @@ export const extractedMessages = [
     key: "source.check.for.agent.1649b814df",
     defaultMessage: "Check for agent",
     sources: [
-      "src/pages/Wizard.tsx:180",
+      "src/pages/Wizard.tsx:194",
     ],
   },
   {
@@ -1451,7 +1452,7 @@ export const extractedMessages = [
     key: "source.continue.31fbef1625",
     defaultMessage: "Continue",
     sources: [
-      "src/pages/Wizard.tsx:183",
+      "src/pages/Wizard.tsx:197",
     ],
   },
   {
@@ -1493,7 +1494,7 @@ export const extractedMessages = [
     key: "source.copied.once.from.memory.ffb61f0314",
     defaultMessage: "Copied once from memory.",
     sources: [
-      "src/pages/Agents.tsx:132",
+      "src/pages/Agents.tsx:133",
     ],
   },
   {
@@ -1507,7 +1508,7 @@ export const extractedMessages = [
     key: "source.copy.command.9a01feecae",
     defaultMessage: "Copy command",
     sources: [
-      "src/pages/Agents.tsx:129",
+      "src/pages/Agents.tsx:130",
     ],
   },
   {
@@ -1563,7 +1564,7 @@ export const extractedMessages = [
     key: "source.could.not.load.agents.1d510cf246",
     defaultMessage: "Could not load agents",
     sources: [
-      "src/pages/Agents.tsx:138",
+      "src/pages/Agents.tsx:139",
     ],
   },
   {
@@ -2088,7 +2089,7 @@ export const extractedMessages = [
     key: "source.dismiss.48845bff33",
     defaultMessage: "Dismiss",
     sources: [
-      "src/pages/Agents.tsx:111",
+      "src/pages/Agents.tsx:112",
       "src/pages/Secrets.tsx:1041",
     ],
   },
@@ -2217,7 +2218,7 @@ export const extractedMessages = [
     defaultMessage: "e.g. payments-api",
     sources: [
       "src/pages/Identities.tsx:1093",
-      "src/pages/Wizard.tsx:228",
+      "src/pages/Wizard.tsx:242",
     ],
   },
   {
@@ -2635,7 +2636,7 @@ export const extractedMessages = [
     key: "source.fresh.heartbeat.39d75ce503",
     defaultMessage: "Fresh heartbeat",
     sources: [
-      "src/pages/Agents.tsx:240",
+      "src/pages/Agents.tsx:241",
     ],
   },
   {
@@ -2914,14 +2915,14 @@ export const extractedMessages = [
     defaultMessage: "Install an agent",
     sources: [
       "src/pages/Wizard.tsx:13",
-      "src/pages/Wizard.tsx:151",
+      "src/pages/Wizard.tsx:158",
     ],
   },
   {
     key: "source.install.command.1ae9754205",
     defaultMessage: "Install command",
     sources: [
-      "src/pages/Agents.tsx:121",
+      "src/pages/Agents.tsx:122",
     ],
   },
   {
@@ -3014,7 +3015,7 @@ export const extractedMessages = [
     defaultMessage: "Issue your first cert",
     sources: [
       "src/pages/Wizard.tsx:14",
-      "src/pages/Wizard.tsx:212",
+      "src/pages/Wizard.tsx:226",
     ],
   },
   {
@@ -3150,8 +3151,8 @@ export const extractedMessages = [
     key: "source.last.seen.21fd79c7de",
     defaultMessage: "Last seen",
     sources: [
-      "src/pages/Agents.tsx:161",
-      "src/pages/Agents.tsx:223",
+      "src/pages/Agents.tsx:162",
+      "src/pages/Agents.tsx:224",
     ],
   },
   {
@@ -3270,7 +3271,7 @@ export const extractedMessages = [
     key: "source.loading.agents.a4e0608f99",
     defaultMessage: "Loading agents...",
     sources: [
-      "src/pages/Agents.tsx:139",
+      "src/pages/Agents.tsx:140",
     ],
   },
   {
@@ -3597,7 +3598,7 @@ export const extractedMessages = [
     key: "source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e",
     defaultMessage: "Mint a one-time enrollment token, install an agent inside the tenant network, then refresh this page when it registers.",
     sources: [
-      "src/pages/Agents.tsx:142",
+      "src/pages/Agents.tsx:143",
     ],
   },
   {
@@ -3653,14 +3654,15 @@ export const extractedMessages = [
     key: "source.name.8a6d880a09",
     defaultMessage: "\", \"--name",
     sources: [
-      "src/pages/Agents.tsx:257",
+      "src/pages/Agents.tsx:258",
+      "src/pages/Wizard.tsx:151",
     ],
   },
   {
     key: "source.name.dcd1d5223f",
     defaultMessage: "Name",
     sources: [
-      "src/pages/Agents.tsx:158",
+      "src/pages/Agents.tsx:159",
       "src/pages/CAHierarchy.tsx:213",
       "src/pages/Discovery.tsx:206",
       "src/pages/Discovery.tsx:238",
@@ -3684,7 +3686,7 @@ export const extractedMessages = [
     key: "source.name.the.service.this.certificate.belongs.1b1c4a6ba8",
     defaultMessage: "Name the service this certificate belongs to. trstctl creates the owner and identity and issues it through the signer-backed internal CA.",
     sources: [
-      "src/pages/Wizard.tsx:215",
+      "src/pages/Wizard.tsx:229",
     ],
   },
   {
@@ -3754,7 +3756,7 @@ export const extractedMessages = [
     key: "source.no.agents.enrolled.yet.345799ad5d",
     defaultMessage: "No agents enrolled yet",
     sources: [
-      "src/pages/Agents.tsx:142",
+      "src/pages/Agents.tsx:143",
     ],
   },
   {
@@ -3846,7 +3848,7 @@ export const extractedMessages = [
     key: "source.no.heartbeat.timestamp.served.c099bbf125",
     defaultMessage: "No heartbeat timestamp served",
     sources: [
-      "src/pages/Agents.tsx:235",
+      "src/pages/Agents.tsx:236",
     ],
   },
   {
@@ -4910,7 +4912,7 @@ export const extractedMessages = [
     key: "source.registered.in.network.agents.57235a4518",
     defaultMessage: "Registered in-network agents",
     sources: [
-      "src/pages/Agents.tsx:155",
+      "src/pages/Agents.tsx:156",
     ],
   },
   {
@@ -5341,13 +5343,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.run.this.on.a.host.inside.your.network.the.0727e79c48",
-    defaultMessage: "Run this on a host inside your network. The agent generates its key locally and enrolls with the one-time token — private keys never leave the host.",
-    sources: [
-      "src/pages/Wizard.tsx:154",
-    ],
-  },
-  {
     key: "source.runtime.status.3571e0aaeb",
     defaultMessage: "Runtime status",
     sources: [
@@ -5366,6 +5361,13 @@ export const extractedMessages = [
     defaultMessage: "SANs",
     sources: [
       "src/pages/Certificates.tsx:407",
+    ],
+  },
+  {
+    key: "source.save.the.one.time.token.to.trstctl.bootstr.1d692d2ad4",
+    defaultMessage: "Save the one-time token to ./trstctl-bootstrap-token with 0600 permissions, then run this on a host inside your network. The agent generates its key locally — private keys never leave the host.",
+    sources: [
+      "src/pages/Wizard.tsx:161",
     ],
   },
   {
@@ -5394,7 +5396,7 @@ export const extractedMessages = [
     key: "source.scan.drift.and.renewal.fields.not.served.y.ac560a89ab",
     defaultMessage: "Scan, drift, and renewal fields not served yet",
     sources: [
-      "src/pages/Agents.tsx:227",
+      "src/pages/Agents.tsx:228",
     ],
   },
   {
@@ -5705,7 +5707,7 @@ export const extractedMessages = [
     key: "source.served.agent.fields.from.get.api.v1.agents.1ba583e004",
     defaultMessage: "Served agent fields from `GET /api/v1/agents`.",
     sources: [
-      "src/pages/Agents.tsx:207",
+      "src/pages/Agents.tsx:208",
     ],
   },
   {
@@ -5811,7 +5813,7 @@ export const extractedMessages = [
     defaultMessage: "Service name",
     sources: [
       "src/pages/Identities.tsx:1085",
-      "src/pages/Wizard.tsx:220",
+      "src/pages/Wizard.tsx:234",
     ],
   },
   {
@@ -6093,7 +6095,7 @@ export const extractedMessages = [
     key: "source.stale.heartbeat.d8742526e2",
     defaultMessage: "Stale heartbeat",
     sources: [
-      "src/pages/Agents.tsx:239",
+      "src/pages/Agents.tsx:240",
     ],
   },
   {
@@ -6128,8 +6130,8 @@ export const extractedMessages = [
     key: "source.status.920e413c7d",
     defaultMessage: "Status",
     sources: [
-      "src/pages/Agents.tsx:159",
-      "src/pages/Agents.tsx:215",
+      "src/pages/Agents.tsx:160",
+      "src/pages/Agents.tsx:216",
       "src/pages/Certificates.tsx:427",
       "src/pages/Discovery.tsx:209",
       "src/pages/Discovery.tsx:240",
@@ -6429,7 +6431,7 @@ export const extractedMessages = [
     key: "source.track.and.renew.certificates.f0f36882b6",
     defaultMessage: "Track and renew certificates",
     sources: [
-      "src/pages/Wizard.tsx:258",
+      "src/pages/Wizard.tsx:272",
     ],
   },
   {
@@ -6536,7 +6538,7 @@ export const extractedMessages = [
     key: "source.unparseable.heartbeat.timestamp.bb97c8934b",
     defaultMessage: "Unparseable heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:237",
+      "src/pages/Agents.tsx:238",
     ],
   },
   {
@@ -6615,8 +6617,8 @@ export const extractedMessages = [
     key: "source.version.dd167905de",
     defaultMessage: "Version",
     sources: [
-      "src/pages/Agents.tsx:160",
-      "src/pages/Agents.tsx:219",
+      "src/pages/Agents.tsx:161",
+      "src/pages/Agents.tsx:220",
       "src/pages/Discovery.tsx:274",
       "src/pages/Secrets.tsx:537",
     ],
@@ -6639,7 +6641,7 @@ export const extractedMessages = [
     key: "source.view.details.d1bf045bb5",
     defaultMessage: "View details",
     sources: [
-      "src/pages/Agents.tsx:182",
+      "src/pages/Agents.tsx:183",
     ],
   },
   {
@@ -6759,14 +6761,14 @@ export const extractedMessages = [
     key: "source.you.re.set.up.trstctl.will.track.this.cred.a3e8f7aec6",
     defaultMessage: "You're set up. trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.",
     sources: [
-      "src/pages/Wizard.tsx:251",
+      "src/pages/Wizard.tsx:265",
     ],
   },
   {
     key: "source.your.first.certificate.has.been.issued.e76296bf11",
     defaultMessage: "Your first certificate has been issued",
     sources: [
-      "src/pages/Wizard.tsx:248",
+      "src/pages/Wizard.tsx:262",
     ],
   },
   {

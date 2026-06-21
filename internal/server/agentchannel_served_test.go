@@ -63,7 +63,7 @@ func enrollAgent(t *testing.T, h *servedHarness, cn, serverName string) *agent.A
 	}
 	a := agent.New(agent.Config{
 		CommonName:     cn,
-		BootstrapToken: tok,
+		BootstrapToken: []byte(tok),
 		ServerName:     serverName,
 		ServerCAPEM:    h.srv.AgentCACertPEM(),
 		Version:        "test-1.0",
@@ -84,8 +84,8 @@ type bootstrapOnlyEnroller struct {
 	}
 }
 
-func (e *bootstrapOnlyEnroller) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
-	return e.a.EnrollBootstrap(ctx, token, csrDER)
+func (e *bootstrapOnlyEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
+	return e.a.EnrollBootstrap(ctx, string(token), csrDER)
 }
 func (e *bootstrapOnlyEnroller) EnrollRenewal(ctx context.Context, csrDER []byte) ([]byte, error) {
 	return nil, context.Canceled // unused in the channel e2e

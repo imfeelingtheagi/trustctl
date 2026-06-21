@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -65,9 +66,9 @@ func NewHTTPEnroller(baseURL string, client *http.Client, opts ...HTTPEnrollerOp
 }
 
 // EnrollBootstrap posts the token and CSR to the bootstrap endpoint.
-func (h *HTTPEnroller) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
+func (h *HTTPEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
 	return h.post(ctx, "/enroll/bootstrap", map[string]string{
-		"token": token,
+		"token": string(token),
 		"csr":   base64.StdEncoding.EncodeToString(csrDER),
 	})
 }
@@ -88,6 +89,7 @@ func (h *HTTPEnroller) post(ctx context.Context, path string, body map[string]st
 	if err != nil {
 		return nil, err
 	}
+	defer secret.Wipe(buf)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err

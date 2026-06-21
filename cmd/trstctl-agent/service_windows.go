@@ -20,6 +20,9 @@ func handleService(action string, o agentOptions) error {
 			return runAgent(ctx, o)
 		})
 	case "install":
+		if o.inlineToken != "" {
+			return fmt.Errorf("inline bootstrap tokens are not persisted for Windows services; use --bootstrap-token-file")
+		}
 		exe, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("locate executable: %w", err)
@@ -45,29 +48,4 @@ func handleService(action string, o agentOptions) error {
 	default:
 		return fmt.Errorf("unknown --service action %q (want install | uninstall | run)", action)
 	}
-}
-
-// serviceArguments are the flags the Windows service is launched with so that,
-// when the SCM starts it, it reproduces this configuration and runs the loop.
-func serviceArguments(o agentOptions) []string {
-	args := []string{
-		"--service=run",
-		"--enroll-url", o.enrollURL,
-		"--ca-bundle", o.caBundle,
-		"--server", o.serverAddr,
-		"--name", o.commonName,
-		"--key", o.keyPath,
-		"--cert", o.certPath,
-		"--rotate-every", o.rotateEvery.String(),
-	}
-	if o.token != "" {
-		args = append(args, "--bootstrap-token", o.token)
-	}
-	if o.tokenFile != "" {
-		args = append(args, "--bootstrap-token-file", o.tokenFile)
-	}
-	if o.serverName != "" {
-		args = append(args, "--server-name", o.serverName)
-	}
-	return args
 }

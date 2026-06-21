@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,15 +20,50 @@ func TestBootstrapTokenFileLoadsTrimmedToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrapToken(token file): %v", err)
 	}
-	if got != "trst_bootstrap_secret" {
+	if !bytes.Equal(got, []byte("trst_bootstrap_secret")) {
 		t.Fatalf("token = %q, want trimmed token", got)
 	}
 }
 
-func TestBootstrapTokenRejectsAmbiguousSources(t *testing.T) {
-	_, err := bootstrapToken(agentOptions{token: "inline", tokenFile: "token-file"})
+func TestBootstrapTokenRejectsInlineArg(t *testing.T) {
+	_, err := bootstrapToken(agentOptions{inlineToken: "inline-secret"})
 	if err == nil {
-		t.Fatal("bootstrapToken accepted both --bootstrap-token and --bootstrap-token-file")
+		t.Fatal("bootstrapToken accepted an inline bootstrap token without the explicit development override")
+	}
+	if !strings.Contains(err.Error(), "--bootstrap-token-file") {
+		t.Fatalf("error = %v, want token-file guidance", err)
+	}
+}
+
+func TestBootstrapTokenRejectsAmbiguousSources(t *testing.T) {
+	_, err := bootstrapToken(agentOptions{
+		inlineToken:                       "inline",
+		tokenFile:                         "token-file",
+		allowInsecureDevBootstrapTokenArg: true,
+	})
+	if err == nil {
+		t.Fatal("bootstrapToken accepted both inline and file bootstrap token sources")
+	}
+}
+
+func TestServiceArgumentsNeverPersistInlineBootstrapToken(t *testing.T) {
+	args := serviceArguments(agentOptions{
+		enrollURL:   "https://cp.example/enroll",
+		caBundle:    "/etc/trstctl/ca.pem",
+		serverAddr:  "cp.example:9443",
+		commonName:  "win-agent-1",
+		keyPath:     "C:\\ProgramData\\trstctl\\agent.key",
+		certPath:    "C:\\ProgramData\\trstctl\\agent.crt",
+		rotateEvery: time.Hour,
+		inlineToken: "inline-secret",
+		tokenFile:   "C:\\ProgramData\\trstctl\\bootstrap-token.txt",
+	})
+	joined := strings.Join(args, "\x00")
+	if strings.Contains(joined, "inline-secret") || strings.Contains(joined, "--bootstrap-token\x00") {
+		t.Fatalf("service arguments persisted inline bootstrap token: %q", args)
+	}
+	if !strings.Contains(joined, "--bootstrap-token-file\x00C:\\ProgramData\\trstctl\\bootstrap-token.txt") {
+		t.Fatalf("service arguments did not preserve the bootstrap token file path: %q", args)
 	}
 }
 
@@ -48,7 +85,7 @@ func TestBootstrapTokenFileNotRequiredAfterIdentityPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("persisted identity should not require bootstrap token file: %v", err)
 	}
-	if got != "" {
+	if len(got) != 0 {
 		t.Fatalf("token = %q, want empty because persisted identity reload does not re-enroll", got)
 	}
 }

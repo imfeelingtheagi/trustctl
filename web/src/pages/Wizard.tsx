@@ -144,7 +144,14 @@ function InstallAgentStep({
   }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example";
-  const command = `trstctl-agent enroll --server ${origin} --token ${token ?? "<minting…>"}`;
+  const command = [
+    "trstctl-agent",
+    `--enroll-url ${origin}`,
+    "--bootstrap-token-file ./trstctl-bootstrap-token",
+    "--server <control-plane-grpc:9443>",
+    "--name <agent-name>",
+    "--ca-bundle ./trstctl-ca.pem",
+  ].join(" ");
 
   return (
     <section aria-labelledby="step-agent-heading" className="space-y-4">
@@ -152,9 +159,16 @@ function InstallAgentStep({
         Install an agent
       </h2>
       <p className="text-body text-muted-foreground">
-        Run this on a host inside your network. The agent generates its key locally and enrolls with
-        the one-time token — private keys never leave the host.
+        Save the one-time token to ./trstctl-bootstrap-token with 0600 permissions, then run this on
+        a host inside your network. The agent generates its key locally — private keys never leave the
+        host.
       </p>
+      {token && (
+        <div>
+          <p className="text-caption font-medium text-muted-foreground">Bootstrap token</p>
+          <code className="mt-1 block break-all rounded-control bg-muted px-3 py-2 text-caption">{token}</code>
+        </div>
+      )}
       <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption">
         <code>{command}</code>
       </pre>

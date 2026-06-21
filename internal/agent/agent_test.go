@@ -31,8 +31,8 @@ type authorityEnroller struct {
 	certPath  string // the agent's persisted cert chain (PEM); read at renewal to form the peer chain
 }
 
-func (a authorityEnroller) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
-	return a.authority.EnrollBootstrap(ctx, token, csrDER)
+func (a authorityEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
+	return a.authority.EnrollBootstrap(ctx, string(token), csrDER)
 }
 
 func (a authorityEnroller) EnrollRenewal(ctx context.Context, csrDER []byte) ([]byte, error) {
@@ -56,7 +56,7 @@ type countingEnroller struct {
 	lastCSR    []byte
 }
 
-func (c *countingEnroller) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
+func (c *countingEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
 	c.mu.Lock()
 	c.bootstraps++
 	c.lastCSR = append([]byte(nil), csrDER...)
@@ -116,7 +116,7 @@ func newAgent(t *testing.T, en agent.Enroller, authority *enroll.Authority, serv
 	dir := t.TempDir()
 	return agent.New(agent.Config{
 		CommonName:     "agent-1",
-		BootstrapToken: token,
+		BootstrapToken: []byte(token),
 		KeyPath:        filepath.Join(dir, "agent.key"),
 		CertPath:       filepath.Join(dir, "agent.crt"),
 		ServerName:     serverName,
@@ -186,7 +186,7 @@ func TestClientCertRotates(t *testing.T) {
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, "agent.crt")
 	a := agent.New(agent.Config{
-		CommonName: "agent-1", BootstrapToken: token,
+		CommonName: "agent-1", BootstrapToken: []byte(token),
 		KeyPath: filepath.Join(dir, "agent.key"), CertPath: certPath,
 		ServerName: "localhost", ServerCAPEM: authority.CABundlePEM(), RefreshBefore: time.Hour,
 	}, authorityEnroller{authority: authority, certPath: certPath})
@@ -217,7 +217,7 @@ func TestSurvivesControlPlaneRestart(t *testing.T) {
 	addr1, stop1 := startCP(t, authority)
 	dir := t.TempDir()
 	cfg := agent.Config{
-		CommonName: "agent-1", BootstrapToken: token,
+		CommonName: "agent-1", BootstrapToken: []byte(token),
 		KeyPath: filepath.Join(dir, "agent.key"), CertPath: filepath.Join(dir, "agent.crt"),
 		ServerName: "localhost", ServerCAPEM: authority.CABundlePEM(), RefreshBefore: time.Hour,
 	}

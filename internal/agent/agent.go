@@ -20,20 +20,21 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Enroller is the control-plane enrollment transport: it signs an agent's CSR
 // into a client-certificate chain (PEM), either against a one-time bootstrap
 // token or — for rotation — against the agent's existing mTLS identity.
 type Enroller interface {
-	EnrollBootstrap(ctx context.Context, token string, csrDER []byte) (certChainPEM []byte, err error)
+	EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) (certChainPEM []byte, err error)
 	EnrollRenewal(ctx context.Context, csrDER []byte) (certChainPEM []byte, err error)
 }
 
 // Config configures an agent.
 type Config struct {
 	CommonName     string // the agent's identity (client-cert subject)
-	BootstrapToken string // one-time token for initial registration
+	BootstrapToken []byte // one-time token for initial registration; wiped after bootstrap
 	KeyPath        string // where the local private key is persisted (0600)
 	CertPath       string // where the issued certificate chain is persisted
 	ServerName     string // expected control-plane server name (TLS)
@@ -79,6 +80,10 @@ func (a *Agent) Bootstrap(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		secret.Wipe(a.cfg.BootstrapToken)
+		a.cfg.BootstrapToken = nil
+	}()
 	chain, err := a.enroller.EnrollBootstrap(ctx, a.cfg.BootstrapToken, csr)
 	if err != nil {
 		return fmt.Errorf("agent: bootstrap enrollment: %w", err)

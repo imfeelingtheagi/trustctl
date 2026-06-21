@@ -85,11 +85,21 @@ after setup from the issuers/API surface.
 
 ### Install an agent
 
-In **Install an agent**, trstctl mints a one-time bootstrap token and shows the
-exact command to run on a host inside your network:
+In **Install an agent**, trstctl mints a one-time bootstrap token. Save that
+token to a local file readable only by the installing user, then run the agent
+with the file path so the bearer credential is not exposed in process arguments:
 
 ```bash
-trstctl-agent enroll --server https://localhost:8443 --token <BOOTSTRAP_TOKEN>
+umask 077
+read -rsp 'Bootstrap token: ' BOOTSTRAP_TOKEN
+printf '\n'
+printf '%s' "$BOOTSTRAP_TOKEN" > ./trstctl-bootstrap-token
+unset BOOTSTRAP_TOKEN
+trstctl-agent --enroll-url https://localhost:8443 \
+  --bootstrap-token-file ./trstctl-bootstrap-token \
+  --server localhost:9443 \
+  --name edge-agent-1 \
+  --ca-bundle ./trstctl-ca.pem
 ```
 
 The agent generates its key locally and enrolls with the token — **private keys

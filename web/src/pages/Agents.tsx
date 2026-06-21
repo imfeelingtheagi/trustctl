@@ -104,7 +104,8 @@ export function Agents() {
               <div>
                 <p className="font-medium">Shown once</p>
                 <p className="mt-1 text-muted-foreground">
-                  Copy this command now. Dismiss clears the token from the page state; the console does not persist it.
+                  Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy this command.
+                  Dismiss clears the token from the page state; the console does not persist it.
                 </p>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setToken(null)}>
@@ -253,7 +254,7 @@ function enrollmentCommand(token: EnrollmentToken): string {
   return [
     "trstctl-agent",
     `--enroll-url ${origin}${enrollPath}`,
-    `--bootstrap-token ${token.token}`,
+    "--bootstrap-token-file ./trstctl-bootstrap-token",
     "--server <control-plane-grpc:9443>",
     "--name <agent-name>",
     "--ca-bundle ./trstctl-ca.pem",

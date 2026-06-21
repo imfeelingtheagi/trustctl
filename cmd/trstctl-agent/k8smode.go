@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/destination"
 	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // k8sOptions configures the agent's Kubernetes DaemonSet mode.
@@ -38,6 +39,7 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(token)
 	enrollClient, err := enrollmentHTTPClient(caPEM)
 	if err != nil {
 		return fmt.Errorf("build enrollment TLS trust: %w", err)
