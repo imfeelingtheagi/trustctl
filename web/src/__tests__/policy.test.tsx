@@ -38,14 +38,8 @@ describe("policy governance surface", () => {
     expect(screen.getByText("Overload 503")).toBeInTheDocument();
     expect(screen.getByText(/default-deny wins/i)).toBeInTheDocument();
     expect(screen.getByText(/policy.decision deny/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Audit policy decisions/i })).toHaveAttribute(
-      "href",
-      "/audit?type=policy.decision",
-    );
-    expect(screen.getByRole("link", { name: /profile evaluation evidence/i })).toHaveAttribute(
-      "href",
-      "/audit?type=issuance.profile_evaluated",
-    );
+    expect(screen.getByRole("link", { name: /Audit policy decisions/i })).toHaveAttribute("href", "/audit?type=policy.decision");
+    expect(screen.getByRole("link", { name: /profile evaluation evidence/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
     expect(screen.getByText("Policy authoring and dry-run API not served yet")).toBeInTheDocument();
     expect(screen.getByText(/lifecycle mutations remain the real enforcement path/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /dry run/i })).not.toBeInTheDocument();

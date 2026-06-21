@@ -1,0 +1,6 @@
+coverage/
+dist/
+node_modules/
+.vite/
+src/i18n/extractedMessages.gen.ts
+src/lib/api-types.gen.ts

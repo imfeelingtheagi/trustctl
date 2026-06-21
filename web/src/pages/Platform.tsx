@@ -367,7 +367,8 @@ export function Platform() {
             </div>
           </dl>
           <p className="mt-3 text-sm text-muted-foreground">
-            The browser never chooses a tenant id through a route, query string, or form field. The backend session or API token supplies it, and PostgreSQL RLS enforces it below the API.
+            The browser never chooses a tenant id through a route, query string, or form field. The backend session or API token supplies it, and PostgreSQL RLS
+            enforces it below the API.
           </p>
         </section>
 
@@ -395,7 +396,8 @@ export function Platform() {
             </div>
           </dl>
           <p className="mt-3 text-sm text-muted-foreground">
-            OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF posture.
+            OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF
+            posture.
           </p>
         </section>
       </div>
@@ -410,8 +412,16 @@ export function Platform() {
             Refresh
           </Button>
         </div>
-        {accessError && <p role="alert" className="mb-3 rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">{accessError}</p>}
-        {accessNotice && <p role="status" className="mb-3 rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">{accessNotice}</p>}
+        {accessError && (
+          <p role="alert" className="mb-3 rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+            {accessError}
+          </p>
+        )}
+        {accessNotice && (
+          <p role="status" className="mb-3 rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+            {accessNotice}
+          </p>
+        )}
         {revealedToken && (
           <div className="mb-3 rounded-panel border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -603,7 +613,8 @@ export function Platform() {
               Static API spec view
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {staticAPIRoutes.length} served REST paths copied from the pinned OpenAPI golden. This is a static spec view until a live `/api/v1/openapi.json` is published.
+              {staticAPIRoutes.length} served REST paths copied from the pinned OpenAPI golden. This is a static spec view until a live `/api/v1/openapi.json`
+              is published.
             </p>
           </div>
           <span className="rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">Spec view</span>
@@ -650,7 +661,8 @@ export function Platform() {
             CLI companion
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and the examples avoid inline Authorization headers.
+            These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and
+            the examples avoid inline Authorization headers.
           </p>
         </div>
         <div className="overflow-x-auto rounded-panel border border-border">
@@ -682,11 +694,13 @@ export function Platform() {
             Single-binary runtime
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Single-binary evaluation mode still keeps private-key operations in a separate signer child process. A real system page needs version, build info, embedded-UI asset, run mode, datastore mode, and signer supervision from a served status read.
+            Single-binary evaluation mode still keeps private-key operations in a separate signer child process. A real system page needs version, build info,
+            embedded-UI asset, run mode, datastore mode, and signer supervision from a served status read.
           </p>
         </div>
         <UnavailableState title="Runtime status JSON not served yet">
-          Binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision aren't shown in the console yet, so this page can't show live runtime state.
+          Binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision aren't shown in the console yet, so
+          this page can't show live runtime state.
         </UnavailableState>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[58rem]">
@@ -744,11 +758,13 @@ export function Platform() {
             Plugin SDK and capability sandbox
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Plugin administration needs loaded-plugin inventory, Ed25519 provenance, digest pins, capability grants, conformance results, runtime status, and denial reasons. The plugin host exists, but the console has no served read API for those records yet.
+            Plugin administration needs loaded-plugin inventory, Ed25519 provenance, digest pins, capability grants, conformance results, runtime status, and
+            denial reasons. The plugin host exists, but the console has no served read API for those records yet.
           </p>
         </div>
         <UnavailableState title="Plugin admin read API not served yet">
-          The plugin runtime is served, but plugin administration is not. Tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons have no served API or CLI management surface yet.
+          The plugin runtime is served, but plugin administration is not. Tenant-scoped plugin inventory, verification receipts, grants, conformance results,
+          runtime state, and denial reasons have no served API or CLI management surface yet.
         </UnavailableState>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[72rem]">
@@ -783,11 +799,13 @@ export function Platform() {
             Cross-cluster federation roadmap
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Cross-cluster and multi-region federation is roadmap-only. The console must not claim topology, replication, conflict handling, or tenant placement is available until a backend exists.
+            Cross-cluster and multi-region federation is roadmap-only. The console must not claim topology, replication, conflict handling, or tenant placement
+            is available until a backend exists.
           </p>
         </div>
         <UnavailableState title="Federation is roadmap-only">
-          Cross-cluster federation is on the roadmap and has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or replication status panel.
+          Cross-cluster federation is on the roadmap and has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or
+          replication status panel.
         </UnavailableState>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[52rem]">
@@ -814,7 +832,8 @@ export function Platform() {
 
       <div className="grid gap-3 lg:grid-cols-3">
         <UnavailableState title="Tenant switching not served yet">
-          Member, role, OIDC mapping, and API-token administration are served above. Tenant list, tenant switching, and per-tenant limits are still fixed by the backend session tenant.
+          Member, role, OIDC mapping, and API-token administration are served above. Tenant list, tenant switching, and per-tenant limits are still fixed by the
+          backend session tenant.
         </UnavailableState>
         <UnavailableState title="Platform status endpoint not served yet">
           Build info, datastore mode, signer-child state, OIDC config, and feature flags aren't shown in the console yet.

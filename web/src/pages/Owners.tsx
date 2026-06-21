@@ -23,7 +23,9 @@ export function Owners() {
           <tbody>
             {data.length === 0 && (
               <tr>
-                <td colSpan={3} className="text-muted-foreground">No owners yet.</td>
+                <td colSpan={3} className="text-muted-foreground">
+                  No owners yet.
+                </td>
               </tr>
             )}
             {data.map((o) => (

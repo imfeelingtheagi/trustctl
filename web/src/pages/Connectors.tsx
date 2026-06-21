@@ -179,7 +179,8 @@ export function Connectors() {
               Recent delivery receipts
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Receipts are projected from `connector.delivery.recorded` events. They contain routing, status, attempts, fingerprint, and rollback references, never certificate private-key bytes.
+              Receipts are projected from `connector.delivery.recorded` events. They contain routing, status, attempts, fingerprint, and rollback references,
+              never certificate private-key bytes.
             </p>
           </div>
           {deliveries.length === 0 ? (
@@ -224,7 +225,8 @@ export function Connectors() {
             Core deployment targets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Each target needs a bounded worker, explicit capability grant, masked credential reference, dry-run or test-deploy preflight, and rollback plan before it can receive a certificate. Raw token hidden is the rule: only sealed secret references appear here.
+            Each target needs a bounded worker, explicit capability grant, masked credential reference, dry-run or test-deploy preflight, and rollback plan
+            before it can receive a certificate. Raw token hidden is the rule: only sealed secret references appear here.
           </p>
         </div>
         <div className="ui-panel overflow-x-auto">
@@ -260,7 +262,8 @@ export function Connectors() {
             Appliance and network targets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Appliance connectors require target secret references, reachability checks, scoped API grants, and rollback commands because a failed deploy can break load balancers or edge firewalls.
+            Appliance connectors require target secret references, reachability checks, scoped API grants, and rollback commands because a failed deploy can
+            break load balancers or edge firewalls.
           </p>
         </div>
         <div className="ui-panel overflow-x-auto">
@@ -292,7 +295,8 @@ export function Connectors() {
             Outbox delivery posture
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            External deployment calls are never made inside the request path. The state change and outbox intent commit together; workers deliver at least once, and target idempotency makes the effect safe to retry.
+            External deployment calls are never made inside the request path. The state change and outbox intent commit together; workers deliver at least once,
+            and target idempotency makes the effect safe to retry.
           </p>
         </div>
         <dl className="grid gap-2 md:grid-cols-4">

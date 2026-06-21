@@ -27,19 +27,59 @@ describe("connector deployment disclosure surface", () => {
   beforeEach(() => {
     apiMock.connectorCatalog.mockReset().mockResolvedValue({
       items: [
-        { name: "nginx", kind: "file/process", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous fullchain/key pair and reload nginx" },
-        { name: "apache", kind: "file/process", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous SSLCertificateFile and graceful reload" },
-        { name: "haproxy", kind: "file/process", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous bundle and reload HAProxy" },
+        {
+          name: "nginx",
+          kind: "file/process",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "restore previous fullchain/key pair and reload nginx",
+        },
+        {
+          name: "apache",
+          kind: "file/process",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "restore previous SSLCertificateFile and graceful reload",
+        },
+        {
+          name: "haproxy",
+          kind: "file/process",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "restore previous bundle and reload HAProxy",
+        },
         { name: "iis", kind: "windows", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous binding thumbprint" },
         { name: "aws-acm", kind: "cloud", delivery_mode: "signed plugin or connector outbox receipt", rollback: "repoint listener to previous ACM ARN" },
         { name: "azure-keyvault", kind: "cloud", delivery_mode: "signed plugin or connector outbox receipt", rollback: "reactivate prior certificate version" },
-        { name: "gcp-certificate-manager", kind: "cloud", delivery_mode: "signed plugin or connector outbox receipt", rollback: "reattach prior certificate resource" },
+        {
+          name: "gcp-certificate-manager",
+          kind: "cloud",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "reattach prior certificate resource",
+        },
         { name: "java-keystore", kind: "keystore", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous keystore object" },
-        { name: "f5", kind: "appliance", delivery_mode: "signed plugin or connector outbox receipt", rollback: "swap virtual server back to previous cert/key object" },
-        { name: "netscaler", kind: "appliance", delivery_mode: "signed plugin or connector outbox receipt", rollback: "bind previous certKey to the service group" },
+        {
+          name: "f5",
+          kind: "appliance",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "swap virtual server back to previous cert/key object",
+        },
+        {
+          name: "netscaler",
+          kind: "appliance",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "bind previous certKey to the service group",
+        },
         { name: "cisco", kind: "appliance", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous trustpoint binding" },
-        { name: "fortigate", kind: "appliance", delivery_mode: "signed plugin or connector outbox receipt", rollback: "restore previous local certificate reference" },
-        { name: "paloalto", kind: "appliance", delivery_mode: "signed plugin or connector outbox receipt", rollback: "revert candidate config to prior certificate object" },
+        {
+          name: "fortigate",
+          kind: "appliance",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "restore previous local certificate reference",
+        },
+        {
+          name: "paloalto",
+          kind: "appliance",
+          delivery_mode: "signed plugin or connector outbox receipt",
+          rollback: "revert candidate config to prior certificate object",
+        },
       ],
     });
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({

@@ -5,22 +5,10 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import {
-  IntlProvider,
-  directionForLocale,
-  formatMessage,
-  negotiateLocale,
-  useTranslation,
-} from "@/i18n/I18nProvider";
+import { IntlProvider, directionForLocale, formatMessage, negotiateLocale, useTranslation } from "@/i18n/I18nProvider";
 import { formatDate, formatNumber, formatPlural } from "@/i18n/format";
 import { extractedMessages } from "@/i18n/extractedMessages.gen";
-import {
-  defaultLocale,
-  defaultTimeZone,
-  messages,
-  pseudoLocalize,
-  type MessageKey,
-} from "@/i18n/messages";
+import { defaultLocale, defaultTimeZone, messages, pseudoLocalize, type MessageKey } from "@/i18n/messages";
 import { navGroups, taskNavItems } from "@/lib/navigation";
 
 function DemoFormats() {

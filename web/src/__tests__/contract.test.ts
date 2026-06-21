@@ -35,9 +35,6 @@ describe("FE↔BE contract (SURFACE-005)", () => {
     // equality check (the gate above) would now fail.
     const mutated = fresh.replace(/\n(\s*)subject(\??:)/, "\n$1subject_DRIFT$2");
     expect(mutated, "the fixture mutation did not change the generated source").not.toBe(fresh);
-    expect(
-      mutated === fresh,
-      "contract gate is vacuous — an injected field rename was not detectable",
-    ).toBe(false);
+    expect(mutated === fresh, "contract gate is vacuous — an injected field rename was not detectable").toBe(false);
   });
 });

@@ -81,13 +81,7 @@ function sanitizeView(view: SavedGridView): SavedGridView {
 function isSavedView(value: unknown): value is SavedGridView {
   if (!value || typeof value !== "object") return false;
   const view = value as SavedGridView;
-  return (
-    isString(view.id) &&
-    isString(view.name) &&
-    isString(view.createdAt) &&
-    Array.isArray(view.columnOrder) &&
-    Array.isArray(view.visibleColumnIds)
-  );
+  return isString(view.id) && isString(view.name) && isString(view.createdAt) && Array.isArray(view.columnOrder) && Array.isArray(view.visibleColumnIds);
 }
 
 function isString(value: unknown): value is string {
@@ -99,8 +93,5 @@ function isSensitiveMetadataKey(key: string): boolean {
 }
 
 function isSensitiveMetadataValue(value: unknown): boolean {
-  return (
-    typeof value === "string" &&
-    /(bearer\s+[a-z0-9._~+/=-]+|trst_[a-z0-9._-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|token=|password=|secret=)/i.test(value)
-  );
+  return typeof value === "string" && /(bearer\s+[a-z0-9._~+/=-]+|trst_[a-z0-9._-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|token=|password=|secret=)/i.test(value);
 }

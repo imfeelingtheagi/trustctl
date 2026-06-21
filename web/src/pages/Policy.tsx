@@ -150,7 +150,8 @@ export function Policy() {
             Served enforcement path
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The browser does not send a tenant id or bypass policy. It asks the served lifecycle endpoint to mutate state; the backend evaluates policy and either emits the event or returns a fail-closed problem.
+            The browser does not send a tenant id or bypass policy. It asks the served lifecycle endpoint to mutate state; the backend evaluates policy and
+            either emits the event or returns a fail-closed problem.
           </p>
         </div>
         <div className="overflow-x-auto rounded-md border border-border">
@@ -175,7 +176,19 @@ export function Policy() {
           </table>
         </div>
         <p className="text-sm text-muted-foreground">
-          Denials are visible in the action error path on <Link className="underline" to="/identities">Identities</Link> and in <Link className="underline" to="/audit?type=policy.decision">Audit policy decisions</Link>. Profile-bound issuance denials are also visible through <Link className="underline" to="/audit?type=issuance.profile_evaluated">profile evaluation evidence</Link>.
+          Denials are visible in the action error path on{" "}
+          <Link className="underline" to="/identities">
+            Identities
+          </Link>{" "}
+          and in{" "}
+          <Link className="underline" to="/audit?type=policy.decision">
+            Audit policy decisions
+          </Link>
+          . Profile-bound issuance denials are also visible through{" "}
+          <Link className="underline" to="/audit?type=issuance.profile_evaluated">
+            profile evaluation evidence
+          </Link>
+          .
         </p>
       </section>
 
@@ -185,11 +198,13 @@ export function Policy() {
             Notification integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels need tenant-scoped channel config, masked secret references, test delivery, duplicate-safe outbox delivery, and redacted failure evidence. The served API does not configure or test channels yet.
+            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels need tenant-scoped channel config, masked secret references, test
+            delivery, duplicate-safe outbox delivery, and redacted failure evidence. The served API does not configure or test channels yet.
           </p>
         </div>
         <UnavailableState title="Notification channels are library-only">
-          Notification channels are library-only. Channel config reads, test delivery, retry state, and delivery receipts are not served by API or CLI yet, so this page cannot operate notification integrations.
+          Notification channels are library-only. Channel config reads, test delivery, retry state, and delivery receipts are not served by API or CLI yet, so
+          this page cannot operate notification integrations.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[70rem]">
@@ -234,7 +249,8 @@ export function Policy() {
             Compliance posture and reports
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Framework dashboards need mapped controls, control state, caveats, and report packaging. Today the served path is the signed audit evidence export; it is evidence, not certification.
+            Framework dashboards need mapped controls, control state, caveats, and report packaging. Today the served path is the signed audit evidence export;
+            it is evidence, not certification.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -256,7 +272,8 @@ export function Policy() {
           </p>
         )}
         <UnavailableState title="Framework-mapped compliance posture is not served yet">
-          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not served by API or CLI yet. The signed audit export above is real evidence, not a compliance certificate.
+          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not served by API or CLI yet. The signed audit export above
+          is real evidence, not a compliance certificate.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[62rem]">
@@ -289,11 +306,13 @@ export function Policy() {
             Policy authoring and dry run
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A real editor needs a tenant-scoped API that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That endpoint is not served yet.
+            A real editor needs a tenant-scoped API that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That
+            endpoint is not served yet.
           </p>
         </div>
         <UnavailableState title="Policy authoring and dry-run API not served yet">
-          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not served by API or CLI yet. Until then, lifecycle mutations remain the real enforcement path.
+          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not served by API or CLI yet. Until then, lifecycle
+          mutations remain the real enforcement path.
         </UnavailableState>
       </section>
     </section>

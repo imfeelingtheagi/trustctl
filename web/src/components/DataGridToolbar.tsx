@@ -33,10 +33,7 @@ export function DataGridToolbar({
         <label className="grid min-w-56 gap-1 text-sm font-medium">
           <span className="sr-only">{searchLabel}</span>
           <span className="relative">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <input
               type="search"
               aria-label={searchLabel}

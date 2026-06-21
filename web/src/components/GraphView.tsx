@@ -43,11 +43,13 @@ export function graphNodeKindLabel(kind: string): string {
 }
 
 export function graphNodeKindStyle(kind: string) {
-  return nodeKindTokens[kind] ?? {
-    label: humanize(kind),
-    fill: "hsl(var(--muted))",
-    stroke: "hsl(var(--muted-foreground))",
-  };
+  return (
+    nodeKindTokens[kind] ?? {
+      label: humanize(kind),
+      fill: "hsl(var(--muted))",
+      stroke: "hsl(var(--muted-foreground))",
+    }
+  );
 }
 
 export function graphEdgeTypeLabel(type: string): string {
@@ -60,11 +62,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, className }: Gra
   const visibleEdges = edges.filter((edge) => nodeByID.has(edge.from) && nodeByID.has(edge.to));
 
   if (nodes.length === 0) {
-    return (
-      <div className={cn("rounded-panel border border-border p-4 text-sm text-muted-foreground", className)}>
-        No graph nodes to draw.
-      </div>
-    );
+    return <div className={cn("rounded-panel border border-border p-4 text-sm text-muted-foreground", className)}>No graph nodes to draw.</div>;
   }
 
   function selectWithKeyboard(event: KeyboardEvent<SVGGElement>, nodeId: string) {
@@ -85,13 +83,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, className }: Gra
         </p>
       </div>
       <div className="overflow-hidden rounded-panel border border-border bg-card shadow-elevation1">
-        <svg
-          role="img"
-          aria-labelledby="graph-visual-heading"
-          viewBox="0 0 720 360"
-          className="h-[24rem] w-full"
-          data-testid="graph-visualization"
-        >
+        <svg role="img" aria-labelledby="graph-visual-heading" viewBox="0 0 720 360" className="h-[24rem] w-full" data-testid="graph-visualization">
           <defs>
             <marker id="graph-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--muted-foreground))" />
@@ -104,15 +96,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, className }: Gra
             const midY = (from.y + to.y) / 2;
             return (
               <g key={`${edge.from}-${edge.type}-${edge.to}`} data-testid="graph-edge" data-edge-type={edge.type}>
-                <line
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  stroke="hsl(var(--muted-foreground) / 0.55)"
-                  strokeWidth={2}
-                  markerEnd="url(#graph-arrow)"
-                />
+                <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="hsl(var(--muted-foreground) / 0.55)" strokeWidth={2} markerEnd="url(#graph-arrow)" />
                 <text x={midX} y={midY - 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
                   {graphEdgeTypeLabel(edge.type)}
                 </text>
@@ -135,14 +119,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, className }: Gra
                 onKeyDown={(event) => selectWithKeyboard(event, node.id)}
                 className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={selected ? 28 : 24}
-                  fill={style.fill}
-                  stroke={style.stroke}
-                  strokeWidth={selected ? 4 : 2}
-                />
+                <circle cx={node.x} cy={node.y} r={selected ? 28 : 24} fill={style.fill} stroke={style.stroke} strokeWidth={selected ? 4 : 2} />
                 <text x={node.x} y={node.y + 4} textAnchor="middle" className="pointer-events-none fill-foreground text-[11px] font-semibold">
                   {nodeInitial(node)}
                 </text>

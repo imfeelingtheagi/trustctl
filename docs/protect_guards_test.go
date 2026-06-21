@@ -52,9 +52,11 @@ func TestStorageTenancyRegressionGuardsStayRequired(t *testing.T) {
 
 	makefile := read(t, "../Makefile")
 	for _, want := range []string{
+		"GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...",
+		"GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...",
 		"$(GO) test -race",
-		"-coverpkg=./...",
-		"./...",
+		"-coverpkg=$(GO_COVER_PACKAGES)",
+		"$(GO_PACKAGES)",
 		"./tools/trstctllint",
 		"-vettool",
 	} {
@@ -3968,15 +3970,17 @@ func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
 	makefile := read(t, "../Makefile")
 	for _, want := range []string{
 		"CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli",
+		"GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...",
+		"GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...",
 		".PHONY: build",
 		"build: ## Build all binaries into ./bin",
 		"$(GO) test -race",
-		"-coverpkg=./...",
+		"-coverpkg=$(GO_COVER_PACKAGES)",
 		"scripts/ci/coverage-critical.sh",
 		".PHONY: lint lint-partial",
-		"$(GO) vet ./...",
+		"$(GO) vet $(GO_PACKAGES)",
 		"./tools/trstctllint",
-		"golangci-lint run ./...",
+		"golangci-lint run $(GO_PACKAGE_DIRS)",
 		"actionlint",
 		"check-actions-pinned.sh",
 	} {
@@ -3991,6 +3995,8 @@ func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
 		"run: make test",
 		"run: make lint",
 		"run: npm ci",
+		"run: npm run lint",
+		"run: npm run format:check",
 		"run: npm run typecheck",
 		"run: npm run test:coverage",
 		"run: npm run build",
@@ -4003,6 +4009,8 @@ func TestReleaseGuardrailCommandsStayFirstClass(t *testing.T) {
 	webPackage := read(t, "../web/package.json")
 	for _, want := range []string{
 		`"build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build"`,
+		`"lint": "eslint . --max-warnings=0"`,
+		`"format:check": "prettier --check ."`,
 		`"typecheck": "tsc -p tsconfig.json --noEmit"`,
 		`"test": "vitest run"`,
 		`"test:coverage": "vitest run --coverage"`,

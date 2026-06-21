@@ -50,7 +50,8 @@ export function SSHTrust() {
       />
 
       <UnavailableState title="High-blast-radius change">
-        SSH trust rollout is agent-side opt-in only. Operators must start the agent with `--ssh-trust-add-ca` and `--ssh-trust-confirm`; the console renders no live trust mutation control.
+        SSH trust rollout is agent-side opt-in only. Operators must start the agent with `--ssh-trust-add-ca` and `--ssh-trust-confirm`; the console renders no
+        live trust mutation control.
       </UnavailableState>
 
       <section aria-labelledby="rollout-heading" className="grid gap-3 border-y border-border py-4">
@@ -59,11 +60,13 @@ export function SSHTrust() {
             SSH deployment and trust rollout
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A safe rollout names the candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation copy before any host changes trust.
+            A safe rollout names the candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation copy before
+            any host changes trust.
           </p>
         </div>
         <UnavailableState title="SSH trust mutation is not served">
-          SSH trust rollout and drift detection run in the agent today; console management is coming soon. Target-host state, rollout status, health failures, and rollback evidence are not surfaced here. This page must never weaken `authorized_keys` or rewrite trust without agent confirmation.
+          SSH trust rollout and drift detection run in the agent today; console management is coming soon. Target-host state, rollout status, health failures,
+          and rollback evidence are not surfaced here. This page must never weaken `authorized_keys` or rewrite trust without agent confirmation.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">
@@ -94,11 +97,13 @@ export function SSHTrust() {
             Attestation-gated SSH user certs
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy. Self-approval blocked is a hard rule, not a UI hint.
+            Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy.
+            Self-approval blocked is a hard rule, not a UI hint.
           </p>
         </div>
         <UnavailableState title="Attested SSH issue flow is library-only">
-          Attestation-gated SSH issuance is available via the library today; console management is coming soon. Attestation decisions are not surfaced here, so this console cannot request short-lived SSH user certs yet. The SSH CA private key stays in the signer and is never shown here.
+          Attestation-gated SSH issuance is available via the library today; console management is coming soon. Attestation decisions are not surfaced here, so
+          this console cannot request short-lived SSH user certs yet. The SSH CA private key stays in the signer and is never shown here.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">

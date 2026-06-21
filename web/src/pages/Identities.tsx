@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  api,
-  ApiError,
-  identityState,
-  type ConnectorDelivery,
-  type GraphImpact,
-  type Identity,
-  type RotationRun,
-  type TransitionTo,
-} from "@/lib/api";
+import { api, ApiError, identityState, type ConnectorDelivery, type GraphImpact, type Identity, type RotationRun, type TransitionTo } from "@/lib/api";
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -29,14 +20,7 @@ interface Action {
 }
 
 const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "revoked", "retired"];
-const identityKinds = [
-  "x509_certificate",
-  "ssh_certificate",
-  "ssh_key",
-  "secret",
-  "api_key",
-  "workload_identity",
-] as const satisfies Identity["kind"][];
+const identityKinds = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"] as const satisfies Identity["kind"][];
 type KindFilter = "all" | Identity["kind"];
 type BulkResult = { id: string; name: string; status: "accepted" | "failed"; message: string };
 type BlastRadiusState = {
@@ -103,9 +87,7 @@ function apiProblemMessage(err: unknown): string {
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.isRateLimited) {
-    return err.retryAfterSeconds != null
-      ? `Rate limited — please retry in ${err.retryAfterSeconds}s.`
-      : "Rate limited — please retry shortly.";
+    return err.retryAfterSeconds != null ? `Rate limited — please retry in ${err.retryAfterSeconds}s.` : "Rate limited — please retry shortly.";
   }
   return `Action failed: ${apiProblemMessage(err)}`;
 }
@@ -293,14 +275,8 @@ export function Identities() {
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
   const [pendingImpact, setPendingImpact] = useState<BlastRadiusState>(emptyBlastRadiusState);
   const impactRequestRef = useRef(0);
-  const filteredItems = useMemo(
-    () => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter),
-    [items, kindFilter],
-  );
-  const selectedRows = useMemo(
-    () => filteredItems.filter((identity) => selectedIds.has(identity.id)),
-    [filteredItems, selectedIds],
-  );
+  const filteredItems = useMemo(() => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter), [items, kindFilter]);
+  const selectedRows = useMemo(() => filteredItems.filter((identity) => selectedIds.has(identity.id)), [filteredItems, selectedIds]);
   const latestDelivery = useMemo(() => latestDeliveryByIdentity(deliveryReceipts), [deliveryReceipts]);
   const latestRotation = useMemo(() => latestRotationByIdentity(rotationRuns), [rotationRuns]);
 
@@ -315,10 +291,7 @@ export function Identities() {
 
   const loadEvidence = useCallback(async () => {
     try {
-      const [deliveries, rotations] = await Promise.all([
-        api.connectorDeliveries({ limit: 50 }),
-        api.rotationRuns({ limit: 50 }),
-      ]);
+      const [deliveries, rotations] = await Promise.all([api.connectorDeliveries({ limit: 50 }), api.rotationRuns({ limit: 50 })]);
       setDeliveryReceipts(deliveries.items ?? []);
       setRotationRuns(rotations.items ?? []);
       setEvidenceError(null);
@@ -350,32 +323,35 @@ export function Identities() {
     void loadDetail(identity.id);
   }
 
-  async function act(id: string, to: TransitionTo, reason?: string) {
-    setBusyId(id);
-    setError(null);
-    setNotice(null);
-    try {
-      await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`);
-      await load();
-      await loadEvidence();
-      if (selectedId === id) {
-        await loadDetail(id);
+  const act = useCallback(
+    async (id: string, to: TransitionTo, reason?: string) => {
+      setBusyId(id);
+      setError(null);
+      setNotice(null);
+      try {
+        await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`);
+        await load();
+        await loadEvidence();
+        if (selectedId === id) {
+          await loadDetail(id);
+        }
+        setNotice(transitionNotice(to));
+        setDeniedTransitions((current) => {
+          const next = { ...current };
+          delete next[deniedKey(id, to)];
+          return next;
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 403) {
+          setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err) }));
+        }
+        setError(errorMessage(err));
+      } finally {
+        setBusyId(null);
       }
-      setNotice(transitionNotice(to));
-      setDeniedTransitions((current) => {
-        const next = { ...current };
-        delete next[deniedKey(id, to)];
-        return next;
-      });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err) }));
-      }
-      setError(errorMessage(err));
-    } finally {
-      setBusyId(null);
-    }
-  }
+    },
+    [load, loadDetail, loadEvidence, selectedId],
+  );
 
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
    * which is first parked in `pending` so the user must confirm it in a dialog that
@@ -387,7 +363,7 @@ export function Identities() {
     setPendingImpact(emptyBlastRadiusState);
   }
 
-  function loadBlastRadius(identity: Identity) {
+  const loadBlastRadius = useCallback((identity: Identity) => {
     const nodeId = graphNodeIdForIdentity(identity);
     const requestID = impactRequestRef.current + 1;
     impactRequestRef.current = requestID;
@@ -420,18 +396,21 @@ export function Identities() {
           });
         }
       });
-  }
+  }, []);
 
-  function request(identity: Identity, to: TransitionTo, label: string, reason?: string) {
-    if (isDestructive(to)) {
-      setPendingConfirmName("");
-      setPendingReason(reason?.trim() || (to === "revoked" ? "operator requested revocation" : "operator requested retirement"));
-      setPending({ id: identity.id, name: identity.name, to, label, reason });
-      loadBlastRadius(identity);
-      return;
-    }
-    void act(identity.id, to, reason);
-  }
+  const request = useCallback(
+    (identity: Identity, to: TransitionTo, label: string, reason?: string) => {
+      if (isDestructive(to)) {
+        setPendingConfirmName("");
+        setPendingReason(reason?.trim() || (to === "revoked" ? "operator requested revocation" : "operator requested retirement"));
+        setPending({ id: identity.id, name: identity.name, to, label, reason });
+        loadBlastRadius(identity);
+        return;
+      }
+      void act(identity.id, to, reason);
+    },
+    [act, loadBlastRadius],
+  );
 
   async function runBulkRevoke() {
     const rows = selectedRows;
@@ -490,9 +469,7 @@ export function Identities() {
         id: "delivery",
         header: "Delivery evidence",
         cell: (identity) => (
-          <span className="text-muted-foreground">
-            {deliveryEvidence(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}
-          </span>
+          <span className="text-muted-foreground">{deliveryEvidence(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}</span>
         ),
       },
       {
@@ -510,18 +487,13 @@ export function Identities() {
                     size="sm"
                     variant={isDestructive(a.to) ? "outline" : "default"}
                     disabled={busyId === identity.id || Boolean(deniedTransitions[deniedKey(identity.id, a.to)])}
-                    aria-describedby={
-                      deniedTransitions[deniedKey(identity.id, a.to)] ? `denied-${identity.id}-${a.to}` : undefined
-                    }
+                    aria-describedby={deniedTransitions[deniedKey(identity.id, a.to)] ? `denied-${identity.id}-${a.to}` : undefined}
                     onClick={() => request(identity, a.to, a.label)}
                   >
                     {a.label}
                   </Button>
                   {deniedTransitions[deniedKey(identity.id, a.to)] && (
-                    <p
-                      id={`denied-${identity.id}-${a.to}`}
-                      className="max-w-xs text-xs text-status-warning"
-                    >
+                    <p id={`denied-${identity.id}-${a.to}`} className="max-w-xs text-xs text-status-warning">
                       {deniedTransitions[deniedKey(identity.id, a.to)]}
                     </p>
                   )}
@@ -533,7 +505,7 @@ export function Identities() {
         },
       },
     ],
-    [busyId, deniedTransitions, latestDelivery, latestRotation],
+    [busyId, deniedTransitions, latestDelivery, latestRotation, request],
   );
 
   return (
@@ -563,25 +535,17 @@ export function Identities() {
         </h2>
         <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
           <p>
-            Issue and revoke are privileged signing actions. The backend enforces RA
-            separation, dual control, and policy before the signer is asked to act.
+            Issue and revoke are privileged signing actions. The backend enforces RA separation, dual control, and policy before the signer is asked to act.
           </p>
           <p>
-            A request-only principal cannot self-issue, and self-approval is denied.
-            Use the approval action with a distinct approver, then retry the transition.
+            A request-only principal cannot self-issue, and self-approval is denied. Use the approval action with a distinct approver, then retry the
+            transition.
           </p>
-          <p>
-            Every lifecycle mutation carries an Idempotency-Key. If the same request is
-            retried by the network, the backend returns the original result.
-          </p>
+          <p>Every lifecycle mutation carries an Idempotency-Key. If the same request is retried by the network, the backend returns the original result.</p>
         </div>
       </section>
 
-      <DeliveryEvidencePanel
-        deliveries={deliveryReceipts}
-        rotations={rotationRuns}
-        error={evidenceError}
-      />
+      <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
 
       <LifecycleAutomationDisclosure />
 
@@ -647,12 +611,7 @@ export function Identities() {
             >
               {`Yes, ${pending.label.toLowerCase()}`}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={clearPending}
-            >
+            <Button type="button" size="sm" variant="ghost" onClick={clearPending}>
               Cancel
             </Button>
           </div>
@@ -683,7 +642,8 @@ export function Identities() {
             Revoke {selectedRows.length} selected identities?
           </h2>
           <p id="bulk-revoke-desc" className="mt-1 text-destructive">
-            This sends one idempotent revoke request per selected identity and reports accepted or failed for each item. Connector and downstream delivery still complete asynchronously through the outbox.
+            This sends one idempotent revoke request per selected identity and reports accepted or failed for each item. Connector and downstream delivery still
+            complete asynchronously through the outbox.
           </p>
           <div className="mt-3 flex gap-2">
             <Button
@@ -724,18 +684,12 @@ export function Identities() {
       {error && <ErrorState title="Identity action failed">{error}</ErrorState>}
 
       {items && items.length === 0 && !showForm && (
-        <EmptyState
-          title="No identities yet"
-          ctaTo="/wizard"
-          ctaLabel="Set up your first certificate"
-        >
+        <EmptyState title="No identities yet" ctaTo="/wizard" ctaLabel="Set up your first certificate">
           Issue your first certificate to start tracking and rotating credentials.
         </EmptyState>
       )}
 
-      {items && items.length > 0 && (
-        <PendingApprovalSummary rows={approvalRows(items)} />
-      )}
+      {items && items.length > 0 && <PendingApprovalSummary rows={approvalRows(items)} />}
 
       {items && items.length > 0 && (
         <div id="manual-lifecycle-transitions" className="space-y-3">
@@ -788,10 +742,10 @@ export function Identities() {
           deniedTransitions={deniedTransitions}
           deliveryReceipt={selectedId ? latestDelivery.get(selectedId) : undefined}
           rotationRun={selectedId ? latestRotation.get(selectedId) : undefined}
-          reason={selectedId ? transitionReasons[selectedId] ?? "" : ""}
+          reason={selectedId ? (transitionReasons[selectedId] ?? "") : ""}
           onReasonChange={(value) => {
             if (!selectedId) return;
-            setTransitionReasons((current) => ({ ...current, [selectedId]: value }))
+            setTransitionReasons((current) => ({ ...current, [selectedId]: value }));
           }}
           onTransition={(to, label) => {
             if (!detail) return;
@@ -823,16 +777,14 @@ function DeliveryEvidencePanel({
           Delivery and rotation evidence
         </h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          The console reads projected connector delivery receipts and lifecycle rotation runs. These are audit-safe
-          routing records: no certificate private key or secret value is returned.
+          The console reads projected connector delivery receipts and lifecycle rotation runs. These are audit-safe routing records: no certificate private key
+          or secret value is returned.
         </p>
       </div>
       {loading && <LoadingState>Loading delivery evidence...</LoadingState>}
       {error && <ErrorState title="Delivery evidence failed to load">{error}</ErrorState>}
       {!loading && !error && recentDeliveries.length === 0 && recentRotations.length === 0 && (
-        <EmptyState title="No delivery or rotation receipts yet">
-          Issue, deploy, or renew an identity to produce outbox-backed evidence.
-        </EmptyState>
+        <EmptyState title="No delivery or rotation receipts yet">Issue, deploy, or renew an identity to produce outbox-backed evidence.</EmptyState>
       )}
       {(recentDeliveries.length > 0 || recentRotations.length > 0) && (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -851,7 +803,9 @@ function DeliveryEvidencePanel({
               <tbody>
                 {recentDeliveries.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-muted-foreground">No connector receipts.</td>
+                    <td colSpan={5} className="text-muted-foreground">
+                      No connector receipts.
+                    </td>
                   </tr>
                 ) : (
                   recentDeliveries.map((receipt) => (
@@ -882,7 +836,9 @@ function DeliveryEvidencePanel({
               <tbody>
                 {recentRotations.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-muted-foreground">No rotation runs.</td>
+                    <td colSpan={5} className="text-muted-foreground">
+                      No rotation runs.
+                    </td>
                   </tr>
                 ) : (
                   recentRotations.map((run) => (
@@ -914,11 +870,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   }
 
   if (state.error) {
-    return (
-      <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">
-        {state.error}
-      </div>
-    );
+    return <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">{state.error}</div>;
   }
 
   if (!state.impact) return null;
@@ -934,8 +886,8 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
         Blast-radius impact
       </h3>
       <p className="mt-1">
-        Served graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream
-        affected node{affected === 1 ? "" : "s"} before this destructive action.
+        Served graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream affected node{affected === 1 ? "" : "s"}{" "}
+        before this destructive action.
       </p>
       {byKind.length > 0 && (
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -966,7 +918,8 @@ function LifecycleAutomationDisclosure() {
             Lifecycle automation
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Automatic renewal runs in the leader scheduler when a deployed X.509 identity reaches the configured renew-before window. This console reads rotation-run and delivery evidence; editing schedules, alert timing, and dry-run execution still live outside this view.
+            Automatic renewal runs in the leader scheduler when a deployed X.509 identity reaches the configured renew-before window. This console reads
+            rotation-run and delivery evidence; editing schedules, alert timing, and dry-run execution still live outside this view.
           </p>
           <a className="mt-3 inline-flex text-sm font-medium text-primary underline" href="#manual-lifecycle-transitions">
             Use manual lifecycle transitions
@@ -996,7 +949,8 @@ function PendingApprovalSummary({ rows }: { rows: ApprovalQueueRow[] }) {
           JIT approvals moved to the inbox
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Requested identities are summarized here, but approval decisions now happen in the dedicated inbox so request and approve controls are not co-located for one operator.
+          Requested identities are summarized here, but approval decisions now happen in the dedicated inbox so request and approve controls are not co-located
+          for one operator.
         </p>
         <Link className="mt-2 inline-flex text-sm font-medium text-primary underline" to="/approvals">
           Open approvals inbox
@@ -1048,17 +1002,13 @@ function RevocationPublicationPanel() {
         Revocation publication
       </h2>
       <div className="mt-2 grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
-        <p>
-          Revoked X.509 certificates are published to the served public OCSP and CRL surfaces after the backend records the lifecycle transition.
-        </p>
+        <p>Revoked X.509 certificates are published to the served public OCSP and CRL surfaces after the backend records the lifecycle transition.</p>
         <p>
           OCSP: <code className="rounded bg-muted px-1 font-mono text-xs">/ocsp/{"{tenant}"}</code>
           <br />
           CRL: <code className="rounded bg-muted px-1 font-mono text-xs">/crl/{"{tenant}"}</code>
         </p>
-        <p>
-          Live propagation health is not served yet. Freshness, scheduler, and responder health aren't surfaced in the console yet.
-        </p>
+        <p>Live propagation health is not served yet. Freshness, scheduler, and responder health aren't surfaced in the console yet.</p>
       </div>
     </section>
   );
@@ -1116,14 +1066,8 @@ function IdentityDetailPanel({
             <h3 id="identity-kind-heading" className="font-semibold">
               {kind?.title ?? "Identity"}
             </h3>
-            <p className="mt-1 text-muted-foreground">
-              {kind?.description ?? "A served non-human identity bound to this tenant."}
-            </p>
-            {terminal && (
-              <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-medium text-foreground">
-                {terminal}
-              </p>
-            )}
+            <p className="mt-1 text-muted-foreground">{kind?.description ?? "A served non-human identity bound to this tenant."}</p>
+            {terminal && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-medium text-foreground">{terminal}</p>}
           </section>
 
           <dl className="grid gap-3 md:grid-cols-2">
@@ -1187,25 +1131,17 @@ function IdentityDetailPanel({
                 ))}
               </dl>
             ) : (
-              <p className="mt-1 text-muted-foreground">
-                No extra kind attributes were returned by the served detail endpoint.
-              </p>
+              <p className="mt-1 text-muted-foreground">No extra kind attributes were returned by the served detail endpoint.</p>
             )}
           </section>
 
-          <CredentialActivityTimeline
-            credentialLabel={identity.name}
-            deliveryReceipt={deliveryReceipt}
-            rotationRun={rotationRun}
-          />
+          <CredentialActivityTimeline credentialLabel={identity.name} deliveryReceipt={deliveryReceipt} rotationRun={rotationRun} />
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">
               Lifecycle state machine
             </h3>
-            <p className="mt-1 text-muted-foreground">
-              Only valid next states are enabled. Disabled targets are not sent to the backend.
-            </p>
+            <p className="mt-1 text-muted-foreground">Only valid next states are enabled. Disabled targets are not sent to the backend.</p>
             <label htmlFor="transition-reason" className="mt-3 block text-sm font-medium">
               Transition reason
             </label>

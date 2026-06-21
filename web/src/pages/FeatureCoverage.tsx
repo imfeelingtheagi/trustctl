@@ -1,14 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Eye,
-  Info,
-  ListFilter,
-  Map,
-  Search,
-  ShieldCheck,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, Info, ListFilter, Map, Search, ShieldCheck } from "lucide-react";
 import {
   featureCoverageDomains,
   featureCoverageItems,
@@ -54,17 +45,7 @@ function StateBadge({ state }: { state: FeatureCoverageState }) {
   );
 }
 
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  helper,
-}: {
-  icon: typeof Map;
-  label: string;
-  value: string | number;
-  helper: string;
-}) {
+function SummaryCard({ icon: Icon, label, value, helper }: { icon: typeof Map; label: string; value: string | number; helper: string }) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -82,11 +63,7 @@ function SummaryCard({
 }
 
 function PhasePill({ phase }: { phase: FeatureCoveragePhase }) {
-  return (
-    <span className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs font-medium">
-      {phase}
-    </span>
-  );
+  return <span className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs font-medium">{phase}</span>;
 }
 
 function surfaceText(label: "API" | "CLI", values: string[], na: string) {
@@ -97,15 +74,7 @@ function surfaceText(label: "API" | "CLI", values: string[], na: string) {
   return `${values.length} ${noun}${values.length === 1 ? "" : "s"}: ${preview}${suffix}`;
 }
 
-function SurfaceLine({
-  label,
-  values,
-  na,
-}: {
-  label: "API" | "CLI";
-  values: string[];
-  na: string;
-}) {
+function SurfaceLine({ label, values, na }: { label: "API" | "CLI"; values: string[]; na: string }) {
   return (
     <p className="mt-2">
       <span className="font-medium text-foreground">{label}:</span> {surfaceText(label, values, na)}
@@ -203,7 +172,12 @@ export function FeatureCoverage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard icon={ListFilter} label="Feature backlog" value={featureCoverageTotals.features} helper="documented features represented here" />
         <SummaryCard icon={Map} label="Capability domains" value={featureCoverageTotals.domains} helper="from certs to secrets, SSH, SPIFFE, AI, and policy" />
-        <SummaryCard icon={ShieldCheck} label="Mapped outcomes" value={featureCoverageTotals.features} helper="each item has operate, observe, or disclose posture" />
+        <SummaryCard
+          icon={ShieldCheck}
+          label="Mapped outcomes"
+          value={featureCoverageTotals.features}
+          helper="each item has operate, observe, or disclose posture"
+        />
         <SummaryCard icon={AlertTriangle} label="Silent gaps" value={0} helper="nothing is allowed to be invisible in the GUI map" />
       </div>
 
@@ -219,10 +193,7 @@ export function FeatureCoverage() {
                   key={phase}
                   type="button"
                   onClick={() => setPhaseFilter(phaseFilter === phase ? "all" : phase)}
-                  className={cn(
-                    "rounded-md border border-border p-4 text-left hover:bg-muted",
-                    phaseFilter === phase && "border-primary bg-muted",
-                  )}
+                  className={cn("rounded-md border border-border p-4 text-left hover:bg-muted", phaseFilter === phase && "border-primary bg-muted")}
                   aria-pressed={phaseFilter === phase}
                 >
                   <span className="font-mono text-sm font-semibold">{phase}</span>
@@ -244,9 +215,15 @@ export function FeatureCoverage() {
             <CardTitle>Outcome legend</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <p><StateBadge state="operate" /> means a real UI action or workflow already exists.</p>
-            <p><StateBadge state="observe" /> means the GUI can show status, evidence, audit, or partial parity.</p>
-            <p><StateBadge state="disclose" /> means the GUI now names the gap and explains the required target mapping.</p>
+            <p>
+              <StateBadge state="operate" /> means a real UI action or workflow already exists.
+            </p>
+            <p>
+              <StateBadge state="observe" /> means the GUI can show status, evidence, audit, or partial parity.
+            </p>
+            <p>
+              <StateBadge state="disclose" /> means the GUI now names the gap and explains the required target mapping.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -262,10 +239,7 @@ export function FeatureCoverage() {
                 key={domain.name}
                 type="button"
                 onClick={() => setDomainFilter(domainFilter === domain.name ? "all" : domain.name)}
-                className={cn(
-                  "rounded-md border border-border p-4 text-left hover:bg-muted",
-                  domainFilter === domain.name && "border-primary bg-muted",
-                )}
+                className={cn("rounded-md border border-border p-4 text-left hover:bg-muted", domainFilter === domain.name && "border-primary bg-muted")}
                 aria-pressed={domainFilter === domain.name}
               >
                 <span className="block font-medium">{domain.name}</span>
@@ -339,6 +313,7 @@ export function FeatureCoverage() {
             </label>
           </div>
 
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The wide matrix needs a keyboard-focusable scroll region. */}
           <div className="overflow-x-auto rounded-md border border-border" role="region" aria-label="Feature coverage table" tabIndex={0}>
             <table className="w-full min-w-[72rem] text-left text-sm">
               <caption className="sr-only">Feature coverage map with backend status, GUI mapping, and acceptance criteria</caption>

@@ -6,15 +6,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  api,
-  ApiError,
-  type DiscoveryFinding,
-  type DiscoveryRun,
-  type DiscoverySchedule,
-  type DiscoverySource,
-  type DiscoverySourceRequest,
-} from "@/lib/api";
+import { api, ApiError, type DiscoveryFinding, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];

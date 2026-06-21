@@ -634,7 +634,7 @@ func TestServerCoverageIsReportedAndGated(t *testing.T) {
 	mk := repoFile(t, "Makefile")
 	// Cross-package attribution is on (the merge that credits internal/server with
 	// the coverage from the projections e2e).
-	mustContainAll(t, "Makefile measures cross-package coverage", mk, "-coverpkg=./...")
+	mustContainAll(t, "Makefile measures cross-package coverage", mk, "-coverpkg=$(GO_COVER_PACKAGES)", "GO_COVER_PACKAGES")
 	// The assembled server's real coverage is surfaced and gated by function.
 	mustContainAll(t, "Makefile gates the assembled server lifecycle coverage", mk,
 		"SERVER_FUNC_COVERAGE_MIN", "internal/server")

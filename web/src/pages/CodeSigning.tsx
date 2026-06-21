@@ -44,7 +44,8 @@ export function CodeSigning() {
       />
 
       <UnavailableState title="Code-signing workflow is library-only">
-        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are library-only. There is no served signing API or CLI workflow yet, so this console cannot submit signing work.
+        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are library-only. There
+        is no served signing API or CLI workflow yet, so this console cannot submit signing work.
       </UnavailableState>
 
       <section aria-labelledby="requests-heading" className="grid gap-3 border-y border-border py-4">
@@ -53,7 +54,8 @@ export function CodeSigning() {
             Signing request ledger
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A valid request names the artifact, digest, signing mode, approval posture, policy result, and downloadable signature receipt. No private key or artifact bytes are exposed.
+            A valid request names the artifact, digest, signing mode, approval posture, policy result, and downloadable signature receipt. No private key or
+            artifact bytes are exposed.
           </p>
         </div>
         <div className="ui-panel overflow-x-auto">

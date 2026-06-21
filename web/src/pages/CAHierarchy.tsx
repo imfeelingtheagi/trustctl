@@ -74,10 +74,7 @@ export function CAHierarchy() {
     void load();
   }, []);
 
-  const sortedIssuers = useMemo(
-    () => [...issuers].sort((a, b) => a.name.localeCompare(b.name)),
-    [issuers],
-  );
+  const sortedIssuers = useMemo(() => [...issuers].sort((a, b) => a.name.localeCompare(b.name)), [issuers]);
 
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
@@ -94,7 +91,8 @@ export function CAHierarchy() {
       />
 
       <UnavailableState title="CA hierarchy ceremony API not served yet">
-        Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are library-tier only. There is no served API or CLI ceremony route yet, so this page renders no create-root, rotate-root, or ceremony execution controls.
+        Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are library-tier only. There is no served API or CLI
+        ceremony route yet, so this page renders no create-root, rotate-root, or ceremony execution controls.
       </UnavailableState>
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
@@ -105,16 +103,15 @@ export function CAHierarchy() {
               Served issuer visibility
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              `GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. It is visibility only; hierarchy mutation is intentionally absent.
+              `GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. It is visibility only; hierarchy mutation is
+              intentionally absent.
             </p>
           </div>
         </div>
         {loading && <LoadingState>Loading issuers...</LoadingState>}
         {renderNotice(notice)}
         {!loading && !notice && sortedIssuers.length === 0 && (
-          <EmptyState title="No issuers served yet">
-            Create issuers through the served issuer API or CLI before they appear in this hierarchy view.
-          </EmptyState>
+          <EmptyState title="No issuers served yet">Create issuers through the served issuer API or CLI before they appear in this hierarchy view.</EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && <IssuerTable issuers={sortedIssuers} />}
       </section>
@@ -127,7 +124,8 @@ export function CAHierarchy() {
               m-of-n key ceremony model
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The library consumes a quorum once, emits tenant-scoped events, and rejects purpose mismatch or replay.
+              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The library consumes a quorum once, emits tenant-scoped events, and
+              rejects purpose mismatch or replay.
             </p>
           </div>
         </div>
@@ -156,7 +154,8 @@ export function CAHierarchy() {
           </table>
         </div>
         <UnavailableState title="Hierarchy mutations are library-tier">
-          `StartCeremony`, `Approve`, `CreateRoot`, `CreateIntermediate`, `Rotate`, and `CrossSign` are implemented in `internal/ca/hierarchy`, but there is no authenticated REST/UI ceremony flow yet.
+          `StartCeremony`, `Approve`, `CreateRoot`, `CreateIntermediate`, `Rotate`, and `CrossSign` are implemented in `internal/ca/hierarchy`, but there is no
+          authenticated REST/UI ceremony flow yet.
         </UnavailableState>
       </section>
 
@@ -196,7 +195,8 @@ export function CAHierarchy() {
           </table>
         </div>
         <UnavailableState title="HSM/KMS lifecycle API not served yet">
-          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary as library-tier workflows. There is no served API or CLI lifecycle surface for this custody workflow yet.
+          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary as library-tier workflows. There
+          is no served API or CLI lifecycle surface for this custody workflow yet.
         </UnavailableState>
       </section>
     </section>

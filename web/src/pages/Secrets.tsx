@@ -6,16 +6,7 @@ import { DetailDrawer } from "@/components/DetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import {
-  api,
-  ApiError,
-  type MachineLoginResponse,
-  type PKISecret,
-  type SecretMeta,
-  type SecretValue,
-  type ShareToken,
-  type ShareValue,
-} from "@/lib/api";
+import { api, ApiError, type MachineLoginResponse, type PKISecret, type SecretMeta, type SecretValue, type ShareToken, type ShareValue } from "@/lib/api";
 
 const ephemeralKeyRows = [
   {
@@ -218,24 +209,15 @@ export function Secrets() {
     void load();
   }, []);
 
-  const selectedMeta = useMemo(
-    () => items.find((item) => item.name === accessName) ?? items[0] ?? null,
-    [items, accessName],
-  );
+  const selectedMeta = useMemo(() => items.find((item) => item.name === accessName) ?? items[0] ?? null, [items, accessName]);
   const filteredItems = useMemo(() => {
     const needle = secretSearch.trim().toLowerCase();
     if (!needle) return items;
     return items.filter((item) =>
-      [item.name, String(item.version ?? ""), item.created_at ?? "", item.updated_at ?? "", "native store"]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
+      [item.name, String(item.version ?? ""), item.created_at ?? "", item.updated_at ?? "", "native store"].join(" ").toLowerCase().includes(needle),
     );
   }, [items, secretSearch]);
-  const detailSecret = useMemo(
-    () => items.find((item) => item.name === detailSecretName) ?? null,
-    [detailSecretName, items],
-  );
+  const detailSecret = useMemo(() => items.find((item) => item.name === detailSecretName) ?? null, [detailSecretName, items]);
 
   const secretColumns = useMemo<Array<DataGridColumn<SecretMeta>>>(
     () => [
@@ -425,7 +407,11 @@ export function Secrets() {
         }
       />
 
-      {notice && <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">{notice}</p>}
+      {notice && (
+        <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+          {notice}
+        </p>
+      )}
 
       {loadError && (
         <UnavailableState title="Secrets API unavailable or disabled">
@@ -440,7 +426,8 @@ export function Secrets() {
               Native secret store
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              `GET /api/v1/secrets/store` returns names and versions only. Create and rotate send a value to the backend, then this page drops the input and shows metadata.
+              `GET /api/v1/secrets/store` returns names and versions only. Create and rotate send a value to the backend, then this page drops the input and
+              shows metadata.
             </p>
           </div>
         </div>
@@ -479,13 +466,7 @@ export function Secrets() {
             rows={filteredItems}
             columns={secretColumns}
             getRowId={(item) => item.name}
-            state={
-              loading
-                ? "loading"
-                : filteredItems.length === 0
-                  ? "empty"
-                  : "ready"
-            }
+            state={loading ? "loading" : filteredItems.length === 0 ? "empty" : "ready"}
             stateTitle={items.length === 0 ? "No secrets stored yet" : "No matching secret metadata"}
             stateMessage={
               items.length === 0
@@ -560,11 +541,13 @@ export function Secrets() {
             Manual rotation and delete
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manual native-store rotation is served with <code>PUT /api/v1/secrets/store/{"{name}"}</code>. Scheduled rotation, rollback evidence, and downstream sync remain backend gaps.
+            Manual native-store rotation is served with <code>PUT /api/v1/secrets/store/{"{name}"}</code>. Scheduled rotation, rollback evidence, and downstream
+            sync remain backend gaps.
           </p>
         </div>
         <UnavailableState title="Scheduled rotation and downstream sync not served yet">
-          The broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet. This page exposes only the served per-secret rotate/delete controls.
+          The broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet. This page exposes only the
+          served per-secret rotate/delete controls.
         </UnavailableState>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -628,12 +611,19 @@ export function Secrets() {
             Developer access
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            SDK and CLI examples target the served store contract and contain only names, tenants, and versions. The access test performs a read without rendering the value.
+            SDK and CLI examples target the served store contract and contain only names, tenants, and versions. The access test performs a read without
+            rendering the value.
           </p>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
-          <Snippet title="CLI injector" text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`} />
-          <Snippet title="TypeScript SDK" text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`} />
+          <Snippet
+            title="CLI injector"
+            text={`trstctl secrets get ${selectedMeta?.name ?? "app/db/password"} --tenant current --format env --exec ./service`}
+          />
+          <Snippet
+            title="TypeScript SDK"
+            text={`const secret = await client.secrets.get("${selectedMeta?.name ?? "app/db/password"}");\nprocess.env.DB_PASSWORD = secret.value; // keep in process memory only`}
+          />
         </div>
         <form aria-label="Secret access test" onSubmit={(event) => void runAccessTest(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -696,7 +686,11 @@ export function Secrets() {
         </form>
         {pkiError && <ErrorState title="PKI issue failed">{pkiError}</ErrorState>}
         {pkiBundle && (
-          <RevealPanel title={`PKI bundle ${pkiBundle.serial}`} onDismiss={() => setPkiBundle(null)} value={`${pkiBundle.certificate}\n${pkiBundle.private_key}`}>
+          <RevealPanel
+            title={`PKI bundle ${pkiBundle.serial}`}
+            onDismiss={() => setPkiBundle(null)}
+            value={`${pkiBundle.certificate}\n${pkiBundle.private_key}`}
+          >
             Copy or download now. The serial, certificate, and private key came from the served PKI-secret endpoint and are cleared when dismissed.
           </RevealPanel>
         )}
@@ -708,7 +702,8 @@ export function Secrets() {
             Machine login
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            `POST /api/v1/secrets/login` exchanges a machine credential for a scoped workload session. The submitted credential is cleared after submit and never echoed.
+            `POST /api/v1/secrets/login` exchanges a machine credential for a scoped workload session. The submitted credential is cleared after submit and
+            never echoed.
           </p>
         </div>
         <form aria-label="Machine login test" onSubmit={(event) => void submitLogin(event)} className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]">
@@ -739,7 +734,8 @@ export function Secrets() {
         {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
         {session && <MachineSession session={session} />}
         <UnavailableState title="Auth-method administration not served yet">
-          Configured token methods, audience rules, issued-session ledger, and revoked methods aren't available in the console yet. This page exposes only the served login exchange.
+          Configured token methods, audience rules, issued-session ledger, and revoked methods aren't available in the console yet. This page exposes only the
+          served login exchange.
         </UnavailableState>
       </section>
 
@@ -818,11 +814,13 @@ export function Secrets() {
             Ephemeral API keys
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Scoped, time-bound API-key requests need approvals, expiry, revocation, and copy-once presentation. The served secrets API does not issue these keys yet.
+            Scoped, time-bound API-key requests need approvals, expiry, revocation, and copy-once presentation. The served secrets API does not issue these keys
+            yet.
           </p>
         </div>
         <UnavailableState title="Ephemeral API-key issuance is library-only">
-          Lease issue, revoke, expiry, approval, and copy-once presentation are library-only. There is no served API or CLI command that can mint short-lived API keys yet.
+          Lease issue, revoke, expiry, approval, and copy-once presentation are library-only. There is no served API or CLI command that can mint short-lived
+          API keys yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
@@ -857,11 +855,13 @@ export function Secrets() {
             Code and CI secret scanning bridge
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Secret-scanning findings need source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling. Live triage is not served.
+            Secret-scanning findings need source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and
+            false-positive handling. Live triage is not served.
           </p>
         </div>
         <UnavailableState title="Secret-scanning triage is library-only">
-          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. There is no served API or CLI triage path yet.
+          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. There is no served API or CLI triage path
+          yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
@@ -896,11 +896,13 @@ export function Secrets() {
             Dynamic secrets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Dynamic backends produce lease-scoped credentials with issue, revoke, lease status, backend health, and copy-once generated credential handling. The browser only shows the shape today.
+            Dynamic backends produce lease-scoped credentials with issue, revoke, lease status, backend health, and copy-once generated credential handling. The
+            browser only shows the shape today.
           </p>
         </div>
         <UnavailableState title="Dynamic secret leases are not served">
-          Backend health, role catalogs, lease issue/revoke, and lease status are library-only. This page cannot request generated credentials because no served dynamic-secret API or CLI command exists yet.
+          Backend health, role catalogs, lease issue/revoke, and lease status are library-only. This page cannot request generated credentials because no served
+          dynamic-secret API or CLI command exists yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">
@@ -935,11 +937,13 @@ export function Secrets() {
             Transit and KMIP
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Encryption-as-a-service and KMIP need keys, encrypt/decrypt tests, HMAC, sign, verify, versions, rewrap, audit, and appliance profiles. Any test plaintext here is local-only copy, not a live transit operation.
+            Encryption-as-a-service and KMIP need keys, encrypt/decrypt tests, HMAC, sign, verify, versions, rewrap, audit, and appliance profiles. Any test
+            plaintext here is local-only copy, not a live transit operation.
           </p>
         </div>
         <UnavailableState title="Transit and KMIP operations are library-only">
-          Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are library-only. No served transit or KMIP API/CLI surface exists yet.
+          Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are library-only. No served transit or KMIP API/CLI
+          surface exists yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
@@ -974,11 +978,13 @@ export function Secrets() {
             Secret sync and platform integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Secret sync needs target platform mappings, masked target credentials, push status, drift detection, rollback, and outbox delivery receipts. No live sync is routed today.
+            Secret sync needs target platform mappings, masked target credentials, push status, drift detection, rollback, and outbox delivery receipts. No live
+            sync is routed today.
           </p>
         </div>
         <UnavailableState title="Secret sync is not served">
-          Target mappings, push attempts, drift status, rollback receipts, and delivery state are library-only. No served secret-sync API/CLI surface exists yet.
+          Target mappings, push attempts, drift status, rollback receipts, and delivery state are library-only. No served secret-sync API/CLI surface exists
+          yet.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[72rem]">
@@ -1010,17 +1016,7 @@ export function Secrets() {
   );
 }
 
-function RevealPanel({
-  title,
-  value,
-  children,
-  onDismiss,
-}: {
-  title: string;
-  value: string;
-  children: ReactNode;
-  onDismiss: () => void;
-}) {
+function RevealPanel({ title, value, children, onDismiss }: { title: string; value: string; children: ReactNode; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
   async function copyValue() {
     try {

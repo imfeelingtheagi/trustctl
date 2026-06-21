@@ -1,17 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import {
-  Activity,
-  AlertTriangle,
-  Boxes,
-  KeyRound,
-  RotateCw,
-  ScrollText,
-  Search,
-  ShieldCheck,
-  ShieldAlert,
-  Siren,
-} from "lucide-react";
+import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
@@ -31,10 +20,7 @@ export function Dashboard() {
   const identities = useResource(api.identities);
 
   const riskRows = risk.data ?? [];
-  const realEmpty =
-    (certs.data?.length ?? 0) === 0 &&
-    riskRows.length === 0 &&
-    (identities.data?.length ?? 0) === 0;
+  const realEmpty = (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && (identities.data?.length ?? 0) === 0;
   const useDemo = preview || realEmpty;
 
   const d = demoDashboard;
@@ -67,8 +53,12 @@ export function Dashboard() {
         description="A single pane of glass over every non-human identity — certificates, workloads, secrets, SSH and AI agents — across your hybrid fleet."
         actions={
           <>
-            <ActionLink to="/discovery" icon={<Search className="h-4 w-4" aria-hidden="true" />}>Discover</ActionLink>
-            <ActionLink to="/identities" icon={<RotateCw className="h-4 w-4" aria-hidden="true" />}>Rotate</ActionLink>
+            <ActionLink to="/discovery" icon={<Search className="h-4 w-4" aria-hidden="true" />}>
+              Discover
+            </ActionLink>
+            <ActionLink to="/identities" icon={<RotateCw className="h-4 w-4" aria-hidden="true" />}>
+              Rotate
+            </ActionLink>
             <ActionLink to="/request" icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} primary>
               Issue credential
             </ActionLink>
@@ -78,22 +68,71 @@ export function Dashboard() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} delta={useDemo ? d.deltas.certificates : undefined} spark={d.issuanceTrend} />
-        <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} delta={useDemo ? d.deltas.identities : undefined} spark={[28, 31, 30, 34, 33, 37, 39, 41, 44, 46, 48, 51]} />
-        <Kpi icon={<Boxes className="h-4 w-4" />} label="Secrets" value={kpis.secrets} delta={useDemo ? d.deltas.secrets : undefined} spark={[20, 22, 21, 24, 23, 25, 26, 27, 27, 29, 30, 31]} />
-        <Kpi icon={<Activity className="h-4 w-4" />} label="Agents online" value={kpis.agentsOnline} sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined} spark={[44, 45, 46, 46, 47, 46, 47, 48, 47, 48, 46, 48]} />
-        <Kpi icon={<AlertTriangle className="h-4 w-4" />} label="Expiring ≤7d" value={kpis.expiring7d} sub="needs action" tone="warn" to="/certificates?expiry=7d" />
+        <Kpi
+          icon={<ScrollText className="h-4 w-4" />}
+          label="Certificates"
+          value={kpis.certificates}
+          delta={useDemo ? d.deltas.certificates : undefined}
+          spark={d.issuanceTrend}
+        />
+        <Kpi
+          icon={<KeyRound className="h-4 w-4" />}
+          label="Identities (NHI)"
+          value={kpis.identities}
+          delta={useDemo ? d.deltas.identities : undefined}
+          spark={[28, 31, 30, 34, 33, 37, 39, 41, 44, 46, 48, 51]}
+        />
+        <Kpi
+          icon={<Boxes className="h-4 w-4" />}
+          label="Secrets"
+          value={kpis.secrets}
+          delta={useDemo ? d.deltas.secrets : undefined}
+          spark={[20, 22, 21, 24, 23, 25, 26, 27, 27, 29, 30, 31]}
+        />
+        <Kpi
+          icon={<Activity className="h-4 w-4" />}
+          label="Agents online"
+          value={kpis.agentsOnline}
+          sub={kpis.agentsTotal ? `${kpis.agentsOnline}/${kpis.agentsTotal}` : undefined}
+          spark={[44, 45, 46, 46, 47, 46, 47, 48, 47, 48, 46, 48]}
+        />
+        <Kpi
+          icon={<AlertTriangle className="h-4 w-4" />}
+          label="Expiring ≤7d"
+          value={kpis.expiring7d}
+          sub="needs action"
+          tone="warn"
+          to="/certificates?expiry=7d"
+        />
         <Kpi icon={<ShieldAlert className="h-4 w-4" />} label="High-risk" value={kpis.highRisk} sub="rotate" tone="crit" to="/risk?sort=score" />
-        <Kpi icon={<Siren className="h-4 w-4" />} label="Open incidents" value={kpis.openIncidents} sub={kpis.openIncidents ? `${kpis.openIncidents} active` : "none"} tone={kpis.openIncidents ? "warn" : "ok"} to="/incidents" />
-        <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="PQC-ready" value={kpis.pqcReady} delta={useDemo ? d.deltas.pqcReady : undefined} tone="ok" spark={[10, 13, 16, 18, 21, 24, 26, 28, 30, 31, 33, 34]} />
+        <Kpi
+          icon={<Siren className="h-4 w-4" />}
+          label="Open incidents"
+          value={kpis.openIncidents}
+          sub={kpis.openIncidents ? `${kpis.openIncidents} active` : "none"}
+          tone={kpis.openIncidents ? "warn" : "ok"}
+          to="/incidents"
+        />
+        <Kpi
+          icon={<ShieldCheck className="h-4 w-4" />}
+          label="PQC-ready"
+          value={kpis.pqcReady}
+          delta={useDemo ? d.deltas.pqcReady : undefined}
+          tone="ok"
+          spark={[10, 13, 16, 18, 21, 24, 26, 28, 30, 31, 33, 34]}
+        />
       </div>
 
       {/* Trend + algorithm mix */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
-            <CardTitle>Issuance trend <span className="ml-1 text-caption font-normal text-muted-foreground">credentials issued per month</span></CardTitle>
-            <span className="rounded-control bg-brand-accent/10 px-2 py-0.5 text-caption font-medium text-brand-accent">{d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} this month</span>
+            <CardTitle>
+              Issuance trend <span className="ml-1 text-caption font-normal text-muted-foreground">credentials issued per month</span>
+            </CardTitle>
+            <span className="rounded-control bg-brand-accent/10 px-2 py-0.5 text-caption font-medium text-brand-accent">
+              {d.issuanceTrend[d.issuanceTrend.length - 1] ?? 0} this month
+            </span>
           </CardHeader>
           <CardContent>
             <AreaTrend values={d.issuanceTrend} />
@@ -101,7 +140,9 @@ export function Dashboard() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Algorithm mix <span className="ml-1 text-caption font-normal text-muted-foreground">by key type</span></CardTitle>
+            <CardTitle>
+              Algorithm mix <span className="ml-1 text-caption font-normal text-muted-foreground">by key type</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Donut segments={d.algoMix} centerLabel={kpis.certificates.toLocaleString()} centerSub="certificates" />
@@ -112,14 +153,24 @@ export function Dashboard() {
       {/* Expiry bands + rotate first + recent activity */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardHeader><CardTitle>Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span></CardTitle></CardHeader>
-          <CardContent><Bands bands={d.expiryBands} /></CardContent>
+          <CardHeader>
+            <CardTitle>
+              Expiry bands <span className="ml-1 text-caption font-normal text-muted-foreground">time to expiry</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Bands bands={d.expiryBands} />
+          </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
-            <CardTitle>Rotate first <span className="ml-1 text-caption font-normal text-muted-foreground">highest-risk</span></CardTitle>
-            <Link to="/risk?sort=score" className="text-caption font-medium text-brand-accent hover:underline">View all →</Link>
+            <CardTitle>
+              Rotate first <span className="ml-1 text-caption font-normal text-muted-foreground">highest-risk</span>
+            </CardTitle>
+            <Link to="/risk?sort=score" className="text-caption font-medium text-brand-accent hover:underline">
+              View all →
+            </Link>
           </CardHeader>
           <CardContent>
             <ul className="-mt-1 divide-y divide-border">
@@ -138,8 +189,12 @@ export function Dashboard() {
 
         <Card>
           <CardHeader className="flex-row items-baseline justify-between space-y-0">
-            <CardTitle>Recent activity <span className="ml-1 text-caption font-normal text-muted-foreground">audit stream</span></CardTitle>
-            <Link to="/audit" className="text-caption font-medium text-brand-accent hover:underline">Explorer →</Link>
+            <CardTitle>
+              Recent activity <span className="ml-1 text-caption font-normal text-muted-foreground">audit stream</span>
+            </CardTitle>
+            <Link to="/audit" className="text-caption font-medium text-brand-accent hover:underline">
+              Explorer →
+            </Link>
           </CardHeader>
           <CardContent>
             <ul className="-mt-1 divide-y divide-border">
@@ -223,14 +278,15 @@ function Kpi({
           <span className="text-display font-semibold tracking-tight tabular-nums">{value.toLocaleString()}</span>
           {spark && <Sparkline values={spark} />}
         </div>
-        {(delta || sub) && (
-          <div className={`mt-1 text-caption font-medium ${toneClass}`}>{delta ?? sub}</div>
-        )}
+        {(delta || sub) && <div className={`mt-1 text-caption font-medium ${toneClass}`}>{delta ?? sub}</div>}
       </CardContent>
     </Card>
   );
   return to ? (
-    <Link to={to} className="group block rounded-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+    <Link
+      to={to}
+      className="group block rounded-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
       {inner}
     </Link>
   ) : (
@@ -239,7 +295,8 @@ function Kpi({
 }
 
 function RiskPip({ score }: { score: number }) {
-  const tone = score >= 90 ? "bg-destructive/10 text-destructive" : score >= 75 ? "bg-status-warning/10 text-status-warning" : "bg-risk-medium/10 text-risk-medium";
+  const tone =
+    score >= 90 ? "bg-destructive/10 text-destructive" : score >= 75 ? "bg-status-warning/10 text-status-warning" : "bg-risk-medium/10 text-risk-medium";
   return <span className={`shrink-0 rounded-control px-2 py-0.5 text-caption font-semibold tabular-nums ${tone}`}>{score}</span>;
 }
 
@@ -291,36 +348,55 @@ function AreaTrend({ values }: { values: number[] }) {
   );
 }
 
-const donutPalette = [
-  "hsl(var(--brand-accent))",
-  "hsl(var(--observe))",
-  "hsl(var(--status-info))",
-  "hsl(var(--risk-medium))",
-  "hsl(var(--disclose))",
-];
+const donutPalette = ["hsl(var(--brand-accent))", "hsl(var(--observe))", "hsl(var(--status-info))", "hsl(var(--risk-medium))", "hsl(var(--disclose))"];
 
 function Donut({ segments, centerLabel, centerSub }: { segments: Array<{ algo: string; n: number }>; centerLabel: string; centerSub: string }) {
   const total = segments.reduce((s, x) => s + x.n, 0) || 1;
   const r = 52;
   const c = 2 * Math.PI * r;
-  let offset = 0;
+  const arcs = segments.reduce<{ offset: number; items: Array<{ algo: string; dash: string; strokeDashoffset: string; color: string }> }>(
+    (state, seg, i) => {
+      const frac = seg.n / total;
+      return {
+        offset: state.offset + frac,
+        items: [
+          ...state.items,
+          {
+            algo: seg.algo,
+            dash: `${(frac * c).toFixed(2)} ${(c - frac * c).toFixed(2)}`,
+            strokeDashoffset: (-state.offset * c).toFixed(2),
+            color: donutPalette[i % donutPalette.length],
+          },
+        ],
+      };
+    },
+    { offset: 0, items: [] },
+  ).items;
   return (
     <div className="flex items-center gap-4">
       <svg width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Algorithm mix by key type">
         <g transform="rotate(-90 64 64)">
           <circle cx="64" cy="64" r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="16" />
-          {segments.map((seg, i) => {
-            const frac = seg.n / total;
-            const dash = `${(frac * c).toFixed(2)} ${(c - frac * c).toFixed(2)}`;
-            const el = (
-              <circle key={seg.algo} cx="64" cy="64" r={r} fill="none" stroke={donutPalette[i % donutPalette.length]} strokeWidth="16" strokeDasharray={dash} strokeDashoffset={(-offset * c).toFixed(2)} />
-            );
-            offset += frac;
-            return el;
-          })}
+          {arcs.map((arc) => (
+            <circle
+              key={arc.algo}
+              cx="64"
+              cy="64"
+              r={r}
+              fill="none"
+              stroke={arc.color}
+              strokeWidth="16"
+              strokeDasharray={arc.dash}
+              strokeDashoffset={arc.strokeDashoffset}
+            />
+          ))}
         </g>
-        <text x="64" y="60" textAnchor="middle" className="fill-foreground text-[18px] font-semibold">{centerLabel}</text>
-        <text x="64" y="78" textAnchor="middle" className="fill-muted-foreground text-[9px]">{centerSub}</text>
+        <text x="64" y="60" textAnchor="middle" className="fill-foreground text-[18px] font-semibold">
+          {centerLabel}
+        </text>
+        <text x="64" y="78" textAnchor="middle" className="fill-muted-foreground text-[9px]">
+          {centerSub}
+        </text>
       </svg>
       <ul className="min-w-0 flex-1 space-y-1.5">
         {segments.map((seg, i) => (

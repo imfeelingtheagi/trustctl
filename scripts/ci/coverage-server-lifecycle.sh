@@ -5,7 +5,7 @@
 #
 # The four core lifecycle functions of the assembled server (server.Build /
 # server.IssueLeaf / server.Drain / server.Shutdown) read ~0% IN-PACKAGE but are
-# exercised by the cross-package projections e2e under `-coverpkg=./...`; this floor
+# exercised by the cross-package projections e2e under `-coverpkg=$(GO_COVER_PACKAGES)`; this floor
 # surfaces and guards their REAL merged coverage so CI reports the assembled server
 # honestly, not the misleading in-package figure. The gate also fails if fewer than
 # all four functions are present in the profile (a regression that dropped the e2e
@@ -57,7 +57,7 @@ eval_lifecycle() {
 		}
 		END {
 			if (seen + 0 < want + 0) {
-				printf "FAIL: expected %d assembled-lifecycle functions in the merged profile, saw %d (did the cross-package e2e run under -coverpkg=./...?)\n", want, seen + 0
+				printf "FAIL: expected %d assembled-lifecycle functions in the merged profile, saw %d (did the cross-package e2e run under -coverpkg=$(GO_COVER_PACKAGES)?)\n", want, seen + 0
 				exit 1
 			}
 			if (bad) exit 1

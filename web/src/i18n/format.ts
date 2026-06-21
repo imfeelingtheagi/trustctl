@@ -59,4 +59,3 @@ export function formatPlural(
   const rule = new Intl.PluralRules(policy.locale).select(value);
   return forms[rule] ?? forms.other;
 }
-

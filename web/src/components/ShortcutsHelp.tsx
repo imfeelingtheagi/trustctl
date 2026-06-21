@@ -16,11 +16,7 @@ const shortcuts = [
 ];
 
 function focusableElements(panel: HTMLElement): HTMLElement[] {
-  return Array.from(
-    panel.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-    ),
-  );
+  return Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'));
 }
 
 export function ShortcutsHelp({ open, onClose, returnFocusRef }: ShortcutsHelpProps) {
@@ -31,10 +27,10 @@ export function ShortcutsHelp({ open, onClose, returnFocusRef }: ShortcutsHelpPr
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const returnTarget = returnFocusRef?.current ?? previous;
     closeRef.current?.focus();
     return () => {
-      const target = returnFocusRef?.current ?? previous;
-      target?.focus();
+      returnTarget?.focus();
     };
   }, [open, returnFocusRef]);
 
@@ -89,9 +85,7 @@ export function ShortcutsHelp({ open, onClose, returnFocusRef }: ShortcutsHelpPr
             {shortcuts.map((shortcut) => (
               <div key={shortcut.label} className="flex items-center justify-between gap-4">
                 <dt className="text-sm font-medium">{shortcut.label}</dt>
-                <dd className="rounded border border-border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-                  {shortcut.keys}
-                </dd>
+                <dd className="rounded border border-border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">{shortcut.keys}</dd>
               </div>
             ))}
           </dl>

@@ -80,7 +80,9 @@ describe("served secrets surface", () => {
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
     expect(screen.getByText("Scheduled rotation and downstream sync not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet/i),
+    ).toBeInTheDocument();
     expect(screen.getByText("Auth-method administration not served yet")).toBeInTheDocument();
     expect(screen.getByText(/revoked methods aren't available in the console yet/i)).toBeInTheDocument();
     expect(screen.getByText("Secret-change approvals not served yet")).toBeInTheDocument();
@@ -107,9 +109,7 @@ describe("served secrets surface", () => {
     await user.type(createForm.getByLabelText("Secret value"), "new-secret-value");
     await user.click(createForm.getByRole("button", { name: /create secret/i }));
 
-    await waitFor(() =>
-      expect(apiMock.createSecret).toHaveBeenCalledWith({ name: "app/cache/token", value: "new-secret-value" }),
-    );
+    await waitFor(() => expect(apiMock.createSecret).toHaveBeenCalledWith({ name: "app/cache/token", value: "new-secret-value" }));
     expect(await screen.findByText(/stored as version 1/i)).toBeInTheDocument();
     expect(screen.queryByText("new-secret-value")).not.toBeInTheDocument();
 
@@ -199,16 +199,7 @@ describe("served secrets surface", () => {
     expect(screen.getByText(/No served transit or KMIP API\/CLI surface exists yet/i)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
-    for (const target of [
-      "Kubernetes",
-      "GitHub Actions",
-      "GitLab CI",
-      "Terraform Cloud",
-      "Vercel",
-      "Netlify",
-      "AWS Parameter Store",
-      "Webhook",
-    ]) {
+    for (const target of ["Kubernetes", "GitHub Actions", "GitLab CI", "Terraform Cloud", "Vercel", "Netlify", "AWS Parameter Store", "Webhook"]) {
       expect(screen.getByText(target)).toBeInTheDocument();
     }
     expect(screen.getByText("secret://sync/github/prod:****")).toBeInTheDocument();
@@ -241,9 +232,7 @@ describe("served secrets surface", () => {
     await user.type(loginForm.getByLabelText("Credential"), "tenant-bound-machine-token");
     await user.click(loginForm.getByRole("button", { name: /test login/i }));
 
-    await waitFor(() =>
-      expect(apiMock.machineLogin).toHaveBeenCalledWith({ method: "token", credential: "tenant-bound-machine-token" }),
-    );
+    await waitFor(() => expect(apiMock.machineLogin).toHaveBeenCalledWith({ method: "token", credential: "tenant-bound-machine-token" }));
     expect(screen.getByText("sess-1")).toBeInTheDocument();
     expect(screen.getByText("svc-api")).toBeInTheDocument();
     expect(loginForm.getByLabelText("Credential")).toHaveValue("");
@@ -271,9 +260,7 @@ describe("served secrets surface", () => {
   });
 
   it("shows the served fail-closed disabled state when secrets API or KEK is unavailable", async () => {
-    apiMock.secretPage.mockRejectedValueOnce(
-      new ApiError(503, JSON.stringify({ detail: "secrets.enable_api disabled or KEK missing" })),
-    );
+    apiMock.secretPage.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "secrets.enable_api disabled or KEK missing" })));
     renderSecrets();
 
     expect(await screen.findByText("Secrets API unavailable or disabled")).toBeInTheDocument();

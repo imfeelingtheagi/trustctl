@@ -54,16 +54,10 @@ export function Risk() {
     const needle = search.trim().toLowerCase();
     if (!needle) return certRows;
     return certRows.filter((row) =>
-      [row.subject, row.credential_id, row.kind, row.owner_active ? "active" : "orphaned"]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
+      [row.subject, row.credential_id, row.kind, row.owner_active ? "active" : "orphaned"].join(" ").toLowerCase().includes(needle),
     );
   }, [certRows, search]);
-  const expandedRisk = useMemo(
-    () => certRows.find((row) => row.credential_id === expanded) ?? null,
-    [certRows, expanded],
-  );
+  const expandedRisk = useMemo(() => certRows.find((row) => row.credential_id === expanded) ?? null, [certRows, expanded]);
 
   useEffect(() => {
     let active = true;
@@ -123,8 +117,16 @@ export function Risk() {
       },
       { id: "top_factor", header: "Top factor", cell: (risk) => formatTopFactor(risk) },
       { id: "expires_at", header: "Expires", sortable: true, cell: (risk) => formatDate(risk.expires_at) },
-      { id: "privilege", header: "Privilege", cell: (risk) => <RiskScaleLabel label={scaleLabel(privilegeLabel, risk.privilege)} raw={risk.privilege} name="privilege" /> },
-      { id: "sensitivity", header: "Sensitivity", cell: (risk) => <RiskScaleLabel label={scaleLabel(sensitivityLabel, risk.sensitivity)} raw={risk.sensitivity} name="sensitivity" /> },
+      {
+        id: "privilege",
+        header: "Privilege",
+        cell: (risk) => <RiskScaleLabel label={scaleLabel(privilegeLabel, risk.privilege)} raw={risk.privilege} name="privilege" />,
+      },
+      {
+        id: "sensitivity",
+        header: "Sensitivity",
+        cell: (risk) => <RiskScaleLabel label={scaleLabel(sensitivityLabel, risk.sensitivity)} raw={risk.sensitivity} name="sensitivity" />,
+      },
       { id: "owner", header: "Owner", cell: (risk) => (risk.owner_active ? "active" : "orphaned") },
       {
         id: "actions",
@@ -132,12 +134,7 @@ export function Risk() {
         cell: (risk) => {
           const isExpanded = expanded === risk.credential_id;
           return (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setExpanded(isExpanded ? null : risk.credential_id)}
-            >
+            <Button type="button" size="sm" variant="outline" onClick={() => setExpanded(isExpanded ? null : risk.credential_id)}>
               {isExpanded ? "Hide factors" : "Show factors"}
             </Button>
           );
@@ -149,20 +146,16 @@ export function Risk() {
 
   return (
     <section aria-labelledby="risk-heading">
-      <PageHeader
-        titleId="risk-heading"
-        title="Credential risk"
-        description="Ranked by composite score — what to rotate first."
-      />
+      <PageHeader titleId="risk-heading" title="Credential risk" description="Ranked by composite score — what to rotate first." />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
-          Risk scoring covers certificates today; scoring for SSH certificates, SSH
-          keys, secrets, API keys, tokens, and workload identities is coming soon.
+          Risk scoring covers certificates today; scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities is coming soon.
         </UnavailableState>
       </div>
       {data && ignoredCount > 0 && (
         <p className="mb-3 text-sm text-status-warning">
-          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on console support for other credential kinds, which is coming soon.
+          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on console support for other credential kinds, which is
+          coming soon.
         </p>
       )}
 
@@ -184,7 +177,17 @@ export function Risk() {
             searchPlaceholder="Search credential or owner state"
             searchValue={search}
             onSearchChange={setSearch}
-            filters={<RiskFilterForm minScore={minScore} privilege={privilege} owner={owner} onMinScore={setMinScore} onPrivilege={setPrivilege} onOwner={setOwner} onSubmit={applyFilters} />}
+            filters={
+              <RiskFilterForm
+                minScore={minScore}
+                privilege={privilege}
+                owner={owner}
+                onMinScore={setMinScore}
+                onPrivilege={setPrivilege}
+                onOwner={setOwner}
+                onSubmit={applyFilters}
+              />
+            }
             columnChooser={columnChooser}
           />
         )}
@@ -272,22 +275,21 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
         <h2 className="mb-2 text-sm font-semibold">Six-factor breakdown</h2>
         <div className="grid gap-2 md:grid-cols-2">
           {factorKeys.map((factor) => (
-            <FactorBar
-              key={factor}
-              factor={factor}
-              value={risk.components[factor]}
-              active={factor === activeFactor}
-            />
+            <FactorBar key={factor} factor={factor} value={risk.components[factor]} active={factor === activeFactor} />
           ))}
         </div>
         <dl className="mt-4 grid gap-2 text-sm md:grid-cols-2">
           <div className="rounded-md border border-border p-2">
             <dt className="font-medium text-muted-foreground">Privilege label</dt>
-            <dd>{scaleLabel(privilegeLabel, risk.privilege)} <span className="text-muted-foreground">(raw {risk.privilege})</span></dd>
+            <dd>
+              {scaleLabel(privilegeLabel, risk.privilege)} <span className="text-muted-foreground">(raw {risk.privilege})</span>
+            </dd>
           </div>
           <div className="rounded-md border border-border p-2">
             <dt className="font-medium text-muted-foreground">Sensitivity label</dt>
-            <dd>{scaleLabel(sensitivityLabel, risk.sensitivity)} <span className="text-muted-foreground">(raw {risk.sensitivity})</span></dd>
+            <dd>
+              {scaleLabel(sensitivityLabel, risk.sensitivity)} <span className="text-muted-foreground">(raw {risk.sensitivity})</span>
+            </dd>
           </div>
         </dl>
       </div>
@@ -350,10 +352,7 @@ function RiskScaleLabel({ label, raw, name }: { label: string; raw: number; name
 function FactorBar({ factor, value, active }: { factor: RiskFactor; value: number; active: boolean }) {
   const pct = factorPercent(value);
   return (
-    <div
-      data-testid={`risk-factor-${factor}`}
-      className={active ? "rounded-md border border-primary p-2" : "rounded-md border border-border p-2"}
-    >
+    <div data-testid={`risk-factor-${factor}`} className={active ? "rounded-md border border-primary p-2" : "rounded-md border border-border p-2"}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="font-medium">{factorLabels[factor]}</span>
         <span>{pct}</span>
@@ -390,9 +389,7 @@ function formatDate(value?: string): string {
 }
 
 function topFactor(risk: CredentialRisk): RiskFactor {
-  return factorKeys.reduce((best, next) =>
-    factorPercent(risk.components[next]) > factorPercent(risk.components[best]) ? next : best,
-  );
+  return factorKeys.reduce((best, next) => (factorPercent(risk.components[next]) > factorPercent(risk.components[best]) ? next : best));
 }
 
 export { privilegeLabel, sensitivityLabel };

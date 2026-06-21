@@ -1,20 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronsUpDown, ChevronUp, Columns3 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
-import {
-  ErrorState,
-  LoadingState,
-  PermissionDeniedState,
-  UnavailableState,
-} from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import {
-  readGridPreferences,
-  sanitizeViewMetadata,
-  writeGridPreferences,
-  type GridViewPrimitive,
-  type SavedGridView,
-} from "@/lib/gridViews";
+import { readGridPreferences, sanitizeViewMetadata, writeGridPreferences, type GridViewPrimitive, type SavedGridView } from "@/lib/gridViews";
 import { cn } from "@/lib/utils";
 
 export type SortDirection = "asc" | "desc";
@@ -89,30 +78,22 @@ export function DataGrid<Row>({
 }: DataGridProps<Row>) {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [viewName, setViewName] = useState("");
-  const [savedViews, setSavedViews] = useState<SavedGridView[]>(() =>
-    viewStorageKey ? readGridPreferences(viewStorageKey).views : [],
-  );
+  const [savedViews, setSavedViews] = useState<SavedGridView[]>(() => (viewStorageKey ? readGridPreferences(viewStorageKey).views : []));
   const columnIds = useMemo(() => columns.map((column) => column.id), [columns]);
-  const defaultVisibleColumnIds = useMemo(
-    () => columns.filter((column) => !column.hiddenByDefault).map((column) => column.id),
-    [columns],
-  );
+  const defaultVisibleColumnIds = useMemo(() => columns.filter((column) => !column.hiddenByDefault).map((column) => column.id), [columns]);
   const defaultColumnOrder = useMemo(() => columns.map((column) => column.id), [columns]);
-  const [visibleColumnIds, setVisibleColumnIds] = useState<Set<string>>(
-    () => new Set(initialVisibleIds(columns, viewStorageKey)),
-  );
-  const [columnOrder, setColumnOrder] = useState<string[]>(
-    () => initialColumnOrder(columns, viewStorageKey),
-  );
+  const [visibleColumnIds, setVisibleColumnIds] = useState<Set<string>>(() => new Set(initialVisibleIds(columns, viewStorageKey)));
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => initialColumnOrder(columns, viewStorageKey));
   const columnById = useMemo(() => new Map(columns.map((column) => [column.id, column])), [columns]);
   const visibleColumns = useMemo(
-    () => columnOrder.map((columnId) => columnById.get(columnId)).filter((column): column is DataGridColumn<Row> => Boolean(column && visibleColumnIds.has(column.id))),
+    () =>
+      columnOrder
+        .map((columnId) => columnById.get(columnId))
+        .filter((column): column is DataGridColumn<Row> => Boolean(column && visibleColumnIds.has(column.id))),
     [columnById, columnOrder, visibleColumnIds],
   );
   const allVisibleRowIds = useMemo(() => rows.map(getRowId), [getRowId, rows]);
-  const selectedVisibleCount = selection
-    ? allVisibleRowIds.filter((id) => selection.selectedIds.has(id)).length
-    : 0;
+  const selectedVisibleCount = selection ? allVisibleRowIds.filter((id) => selection.selectedIds.has(id)).length : 0;
   const allVisibleSelected = selection ? allVisibleRowIds.length > 0 && selectedVisibleCount === allVisibleRowIds.length : false;
   const partiallySelected = selection ? selectedVisibleCount > 0 && !allVisibleSelected : false;
 
@@ -161,7 +142,10 @@ export function DataGrid<Row>({
   function saveCurrentView() {
     if (!viewStorageKey || !viewName.trim()) return;
     const nextView: SavedGridView = {
-      id: `${Date.now()}-${viewName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      id: `${Date.now()}-${viewName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")}`,
       name: viewName.trim(),
       createdAt: new Date().toISOString(),
       columnOrder,
@@ -218,30 +202,18 @@ export function DataGrid<Row>({
 
   const columnChooser = (
     <div className="relative">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-expanded={chooserOpen}
-        onClick={() => setChooserOpen((open) => !open)}
-      >
+      <Button type="button" variant="outline" size="sm" aria-expanded={chooserOpen} onClick={() => setChooserOpen((open) => !open)}>
         <Columns3 className="h-4 w-4" aria-hidden="true" />
         Columns
       </Button>
       {chooserOpen && (
         <div className="absolute right-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
           <fieldset>
-            <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">
-              Visible columns
-            </legend>
+            <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">Visible columns</legend>
             {columns.map((column) => (
               <div key={column.id} className="flex items-center gap-2 rounded-control px-2 py-1.5">
                 <label className="flex flex-1 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={visibleColumnIds.has(column.id)}
-                    onChange={() => toggleColumn(column.id)}
-                  />
+                  <input type="checkbox" checked={visibleColumnIds.has(column.id)} onChange={() => toggleColumn(column.id)} />
                   <span>{column.header}</span>
                 </label>
                 <Button
@@ -313,7 +285,9 @@ export function DataGrid<Row>({
       </div>
 
       {state !== "ready" ? (
-        <GridState state={state} title={stateTitle}>{stateMessage}</GridState>
+        <GridState state={state} title={stateTitle}>
+          {stateMessage}
+        </GridState>
       ) : (
         <div className="overflow-x-auto rounded-panel border border-border bg-card shadow-elevation1">
           <table className="w-full min-w-[40rem] text-left text-body">
@@ -349,7 +323,11 @@ export function DataGrid<Row>({
                     )}
                   </th>
                 ))}
-                {onRowOpen && <th scope="col" className="px-3 py-2 font-medium">Action</th>}
+                {onRowOpen && (
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Action
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>

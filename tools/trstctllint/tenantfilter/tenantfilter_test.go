@@ -49,8 +49,8 @@ func TestTenantFilterLintGateFailsClosed(t *testing.T) {
 	for _, want := range []string{
 		"lint: ## Run the full lint gate",
 		"$(GO) build -o \"$$vettool\" ./tools/trstctllint",
-		"$(GO) vet -vettool=\"$$vettool\" ./...",
-		"golangci-lint run ./...",
+		"$(GO) vet -vettool=\"$$vettool\" $(GO_PACKAGES)",
+		"golangci-lint run $(GO_PACKAGE_DIRS)",
 		"FAIL: golangci-lint is not installed",
 		"FAIL: actionlint is not installed",
 		"lint-partial",

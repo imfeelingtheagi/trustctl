@@ -31,10 +31,7 @@ function requesterFor(user: ReturnType<typeof useAuth>["user"]): string {
 
 function isRequesterIdentity(identity: Identity, requester: string, subject?: string): boolean {
   const attrRequester = identity.attributes?.requester;
-  return (
-    (typeof attrRequester === "string" && attrRequester === requester) ||
-    (subject != null && identity.owner_id === subject)
-  );
+  return (typeof attrRequester === "string" && attrRequester === requester) || (subject != null && identity.owner_id === subject);
 }
 
 function profileLabel(identity: Identity): string {
@@ -116,10 +113,7 @@ export function RequestCredential() {
     if (!ownerId && user?.subject) setOwnerId(user.subject);
   }, [ownerId, user?.subject]);
 
-  const activeProfiles = useMemo(
-    () => (profiles ?? []).filter((profile) => profile.active !== false).sort((a, b) => a.name.localeCompare(b.name)),
-    [profiles],
-  );
+  const activeProfiles = useMemo(() => (profiles ?? []).filter((profile) => profile.active !== false).sort((a, b) => a.name.localeCompare(b.name)), [profiles]);
 
   useEffect(() => {
     if (!selectedProfileKey && activeProfiles.length > 0) setSelectedProfileKey(profileKey(activeProfiles[0]));
@@ -230,9 +224,7 @@ export function RequestCredential() {
             {profileError && <ErrorState title="Profile list unavailable">{profileError}</ErrorState>}
             {profiles == null && !profileError && <LoadingState>Loading profiles...</LoadingState>}
             {profiles && activeProfiles.length === 0 && (
-              <EmptyState title="No active profiles">
-                Create or activate a certificate profile before self-service requests can be accepted.
-              </EmptyState>
+              <EmptyState title="No active profiles">Create or activate a certificate profile before self-service requests can be accepted.</EmptyState>
             )}
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -326,10 +318,7 @@ export function RequestCredential() {
         getRowId={(identity) => identity.id}
         state={requestGridState}
         stateTitle={requestError ? "Request status unavailable" : "No requests yet"}
-        stateMessage={
-          requestError ??
-          "Self-service requests created by this session principal appear here after the backend accepts them."
-        }
+        stateMessage={requestError ?? "Self-service requests created by this session principal appear here after the backend accepts them."}
       />
     </section>
   );

@@ -1,12 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -84,11 +76,7 @@ function routeScore(command: RouteCommand, query: string): number {
 }
 
 function focusableElements(panel: HTMLElement): HTMLElement[] {
-  return Array.from(
-    panel.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-    ),
-  );
+  return Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'));
 }
 
 export function CommandPalette({ open, onClose, returnFocusRef }: CommandPaletteProps) {
@@ -101,11 +89,8 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
   const search = useGlobalSearch(query, { enabled: open && trimmed.length > 0 });
   const commands = useMemo(() => routeCommands(t), [t]);
   const filteredRoutes = useMemo(
-    () =>
-      commands
-        .filter((command) => matchesRoute(command, query))
-        .sort((left, right) => routeScore(left, query) - routeScore(right, query)),
-    [query],
+    () => commands.filter((command) => matchesRoute(command, query)).sort((left, right) => routeScore(left, query) - routeScore(right, query)),
+    [commands, query],
   );
   const choices: Array<RouteCommand | GlobalSearchResult> = [...filteredRoutes, ...search.results];
   const titleId = "command-palette-title";
@@ -114,11 +99,11 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const returnTarget = returnFocusRef?.current ?? previous;
     inputRef.current?.focus();
     return () => {
       setQuery("");
-      const target = returnFocusRef?.current ?? previous;
-      target?.focus();
+      returnTarget?.focus();
     };
   }, [open, returnFocusRef]);
 
@@ -189,10 +174,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
         </div>
         <div className="border-b border-border p-comfortable">
           <label className="relative block">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            />
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               ref={inputRef}
               type="search"
@@ -205,9 +187,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
             />
           </label>
           {search.unavailableSources.length > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t("command.sourcesUnavailable", { sources: search.unavailableSources.join(", ") })}
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">{t("command.sourcesUnavailable", { sources: search.unavailableSources.join(", ") })}</p>
           )}
         </div>
         <div className="max-h-[24rem] overflow-y-auto p-2">
@@ -231,9 +211,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
               ))}
             </PaletteSection>
           )}
-          {!search.loading && choices.length === 0 && (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("command.noResults")}</p>
-          )}
+          {!search.loading && choices.length === 0 && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("command.noResults")}</p>}
         </div>
       </div>
     </div>
@@ -249,15 +227,7 @@ function PaletteSection({ children, title }: { children: ReactNode; title: strin
   );
 }
 
-function PaletteButton({
-  description,
-  label,
-  onClick,
-}: {
-  description: string;
-  label: string;
-  onClick: () => void;
-}) {
+function PaletteButton({ description, label, onClick }: { description: string; label: string; onClick: () => void }) {
   const { t } = useTranslation();
   return (
     <button

@@ -29,6 +29,11 @@ LDFLAGS   := -s -w \
 	-X $(BUILDINFO).commit=$(COMMIT) \
 	-X $(BUILDINFO).date=$(DATE)
 GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'
+# npm installs may include Go helper packages inside web/node_modules. web/ is
+# gated by npm scripts; Go gates enumerate first-party Go roots by construction.
+GO_PACKAGES ?= ./clients/... ./cmd/... ./deploy/... ./docs/... ./internal/... ./scripts/... ./tools/...
+GO_COVER_PACKAGES ?= ./clients/...,./cmd/...,./deploy/...,./docs/...,./internal/...,./scripts/...,./tools/...
+GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.7
@@ -40,6 +45,7 @@ GO_ENV_GOPATH := $(shell $(GO) env GOPATH)
 GO_TOOL_BIN ?= $(if $(GO_ENV_GOBIN),$(GO_ENV_GOBIN),$(GO_ENV_GOPATH)/bin)
 GOVULNCHECK := $(GO_TOOL_BIN)/govulncheck
 CYCLONEDX_GOMOD := $(GO_TOOL_BIN)/cyclonedx-gomod
+WEB_NPM ?= npm --prefix web
 
 # Minimum total test coverage (percent), enforced by `make test`. Generated code
 # (*.pb.go) is excluded from the measurement.
@@ -106,7 +112,8 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
-	$(GO) test -race -count=1 -covermode=atomic -coverpkg=./... -coverprofile=$(COVERPROFILE) ./...
+	@echo ">> go test (race + merged first-party coverage)"
+	@$(GO) test -race -count=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE) $(GO_PACKAGES)
 	@grep -v -E '\.pb\.go:' $(COVERPROFILE) > $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
@@ -176,18 +183,18 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 		exit 1; \
 	fi
 	@echo ">> go vet"
-	$(GO) vet ./...
+	$(GO) vet $(GO_PACKAGES)
 	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
 	@vettool=$$(mktemp "$${TMPDIR:-/tmp}/trstctllint.XXXXXX"); \
 	trap 'rm -f "$$vettool"' EXIT; \
 	$(GO) build -o "$$vettool" ./tools/trstctllint; \
-	$(GO) vet -vettool="$$vettool" ./...
+	$(GO) vet -vettool="$$vettool" $(GO_PACKAGES)
 	@# golangci-lint carries errcheck/staticcheck/unused — a real part of the gate.
 	@# When it is missing we must NOT pass silently (CODE-005): make lint is the
 	@# full gate and fails closed by default. Developers who explicitly want only
 	@# the cheap local subset must run the intentionally named make lint-partial.
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		echo ">> golangci-lint"; golangci-lint run ./...; \
+		echo ">> golangci-lint"; golangci-lint run $(GO_PACKAGE_DIRS); \
 	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! ============================================================"; \
 		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \
@@ -209,6 +216,17 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null
 	@bash scripts/ci/check-actions-pinned.sh .
+
+.PHONY: web-lint web-format-check web-check
+web-lint: ## Run frontend ESLint from the repository root (CODE-002)
+	@echo ">> web lint"
+	@$(WEB_NPM) run lint
+
+web-format-check: ## Check frontend formatting from the repository root (CODE-002)
+	@echo ">> web format:check"
+	@$(WEB_NPM) run format:check
+
+web-check: web-lint web-format-check ## Run the frontend lint and formatter gates from the repository root (CODE-002)
 
 .PHONY: run
 run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version)

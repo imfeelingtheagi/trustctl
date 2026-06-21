@@ -76,10 +76,7 @@ describe("SPA security sinks (SURFACE-I01)", () => {
     // source file under src/pages and src/components with the same recursive fs
     // walk used above (test files are already excluded by sourceFiles).
     const ticketId = /BACKEND-[A-Z-]+|FE-PTR-[A-Z-]+/;
-    const surfaceFiles = [
-      ...sourceFiles(path.join(SRC, "pages")),
-      ...sourceFiles(path.join(SRC, "components")),
-    ];
+    const surfaceFiles = [...sourceFiles(path.join(SRC, "pages")), ...sourceFiles(path.join(SRC, "components"))];
     expect(surfaceFiles.length, "expected to scan pages and components source files").toBeGreaterThan(5);
     const offenders: string[] = [];
     for (const f of surfaceFiles) {

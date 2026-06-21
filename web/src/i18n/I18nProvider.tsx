@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   catalogs,
   defaultLocale,
@@ -17,15 +9,7 @@ import {
   type MessageKey,
   type MessageValues,
 } from "@/i18n/messages";
-import {
-  browserTimeZone,
-  formatDate,
-  formatDateTime,
-  formatNumber,
-  formatPlural,
-  normalizeTimeZone,
-  type FormatPolicy,
-} from "@/i18n/format";
+import { browserTimeZone, formatDate, formatDateTime, formatNumber, formatPlural, normalizeTimeZone, type FormatPolicy } from "@/i18n/format";
 
 export interface I18nContextValue extends FormatPolicy {
   dir: "ltr" | "rtl";
@@ -63,12 +47,7 @@ export function negotiateLocale(candidates: readonly string[] = []): Locale {
 
 function initialLocalePreference(initialLocale?: Locale): Locale {
   if (initialLocale) return initialLocale;
-  const languages =
-    typeof navigator === "undefined"
-      ? []
-      : navigator.languages.length > 0
-        ? navigator.languages
-        : [navigator.language];
+  const languages = typeof navigator === "undefined" ? [] : navigator.languages.length > 0 ? navigator.languages : [navigator.language];
   return negotiateLocale(languages);
 }
 
@@ -77,11 +56,7 @@ function initialTimeZonePreference(initialTimeZone?: string): string {
   return normalizeTimeZone(browserTimeZone());
 }
 
-export function formatMessage(
-  key: MessageKey,
-  values?: MessageValues,
-  locale: Locale = defaultLocale,
-): string {
+export function formatMessage(key: MessageKey, values?: MessageValues, locale: Locale = defaultLocale): string {
   const message = catalogs[locale]?.[key] ?? catalogs[defaultLocale][key];
   return interpolateMessage(message, values);
 }
@@ -100,10 +75,7 @@ export function IntlProvider({ children, initialLocale, initialTimeZone }: IntlP
     updateTimeZone(normalized);
   }, []);
 
-  const t = useCallback(
-    (key: MessageKey, values?: MessageValues) => formatMessage(key, values, locale),
-    [locale],
-  );
+  const t = useCallback((key: MessageKey, values?: MessageValues) => formatMessage(key, values, locale), [locale]);
 
   const policy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
 
@@ -121,14 +93,10 @@ export function IntlProvider({ children, initialLocale, initialTimeZone }: IntlP
       dir,
       t,
       formatMessage: t,
-      formatDate: (valueToFormat, nextPolicy = policy, options) =>
-        formatDate(valueToFormat, nextPolicy, options),
-      formatDateTime: (valueToFormat, nextPolicy = policy, options) =>
-        formatDateTime(valueToFormat, nextPolicy, options),
-      formatNumber: (valueToFormat, nextPolicy = policy, options) =>
-        formatNumber(valueToFormat, nextPolicy, options),
-      formatPlural: (valueToFormat, forms, nextPolicy = policy) =>
-        formatPlural(valueToFormat, forms, nextPolicy),
+      formatDate: (valueToFormat, nextPolicy = policy, options) => formatDate(valueToFormat, nextPolicy, options),
+      formatDateTime: (valueToFormat, nextPolicy = policy, options) => formatDateTime(valueToFormat, nextPolicy, options),
+      formatNumber: (valueToFormat, nextPolicy = policy, options) => formatNumber(valueToFormat, nextPolicy, options),
+      formatPlural: (valueToFormat, forms, nextPolicy = policy) => formatPlural(valueToFormat, forms, nextPolicy),
       setLocale,
       setTimeZone,
     }),

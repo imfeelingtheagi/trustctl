@@ -185,10 +185,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText("X.509 certificate identity")).toBeInTheDocument();
     expect(screen.getByText("Not after")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Owner owner-x" })).toHaveAttribute("href", "/owners?owner=owner-x");
-    expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute(
-      "href",
-      "/coverage?feature=F5&issuer=issuer-x",
-    );
+    expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute("href", "/coverage?feature=F5&issuer=issuer-x");
     expect(screen.getByText(/api.example.test/)).toBeInTheDocument();
 
     const sshRow = screen.getByText("deploy-key").closest("tr")!;
@@ -249,9 +246,7 @@ describe("lifecycle actions from the UI", () => {
     await user.type(screen.getByLabelText("Transition reason"), "approved in CAB-1234");
     await user.click(screen.getByRole("button", { name: "Move to issued" }));
 
-    await waitFor(() =>
-      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234"),
-    );
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234"));
   });
 
   it("shows revoked and retired terminal handling in the state machine", async () => {
@@ -298,15 +293,11 @@ describe("lifecycle actions from the UI", () => {
     await user.clear(reason);
     await user.type(reason, "key compromise CAB-9001");
     await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
-    await waitFor(() =>
-      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "key compromise CAB-9001"),
-    );
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "key compromise CAB-9001"));
   });
 
   it("shows served blast-radius impact before destructive confirmation (FE-083)", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "dep-9", name: "to-revoke", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "to-revoke", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" }]);
     apiMock.graphBlastRadius.mockResolvedValue({
       node: { id: "cert:dep-9", kind: "credential", name: "to-revoke certificate" },
       affected: [
@@ -334,9 +325,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("does not invent blast-radius impact when no graph node mapping is served (FE-083)", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "api-9", name: "api-key", kind: "api_key", owner_id: "owner-1", status: "deployed" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "api-9", name: "api-key", kind: "api_key", owner_id: "owner-1", status: "deployed" }]);
     const user = userEvent.setup();
     renderIdentities();
 
@@ -349,9 +338,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("degrades blast-radius impact when the served graph request fails (FE-083)", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "dep-404", name: "missing-graph-node", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "dep-404", name: "missing-graph-node", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" }]);
     apiMock.graphBlastRadius.mockRejectedValue(new ApiError(404, JSON.stringify({ detail: "graph node not found" })));
     const user = userEvent.setup();
     renderIdentities();
@@ -435,9 +422,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("shows RA separation guardrails and served problem details for denied issue", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "req-1", name: "request-only-svc", kind: "x509_certificate", status: "requested" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "request-only-svc", kind: "x509_certificate", status: "requested" }]);
     apiMock.transitionIdentity.mockReset().mockRejectedValue(
       new ApiError(
         403,
@@ -462,9 +447,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("moves dual-control approval decisions out of identity rows", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "req-1", name: "self-approval-svc", kind: "x509_certificate", status: "requested" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "self-approval-svc", kind: "x509_certificate", status: "requested" }]);
     renderIdentities();
 
     const row = (await screen.findByText("self-approval-svc")).closest("tr")!;
@@ -498,9 +481,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("labels served connector receipts instead of claiming synchronous deploy", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "iss-1", name: "issued-svc", kind: "x509_certificate", status: "issued" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "iss-1", name: "issued-svc", kind: "x509_certificate", status: "issued" }]);
     apiMock.connectorDeliveries.mockResolvedValue({
       items: [
         {
@@ -531,9 +512,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("discloses scheduler-backed lifecycle automation and served run evidence boundaries", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" }]);
     apiMock.rotationRuns.mockResolvedValue({
       items: [
         {
@@ -566,17 +545,12 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText("Dry run")).toBeInTheDocument();
     expect(screen.getAllByText("Rollback").length).toBeGreaterThan(0);
     expect(screen.getByText(/editing schedules, alert timing, and dry-run execution/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /use manual lifecycle transitions/i })).toHaveAttribute(
-      "href",
-      "#manual-lifecycle-transitions",
-    );
+    expect(screen.getByRole("link", { name: /use manual lifecycle transitions/i })).toHaveAttribute("href", "#manual-lifecycle-transitions");
     expect(screen.queryByRole("button", { name: /save schedule|run automation/i })).not.toBeInTheDocument();
   });
 
   it("reports idempotency protection after a successful lifecycle transition", async () => {
-    apiMock.identities.mockResolvedValue([
-      { id: "req-1", name: "idempotent-svc", kind: "x509_certificate", status: "requested" },
-    ]);
+    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "idempotent-svc", kind: "x509_certificate", status: "requested" }]);
     const user = userEvent.setup();
     renderIdentities();
 

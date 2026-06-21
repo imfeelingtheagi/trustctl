@@ -110,9 +110,7 @@ export function Profiles() {
       {!items && <LoadingState>Loading profiles...</LoadingState>}
 
       {items && items.length === 0 && !showForm && (
-        <EmptyState title="No profiles yet">
-          Create a certificate profile before issuing from a constrained template.
-        </EmptyState>
+        <EmptyState title="No profiles yet">Create a certificate profile before issuing from a constrained template.</EmptyState>
       )}
 
       {items && items.length > 0 && (
@@ -143,8 +141,7 @@ export function Profiles() {
                           aria-label={`View ${p.name} version ${p.version}`}
                           onClick={() => void loadVersion(p)}
                         >
-                          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                          v{p.version}
+                          <Eye className="h-3.5 w-3.5" aria-hidden="true" />v{p.version}
                           {p.active ? " active" : ""}
                         </Button>
                       ))}
@@ -282,22 +279,14 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function GuidedFields({
-  fields,
-  onChange,
-}: {
-  fields: BuilderFields;
-  onChange: (fields: BuilderFields) => void;
-}) {
+function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (fields: BuilderFields) => void }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <CheckboxSet
         legend="Allowed key algorithms"
         values={keyAlgorithms}
         selected={fields.allowedKeyAlgorithms}
-        onToggle={(value) =>
-          onChange({ ...fields, allowedKeyAlgorithms: toggleValue(fields.allowedKeyAlgorithms, value) })
-        }
+        onToggle={(value) => onChange({ ...fields, allowedKeyAlgorithms: toggleValue(fields.allowedKeyAlgorithms, value) })}
       />
       <CheckboxSet
         legend="Allowed EKUs"
@@ -350,9 +339,7 @@ function GuidedFields({
           legend="Allowed enrollment protocols"
           values={enrollmentProtocols}
           selected={fields.allowedProtocols}
-          onToggle={(value) =>
-            onChange({ ...fields, allowedProtocols: toggleValue(fields.allowedProtocols, value) })
-          }
+          onToggle={(value) => onChange({ ...fields, allowedProtocols: toggleValue(fields.allowedProtocols, value) })}
         />
       </div>
     </div>
@@ -376,12 +363,7 @@ function CheckboxSet({
       <div className="flex flex-wrap gap-3">
         {values.map((value) => (
           <label key={value} className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={selected.includes(value)}
-              onChange={() => onToggle(value)}
-              className="h-4 w-4 rounded border-border"
-            />
+            <input type="checkbox" checked={selected.includes(value)} onChange={() => onToggle(value)} className="h-4 w-4 rounded border-border" />
             <span>{value}</span>
           </label>
         ))}
@@ -428,8 +410,8 @@ function ProfileVersionDetail({ profile, listedProfiles }: { profile: Profile; l
           {profile.name} version {profile.version}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {profile.active ? "Active version." : "Historical version."} Certificates already bound to a profile keep
-          audit evidence for the version that evaluated issuance; creating a new profile version does not rewrite past decisions.
+          {profile.active ? "Active version." : "Historical version."} Certificates already bound to a profile keep audit evidence for the version that
+          evaluated issuance; creating a new profile version does not rewrite past decisions.
         </p>
       </div>
 

@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  api,
-  ApiError,
-  type GraphImpact,
-  type GraphNode,
-  type GraphQueryResult,
-  type GraphReachable,
-  type GraphResponse,
-} from "@/lib/api";
+import { api, ApiError, type GraphImpact, type GraphNode, type GraphQueryResult, type GraphReachable, type GraphResponse } from "@/lib/api";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import {
@@ -39,7 +31,7 @@ export function Graph() {
   const [hiddenEdgeTypes, setHiddenEdgeTypes] = useState<Set<string>>(() => new Set());
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [reachable, setReachable] = useState<GraphReachable | null>(null);
-  const [queryText, setQueryText] = useState('MATCH (a)-[e]->(b) RETURN a,b');
+  const [queryText, setQueryText] = useState("MATCH (a)-[e]->(b) RETURN a,b");
   const [queryResult, setQueryResult] = useState<GraphQueryResult | null>(null);
   const [blastError, setBlastError] = useState<string | null>(null);
   const [reachableError, setReachableError] = useState<string | null>(null);
@@ -61,26 +53,19 @@ export function Graph() {
         node.id.toLowerCase().includes(q) ||
         node.name.toLowerCase().includes(q) ||
         node.kind.toLowerCase().includes(q) ||
-        JSON.stringify(node.attrs ?? {}).toLowerCase().includes(q);
+        JSON.stringify(node.attrs ?? {})
+          .toLowerCase()
+          .includes(q);
       return kindOK && searchOK;
     });
   }, [data, kindFilter, search]);
-  const visibleNodes = useMemo(
-    () => filteredNodes.filter((node) => !hiddenNodeKinds.has(node.kind)),
-    [filteredNodes, hiddenNodeKinds],
-  );
+  const visibleNodes = useMemo(() => filteredNodes.filter((node) => !hiddenNodeKinds.has(node.kind)), [filteredNodes, hiddenNodeKinds]);
   const visibleNodeIDs = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
   const visibleEdges = useMemo(
-    () =>
-      (data?.edges ?? []).filter(
-        (edge) =>
-          !hiddenEdgeTypes.has(edge.type) &&
-          visibleNodeIDs.has(edge.from) &&
-          visibleNodeIDs.has(edge.to),
-      ),
+    () => (data?.edges ?? []).filter((edge) => !hiddenEdgeTypes.has(edge.type) && visibleNodeIDs.has(edge.from) && visibleNodeIDs.has(edge.to)),
     [data, hiddenEdgeTypes, visibleNodeIDs],
   );
-  const selectedNode = selected ? nodeByID.get(selected) ?? null : null;
+  const selectedNode = selected ? (nodeByID.get(selected) ?? null) : null;
   const emptyGraph = data != null && data.nodes.length === 0 && data.edges.length === 0;
 
   useEffect(() => {
@@ -253,9 +238,7 @@ export function Graph() {
               </label>
               <div className="grid gap-1 text-sm">
                 Selected node
-                <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">
-                  {selectedNode?.name || "No node selected"}
-                </p>
+                <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2" aria-label="Node search results">
@@ -263,13 +246,7 @@ export function Graph() {
                 <p className="text-sm text-muted-foreground">No graph nodes match the current filters.</p>
               ) : (
                 filteredNodes.slice(0, 8).map((node) => (
-                  <Button
-                    key={node.id}
-                    type="button"
-                    size="sm"
-                    variant={selected === node.id ? "default" : "outline"}
-                    onClick={() => setSelected(node.id)}
-                  >
+                  <Button key={node.id} type="button" size="sm" variant={selected === node.id ? "default" : "outline"} onClick={() => setSelected(node.id)}>
                     Choose {node.name || graphNodeKindLabel(node.kind)}
                   </Button>
                 ))
@@ -303,7 +280,9 @@ export function Graph() {
                 <tbody>
                   {filteredNodes.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="text-muted-foreground">No graph nodes match the current filters.</td>
+                      <td colSpan={4} className="text-muted-foreground">
+                        No graph nodes match the current filters.
+                      </td>
                     </tr>
                   )}
                   {filteredNodes.map((node) => (
@@ -322,7 +301,9 @@ export function Graph() {
               </table>
 
               <section aria-labelledby="graph-edges-heading">
-                <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">Edges</h2>
+                <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">
+                  Edges
+                </h2>
                 <table className="ui-table">
                   <caption className="sr-only">Credential graph edges</caption>
                   <thead>
@@ -336,7 +317,9 @@ export function Graph() {
                   <tbody>
                     {data.edges.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="text-muted-foreground">No graph edges returned.</td>
+                        <td colSpan={4} className="text-muted-foreground">
+                          No graph edges returned.
+                        </td>
                       </tr>
                     )}
                     {data.edges.map((edge) => (
@@ -398,11 +381,7 @@ export function Graph() {
                 <ErrorState title="Graph query unavailable">{queryError}</ErrorState>
               </div>
             )}
-            {queryResult && (
-              <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(queryResult.rows, null, 2)}
-              </pre>
-            )}
+            {queryResult && <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(queryResult.rows, null, 2)}</pre>}
           </section>
         </>
       )}
@@ -412,16 +391,14 @@ export function Graph() {
 
 function NodeDetail({ node }: { node: GraphNode | null }) {
   if (!node) {
-    return (
-      <aside className="ui-panel p-comfortable text-sm text-muted-foreground">
-        Select a graph node to inspect its attributes and drilldown links.
-      </aside>
-    );
+    return <aside className="ui-panel p-comfortable text-sm text-muted-foreground">Select a graph node to inspect its attributes and drilldown links.</aside>;
   }
   const attrRows = Object.entries(node.attrs ?? {});
   return (
     <aside aria-labelledby="graph-node-detail-heading" className="ui-panel p-comfortable text-sm">
-      <h2 id="graph-node-detail-heading" className="text-title font-semibold">Node detail</h2>
+      <h2 id="graph-node-detail-heading" className="text-title font-semibold">
+        Node detail
+      </h2>
       <dl className="mt-3 grid gap-2">
         <div>
           <dt className="font-medium text-muted-foreground">Name</dt>
@@ -459,13 +436,19 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
           </li>
         )}
         <li>
-          <a className="text-primary underline" href={`/risk?node=${encodeURIComponent(node.id)}`}>Risk row</a>
+          <a className="text-primary underline" href={`/risk?node=${encodeURIComponent(node.id)}`}>
+            Risk row
+          </a>
         </li>
         <li>
-          <a className="text-primary underline" href={`/identities?node=${encodeURIComponent(node.id)}`}>Lifecycle identity</a>
+          <a className="text-primary underline" href={`/identities?node=${encodeURIComponent(node.id)}`}>
+            Lifecycle identity
+          </a>
         </li>
         <li>
-          <a className="text-primary underline" href={`/audit?node=${encodeURIComponent(node.id)}`}>Audit evidence</a>
+          <a className="text-primary underline" href={`/audit?node=${encodeURIComponent(node.id)}`}>
+            Audit evidence
+          </a>
         </li>
       </ul>
     </aside>
@@ -514,10 +497,16 @@ function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
       {nodes.map((node) => (
         <li key={node.id} className="rounded-md border border-border p-2">
           <p className="font-medium">{node.name || node.id}</p>
-          <p className="font-mono text-xs text-muted-foreground">{node.kind} · {node.id}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {node.kind} · {node.id}
+          </p>
           <div className="mt-1 flex flex-wrap gap-2 text-xs">
-            <a className="text-primary underline" href={`/risk?node=${encodeURIComponent(node.id)}`}>Risk</a>
-            <a className="text-primary underline" href={`/audit?node=${encodeURIComponent(node.id)}`}>Audit</a>
+            <a className="text-primary underline" href={`/risk?node=${encodeURIComponent(node.id)}`}>
+              Risk
+            </a>
+            <a className="text-primary underline" href={`/audit?node=${encodeURIComponent(node.id)}`}>
+              Audit
+            </a>
             {node.id.startsWith("cert:") && (
               <a className="text-primary underline" href={`/certificates?credential=${encodeURIComponent(node.id.slice(5))}`}>
                 Certificate

@@ -5,7 +5,7 @@
 # The repo-wide gate in `make test` enforces only an *aggregate* floor: the
 # average can clear the bar while a critical package quietly rots. This gate
 # closes that hole by requiring EACH critical package to independently meet a
-# floor, computed from the merged `-coverpkg=./...` profile that `make test`
+# floor, computed from the merged `-coverpkg=$(GO_COVER_PACKAGES)` profile that `make test`
 # already writes (so it sees coverage delivered by cross-package integration
 # tests, not just in-package unit tests).
 #

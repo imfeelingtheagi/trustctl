@@ -14,16 +14,7 @@ export type DetailDrawerProps = {
   className?: string;
 };
 
-export function DetailDrawer({
-  open,
-  title,
-  description,
-  children,
-  actions,
-  onClose,
-  returnFocusRef,
-  className,
-}: DetailDrawerProps) {
+export function DetailDrawer({ open, title, description, children, actions, onClose, returnFocusRef, className }: DetailDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = "detail-drawer-title";
@@ -32,10 +23,10 @@ export function DetailDrawer({
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const returnTarget = returnFocusRef?.current ?? previous;
     closeRef.current?.focus();
     return () => {
-      const target = returnFocusRef?.current ?? previous;
-      target?.focus();
+      returnTarget?.focus();
     };
   }, [open, returnFocusRef]);
 
@@ -70,22 +61,14 @@ export function DetailDrawer({
 
   return (
     <div className="fixed inset-0 z-50" role="presentation">
-      <button
-        type="button"
-        aria-label="Close detail drawer"
-        className="absolute inset-0 h-full w-full bg-foreground/20"
-        onClick={onClose}
-      />
+      <button type="button" aria-label="Close detail drawer" className="absolute inset-0 h-full w-full bg-foreground/20" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className={cn(
-          "absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-elevation3",
-          className,
-        )}
+        className={cn("absolute right-0 top-0 flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-elevation3", className)}
       >
         <header className="border-b border-border p-comfortable">
           <div className="flex items-start justify-between gap-3">

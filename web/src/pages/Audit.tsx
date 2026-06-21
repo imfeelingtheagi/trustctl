@@ -166,13 +166,7 @@ export function Audit() {
                       ? "empty"
                       : "ready"
             }
-            stateTitle={
-              error?.kind === "error"
-                ? "Audit unavailable"
-                : events && events.length === 0
-                  ? "No audit events match these filters"
-                  : undefined
-            }
+            stateTitle={error?.kind === "error" ? "Audit unavailable" : events && events.length === 0 ? "No audit events match these filters" : undefined}
             stateMessage={
               error?.message ??
               (events && events.length === 0
@@ -187,11 +181,43 @@ export function Audit() {
                 onSearchChange={(value) => updateFilter("q", value)}
                 filters={
                   <>
-                    <AuditFilterInput id="audit-type" label="Type" value={filters.type} onChange={(value) => updateFilter("type", value)} placeholder="identity.issued" />
-                    <AuditFilterInput id="audit-since" label="Since" value={filters.since} onChange={(value) => updateFilter("since", value)} placeholder="2026-06-17T00:00:00Z" />
-                    <AuditFilterInput id="audit-until" label="Until" value={filters.until} onChange={(value) => updateFilter("until", value)} placeholder="2026-06-18T00:00:00Z" />
-                    <AuditFilterInput id="audit-as-of" label="As of sequence" type="number" value={filters.asOf} onChange={(value) => updateFilter("asOf", value)} />
-                    <AuditFilterInput id="audit-limit" label="Limit" type="number" value={filters.limit} onChange={(value) => updateFilter("limit", value)} min="1" max="100" />
+                    <AuditFilterInput
+                      id="audit-type"
+                      label="Type"
+                      value={filters.type}
+                      onChange={(value) => updateFilter("type", value)}
+                      placeholder="identity.issued"
+                    />
+                    <AuditFilterInput
+                      id="audit-since"
+                      label="Since"
+                      value={filters.since}
+                      onChange={(value) => updateFilter("since", value)}
+                      placeholder="2026-06-17T00:00:00Z"
+                    />
+                    <AuditFilterInput
+                      id="audit-until"
+                      label="Until"
+                      value={filters.until}
+                      onChange={(value) => updateFilter("until", value)}
+                      placeholder="2026-06-18T00:00:00Z"
+                    />
+                    <AuditFilterInput
+                      id="audit-as-of"
+                      label="As of sequence"
+                      type="number"
+                      value={filters.asOf}
+                      onChange={(value) => updateFilter("asOf", value)}
+                    />
+                    <AuditFilterInput
+                      id="audit-limit"
+                      label="Limit"
+                      type="number"
+                      value={filters.limit}
+                      onChange={(value) => updateFilter("limit", value)}
+                      min="1"
+                      max="100"
+                    />
                   </>
                 }
                 columnChooser={columnChooser}

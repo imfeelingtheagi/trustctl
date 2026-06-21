@@ -8,9 +8,7 @@ function mockFetch(status: number, body: string, headers: Record<string, string>
   const h = new Headers(headers);
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      new Response(status === 204 ? null : body, { status, headers: h }),
-    ),
+    vi.fn(async () => new Response(status === 204 ? null : body, { status, headers: h })),
   );
 }
 
@@ -224,11 +222,7 @@ describe("api CSRF contract (SEC-001)", () => {
     await api.issueCertificate({ name: "payments" });
 
     const calls = vi.mocked(fetch).mock.calls;
-    expect(calls.map((call) => call[0])).toEqual([
-      "/api/v1/owners",
-      "/api/v1/identities",
-      "/api/v1/identities/identity-1/transitions",
-    ]);
+    expect(calls.map((call) => call[0])).toEqual(["/api/v1/owners", "/api/v1/identities", "/api/v1/identities/identity-1/transitions"]);
     expect(JSON.parse(calls[1][1]?.body as string)).toEqual({
       kind: "x509_certificate",
       name: "payments",
@@ -362,9 +356,7 @@ describe("certificate inventory contract", () => {
       expiringBefore: "2026-07-01T00:00:00.000Z",
     });
 
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
-      "/api/v1/certificates?limit=5&cursor=cursor-1&expiring_before=2026-07-01T00%3A00%3A00.000Z",
-    );
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/certificates?limit=5&cursor=cursor-1&expiring_before=2026-07-01T00%3A00%3A00.000Z");
     expect(page.next_cursor).toBe("cursor-2");
   });
 
@@ -415,9 +407,7 @@ describe("risk query contract", () => {
 
     await api.risk({ sort: "expiry", minScore: 70, privilege: 3, owner: "platform" });
 
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
-      "/api/v1/risk/credentials?sort=expiry&min_score=70&privilege=3&owner=platform",
-    );
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/risk/credentials?sort=expiry&min_score=70&privilege=3&owner=platform");
   });
 });
 
@@ -463,9 +453,7 @@ describe("audit contract", () => {
 
     await api.exportAudit({ type: "identity.revoked", q: "revoked", limit: 10 });
 
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
-      "/api/v1/audit/export?limit=10&type=identity.revoked&q=revoked",
-    );
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/audit/export?limit=10&type=identity.revoked&q=revoked");
   });
 });
 

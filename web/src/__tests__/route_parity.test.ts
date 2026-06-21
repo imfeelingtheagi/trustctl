@@ -1,15 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  appRoutePaths,
-  navGroups,
-  realGuiSurfaces,
-  type RealGuiSurface,
-} from "@/lib/navigation";
+import { appRoutePaths, navGroups, realGuiSurfaces, type RealGuiSurface } from "@/lib/navigation";
 import { featureCoverageItems } from "@/lib/featureCoverage";
 
-const servedFeatureIds = featureCoverageItems
-  .filter((item) => item.servedState === "served" || item.servedState === "conditional")
-  .map((item) => item.id);
+const servedFeatureIds = featureCoverageItems.filter((item) => item.servedState === "served" || item.servedState === "conditional").map((item) => item.id);
 
 function surfacesFor(featureId: string): RealGuiSurface[] {
   return realGuiSurfaces.filter((surface) => surface.featureId === featureId);

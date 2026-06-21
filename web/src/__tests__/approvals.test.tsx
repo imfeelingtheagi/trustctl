@@ -67,10 +67,7 @@ describe("dedicated approvals inbox", () => {
     expect(within(row).getByText("dev@example.test")).toBeInTheDocument();
     expect(within(row).getByText("1/2")).toBeInTheDocument();
     expect(within(row).getByText("2026-06-19T18:00:00Z")).toBeInTheDocument();
-    expect(within(row).getByRole("link", { name: /audit trail/i })).toHaveAttribute(
-      "href",
-      "/audit?type=identity.approval&q=jit-1+issue",
-    );
+    expect(within(row).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?type=identity.approval&q=jit-1+issue");
 
     await user.click(within(row).getByRole("button", { name: /approve issue for jit-db/i }));
 

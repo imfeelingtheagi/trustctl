@@ -80,9 +80,7 @@ describe("operational console surface", () => {
 
   it("surfaces served profile validation problems from the JSON fallback", async () => {
     apiMock.profiles.mockResolvedValue([]);
-    apiMock.createProfile.mockRejectedValue(
-      new ApiError(422, JSON.stringify({ detail: "max_validity exceeds the tenant profile ceiling" })),
-    );
+    apiMock.createProfile.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "max_validity exceeds the tenant profile ceiling" })));
     const user = userEvent.setup();
     renderAt("/profiles");
 
@@ -126,9 +124,7 @@ describe("operational console surface", () => {
       },
     };
     apiMock.profiles.mockResolvedValue([versionOne, versionTwo]);
-    apiMock.getProfileVersion.mockImplementation((_name: string, version: number) =>
-      Promise.resolve(version === 1 ? versionOne : versionTwo),
-    );
+    apiMock.getProfileVersion.mockImplementation((_name: string, version: number) => Promise.resolve(version === 1 ? versionOne : versionTwo));
     const user = userEvent.setup();
     renderAt("/profiles");
 
@@ -169,18 +165,13 @@ describe("operational console surface", () => {
 
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
     expect(await screen.findByText("jws: sealed.bundle")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute(
-      "download",
-      "audit-evidence.jws.txt",
-    );
+    expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "audit-evidence.jws.txt");
     expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50 });
   });
 
   it("filters audit events through served params and opens the event detail drawer", async () => {
     apiMock.auditEvents
-      .mockResolvedValueOnce([
-        { sequence: 1, id: "evt-1", type: "identity.requested", tenant_id: "t1", time: "2026-06-17T11:00:00Z" },
-      ])
+      .mockResolvedValueOnce([{ sequence: 1, id: "evt-1", type: "identity.requested", tenant_id: "t1", time: "2026-06-17T11:00:00Z" }])
       .mockResolvedValueOnce([
         {
           sequence: 7,
@@ -232,9 +223,7 @@ describe("operational console surface", () => {
     empty.unmount();
 
     apiMock.auditEvents.mockReset();
-    apiMock.auditEvents.mockRejectedValue(
-      new ApiError(403, JSON.stringify({ detail: "tenant t2 audit stream exists but is forbidden" })),
-    );
+    apiMock.auditEvents.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "tenant t2 audit stream exists but is forbidden" })));
     renderAt("/audit");
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
@@ -243,9 +232,7 @@ describe("operational console surface", () => {
   });
 
   it("surfaces audit export problem+json errors", async () => {
-    apiMock.auditEvents.mockResolvedValue([
-      { sequence: 7, id: "evt-7", type: "identity.issued", tenant_id: "t1", time: "2026-06-17T12:00:00Z", hash: "abc" },
-    ]);
+    apiMock.auditEvents.mockResolvedValue([{ sequence: 7, id: "evt-7", type: "identity.issued", tenant_id: "t1", time: "2026-06-17T12:00:00Z", hash: "abc" }]);
     apiMock.exportAudit.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "audit export window too large" })));
     const user = userEvent.setup();
     renderAt("/audit");
@@ -295,10 +282,7 @@ describe("operational console surface", () => {
     expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
     expect(screen.getByTestId("graph-visualization")).toBeInTheDocument();
     expect(screen.getAllByTestId("graph-node")).toHaveLength(2);
-    expect(screen.getAllByTestId("graph-node").map((node) => node.getAttribute("data-node-kind"))).toEqual([
-      "credential",
-      "workload",
-    ]);
+    expect(screen.getAllByTestId("graph-node").map((node) => node.getAttribute("data-node-kind"))).toEqual(["credential", "workload"]);
     expect(screen.getAllByTestId("graph-edge")).toHaveLength(1);
     expect(screen.getByTestId("graph-text-fallback")).toBeInTheDocument();
     expect(screen.getByText("The credential is deployed to that workload or resource.")).toBeInTheDocument();
@@ -327,15 +311,9 @@ describe("operational console surface", () => {
     expect(await screen.findByRole("heading", { name: "Node detail" })).toBeInTheDocument();
     expect(screen.getAllByText("cert:cert/unsafe").length).toBeGreaterThan(0);
     expect(screen.getByText("01")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Certificate detail" })).toHaveAttribute(
-      "href",
-      "/certificates?credential=cert%2Funsafe",
-    );
+    expect(screen.getByRole("link", { name: "Certificate detail" })).toHaveAttribute("href", "/certificates?credential=cert%2Funsafe");
     expect(screen.getByRole("link", { name: "Risk row" })).toHaveAttribute("href", "/risk?node=cert%3Acert%2Funsafe");
-    expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute(
-      "href",
-      "/audit?node=cert%3Acert%2Funsafe",
-    );
+    expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute("href", "/audit?node=cert%3Acert%2Funsafe");
   });
 
   it("renders blast-radius by-kind, reachable nodes, graph query rows, and export", async () => {
@@ -388,9 +366,7 @@ describe("operational console surface", () => {
     expect(screen.getByRole("button", { name: "Analyze" })).toBeDisabled();
     empty.unmount();
 
-    apiMock.graph.mockRejectedValue(
-      new ApiError(403, JSON.stringify({ detail: "tenant t2 graph scope exists but is forbidden" })),
-    );
+    apiMock.graph.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "tenant t2 graph scope exists but is forbidden" })));
     renderAt("/graph");
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
@@ -440,10 +416,7 @@ describe("operational console surface", () => {
 
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
-    expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual([
-      "root-ca.example.test",
-      "old-leaf.example.test",
-    ]);
+    expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.getByRole("heading", { name: "Risk band legend" })).toBeInTheDocument();
     expect(screen.getByText("90-100")).toBeInTheDocument();
 
@@ -492,19 +465,10 @@ describe("operational console surface", () => {
     const row = (await screen.findByText("edge.example.test")).closest("tr")!;
     await user.click(within(row).getByRole("button", { name: /show factors/i }));
 
-    expect(screen.getByRole("link", { name: "Credential detail" })).toHaveAttribute(
-      "href",
-      "/certificates?credential=cert%2Funsafe",
-    );
+    expect(screen.getByRole("link", { name: "Credential detail" })).toHaveAttribute("href", "/certificates?credential=cert%2Funsafe");
     expect(screen.getByRole("link", { name: "Owner status orphaned" })).toHaveAttribute("href", "/owners?status=orphaned");
-    expect(screen.getByRole("link", { name: "Graph blast radius" })).toHaveAttribute(
-      "href",
-      "/graph?node=cert%3Acert%2Funsafe",
-    );
-    expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute(
-      "href",
-      "/audit?credential=cert%2Funsafe",
-    );
+    expect(screen.getByRole("link", { name: "Graph blast radius" })).toHaveAttribute("href", "/graph?node=cert%3Acert%2Funsafe");
+    expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute("href", "/audit?credential=cert%2Funsafe");
   });
 
   it("shows the certificate-only risk scope and does not fabricate non-certificate scores", async () => {

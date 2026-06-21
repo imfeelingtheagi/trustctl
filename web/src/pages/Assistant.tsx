@@ -23,9 +23,7 @@ function formatError(err: unknown): string {
     if (err.status === 403) return "Permission denied for this evidence scope.";
     if (err.status === 404) return "Tool is not available.";
     if (err.status === 429) {
-      return err.retryAfterSeconds != null
-        ? `Rate limited. Try again in ${err.retryAfterSeconds}s.`
-        : "Rate limited. Try again later.";
+      return err.retryAfterSeconds != null ? `Rate limited. Try again in ${err.retryAfterSeconds}s.` : "Rate limited. Try again later.";
     }
     if (err.status === 503) return "Assistant surface is not enabled.";
     return `Request failed (${err.status}).`;
@@ -33,17 +31,7 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function ToggleTab({
-  active,
-  children,
-  icon,
-  onClick,
-}: {
-  active: boolean;
-  children: ReactNode;
-  icon: ReactNode;
-  onClick: () => void;
-}) {
+function ToggleTab({ active, children, icon, onClick }: { active: boolean; children: ReactNode; icon: ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -69,12 +57,8 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
     <section aria-label="Assistant answer" className="mt-5 ui-panel p-comfortable">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium">
         {tool && <span className="rounded-control border border-border px-2 py-1">Tool: {tool}</span>}
-        <span className="rounded-control border border-border px-2 py-1">
-          {answer.grounded ? "Grounded" : "No cited evidence"}
-        </span>
-        <span className="rounded-control border border-border px-2 py-1">
-          {answer.sufficient ? "Sufficient" : "Insufficient"}
-        </span>
+        <span className="rounded-control border border-border px-2 py-1">{answer.grounded ? "Grounded" : "No cited evidence"}</span>
+        <span className="rounded-control border border-border px-2 py-1">{answer.sufficient ? "Sufficient" : "Insufficient"}</span>
       </div>
       <p className="whitespace-pre-wrap text-body" data-testid="assistant-answer">
         {answer.text}
@@ -99,11 +83,7 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
 
 function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStatus | null; error: string | null; loading: boolean }) {
   const enabled = status?.enabled ? "enabled" : "disabled";
-  const model = status?.model_configured
-    ? status.model_name
-      ? `${status.model_mode}: ${status.model_name}`
-      : status.model_mode
-    : "not configured";
+  const model = status?.model_configured ? (status.model_name ? `${status.model_mode}: ${status.model_name}` : status.model_mode) : "not configured";
   const egress = status?.egress ?? "none";
   const endpoint = status?.endpoint_host ?? "not disclosed";
   return (
@@ -113,7 +93,8 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
           AI runtime boundary
         </h2>
         <p className="mt-1 max-w-3xl text-body text-muted-foreground">
-          Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
+          Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API
+          token, never from a browser field.
         </p>
       </div>
       <dl className="grid gap-3 md:grid-cols-4">
@@ -135,8 +116,7 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
         </div>
       </dl>
       <p className="text-body text-muted-foreground">
-        Redaction boundary: {status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
-        {status?.residual_refusal_gate === false ? "inactive" : "active"}.
+        Redaction boundary: {status?.redaction ?? "default-redactor"}; residual refusal gate: {status?.residual_refusal_gate === false ? "inactive" : "active"}.
       </p>
       {error && (
         <UnavailableState title="AI runtime status unavailable">
@@ -181,7 +161,8 @@ function RCAWorkspaceDisclosure() {
         RCA evidence workspace
       </h3>
       <p className="mt-2 text-muted-foreground">
-        RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a served remediation workflow exists.
+        RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text
+        until a served remediation workflow exists.
       </p>
     </section>
   );
@@ -194,7 +175,8 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
         MCP permission boundary
       </h3>
       <p className="mt-2 text-muted-foreground">
-        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Model egress and redaction posture are read from the served runtime status above.
+        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Model egress and
+        redaction posture are read from the served runtime status above.
       </p>
     </section>
   );
@@ -222,9 +204,7 @@ export function Assistant() {
   }, [selectedTool, tools.data]);
 
   function toggleSurface(value: string) {
-    setSurfaces((current) =>
-      current.includes(value) ? current.filter((v) => v !== value) : [...current, value],
-    );
+    setSurfaces((current) => (current.includes(value) ? current.filter((v) => v !== value) : [...current, value]));
   }
 
   async function runQuery(e: FormEvent) {
@@ -304,25 +284,13 @@ export function Assistant() {
       <AssistantRuntimeDisclosure status={runtime.data} error={runtime.error} loading={runtime.loading} />
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Assistant workflow">
-        <ToggleTab
-          active={tab === "query"}
-          onClick={() => setTab("query")}
-          icon={<Search aria-hidden="true" className="h-4 w-4" />}
-        >
+        <ToggleTab active={tab === "query"} onClick={() => setTab("query")} icon={<Search aria-hidden="true" className="h-4 w-4" />}>
           Query
         </ToggleTab>
-        <ToggleTab
-          active={tab === "rca"}
-          onClick={() => setTab("rca")}
-          icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}
-        >
+        <ToggleTab active={tab === "rca"} onClick={() => setTab("rca")} icon={<ShieldAlert aria-hidden="true" className="h-4 w-4" />}>
           RCA
         </ToggleTab>
-        <ToggleTab
-          active={tab === "mcp"}
-          onClick={() => setTab("mcp")}
-          icon={<Wrench aria-hidden="true" className="h-4 w-4" />}
-        >
+        <ToggleTab active={tab === "mcp"} onClick={() => setTab("mcp")} icon={<Wrench aria-hidden="true" className="h-4 w-4" />}>
           MCP tools
         </ToggleTab>
       </div>
@@ -367,11 +335,7 @@ export function Assistant() {
                 <div className="flex flex-wrap gap-3">
                   {surfaceOptions.map((surface) => (
                     <label key={surface.value} className="inline-flex items-center gap-2 text-body">
-                      <input
-                        type="checkbox"
-                        checked={surfaces.includes(surface.value)}
-                        onChange={() => toggleSurface(surface.value)}
-                      />
+                      <input type="checkbox" checked={surfaces.includes(surface.value)} onChange={() => toggleSurface(surface.value)} />
                       {surface.label}
                     </label>
                   ))}
@@ -433,11 +397,17 @@ export function Assistant() {
           </CardHeader>
           <CardContent>
             <MCPBoundary readOnly={tools.data?.read_only} />
-            {tools.loading && <p role="status" className="text-body text-muted-foreground">Loading tools...</p>}
-            {tools.error && <p role="alert" className="text-body text-destructive">Could not load tools: {tools.error}</p>}
-            {tools.data && tools.data.tools.length === 0 && (
-              <p className="text-body text-muted-foreground">No MCP tools are available for this tenant.</p>
+            {tools.loading && (
+              <p role="status" className="text-body text-muted-foreground">
+                Loading tools...
+              </p>
             )}
+            {tools.error && (
+              <p role="alert" className="text-body text-destructive">
+                Could not load tools: {tools.error}
+              </p>
+            )}
+            {tools.data && tools.data.tools.length === 0 && <p className="text-body text-muted-foreground">No MCP tools are available for this tenant.</p>}
             {tools.data && tools.data.tools.length > 0 && (
               <form onSubmit={runTool} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_2fr]">

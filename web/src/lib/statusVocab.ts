@@ -1,24 +1,6 @@
-export type StatusTone =
-  | "operate"
-  | "observe"
-  | "disclose"
-  | "success"
-  | "warning"
-  | "critical"
-  | "high"
-  | "medium"
-  | "low"
-  | "neutral"
-  | "info";
+export type StatusTone = "operate" | "observe" | "disclose" | "success" | "warning" | "critical" | "high" | "medium" | "low" | "neutral" | "info";
 
-export type StatusVocabulary =
-  | "agent"
-  | "certificate"
-  | "delivery"
-  | "expiry"
-  | "honesty"
-  | "lifecycle"
-  | "risk";
+export type StatusVocabulary = "agent" | "certificate" | "delivery" | "expiry" | "honesty" | "lifecycle" | "risk";
 
 export type StatusDescriptor = {
   label: string;
@@ -92,10 +74,12 @@ export const statusVocabulary: Record<StatusVocabulary, Record<string, StatusDes
 
 export function describeStatus(vocabulary: StatusVocabulary, value: string): StatusDescriptor {
   const normalized = value.toLowerCase();
-  return statusVocabulary[vocabulary][normalized] ?? {
-    label: humanizeStatus(value),
-    tone: "neutral",
-  };
+  return (
+    statusVocabulary[vocabulary][normalized] ?? {
+      label: humanizeStatus(value),
+      tone: "neutral",
+    }
+  );
 }
 
 export function riskBand(score: number): keyof typeof riskBands {
@@ -118,7 +102,5 @@ export function expiryBandForDate(value?: string): keyof typeof expiryBands {
 }
 
 export function humanizeStatus(value: string): string {
-  return value
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }

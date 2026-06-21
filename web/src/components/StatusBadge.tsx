@@ -23,25 +23,14 @@ export type StatusBadgeProps = HTMLAttributes<HTMLSpanElement> & {
   tone?: StatusTone;
 };
 
-export function StatusBadge({
-  className,
-  value,
-  vocabulary = "lifecycle",
-  label,
-  tone,
-  ...props
-}: StatusBadgeProps) {
+export function StatusBadge({ className, value, vocabulary = "lifecycle", label, tone, ...props }: StatusBadgeProps) {
   const described = describeStatus(vocabulary, value);
   const resolvedTone = tone ?? described.tone;
   return (
     <span
       data-status-badge={vocabulary}
       data-status-value={value}
-      className={cn(
-        "inline-flex min-h-7 items-center rounded-control border px-2 py-1 text-caption font-medium",
-        toneClasses[resolvedTone],
-        className,
-      )}
+      className={cn("inline-flex min-h-7 items-center rounded-control border px-2 py-1 text-caption font-medium", toneClasses[resolvedTone], className)}
       {...props}
     >
       {label ?? described.label}

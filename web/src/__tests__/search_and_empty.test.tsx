@@ -268,9 +268,7 @@ describe("certificate inventory gap closure", () => {
 
   it("surfaces problem+json detail when ingest rejects invalid PEM", async () => {
     apiMock.certificatePage.mockResolvedValue({ items: [] });
-    apiMock.ingestCertificate.mockRejectedValue(
-      new ApiError(422, JSON.stringify({ detail: "could not parse certificate: bad PEM" })),
-    );
+    apiMock.ingestCertificate.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "could not parse certificate: bad PEM" })));
     const user = userEvent.setup();
     renderCerts();
 

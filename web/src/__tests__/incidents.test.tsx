@@ -98,9 +98,7 @@ describe("incident response served execution surface", () => {
     await user.type(screen.getByLabelText("Rollback reference"), "restore previous fullchain");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
-    await waitFor(() =>
-      expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:11111111-1111-1111-1111-111111111111"),
-    );
+    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:11111111-1111-1111-1111-111111111111"));
     expect(await screen.findByRole("heading", { name: "Blast-radius snapshot" })).toBeInTheDocument();
     expect(screen.getByText("payments service")).toBeInTheDocument();
 
@@ -122,9 +120,7 @@ describe("incident response served execution surface", () => {
   });
 
   it("renders fleet and break-glass sections with error state for unavailable graph preview", async () => {
-    apiMock.graphBlastRadius.mockRejectedValueOnce(
-      new ApiError(503, JSON.stringify({ detail: "graph projection is rebuilding" })),
-    );
+    apiMock.graphBlastRadius.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "graph projection is rebuilding" })));
     const user = userEvent.setup();
     renderIncidents();
 

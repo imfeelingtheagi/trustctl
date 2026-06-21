@@ -61,10 +61,7 @@ const iconMap: Record<NavIcon, typeof Activity> = {
 function NavCount({ n }: { n: number }) {
   if (!n) return null;
   return (
-    <span
-      aria-hidden="true"
-      className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 text-[10px] font-medium leading-5 text-muted-foreground"
-    >
+    <span aria-hidden="true" className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 text-[10px] font-medium leading-5 text-muted-foreground">
       {n}
     </span>
   );
@@ -93,9 +90,7 @@ function TreatmentBadge({ treatment }: { treatment: NavTreatment }) {
 }
 
 function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window === "undefined" ? true : window.innerWidth >= 768,
-  );
+  const [isDesktop, setIsDesktop] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 768));
 
   useEffect(() => {
     const updateWidth = () => setIsDesktop(window.innerWidth >= 768);
@@ -119,9 +114,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
     <nav aria-label={t("shell.primaryNavigation")} className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
         <li>
-          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {t("nav.section.needsAction")}
-          </p>
+          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("nav.section.needsAction")}</p>
           <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
             {taskNavItems.map(({ to, labelKey, descriptionKey, icon, treatment }) => {
               const Icon = iconMap[icon];
@@ -135,29 +128,25 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                     className={({ isActive }) =>
                       cn(
                         "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                        isActive
-                          ? "bg-brand-accent/10 font-medium text-brand-accent"
-                          : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
+                        isActive ? "bg-brand-accent/10 font-medium text-brand-accent" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
                       )
                     }
                   >
                     <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{label}</span>
-                        <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
-                      </span>
-                      <TreatmentBadge treatment={treatment} />
-                    </NavLink>
-                  </li>
-                );
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{label}</span>
+                      <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
+                    </span>
+                    <TreatmentBadge treatment={treatment} />
+                  </NavLink>
+                </li>
+              );
             })}
           </ul>
         </li>
         {navGroups.map((group) => (
           <li key={group.labelKey}>
-            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t(group.labelKey)}
-            </p>
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(group.labelKey)}</p>
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const { to, labelKey, icon, end } = item;
@@ -173,9 +162,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                       className={({ isActive }) =>
                         cn(
                           "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                          isActive
-                            ? "bg-brand-accent/10 font-medium text-brand-accent"
-                            : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
+                          isActive ? "bg-brand-accent/10 font-medium text-brand-accent" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
                         )
                       }
                     >
@@ -270,11 +257,7 @@ export function AppShell() {
               onClick={() => setMobileNavOpen((open) => !open)}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              {mobileNavOpen ? (
-                <X aria-hidden="true" className="h-4 w-4" />
-              ) : (
-                <Menu aria-hidden="true" className="h-4 w-4" />
-              )}
+              {mobileNavOpen ? <X aria-hidden="true" className="h-4 w-4" /> : <Menu aria-hidden="true" className="h-4 w-4" />}
             </button>
           )}
           <span
@@ -288,9 +271,7 @@ export function AppShell() {
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block truncate text-sm font-semibold tracking-tight">{t("app.brand.name")}</span>
-            <span className="hidden truncate text-[10px] font-medium uppercase tracking-wider text-brand-accent sm:block">
-              {t("app.brand.subtitle")}
-            </span>
+            <span className="hidden truncate text-[10px] font-medium uppercase tracking-wider text-brand-accent sm:block">{t("app.brand.subtitle")}</span>
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -308,20 +289,10 @@ export function AppShell() {
             <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">Cmd K</kbd>
           </Button>
           {user && (
-            <div
-              aria-label={t("shell.tenantContext")}
-              className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex"
-            >
+            <div aria-label={t("shell.tenantContext")} className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex">
               <span className="text-muted-foreground">{t("shell.tenant")}</span>
               <strong className="max-w-32 truncate font-semibold">{user.tenant_id}</strong>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled
-                aria-label={t("shell.tenantSwitchUnavailableLabel")}
-                className="h-6 px-2 text-[11px]"
-              >
+              <Button type="button" variant="ghost" size="sm" disabled aria-label={t("shell.tenantSwitchUnavailableLabel")} className="h-6 px-2 text-[11px]">
                 {t("shell.tenantSwitchUnavailable")}
               </Button>
               <span className="hidden text-[10px] uppercase text-muted-foreground xl:inline">{t("shell.tenantSwitchUnavailableLabel")}</span>
@@ -400,16 +371,8 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        returnFocusRef={commandButtonRef}
-      />
-      <ShortcutsHelp
-        open={shortcutsOpen}
-        onClose={() => setShortcutsOpen(false)}
-        returnFocusRef={shortcutsButtonRef}
-      />
+      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} />
+      <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
     </div>
   );
 }

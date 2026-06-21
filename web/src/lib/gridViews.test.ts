@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  gridStorageName,
-  readGridPreferences,
-  sanitizeViewMetadata,
-  writeGridPreferences,
-} from "@/lib/gridViews";
+import { gridStorageName, readGridPreferences, sanitizeViewMetadata, writeGridPreferences } from "@/lib/gridViews";
 
 describe("grid view storage safety (SEC-005)", () => {
   beforeEach(() => {

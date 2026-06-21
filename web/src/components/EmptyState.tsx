@@ -4,17 +4,7 @@ import { Link } from "react-router-dom";
 /** EmptyState is a guiding placeholder shown when a view has no data yet. It
  * points the user at the next concrete action rather than leaving a blank
  * screen — a core part of the sub-15-minute first-run target (F12). */
-export function EmptyState({
-  title,
-  children,
-  ctaTo,
-  ctaLabel,
-}: {
-  title: string;
-  children?: ReactNode;
-  ctaTo?: string;
-  ctaLabel?: string;
-}) {
+export function EmptyState({ title, children, ctaTo, ctaLabel }: { title: string; children?: ReactNode; ctaTo?: string; ctaLabel?: string }) {
   return (
     <div data-state-primitive="empty" className="rounded-lg border border-dashed border-border p-10 text-center">
       <h2 className="mb-1 text-lg font-semibold">{title}</h2>

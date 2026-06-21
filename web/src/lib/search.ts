@@ -69,10 +69,7 @@ function secretResult(secret: SecretMeta): GlobalSearchResult {
   };
 }
 
-export async function searchInventory(
-  query: string,
-  client: SearchClient = api,
-): Promise<GlobalSearchResponse> {
+export async function searchInventory(query: string, client: SearchClient = api): Promise<GlobalSearchResponse> {
   const trimmed = query.trim();
   if (!trimmed) return emptyResponse;
 
@@ -99,32 +96,19 @@ export async function searchInventory(
       source: "identities",
       load: async () =>
         (await client.identities())
-          .filter((identity) =>
-            matches(trimmed, [
-              identity.name,
-              identity.id,
-              identity.kind,
-              identity.status,
-              identity.owner_id,
-              identity.issuer_id,
-            ]),
-          )
+          .filter((identity) => matches(trimmed, [identity.name, identity.id, identity.kind, identity.status, identity.owner_id, identity.issuer_id]))
           .map(identityResult),
     },
     {
       source: "secrets",
       load: async () => {
         const page = await client.secretPage({ limit: 25 });
-        return (page.items ?? [])
-          .filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at]))
-          .map(secretResult);
+        return (page.items ?? []).filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at])).map(secretResult);
       },
     },
   ];
 
-  const settled = await Promise.allSettled(
-    tasks.map((task) => task.load().then((results) => ({ source: task.source, results }))),
-  );
+  const settled = await Promise.allSettled(tasks.map((task) => task.load().then((results) => ({ source: task.source, results }))));
   const results: GlobalSearchResult[] = [];
   const unavailableSources: SearchSource[] = [];
 
@@ -142,10 +126,7 @@ export async function searchInventory(
   };
 }
 
-export function useGlobalSearch(
-  query: string,
-  options: { client?: SearchClient; enabled?: boolean } = {},
-): GlobalSearchState {
+export function useGlobalSearch(query: string, options: { client?: SearchClient; enabled?: boolean } = {}): GlobalSearchState {
   const { client = api, enabled = true } = options;
   const [state, setState] = useState<GlobalSearchState>({ ...emptyResponse, loading: false });
 

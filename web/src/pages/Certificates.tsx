@@ -5,12 +5,7 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { EmptyState } from "@/components/EmptyState";
-import {
-  ErrorState,
-  LoadingState,
-  PermissionDeniedState,
-  UnavailableState,
-} from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
@@ -185,9 +180,7 @@ export function Certificates() {
     const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter((c) =>
-      [c.subject, c.issuer, c.status, c.fingerprint, c.serial, c.deployment_location]
-        .filter(Boolean)
-        .some((v) => v!.toLowerCase().includes(q)),
+      [c.subject, c.issuer, c.status, c.fingerprint, c.serial, c.deployment_location].filter(Boolean).some((v) => v!.toLowerCase().includes(q)),
     );
   }, [certificates, query]);
 
@@ -209,18 +202,12 @@ export function Certificates() {
       />
 
       {showIngest && (
-        <form
-          onSubmit={submitIngest}
-          aria-labelledby="ingest-heading"
-          className="mb-6 grid gap-4 border-y border-border py-4"
-        >
+        <form onSubmit={submitIngest} aria-labelledby="ingest-heading" className="mb-6 grid gap-4 border-y border-border py-4">
           <div>
             <h2 id="ingest-heading" className="text-title font-semibold">
               Add certificate
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Paste a public certificate PEM. Private keys do not belong in this form.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Paste a public certificate PEM. Private keys do not belong in this form.</p>
           </div>
           <label className="grid gap-1 text-sm font-medium" htmlFor="cert-pem">
             Certificate PEM
@@ -264,13 +251,13 @@ export function Certificates() {
               />
             </label>
           </div>
-          {ingestError?.kind === "permission" && (
-            <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>
+          {ingestError?.kind === "permission" && <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>}
+          {ingestError?.kind === "error" && <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>}
+          {ingestSuccess && (
+            <p role="status" className="text-sm text-status-success">
+              {ingestSuccess}
+            </p>
           )}
-          {ingestError?.kind === "error" && (
-            <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>
-          )}
-          {ingestSuccess && <p role="status" className="text-sm text-status-success">{ingestSuccess}</p>}
           <div>
             <button
               type="submit"
@@ -285,16 +272,10 @@ export function Certificates() {
 
       {loading && <LoadingState>Loading certificates...</LoadingState>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
-      {error?.kind === "error" && (
-        <ErrorState title="Could not load certificates">{error.message}</ErrorState>
-      )}
+      {error?.kind === "error" && <ErrorState title="Could not load certificates">{error.message}</ErrorState>}
 
       {!loading && certificates.length === 0 && !error && (
-        <EmptyState
-          title="No certificates yet"
-          ctaTo="/wizard"
-          ctaLabel="Set up your first certificate"
-        >
+        <EmptyState title="No certificates yet" ctaTo="/wizard" ctaLabel="Set up your first certificate">
           Run the setup wizard to connect a CA, install an agent, and issue your first certificate.
         </EmptyState>
       )}
@@ -325,9 +306,7 @@ export function Certificates() {
                     onClick={() => selectExpiry(f.value)}
                     aria-pressed={expiry === f.value}
                     className={`min-h-9 rounded-md border px-2.5 text-sm ${
-                      expiry === f.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background"
+                      expiry === f.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
                     }`}
                   >
                     {f.label}
@@ -386,91 +365,90 @@ export function Certificates() {
         description={detailID ? `Fetched from GET /api/v1/certificates/${detailID}.` : undefined}
         onClose={() => setDetailID(null)}
       >
-          {detailLoading && <LoadingState>Loading certificate details...</LoadingState>}
-          {detailError?.kind === "permission" && (
-            <PermissionDeniedState>{detailError.message}</PermissionDeniedState>
-          )}
-          {detailError?.kind === "error" && (
-            <ErrorState title="Could not load certificate details">{detailError.message}</ErrorState>
-          )}
-          {detail && (
-            <dl className="grid gap-3 text-sm md:grid-cols-2">
-              <div>
-                <dt className="font-medium text-muted-foreground">Subject</dt>
-                <dd>{detail.subject}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Issuer</dt>
-                <dd>{detail.issuer || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">SANs</dt>
-                <dd>{detail.sans?.length ? detail.sans.join(", ") : "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Key algorithm</dt>
-                <dd>{detail.key_algorithm || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Serial</dt>
-                <dd className="break-all font-mono text-xs">{detail.serial || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Fingerprint</dt>
-                <dd className="break-all font-mono text-xs">{detail.fingerprint}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Validity</dt>
-                <dd>{formatDate(detail.not_before)} to {formatDate(detail.not_after)}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Status</dt>
-                <dd>{detail.status}</dd>
-              </div>
-              {detail.status === "revoked" && (
-                <>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">Revoked at</dt>
-                    <dd>{formatDate(detail.revoked_at)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">Revocation reason</dt>
-                    <dd>{detail.revocation_reason || "-"}</dd>
-                  </div>
-                </>
-              )}
-              <div>
-                <dt className="font-medium text-muted-foreground">Source</dt>
-                <dd>{detail.source || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Deployment location</dt>
-                <dd>{detail.deployment_location || "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-muted-foreground">Owner</dt>
-                <dd>
-                  {detail.owner_id ? (
-                    <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
-                      {detail.owner_id}
-                    </a>
-                  ) : "-"}
-                </dd>
-              </div>
-              <div className="md:col-span-2">
-                <dt className="font-medium text-muted-foreground">Certificate chain</dt>
-                <dd>
-                  <UnavailableState title="Certificate chain not served yet">
-                    The current detail contract returns certificate metadata, not chain bytes. Use
-                    issuer evidence until a chain field is served.
-                  </UnavailableState>
-                </dd>
-              </div>
-              <div className="md:col-span-2">
-                <CredentialActivityTimeline credentialLabel={detail.subject} />
-              </div>
-            </dl>
-          )}
+        {detailLoading && <LoadingState>Loading certificate details...</LoadingState>}
+        {detailError?.kind === "permission" && <PermissionDeniedState>{detailError.message}</PermissionDeniedState>}
+        {detailError?.kind === "error" && <ErrorState title="Could not load certificate details">{detailError.message}</ErrorState>}
+        {detail && (
+          <dl className="grid gap-3 text-sm md:grid-cols-2">
+            <div>
+              <dt className="font-medium text-muted-foreground">Subject</dt>
+              <dd>{detail.subject}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Issuer</dt>
+              <dd>{detail.issuer || "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">SANs</dt>
+              <dd>{detail.sans?.length ? detail.sans.join(", ") : "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Key algorithm</dt>
+              <dd>{detail.key_algorithm || "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Serial</dt>
+              <dd className="break-all font-mono text-xs">{detail.serial || "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Fingerprint</dt>
+              <dd className="break-all font-mono text-xs">{detail.fingerprint}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Validity</dt>
+              <dd>
+                {formatDate(detail.not_before)} to {formatDate(detail.not_after)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Status</dt>
+              <dd>{detail.status}</dd>
+            </div>
+            {detail.status === "revoked" && (
+              <>
+                <div>
+                  <dt className="font-medium text-muted-foreground">Revoked at</dt>
+                  <dd>{formatDate(detail.revoked_at)}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">Revocation reason</dt>
+                  <dd>{detail.revocation_reason || "-"}</dd>
+                </div>
+              </>
+            )}
+            <div>
+              <dt className="font-medium text-muted-foreground">Source</dt>
+              <dd>{detail.source || "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Deployment location</dt>
+              <dd>{detail.deployment_location || "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Owner</dt>
+              <dd>
+                {detail.owner_id ? (
+                  <a className="text-primary underline" href={`/owners?owner=${encodeURIComponent(detail.owner_id)}`}>
+                    {detail.owner_id}
+                  </a>
+                ) : (
+                  "-"
+                )}
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="font-medium text-muted-foreground">Certificate chain</dt>
+              <dd>
+                <UnavailableState title="Certificate chain not served yet">
+                  The current detail contract returns certificate metadata, not chain bytes. Use issuer evidence until a chain field is served.
+                </UnavailableState>
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <CredentialActivityTimeline credentialLabel={detail.subject} />
+            </div>
+          </dl>
+        )}
       </DetailDrawer>
     </section>
   );
@@ -515,9 +493,7 @@ const certificateColumns: Array<DataGridColumn<Certificate>> = [
     cell: (c) => (
       <div className="grid gap-1">
         <StatusBadge vocabulary="certificate" value={c.status} />
-        {c.status === "revoked" && c.revocation_reason && (
-          <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>
-        )}
+        {c.status === "revoked" && c.revocation_reason && <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>}
       </div>
     ),
   },

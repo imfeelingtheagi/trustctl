@@ -70,9 +70,7 @@ describe("auth + dashboards", () => {
 
     renderAt("/");
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument());
   });
 
   it("allows local dev preview without storing an auth token", async () => {
@@ -191,16 +189,12 @@ describe("auth + dashboards", () => {
   it("lands the certificate inventory on an expiry-filtered worklist from the URL", async () => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1" });
     apiMock.certificatePage.mockResolvedValue({
-      items: [
-        { id: "c1", tenant_id: "t1", subject: "CN=soon.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
-      ],
+      items: [{ id: "c1", tenant_id: "t1", subject: "CN=soon.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" }],
     });
 
     renderAt("/certificates?expiry=30d");
 
-    await waitFor(() =>
-      expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: expect.any(String) }),
-    );
+    await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: expect.any(String) }));
     expect(await screen.findByText("CN=soon.example.com")).toBeInTheDocument();
   });
 });

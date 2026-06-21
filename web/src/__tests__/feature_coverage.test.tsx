@@ -5,12 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
-import {
-  featureCoverageDomains,
-  featureCoverageItems,
-  featureCoverageTotals,
-  featureMaturityLabels,
-} from "@/lib/featureCoverage";
+import { featureCoverageDomains, featureCoverageItems, featureCoverageTotals, featureMaturityLabels } from "@/lib/featureCoverage";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: { me: vi.fn() },
@@ -46,9 +41,7 @@ describe("feature coverage roadmap surface", () => {
     const primaryNav = screen.getByRole("navigation", { name: /Primary/i });
     expect(within(primaryNav).getByRole("link", { name: /Coverage roadmap.*Observe/i })).toHaveAttribute("href", "/coverage");
     expect(screen.getByRole("searchbox", { name: "Search feature coverage" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("table", { name: /Feature coverage map with backend status, GUI mapping, and acceptance criteria/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: /Feature coverage map with backend status, GUI mapping, and acceptance criteria/i })).toBeInTheDocument();
     expect(screen.getAllByText("Served state:").length).toBeGreaterThan(0);
     expect(screen.getAllByText("API:").length).toBeGreaterThan(0);
     expect(screen.getAllByText("CLI:").length).toBeGreaterThan(0);

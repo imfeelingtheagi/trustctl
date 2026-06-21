@@ -46,10 +46,7 @@ describe("posture collector disclosures", () => {
     expect(screen.getByText(/RSA-2048, EC-256, and TLS 1.2/)).toBeInTheDocument();
     expect(screen.getByText(/3DES\/DES\/RC4\/NULL\/EXPORT\/MD5/)).toBeInTheDocument();
     expect(screen.getByText("ML-DSA, ML-KEM, SLH-DSA")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Link weak-crypto risk to the risk dashboard/i })).toHaveAttribute(
-      "href",
-      "/risk",
-    );
+    expect(screen.getByRole("link", { name: /Link weak-crypto risk to the risk dashboard/i })).toHaveAttribute("href", "/risk");
     expect(screen.queryByRole("button", { name: /run cbom scan|scan now/i })).not.toBeInTheDocument();
   });
 

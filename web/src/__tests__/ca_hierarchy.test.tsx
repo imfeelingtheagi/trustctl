@@ -56,10 +56,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("ssh_ca")).toBeInTheDocument();
     expect(screen.getByText("Root CA -> SSH CA")).toBeInTheDocument();
     expect(screen.getByText(/BEGIN PUBLIC KEY/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Certificates for Root CA" })).toHaveAttribute(
-      "href",
-      "/certificates?issuer=iss-root",
-    );
+    expect(screen.getByRole("link", { name: "Certificates for Root CA" })).toHaveAttribute("href", "/certificates?issuer=iss-root");
   });
 
   it("explains m-of-n hierarchy ceremonies without create or rotate controls", async () => {
@@ -67,10 +64,7 @@ describe("CA hierarchy and custody surface", () => {
 
     expect(await screen.findByText("CA hierarchy ceremony API not served yet")).toBeInTheDocument();
     expect(screen.getByText(/renders no create-root, rotate-root, or ceremony execution controls/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Key ceremony runbook" })).toHaveAttribute(
-      "href",
-      "/docs/runbooks/key-ceremony.md",
-    );
+    expect(screen.getByRole("link", { name: "Key ceremony runbook" })).toHaveAttribute("href", "/docs/runbooks/key-ceremony.md");
     expect(screen.getByText("root:<sha256-of-ca-spec>")).toBeInTheDocument();
     expect(screen.getByText("intermediate:<parent-ca-id>:<sha256-of-ca-spec>")).toBeInTheDocument();
     expect(screen.getByText("cross-sign:<ca-id>:<sha256-of-target-cert-der>")).toBeInTheDocument();
@@ -91,9 +85,7 @@ describe("CA hierarchy and custody surface", () => {
   });
 
   it("surfaces issuer permission errors without hiding the ceremony disclosure", async () => {
-    apiMock.issuers.mockRejectedValueOnce(
-      new ApiError(403, JSON.stringify({ detail: "missing issuers:read" })),
-    );
+    apiMock.issuers.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ detail: "missing issuers:read" })));
     renderCAHierarchy();
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();

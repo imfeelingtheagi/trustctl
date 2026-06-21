@@ -104,9 +104,7 @@ function extract() {
       }
     }
   }
-  return [...byValue.values()]
-    .map((entry) => ({ ...entry, sources: [...entry.sources].sort() }))
-    .sort((left, right) => left.key.localeCompare(right.key));
+  return [...byValue.values()].map((entry) => ({ ...entry, sources: [...entry.sources].sort() })).sort((left, right) => left.key.localeCompare(right.key));
 }
 
 function emit(entries) {
@@ -137,7 +135,7 @@ function emit(entries) {
     rows,
     "] as const;",
     "",
-    "export type ExtractedMessageKey = (typeof extractedMessages)[number][\"key\"];",
+    'export type ExtractedMessageKey = (typeof extractedMessages)[number]["key"];',
     "",
   ].join("\n");
 }

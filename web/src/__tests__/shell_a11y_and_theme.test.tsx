@@ -104,23 +104,70 @@ describe("app shell accessibility and theme", () => {
     });
     apiMock.members.mockResolvedValue({
       items: [
-        { tenant_id: "t1", subject: "issuer", roles: ["operator"], source: "manual", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
-        { tenant_id: "t1", subject: "approver-one", roles: ["operator"], source: "manual", status: "offboarded", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z", offboarded_at: "2026-01-02T00:00:00Z" },
+        {
+          tenant_id: "t1",
+          subject: "issuer",
+          roles: ["operator"],
+          source: "manual",
+          status: "active",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+        {
+          tenant_id: "t1",
+          subject: "approver-one",
+          roles: ["operator"],
+          source: "manual",
+          status: "offboarded",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-02T00:00:00Z",
+          offboarded_at: "2026-01-02T00:00:00Z",
+        },
       ],
     });
     apiMock.apiTokens.mockResolvedValue({
       items: [
         { id: "tok-1", tenant_id: "t1", subject: "issuer", scopes: ["identities:write", "certs:issue"], created_at: "2026-01-01T00:00:00Z" },
-        { id: "tok-2", tenant_id: "t1", subject: "approver-one", scopes: ["certs:issue"], created_at: "2026-01-01T00:00:00Z", revoked_at: "2026-01-02T00:00:00Z" },
+        {
+          id: "tok-2",
+          tenant_id: "t1",
+          subject: "approver-one",
+          scopes: ["certs:issue"],
+          created_at: "2026-01-01T00:00:00Z",
+          revoked_at: "2026-01-02T00:00:00Z",
+        },
       ],
     });
-    apiMock.upsertMember.mockResolvedValue({ tenant_id: "t1", subject: "new-approver", roles: ["operator"], source: "manual", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" });
+    apiMock.upsertMember.mockResolvedValue({
+      tenant_id: "t1",
+      subject: "new-approver",
+      roles: ["operator"],
+      source: "manual",
+      status: "active",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
     apiMock.offboardMember.mockResolvedValue({
-      member: { tenant_id: "t1", subject: "approver-one", roles: ["operator"], source: "manual", status: "offboarded", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z" },
+      member: {
+        tenant_id: "t1",
+        subject: "approver-one",
+        roles: ["operator"],
+        source: "manual",
+        status: "offboarded",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-02T00:00:00Z",
+      },
       revoked_token_count: 1,
       rotation_evidence: "active API tokens for the offboarded subject were revoked",
     });
-    apiMock.createAPIToken.mockResolvedValue({ id: "tok-new", tenant_id: "t1", subject: "new-approver", scopes: ["certs:issue"], created_at: "2026-01-01T00:00:00Z", token: "trst_test_token" });
+    apiMock.createAPIToken.mockResolvedValue({
+      id: "tok-new",
+      tenant_id: "t1",
+      subject: "new-approver",
+      scopes: ["certs:issue"],
+      created_at: "2026-01-01T00:00:00Z",
+      token: "trst_test_token",
+    });
     apiMock.logout.mockReset();
     apiMock.logout.mockResolvedValue(undefined);
     document.documentElement.classList.remove("dark");
@@ -282,15 +329,7 @@ describe("app shell accessibility and theme", () => {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
 
-    for (const link of [
-      "Discovery",
-      "SPIFFE",
-      "Native secrets",
-      "Connectors",
-      "Incidents",
-      "RBAC",
-      "Platform",
-    ]) {
+    for (const link of ["Discovery", "SPIFFE", "Native secrets", "Connectors", "Incidents", "RBAC", "Platform"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
   });
@@ -306,13 +345,11 @@ describe("app shell accessibility and theme", () => {
       "href",
       "/certificates?expiry=30d",
     );
-    expect(
-      within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox.*Operate/i }),
-    ).toHaveAttribute("href", "/approvals?status=pending");
-    expect(within(taskList).getByRole("link", { name: /Highest risk.*risk-prioritized rotation list.*Observe/i })).toHaveAttribute(
+    expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox.*Operate/i })).toHaveAttribute(
       "href",
-      "/risk?sort=score",
+      "/approvals?status=pending",
     );
+    expect(within(taskList).getByRole("link", { name: /Highest risk.*risk-prioritized rotation list.*Observe/i })).toHaveAttribute("href", "/risk?sort=score");
 
     expect(within(nav).getAllByText("Operate").length).toBeGreaterThan(0);
     expect(within(nav).getAllByText("Observe").length).toBeGreaterThan(0);

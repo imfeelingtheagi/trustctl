@@ -1,12 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import {
-  api,
-  ApiError,
-  type GraphImpact,
-  type GraphNode,
-  type IncidentExecution,
-  type IncidentExecutionRequest,
-} from "@/lib/api";
+import { api, ApiError, type GraphImpact, type GraphNode, type IncidentExecution, type IncidentExecutionRequest } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
@@ -155,11 +148,7 @@ export function Incidents() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Reason
-            <input
-              className="ui-input"
-              value={form.reason ?? ""}
-              onChange={(event) => setForm({ ...form, reason: event.target.value })}
-            />
+            <input className="ui-input" value={form.reason ?? ""} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Replacement name
@@ -172,11 +161,7 @@ export function Incidents() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Connector
-            <input
-              className="ui-input"
-              value={form.connector ?? ""}
-              onChange={(event) => setForm({ ...form, connector: event.target.value })}
-            />
+            <input className="ui-input" value={form.connector ?? ""} onChange={(event) => setForm({ ...form, connector: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Target
@@ -230,7 +215,8 @@ export function Incidents() {
             Fleet re-issuance for CA compromise
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            CA compromise reissue is staged by issuer, batch, health check, resume point, rollback plan, failed target list, and audit receipt before revocation completes.
+            CA compromise reissue is staged by issuer, batch, health check, resume point, rollback plan, failed target list, and audit receipt before revocation
+            completes.
           </p>
         </div>
         <div className="overflow-x-auto rounded-panel border border-border">

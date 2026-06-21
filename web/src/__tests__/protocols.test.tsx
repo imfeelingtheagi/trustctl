@@ -44,11 +44,7 @@ describe("served-gated protocol surface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Copy ACME certbot command" }));
 
-    await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(
-        expect.stringContaining("--server https://trstctl.example.test/directory"),
-      ),
-    );
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("--server https://trstctl.example.test/directory")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/Bearer|token|password/i));
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
   });
@@ -94,9 +90,7 @@ describe("served-gated protocol surface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Copy TSA HTTP POST command" }));
 
-    await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://trstctl.example.test/tsa")),
-    );
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://trstctl.example.test/tsa")));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/PRIVATE KEY|password/i));
   });
 
@@ -105,7 +99,9 @@ describe("served-gated protocol surface", () => {
 
     expect(screen.getByRole("heading", { name: "ACME Renewal Information (ARI)" })).toBeInTheDocument();
     expect(screen.getByText("ACME enabled state unknown to console")).toBeInTheDocument();
-    expect(screen.getByText(/Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/ARI recommendations must survive process restart/i)).toBeInTheDocument();
     expect(screen.getByText(/client renewal windows and Retry-After guidance/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();

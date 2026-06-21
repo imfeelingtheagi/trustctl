@@ -162,7 +162,8 @@ export function Workloads() {
             Workload attestation chain
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Attestation proves the workload and its platform. This preview keeps raw tokens and signed evidence out of the browser and shows only decision fixtures.
+            Attestation proves the workload and its platform. This preview keeps raw tokens and signed evidence out of the browser and shows only decision
+            fixtures.
           </p>
         </div>
         <div className="ui-panel overflow-x-auto">
@@ -189,7 +190,8 @@ export function Workloads() {
           </table>
         </div>
         <UnavailableState title="Attestation API is library-only">
-          Accepted, rejected, expired, and wrong-tenant attestation decisions are library-only. This page cannot show live workload evidence because no served attestation API or CLI command exists yet.
+          Accepted, rejected, expired, and wrong-tenant attestation decisions are library-only. This page cannot show live workload evidence because no served
+          attestation API or CLI command exists yet.
         </UnavailableState>
       </section>
 
@@ -199,7 +201,8 @@ export function Workloads() {
             AI-agent / NHI broker
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A broker turns an agent identity plus policy into a short credential lease. Broker issuance is library-only, so this fixture shows scope and audit shape only.
+            A broker turns an agent identity plus policy into a short credential lease. Broker issuance is library-only, so this fixture shows scope and audit
+            shape only.
           </p>
         </div>
         <div className="ui-panel overflow-x-auto">

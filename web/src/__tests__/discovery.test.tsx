@@ -172,9 +172,7 @@ describe("discovery control-plane surface", () => {
   });
 
   it("uses permission and empty states when discovery records are unavailable or absent", async () => {
-    apiMock.discoverySources.mockRejectedValueOnce(
-      new ApiError(403, JSON.stringify({ detail: "missing discovery:read" })),
-    );
+    apiMock.discoverySources.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ detail: "missing discovery:read" })));
     apiMock.discoverySchedules.mockResolvedValueOnce({ items: [] });
     apiMock.discoveryRuns.mockResolvedValueOnce({ items: [] });
     apiMock.discoveryFindings.mockResolvedValueOnce({ items: [] });

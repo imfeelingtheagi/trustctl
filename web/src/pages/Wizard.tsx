@@ -24,11 +24,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   return (
     <section aria-labelledby="wizard-heading" className="mx-auto max-w-2xl">
-      <PageHeader
-        title="Set up trstctl"
-        titleId="wizard-heading"
-        description="Three steps to your first certificate."
-      />
+      <PageHeader title="Set up trstctl" titleId="wizard-heading" description="Three steps to your first certificate." />
 
       <ol className="mb-8 flex gap-2" aria-label="Setup progress">
         {steps.map((s) => {
@@ -54,17 +50,8 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
       <Card>
         <CardContent className="pt-comfortable">
-          {step === 1 && (
-            <InternalCAStep onReady={() => setStep(2)} />
-          )}
-          {step === 2 && (
-            <InstallAgentStep
-              pollMs={pollMs}
-              agent={agent}
-              onAgent={setAgent}
-              onContinue={() => setStep(3)}
-            />
-          )}
+          {step === 1 && <InternalCAStep onReady={() => setStep(2)} />}
+          {step === 2 && <InstallAgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} onContinue={() => setStep(3)} />}
           {step === 3 && <IssueCertStep onIssued={() => setStep(4)} />}
           {step === 4 && <DoneStep />}
         </CardContent>
@@ -85,12 +72,10 @@ function InternalCAStep({ onReady }: { onReady: () => void }) {
         Use the internal Certificate Authority
       </h2>
       <p className="text-body text-muted-foreground">
-        A fresh trstctl server provisions a signer-backed internal X.509 CA at boot.
-        The first certificate uses that CA directly; external CA issuer routing is configured after setup.
+        A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. The first certificate uses that CA directly; external CA issuer routing is
+        configured after setup.
       </p>
-      <Button type="submit">
-        Use internal CA
-      </Button>
+      <Button type="submit">Use internal CA</Button>
     </form>
   );
 }
@@ -159,9 +144,8 @@ function InstallAgentStep({
         Install an agent
       </h2>
       <p className="text-body text-muted-foreground">
-        Save the one-time token to ./trstctl-bootstrap-token with 0600 permissions, then run this on
-        a host inside your network. The agent generates its key locally — private keys never leave the
-        host.
+        Save the one-time token to ./trstctl-bootstrap-token with 0600 permissions, then run this on a host inside your network. The agent generates its key
+        locally — private keys never leave the host.
       </p>
       {token && (
         <div>
@@ -227,8 +211,7 @@ function IssueCertStep({ onIssued }: { onIssued: () => void }) {
         Issue your first cert
       </h2>
       <p className="text-body text-muted-foreground">
-        Name the service this certificate belongs to. trstctl creates the owner and identity and
-        issues it through the signer-backed internal CA.
+        Name the service this certificate belongs to. trstctl creates the owner and identity and issues it through the signer-backed internal CA.
       </p>
       <div className="space-y-1">
         <label htmlFor="svc-name" className="block text-body font-medium">

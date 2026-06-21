@@ -50,10 +50,7 @@ export function Agents() {
     }
   }
 
-  const selected = useMemo(
-    () => agents.find((agent) => agent.id === selectedID) ?? agents[0] ?? null,
-    [agents, selectedID],
-  );
+  const selected = useMemo(() => agents.find((agent) => agent.id === selectedID) ?? agents[0] ?? null, [agents, selectedID]);
   const command = token ? enrollmentCommand(token) : "";
 
   async function copyCommand() {
@@ -104,8 +101,8 @@ export function Agents() {
               <div>
                 <p className="font-medium">Shown once</p>
                 <p className="mt-1 text-muted-foreground">
-                  Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy this command.
-                  Dismiss clears the token from the page state; the console does not persist it.
+                  Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy this command. Dismiss clears the token from the page state; the
+                  console does not persist it.
                 </p>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setToken(null)}>
@@ -175,9 +172,7 @@ export function Agents() {
                         <td className="font-mono text-xs">{agent.version || "-"}</td>
                         <td>
                           <p>{formatDate(agent.last_seen_at)}</p>
-                          <p className={freshness.stale ? "text-xs font-medium text-status-warning" : "text-xs text-muted-foreground"}>
-                            {freshness.label}
-                          </p>
+                          <p className={freshness.stale ? "text-xs font-medium text-status-warning" : "text-xs text-muted-foreground"}>{freshness.label}</p>
                         </td>
                         <td>
                           <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
@@ -226,7 +221,8 @@ function AgentDetail({ agent }: { agent: Agent }) {
         </div>
       </dl>
       <UnavailableState title="Scan, drift, and renewal fields not served yet">
-        Discovery scanning and drift detection run in the agent today, and agent-driven certificate renewal runs there too; console views for capabilities, last scan, drift summary, and renewal state are coming soon. This page shows only the fields the served Agent schema carries.
+        Discovery scanning and drift detection run in the agent today, and agent-driven certificate renewal runs there too; console views for capabilities, last
+        scan, drift summary, and renewal state are coming soon. This page shows only the fields the served Agent schema carries.
       </UnavailableState>
     </aside>
   );

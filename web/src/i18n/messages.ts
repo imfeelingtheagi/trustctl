@@ -452,9 +452,7 @@ export function pseudoLocalize(message: string): string {
 }
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {
-  return Object.fromEntries(
-    Object.entries(messages).map(([key, descriptor]) => [key, localize(descriptor.defaultMessage)]),
-  ) as Record<MessageKey, string>;
+  return Object.fromEntries(Object.entries(messages).map(([key, descriptor]) => [key, localize(descriptor.defaultMessage)])) as Record<MessageKey, string>;
 }
 
 export const catalogs: Record<Locale, Record<MessageKey, string>> = {

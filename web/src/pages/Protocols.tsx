@@ -54,13 +54,11 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "certbot",
-        command:
-          "certbot certonly --server https://trstctl.example.test/directory --manual --preferred-challenges dns -d api.example.test",
+        command: "certbot certonly --server https://trstctl.example.test/directory --manual --preferred-challenges dns -d api.example.test",
       },
       {
         label: "x/crypto/acme",
-        command:
-          'client := &acme.Client{DirectoryURL: "https://trstctl.example.test/directory"}',
+        command: 'client := &acme.Client{DirectoryURL: "https://trstctl.example.test/directory"}',
       },
     ],
     deferredRead: "ACME accounts, orders, challenges, ARI state, and revocations",
@@ -77,13 +75,11 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "cacerts",
-        command:
-          "curl -s https://trstctl.example.test/.well-known/est/cacerts -o cacerts.p7",
+        command: "curl -s https://trstctl.example.test/.well-known/est/cacerts -o cacerts.p7",
       },
       {
         label: "simpleenroll",
-        command:
-          "curl -s -H 'Authorization: Bearer <bootstrap-token>' --data-binary @device.csr https://trstctl.example.test/.well-known/est/simpleenroll",
+        command: "curl -s -H 'Authorization: Bearer <bootstrap-token>' --data-binary @device.csr https://trstctl.example.test/.well-known/est/simpleenroll",
       },
     ],
     deferredRead: "EST enrollment transcript",
@@ -100,13 +96,11 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "GetCACert",
-        command:
-          "sscep getca -u https://trstctl.example.test/scep -c trstctl-ca.pem",
+        command: "sscep getca -u https://trstctl.example.test/scep -c trstctl-ca.pem",
       },
       {
         label: "PKIOperation",
-        command:
-          "sscep enroll -u https://trstctl.example.test/scep -c trstctl-ca.pem -k device.key -r device.csr -l device.pem",
+        command: "sscep enroll -u https://trstctl.example.test/scep -c trstctl-ca.pem -k device.key -r device.csr -l device.pem",
       },
     ],
     deferredRead: "SCEP enrollment transcript",
@@ -123,8 +117,7 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "OpenSSL p10cr",
-        command:
-          "openssl cmp -server https://trstctl.example.test -path /cmp -cmd p10cr -csr device.csr -certout device.pem",
+        command: "openssl cmp -server https://trstctl.example.test -path /cmp -cmd p10cr -csr device.csr -certout device.pem",
       },
     ],
     deferredRead: "CMP enrollment transcript",
@@ -146,8 +139,7 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "spiffe-helper",
-        command:
-          "SPIFFE_ENDPOINT_SOCKET=unix:///tmp/trstctl-spiffe-workload.sock spiffe-helper -config ./spiffe-helper.conf",
+        command: "SPIFFE_ENDPOINT_SOCKET=unix:///tmp/trstctl-spiffe-workload.sock spiffe-helper -config ./spiffe-helper.conf",
       },
       {
         label: "go-spiffe",
@@ -169,13 +161,11 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "authority key",
-        command:
-          "curl -s https://trstctl.example.test/ssh/ca -o /etc/ssh/trusted_user_ca_keys",
+        command: "curl -s https://trstctl.example.test/ssh/ca -o /etc/ssh/trusted_user_ca_keys",
       },
       {
         label: "KRL",
-        command:
-          "curl -s https://trstctl.example.test/ssh/krl -o /etc/ssh/revoked_keys.krl",
+        command: "curl -s https://trstctl.example.test/ssh/krl -o /etc/ssh/revoked_keys.krl",
       },
     ],
     deferredRead: "SSH issue/revoke log",
@@ -192,18 +182,15 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: "OpenSSL query",
-        command:
-          "openssl ts -query -data artifact.bin -sha256 -cert -out request.tsq",
+        command: "openssl ts -query -data artifact.bin -sha256 -cert -out request.tsq",
       },
       {
         label: "HTTP POST",
-        command:
-          "curl -s -H 'Content-Type: application/timestamp-query' --data-binary @request.tsq https://trstctl.example.test/tsa -o response.tsr",
+        command: "curl -s -H 'Content-Type: application/timestamp-query' --data-binary @request.tsq https://trstctl.example.test/tsa -o response.tsr",
       },
       {
         label: "OpenSSL verify",
-        command:
-          "openssl ts -verify -in response.tsr -queryfile request.tsq -CAfile tsa-ca.pem",
+        command: "openssl ts -verify -in response.tsr -queryfile request.tsq -CAfile tsa-ca.pem",
       },
     ],
     deferredRead: "TSA issuance health",
@@ -360,12 +347,14 @@ export function Protocols() {
         </h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <UnavailableState title="Live enabled-state is not served yet">
-            Live protocol status — enabled/disabled state, tenant binding, public endpoint, and responder health — isn't surfaced in the console yet, so this console can't claim a protocol is active. The protocol servers themselves are served-gated and default off.
+            Live protocol status — enabled/disabled state, tenant binding, public endpoint, and responder health — isn't surfaced in the console yet, so this
+            console can't claim a protocol is active. The protocol servers themselves are served-gated and default off.
           </UnavailableState>
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">Fail-closed startup and issuance posture</p>
             <p className="mt-1 text-muted-foreground">
-              Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.
+              Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests
+              when no issuing CA/profile can satisfy the protocol request.
             </p>
           </div>
         </div>
@@ -377,22 +366,21 @@ export function Protocols() {
             Intune / MDM enrollment
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            MDM enrollment is conditional on SCEP being served and enabled. The console can explain the SCEP challenge gate, Intune profile guidance, challenge rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.
+            MDM enrollment is conditional on SCEP being served and enabled. The console can explain the SCEP challenge gate, Intune profile guidance, challenge
+            rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.
           </p>
         </div>
         <UnavailableState title="MDM gate is library-only">
-          Intune/MDM profile state, challenge rotation, and enrollment failures run in the library/API today — console management is coming soon. Live SCEP enabled-state also isn't surfaced here yet, so this page can't claim an MDM flow is active.
+          Intune/MDM profile state, challenge rotation, and enrollment failures run in the library/API today — console management is coming soon. Live SCEP
+          enabled-state also isn't surfaced here yet, so this page can't claim an MDM flow is active.
         </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-          <FixtureTable
-            title="SCEP challenge fixtures"
-            caption="MDM SCEP challenge fixtures"
-            rows={mdmFixtures}
-          />
+          <FixtureTable title="SCEP challenge fixtures" caption="MDM SCEP challenge fixtures" rows={mdmFixtures} />
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">Intune profile guidance</p>
             <p className="mt-1 text-muted-foreground">
-              Intune should point its SCEP profile at `/scep`, include the tenant binding in the deployment profile, and require challenge validation before device certificates are issued.
+              Intune should point its SCEP profile at `/scep`, include the tenant binding in the deployment profile, and require challenge validation before
+              device certificates are issued.
             </p>
             <p className="mt-3 font-medium">Challenge lifecycle</p>
             <p className="mt-1 text-muted-foreground">
@@ -409,7 +397,8 @@ export function Protocols() {
               ACME Renewal Information (ARI)
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              ARI tells ACME clients when to renew and how to pace retries. This console only renders the safe model until ACME enabled-state and durable ARI state are served.
+              ARI tells ACME clients when to renew and how to pace retries. This console only renders the safe model until ACME enabled-state and durable ARI
+              state are served.
             </p>
           </div>
           <span className="inline-flex rounded-control border border-status-warning/30 bg-status-warning/10 px-2 py-1 text-caption font-medium text-status-warning">
@@ -448,7 +437,8 @@ export function Protocols() {
             ACME DNS validation
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            DNS-01 automation, provider plugins, CNAME isolation, CAA enforcement, validation-method policy, and wildcard issuance are shown as non-interactive previews until protocol status and DNS preflight reads are served.
+            DNS-01 automation, provider plugins, CNAME isolation, CAA enforcement, validation-method policy, and wildcard issuance are shown as non-interactive
+            previews until protocol status and DNS preflight reads are served.
           </p>
         </div>
 
@@ -480,25 +470,14 @@ export function Protocols() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-3">
-          <FixtureTable
-            title="CNAME validation isolation"
-            caption="CNAME validation isolation fixtures"
-            rows={cnameFixtures}
-          />
-          <FixtureTable
-            title="CAA policy preview"
-            caption="CAA policy fixtures"
-            rows={caaFixtures}
-          />
-          <FixtureTable
-            title="Validation method policy"
-            caption="Validation method fixtures"
-            rows={validationMethodFixtures}
-          />
+          <FixtureTable title="CNAME validation isolation" caption="CNAME validation isolation fixtures" rows={cnameFixtures} />
+          <FixtureTable title="CAA policy preview" caption="CAA policy fixtures" rows={caaFixtures} />
+          <FixtureTable title="Validation method policy" caption="Validation method fixtures" rows={validationMethodFixtures} />
         </div>
 
         <UnavailableState title="DNS validation controls are protocol-status gated">
-          Live ACME status, DNS provider health, challenge history, and preflight results aren't surfaced in the console yet, so it can't run DNS checks. Wildcard issuance requires explicit operator acknowledgement, DNS-01 only, profile opt-in, and blast-radius review.
+          Live ACME status, DNS provider health, challenge history, and preflight results aren't surfaced in the console yet, so it can't run DNS checks.
+          Wildcard issuance requires explicit operator acknowledgement, DNS-01 only, profile opt-in, and blast-radius review.
         </UnavailableState>
       </section>
 
@@ -529,7 +508,9 @@ export function Protocols() {
                   <td>
                     <ul className="grid gap-1">
                       {protocol.env.map((env) => (
-                        <li key={env} className="font-mono text-xs">{env}</li>
+                        <li key={env} className="font-mono text-xs">
+                          {env}
+                        </li>
                       ))}
                     </ul>
                   </td>
@@ -588,11 +569,10 @@ export function Protocols() {
               </div>
               <div className="grid content-start gap-3">
                 <UnavailableState title={`${protocol.deferredRead} not served yet`}>
-                  {protocol.diagnostics} This remains blocked until a served admin/status read exists; the page does not invent order, challenge, or transcript data.
+                  {protocol.diagnostics} This remains blocked until a served admin/status read exists; the page does not invent order, challenge, or transcript
+                  data.
                 </UnavailableState>
-                <p className="ui-panel p-3 text-sm text-muted-foreground">
-                  Live tenant binding and endpoint health also aren't surfaced in the console yet.
-                </p>
+                <p className="ui-panel p-3 text-sm text-muted-foreground">Live tenant binding and endpoint health also aren't surfaced in the console yet.</p>
               </div>
             </div>
           </section>
@@ -602,15 +582,7 @@ export function Protocols() {
   );
 }
 
-function FixtureTable({
-  title,
-  caption,
-  rows,
-}: {
-  title: string;
-  caption: string;
-  rows: ValidationFixture[];
-}) {
+function FixtureTable({ title, caption, rows }: { title: string; caption: string; rows: ValidationFixture[] }) {
   return (
     <section aria-labelledby={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="grid gap-2">
       <h3 id={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="text-title font-semibold">

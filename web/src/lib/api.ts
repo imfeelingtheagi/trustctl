@@ -189,11 +189,7 @@ export class ApiError extends Error {
    * (SURFACE-007; the server emits Retry-After on rate-limit at api.go). */
   retryAfterSeconds?: number;
   constructor(status: number, body: string, retryAfterSeconds?: number) {
-    super(
-      status === 429
-        ? `rate limited (429)${retryAfterSeconds != null ? ` — retry in ${retryAfterSeconds}s` : ""}`
-        : `request failed (${status})`,
-    );
+    super(status === 429 ? `rate limited (429)${retryAfterSeconds != null ? ` — retry in ${retryAfterSeconds}s` : ""}` : `request failed (${status})`);
     this.name = "ApiError";
     this.status = status;
     this.body = body;
@@ -325,11 +321,7 @@ export interface Api {
   me(): Promise<Me>;
   logout(): Promise<void>;
   certificates(): Promise<Certificate[]>;
-  certificatePage(options?: {
-    limit?: number;
-    cursor?: string;
-    expiringBefore?: string;
-  }): Promise<CertificatePage>;
+  certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -410,8 +402,7 @@ export const api: Api = {
     const suffix = qs.toString();
     return req<CertificatePage>(`/api/v1/certificates${suffix ? `?${suffix}` : ""}`);
   },
-  certificates: () =>
-    api.certificatePage().then((r) => r.items ?? []),
+  certificates: () => api.certificatePage().then((r) => r.items ?? []),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),
@@ -421,10 +412,8 @@ export const api: Api = {
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
-  transitionIdentity: (id, to, reason) =>
-    mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, { to, reason }),
-  approveIdentityAction: (id, action) =>
-    mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, { action }),
+  transitionIdentity: (id, to, reason) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, { to, reason }),
+  approveIdentityAction: (id, action) => mutate<Approval>("POST", `/api/v1/identities/${encodeURIComponent(id)}/approvals`, { action }),
   issueCertificate: async (input) => {
     let ownerId = input.ownerId;
     if (!ownerId) {
@@ -436,14 +425,11 @@ export const api: Api = {
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
-  discoverySources: (options) =>
-    req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
+  discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
-  discoverySchedules: (options) =>
-    req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),
+  discoverySchedules: (options) => req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),
   createDiscoverySchedule: (input) => mutate<DiscoverySchedule>("POST", "/api/v1/discovery/schedules", input),
-  discoveryRuns: (options) =>
-    req<DiscoveryRunList>(`/api/v1/discovery/runs${pageQueryString(options)}`),
+  discoveryRuns: (options) => req<DiscoveryRunList>(`/api/v1/discovery/runs${pageQueryString(options)}`),
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   discoveryFindings: (options) => {
@@ -455,40 +441,29 @@ export const api: Api = {
     return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
   },
   connectorCatalog: () => req<ConnectorCatalog>("/api/v1/connectors/catalog"),
-  connectorDeliveries: (options) =>
-    req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
-  rotationRuns: (options) =>
-    req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
+  connectorDeliveries: (options) => req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
+  rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
-  incidentExecutions: (options) =>
-    req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
+  incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
-  risk: (options) =>
-    req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
+  risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
-  getProfileVersion: (name, version) =>
-    req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
+  getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
   accessRoles: () => req<RoleList>("/api/v1/access/roles"),
   oidcMappingStatus: () => req<OIDCMappingStatus>("/api/v1/access/oidc-mapping"),
   members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),
-  upsertMember: (subject, input) =>
-    mutate<Member>("PUT", `/api/v1/access/members/${encodeURIComponent(subject)}`, input),
-  offboardMember: (subject, input) =>
-    mutate<OffboardMemberResponse>("POST", `/api/v1/access/members/${encodeURIComponent(subject)}/offboard`, input),
+  upsertMember: (subject, input) => mutate<Member>("PUT", `/api/v1/access/members/${encodeURIComponent(subject)}`, input),
+  offboardMember: (subject, input) => mutate<OffboardMemberResponse>("POST", `/api/v1/access/members/${encodeURIComponent(subject)}/offboard`, input),
   apiTokens: (options) => req<APITokenList>(`/api/v1/access/api-tokens${apiTokensQueryString(options)}`),
   createAPIToken: (input) => mutate<APITokenCreateResponse>("POST", "/api/v1/access/api-tokens", input),
   revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),
-  erasePrivacySubject: (input) =>
-    mutate<PrivacySubjectErasure>("POST", "/api/v1/privacy/subject-erasures", input),
-  privacySubjectErasures: (options) =>
-    req<PrivacySubjectErasureList>(`/api/v1/privacy/subject-erasures${pageQueryString(options)}`),
+  erasePrivacySubject: (input) => mutate<PrivacySubjectErasure>("POST", "/api/v1/privacy/subject-erasures", input),
+  privacySubjectErasures: (options) => req<PrivacySubjectErasureList>(`/api/v1/privacy/subject-erasures${pageQueryString(options)}`),
   enforcePrivacyRetention: () => mutate<PrivacyRetentionRun>("POST", "/api/v1/privacy/retention-runs"),
-  privacyRetentionRuns: (options) =>
-    req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
+  privacyRetentionRuns: (options) => req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
-  auditEvents: (options) =>
-    req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
+  auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
@@ -498,8 +473,7 @@ export const api: Api = {
   aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
   aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
-  callMCPTool: (tool, input) =>
-    postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
+  callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
   secretPage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));
@@ -509,8 +483,7 @@ export const api: Api = {
   },
   createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
   getSecret: (name) => req<SecretValue>(`/api/v1/secrets/store/${encodeURIComponent(name)}`),
-  rotateSecret: (name, input) =>
-    mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
+  rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
   deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
