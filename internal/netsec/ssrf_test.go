@@ -52,3 +52,35 @@ func TestSafeClientRefusesInternalTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestValidatePublicHTTPSURLRejectsUnsafeEndpoints(t *testing.T) {
+	for _, raw := range []string{
+		"://bad",
+		"http://example.com/hook",
+		"https:///missing-host",
+		"https://127.0.0.1/hook",
+		"https://[::1]/hook",
+		"https://169.254.169.254/latest/meta-data/",
+		"https://10.0.0.1/hook",
+		"https://100.64.0.1/hook",
+		"https://[fd00:ec2::254]/hook",
+	} {
+		err := netsec.ValidatePublicHTTPSURL(raw)
+		if err == nil {
+			t.Errorf("ValidatePublicHTTPSURL(%q) = nil, want SSRF-blocked error", raw)
+			continue
+		}
+		if !errors.Is(err, netsec.ErrSSRFBlocked) {
+			t.Errorf("ValidatePublicHTTPSURL(%q) = %v, want ErrSSRFBlocked", raw, err)
+		}
+	}
+
+	for _, raw := range []string{
+		"https://example.com/hook",
+		"https://api.example.test/v1/events",
+	} {
+		if err := netsec.ValidatePublicHTTPSURL(raw); err != nil {
+			t.Errorf("ValidatePublicHTTPSURL(%q) = %v, want allowed", raw, err)
+		}
+	}
+}

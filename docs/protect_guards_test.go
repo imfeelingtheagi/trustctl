@@ -2051,6 +2051,90 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- SEC-004: outbound SSRF controls stay centralized --------------------------
+
+// TestSSRFStrengthGuardsStayRequired locks the SEC-004 strength: attacker- or
+// operator-influenced outbound HTTP must use one shared SSRF denylist, ACME HTTP-01
+// must default to that guarded client, and cloud-provider calls must share bounded
+// reads and timeout floors. ELI5: every "go fetch that URL" path has one bouncer
+// checking it is not an internal/metadata address, and the cloud clients read only
+// a capped amount even when the peer shouts forever.
+func TestSSRFStrengthGuardsStayRequired(t *testing.T) {
+	for _, tc := range []struct {
+		root string
+		name string
+	}{
+		{"../internal/netsec", "TestBlockedIPDenylist"},
+		{"../internal/netsec", "TestSafeClientRefusesInternalTargets"},
+		{"../internal/netsec", "TestValidatePublicHTTPSURLRejectsUnsafeEndpoints"},
+		{"../internal/protocols/acme", "TestBlockedIPClassification"},
+		{"../internal/protocols/acme", "TestHTTP01SSRFBlocksMetadataAndLoopback"},
+		{"../internal/protocols/acme", "TestHTTP01SSRFBlocksRebindViaResolvedIP"},
+		{"../internal/protocols/acme", "TestSSRFRedirectSchemeRejected"},
+		{"../internal/cloudhttp", "TestJSONBoundsErrorBody"},
+		{"../internal/cloudhttp", "TestJSONTimeoutFloorAppliesWhenNoDeadline"},
+		{"../internal/cloudhttp", "TestProvidersImportAndCallCloudhttp"},
+		{"../internal/cloudhttp", "TestProvidersHaveNoBespokeRoundTrip"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("SEC-004: %s no longer declares %s; SSRF/cloud HTTP proof weakened", tc.root, tc.name)
+		}
+	}
+
+	netsecGo := read(t, "../internal/netsec/ssrf.go")
+	for _, want := range []string{
+		"func BlockedIP(ip net.IP) bool",
+		"fd00:ec2::254",
+		"v4[0] == 100 && v4[1]&0xc0 == 64",
+		"func SafeDialControl",
+		"func SafeTransport() *http.Transport",
+		"DisableKeepAlives: true",
+		"func ValidatePublicHTTPSURL(raw string) error",
+		"outbound endpoint must use https",
+		"func SafeClient(timeout time.Duration) *http.Client",
+		"CheckRedirect",
+		"redirect to scheme",
+	} {
+		if !strings.Contains(netsecGo, want) {
+			t.Errorf("SEC-004: netsec/ssrf.go no longer contains %q; shared SSRF guard weakened", want)
+		}
+	}
+
+	acmeValidate := read(t, "../internal/protocols/acme/validate.go")
+	for _, want := range []string{
+		"client = ssrfSafeClient(5 * time.Second)",
+		"AllowPrivateTargets",
+		"io.LimitReader(resp.Body, 4096)",
+	} {
+		if !strings.Contains(acmeValidate, want) {
+			t.Errorf("SEC-004: ACME validate.go no longer contains %q; HTTP-01 SSRF/default bounds proof weakened", want)
+		}
+	}
+	acmeSSRF := read(t, "../internal/protocols/acme/ssrf.go")
+	for _, want := range []string{
+		"ErrSSRFBlocked = netsec.ErrSSRFBlocked",
+		"netsec.BlockedIP(ip)",
+		"netsec.SafeClient(timeout)",
+	} {
+		if !strings.Contains(acmeSSRF, want) {
+			t.Errorf("SEC-004: ACME ssrf.go no longer contains %q; shared netsec delegation weakened", want)
+		}
+	}
+
+	cloudHTTP := read(t, "../internal/cloudhttp/cloudhttp.go")
+	for _, want := range []string{
+		"MaxBodyBytes = 1 << 20",
+		"MaxErrorBytes = 4096",
+		"context.WithTimeout",
+		"io.LimitReader(resp.Body, MaxErrorBytes)",
+		"io.LimitReader(resp.Body, MaxBodyBytes)",
+	} {
+		if !strings.Contains(cloudHTTP, want) {
+			t.Errorf("SEC-004: cloudhttp.go no longer contains %q; cloud HTTP bounded-read/timeout proof weakened", want)
+		}
+	}
+}
+
 // ---- SEC-003..006: appsec positive controls stay locked ------------------------
 
 // TestSecurityPostureStrengthGuardsStayRequired locks the SEC confirmed
