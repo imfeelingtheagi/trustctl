@@ -3,7 +3,10 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -152,4 +155,65 @@ func TestStoreSystemPoolIsTheNamedRLSBypassAccessor(t *testing.T) {
 	if !strings.Contains(string(src), "func (s *Store) SystemPool()") {
 		t.Error("store.go must define SystemPool() as the named RLS-bypass accessor (TENANT-005)")
 	}
+}
+
+// TestSystemPoolProductionUseInventory pins TENANT-STRENGTH-001's "named and
+// rare" rule: production RLS-bypass call sites must stay greppable and consciously
+// reviewed. ELI5: the master key to walk around tenant fences exists, but every
+// place it is used has to stay on this tiny written list.
+func TestSystemPoolProductionUseInventory(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	approved := map[string]int{
+		"internal/backup/postgres_state.go":     2,
+		"internal/idemgc/idemgc.go":             2,
+		"internal/orchestrator/outbox.go":       2,
+		"internal/outboxgc/outboxgc.go":         2,
+		"internal/server/server.go":             1,
+		"internal/store/connector_lifecycle.go": 1,
+	}
+	found := map[string]int{}
+
+	err := filepath.WalkDir(filepath.Join(root, "internal"), func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "internal/store/store.go" {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if n := strings.Count(string(src), ".SystemPool()"); n > 0 {
+			found[rel] = n
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan SystemPool production usage: %v", err)
+	}
+
+	for rel, want := range approved {
+		if got := found[rel]; got != want {
+			t.Errorf("SystemPool use count in %s = %d, want %d", rel, got, want)
+		}
+		delete(found, rel)
+	}
+	if len(found) == 0 {
+		return
+	}
+	var extra []string
+	for rel, n := range found {
+		extra = append(extra, fmt.Sprintf("%s (%d)", rel, n))
+	}
+	sort.Strings(extra)
+	t.Fatalf("unapproved production SystemPool use(s): %s", strings.Join(extra, ", "))
 }
