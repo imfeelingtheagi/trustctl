@@ -3,6 +3,8 @@ package query_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +28,19 @@ func viewerPrincipal(tenant string) authz.Principal {
 // store — exactly the "fails closed before execution" property the design requires.
 func newValidationEngine() *query.Engine {
 	return query.New(nil, nil, nil, query.Config{MaxRows: 10, MaxDepth: 4, Timeout: time.Second})
+}
+
+func TestSpecHasNoTenantSelector(t *testing.T) {
+	specType := reflect.TypeOf(query.Spec{})
+	for i := 0; i < specType.NumField(); i++ {
+		field := specType.Field(i)
+		name := strings.ToLower(field.Name)
+		tag := strings.ToLower(string(field.Tag))
+		if strings.Contains(name, "tenant") || strings.Contains(name, "scope") ||
+			strings.Contains(tag, "tenant") || strings.Contains(tag, "scope") {
+			t.Fatalf("query.Spec exposes %s; tenant scope must come only from the authenticated principal", field.Name)
+		}
+	}
 }
 
 func TestUnknownSurfaceFailsClosed(t *testing.T) {

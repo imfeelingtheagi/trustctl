@@ -3438,6 +3438,7 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/query", "TestCrossTenantReturnsNothingByConstruction"},
 		{"../internal/query", "TestPropertyNoQueryPathLeaksOutOfScope"},
 		{"../internal/query", "TestLogOffsetDoesNotRevealForeignTenantEvents"},
+		{"../internal/query", "TestSpecHasNoTenantSelector"},
 		{"../internal/audit", "TestSearchFiltersByTenantAndType"},
 		{"../internal/audit", "TestTenantAuditUsesTenantLocalSequence"},
 		{"../internal/audit", "TestSearchFailsClosedOnEmptyTenant"},
