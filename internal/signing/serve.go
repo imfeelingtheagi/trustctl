@@ -30,6 +30,12 @@ type ServeOptions struct {
 	// rejected with RESOURCE_EXHAUSTED (AN-7, SIGNER-001). <=0 means
 	// defaultMaxInflight.
 	MaxInflight int
+
+	// AllowInsecureDevNonLinux permits the local-development fallback on
+	// non-Linux hosts that cannot provide SO_PEERCRED/getpeereid-style UDS peer
+	// credentials. The production default is false: if the signer cannot bind a
+	// UDS peer to the expected uid, it refuses to serve.
+	AllowInsecureDevNonLinux bool
 }
 
 // Serve runs an in-memory signing service on a Unix domain socket at socketPath
@@ -51,7 +57,7 @@ func ServeServer(ctx context.Context, socketPath string, svc *Server) error {
 
 // ServeServerWithOptions is ServeServer with explicit AN-7 tuning.
 func ServeServerWithOptions(ctx context.Context, socketPath string, svc *Server, opts ServeOptions) error {
-	ln, err := listenUDS(socketPath)
+	ln, err := listenUDS(socketPath, opts)
 	if err != nil {
 		return err
 	}
@@ -129,7 +135,10 @@ func serveGRPC(ctx context.Context, ln net.Listener, svc *Server, opts ServeOpti
 // listenUDS creates the socket directory (0700), removes any stale socket,
 // listens, tightens the socket to 0600, and wraps the listener with peer-uid
 // authentication.
-func listenUDS(socketPath string) (net.Listener, error) {
+func listenUDS(socketPath string, opts ServeOptions) (net.Listener, error) {
+	if !peerCredentialsSupported() && !opts.AllowInsecureDevNonLinux {
+		return nil, fmt.Errorf("%w: UDS peer credentials are unavailable; pass the explicit development override only for local non-Linux testing", ErrUnsupportedHardening)
+	}
 	dir := filepath.Dir(socketPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create socket dir: %w", err)
@@ -148,5 +157,5 @@ func listenUDS(socketPath string) (net.Listener, error) {
 		_ = ln.Close()
 		return nil, fmt.Errorf("chmod socket: %w", err)
 	}
-	return newPeerAuthListener(ln, os.Geteuid()), nil
+	return newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux), nil
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -57,7 +58,11 @@ func startSignerChild(t *testing.T) (server.SignerProvider, func()) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "s.sock")
 	authSecret := filepath.Join(dir, "sign-auth.bin")
-	client, stop, err := signing.StartChild(context.Background(), bin, socket, "--auth-secret", authSecret)
+	args := []string{"--auth-secret", authSecret}
+	if runtime.GOOS != "linux" {
+		args = append([]string{"--allow-insecure-dev-nonlinux"}, args...)
+	}
+	client, stop, err := signing.StartChild(context.Background(), bin, socket, args...)
 	if err != nil {
 		t.Fatalf("StartChild: %v", err)
 	}

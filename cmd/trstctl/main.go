@@ -387,6 +387,7 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "secrets.auth_secret_file: %s\n", cfg.Secrets.AuthSecretFile)
 	}
 	fmt.Fprintf(&b, "signer.mode: %s\n", cfg.Signer.Mode)
+	fmt.Fprintf(&b, "signer.allow_insecure_dev_nonlinux: %t\n", cfg.Signer.AllowInsecureDevNonLinux)
 	if cfg.Signer.Mode == config.SignerExternal {
 		fmt.Fprintf(&b, "signer.socket: %s\n", cfg.Signer.Socket)
 	}

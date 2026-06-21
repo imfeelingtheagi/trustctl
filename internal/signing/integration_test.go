@@ -29,7 +29,7 @@ func TestSignCSROverUDS(t *testing.T) {
 	socket := filepath.Join(dir, "s.sock")
 
 	ctx := context.Background()
-	client, stop, err := signing.StartChild(ctx, bin, socket)
+	client, stop, err := signing.StartChild(ctx, bin, socket, devSignerArgs()...)
 	if err != nil {
 		t.Fatalf("StartChild: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSignerBinaryRequiresContentAuthorizationForCASign(t *testing.T) {
 	authSecret := filepath.Join(dir, "sign-auth.bin")
 
 	ctx := context.Background()
-	client, stop, err := signing.StartChild(ctx, bin, socket, "--auth-secret", authSecret)
+	client, stop, err := signing.StartChild(ctx, bin, socket, devSignerArgs("--auth-secret", authSecret)...)
 	if err != nil {
 		t.Fatalf("StartChild with --auth-secret: %v", err)
 	}

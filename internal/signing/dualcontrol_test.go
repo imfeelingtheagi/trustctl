@@ -43,7 +43,7 @@ func serveDualControl(t *testing.T, authz *crypto.SignAuthorizer) *signing.Clien
 	t.Cleanup(cancel)
 	served := make(chan error, 1)
 	svc := signing.NewServer(signing.WithAuthorizer(authz))
-	go func() { served <- signing.ServeServer(ctx, socket, svc) }()
+	go func() { served <- signing.ServeServerWithOptions(ctx, socket, svc, devServeOptions()) }()
 	t.Cleanup(func() {
 		cancel()
 		select {

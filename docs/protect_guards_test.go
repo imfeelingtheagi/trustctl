@@ -1306,9 +1306,10 @@ func TestTrustRootControlsStayRequired(t *testing.T) {
 		"socket := flag.String(\"socket\"",
 		"mtlsListen := flag.String(\"mtls-listen\"",
 		"signing.Harden()",
+		"signing.ErrUnsupportedHardening",
 		"signing.LoadOrCreateAuthorizer",
 		"signing.ServeServerMTLS",
-		"signing.ServeServer(ctx, *socket, srv)",
+		"signing.ServeServerWithOptions(ctx, *socket, srv, serveOpts)",
 	} {
 		if !strings.Contains(signerMain, want) {
 			t.Errorf("RED-101: cmd/trstctl-signer no longer contains %q; isolated signer process evidence weakened", want)
@@ -2360,12 +2361,14 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		"kekFile := flag.String(\"kek\"",
 		"authSecret := flag.String(\"auth-secret\"",
 		"mtlsListen := flag.String(\"mtls-listen\"",
+		"allowInsecureDevNonLinux := flag.Bool(\"allow-insecure-dev-nonlinux\"",
 		"signing.Harden()",
+		"signing.ErrUnsupportedHardening",
 		"signing.LoadOrCreateAuthorizer",
 		"signing.WithAuthorizer(authz)",
 		"signing.NewPersistentServer(signing.NewKeyStore(",
 		"signing.ServeServerMTLS(ctx",
-		"signing.ServeServer(ctx, *socket, srv)",
+		"signing.ServeServerWithOptions(ctx, *socket, srv, serveOpts)",
 	} {
 		if !strings.Contains(signerMain, want) {
 			t.Errorf("SIGNER-005/006: trstctl-signer main no longer contains %q; isolated process or persistent custody wiring weakened", want)
@@ -2388,7 +2391,7 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		"svc.Shutdown()",
 		"os.MkdirAll(dir, 0o700)",
 		"os.Chmod(socketPath, 0o600)",
-		"newPeerAuthListener(ln, os.Geteuid())",
+		"newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux)",
 	} {
 		if !strings.Contains(serveGo, want) {
 			t.Errorf("SIGNER-005: serve.go no longer contains %q; signer transport isolation/backpressure proof weakened", want)
@@ -3705,7 +3708,8 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/projections", "TestTokenForTenantACannotReachTenantB"},
 		{"../internal/signing", "TestPeerAuthListenerRejectsMismatchedUID"},
 		{"../internal/signing", "TestPeerAuthListenerAcceptsMatchingUID"},
-		{"../internal/signing", "TestPeerAuthListenerAcceptsWhenUIDUndeterminable"},
+		{"../internal/signing", "TestPeerAuthListenerRejectsWhenUIDUndeterminable"},
+		{"../internal/signing", "TestPeerAuthListenerAcceptsUndeterminableUIDOnlyWithDevOverride"},
 		{"../internal/signing", "TestSignCSROverUDS"},
 		{"../internal/signing", "TestSignOverMTLS_EndToEnd"},
 		{"../internal/signing", "TestSignOverMTLS_RejectsUntrustedPeer"},
@@ -3803,14 +3807,16 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"os.MkdirAll(dir, 0o700)",
 		"os.Chmod(dir, 0o700)",
 		"os.Chmod(socketPath, 0o600)",
-		"newPeerAuthListener(ln, os.Geteuid())",
+		"newPeerAuthListener(ln, os.Geteuid(), opts.AllowInsecureDevNonLinux)",
 	)
 	peerAuth := read(t, "../internal/signing/peer.go")
 	check("internal/signing/peer.go peer UID filter", peerAuth,
 		"type peerAuthListener struct",
 		"allowedUID int",
+		"allowUndeterminedDevNonLinux bool",
 		"peerUID func(net.Conn) (int, bool)",
-		"if uid, ok := l.peerUID(c); !ok || uid == l.allowedUID",
+		"if ok && uid == l.allowedUID",
+		"if !ok && l.allowUndeterminedDevNonLinux",
 		"_ = c.Close() // reject a peer whose uid does not match",
 	)
 	signerMTLS := read(t, "../internal/crypto/mtls/signer.go")

@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -70,7 +71,10 @@ func provisionOnce(t *testing.T, keysDir string, kekW *seal.LocalKEK, socket, ca
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { defer close(done); _ = signing.ServeServer(ctx, socket, srv) }()
+	go func() {
+		defer close(done)
+		_ = signing.ServeServerWithOptions(ctx, socket, srv, signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"})
+	}()
 	defer func() { cancel(); <-done }()
 
 	client, err := signing.DialReady(context.Background(), socket, 10*time.Second)

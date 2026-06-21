@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // repoRoot returns the module root, derived from this test file's location.
@@ -28,4 +30,15 @@ func buildSigner(t *testing.T) string {
 		t.Fatalf("build trstctl-signer: %v\n%s", err, out)
 	}
 	return bin
+}
+
+func devServeOptions() signing.ServeOptions {
+	return signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"}
+}
+
+func devSignerArgs(extra ...string) []string {
+	if runtime.GOOS == "linux" {
+		return extra
+	}
+	return append([]string{"--allow-insecure-dev-nonlinux"}, extra...)
 }

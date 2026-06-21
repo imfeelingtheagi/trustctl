@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ func main() {
 	keystore := flag.String("keystore", "", "directory for sealed key persistence; keys survive a restart (R3.2)")
 	kekFile := flag.String("kek", "", "path to the key-encryption key file that seals persisted keys (required with --keystore)")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
+	allowInsecureDevNonLinux := flag.Bool("allow-insecure-dev-nonlinux", false, "development-only: allow signer startup on non-Linux where process hardening, UDS peer UID checks, and locked memory are unavailable")
 
 	// Cross-node mTLS transport (AN-4 multi-node mode, SIGNER-005 / design §3,§5.2).
 	// When --mtls-listen is set the signer serves the SAME gRPC SignerService over
@@ -59,8 +61,11 @@ func main() {
 
 	// Process-level memory protection before any key touches memory (AN-8).
 	if err := signing.Harden(); err != nil {
-		fmt.Fprintf(os.Stderr, "trstctl-signer: harden: %v\n", err)
-		os.Exit(1)
+		if !*allowInsecureDevNonLinux || !errors.Is(err, signing.ErrUnsupportedHardening) {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: harden: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "trstctl-signer: WARNING: non-Linux development hardening override active; process hardening, UDS peer UID checks, and locked memory are unavailable\n")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -101,15 +106,16 @@ func main() {
 	}
 
 	var serveErr error
+	serveOpts := signing.ServeOptions{AllowInsecureDevNonLinux: *allowInsecureDevNonLinux}
 	if useMTLS {
 		serveErr = signing.ServeServerMTLS(ctx, *mtlsListen, srv, mtls.SignerPeerConfig{
 			CertFile:   *mtlsCert,
 			KeyFile:    *mtlsKey,
 			PeerCAFile: *mtlsPeerCA,
 			PeerPinHex: *mtlsPeerPin,
-		}, signing.ServeOptions{})
+		}, serveOpts)
 	} else {
-		serveErr = signing.ServeServer(ctx, *socket, srv)
+		serveErr = signing.ServeServerWithOptions(ctx, *socket, srv, serveOpts)
 	}
 	if serveErr != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", serveErr)

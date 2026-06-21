@@ -102,16 +102,55 @@ func TestPeerAuthListenerAcceptsMatchingUID(t *testing.T) {
 	}
 }
 
-// TestPeerAuthListenerAcceptsWhenUIDUndeterminable documents the WIRE-009 fallback:
-// when peerUID returns ok=false (the non-Linux case), the connection is accepted —
-// filesystem permissions remain the access control. This pins the documented
-// behavior so a change to it is deliberate.
-func TestPeerAuthListenerAcceptsWhenUIDUndeterminable(t *testing.T) {
-	fl := &fakeListener{conns: make(chan net.Conn, 1)}
+// TestPeerAuthListenerRejectsWhenUIDUndeterminable proves SIGNER-002's fail-closed
+// default: if the platform cannot bind the UDS peer to a uid, the signer must not
+// silently fall back to filesystem permissions only.
+func TestPeerAuthListenerRejectsWhenUIDUndeterminable(t *testing.T) {
+	fl := &fakeListener{conns: make(chan net.Conn, 2)}
 	l := &peerAuthListener{
 		Listener:   fl,
 		allowedUID: 1000,
 		peerUID:    func(net.Conn) (int, bool) { return 0, false }, // undeterminable (non-Linux)
+	}
+	server, client := net.Pipe()
+	defer func() { _ = client.Close() }()
+	spy := &closeSpyConn{Conn: server, closed: make(chan struct{})}
+
+	matching, mclient := net.Pipe()
+	defer func() { _ = mclient.Close() }()
+	defer func() { _ = matching.Close() }()
+	l.peerUID = func(c net.Conn) (int, bool) {
+		if c == matching {
+			return 1000, true
+		}
+		return 0, false
+	}
+	fl.conns <- spy
+	fl.conns <- matching
+
+	got, err := l.Accept()
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	if got != matching {
+		t.Fatal("Accept returned the undetermined-uid connection; it must wait for an authenticated peer")
+	}
+	select {
+	case <-spy.closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("undetermined-uid connection was not closed by the listener")
+	}
+}
+
+// TestPeerAuthListenerAcceptsUndeterminableUIDOnlyWithDevOverride keeps the local
+// non-Linux development escape hatch explicit and test-visible.
+func TestPeerAuthListenerAcceptsUndeterminableUIDOnlyWithDevOverride(t *testing.T) {
+	fl := &fakeListener{conns: make(chan net.Conn, 1)}
+	l := &peerAuthListener{
+		Listener:                     fl,
+		allowedUID:                   1000,
+		allowUndeterminedDevNonLinux: true,
+		peerUID:                      func(net.Conn) (int, bool) { return 0, false },
 	}
 	server, client := net.Pipe()
 	defer func() { _ = client.Close() }()
@@ -123,6 +162,6 @@ func TestPeerAuthListenerAcceptsWhenUIDUndeterminable(t *testing.T) {
 		t.Fatalf("Accept: %v", err)
 	}
 	if got != server {
-		t.Fatal("Accept should accept when the peer uid is undeterminable (WIRE-009 fallback)")
+		t.Fatal("dev override should accept an undetermined-uid connection")
 	}
 }

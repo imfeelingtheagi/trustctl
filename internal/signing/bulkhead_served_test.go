@@ -65,7 +65,9 @@ func testSignerShedsFloodOverUDS(t *testing.T) {
 	defer cancel()
 	served := make(chan error, 1)
 	go func() {
-		served <- signing.ServeServerWithOptions(ctx, socket, svc, signing.ServeOptions{MaxInflight: bound})
+		opts := devServeOptions()
+		opts.MaxInflight = bound
+		served <- signing.ServeServerWithOptions(ctx, socket, svc, opts)
 	}()
 
 	client := waitReady(t, socket)

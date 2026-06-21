@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func serveSignerWithAuthorizer(t *testing.T, authz *crypto.SignAuthorizer) *sign
 	t.Cleanup(cancel)
 	done := make(chan error, 1)
 	go func() {
-		done <- signing.ServeServer(ctx, socket, signing.NewServer(signing.WithAuthorizer(authz)))
+		done <- signing.ServeServerWithOptions(ctx, socket, signing.NewServer(signing.WithAuthorizer(authz)), signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"})
 	}()
 	t.Cleanup(func() {
 		cancel()

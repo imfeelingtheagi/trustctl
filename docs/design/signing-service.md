@@ -65,6 +65,11 @@ plan.
   with no shell, no `exec`, and no outbound network except its single listener.
   It has **no HTTP server** and **no SQL driver** (see §7). Process hardening
   (seccomp profile, `PR_SET_DUMPABLE`, `RLIMIT_CORE=0`) is covered in §6.
+- **No silent non-Linux downgrade.** The signer refuses to start on platforms
+  that cannot provide process hardening, UDS peer-UID binding, and locked
+  non-dumpable memory unless an operator passes the explicit
+  `--allow-insecure-dev-nonlinux` / `TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX`
+  local-development override.
 - **Lifecycle.** Start → bind socket (0700 dir, 0600 socket) → handshake/peer
   check → serve → drain (refuse new work, finish in-flight) → zeroize all key
   buffers → exit. A crash is detected by the control plane via the connection

@@ -2,5 +2,7 @@
 
 package signing
 
-// Harden is a no-op on non-Linux platforms (Linux is the production target).
-func Harden() error { return nil }
+// Harden fails closed on non-Linux platforms. The signer cannot claim AN-4/AN-8
+// production hardening without process dump/ptrace controls, UDS peer-UID
+// binding, and locked/no-dump secret memory.
+func Harden() error { return ErrUnsupportedHardening }

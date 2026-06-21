@@ -35,3 +35,5 @@ func peerUID(c net.Conn) (int, bool) {
 	}
 	return uid, true
 }
+
+func peerCredentialsSupported() bool { return true }

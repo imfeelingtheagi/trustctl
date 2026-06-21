@@ -33,7 +33,7 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sup, err := signing.Supervise(ctx, bin, socket)
+	sup, err := signing.Supervise(ctx, bin, socket, devSignerArgs()...)
 	if err != nil {
 		t.Fatalf("Supervise: %v", err)
 	}

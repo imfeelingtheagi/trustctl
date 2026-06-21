@@ -2,8 +2,10 @@ package signing_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -24,7 +26,7 @@ func TestServeInProcess(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan error, 1)
-	go func() { served <- signing.Serve(ctx, socket) }()
+	go func() { served <- signing.ServeServerWithOptions(ctx, socket, signing.NewServer(), devServeOptions()) }()
 
 	client := waitReady(t, socket)
 	defer func() { _ = client.Close() }()
@@ -55,10 +57,17 @@ func TestServeInProcess(t *testing.T) {
 	}
 }
 
-// TestHarden exercises the process-hardening entry point (a no-op off Linux).
+// TestHarden exercises the process-hardening entry point. Linux applies the
+// signer hardening in-process; non-Linux must fail closed so cmd/trstctl-signer
+// cannot silently start without core-dump/ptrace hardening, peer UID checks, and
+// locked secret memory (SIGNER-002).
 func TestHarden(t *testing.T) {
-	if err := signing.Harden(); err != nil {
+	err := signing.Harden()
+	if runtime.GOOS == "linux" && err != nil {
 		t.Fatalf("Harden: %v", err)
+	}
+	if runtime.GOOS != "linux" && !errors.Is(err, signing.ErrUnsupportedHardening) {
+		t.Fatalf("Harden on %s = %v, want ErrUnsupportedHardening", runtime.GOOS, err)
 	}
 }
 

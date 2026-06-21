@@ -76,6 +76,22 @@ func TestSignerCoResidentAuthorizerIsEvalOnly(t *testing.T) {
 	}
 }
 
+func TestSignerNonLinuxDevHardeningOverrideIsExplicit(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX": "true",
+	}
+	c, err := config.Load(envFunc(nil, env))
+	if err != nil {
+		t.Fatalf("load signer non-Linux dev override: %v", err)
+	}
+	if !c.Signer.AllowInsecureDevNonLinux {
+		t.Fatal("TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX was not applied")
+	}
+	if c.Signer.AllowInsecureDevNonLinux && c.Signer.Mode != config.SignerChild {
+		t.Fatal("the non-Linux hardening override is only intended for the child signer development path")
+	}
+}
+
 // TestSignerExternalMTLSValidation (SIGNER-005): the cross-node mTLS signer
 // transport is selected by signer.mtls_address; it requires the full mTLS material
 // and is mutually exclusive with a UDS socket. A complete block validates and is

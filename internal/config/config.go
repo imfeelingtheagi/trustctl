@@ -671,6 +671,11 @@ type Signer struct {
 	// control plane load AuthSecretFile and mint signer tokens locally. Production-
 	// like external NATS deployments reject it.
 	AllowCoResidentAuthorizer bool `json:"allow_co_resident_authorizer,omitempty"`
+	// AllowInsecureDevNonLinux is a local-development-only escape hatch for
+	// running child signer mode on non-Linux hosts. Without it, trstctl-signer
+	// refuses unsupported hardening targets instead of silently dropping
+	// core-dump/ptrace controls, UDS peer UID binding, and locked memory.
+	AllowInsecureDevNonLinux bool `json:"allow_insecure_dev_nonlinux,omitempty"`
 
 	// Cross-node mTLS transport for an external signer (SIGNER-005 / design §3,§5.2).
 	// When MTLSAddress is set in external mode the control plane dials the signer
@@ -952,6 +957,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", &c.Signer.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", &c.Signer.AuthTokenCommand)
 	setBool(getenv, "TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", &c.Signer.AllowCoResidentAuthorizer)
+	setBool(getenv, "TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX", &c.Signer.AllowInsecureDevNonLinux)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_ADDRESS", &c.Signer.MTLSAddress)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_SERVER_NAME", &c.Signer.MTLSServerName)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_CERT_FILE", &c.Signer.MTLSCertFile)
@@ -1262,6 +1268,9 @@ func validateSignerConfig(c *Config) []error {
 	}
 	if c.Signer.AllowCoResidentAuthorizer && c.NATS.Mode == NATSExternal && !c.NATS.AllowSingleReplica {
 		errs = append(errs, errors.New("signer.allow_co_resident_authorizer is evaluation-only; production external NATS deployments must use signer.auth_token_command or another independent token provider"))
+	}
+	if c.Signer.AllowInsecureDevNonLinux && c.Signer.Mode != SignerChild {
+		errs = append(errs, errors.New("signer.allow_insecure_dev_nonlinux is only valid for local child signer development; external signer deployments must harden the signer process directly"))
 	}
 	// The signer runs as a supervised child or connects to an external service. An
 	// external signer is reached over EITHER a co-located UDS (signer.socket) OR a

@@ -256,10 +256,15 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 	if socket == "" {
 		socket = filepath.Join(os.TempDir(), "trstctl-signer.sock")
 	}
-	sup, err := signing.Supervise(ctx, signerBin, socket,
+	args := []string{
 		"--keystore", cfg.Signer.KeyStoreDir,
 		"--kek", cfg.Secrets.KEKFile,
-		"--auth-secret", cfg.Signer.AuthSecretFile)
+		"--auth-secret", cfg.Signer.AuthSecretFile,
+	}
+	if cfg.Signer.AllowInsecureDevNonLinux {
+		args = append(args, "--allow-insecure-dev-nonlinux")
+	}
+	sup, err := signing.Supervise(ctx, signerBin, socket, args...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("start signer: %w", err)
 	}

@@ -221,7 +221,7 @@ func TestServedCAKeyRefusesForgeryOverUDS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	served := make(chan error, 1)
-	go func() { served <- signing.Serve(ctx, socket) }()
+	go func() { served <- signing.ServeServerWithOptions(ctx, socket, signing.NewServer(), devServeOptions()) }()
 
 	client := waitReady(t, socket)
 	defer func() { _ = client.Close() }()

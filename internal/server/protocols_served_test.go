@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -99,7 +100,7 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	signerDone := make(chan error, 1)
 	signerEarlyErr := make(chan error, 1)
 	go func() {
-		serr := signing.ServeServer(signerCtx, socket, signerSrv)
+		serr := signing.ServeServerWithOptions(signerCtx, socket, signerSrv, signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"})
 		if serr != nil {
 			signerEarlyErr <- serr
 		}
