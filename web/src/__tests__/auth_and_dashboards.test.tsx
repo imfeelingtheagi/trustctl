@@ -9,6 +9,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    logout: vi.fn(),
     certificates: vi.fn(),
     certificatePage: vi.fn(),
     getCertificate: vi.fn(),
@@ -47,6 +48,7 @@ function AuthProbe() {
 describe("auth + dashboards", () => {
   beforeEach(() => {
     apiMock.me.mockReset();
+    apiMock.logout.mockReset();
     apiMock.certificates.mockReset();
     apiMock.certificatePage.mockReset();
     apiMock.getCertificate.mockReset();
@@ -55,6 +57,7 @@ describe("auth + dashboards", () => {
     apiMock.auditEvents.mockReset();
     apiMock.risk.mockReset();
     apiMock.certificates.mockResolvedValue([]);
+    apiMock.logout.mockResolvedValue(undefined);
     apiMock.certificatePage.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
     apiMock.auditEvents.mockResolvedValue([]);
@@ -140,6 +143,21 @@ describe("auth + dashboards", () => {
     // Rotate-first uses served risk data (highest score first).
     expect(await within(dash).findByText("CN=svc")).toBeInTheDocument();
     expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" });
+  });
+
+  it("signs out through the served logout endpoint and returns to login", async () => {
+    apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    const user = userEvent.setup();
+
+    renderAt("/");
+
+    expect(await screen.findByTestId("current-user")).toHaveTextContent("u@example.test");
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+
+    await waitFor(() => expect(apiMock.logout).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("current-user")).not.toBeInTheDocument();
   });
 
   it("falls back to demo data when the backend serves nothing", async () => {

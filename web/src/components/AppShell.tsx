@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   KeyRound,
   LockKeyhole,
+  LogOut,
   Rocket,
   ServerCog,
   Siren,
@@ -204,7 +205,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * navigation sidebar, and the routed main content — landmarked and keyboard
  * navigable for WCAG 2.1 AA. */
 export function AppShell() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { t } = useTranslation();
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
@@ -212,7 +213,20 @@ export function AppShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const mobileNavId = "mobile-primary-nav";
+
+  async function handleLogout() {
+    setLogoutPending(true);
+    setLogoutError(null);
+    try {
+      await logout();
+    } catch {
+      setLogoutPending(false);
+      setLogoutError(t("shell.signOutFailed"));
+    }
+  }
 
   useEffect(() => {
     if (isDesktop) {
@@ -328,6 +342,24 @@ export function AppShell() {
             <span className="hidden max-w-44 truncate text-sm text-muted-foreground sm:inline" data-testid="current-user">
               {user.email || user.subject}
             </span>
+          )}
+          {logoutError && (
+            <span className="max-w-40 truncate text-xs text-destructive" role="alert">
+              {logoutError}
+            </span>
+          )}
+          {user && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label={t("shell.signOut")}
+              title={t("shell.signOut")}
+              onClick={handleLogout}
+              disabled={logoutPending}
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+            </Button>
           )}
         </div>
       </header>

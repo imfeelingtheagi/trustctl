@@ -70,6 +70,14 @@ export const messages = {
     defaultMessage: "Open keyboard shortcuts",
     description: "Keyboard-shortcuts help button label.",
   },
+  "shell.signOut": {
+    defaultMessage: "Sign out",
+    description: "Button label for ending the current browser session.",
+  },
+  "shell.signOutFailed": {
+    defaultMessage: "Sign-out failed",
+    description: "Short error shown when the current browser session could not be ended.",
+  },
   "nav.section.needsAction": {
     defaultMessage: "Needs action",
     description: "Primary nav section for urgent worklists.",
@@ -454,4 +462,3 @@ export const catalogs: Record<Locale, Record<MessageKey, string>> = {
   "en-XA": buildCatalog(pseudoLocalize),
   "ar-XB": buildCatalog(pseudoLocalize),
 };
-

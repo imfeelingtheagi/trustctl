@@ -8,7 +8,10 @@ interface AuthState {
   preview: boolean;
   previewAvailable: boolean;
   startPreview: () => void;
+  logout: () => Promise<void>;
 }
+
+type AuthCoreState = Omit<AuthState, "startPreview" | "logout">;
 
 const previewUser: Me = {
   subject: "dev-preview",
@@ -23,18 +26,18 @@ const AuthContext = createContext<AuthState>({
   preview: false,
   previewAvailable: false,
   startPreview: () => {},
+  logout: async () => {},
 });
 
 /** AuthProvider resolves the current session from /auth/me on mount. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const previewRef = useRef(false);
-  const [state, setState] = useState<AuthState>({
+  const [state, setState] = useState<AuthCoreState>({
     user: null,
     loading: true,
     error: null,
     preview: false,
     previewAvailable: import.meta.env.DEV,
-    startPreview: () => {},
   });
 
   const startPreview = useCallback(() => {
@@ -46,8 +49,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error: null,
       preview: true,
       previewAvailable: true,
-      startPreview,
     });
+  }, []);
+
+  const logout = useCallback(async () => {
+    if (previewRef.current) {
+      previewRef.current = false;
+      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
+      return;
+    }
+
+    setState((current) => ({ ...current, error: null }));
+    try {
+      await api.logout();
+      setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
+    } catch (err) {
+      setState((current) => ({ ...current, loading: false, error: String(err) }));
+      throw err;
+    }
   }, []);
 
   useEffect(() => {
@@ -56,22 +75,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .me()
       .then((user) => {
         if (!active || previewRef.current) return;
-        setState({ user, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV, startPreview });
+        setState({ user, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
       })
       .catch((err) => {
         if (!active || previewRef.current) return;
         if (err instanceof UnauthorizedError) {
-          setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV, startPreview });
+          setState({ user: null, loading: false, error: null, preview: false, previewAvailable: import.meta.env.DEV });
         } else {
-          setState({ user: null, loading: false, error: String(err), preview: false, previewAvailable: import.meta.env.DEV, startPreview });
+          setState({ user: null, loading: false, error: String(err), preview: false, previewAvailable: import.meta.env.DEV });
         }
       });
     return () => {
       active = false;
     };
-  }, [startPreview]);
+  }, []);
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ ...state, startPreview, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

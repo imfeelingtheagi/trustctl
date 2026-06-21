@@ -112,6 +112,18 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
   });
 
+  it("posts logout to the served auth endpoint with the CSRF cookie", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-logout; path=/";
+    mockFetch(204, "");
+
+    await api.logout();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/auth/logout");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-logout");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+  });
+
   it("sends certificate ingest through the served mutation with Idempotency-Key", async () => {
     document.cookie = "trstctl_csrf=csrf-token-3; path=/";
     mockFetch(

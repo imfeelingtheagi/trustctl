@@ -161,13 +161,19 @@ func TestAuthLogoutClearsSession(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("logout = %d, want 204", rec.Code)
 	}
-	var cleared bool
+	var clearedSession, clearedCSRF bool
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == "trstctl_session" && c.MaxAge < 0 {
-			cleared = true
+			clearedSession = true
+		}
+		if c.Name == "trstctl_csrf" && c.MaxAge < 0 {
+			clearedCSRF = true
 		}
 	}
-	if !cleared {
+	if !clearedSession {
 		t.Error("logout should clear the session cookie")
+	}
+	if !clearedCSRF {
+		t.Error("logout should clear the CSRF cookie")
 	}
 }

@@ -323,6 +323,7 @@ export function firstCertificateIdentityRequest(input: IssueCertificateInput, ow
  * field the server does not accept — the same contract guarantee as the responses. */
 export interface Api {
   me(): Promise<Me>;
+  logout(): Promise<void>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: {
     limit?: number;
@@ -400,6 +401,7 @@ export interface Api {
 
 export const api: Api = {
   me: () => req<Me>("/auth/me"),
+  logout: () => req<void>("/auth/logout", { method: "POST" }),
   certificatePage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));
