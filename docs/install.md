@@ -240,8 +240,10 @@ Authenticode signature and inspect the signer:
 Get-AuthenticodeSignature .\trstctl-agent.msi   # Status must be 'Valid'
 ```
 
-On any platform you can also verify the published checksums against the release
-asset, and (when present) the signature with `osslsigncode`:
+The protected release workflow publishes the signed Windows agent files as durable
+GitHub Release assets: `trstctl-agent.exe`, `trstctl-agent.msi`, and `SHA256SUMS`.
+On any platform you can verify the published checksums against those release assets,
+and (when present) the signature with `osslsigncode`:
 
 ```bash
 sha256sum -c SHA256SUMS                    # the agent .exe/.msi hashes match the release

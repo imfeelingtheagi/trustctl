@@ -264,14 +264,14 @@ jobs:
   # job builds the Windows agent .exe + .msi via the same `make dist-windows` path
   # used locally, Authenticode-signs BOTH through an operator-owned remote signer
   # authenticated by GitHub OIDC, publishes the SHA-256 sums, and uploads everything
-  # as release assets. The signer keeps its code-signing key in an HSM/cloud signing
+  # as durable GitHub Release assets. The signer keeps its code-signing key in an HSM/cloud signing
   # boundary; no long-lived PKCS#12 secret is materialized on the runner.
   agent-windows:
     name: agent / windows sign + publish
     runs-on: ubuntu-latest
     timeout-minutes: 30 # TEST-004
     permissions:
-      contents: read
+      contents: write # create/update the tag's GitHub Release assets
       id-token: write # remote Authenticode signer authenticates this job by OIDC
     environment: windows-code-signing
     # Do not build/sign/publish the privileged agent off an untested ref (TEST-005)
@@ -320,14 +320,43 @@ jobs:
             osslsigncode verify -in "$art"
           done
 
-      - name: Upload Windows agent release artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: trstctl-agent-windows
-          path: |
-            dist/trstctl-agent.exe
-            dist/trstctl-agent.msi
-            dist/SHA256SUMS
+      - name: Verify the checksum manifest
+        run: |
+          set -euo pipefail
+          for art in dist/trstctl-agent.exe dist/trstctl-agent.msi dist/SHA256SUMS; do
+            test -s "$art"
+          done
+          ( cd dist && sha256sum -c SHA256SUMS )
+
+      - name: Publish Windows agent GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::Windows release assets can only be published from a tag ref, got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" \
+            dist/trstctl-agent.exe \
+            dist/trstctl-agent.msi \
+            dist/SHA256SUMS \
+            --clobber
+
+      - name: Verify GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for name in trstctl-agent.exe trstctl-agent.msi SHA256SUMS; do
+            if ! grep -qx "$name" <<<"$assets"; then
+              echo "::error::GitHub Release $GITHUB_REF_NAME is missing Windows asset $name"
+              exit 1
+            fi
+          done
 
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).

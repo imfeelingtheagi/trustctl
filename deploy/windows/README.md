@@ -23,8 +23,8 @@ a `SHA256SUMS` manifest into `dist/`.
   left unsigned (and the target says so). **Published release artifacts are
   signed:** the `agent-windows` job in `.github/workflows/release.yml` runs in the
   protected `windows-code-signing` environment, authenticates to that signer with
-  GitHub OIDC, and uploads the Windows agent artifacts only after
-  signing/verification. No code-signing PKCS#12 is decoded or written on the CI
+  GitHub OIDC, and publishes durable GitHub Release assets only after
+  signing, Authenticode verification, and `sha256sum -c SHA256SUMS` pass. No code-signing PKCS#12 is decoded or written on the CI
   runner. The `windows / test + MSI` CI job builds unsigned package artifacts only;
   release signing is the protected gate.
 - **MSI.** `make dist-windows` builds the MSI with `wixl` (msitools) when
