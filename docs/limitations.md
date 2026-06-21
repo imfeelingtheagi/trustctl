@@ -596,12 +596,15 @@ a lab process software cannot perform.
 
 **Signer UDS peer-uid is Linux-only (WIRE-009 / SIGNER-006).** The signing service's
 Unix-domain-socket listener authenticates the connecting process's uid via
-`SO_PEERCRED`, which exists only on **Linux** — the supported production target
-(Docker/Helm). On non-Linux hosts the peer-uid layer is unavailable and the access
-control is the `0700` socket directory + `0600` socket alone; the listener accepts a
-connection whose uid it cannot determine. This is defense-in-depth, not the primary
-control, and the rejection path is now covered by tests so a regression that breaks
-the uid comparison is caught in CI.
+`SO_PEERCRED`, which exists only on **Linux** -- the supported production target
+(Docker/Helm). On non-Linux hosts, `trstctl-signer` now fails closed when process
+hardening, locked memory, or UDS peer credentials are unavailable. Local developers
+can opt into the filesystem-permissions-only fallback with the explicit
+`--allow-insecure-dev-nonlinux` flag (or
+`TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX=true` for child signer mode), but this is
+not a production control. Production deployments without reliable UDS peer
+credentials should use the signer's fail-closed mTLS transport with pinned peer
+certificates.
 
 ## Post-quantum cryptography (issuance algorithms)
 

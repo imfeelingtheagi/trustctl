@@ -145,6 +145,18 @@ func TestPeerAuthListenerRejectsWhenUIDUndeterminable(t *testing.T) {
 // TestPeerAuthListenerAcceptsUndeterminableUIDOnlyWithDevOverride keeps the local
 // non-Linux development escape hatch explicit and test-visible.
 func TestPeerAuthListenerAcceptsUndeterminableUIDOnlyWithDevOverride(t *testing.T) {
+	assertPeerAuthListenerAcceptsWithExplicitDevOverride(t)
+}
+
+// TestPeerAuthListenerAcceptsWithExplicitDevOverride uses the exact WIRE-009
+// acceptance-test name from the audit backlog.
+func TestPeerAuthListenerAcceptsWithExplicitDevOverride(t *testing.T) {
+	assertPeerAuthListenerAcceptsWithExplicitDevOverride(t)
+}
+
+func assertPeerAuthListenerAcceptsWithExplicitDevOverride(t *testing.T) {
+	t.Helper()
+
 	fl := &fakeListener{conns: make(chan net.Conn, 1)}
 	l := &peerAuthListener{
 		Listener:                     fl,
