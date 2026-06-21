@@ -18,29 +18,35 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered      = "tenant.registered"
-	EventTenantOffboarded      = "tenant.offboarded"
-	EventOwnerCreated          = "owner.created"
-	EventOwnerUpdated          = "owner.updated"
-	EventOwnerDeleted          = "owner.deleted"
-	EventIssuerCreated         = "issuer.created"
-	EventIdentityCreated       = "identity.created"
-	EventIdentityIssued        = "identity.issued"
-	EventIdentityDeployed      = "identity.deployed"
-	EventIdentityRevoked       = "identity.revoked"
-	EventIdentityRenewing      = "identity.renewing"
-	EventIdentityRenewed       = "identity.renewed"
-	EventIdentityRetired       = "identity.retired"
-	EventCertificateRecorded   = "certificate.recorded"
-	EventCertificateRevoked    = "certificate.revoked"
-	EventCertificateSuperseded = "certificate.superseded"
-	EventCAIssuedCertificate   = "ca.certificate.issued"
-	EventCACertificateRevoked  = "ca.certificate.revoked"
-	EventCRLPublished          = "ca.crl.published"
-	EventAgentHeartbeat        = "agent.heartbeat"
-	EventAgentCertRenewed      = "agent.cert.renewed"
-	EventProfileCreated        = "profile.created"
-	EventProfileUpdated        = "profile.updated"
+	EventTenantRegistered          = "tenant.registered"
+	EventTenantOffboarded          = "tenant.offboarded"
+	EventOwnerCreated              = "owner.created"
+	EventOwnerUpdated              = "owner.updated"
+	EventOwnerDeleted              = "owner.deleted"
+	EventIssuerCreated             = "issuer.created"
+	EventIdentityCreated           = "identity.created"
+	EventIdentityIssued            = "identity.issued"
+	EventIdentityDeployed          = "identity.deployed"
+	EventIdentityRevoked           = "identity.revoked"
+	EventIdentityRenewing          = "identity.renewing"
+	EventIdentityRenewed           = "identity.renewed"
+	EventIdentityRetired           = "identity.retired"
+	EventCertificateRecorded       = "certificate.recorded"
+	EventCertificateRevoked        = "certificate.revoked"
+	EventCertificateSuperseded     = "certificate.superseded"
+	EventCAIssuedCertificate       = "ca.certificate.issued"
+	EventCACertificateRevoked      = "ca.certificate.revoked"
+	EventCRLPublished              = "ca.crl.published"
+	EventAgentHeartbeat            = "agent.heartbeat"
+	EventAgentCertRenewed          = "agent.cert.renewed"
+	EventProfileCreated            = "profile.created"
+	EventProfileUpdated            = "profile.updated"
+	EventDiscoverySourceUpserted   = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted = "discovery.schedule.upserted"
+	EventDiscoveryRunQueued        = "discovery.run.queued"
+	EventDiscoveryRunStarted       = "discovery.run.started"
+	EventDiscoveryFindingRecorded  = "discovery.finding.recorded"
+	EventDiscoveryRunCompleted     = "discovery.run.completed"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -234,6 +240,61 @@ type ProfileVersioned struct {
 	CreatedBy string          `json:"created_by"`
 }
 
+// DiscoverySourceUpserted is the payload of discovery.source.upserted.
+type DiscoverySourceUpserted struct {
+	ID     string          `json:"id"`
+	Kind   string          `json:"kind"`
+	Name   string          `json:"name"`
+	Config json.RawMessage `json:"config"`
+}
+
+// DiscoveryScheduleUpserted is the payload of discovery.schedule.upserted.
+type DiscoveryScheduleUpserted struct {
+	ID              string `json:"id"`
+	SourceID        string `json:"source_id"`
+	Name            string `json:"name"`
+	IntervalSeconds int    `json:"interval_seconds"`
+	Enabled         bool   `json:"enabled"`
+}
+
+// DiscoveryRunQueued is the payload of discovery.run.queued.
+type DiscoveryRunQueued struct {
+	ID          string  `json:"id"`
+	SourceID    string  `json:"source_id"`
+	ScheduleID  *string `json:"schedule_id,omitempty"`
+	DryRun      bool    `json:"dry_run"`
+	RequestedBy string  `json:"requested_by,omitempty"`
+}
+
+// DiscoveryRunStarted is the payload of discovery.run.started.
+type DiscoveryRunStarted struct {
+	ID string `json:"id"`
+}
+
+// DiscoveryFindingRecorded is the payload of discovery.finding.recorded.
+type DiscoveryFindingRecorded struct {
+	ID          string          `json:"id"`
+	RunID       string          `json:"run_id"`
+	SourceID    string          `json:"source_id"`
+	Kind        string          `json:"kind"`
+	Ref         string          `json:"ref"`
+	Provenance  string          `json:"provenance"`
+	Fingerprint string          `json:"fingerprint,omitempty"`
+	RiskScore   int             `json:"risk_score,omitempty"`
+	Metadata    json.RawMessage `json:"metadata"`
+}
+
+// DiscoveryRunCompleted is the payload of discovery.run.completed.
+type DiscoveryRunCompleted struct {
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	Targets    int    `json:"targets"`
+	Discovered int    `json:"discovered"`
+	Failed     int    `json:"failed"`
+	Rejected   int    `json:"rejected"`
+	Error      string `json:"error,omitempty"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -319,27 +380,33 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
-	EventOwnerCreated:          {1: true},
-	EventOwnerUpdated:          {1: true},
-	EventOwnerDeleted:          {1: true},
-	EventIssuerCreated:         {1: true},
-	EventIdentityCreated:       {1: true},
-	EventIdentityIssued:        {1: true},
-	EventIdentityDeployed:      {1: true},
-	EventIdentityRevoked:       {1: true},
-	EventIdentityRenewing:      {1: true},
-	EventIdentityRenewed:       {1: true},
-	EventIdentityRetired:       {1: true},
-	EventCertificateRecorded:   {1: true},
-	EventCertificateRevoked:    {1: true},
-	EventCertificateSuperseded: {1: true},
-	EventCAIssuedCertificate:   {1: true},
-	EventCACertificateRevoked:  {1: true},
-	EventCRLPublished:          {1: true, 2: true},
-	EventAgentHeartbeat:        {1: true},
-	EventAgentCertRenewed:      {1: true},
-	EventProfileCreated:        {1: true, 2: true},
-	EventProfileUpdated:        {1: true, 2: true},
+	EventOwnerCreated:              {1: true},
+	EventOwnerUpdated:              {1: true},
+	EventOwnerDeleted:              {1: true},
+	EventIssuerCreated:             {1: true},
+	EventIdentityCreated:           {1: true},
+	EventIdentityIssued:            {1: true},
+	EventIdentityDeployed:          {1: true},
+	EventIdentityRevoked:           {1: true},
+	EventIdentityRenewing:          {1: true},
+	EventIdentityRenewed:           {1: true},
+	EventIdentityRetired:           {1: true},
+	EventCertificateRecorded:       {1: true},
+	EventCertificateRevoked:        {1: true},
+	EventCertificateSuperseded:     {1: true},
+	EventCAIssuedCertificate:       {1: true},
+	EventCACertificateRevoked:      {1: true},
+	EventCRLPublished:              {1: true, 2: true},
+	EventAgentHeartbeat:            {1: true},
+	EventAgentCertRenewed:          {1: true},
+	EventProfileCreated:            {1: true, 2: true},
+	EventProfileUpdated:            {1: true, 2: true},
+	EventDiscoverySourceUpserted:   {1: true},
+	EventDiscoveryScheduleUpserted: {1: true},
+	EventDiscoveryRunQueued:        {1: true},
+	EventDiscoveryRunStarted:       {1: true},
+	EventDiscoveryFindingRecorded:  {1: true},
+	EventDiscoveryRunCompleted:     {1: true},
 }
 
 var lifecycleEventTypes = map[string]bool{
@@ -566,6 +633,61 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyProfileVersionTx(ctx, tx, store.ProfileRecord{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Version: pl.Version,
 			Spec: pl.Spec, Active: pl.Active, CreatedBy: pl.CreatedBy, CreatedAt: e.Time,
+		})
+	case EventDiscoverySourceUpserted:
+		var pl DiscoverySourceUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
+			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Name: pl.Name,
+			Config: pl.Config, CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventDiscoveryScheduleUpserted:
+		var pl DiscoveryScheduleUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryScheduleUpsertedTx(ctx, tx, store.DiscoverySchedule{
+			ID: pl.ID, TenantID: e.TenantID, SourceID: pl.SourceID, Name: pl.Name,
+			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
+			CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventDiscoveryRunQueued:
+		var pl DiscoveryRunQueued
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryRunQueuedTx(ctx, tx, store.DiscoveryRun{
+			ID: pl.ID, TenantID: e.TenantID, SourceID: pl.SourceID, ScheduleID: pl.ScheduleID,
+			Status: "queued", DryRun: pl.DryRun, RequestedBy: pl.RequestedBy, CreatedAt: e.Time,
+		})
+	case EventDiscoveryRunStarted:
+		var pl DiscoveryRunStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryRunStartedTx(ctx, tx, e.TenantID, pl.ID, e.Time)
+	case EventDiscoveryFindingRecorded:
+		var pl DiscoveryFindingRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryFindingRecordedTx(ctx, tx, store.DiscoveryFinding{
+			ID: pl.ID, TenantID: e.TenantID, RunID: pl.RunID, SourceID: pl.SourceID,
+			Kind: pl.Kind, Ref: pl.Ref, Provenance: pl.Provenance, Fingerprint: pl.Fingerprint,
+			RiskScore: pl.RiskScore, Metadata: pl.Metadata, DiscoveredAt: e.Time,
+		})
+	case EventDiscoveryRunCompleted:
+		var pl DiscoveryRunCompleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		completedAt := e.Time
+		return p.store.ApplyDiscoveryRunCompletedTx(ctx, tx, store.DiscoveryRun{
+			ID: pl.ID, TenantID: e.TenantID, Status: pl.Status, Targets: pl.Targets,
+			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
+			Error: pl.Error, CompletedAt: &completedAt,
 		})
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the

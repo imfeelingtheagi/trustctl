@@ -308,6 +308,11 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "expiring_before", typ: "string", desc: "RFC3339; return only certificates expiring before this time"},
 	}
+	discoveryFindingQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+		{name: "run_id", typ: "string", format: "uuid", desc: "return only findings from this discovery run"},
+	}
 	auditQuery := []param{
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
 		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
@@ -336,6 +341,15 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: idPath, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
+
+		{method: "POST", path: "/api/v1/discovery/sources", opID: "createDiscoverySource", summary: "Create a discovery source", handler: a.createDiscoverySource, reqSchema: "DiscoverySourceRequest", resSchema: "DiscoverySource", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "GET", path: "/api/v1/discovery/sources", opID: "listDiscoverySources", summary: "List discovery sources", handler: a.listDiscoverySources, query: page, resSchema: "DiscoverySourceList", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "POST", path: "/api/v1/discovery/schedules", opID: "createDiscoverySchedule", summary: "Create a discovery schedule", handler: a.createDiscoverySchedule, reqSchema: "DiscoveryScheduleRequest", resSchema: "DiscoverySchedule", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "GET", path: "/api/v1/discovery/schedules", opID: "listDiscoverySchedules", summary: "List discovery schedules", handler: a.listDiscoverySchedules, query: page, resSchema: "DiscoveryScheduleList", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "POST", path: "/api/v1/discovery/runs", opID: "startDiscoveryRun", summary: "Start a discovery run", handler: a.startDiscoveryRun, reqSchema: "DiscoveryRunRequest", resSchema: "DiscoveryRun", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "GET", path: "/api/v1/discovery/runs", opID: "listDiscoveryRuns", summary: "List discovery runs", handler: a.listDiscoveryRuns, query: page, resSchema: "DiscoveryRunList", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "GET", path: "/api/v1/discovery/runs/{id}", opID: "getDiscoveryRun", summary: "Get a discovery run", handler: a.getDiscoveryRun, pathParams: idPath, resSchema: "DiscoveryRun", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "GET", path: "/api/v1/discovery/findings", opID: "listDiscoveryFindings", summary: "List discovery findings", handler: a.listDiscoveryFindings, query: discoveryFindingQuery, resSchema: "DiscoveryFindingList", successCode: "200", perm: authz.DiscoveryRead},
 
 		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},

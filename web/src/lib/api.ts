@@ -21,6 +21,17 @@ import type {
   CertificateList,
   CredentialRisk as GenCredentialRisk,
   CredentialRiskList,
+  DiscoveryFinding,
+  DiscoveryFindingList,
+  DiscoveryRun,
+  DiscoveryRunList,
+  DiscoveryRunRequest,
+  DiscoverySchedule,
+  DiscoveryScheduleList,
+  DiscoveryScheduleRequest,
+  DiscoverySource,
+  DiscoverySourceList,
+  DiscoverySourceRequest,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -76,6 +87,17 @@ export type IssueCertificateInput = {
 };
 export type {
   AuditBundle,
+  DiscoveryFinding,
+  DiscoveryFindingList,
+  DiscoveryRun,
+  DiscoveryRunList,
+  DiscoveryRunRequest,
+  DiscoverySchedule,
+  DiscoveryScheduleList,
+  DiscoveryScheduleRequest,
+  DiscoverySource,
+  DiscoverySourceList,
+  DiscoverySourceRequest,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -269,6 +291,14 @@ export interface Api {
   issueCertificate(input: IssueCertificateInput): Promise<Identity>;
   agents(): Promise<Agent[]>;
   createEnrollmentToken(): Promise<EnrollmentToken>;
+  discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
+  createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
+  discoverySchedules(options?: { limit?: number; cursor?: string }): Promise<DiscoveryScheduleList>;
+  createDiscoverySchedule(input: DiscoveryScheduleRequest): Promise<DiscoverySchedule>;
+  discoveryRuns(options?: { limit?: number; cursor?: string }): Promise<DiscoveryRunList>;
+  getDiscoveryRun(id: string): Promise<DiscoveryRun>;
+  startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
+  discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
@@ -330,6 +360,24 @@ export const api: Api = {
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
+  discoverySources: (options) =>
+    req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
+  createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
+  discoverySchedules: (options) =>
+    req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),
+  createDiscoverySchedule: (input) => mutate<DiscoverySchedule>("POST", "/api/v1/discovery/schedules", input),
+  discoveryRuns: (options) =>
+    req<DiscoveryRunList>(`/api/v1/discovery/runs${pageQueryString(options)}`),
+  getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
+  startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
+  discoveryFindings: (options) => {
+    const qs = new URLSearchParams();
+    if (options?.limit != null) qs.set("limit", String(options.limit));
+    if (options?.cursor) qs.set("cursor", options.cursor);
+    if (options?.runId) qs.set("run_id", options.runId);
+    const suffix = qs.toString();
+    return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
+  },
   risk: (options) =>
     req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
@@ -386,6 +434,14 @@ function riskQueryString(options?: RiskQuery): string {
   if (options?.minScore != null) qs.set("min_score", String(options.minScore));
   if (options?.privilege != null) qs.set("privilege", String(options.privilege));
   if (options?.owner) qs.set("owner", options.owner);
+  const suffix = qs.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
+function pageQueryString(options?: { limit?: number; cursor?: string }): string {
+  const qs = new URLSearchParams();
+  if (options?.limit != null) qs.set("limit", String(options.limit));
+  if (options?.cursor) qs.set("cursor", options.cursor);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

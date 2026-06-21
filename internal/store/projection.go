@@ -296,13 +296,13 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_issued_certs", "ca_crls"}
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly
 // ReadModelTables — the tables this platform projects from events today; other
-// read models (discovery inventory, CA state) are rebuilt by their own subsystems
-// and join this set as they become event-sourced.
+// read models with independent rebuild paths are kept out of this list until they
+// become event-sourced.
 func (s *Store) TruncateReadModel(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx,
 		`TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`)
@@ -394,7 +394,7 @@ func (s *Store) DeleteTenantReadModelTx(ctx context.Context, tx pgx.Tx, tenantID
 	}
 	// Order: dependents first. identity_transitions and certificates reference
 	// identities/owners; the tenants row is removed last.
-	ordered := []string{"identity_transitions", "ca_crls", "ca_issued_certs", "certificates", "identities", "certificate_profiles", "issuers", "owners", "tenants"}
+	ordered := []string{"identity_transitions", "ca_crls", "ca_issued_certs", "certificates", "identities", "certificate_profiles", "discovery_findings", "discovery_runs", "discovery_schedules", "discovery_sources", "issuers", "owners", "tenants"}
 	for _, table := range ordered {
 		if _, err := tx.Exec(ctx, "DELETE FROM "+table+" WHERE tenant_id = $1", tenantID); err != nil {
 			return fmt.Errorf("store: delete read-model %s for tenant: %w", table, err)

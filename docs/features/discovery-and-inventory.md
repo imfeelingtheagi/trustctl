@@ -69,8 +69,11 @@ producer instead of dropping targets or exhausting the pool the API needs — a 
 scan can never starve the rest of the system. The handshake and certificate parsing
 both go through `internal/crypto` (**AN-3**).
 
-*Code:* `internal/discovery/netscan`. **Status:** library-complete and tested, but
-not yet wired into the running control plane — see [Pitfalls & limits](#pitfalls--limits).
+*Code:* `internal/discovery/netscan`, `internal/api/discovery.go`,
+`internal/server/discovery.go`. **Status:** served by the running control plane:
+operators create a `network` source, queue a run, and inspect findings through
+REST/CLI/UI. The run executes from the outbox worker, so the external probes are
+durable and retryable (**AN-6**) instead of being done inline by the request handler.
 
 ### Agent-based discovery (F3) — what each host can see from the inside
 
@@ -102,8 +105,10 @@ grant whose comment field is blank — meaning nobody can say whose key it is. A
 orphaned standing-access key is exactly the thing a security team wants surfaced. Only
 the fingerprint is ever stored, never private key material (**AN-8**).
 
-*Code:* `internal/sshinv`, `internal/agent/sshdiscovery`, `internal/discovery/sshscan`.
-**Status:** library-complete and tested; no HTTP/CLI surface yet.
+*Code:* `internal/sshinv`, `internal/agent/sshdiscovery`, `internal/discovery/sshscan`,
+plus the served `ssh` discovery source/run/finding control-plane records. **Status:**
+SSH source, schedule, run, and metadata-only finding records are served; host-key
+execution still belongs to the agent/library connector.
 
 ### Agentless cloud discovery (F49) — pull inventory from the cloud's own APIs
 
@@ -115,8 +120,11 @@ credentials. Request signing (e.g. AWS SigV4) and all certificate parsing go thr
 `internal/crypto` (**AN-3**), and the enumerators run on a bulkhead with retry/backoff
 on rate limits (**AN-7**).
 
-*Code:* `internal/discovery/cloudcert/{acmdisc,kvdisc,gcmdisc}`. **Status:**
-library-complete and tested against faithful API doubles; not yet scheduled by the server.
+*Code:* `internal/discovery/cloudcert/{acmdisc,kvdisc,gcmdisc}`, plus the served
+`cloud_certificate` discovery source/run/finding control-plane records. **Status:**
+cloud source, schedule, run, and metadata-only finding records are served; provider
+API execution remains connector-owned and uses credential references rather than
+inline credentials.
 
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
@@ -135,10 +143,11 @@ tokens at 50, stored secrets at 30, with +30 for stale or never-rotated — and 
 leaked-credential findings from scanners (gitleaks, trufflehog) into the same graph,
 again structurally excluding the secret value.
 
-*Code:* `internal/discovery` (the `Source`/`Connector` model), `internal/secretscan`.
-**Status:** library-complete and tested; the graph and risk read-APIs that surface
-findings (`GET /api/v1/graph`, `GET /api/v1/risk/credentials`) are served, but no
-server-side job runs these connectors yet.
+*Code:* `internal/discovery` (the `Source`/`Connector` model), `internal/secretscan`,
+plus the served `secret_store` and `api_key` discovery source/run/finding
+control-plane records. **Status:** source, schedule, run, and metadata-only finding
+records are served. Connector execution records references and fingerprints, not
+secret values.
 
 ## Use it
 
@@ -156,8 +165,30 @@ trstctl-cli certificates ingest -f ./server.pem
 ```
 
 Those map to the served REST routes `GET /api/v1/certificates` and
-`POST /api/v1/certificates` (the latter requires an `Idempotency-Key` header). To see
-enrolled agents that perform local discovery:
+`POST /api/v1/certificates` (the latter requires an `Idempotency-Key` header).
+
+Network discovery is live too:
+
+```sh
+cat > source.json <<'JSON'
+{"kind":"network","name":"edge","config":{"targets":["10.0.0.10:443"]}}
+JSON
+trstctl-cli discovery sources create -f source.json
+trstctl-cli discovery sources list
+
+cat > run.json <<'JSON'
+{"source_id":"<source-id>"}
+JSON
+trstctl-cli discovery runs start -f run.json
+trstctl-cli discovery runs list
+trstctl-cli discovery findings list --run_id <run-id>
+```
+
+Those map to `POST|GET /api/v1/discovery/sources`,
+`POST|GET /api/v1/discovery/schedules`, `POST|GET /api/v1/discovery/runs`,
+`GET /api/v1/discovery/runs/{id}`, and `GET /api/v1/discovery/findings`.
+
+To see enrolled agents that perform local discovery:
 
 ```sh
 trstctl-cli agents list
@@ -178,10 +209,10 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Certificate inventory (F1) | **Served** — REST + CLI, event-sourced |
 | Agent enrollment (for F3) | **Served** — `/enroll/bootstrap`, `/api/v1/agents` |
 | Agent-based discovery loop (F3) | Runs **inside the agent binary** |
-| Network discovery (F2) | **Library-complete**, tested; not yet scheduled by the server |
-| Agentless cloud discovery (F49) | **Library-complete**, tested; not yet scheduled |
-| SSH discovery (F42) | **Library-complete**, tested; no HTTP/CLI surface yet |
-| Secret-store & API-key discovery (F35, F36) | **Library-complete**, tested; not yet scheduled |
+| Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox |
+| Agentless cloud discovery (F49) | **Control-plane served** — source/schedule/run/finding records; provider execution is connector-owned |
+| SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
+| Secret-store & API-key discovery (F35, F36) | **Control-plane served** — metadata-only references/fingerprints, never values |
 
 Other gotchas: a network scan only sees what a host presents on a port at scan time —
 pair it with agent-based discovery for the full picture. Cloud discovery needs
@@ -191,15 +222,21 @@ what it is.
 
 ## Reference
 
-- **CLI groups:** `certificates`, `agents` (full set: `owners`, `issuers`,
-  `identities`, `certificates`, `profiles`, `audit`, `graph`, `risk`, `agents`).
+- **CLI groups:** `certificates`, `discovery`, `agents` (full set: `owners`,
+  `issuers`, `identities`, `certificates`, `discovery`, `profiles`, `audit`,
+  `graph`, `risk`, `agents`).
 - **Served routes:** `GET|POST /api/v1/certificates`, `GET /api/v1/certificates/{id}`,
-  `GET /api/v1/agents`, `POST /api/v1/agents/enrollment-tokens`, `POST /enroll/bootstrap`.
+  `GET|POST /api/v1/discovery/sources`, `GET|POST /api/v1/discovery/schedules`,
+  `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
+  `GET /api/v1/discovery/findings`, `GET /api/v1/agents`,
+  `POST /api/v1/agents/enrollment-tokens`, `POST /enroll/bootstrap`.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`.
-- **Audit events:** `certificate.recorded`, `discovery.found`, `secretscan.finding`.
+- **Audit events:** `certificate.recorded`, `discovery.source.upserted`,
+  `discovery.schedule.upserted`, `discovery.run.queued`, `discovery.run.started`,
+  `discovery.finding.recorded`, `discovery.run.completed`, `secretscan.finding`.
 
 ## See also
 

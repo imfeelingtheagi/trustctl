@@ -284,6 +284,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.actions.ff8059dc67",
+    defaultMessage: "Actions",
+    sources: [
+      "src/pages/Discovery.tsx:264",
+    ],
+  },
+  {
     key: "source.active.9687961165",
     defaultMessage: "active",
     sources: [
@@ -472,13 +479,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/FeatureCoverage.tsx:105",
       "src/pages/FeatureCoverage.tsx:92",
-    ],
-  },
-  {
-    key: "source.api.key.and.token.inventory.e3de95ffd2",
-    defaultMessage: "API key and token inventory",
-    sources: [
-      "src/pages/Discovery.tsx:156",
     ],
   },
   {
@@ -1265,13 +1265,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.cloud.certificate.discovery.c1f3254d49",
-    defaultMessage: "Cloud certificate discovery",
-    sources: [
-      "src/pages/Discovery.tsx:23",
-    ],
-  },
-  {
     key: "source.cluster.service.path.f9947d11c2",
     defaultMessage: "cluster/service/path",
     sources: [
@@ -1368,6 +1361,13 @@ export const extractedMessages = [
     defaultMessage: "Compared",
     sources: [
       "src/pages/Profiles.tsx:479",
+    ],
+  },
+  {
+    key: "source.completed.22a970d2e5",
+    defaultMessage: "Completed",
+    sources: [
+      "src/pages/Discovery.tsx:336",
     ],
   },
   {
@@ -1638,10 +1638,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.create.schedule.5b08f3c719",
+    defaultMessage: "Create schedule",
+    sources: [
+      "src/pages/Discovery.tsx:216",
+    ],
+  },
+  {
     key: "source.create.secret.b72a982613",
     defaultMessage: "Create secret",
     sources: [
       "src/pages/Secrets.tsx:448",
+    ],
+  },
+  {
+    key: "source.create.source.020457fb23",
+    defaultMessage: "Create source",
+    sources: [
+      "src/pages/Discovery.tsx:176",
     ],
   },
   {
@@ -1655,7 +1669,6 @@ export const extractedMessages = [
     key: "source.created.d70b9e24bc",
     defaultMessage: "Created",
     sources: [
-      "src/pages/Discovery.tsx:276",
       "src/pages/Secrets.tsx:545",
     ],
   },
@@ -2065,24 +2078,53 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.discovered.96a5ba634b",
+    defaultMessage: "Discovered",
+    sources: [
+      "src/pages/Discovery.tsx:334",
+      "src/pages/Discovery.tsx:371",
+    ],
+  },
+  {
     key: "source.discovery.80fc402133",
     defaultMessage: "Discovery",
     sources: [
-      "src/pages/Discovery.tsx:97",
+      "src/pages/Discovery.tsx:126",
     ],
   },
   {
-    key: "source.discovery.metadata.unavailable.a5df2bbd5a",
-    defaultMessage: "Discovery metadata unavailable",
+    key: "source.discovery.findings.ea4109ed6d",
+    defaultMessage: "Discovery findings",
     sources: [
-      "src/pages/Discovery.tsx:302",
+      "src/pages/Discovery.tsx:363",
     ],
   },
   {
-    key: "source.discovery.scan.api.not.served.yet.fcd09f0ee7",
-    defaultMessage: "Discovery scan API not served yet",
+    key: "source.discovery.runs.6c691cc9f4",
+    defaultMessage: "Discovery runs",
     sources: [
-      "src/pages/Discovery.tsx:107",
+      "src/pages/Discovery.tsx:327",
+    ],
+  },
+  {
+    key: "source.discovery.schedules.45e677eded",
+    defaultMessage: "Discovery schedules",
+    sources: [
+      "src/pages/Discovery.tsx:297",
+    ],
+  },
+  {
+    key: "source.discovery.sources.88fcff1677",
+    defaultMessage: "Discovery sources",
+    sources: [
+      "src/pages/Discovery.tsx:257",
+    ],
+  },
+  {
+    key: "source.discovery.unavailable.839198b6dc",
+    defaultMessage: "Discovery unavailable",
+    sources: [
+      "src/pages/Discovery.tsx:408",
     ],
   },
   {
@@ -2169,6 +2211,13 @@ export const extractedMessages = [
     sources: [
       "src/pages/Graph.tsx:452",
       "src/pages/Risk.tsx:295",
+    ],
+  },
+  {
+    key: "source.dry.run.d5da154d9f",
+    defaultMessage: "Dry run",
+    sources: [
+      "src/pages/Discovery.tsx:280",
     ],
   },
   {
@@ -2269,6 +2318,13 @@ export const extractedMessages = [
     defaultMessage: "Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and a post-incident checklist. There is no one-click bypass.",
     sources: [
       "src/pages/Incidents.tsx:190",
+    ],
+  },
+  {
+    key: "source.enabled.92c1cdfdf4",
+    defaultMessage: "Enabled",
+    sources: [
+      "src/pages/Discovery.tsx:303",
     ],
   },
   {
@@ -2426,8 +2482,6 @@ export const extractedMessages = [
     key: "source.expires.f6725f3af0",
     defaultMessage: "Expires",
     sources: [
-      "src/pages/Discovery.tsx:210",
-      "src/pages/Discovery.tsx:241",
       "src/pages/Secrets.tsx:1082",
     ],
   },
@@ -2481,17 +2535,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.external.secret.store.discovery.not.served.39c237bf66",
-    defaultMessage: "External secret-store discovery not served yet",
-    sources: [
-      "src/pages/Discovery.tsx:191",
-    ],
-  },
-  {
     key: "source.fail.closed.startup.and.issuance.posture.661fcb680a",
     defaultMessage: "Fail-closed startup and issuance posture",
     sources: [
       "src/pages/Protocols.tsx:366",
+    ],
+  },
+  {
+    key: "source.failed.031a8f0f65",
+    defaultMessage: "Failed",
+    sources: [
+      "src/pages/Discovery.tsx:335",
     ],
   },
   {
@@ -2574,6 +2628,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.findings.e171c2ff25",
+    defaultMessage: "Findings",
+    sources: [
+      "src/pages/Discovery.tsx:244",
+    ],
+  },
+  {
     key: "source.findings.redacted.snippets.rotation.links.1b51627bb8",
     defaultMessage: "Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. There is no served API or CLI triage path yet.",
     sources: [
@@ -2585,7 +2646,7 @@ export const extractedMessages = [
     defaultMessage: "Fingerprint",
     sources: [
       "src/pages/Certificates.tsx:419",
-      "src/pages/Discovery.tsx:211",
+      "src/pages/Discovery.tsx:369",
       "src/pages/Incidents.tsx:111",
     ],
   },
@@ -2933,6 +2994,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.interval.6f45b0005e",
+    defaultMessage: "Interval",
+    sources: [
+      "src/pages/Discovery.tsx:302",
+    ],
+  },
+  {
+    key: "source.interval.seconds.5f0f5b832a",
+    defaultMessage: "Interval seconds",
+    sources: [
+      "src/pages/Discovery.tsx:203",
+    ],
+  },
+  {
     key: "source.intune.mdm.enrollment.62bcd0c1f9",
     defaultMessage: "Intune / MDM enrollment",
     sources: [
@@ -3130,7 +3205,9 @@ export const extractedMessages = [
     defaultMessage: "Kind",
     sources: [
       "src/pages/CAHierarchy.tsx:214",
-      "src/pages/Discovery.tsx:207",
+      "src/pages/Discovery.tsx:152",
+      "src/pages/Discovery.tsx:261",
+      "src/pages/Discovery.tsx:366",
       "src/pages/Graph.tsx:238",
       "src/pages/Graph.tsx:298",
       "src/pages/Graph.tsx:431",
@@ -3317,6 +3394,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.loading.discovery.records.da1c8fab87",
+    defaultMessage: "Loading discovery records...",
+    sources: [
+      "src/pages/Discovery.tsx:137",
+    ],
+  },
+  {
     key: "source.loading.graph.083d9e4f63",
     defaultMessage: "Loading graph...",
     sources: [
@@ -3364,13 +3448,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/Profiles.tsx:110",
       "src/pages/RequestCredential.tsx:231",
-    ],
-  },
-  {
-    key: "source.loading.served.discovery.adjacent.metadata.4bfed06309",
-    defaultMessage: "Loading served discovery-adjacent metadata...",
-    sources: [
-      "src/pages/Discovery.tsx:131",
     ],
   },
   {
@@ -3469,7 +3546,6 @@ export const extractedMessages = [
     key: "source.masked.fingerprint.598e9164c0",
     defaultMessage: "Masked fingerprint",
     sources: [
-      "src/pages/Discovery.tsx:243",
       "src/pages/Secrets.tsx:873",
     ],
   },
@@ -3563,7 +3639,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:217",
+      "src/lib/api.ts:239",
     ],
   },
   {
@@ -3626,21 +3702,24 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:310",
-      "src/lib/api.ts:312",
-      "src/lib/api.ts:314",
-      "src/lib/api.ts:317",
-      "src/lib/api.ts:318",
-      "src/lib/api.ts:320",
-      "src/lib/api.ts:332",
-      "src/lib/api.ts:338",
-      "src/lib/api.ts:358",
-      "src/lib/api.ts:360",
+      "src/lib/api.ts:340",
+      "src/lib/api.ts:342",
+      "src/lib/api.ts:344",
+      "src/lib/api.ts:347",
+      "src/lib/api.ts:348",
+      "src/lib/api.ts:350",
       "src/lib/api.ts:362",
-      "src/lib/api.ts:363",
-      "src/lib/api.ts:364",
       "src/lib/api.ts:365",
-      "src/lib/api.ts:366",
+      "src/lib/api.ts:368",
+      "src/lib/api.ts:372",
+      "src/lib/api.ts:386",
+      "src/lib/api.ts:406",
+      "src/lib/api.ts:408",
+      "src/lib/api.ts:410",
+      "src/lib/api.ts:411",
+      "src/lib/api.ts:412",
+      "src/lib/api.ts:413",
+      "src/lib/api.ts:414",
     ],
   },
   {
@@ -3664,9 +3743,10 @@ export const extractedMessages = [
     sources: [
       "src/pages/Agents.tsx:159",
       "src/pages/CAHierarchy.tsx:213",
-      "src/pages/Discovery.tsx:206",
-      "src/pages/Discovery.tsx:238",
-      "src/pages/Discovery.tsx:273",
+      "src/pages/Discovery.tsx:148",
+      "src/pages/Discovery.tsx:199",
+      "src/pages/Discovery.tsx:260",
+      "src/pages/Discovery.tsx:300",
       "src/pages/Graph.tsx:297",
       "src/pages/Graph.tsx:427",
       "src/pages/Identities.tsx:947",
@@ -3690,13 +3770,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.native.secret.metadata.dc445bed30",
-    defaultMessage: "Native secret metadata",
-    sources: [
-      "src/pages/Discovery.tsx:177",
-    ],
-  },
-  {
     key: "source.native.secret.store.174d71834e",
     defaultMessage: "Native secret store",
     sources: [
@@ -3708,13 +3781,6 @@ export const extractedMessages = [
     defaultMessage: "native store",
     sources: [
       "src/pages/Secrets.tsx:534",
-    ],
-  },
-  {
-    key: "source.network.discovery.8b93ebde60",
-    defaultMessage: "Network discovery",
-    sources: [
-      "src/pages/Discovery.tsx:14",
     ],
   },
   {
@@ -3760,13 +3826,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.api.key.identities.in.served.inventory.7fdf2e9867",
-    defaultMessage: "No API-key identities in served inventory",
-    sources: [
-      "src/pages/Discovery.tsx:165",
-    ],
-  },
-  {
     key: "source.no.attributes.returned.for.this.node.5b22b96afd",
     defaultMessage: "No attributes returned for this node.",
     sources: [
@@ -3792,6 +3851,34 @@ export const extractedMessages = [
     defaultMessage: "No citations returned.",
     sources: [
       "src/pages/Assistant.tsx:85",
+    ],
+  },
+  {
+    key: "source.no.discovery.findings.7c8b4f0e23",
+    defaultMessage: "No discovery findings",
+    sources: [
+      "src/pages/Discovery.tsx:247",
+    ],
+  },
+  {
+    key: "source.no.discovery.runs.e3ba4972a6",
+    defaultMessage: "No discovery runs",
+    sources: [
+      "src/pages/Discovery.tsx:240",
+    ],
+  },
+  {
+    key: "source.no.discovery.schedules.17183fb10e",
+    defaultMessage: "No discovery schedules",
+    sources: [
+      "src/pages/Discovery.tsx:233",
+    ],
+  },
+  {
+    key: "source.no.discovery.sources.b70fd7af27",
+    defaultMessage: "No discovery sources",
+    sources: [
+      "src/pages/Discovery.tsx:226",
     ],
   },
   {
@@ -3880,13 +3967,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.native.secrets.in.served.store.630c8573dd",
-    defaultMessage: "No native secrets in served store",
-    sources: [
-      "src/pages/Discovery.tsx:186",
-    ],
-  },
-  {
     key: "source.no.owner.no.rotation.400d.f53c3e31d0",
     defaultMessage: "no owner · no rotation 400d+",
     sources: [
@@ -3936,17 +4016,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.source.2eca7a588d",
+    defaultMessage: "No source",
+    sources: [
+      "src/pages/Discovery.tsx:191",
+    ],
+  },
+  {
     key: "source.no.spec.differences.de9813046a",
     defaultMessage: "No spec differences.",
     sources: [
       "src/pages/Profiles.tsx:470",
-    ],
-  },
-  {
-    key: "source.no.ssh.identities.in.served.inventory.853c8ea018",
-    defaultMessage: "No SSH identities in served inventory",
-    sources: [
-      "src/pages/Discovery.tsx:144",
     ],
   },
   {
@@ -4227,8 +4307,6 @@ export const extractedMessages = [
     defaultMessage: "Owner",
     sources: [
       "src/pages/Certificates.tsx:451",
-      "src/pages/Discovery.tsx:208",
-      "src/pages/Discovery.tsx:239",
       "src/pages/Identities.tsx:967",
       "src/pages/Risk.tsx:250",
       "src/pages/Secrets.tsx:874",
@@ -4296,14 +4374,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:227",
+      "src/lib/api.ts:249",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:190",
+      "src/lib/api.ts:212",
     ],
   },
   {
@@ -4513,10 +4591,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:345",
-      "src/lib/api.ts:346",
-      "src/lib/api.ts:347",
-      "src/lib/api.ts:349",
+      "src/lib/api.ts:393",
+      "src/lib/api.ts:394",
+      "src/lib/api.ts:395",
+      "src/lib/api.ts:397",
     ],
   },
   {
@@ -4897,6 +4975,7 @@ export const extractedMessages = [
     key: "source.reference.71bf90935f",
     defaultMessage: "Reference",
     sources: [
+      "src/pages/Discovery.tsx:367",
       "src/pages/Protocols.tsx:461",
     ],
   },
@@ -4905,7 +4984,7 @@ export const extractedMessages = [
     defaultMessage: "Refresh",
     sources: [
       "src/pages/CAHierarchy.tsx:90",
-      "src/pages/Discovery.tsx:101",
+      "src/pages/Discovery.tsx:130",
     ],
   },
   {
@@ -4982,23 +5061,27 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:298",
-      "src/lib/api.ts:309",
-      "src/lib/api.ts:311",
-      "src/lib/api.ts:313",
-      "src/lib/api.ts:315",
-      "src/lib/api.ts:316",
-      "src/lib/api.ts:331",
-      "src/lib/api.ts:333",
-      "src/lib/api.ts:335",
-      "src/lib/api.ts:336",
+      "src/lib/api.ts:328",
       "src/lib/api.ts:339",
       "src/lib/api.ts:341",
-      "src/lib/api.ts:342",
       "src/lib/api.ts:343",
-      "src/lib/api.ts:344",
-      "src/lib/api.ts:348",
-      "src/lib/api.ts:359",
+      "src/lib/api.ts:345",
+      "src/lib/api.ts:346",
+      "src/lib/api.ts:361",
+      "src/lib/api.ts:363",
+      "src/lib/api.ts:366",
+      "src/lib/api.ts:369",
+      "src/lib/api.ts:371",
+      "src/lib/api.ts:381",
+      "src/lib/api.ts:383",
+      "src/lib/api.ts:384",
+      "src/lib/api.ts:387",
+      "src/lib/api.ts:389",
+      "src/lib/api.ts:390",
+      "src/lib/api.ts:391",
+      "src/lib/api.ts:392",
+      "src/lib/api.ts:396",
+      "src/lib/api.ts:407",
     ],
   },
   {
@@ -5198,6 +5281,7 @@ export const extractedMessages = [
     key: "source.risk.0711a8d636",
     defaultMessage: "Risk",
     sources: [
+      "src/pages/Discovery.tsx:370",
       "src/pages/Graph.tsx:519",
     ],
   },
@@ -5329,6 +5413,14 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.run.00d60e31a4",
+    defaultMessage: "Run",
+    sources: [
+      "src/pages/Discovery.tsx:277",
+      "src/pages/Discovery.tsx:330",
+    ],
+  },
+  {
     key: "source.run.graph.query.3e99f2000a",
     defaultMessage: "Run graph query",
     sources: [
@@ -5340,6 +5432,13 @@ export const extractedMessages = [
     defaultMessage: "Run the setup wizard to connect a CA, install an agent, and issue your first certificate.",
     sources: [
       "src/pages/Certificates.tsx:297",
+    ],
+  },
+  {
+    key: "source.runs.848f54e896",
+    defaultMessage: "Runs",
+    sources: [
+      "src/pages/Discovery.tsx:237",
     ],
   },
   {
@@ -5386,24 +5485,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.scan.based.key.discovery.and.leaked.token.1b6cc5d771",
-    defaultMessage: "Scan-based key discovery and leaked-token ingestion in the console are coming soon.",
-    sources: [
-      "src/pages/Discovery.tsx:165",
-    ],
-  },
-  {
     key: "source.scan.drift.and.renewal.fields.not.served.y.ac560a89ab",
     defaultMessage: "Scan, drift, and renewal fields not served yet",
     sources: [
       "src/pages/Agents.tsx:228",
-    ],
-  },
-  {
-    key: "source.scanner.findings.not.served.yet.0a7ded5e69",
-    defaultMessage: "Scanner findings not served yet",
-    sources: [
-      "src/pages/Discovery.tsx:170",
     ],
   },
   {
@@ -5421,6 +5506,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.schedule.f4830a1dae",
+    defaultMessage: "Schedule",
+    sources: [
+      "src/pages/Discovery.tsx:184",
+    ],
+  },
+  {
     key: "source.scheduled.rotation.and.downstream.sync.not.4e6914c952",
     defaultMessage: "Scheduled rotation and downstream sync not served yet",
     sources: [
@@ -5432,6 +5524,13 @@ export const extractedMessages = [
     defaultMessage: ". Scheduled rotation, rollback evidence, and downstream sync remain backend gaps.",
     sources: [
       "src/pages/Secrets.tsx:563",
+    ],
+  },
+  {
+    key: "source.schedules.221ff19c90",
+    defaultMessage: "Schedules",
+    sources: [
+      "src/pages/Discovery.tsx:230",
     ],
   },
   {
@@ -5453,7 +5552,6 @@ export const extractedMessages = [
     key: "source.scopes.0d5644ff52",
     defaultMessage: "Scopes",
     sources: [
-      "src/pages/Discovery.tsx:242",
       "src/pages/Secrets.tsx:1086",
     ],
   },
@@ -5504,13 +5602,6 @@ export const extractedMessages = [
     defaultMessage: "Secret access test",
     sources: [
       "src/pages/Secrets.tsx:638",
-    ],
-  },
-  {
-    key: "source.secret.and.api.key.discovery.18fcf5d6e3",
-    defaultMessage: "Secret and API-key discovery",
-    sources: [
-      "src/pages/Discovery.tsx:41",
     ],
   },
   {
@@ -5711,20 +5802,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.served.api.key.identities.with.masked.fing.69dc76427a",
-    defaultMessage: "Served `api_key` identities with masked fingerprints and expiry. Token values are never fetched, rendered, or stored.",
-    sources: [
-      "src/pages/Discovery.tsx:159",
-    ],
-  },
-  {
-    key: "source.served.api.key.identity.inventory.574d63b7cf",
-    defaultMessage: "Served API key identity inventory",
-    sources: [
-      "src/pages/Discovery.tsx:235",
-    ],
-  },
-  {
     key: "source.served.enforcement.path.ed15df9b3f",
     defaultMessage: "Served enforcement path",
     sources: [
@@ -5736,20 +5813,6 @@ export const extractedMessages = [
     defaultMessage: "Served-gated enrollment protocol endpoints",
     sources: [
       "src/pages/Protocols.tsx:511",
-    ],
-  },
-  {
-    key: "source.served.get.api.v1.identities.rows.where.ki.59f31aed9b",
-    defaultMessage: "Served `GET /api/v1/identities` rows where kind is `ssh_key` or `ssh_certificate`. Trust mutation and host-key remediation controls are intentionally absent.",
-    sources: [
-      "src/pages/Discovery.tsx:138",
-    ],
-  },
-  {
-    key: "source.served.get.api.v1.secrets.store.returns.na.8845bbba05",
-    defaultMessage: "Served `GET /api/v1/secrets/store` returns names and versions only. This table never asks for or renders secret values.",
-    sources: [
-      "src/pages/Discovery.tsx:180",
     ],
   },
   {
@@ -5778,20 +5841,6 @@ export const extractedMessages = [
     defaultMessage: "Served issuer visibility",
     sources: [
       "src/pages/CAHierarchy.tsx:104",
-    ],
-  },
-  {
-    key: "source.served.native.secret.metadata.75b8b5fa21",
-    defaultMessage: "Served native secret metadata",
-    sources: [
-      "src/pages/Discovery.tsx:270",
-    ],
-  },
-  {
-    key: "source.served.ssh.identity.inventory.0e34176722",
-    defaultMessage: "Served SSH identity inventory",
-    sources: [
-      "src/pages/Discovery.tsx:203",
     ],
   },
   {
@@ -5997,6 +6046,11 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:247",
       "src/pages/Certificates.tsx:443",
+      "src/pages/Discovery.tsx:143",
+      "src/pages/Discovery.tsx:188",
+      "src/pages/Discovery.tsx:301",
+      "src/pages/Discovery.tsx:331",
+      "src/pages/Discovery.tsx:368",
       "src/pages/Secrets.tsx:871",
     ],
   },
@@ -6005,6 +6059,13 @@ export const extractedMessages = [
     defaultMessage: "Source:",
     sources: [
       "src/pages/FeatureCoverage.tsx:197",
+    ],
+  },
+  {
+    key: "source.sources.caf85b0888",
+    defaultMessage: "Sources",
+    sources: [
+      "src/pages/Discovery.tsx:223",
     ],
   },
   {
@@ -6040,27 +6101,6 @@ export const extractedMessages = [
     defaultMessage: "SSH deployment and trust rollout",
     sources: [
       "src/pages/SSHTrust.tsx:58",
-    ],
-  },
-  {
-    key: "source.ssh.discovery.1a54e9bd8c",
-    defaultMessage: "SSH discovery",
-    sources: [
-      "src/pages/Discovery.tsx:32",
-    ],
-  },
-  {
-    key: "source.ssh.discovery.findings.not.served.yet.24e2dadd4c",
-    defaultMessage: "SSH discovery findings not served yet",
-    sources: [
-      "src/pages/Discovery.tsx:149",
-    ],
-  },
-  {
-    key: "source.ssh.identity.inventory.d665733df7",
-    defaultMessage: "SSH identity inventory",
-    sources: [
-      "src/pages/Discovery.tsx:135",
     ],
   },
   {
@@ -6133,8 +6173,7 @@ export const extractedMessages = [
       "src/pages/Agents.tsx:160",
       "src/pages/Agents.tsx:216",
       "src/pages/Certificates.tsx:427",
-      "src/pages/Discovery.tsx:209",
-      "src/pages/Discovery.tsx:240",
+      "src/pages/Discovery.tsx:332",
       "src/pages/Identities.tsx:951",
       "src/pages/Policy.tsx:203",
       "src/pages/Secrets.tsx:836",
@@ -6236,6 +6275,15 @@ export const extractedMessages = [
     defaultMessage: "Target platform",
     sources: [
       "src/pages/Secrets.tsx:988",
+    ],
+  },
+  {
+    key: "source.targets.27445f6ab6",
+    defaultMessage: "Targets",
+    sources: [
+      "src/pages/Discovery.tsx:164",
+      "src/pages/Discovery.tsx:262",
+      "src/pages/Discovery.tsx:333",
     ],
   },
   {
@@ -6545,7 +6593,8 @@ export const extractedMessages = [
     key: "source.updated.3a5ecca188",
     defaultMessage: "Updated",
     sources: [
-      "src/pages/Discovery.tsx:275",
+      "src/pages/Discovery.tsx:263",
+      "src/pages/Discovery.tsx:304",
       "src/pages/Secrets.tsx:541",
     ],
   },
@@ -6619,7 +6668,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/Agents.tsx:161",
       "src/pages/Agents.tsx:220",
-      "src/pages/Discovery.tsx:274",
       "src/pages/Secrets.tsx:537",
     ],
   },

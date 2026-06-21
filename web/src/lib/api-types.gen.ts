@@ -117,6 +117,98 @@ export interface CredentialRiskList {
   credentials: CredentialRisk[];
 }
 
+export interface DiscoveryFinding {
+  discovered_at: string;
+  fingerprint: string;
+  id: string;
+  kind: string;
+  metadata: Record<string, unknown>;
+  provenance: string;
+  ref: string;
+  risk_score?: number;
+  run_id: string;
+  source_id: string;
+  tenant_id: string;
+}
+
+export interface DiscoveryFindingList {
+  items: DiscoveryFinding[];
+  next_cursor?: string;
+}
+
+export interface DiscoveryRun {
+  completed_at?: string;
+  created_at: string;
+  discovered: number;
+  dry_run: boolean;
+  error?: string;
+  failed: number;
+  id: string;
+  rejected: number;
+  requested_by?: string;
+  schedule_id?: string;
+  source_id: string;
+  started_at?: string;
+  status: "queued" | "running" | "succeeded" | "partial" | "failed";
+  targets: number;
+  tenant_id: string;
+}
+
+export interface DiscoveryRunList {
+  items: DiscoveryRun[];
+  next_cursor?: string;
+}
+
+export interface DiscoveryRunRequest {
+  dry_run?: boolean;
+  schedule_id?: string;
+  source_id: string;
+}
+
+export interface DiscoverySchedule {
+  created_at?: string;
+  enabled: boolean;
+  id: string;
+  interval_seconds: number;
+  name: string;
+  source_id: string;
+  tenant_id: string;
+  updated_at?: string;
+}
+
+export interface DiscoveryScheduleList {
+  items: DiscoverySchedule[];
+  next_cursor?: string;
+}
+
+export interface DiscoveryScheduleRequest {
+  enabled?: boolean;
+  interval_seconds: number;
+  name: string;
+  source_id: string;
+}
+
+export interface DiscoverySource {
+  config: Record<string, unknown>;
+  created_at: string;
+  id: string;
+  kind: "network" | "ssh" | "cloud_certificate" | "secret_store" | "api_key" | "agent" | "manual";
+  name: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface DiscoverySourceList {
+  items: DiscoverySource[];
+  next_cursor?: string;
+}
+
+export interface DiscoverySourceRequest {
+  config?: Record<string, unknown>;
+  kind: "network" | "ssh" | "cloud_certificate" | "secret_store" | "api_key" | "agent" | "manual";
+  name: string;
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;

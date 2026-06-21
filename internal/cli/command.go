@@ -44,6 +44,15 @@ var commandTable = []Command{
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
 
+	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},
+	{Name: []string{"discovery", "sources", "list"}, Method: "GET", Path: "/api/v1/discovery/sources", Query: []string{"limit", "cursor"}, Summary: "List discovery sources"},
+	{Name: []string{"discovery", "schedules", "create"}, Method: "POST", Path: "/api/v1/discovery/schedules", Body: bodyFile, Summary: "Create a discovery schedule"},
+	{Name: []string{"discovery", "schedules", "list"}, Method: "GET", Path: "/api/v1/discovery/schedules", Query: []string{"limit", "cursor"}, Summary: "List discovery schedules"},
+	{Name: []string{"discovery", "runs", "start"}, Method: "POST", Path: "/api/v1/discovery/runs", Body: bodyFile, Summary: "Start a discovery run"},
+	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor"}, Summary: "List discovery runs"},
+	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
+	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id"}, Summary: "List discovery findings"},
+
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
 	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},
 	{Name: []string{"profiles", "get-version"}, Method: "GET", Path: "/api/v1/profiles/{name}/versions/{version}", Summary: "Get a certificate-profile version"},

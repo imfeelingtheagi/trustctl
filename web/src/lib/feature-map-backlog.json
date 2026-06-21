@@ -206,54 +206,117 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 44,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Discovery at /discovery, /certificates, /agents - network scan blocked disclosure plus links to served ingest and agent enrollment; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan and certificate recording",
+      "current_frontend_mapping": "basic: Discovery at /discovery creates network sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory.",
       "target_gui_mapping": "Discovery source page for network ranges, scan scheduling, dry-run preview, findings import, scan history, and library-only/disabled disclosure until served scheduler exists.",
-      "acceptance_test": "UI hides execution until a served scheduler exists, but displays documented capability, prerequisites, and blocked state without implying live server support.",
+      "acceptance_test": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
       ],
       "source_backend": [
-        "internal/discovery/netscan"
+        "internal/discovery/netscan",
+        "/api/v1/discovery/sources",
+        "/api/v1/discovery/schedules",
+        "/api/v1/discovery/runs",
+        "/api/v1/discovery/findings"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Discovery.tsx",
+        "web/src/lib/api.ts"
+      ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings",
+        "listCertificates"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list",
+        "certificates list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "Network discovery is served through tenant-scoped source, schedule, run, and finding APIs, with queued runs executed by the server outbox worker.",
+            "Served network runs use the bounded netscan runner and record discovered TLS certificates through the event-sourced certificate inventory path."
+          ],
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/orchestrator/discovery.go",
+            "internal/server/discovery_served_test.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Discovery at /discovery, /certificates, /agents - network scan blocked disclosure plus links to served ingest and agent enrollment; coverage ledger: /coverage",
-            "target_gui_mapping: Discovery source page for network ranges, scan scheduling, dry-run preview, findings import, scan history, and library-only/disabled disclosure until served scheduler exists."
+            "basic: Discovery at /discovery creates network sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/pages/FeatureCoverage.tsx"
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/lib/api.ts"
           ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: discovery sources create",
+            "CLI command: discovery sources list",
+            "CLI command: discovery schedules create",
+            "CLI command: discovery schedules list",
+            "CLI command: discovery runs start",
+            "CLI command: discovery runs list",
+            "CLI command: discovery runs get",
+            "CLI command: discovery findings list",
+            "CLI command: certificates list"
+          ],
+          "refs": [
+            "internal/cli/command.go"
+          ]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createDiscoverySource",
+            "OpenAPI operationId: listDiscoverySources",
+            "OpenAPI operationId: createDiscoverySchedule",
+            "OpenAPI operationId: listDiscoverySchedules",
+            "OpenAPI operationId: startDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryRuns",
+            "OpenAPI operationId: getDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryFindings",
+            "OpenAPI operationId: listCertificates"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI hides execution until a served scheduler exists, but displays documented capability, prerequisites, and blocked state without implying live server support.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "TestServedDiscoveryNetworkScanEndToEnd covers source creation, run queueing, outbox execution, discovery findings, and certificate inventory projection.",
+            "Discovery page test covers source creation, run queueing, served findings, and no browser storage leakage.",
+            "FeatureFacetCoverage keeps discovery served/UI/CLI/API/RBAC metadata non-empty."
           ],
           "refs": [
-            "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "internal/server/discovery_served_test.go",
+            "web/src/__tests__/discovery.test.tsx",
+            "internal/featureparity/feature_facet_coverage_test.go"
           ]
         },
         "docs": {
@@ -265,27 +328,51 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
+            "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
+            "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
+          ],
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/authz/authz.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F2; current mapping is disclosure: Discovery at /discovery, /certificates, /agents - network scan blocked disclosure plus links to served ingest and agent enrollment; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+            "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
+          ],
+          "refs": [
+            "internal/orchestrator/discovery.go",
+            "internal/projections/projections.go",
+            "internal/store/discovery.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F2 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": [
+            "internal/server/discovery.go",
+            "internal/store/discovery.go",
+            "web/src/pages/Discovery.tsx"
+          ]
         },
         "a11y": {
           "evidence": [
-            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+            "Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."
           ],
           "refs": [
-            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/discovery.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
-            "web/src/index.css"
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
           ],
           "refs": [
             "web/scripts/extract-i18n-messages.mjs",
@@ -449,55 +536,113 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 45,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Discovery at /discovery - ssh_key/ssh_certificate identity table plus SSH scan findings blocked disclosure; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records; SSH scan execution remains agent/library-owned",
+      "current_frontend_mapping": "partial: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen.",
       "target_gui_mapping": "SSH inventory page showing discovered authorized_keys, trusted CAs, host keys, standing access, weak trust, and agent source evidence.",
-      "acceptance_test": "UI route exists with library-only/agent-required state, fixtures for discovered SSH keys, and no trust mutation controls unless explicit agent capability is present.",
+      "acceptance_test": "UI and API tests must prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/ssh.md"
       ],
       "source_backend": [
         "internal/agent/sshdiscovery",
-        "internal/sshinv"
+        "internal/sshinv",
+        "/api/v1/discovery/sources",
+        "/api/v1/discovery/schedules",
+        "/api/v1/discovery/runs",
+        "/api/v1/discovery/findings"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Discovery.tsx",
+        "web/src/lib/api.ts"
+      ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "SSH discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records; execution-specific SSH scanning remains behind agent/library code."
+          ],
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/agent/sshdiscovery",
+            "internal/agent/sshtrust"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Discovery at /discovery - ssh_key/ssh_certificate identity table plus SSH scan findings blocked disclosure; coverage ledger: /coverage",
-            "target_gui_mapping: SSH inventory page showing discovered authorized_keys, trusted CAs, host keys, standing access, weak trust, and agent source evidence."
+            "partial: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/pages/FeatureCoverage.tsx"
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/lib/api.ts"
           ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: discovery sources create",
+            "CLI command: discovery sources list",
+            "CLI command: discovery schedules create",
+            "CLI command: discovery schedules list",
+            "CLI command: discovery runs start",
+            "CLI command: discovery runs list",
+            "CLI command: discovery runs get",
+            "CLI command: discovery findings list"
+          ],
+          "refs": [
+            "internal/cli/command.go"
+          ]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createDiscoverySource",
+            "OpenAPI operationId: listDiscoverySources",
+            "OpenAPI operationId: createDiscoverySchedule",
+            "OpenAPI operationId: listDiscoverySchedules",
+            "OpenAPI operationId: startDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryRuns",
+            "OpenAPI operationId: getDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryFindings"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI route exists with library-only/agent-required state, fixtures for discovered SSH keys, and no trust mutation controls unless explicit agent capability is present.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "acceptance_test: UI and API tests must prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+            "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
@@ -512,27 +657,51 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
+            "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
+            "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
+          ],
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/authz/authz.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F42; current mapping is disclosure: Discovery at /discovery - ssh_key/ssh_certificate identity table plus SSH scan findings blocked disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+            "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
+          ],
+          "refs": [
+            "internal/orchestrator/discovery.go",
+            "internal/projections/projections.go",
+            "internal/store/discovery.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F42 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": [
+            "internal/server/discovery.go",
+            "internal/store/discovery.go",
+            "web/src/pages/Discovery.tsx"
+          ]
         },
         "a11y": {
           "evidence": [
-            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+            "Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."
           ],
           "refs": [
-            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/discovery.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
-            "web/src/index.css"
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
           ],
           "refs": [
             "web/scripts/extract-i18n-messages.mjs",
@@ -549,53 +718,111 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 46,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Discovery at /discovery, /secrets, /certificates - cloud discovery blocked disclosure with sealed-secret credential-reference guidance; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records; cloud API execution remains connector-owned",
+      "current_frontend_mapping": "partial: Discovery at /discovery serves cloud_certificate sources, schedules, runs, and metadata-only findings with credential references only; /secrets stores sealed references.",
       "target_gui_mapping": "Cloud discovery source UI for AWS/Azure/GCP account connectors, scoped credentials, dry-run, imported certificate preview, and scheduler status.",
-      "acceptance_test": "UI must disclose library-only status until served scheduling is wired and must never ask for cloud credentials without a sealed secret path.",
+      "acceptance_test": "UI and API tests must prove cloud_certificate discovery sources use credential references only, can be scheduled and run, and never ask for raw cloud credentials.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
       ],
       "source_backend": [
-        "internal/discovery/cloudcert"
+        "internal/discovery/cloudcert",
+        "/api/v1/discovery/sources",
+        "/api/v1/discovery/schedules",
+        "/api/v1/discovery/runs",
+        "/api/v1/discovery/findings"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Discovery.tsx",
+        "web/src/lib/api.ts"
+      ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "Cloud certificate discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records with credential references only; provider-specific execution stays connector-owned."
+          ],
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/discovery/cloudcert",
+            "internal/secrets"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Discovery at /discovery, /secrets, /certificates - cloud discovery blocked disclosure with sealed-secret credential-reference guidance; coverage ledger: /coverage",
-            "target_gui_mapping: Cloud discovery source UI for AWS/Azure/GCP account connectors, scoped credentials, dry-run, imported certificate preview, and scheduler status."
+            "partial: Discovery at /discovery serves cloud_certificate sources, schedules, runs, and metadata-only findings with credential references only; /secrets stores sealed references."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/pages/FeatureCoverage.tsx"
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/lib/api.ts"
           ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: discovery sources create",
+            "CLI command: discovery sources list",
+            "CLI command: discovery schedules create",
+            "CLI command: discovery schedules list",
+            "CLI command: discovery runs start",
+            "CLI command: discovery runs list",
+            "CLI command: discovery runs get",
+            "CLI command: discovery findings list"
+          ],
+          "refs": [
+            "internal/cli/command.go"
+          ]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createDiscoverySource",
+            "OpenAPI operationId: listDiscoverySources",
+            "OpenAPI operationId: createDiscoverySchedule",
+            "OpenAPI operationId: listDiscoverySchedules",
+            "OpenAPI operationId: startDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryRuns",
+            "OpenAPI operationId: getDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryFindings"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI must disclose library-only status until served scheduling is wired and must never ask for cloud credentials without a sealed secret path.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "acceptance_test: UI and API tests must prove cloud_certificate discovery sources use credential references only, can be scheduled and run, and never ask for raw cloud credentials.",
+            "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
@@ -608,27 +835,51 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
+            "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
+            "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
+          ],
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/authz/authz.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F49; current mapping is disclosure: Discovery at /discovery, /secrets, /certificates - cloud discovery blocked disclosure with sealed-secret credential-reference guidance; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+            "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
+          ],
+          "refs": [
+            "internal/orchestrator/discovery.go",
+            "internal/projections/projections.go",
+            "internal/store/discovery.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F49 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": [
+            "internal/server/discovery.go",
+            "internal/store/discovery.go",
+            "web/src/pages/Discovery.tsx"
+          ]
         },
         "a11y": {
           "evidence": [
-            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+            "Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."
           ],
           "refs": [
-            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/discovery.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
-            "web/src/index.css"
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
           ],
           "refs": [
             "web/scripts/extract-i18n-messages.mjs",
@@ -645,55 +896,113 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 47,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Discovery at /discovery, /secrets - native secret metadata table plus external discovery blocked disclosure; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records; external secret-store scan execution remains connector-owned",
+      "current_frontend_mapping": "partial: Discovery at /discovery serves secret_store sources, schedules, runs, and metadata-only findings; /secrets serves native secret metadata and values remain off-table.",
       "target_gui_mapping": "Secret inventory discovery UI showing stores, names, metadata, rotation posture, and findings without exposing values.",
-      "acceptance_test": "UI tests prove discovered secret values are never rendered, stored in browser state, logged, or included in screenshots.",
+      "acceptance_test": "UI and API tests must prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/secrets.md"
       ],
       "source_backend": [
         "internal/secretstore",
-        "internal/secretscan"
+        "internal/secretscan",
+        "/api/v1/discovery/sources",
+        "/api/v1/discovery/schedules",
+        "/api/v1/discovery/runs",
+        "/api/v1/discovery/findings"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Discovery.tsx",
+        "web/src/lib/api.ts"
+      ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "Secret store discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records; native secret metadata remains served separately and secret values stay off-table."
+          ],
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/secrets",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Discovery at /discovery, /secrets - native secret metadata table plus external discovery blocked disclosure; coverage ledger: /coverage",
-            "target_gui_mapping: Secret inventory discovery UI showing stores, names, metadata, rotation posture, and findings without exposing values."
+            "partial: Discovery at /discovery serves secret_store sources, schedules, runs, and metadata-only findings; /secrets serves native secret metadata and values remain off-table."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/pages/FeatureCoverage.tsx"
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/lib/api.ts"
           ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: discovery sources create",
+            "CLI command: discovery sources list",
+            "CLI command: discovery schedules create",
+            "CLI command: discovery schedules list",
+            "CLI command: discovery runs start",
+            "CLI command: discovery runs list",
+            "CLI command: discovery runs get",
+            "CLI command: discovery findings list"
+          ],
+          "refs": [
+            "internal/cli/command.go"
+          ]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createDiscoverySource",
+            "OpenAPI operationId: listDiscoverySources",
+            "OpenAPI operationId: createDiscoverySchedule",
+            "OpenAPI operationId: listDiscoverySchedules",
+            "OpenAPI operationId: startDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryRuns",
+            "OpenAPI operationId: getDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryFindings"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI tests prove discovered secret values are never rendered, stored in browser state, logged, or included in screenshots.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "acceptance_test: UI and API tests must prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
+            "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
@@ -708,27 +1017,51 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
+            "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
+            "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
+          ],
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/authz/authz.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F35; current mapping is disclosure: Discovery at /discovery, /secrets - native secret metadata table plus external discovery blocked disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+            "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
+          ],
+          "refs": [
+            "internal/orchestrator/discovery.go",
+            "internal/projections/projections.go",
+            "internal/store/discovery.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F35 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": [
+            "internal/server/discovery.go",
+            "internal/store/discovery.go",
+            "web/src/pages/Discovery.tsx"
+          ]
         },
         "a11y": {
           "evidence": [
-            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+            "Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."
           ],
           "refs": [
-            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/discovery.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
-            "web/src/index.css"
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
           ],
           "refs": [
             "web/scripts/extract-i18n-messages.mjs",
@@ -745,55 +1078,113 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 48,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Discovery at /discovery - api_key identity table with masked fingerprints plus scanner blocked disclosure; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records; token scanner execution remains connector-owned",
+      "current_frontend_mapping": "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; api_key identity rows still show masked references only.",
       "target_gui_mapping": "API key inventory UI with key name, owner, scope, last-seen, expiry, rotation age, source, and masked fingerprint only.",
-      "acceptance_test": "UI tests prove token values cannot render and findings link to owner, risk, and rotation workflows.",
+      "acceptance_test": "UI and API tests must prove api_key discovery sources, runs, and findings use masked references and never render token values.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/secrets.md"
       ],
       "source_backend": [
         "internal/secretscan",
-        "internal/store/api_token.go"
+        "internal/store/api_token.go",
+        "/api/v1/discovery/sources",
+        "/api/v1/discovery/schedules",
+        "/api/v1/discovery/runs",
+        "/api/v1/discovery/findings"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Discovery.tsx",
+        "web/src/lib/api.ts"
+      ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "API key/token inventory discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records while token values remain masked and connector-owned."
+          ],
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/secrets",
+            "web/src/__tests__/discovery.test.tsx"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Discovery at /discovery - api_key identity table with masked fingerprints plus scanner blocked disclosure; coverage ledger: /coverage",
-            "target_gui_mapping: API key inventory UI with key name, owner, scope, last-seen, expiry, rotation age, source, and masked fingerprint only."
+            "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; api_key identity rows still show masked references only."
           ],
           "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/pages/FeatureCoverage.tsx"
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/lib/api.ts"
           ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: discovery sources create",
+            "CLI command: discovery sources list",
+            "CLI command: discovery schedules create",
+            "CLI command: discovery schedules list",
+            "CLI command: discovery runs start",
+            "CLI command: discovery runs list",
+            "CLI command: discovery runs get",
+            "CLI command: discovery findings list"
+          ],
+          "refs": [
+            "internal/cli/command.go"
+          ]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createDiscoverySource",
+            "OpenAPI operationId: listDiscoverySources",
+            "OpenAPI operationId: createDiscoverySchedule",
+            "OpenAPI operationId: listDiscoverySchedules",
+            "OpenAPI operationId: startDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryRuns",
+            "OpenAPI operationId: getDiscoveryRun",
+            "OpenAPI operationId: listDiscoveryFindings"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI tests prove token values cannot render and findings link to owner, risk, and rotation workflows.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "acceptance_test: UI and API tests must prove api_key discovery sources, runs, and findings use masked references and never render token values.",
+            "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
@@ -808,27 +1199,51 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
+            "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
+            "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
+          ],
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/authz/authz.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F36; current mapping is disclosure: Discovery at /discovery - api_key identity table with masked fingerprints plus scanner blocked disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+            "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
+          ],
+          "refs": [
+            "internal/orchestrator/discovery.go",
+            "internal/projections/projections.go",
+            "internal/store/discovery.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F36 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": [
+            "internal/server/discovery.go",
+            "internal/store/discovery.go",
+            "web/src/pages/Discovery.tsx"
+          ]
         },
         "a11y": {
           "evidence": [
-            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+            "Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."
           ],
           "refs": [
-            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/discovery.test.tsx",
             "web/src/__tests__/feature_coverage.test.tsx",
-            "web/src/index.css"
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx"
           ]
         },
         "i18n": {
           "evidence": [
-            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+            "Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
           ],
           "refs": [
             "web/scripts/extract-i18n-messages.mjs",

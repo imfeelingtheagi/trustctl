@@ -106,8 +106,10 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRevoke(ctx, m)
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
+	case "discovery.run":
+		return d.handleDiscoveryRun(ctx, m)
 	default:
-		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") {
+		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") {
 			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
 		}
 		return nil

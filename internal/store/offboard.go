@@ -25,6 +25,10 @@ import (
 var TenantScopedTables = []string{
 	// Children first (foreign keys point "up" to the tables below them).
 	"attestations",
+	"discovery_findings",
+	"discovery_runs",
+	"discovery_schedules",
+	"discovery_sources",
 	"certificates",
 	"identity_transitions",
 	"identities",

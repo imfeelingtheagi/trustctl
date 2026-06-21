@@ -68,7 +68,7 @@ describe("feature coverage roadmap surface", () => {
     }
   });
 
-  it("makes non-certificate gaps visible as disclosures instead of silent omissions", async () => {
+  it("keeps remaining gaps visible and moves served discovery partials to observe", async () => {
     const user = userEvent.setup();
     renderAt("/coverage");
 
@@ -77,8 +77,14 @@ describe("feature coverage roadmap surface", () => {
 
     expect(screen.getAllByTestId("feature-row")).toHaveLength(featureCoverageTotals.disclose);
     expect(screen.getByText("Secret sync / platform integrations")).toBeInTheDocument();
-    expect(screen.getByText("Agentless cloud certificate discovery")).toBeInTheDocument();
     expect(screen.getByText("Plugin SDK with capability sandboxing")).toBeInTheDocument();
+    expect(screen.queryByText("Agentless cloud certificate discovery")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Observe" }));
+
+    expect(screen.getAllByTestId("feature-row")).toHaveLength(featureCoverageTotals.observe);
+    expect(screen.getByText("Agentless cloud certificate discovery")).toBeInTheDocument();
+    expect(screen.getByText("Secret store discovery")).toBeInTheDocument();
   });
 
   it("supports focused feature search by feature ID and keeps target mapping visible", async () => {

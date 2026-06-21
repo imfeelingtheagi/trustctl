@@ -27,6 +27,8 @@ const (
 	RiskRead        Permission = "risk:read"
 	AgentsRead      Permission = "agents:read"
 	AgentsWrite     Permission = "agents:write"
+	DiscoveryRead   Permission = "discovery:read"
+	DiscoveryWrite  Permission = "discovery:write"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -55,6 +57,7 @@ func allResourcePermissions() []Permission {
 		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
+		DiscoveryRead, DiscoveryWrite,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 	}
@@ -80,7 +83,7 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, ProfilesRead, SecretsRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, ProfilesRead, SecretsRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},

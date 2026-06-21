@@ -111,8 +111,35 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return 0, err
 	}
 	err = log.Replay(ctx, from+1, func(ev events.Event) error {
-		// Only lifecycle transition events carry a state-machine side effect; skip
-		// everything else (domain CRUD events, tenant events, certificate events).
+		// Lifecycle transitions and queued discovery runs carry outbox side effects;
+		// skip everything else (domain CRUD events, tenant events, certificate events).
+		if ev.Type == projections.EventDiscoveryRunQueued {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var pl projections.DiscoveryRunQueued
+			if err := json.Unmarshal(ev.Data, &pl); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+					TenantID:       ev.TenantID,
+					Destination:    discoveryRunDestination,
+					IdempotencyKey: ev.ID,
+					Payload:        ev.Data,
+				})
+				if err != nil {
+					return err
+				}
+				if inserted {
+					healed++
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if !isLifecycleTransition(ev.Type) {
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}

@@ -1,79 +1,60 @@
 import { useEffect, useMemo, useState } from "react";
-import { Cloud, Database, Fingerprint, KeyRound, Network, RefreshCw, Server } from "lucide-react";
+import type { FormEvent } from "react";
+import { ClipboardList, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
-import { api, ApiError, type Identity, type SecretMeta } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type DiscoveryFinding,
+  type DiscoveryRun,
+  type DiscoverySchedule,
+  type DiscoverySource,
+  type DiscoverySourceRequest,
+} from "@/lib/api";
 
 type Notice = { kind: "permission" | "error"; message: string };
+type SourceKind = DiscoverySourceRequest["kind"];
 
-const sourceCards = [
-  {
-    feature: "F2",
-    title: "Network discovery",
-    icon: Network,
-    body: "Port-range TLS scanning is library-complete in `internal/discovery/netscan`, but the control plane does not serve a scan schedule, run, or findings API yet.",
-    next: "Use the served certificate ingest page to land a certificate found outside the product.",
-    href: "/certificates",
-    link: "Open certificate ingest",
-  },
-  {
-    feature: "F49",
-    title: "Cloud certificate discovery",
-    icon: Cloud,
-    body: "AWS ACM, Azure Key Vault, and GCP certificate enumeration are library-only. Cloud credentials must be sealed references, never raw browser fields.",
-    next: "Store credential references in the native secret store, then wait for the discovery API to mount.",
-    href: "/secrets",
-    link: "Open sealed secret store",
-  },
-  {
-    feature: "F42",
-    title: "SSH discovery",
-    icon: Server,
-    body: "Authorized_keys, host keys, trusted CAs, and standing SSH access discovery run in library/agent code only today.",
-    next: "The served inventory below can show existing ssh_key and ssh_certificate identities, but not discovered host findings.",
-    href: "/agents",
-    link: "Open agent enrollment",
-  },
-  {
-    feature: "F35/F36",
-    title: "Secret and API-key discovery",
-    icon: KeyRound,
-    body: "External store enumeration and leaked-key scanner ingestion are not served. Discovery records references and fingerprints, not secret values.",
-    next: "The served slices below show native secret names and api_key identities only.",
-    href: "/secrets",
-    link: "Open native secrets",
-  },
-];
+const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "secret_store", "api_key", "agent", "manual"];
 
 export function Discovery() {
-  const [identities, setIdentities] = useState<Identity[]>([]);
-  const [secrets, setSecrets] = useState<SecretMeta[]>([]);
-  const [identityError, setIdentityError] = useState<Notice | null>(null);
-  const [secretError, setSecretError] = useState<Notice | null>(null);
+  const [sources, setSources] = useState<DiscoverySource[]>([]);
+  const [schedules, setSchedules] = useState<DiscoverySchedule[]>([]);
+  const [runs, setRuns] = useState<DiscoveryRun[]>([]);
+  const [findings, setFindings] = useState<DiscoveryFinding[]>([]);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [sourceName, setSourceName] = useState("");
+  const [sourceKind, setSourceKind] = useState<SourceKind>("network");
+  const [targets, setTargets] = useState("");
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleSourceID, setScheduleSourceID] = useState("");
+  const [scheduleInterval, setScheduleInterval] = useState(3600);
 
   async function load() {
     setLoading(true);
-    setIdentityError(null);
-    setSecretError(null);
-    const [identityResult, secretResult] = await Promise.allSettled([
-      api.identities(),
-      api.secretPage({ limit: 20 }),
+    setNotice(null);
+    const [sourceResult, scheduleResult, runResult, findingResult] = await Promise.allSettled([
+      api.discoverySources({ limit: 50 }),
+      api.discoverySchedules({ limit: 50 }),
+      api.discoveryRuns({ limit: 50 }),
+      api.discoveryFindings({ limit: 50 }),
     ]);
-    if (identityResult.status === "fulfilled") {
-      setIdentities(identityResult.value);
-    } else {
-      setIdentities([]);
-      setIdentityError(noticeForError(identityResult.reason, "Could not load identities"));
-    }
-    if (secretResult.status === "fulfilled") {
-      setSecrets(secretResult.value.items ?? []);
-    } else {
-      setSecrets([]);
-      setSecretError(noticeForError(secretResult.reason, "Could not load secret metadata"));
-    }
+    if (sourceResult.status === "fulfilled") setSources(sourceResult.value.items ?? []);
+    else setSources([]);
+    if (scheduleResult.status === "fulfilled") setSchedules(scheduleResult.value.items ?? []);
+    else setSchedules([]);
+    if (runResult.status === "fulfilled") setRuns(runResult.value.items ?? []);
+    else setRuns([]);
+    if (findingResult.status === "fulfilled") setFindings(findingResult.value.items ?? []);
+    else setFindings([]);
+    const rejected = [sourceResult, scheduleResult, runResult, findingResult].find((result) => result.status === "rejected");
+    if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
   }
 
@@ -81,21 +62,69 @@ export function Discovery() {
     void load();
   }, []);
 
-  const sshIdentities = useMemo(
-    () => identities.filter((identity) => identity.kind === "ssh_key" || identity.kind === "ssh_certificate"),
-    [identities],
-  );
-  const apiKeyIdentities = useMemo(
-    () => identities.filter((identity) => identity.kind === "api_key"),
-    [identities],
-  );
+  useEffect(() => {
+    if (!scheduleSourceID && sources[0]) setScheduleSourceID(sources[0].id);
+  }, [scheduleSourceID, sources]);
+
+  const sourceByID = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources]);
+
+  async function createSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy("source");
+    setNotice(null);
+    try {
+      const config = sourceKind === "network" ? { targets: parseTargets(targets) } : {};
+      const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
+      setSourceName("");
+      setTargets("");
+      setScheduleSourceID(created.id);
+      await load();
+    } catch (err) {
+      setNotice(noticeForError(err, "Could not create discovery source"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function createSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy("schedule");
+    setNotice(null);
+    try {
+      await api.createDiscoverySchedule({
+        source_id: scheduleSourceID,
+        name: scheduleName.trim(),
+        interval_seconds: scheduleInterval,
+        enabled: true,
+      });
+      setScheduleName("");
+      await load();
+    } catch (err) {
+      setNotice(noticeForError(err, "Could not create discovery schedule"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function startRun(sourceID: string, dryRun = false) {
+    setBusy(`run:${sourceID}:${dryRun}`);
+    setNotice(null);
+    try {
+      await api.startDiscoveryRun({ source_id: sourceID, dry_run: dryRun });
+      await load();
+    } catch (err) {
+      setNotice(noticeForError(err, "Could not start discovery run"));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <section aria-labelledby="discovery-heading" className="grid gap-6">
       <PageHeader
         titleId="discovery-heading"
         title="Discovery"
-        description="Discovery scanners are library-complete but not served as control-plane APIs. This page is read-only: it names the backend gaps and shows only metadata that is already served."
+        description="Manage tenant discovery sources, schedules, runs, and findings."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
@@ -104,188 +133,155 @@ export function Discovery() {
         }
       />
 
-      <UnavailableState title="Discovery scan API not served yet">
-        Discovery scanning is available via the agent and library today; console management is coming soon. Scan sources, schedules, dry-run previews, runs, findings, and agent source evidence are not surfaced here, so the GUI cannot offer scan execution. Leaked-token scanner findings are also coming soon.
-      </UnavailableState>
+      {notice && renderNotice(notice)}
+      {loading && <LoadingState>Loading discovery records...</LoadingState>}
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        {sourceCards.map(({ feature, title, icon: Icon, body, next, href, link }) => (
-          <section key={title} aria-labelledby={`${feature}-heading`} className="ui-panel grid gap-3 p-comfortable text-sm">
-            <div className="flex items-start gap-3">
-              <Icon className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <div>
-                <h2 id={`${feature}-heading`} className="text-title font-semibold">
-                  {title}
-                </h2>
-                <p className="mt-1 text-muted-foreground">{body}</p>
-              </div>
-            </div>
-            <p className="text-muted-foreground">{next}</p>
-            <a className="text-sm font-medium text-primary underline" href={href}>
-              {link}
-            </a>
-          </section>
-        ))}
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <form aria-labelledby="source-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSource}>
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 id="source-form-heading" className="text-title font-semibold">
+              Source
+            </h2>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
+            <label className="grid gap-1 text-sm font-medium">
+              Name
+              <input className="ui-input" value={sourceName} onChange={(event) => setSourceName(event.target.value)} required />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Kind
+              <select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
+                {sourceKinds.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {kind}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {sourceKind === "network" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Targets
+              <textarea
+                className="ui-input min-h-24 font-mono text-xs"
+                value={targets}
+                onChange={(event) => setTargets(event.target.value)}
+                placeholder="10.0.0.10:443"
+                required
+              />
+            </label>
+          )}
+          <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Create source
+          </Button>
+        </form>
+
+        <form aria-labelledby="schedule-form-heading" className="ui-panel grid gap-4 p-comfortable" onSubmit={createSchedule}>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 id="schedule-form-heading" className="text-title font-semibold">
+              Schedule
+            </h2>
+          </div>
+          <label className="grid gap-1 text-sm font-medium">
+            Source
+            <select className="ui-input" value={scheduleSourceID} onChange={(event) => setScheduleSourceID(event.target.value)} required>
+              {sources.length === 0 && <option value="">No source</option>}
+              {sources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Name
+            <input className="ui-input" value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} required />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Interval seconds
+            <input
+              className="ui-input"
+              type="number"
+              min={60}
+              step={60}
+              value={scheduleInterval}
+              onChange={(event) => setScheduleInterval(Number(event.target.value))}
+              required
+            />
+          </label>
+          <Button type="submit" className="justify-self-start" disabled={busy === "schedule" || sources.length === 0}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Create schedule
+          </Button>
+        </form>
       </div>
 
-      {loading && <LoadingState>Loading served discovery-adjacent metadata...</LoadingState>}
-
-      <section aria-labelledby="ssh-inventory-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="ssh-inventory-heading" className="text-title font-semibold">
-            SSH identity inventory
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Served `GET /api/v1/identities` rows where kind is `ssh_key` or `ssh_certificate`. Trust mutation and host-key remediation controls are intentionally absent.
-          </p>
-        </div>
-        {renderNotice(identityError)}
-        {!loading && !identityError && sshIdentities.length === 0 && (
-          <EmptyState title="No SSH identities in served inventory">
-            Enroll agents or create SSH identities elsewhere; discovery scan findings in the console are coming soon.
-          </EmptyState>
-        )}
-        {!loading && !identityError && sshIdentities.length > 0 && <SSHIdentityTable identities={sshIdentities} />}
-        <UnavailableState title="SSH discovery findings not served yet">
-          SSH discovery is available via the agent and library today; console management is coming soon. Weak trust flags, discovered host keys, authorized_keys entries, trusted CAs, and agent source paths are not surfaced here. No browser control can rewrite sshd trust from this page.
-        </UnavailableState>
+      <section aria-labelledby="sources-heading" className="grid gap-3 border-y border-border py-4">
+        <h2 id="sources-heading" className="text-title font-semibold">
+          Sources
+        </h2>
+        {!loading && sources.length === 0 ? <EmptyState title="No discovery sources" /> : <SourceTable sources={sources} busy={busy} onStart={startRun} />}
       </section>
 
-      <section aria-labelledby="api-key-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="api-key-heading" className="text-title font-semibold">
-            API key and token inventory
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Served `api_key` identities with masked fingerprints and expiry. Token values are never fetched, rendered, or stored.
-          </p>
-        </div>
-        {renderNotice(identityError)}
-        {!loading && !identityError && apiKeyIdentities.length === 0 && (
-          <EmptyState title="No API-key identities in served inventory">
-            Scan-based key discovery and leaked-token ingestion in the console are coming soon.
-          </EmptyState>
-        )}
-        {!loading && !identityError && apiKeyIdentities.length > 0 && <APIKeyTable identities={apiKeyIdentities} />}
-        <UnavailableState title="Scanner findings not served yet">
-          Secret scanning is available via the agent and library today; console management is coming soon. Findings from gitleaks, trufflehog, and external secret-store enumerators are not surfaced here, so the GUI cannot show discovered tokens yet.
-        </UnavailableState>
+      <section aria-labelledby="schedules-heading" className="grid gap-3 border-y border-border py-4">
+        <h2 id="schedules-heading" className="text-title font-semibold">
+          Schedules
+        </h2>
+        {!loading && schedules.length === 0 ? <EmptyState title="No discovery schedules" /> : <ScheduleTable schedules={schedules} sourceByID={sourceByID} />}
       </section>
 
-      <section aria-labelledby="secret-store-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="secret-store-heading" className="text-title font-semibold">
-            Native secret metadata
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Served `GET /api/v1/secrets/store` returns names and versions only. This table never asks for or renders secret values.
-          </p>
-        </div>
-        {renderNotice(secretError)}
-        {!loading && !secretError && secrets.length === 0 && (
-          <EmptyState title="No native secrets in served store">
-            Create sealed secrets on `/secrets`; external-store discovery in the console is coming soon.
-          </EmptyState>
-        )}
-        {!loading && !secretError && secrets.length > 0 && <SecretMetadataTable secrets={secrets} />}
-        <UnavailableState title="External secret-store discovery not served yet">
-          External-store discovery is available via the agent and library today; console management is coming soon. Kubernetes, GitHub, cloud-provider, and other external store enumeration is not surfaced here. This page shows only native-store metadata.
-        </UnavailableState>
+      <section aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
+        <h2 id="runs-heading" className="text-title font-semibold">
+          Runs
+        </h2>
+        {!loading && runs.length === 0 ? <EmptyState title="No discovery runs" /> : <RunTable runs={runs} sourceByID={sourceByID} />}
+      </section>
+
+      <section aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
+        <h2 id="findings-heading" className="text-title font-semibold">
+          Findings
+        </h2>
+        {!loading && findings.length === 0 ? <EmptyState title="No discovery findings" /> : <FindingTable findings={findings} sourceByID={sourceByID} />}
       </section>
     </section>
   );
 }
 
-function SSHIdentityTable({ identities }: { identities: Identity[] }) {
+function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; busy: string | null; onStart: (sourceID: string, dryRun?: boolean) => void }) {
   return (
     <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[48rem]">
-        <caption className="sr-only">Served SSH identity inventory</caption>
+      <table className="ui-table min-w-[56rem]">
+        <caption className="sr-only">Discovery sources</caption>
         <thead>
           <tr>
             <th scope="col">Name</th>
             <th scope="col">Kind</th>
-            <th scope="col">Owner</th>
-            <th scope="col">Status</th>
-            <th scope="col">Expires</th>
-            <th scope="col">Fingerprint</th>
-          </tr>
-        </thead>
-        <tbody>
-          {identities.map((identity) => (
-            <tr key={identity.id} className="align-top">
-              <td className="font-medium">{identity.name}</td>
-              <td>{identity.kind}</td>
-              <td className="font-mono text-xs">{identity.owner_id}</td>
-              <td>{identity.status}</td>
-              <td>{formatDate(identity.not_after)}</td>
-              <td className="font-mono text-xs">{maskFingerprint(stringAttr(identity, "fingerprint"))}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function APIKeyTable({ identities }: { identities: Identity[] }) {
-  return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[48rem]">
-        <caption className="sr-only">Served API key identity inventory</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Owner</th>
-            <th scope="col">Status</th>
-            <th scope="col">Expires</th>
-            <th scope="col">Scopes</th>
-            <th scope="col">Masked fingerprint</th>
-          </tr>
-        </thead>
-        <tbody>
-          {identities.map((identity) => (
-            <tr key={identity.id} className="align-top">
-              <td className="font-medium">{identity.name}</td>
-              <td className="font-mono text-xs">{identity.owner_id}</td>
-              <td>{identity.status}</td>
-              <td>{formatDate(identity.not_after)}</td>
-              <td>{scopes(identity)}</td>
-              <td className="font-mono text-xs">
-                <Fingerprint className="mr-1 inline h-3 w-3" aria-hidden="true" />
-                {maskFingerprint(stringAttr(identity, "fingerprint"))}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SecretMetadataTable({ secrets }: { secrets: SecretMeta[] }) {
-  return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[38rem]">
-        <caption className="sr-only">Served native secret metadata</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Version</th>
+            <th scope="col">Targets</th>
             <th scope="col">Updated</th>
-            <th scope="col">Created</th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {secrets.map((secret) => (
-            <tr key={secret.name} className="align-top">
-              <td className="font-medium">
-                <Database className="mr-1 inline h-3 w-3" aria-hidden="true" />
-                {secret.name}
+          {sources.map((source) => (
+            <tr key={source.id} className="align-top">
+              <td className="font-medium">{source.name}</td>
+              <td>{source.kind}</td>
+              <td className="font-mono text-xs">{targetCount(source)}</td>
+              <td>{formatDateTime(source.updated_at)}</td>
+              <td>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={() => onStart(source.id, false)} disabled={busy?.startsWith(`run:${source.id}`)}>
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                    Run
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => onStart(source.id, true)} disabled={busy?.startsWith(`run:${source.id}`)}>
+                    Dry run
+                  </Button>
+                </div>
               </td>
-              <td>v{secret.version}</td>
-              <td>{formatDate(secret.updated_at)}</td>
-              <td>{formatDate(secret.created_at)}</td>
             </tr>
           ))}
         </tbody>
@@ -294,12 +290,122 @@ function SecretMetadataTable({ secrets }: { secrets: SecretMeta[] }) {
   );
 }
 
-function renderNotice(notice: Notice | null) {
-  if (!notice) return null;
-  if (notice.kind === "permission") {
-    return <PermissionDeniedState>{notice.message}</PermissionDeniedState>;
-  }
-  return <ErrorState title="Discovery metadata unavailable">{notice.message}</ErrorState>;
+function ScheduleTable({ schedules, sourceByID }: { schedules: DiscoverySchedule[]; sourceByID: Map<string, DiscoverySource> }) {
+  return (
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[44rem]">
+        <caption className="sr-only">Discovery schedules</caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Source</th>
+            <th scope="col">Interval</th>
+            <th scope="col">Enabled</th>
+            <th scope="col">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {schedules.map((schedule) => (
+            <tr key={schedule.id} className="align-top">
+              <td className="font-medium">{schedule.name}</td>
+              <td>{sourceByID.get(schedule.source_id)?.name ?? schedule.source_id}</td>
+              <td>{schedule.interval_seconds}s</td>
+              <td>{schedule.enabled ? "yes" : "no"}</td>
+              <td>{formatDateTime(schedule.updated_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<string, DiscoverySource> }) {
+  return (
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[58rem]">
+        <caption className="sr-only">Discovery runs</caption>
+        <thead>
+          <tr>
+            <th scope="col">Run</th>
+            <th scope="col">Source</th>
+            <th scope="col">Status</th>
+            <th scope="col">Targets</th>
+            <th scope="col">Discovered</th>
+            <th scope="col">Failed</th>
+            <th scope="col">Completed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((run) => (
+            <tr key={run.id} className="align-top">
+              <td className="font-mono text-xs">{shortID(run.id)}</td>
+              <td>{sourceByID.get(run.source_id)?.name ?? run.source_id}</td>
+              <td>
+                <StatusBadge vocabulary="lifecycle" value={run.status} />
+              </td>
+              <td>{run.targets}</td>
+              <td>{run.discovered}</td>
+              <td>{run.failed + run.rejected}</td>
+              <td>{formatDateTime(run.completed_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FindingTable({ findings, sourceByID }: { findings: DiscoveryFinding[]; sourceByID: Map<string, DiscoverySource> }) {
+  return (
+    <div className="ui-panel overflow-x-auto">
+      <table className="ui-table min-w-[64rem]">
+        <caption className="sr-only">Discovery findings</caption>
+        <thead>
+          <tr>
+            <th scope="col">Kind</th>
+            <th scope="col">Reference</th>
+            <th scope="col">Source</th>
+            <th scope="col">Fingerprint</th>
+            <th scope="col">Risk</th>
+            <th scope="col">Discovered</th>
+          </tr>
+        </thead>
+        <tbody>
+          {findings.map((finding) => (
+            <tr key={finding.id} className="align-top">
+              <td>{finding.kind}</td>
+              <td className="font-medium">{finding.ref}</td>
+              <td>{sourceByID.get(finding.source_id)?.name ?? finding.source_id}</td>
+              <td className="font-mono text-xs">{maskFingerprint(finding.fingerprint)}</td>
+              <td>{finding.risk_score ?? 0}</td>
+              <td>{formatDateTime(finding.discovered_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function parseTargets(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((target) => target.trim())
+    .filter(Boolean);
+}
+
+function targetCount(source: DiscoverySource): string {
+  const targets = source.config.targets;
+  if (Array.isArray(targets)) return String(targets.length);
+  const cidrs = source.config.cidrs;
+  if (Array.isArray(cidrs)) return `${cidrs.length} cidr`;
+  return "-";
+}
+
+function renderNotice(notice: Notice) {
+  if (notice.kind === "permission") return <PermissionDeniedState>{notice.message}</PermissionDeniedState>;
+  return <ErrorState title="Discovery unavailable">{notice.message}</ErrorState>;
 }
 
 function noticeForError(err: unknown, fallback: string): Notice {
@@ -317,15 +423,8 @@ function noticeForError(err: unknown, fallback: string): Notice {
   return { kind: "error", message: err instanceof Error ? err.message : fallback };
 }
 
-function stringAttr(identity: Identity, key: string): string {
-  const value = identity.attributes?.[key];
-  return typeof value === "string" ? value : "";
-}
-
-function scopes(identity: Identity): string {
-  const value = identity.attributes?.scopes;
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string").join(", ") || "-";
-  return typeof value === "string" ? value : "-";
+function shortID(id: string): string {
+  return id.length <= 12 ? id : id.slice(0, 12);
 }
 
 function maskFingerprint(value: string): string {
@@ -334,7 +433,7 @@ function maskFingerprint(value: string): string {
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
 }
 
-function formatDate(value?: string): string {
+function formatDateTime(value?: string): string {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString();
+  return new Date(value).toLocaleString();
 }
