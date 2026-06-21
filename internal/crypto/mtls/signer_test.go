@@ -220,6 +220,64 @@ func nextResult(t *testing.T, results <-chan error) error {
 	}
 }
 
+// TestSignerMTLSConfigFailsClosed is the WIRE-103/SIGNER-005 boundary guard:
+// signer mTLS credentials are not built unless all peer-authentication material
+// is present and usable. That keeps a half-configured cross-node signer channel
+// from degrading to CA-only, unpinned, or unverifiable transport.
+func TestSignerMTLSConfigFailsClosed(t *testing.T) {
+	const serverName = "trstctl-signer.svc"
+	dir := t.TempDir()
+	mat, err := mtls.GenerateSignerPeerMaterial(dir, serverName, time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateSignerPeerMaterial: %v", err)
+	}
+
+	requireErrContains := func(t *testing.T, err error, want string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("got nil error, want one mentioning %q", want)
+		}
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %v, want it to mention %q", err, want)
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		edit func(*mtls.SignerPeerConfig)
+		want string
+	}{
+		{name: "missing cert", edit: func(c *mtls.SignerPeerConfig) { c.CertFile = "" }, want: "cert"},
+		{name: "missing key", edit: func(c *mtls.SignerPeerConfig) { c.KeyFile = "" }, want: "key"},
+		{name: "missing peer CA", edit: func(c *mtls.SignerPeerConfig) { c.PeerCAFile = "" }, want: "peer-ca"},
+		{name: "missing peer pin", edit: func(c *mtls.SignerPeerConfig) { c.PeerPinHex = "" }, want: "peer-pin"},
+		{name: "malformed peer pin", edit: func(c *mtls.SignerPeerConfig) { c.PeerPinHex = "zz" }, want: "pin"},
+	} {
+		t.Run("server "+tc.name, func(t *testing.T) {
+			cfg := mat.Signer
+			tc.edit(&cfg)
+			_, err := mtls.SignerServerCredentials(cfg)
+			requireErrContains(t, err, tc.want)
+		})
+		t.Run("client "+tc.name, func(t *testing.T) {
+			cfg := mat.ControlPlane
+			tc.edit(&cfg)
+			_, err := mtls.SignerClientCredentials(cfg, serverName)
+			requireErrContains(t, err, tc.want)
+		})
+	}
+
+	_, err = mtls.SignerClientCredentials(mat.ControlPlane, "")
+	requireErrContains(t, err, "server name")
+
+	if _, err := mtls.SignerServerCredentials(mat.Signer); err != nil {
+		t.Fatalf("complete signer server mTLS config should build credentials: %v", err)
+	}
+	if _, err := mtls.SignerClientCredentials(mat.ControlPlane, serverName); err != nil {
+		t.Fatalf("complete signer client mTLS config should build credentials: %v", err)
+	}
+}
+
 // TestParsePin validates the operator-facing pin parsing: a 64-char hex SHA-256
 // round-trips, and malformed/short pins are rejected.
 func TestParsePin(t *testing.T) {

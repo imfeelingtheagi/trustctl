@@ -3724,6 +3724,7 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/signing", "TestSignOverMTLS_RejectsCASignedButUnpinnedPeer"},
 		{"../internal/signing", "TestSignOverMTLS_RejectsUntrustedSigner"},
 		{"../internal/signing", "TestSignerMTLSConfigFailsClosed"},
+		{"../internal/crypto/mtls", "TestSignerMTLSConfigFailsClosed"},
 		{"../internal/crypto/mtls", "TestSignerMTLSNegotiatesTLS13AEAD"},
 		{"../internal/crypto/mtls", "TestSignerMTLSRejectsUntrustedClientAtHandshake"},
 	} {
