@@ -24,6 +24,9 @@ binary serves today versus what is built as library code but not yet served.
   macOS, Windows, Docker, and Kubernetes.
 - **[Configuration](configuration.md)** — the bundled vs. external datastore
   switches, server settings, and lifecycle thresholds.
+- **[Performance SLOs](performance.md)** and
+  **[capacity planning](performance-capacity.md)** — the hot-path latency,
+  throughput, queue, projection-lag, and right-sizing contract.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Troubleshooting](troubleshooting.md)** — fixes for the issues people hit
   first.

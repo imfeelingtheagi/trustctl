@@ -57,6 +57,9 @@ nav:
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
   - Observability: observability.md
+  - Performance:
+      - SLO matrix: performance.md
+      - Capacity and cost model: performance-capacity.md
   - Operations & resilience: operations.md
   - CLI: cli.md
   - Telemetry: telemetry.md

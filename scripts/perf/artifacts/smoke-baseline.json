@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "profile": "smoke",
+  "generated_at": "2026-06-21T05:50:05Z",
+  "measurement_artifact": "scripts/perf/artifacts/smoke-baseline.json",
+  "capacity_tiers": [
+    "CAP-SMALL",
+    "CAP-MEDIUM",
+    "CAP-LARGE"
+  ],
+  "results": [
+    {
+      "hot_path": "api.issuance",
+      "slo_id": "PERF-SLO-001",
+      "benchmark": "BenchmarkIssuance",
+      "samples": 64,
+      "p50_ms": 0.002458,
+      "p95_ms": 0.004083,
+      "p99_ms": 0.004375,
+      "throughput_per_second": 377953.4999084644,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "api.inventory",
+      "slo_id": "PERF-SLO-002",
+      "benchmark": "BenchmarkInventory",
+      "samples": 64,
+      "p50_ms": 0.14525,
+      "p95_ms": 0.367459,
+      "p99_ms": 0.466208,
+      "throughput_per_second": 5844.54870267,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "api.graph_risk",
+      "slo_id": "PERF-SLO-003",
+      "benchmark": "BenchmarkGraphRiskQuery",
+      "samples": 64,
+      "p50_ms": 0.161917,
+      "p95_ms": 0.647292,
+      "p99_ms": 0.776333,
+      "throughput_per_second": 3754.4454247066797,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "api.secrets",
+      "slo_id": "PERF-SLO-004",
+      "benchmark": "BenchmarkSecrets",
+      "samples": 64,
+      "p50_ms": 0.002792,
+      "p95_ms": 0.030958,
+      "p99_ms": 0.089208,
+      "throughput_per_second": 112157.72179627602,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "protocol.enrollment",
+      "slo_id": "PERF-SLO-005",
+      "benchmark": "BenchmarkProtocolEnrollment",
+      "samples": 64,
+      "p50_ms": 0.00175,
+      "p95_ms": 0.00225,
+      "p99_ms": 0.002333,
+      "throughput_per_second": 534259.3829304128,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "revocation.ocsp_crl",
+      "slo_id": "PERF-SLO-006",
+      "benchmark": "BenchmarkOCSPCRL",
+      "samples": 64,
+      "p50_ms": 0.062792,
+      "p95_ms": 0.066708,
+      "p99_ms": 0.068666,
+      "throughput_per_second": 15749.806449644178,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "signer.rpc",
+      "slo_id": "PERF-SLO-007",
+      "benchmark": "BenchmarkSignerRPC",
+      "samples": 64,
+      "p50_ms": 0.000417,
+      "p95_ms": 0.000916,
+      "p99_ms": 0.000959,
+      "throughput_per_second": 1893939.393939394,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    },
+    {
+      "hot_path": "spine.projection_replay",
+      "slo_id": "PERF-SLO-008",
+      "benchmark": "BenchmarkProjectionReplay",
+      "samples": 64,
+      "p50_ms": 0.004875,
+      "p95_ms": 0.006459,
+      "p99_ms": 0.023708,
+      "throughput_per_second": 173441.73441734415,
+      "error_budget_percent": 0,
+      "queue_saturation": 0,
+      "projection_lag_events": 0,
+      "met": true
+    }
+  ],
+  "summary": {
+    "hot_paths": 8,
+    "met": 8,
+    "failed": 0,
+    "ok": true
+  }
+}

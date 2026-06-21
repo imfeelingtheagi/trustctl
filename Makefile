@@ -157,6 +157,12 @@ chaos: ## Run the fault-injection / chaos suite over the embedded spine (RESIL-0
 	$(GO) test -tags=chaos -race -count=1 -run '^TestChaos' ./internal/orchestrator/... ./internal/signing/...
 	@echo ">> chaos: all fault-injection scenarios held the safe failure direction"
 
+.PHONY: perf-smoke
+perf-smoke: ## Run the committed hot-path performance SLO smoke gate (PERF-001/002/003)
+	@out="$${PERF_OUT:-$${TMPDIR:-/tmp}/trstctl-perf-smoke.json}"; \
+	echo ">> perf-smoke ($$out)"; \
+	scripts/perf/run-local.sh --profile smoke --out "$$out"
+
 .PHONY: lint lint-partial
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1

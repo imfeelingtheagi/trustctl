@@ -56,6 +56,16 @@ jobs:
           TRSTCTL_REQUIRE_OPENSSH: "1"
         run: make test
 
+      - name: Perf smoke SLO gate
+        run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"
+
+      - name: Upload perf smoke SLO artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perf-smoke-slo
+          path: ${{ runner.temp }}/perf-smoke.json
+          if-no-files-found: error
+
       # Install the pinned golangci-lint v2 (required for Go 1.26) so the lint
       # step uses a deterministic version rather than the runner's.
       - name: Install lint tooling

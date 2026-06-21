@@ -23,6 +23,8 @@ var requiredPages = []string{
 	"compliance.md",
 	"observability.md",
 	"operations.md",
+	"performance.md",
+	"performance-capacity.md",
 	"disaster-recovery.md",
 	"migrations.md",
 	"limitations.md",
