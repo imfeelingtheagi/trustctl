@@ -104,9 +104,9 @@ type TenantDeletionAttestation struct {
 // the caller emits a `tenant.offboarded` event (projections.EventTenantOffboarded)
 // in the same flow so the offboarding is itself event-sourced and reconstructable,
 // and the projector replays it through OffboardTenant on a Rebuild so a rebuilt
-// read model does not resurrect a deleted tenant. Object-store audit-archive
-// residue (cold-storage bundles) is out of band and is documented in
-// docs/limitations.md as operator-driven cleanup.
+// read model does not resurrect a deleted tenant. Object-store audit-archive residue
+// (cold-storage bundles) is out of band and is documented in docs/limitations.md as
+// operator-driven cleanup.
 func (s *Store) OffboardTenant(ctx context.Context, tenantID string) (TenantDeletionAttestation, error) {
 	att := TenantDeletionAttestation{
 		TenantID: tenantID,

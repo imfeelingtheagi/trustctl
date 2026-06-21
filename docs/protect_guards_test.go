@@ -3425,6 +3425,7 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/store", "TestTenantsRLSWithCheckBlocksCrossTenantWrite"},
 		{"../internal/store", "TestOffboardTenantErasesOnlyThatTenant"},
 		{"../internal/store", "TestEveryTenantTableCoveredByOffboard"},
+		{"../docs", "TestTenantOffboardingPrivacyBoundaryDocumented"},
 		{"../internal/store", "TestStoreSystemPoolIsTheNamedRLSBypassAccessor"},
 		{"../internal/store", "TestSystemPoolProductionUseInventory"},
 		{"../internal/store", "TestSystemQueryMarkersExplainTenantExposure"},

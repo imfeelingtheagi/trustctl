@@ -51,6 +51,23 @@ real built Vite bundle and serves it at `/`, and the frontend's API types are
 `EXC-WIRE-04` — is **now served too** (`SURFACE-003`, behind `ai.enable_api`); see its
 section below.
 
+### Tenant offboarding boundary
+
+Tenant offboarding erases **PostgreSQL read state** for the target tenant:
+`OffboardTenant` deletes every tenant-scoped table under that tenant's RLS context,
+verifies zero residue, and returns a deletion attestation. The
+`tenant.offboarded` event is replayed by projections, so a read-model rebuild does
+not resurrect the tenant's PostgreSQL rows.
+
+That is the TENANT-owned boundary. It is not a promise that the append-only event log
+or a signed **audit archive** disappears when a tenant is offboarded. Those records
+are governed by audit/privacy retention policy: configure
+`TRSTCTL_AUDIT_RETENTION` plus `TRSTCTL_AUDIT_ARCHIVE_DIR` for archive-then-prune
+of audit records, and use **Privacy Retention** for non-audit personal data
+pseudonymization. WORM/object-store archive cleanup and legal hold decisions remain
+operator privacy/compliance work, described in [compliance](compliance.md) and
+[configuration](configuration.md).
+
 ## Built and tested, but not yet served by the binary
 
 These subsystems exist as **library code with real unit/integration/conformance
