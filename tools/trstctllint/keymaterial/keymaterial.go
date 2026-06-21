@@ -10,6 +10,9 @@
 //     internal/crypto/seal). These are fail-closed: deleting their
 //     //trstctl:keymaterial marker does NOT disable the rule (ARCH-004), so the
 //     AN-8 guarantee on the real key buffers cannot be silently turned off.
+//   - by default, if it is the signing service package and the identifier names
+//     raw signer private-key custody. Opaque signer handles and socket paths are
+//     strings by design; raw private-key material is not.
 //   - by opt-in, if it carries the //trstctl:keymaterial marker. The marker
 //     brings additional packages under the rule as the key-handling surface
 //     grows; it can only make the rule apply, never silence it.
@@ -48,6 +51,21 @@ const keyMaterialMarker = "trstctl:keymaterial"
 var defaultKeyMaterialPkgs = map[string]bool{
 	"trstctl.com/trstctl/internal/crypto/secret": true,
 	"trstctl.com/trstctl/internal/crypto/seal":   true,
+}
+
+var signingKeyCustodyPkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/signing": true,
+}
+
+var signingKeyMaterialNameFragments = []string{
+	"keymaterial",
+	"pkcs8",
+	"plaintextkey",
+	"privatekey",
+	"privatepem",
+	"rawkey",
+	"sealedkey",
+	"secretkey",
 }
 
 var secretSurfacePkgs = map[string]bool{
@@ -91,16 +109,17 @@ var providerCredentialNames = map[string]bool{
 // Analyzer enforces AN-8.
 var Analyzer = &analysis.Analyzer{
 	Name: "keymaterial",
-	Doc:  "AN-8: key-handling packages (secret/seal by default, or //trstctl:keymaterial) must not use string for key material; use []byte.",
+	Doc:  "AN-8: key-handling packages (secret/seal and signer custody by default, or //trstctl:keymaterial) must not use string for key material; use []byte.",
 	Run:  run,
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	inKeyMaterialScope := inScope(pass)
+	inSigningKeyCustodyScope := signingKeyCustodyPkgs[pass.Pkg.Path()]
 	inSecretSurfaceScope := secretSurfacePkgs[pass.Pkg.Path()]
 	inDeploymentConnectorScope := strings.HasPrefix(pass.Pkg.Path(), "trstctl.com/trstctl/internal/connector/")
 	inProviderCredentialScope := providerCredentialScope(pass.Pkg.Path())
-	if !inKeyMaterialScope && !inSecretSurfaceScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
+	if !inKeyMaterialScope && !inSigningKeyCustodyScope && !inSecretSurfaceScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
 		return nil, nil
 	}
 	for _, file := range pass.Files {
@@ -110,6 +129,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				if inKeyMaterialScope && isStringBacked(pass, x.Type) {
 					pass.Reportf(x.Type.Pos(),
 						"key-handling package must not use string for key material; use []byte (AN-8)")
+				}
+				if inSigningKeyCustodyScope && signingKeyMaterialFieldName(x) && isStringBacked(pass, x.Type) {
+					pass.Reportf(x.Type.Pos(),
+						"signing key custody must not use string-backed key material; use []byte or crypto.LockedSigner-backed storage (AN-8)")
 				}
 				if inSecretSurfaceScope && secretSurfaceFieldName(pass, x) && isStringBacked(pass, x.Type) {
 					pass.Reportf(x.Type.Pos(),
@@ -163,6 +186,18 @@ func secretSurfaceFieldName(pass *analysis.Pass, field *ast.Field) bool {
 		}
 		if name.Name != "Token" || strings.HasSuffix(pass.Fset.Position(name.Pos()).Filename, "/secrets.go") {
 			return true
+		}
+	}
+	return false
+}
+
+func signingKeyMaterialFieldName(field *ast.Field) bool {
+	for _, name := range field.Names {
+		normalized := strings.ToLower(name.Name)
+		for _, fragment := range signingKeyMaterialNameFragments {
+			if strings.Contains(normalized, fragment) {
+				return true
+			}
 		}
 	}
 	return false

@@ -25,6 +25,7 @@ func TestKeyMaterial(t *testing.T) {
 		"trstctl.com/trstctl/internal/authmethod",
 		"trstctl.com/trstctl/internal/connector/badkeycopy",
 		"trstctl.com/trstctl/internal/kms/badcreds",
+		"trstctl.com/trstctl/internal/signing",
 		// Default-on secret primitive WITHOUT the marker: ARCH-004 fail-closed
 		// proof — a forgotten marker does not disable the rule here.
 		"trstctl.com/trstctl/internal/crypto/secret",
