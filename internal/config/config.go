@@ -56,6 +56,17 @@ const (
 	TLSDisabled = "disabled"
 )
 
+// AI model serving modes. The default is "off": the AI/RCA/MCP surface can still
+// answer from grounded citations, but no prompt leaves the process.
+const (
+	AIModelOff   = "off"
+	AIModelLocal = "local"
+	AIModelCloud = "cloud"
+
+	AIModelRuntimeOllama = "ollama"
+	AIModelRuntimeVLLM   = "vllm"
+)
+
 // Config is the top-level configuration.
 type Config struct {
 	Server    Server    `json:"server"`
@@ -675,6 +686,23 @@ type AI struct {
 	// RateWindowSeconds is the MCP rate-limit window in seconds. Zero selects one
 	// minute.
 	RateWindowSeconds int `json:"rate_window_seconds,omitempty"`
+	// Model configures the optional reasoning model. Mode "off" is the default and
+	// means no prompt egress. Mode "local" targets an operator-owned Ollama/vLLM
+	// completion endpoint. Mode "cloud" requires AllowEgress=true so cloud prompt
+	// egress is a deliberate, inspectable choice.
+	Model AIModel `json:"model,omitempty"`
+}
+
+// AIModel configures the optional model adapter behind the served AI surface. It
+// carries no credentials by design: secrets belong in operator-managed network
+// controls or a future secret-backed auth mechanism, not in JSON/string config.
+type AIModel struct {
+	Mode        string `json:"mode,omitempty"`         // off | local | cloud
+	Runtime     string `json:"runtime,omitempty"`      // local: ollama | vllm
+	Provider    string `json:"provider,omitempty"`     // cloud: provider/gateway label
+	Endpoint    string `json:"endpoint,omitempty"`     // completion endpoint; never echoed in full
+	Name        string `json:"name,omitempty"`         // model name at the endpoint
+	AllowEgress bool   `json:"allow_egress,omitempty"` // required only for cloud mode
 }
 
 // RateWindow returns the MCP rate-limit window, defaulting to one minute.
@@ -683,6 +711,16 @@ func (a AI) RateWindow() time.Duration {
 		return time.Minute
 	}
 	return time.Duration(a.RateWindowSeconds) * time.Second
+}
+
+// ModeValue normalizes the configured model mode. Empty means off, so old configs
+// keep the air-gapped default.
+func (m AIModel) ModeValue() string {
+	mode := strings.ToLower(strings.TrimSpace(m.Mode))
+	if mode == "" {
+		return AIModelOff
+	}
+	return mode
 }
 
 // Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
@@ -999,6 +1037,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AI_MCP_IDENTITY", &c.AI.MCPIdentity)
 	setInt(getenv, "TRSTCTL_AI_RATE_MAX", &c.AI.RateMax)
 	setInt(getenv, "TRSTCTL_AI_RATE_WINDOW_SECONDS", &c.AI.RateWindowSeconds)
+	setString(getenv, "TRSTCTL_AI_MODEL_MODE", &c.AI.Model.Mode)
+	setString(getenv, "TRSTCTL_AI_MODEL_RUNTIME", &c.AI.Model.Runtime)
+	setString(getenv, "TRSTCTL_AI_MODEL_PROVIDER", &c.AI.Model.Provider)
+	setString(getenv, "TRSTCTL_AI_MODEL_ENDPOINT", &c.AI.Model.Endpoint)
+	setString(getenv, "TRSTCTL_AI_MODEL_NAME", &c.AI.Model.Name)
+	setBool(getenv, "TRSTCTL_AI_MODEL_ALLOW_EGRESS", &c.AI.Model.AllowEgress)
 	setString(getenv, "TRSTCTL_SIGNER_MODE", &c.Signer.Mode)
 	setString(getenv, "TRSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
 	setString(getenv, "TRSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
@@ -1425,6 +1469,7 @@ func validateServedSurfaces(c *Config) []error {
 	if c.Plugins.Enabled {
 		errs = append(errs, c.Plugins.validate()...)
 	}
+	errs = append(errs, validateAIModel(c.AI.Model)...)
 	// Served agent steady-state channel (WIRE-004 / OPS-005): when enabled it requires a
 	// signer (the agent CA is custodied there, AN-4) so the binary never advertises an
 	// agent channel it cannot back with a signer-custodied CA — fail closed. The
@@ -1436,6 +1481,76 @@ func validateServedSurfaces(c *Config) []error {
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
+	}
+	return errs
+}
+
+func validateAIModel(m AIModel) []error {
+	var errs []error
+	mode := m.ModeValue()
+	switch mode {
+	case AIModelOff:
+		if m.AllowEgress {
+			errs = append(errs, errors.New("ai.model.allow_egress is only valid when ai.model.mode is cloud"))
+		}
+	case AIModelLocal:
+		runtime := strings.ToLower(strings.TrimSpace(m.Runtime))
+		if runtime != AIModelRuntimeOllama && runtime != AIModelRuntimeVLLM {
+			errs = append(errs, fmt.Errorf("ai.model.runtime %q is invalid for local mode (want %q or %q)", m.Runtime, AIModelRuntimeOllama, AIModelRuntimeVLLM))
+		}
+		if strings.TrimSpace(m.Provider) != "" {
+			errs = append(errs, errors.New("ai.model.provider is only valid when ai.model.mode is cloud; use ai.model.runtime for local models"))
+		}
+		if m.AllowEgress {
+			errs = append(errs, errors.New("ai.model.allow_egress is only valid when ai.model.mode is cloud"))
+		}
+		if strings.TrimSpace(m.Name) == "" {
+			errs = append(errs, errors.New("ai.model.name is required when ai.model.mode is local"))
+		}
+		errs = append(errs, validateAIEndpoint("ai.model.endpoint", m.Endpoint, false)...)
+	case AIModelCloud:
+		if strings.TrimSpace(m.Provider) == "" {
+			errs = append(errs, errors.New("ai.model.provider is required when ai.model.mode is cloud"))
+		}
+		if strings.TrimSpace(m.Runtime) != "" {
+			errs = append(errs, errors.New("ai.model.runtime is only valid when ai.model.mode is local"))
+		}
+		if strings.TrimSpace(m.Name) == "" {
+			errs = append(errs, errors.New("ai.model.name is required when ai.model.mode is cloud"))
+		}
+		if !m.AllowEgress {
+			errs = append(errs, errors.New("ai.model.allow_egress=true is required when ai.model.mode is cloud"))
+		}
+		errs = append(errs, validateAIEndpoint("ai.model.endpoint", m.Endpoint, true)...)
+	default:
+		errs = append(errs, fmt.Errorf("ai.model.mode %q is invalid (want %q, %q, or %q)", m.Mode, AIModelOff, AIModelLocal, AIModelCloud))
+	}
+	return errs
+}
+
+func validateAIEndpoint(name, raw string, requireHTTPS bool) []error {
+	var errs []error
+	if strings.TrimSpace(raw) == "" {
+		return []error{fmt.Errorf("%s is required when ai.model.mode is not off", name)}
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return []error{fmt.Errorf("%s %q must be an absolute http(s) URL", name, raw)}
+	}
+	if u.User != nil {
+		errs = append(errs, fmt.Errorf("%s must not include credentials in the URL", name))
+	}
+	switch {
+	case requireHTTPS:
+		if u.Scheme != "https" {
+			errs = append(errs, fmt.Errorf("%s %q must use https for cloud model egress", name, raw))
+		}
+	case u.Scheme == "https":
+		// ok
+	case u.Scheme == "http" && isLoopbackHost(u.Hostname()):
+		// ok: local Ollama/vLLM loopback endpoint
+	default:
+		errs = append(errs, fmt.Errorf("%s %q must use https unless it is a loopback local model endpoint", name, raw))
 	}
 	return errs
 }

@@ -11,6 +11,7 @@
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import type {
   AIAnswer as GenAIAnswer,
+  AIStatus as GenAIStatus,
   AIQueryRequest,
   APIToken,
   APITokenCreateRequest,
@@ -102,6 +103,7 @@ export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
 export type AIAnswer = GenAIAnswer;
+export type AIStatus = GenAIStatus;
 export type CredentialRisk = GenCredentialRisk;
 export type Approval = GenApproval;
 export type AuditEvent = GenAuditEvent;
@@ -380,6 +382,7 @@ export interface Api {
   graphBlastRadius(id: string): Promise<GraphImpact>;
   graphReachable(id: string): Promise<GraphReachable>;
   graphQuery(query: string): Promise<GraphQueryResult>;
+  aiStatus(): Promise<AIStatus>;
   aiQuery(input: AIQueryRequest): Promise<AIAnswer>;
   aiRCA(input: RCARequest): Promise<AIAnswer>;
   mcpTools(): Promise<MCPToolList>;
@@ -489,6 +492,7 @@ export const api: Api = {
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
   graphQuery: (query) => postRead<GraphQueryResult>("/api/v1/graph/query", { query }),
+  aiStatus: () => req<AIStatus>("/api/v1/ai/status"),
   aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
   aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),

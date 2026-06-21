@@ -9,6 +9,7 @@ import { AppRoutes } from "@/App";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
+    aiStatus: vi.fn(),
     aiQuery: vi.fn(),
     aiRCA: vi.fn(),
     mcpTools: vi.fn(),
@@ -37,6 +38,16 @@ describe("assistant console workflow", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.aiStatus.mockResolvedValue({
+      enabled: true,
+      model_configured: false,
+      model_mode: "off",
+      egress: "none",
+      redaction: "default-redactor",
+      residual_refusal_gate: true,
+      rate_max: 60,
+      rate_window_seconds: 60,
+    });
     apiMock.mcpTools.mockResolvedValue({
       identity: "spiffe://example.org/mcp-server",
       read_only: true,
@@ -57,8 +68,8 @@ describe("assistant console workflow", () => {
     expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Assistant/i })).toHaveAttribute("href", "/assistant");
     expect(screen.getByText("AI runtime boundary")).toBeInTheDocument();
-    expect(screen.getByText("AI model and runtime status not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/no model configured means nothing phones home/i)).toBeInTheDocument();
+    expect(await screen.findByText("not configured")).toBeInTheDocument();
+    expect(screen.getByText(/Redaction boundary: default-redactor/)).toBeInTheDocument();
     expect(screen.getByText("Structured query preview")).toBeInTheDocument();
     expect(screen.getByText(/Tenant\/RBAC filtering is applied/)).toBeInTheDocument();
 
@@ -75,6 +86,29 @@ describe("assistant console workflow", () => {
         limit: 25,
       }),
     );
+  });
+
+  it("shows served AI model mode, endpoint host, and egress posture", async () => {
+    apiMock.aiStatus.mockResolvedValue({
+      enabled: true,
+      model_configured: true,
+      model_mode: "local",
+      model_name: "llama3.1",
+      runtime: "ollama",
+      endpoint_host: "127.0.0.1:11434",
+      egress: "local-endpoint",
+      redaction: "default-redactor",
+      residual_refusal_gate: true,
+      rate_max: 3,
+      rate_window_seconds: 60,
+    });
+    renderAssistant();
+
+    expect(await screen.findByText("local: llama3.1")).toBeInTheDocument();
+    expect(screen.getByText("local-endpoint")).toBeInTheDocument();
+    expect(screen.getByText("127.0.0.1:11434")).toBeInTheDocument();
+    expect(screen.getByText(/residual refusal gate: active/i)).toBeInTheDocument();
+    expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
   });
 
   it("renders RCA redaction and no-evidence state instead of hiding the answer", async () => {

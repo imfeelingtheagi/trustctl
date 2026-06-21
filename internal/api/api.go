@@ -442,6 +442,7 @@ func (a *API) routes() []route {
 		// Idempotency-Key, like the graph query). The surface fails closed (503) unless
 		// the server wires WithAISurface. RBAC is graph:read for the query/RCA/MCP routes
 		// (the AI surface is a read consumer of the credential graph + inventory).
+		{method: "GET", path: "/api/v1/ai/status", opID: "aiStatus", summary: "Report the served AI runtime/model posture without leaking model endpoint secrets", handler: a.aiStatus, resSchema: "AIStatus", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/ai/query", opID: "aiQuery", summary: "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)", handler: a.aiQuery, reqSchema: "AIQueryRequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/ai/rca", opID: "aiRCA", summary: "Answer a grounded root-cause / NL question from cited tenant records (read-only)", handler: a.aiRCA, reqSchema: "RCARequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/mcp/tools", opID: "listMCPTools", summary: "List the read-only, tenant-scoped MCP tools an AI agent may call", handler: a.mcpTools, resSchema: "MCPToolList", successCode: "200", perm: authz.GraphRead},

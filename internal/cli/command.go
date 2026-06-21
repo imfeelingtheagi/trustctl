@@ -96,6 +96,7 @@ var commandTable = []Command{
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyNone, Summary: "Mint a one-time agent bootstrap token"},
 
 	// AI assistant + root-cause analysis (SURFACE-003).
+	{Name: []string{"ai", "status"}, Method: "GET", Path: "/api/v1/ai/status", Summary: "Show AI runtime and model status"},
 	{Name: []string{"ai", "query"}, Method: "POST", Path: "/api/v1/ai/query", Body: bodyFile, Summary: "Ask the AI assistant a question"},
 	{Name: []string{"ai", "rca"}, Method: "POST", Path: "/api/v1/ai/rca", Body: bodyFile, Summary: "Run an AI root-cause analysis"},
 

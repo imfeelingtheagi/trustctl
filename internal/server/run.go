@@ -297,6 +297,10 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 	if err != nil {
 		return Deps{}, fmt.Errorf("plugins: %w", err)
 	}
+	aiModel, aiModelStatus, err := aiModelFromConfig(cfg.AI.Model)
+	if err != nil {
+		return Deps{}, fmt.Errorf("ai model: %w", err)
+	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		CACertFile: cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
@@ -310,7 +314,7 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       cfg.Protocols, Plugins: pluginCfg, OIDC: cfg.Auth.OIDC,
 		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret,
-		EnableAISurface: cfg.AI.EnableAPI, AIModel: aiModelFromConfig(),
+		EnableAISurface: cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
 		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr,
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
@@ -463,7 +467,7 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
 	}
 	if srv.apiAISurfaceServed() {
-		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped, air-gapped model by default)")
+		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped)")
 	}
 }
 

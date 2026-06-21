@@ -279,10 +279,10 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F72", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview" },
   { featureId: "F73", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "HTTP-01/DNS-01/TLS-ALPN-01 method policy preview" },
   { featureId: "F74", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "wildcard DNS-01-only acknowledgement and blast-radius disclosure" },
-  { featureId: "F75", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded query with citations and platform-status unavailable state" },
+  { featureId: "F75", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded query with citations and served runtime status" },
   { featureId: "F76", routes: ["/assistant"], component: "Assistant", kind: "observe", evidence: "AI model runtime disclosure and redaction boundary" },
-  { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and platform-status unavailable state" },
-  { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and runtime-status unavailable state" },
+  { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and served runtime status" },
+  { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and served runtime status" },
 ];
 
 const surfaceKindByFeature = new Map(realGuiSurfaces.map((surface) => [surface.featureId, surface.kind]));

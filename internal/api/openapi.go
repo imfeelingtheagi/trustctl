@@ -535,6 +535,21 @@ func componentSchemas() map[string]*Schema {
 		"sufficient": {Type: "boolean"},
 		"grounded":   {Type: "boolean"},
 	}, "text", "sufficient")
+	aiStatus := object(map[string]*Schema{
+		"enabled":               {Type: "boolean"},
+		"model_configured":      {Type: "boolean"},
+		"model_mode":            str(),
+		"model_name":            str(),
+		"runtime":               str(),
+		"provider":              str(),
+		"endpoint_host":         str(),
+		"egress":                str(),
+		"redaction":             str(),
+		"residual_refusal_gate": {Type: "boolean"},
+		"mcp_identity":          str(),
+		"rate_max":              {Type: "integer"},
+		"rate_window_seconds":   {Type: "integer"},
+	}, "enabled", "model_configured", "model_mode", "egress", "redaction", "residual_refusal_gate")
 	mcpToolList := object(map[string]*Schema{
 		"identity":  str(),
 		"read_only": {Type: "boolean"},
@@ -642,6 +657,7 @@ func componentSchemas() map[string]*Schema {
 		"AIQueryRequest":               aiQueryReq,
 		"RCARequest":                   rcaReq,
 		"AIAnswer":                     aiAnswer,
+		"AIStatus":                     aiStatus,
 		"MCPToolList":                  mcpToolList,
 		"MCPToolCall":                  mcpToolCall,
 		"MCPToolResult":                mcpToolResult,

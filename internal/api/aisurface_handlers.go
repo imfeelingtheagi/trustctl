@@ -51,6 +51,25 @@ type aiAnswer struct {
 	Grounded   bool     `json:"grounded"`
 }
 
+// aiStatusResponse exposes the served AI runtime boundary without leaking secret-ish
+// config. It reports whether the surface is mounted, whether a model is configured,
+// which non-secret mode/provider/runtime is active, and what egress class applies.
+type aiStatusResponse struct {
+	Enabled             bool   `json:"enabled"`
+	ModelConfigured     bool   `json:"model_configured"`
+	ModelMode           string `json:"model_mode"`
+	ModelName           string `json:"model_name,omitempty"`
+	Runtime             string `json:"runtime,omitempty"`
+	Provider            string `json:"provider,omitempty"`
+	EndpointHost        string `json:"endpoint_host,omitempty"`
+	Egress              string `json:"egress"`
+	Redaction           string `json:"redaction"`
+	ResidualRefusalGate bool   `json:"residual_refusal_gate"`
+	MCPIdentity         string `json:"mcp_identity,omitempty"`
+	RateMax             int    `json:"rate_max,omitempty"`
+	RateWindowSeconds   int    `json:"rate_window_seconds,omitempty"`
+}
+
 // rcaRequest is a grounded root-cause / NL question over the tenant's data (F77).
 type rcaRequest struct {
 	Subject  string `json:"subject"`
@@ -104,6 +123,44 @@ func subjectFieldForSurface(s query.Surface) (query.Field, bool) {
 	default:
 		return "", false
 	}
+}
+
+// aiStatus reports the AI runtime/model posture. It is intentionally available even
+// when the AI surface itself is disabled: disabled is a valid, fail-closed posture the
+// UI and operators need to see as data. The route is still authenticated/RBAC-gated by
+// guard(), so it is not a public capability probe.
+func (a *API) aiStatus(w http.ResponseWriter, _ *http.Request) {
+	status := aiStatusResponse{
+		Enabled:             a.ai != nil,
+		ModelMode:           "off",
+		Egress:              "none",
+		Redaction:           "default-redactor",
+		ResidualRefusalGate: true,
+	}
+	if a.ai == nil {
+		a.writeJSON(w, http.StatusOK, status)
+		return
+	}
+	model := a.ai.be.Model
+	st := a.ai.be.ModelStatus
+	if st.Mode != "" {
+		status.ModelMode = st.Mode
+	}
+	status.Runtime = st.Runtime
+	status.Provider = st.Provider
+	status.EndpointHost = st.EndpointHost
+	if st.Egress != "" {
+		status.Egress = st.Egress
+	}
+	status.ModelConfigured = model != nil && model.Available()
+	status.ModelName = st.ModelName
+	if status.ModelName == "" && status.ModelConfigured {
+		status.ModelName = model.ModelName()
+	}
+	status.MCPIdentity = a.ai.be.MCPIdentity
+	status.RateMax = a.ai.be.RateMax
+	status.RateWindowSeconds = int(a.ai.be.RateWindow.Seconds())
+	a.writeJSON(w, http.StatusOK, status)
 }
 
 // aiQuery answers a typed semantic/NL query over the tenant's own data surfaces (F75).

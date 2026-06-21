@@ -23,6 +23,22 @@ export interface AIQueryRequest {
   surfaces: string[];
 }
 
+export interface AIStatus {
+  egress: string;
+  enabled: boolean;
+  endpoint_host?: string;
+  mcp_identity?: string;
+  model_configured: boolean;
+  model_mode: string;
+  model_name?: string;
+  provider?: string;
+  rate_max?: number;
+  rate_window_seconds?: number;
+  redaction: string;
+  residual_refusal_gate: boolean;
+  runtime?: string;
+}
+
 export interface APIToken {
   created_at: string;
   expires_at?: string;

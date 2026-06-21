@@ -59,7 +59,7 @@ export const extractedMessages = [
     key: "source.25.cited.records.8fedaba2c8",
     defaultMessage: "25 cited records",
     sources: [
-      "src/pages/Assistant.tsx:135",
+      "src/pages/Assistant.tsx:167",
     ],
   },
   {
@@ -375,17 +375,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ai.model.and.runtime.status.not.served.yet.2bf9586086",
-    defaultMessage: "AI model and runtime status not served yet",
-    sources: [
-      "src/pages/Assistant.tsx:111",
-    ],
-  },
-  {
     key: "source.ai.runtime.boundary.0126aa890a",
     defaultMessage: "AI runtime boundary",
     sources: [
-      "src/pages/Assistant.tsx:104",
+      "src/pages/Assistant.tsx:112",
+    ],
+  },
+  {
+    key: "source.ai.runtime.status.unavailable.b36957005d",
+    defaultMessage: "AI runtime status unavailable",
+    sources: [
+      "src/pages/Assistant.tsx:142",
     ],
   },
   {
@@ -620,7 +620,7 @@ export const extractedMessages = [
     key: "source.assistant.391e405152",
     defaultMessage: "Assistant",
     sources: [
-      "src/pages/Assistant.tsx:260",
+      "src/pages/Assistant.tsx:293",
     ],
   },
   {
@@ -634,7 +634,7 @@ export const extractedMessages = [
     key: "source.assistant.workflow.8962351a8a",
     defaultMessage: "Assistant workflow",
     sources: [
-      "src/pages/Assistant.tsx:273",
+      "src/pages/Assistant.tsx:306",
     ],
   },
   {
@@ -2368,6 +2368,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.egress.66a3afae15",
+    defaultMessage: "Egress",
+    sources: [
+      "src/pages/Assistant.tsx:129",
+    ],
+  },
+  {
     key: "source.eli5.technical.meaning.32ba828e4c",
     defaultMessage: "ELI5 technical meaning",
     sources: [
@@ -2398,17 +2405,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.enabled.state.model.mode.egress.posture.re.8c206244e8",
-    defaultMessage: "Enabled state, model mode, egress posture, redaction/refusal counters, and last model error are not shown in the console yet. Until then the console states the safe default: no model configured means nothing phones home, and every model path must cross the redaction boundary before egress.",
-    sources: [
-      "src/pages/Assistant.tsx:111",
-    ],
-  },
-  {
     key: "source.encryption.as.a.service.and.kmip.need.keys.1fe8ac5f65",
     defaultMessage: "Encryption-as-a-service and KMIP need keys, encrypt/decrypt tests, HMAC, sign, verify, versions, rewrap, audit, and appliance profiles. Any test plaintext here is local-only copy, not a live transit operation.",
     sources: [
       "src/pages/Secrets.tsx:937",
+    ],
+  },
+  {
+    key: "source.endpoint.host.4f0d916bb9",
+    defaultMessage: "Endpoint host",
+    sources: [
+      "src/pages/Assistant.tsx:133",
     ],
   },
   {
@@ -2517,7 +2524,7 @@ export const extractedMessages = [
     key: "source.evidence.surfaces.6acbb05a44",
     defaultMessage: "Evidence surfaces",
     sources: [
-      "src/pages/Assistant.tsx:333",
+      "src/pages/Assistant.tsx:366",
     ],
   },
   {
@@ -2874,7 +2881,7 @@ export const extractedMessages = [
     key: "source.grounded.query.2a3d813fd7",
     defaultMessage: "Grounded query",
     sources: [
-      "src/pages/Assistant.tsx:306",
+      "src/pages/Assistant.tsx:339",
     ],
   },
   {
@@ -3406,7 +3413,7 @@ export const extractedMessages = [
     key: "source.limit.674b0ed54b",
     defaultMessage: "Limit",
     sources: [
-      "src/pages/Assistant.tsx:134",
+      "src/pages/Assistant.tsx:166",
     ],
   },
   {
@@ -3582,7 +3589,7 @@ export const extractedMessages = [
     key: "source.loading.tools.efc190cd4c",
     defaultMessage: "Loading tools...",
     sources: [
-      "src/pages/Assistant.tsx:403",
+      "src/pages/Assistant.tsx:436",
     ],
   },
   {
@@ -3702,15 +3709,15 @@ export const extractedMessages = [
     key: "source.mcp.permission.boundary.e111399a5a",
     defaultMessage: "MCP permission boundary",
     sources: [
-      "src/pages/Assistant.tsx:161",
+      "src/pages/Assistant.tsx:193",
     ],
   },
   {
     key: "source.mcp.tools.1a32c98e7f",
     defaultMessage: "MCP tools",
     sources: [
-      "src/pages/Assistant.tsx:292",
-      "src/pages/Assistant.tsx:399",
+      "src/pages/Assistant.tsx:325",
+      "src/pages/Assistant.tsx:432",
     ],
   },
   {
@@ -3781,7 +3788,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:279",
+      "src/lib/api.ts:293",
     ],
   },
   {
@@ -3848,6 +3855,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.model.5e2c614c23",
+    defaultMessage: "Model",
+    sources: [
+      "src/pages/Assistant.tsx:125",
+    ],
+  },
+  {
     key: "source.move.within.overlay.659fa0eb0e",
     defaultMessage: "Move within overlay",
     sources: [
@@ -3858,29 +3872,31 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:394",
-      "src/lib/api.ts:396",
-      "src/lib/api.ts:398",
-      "src/lib/api.ts:401",
-      "src/lib/api.ts:402",
-      "src/lib/api.ts:404",
+      "src/lib/api.ts:414",
       "src/lib/api.ts:416",
-      "src/lib/api.ts:419",
+      "src/lib/api.ts:418",
+      "src/lib/api.ts:421",
       "src/lib/api.ts:422",
-      "src/lib/api.ts:426",
-      "src/lib/api.ts:440",
-      "src/lib/api.ts:449",
-      "src/lib/api.ts:453",
-      "src/lib/api.ts:455",
-      "src/lib/api.ts:458",
-      "src/lib/api.ts:459",
+      "src/lib/api.ts:424",
+      "src/lib/api.ts:436",
+      "src/lib/api.ts:439",
+      "src/lib/api.ts:442",
+      "src/lib/api.ts:446",
+      "src/lib/api.ts:460",
+      "src/lib/api.ts:469",
+      "src/lib/api.ts:473",
+      "src/lib/api.ts:475",
+      "src/lib/api.ts:478",
       "src/lib/api.ts:479",
-      "src/lib/api.ts:481",
-      "src/lib/api.ts:483",
+      "src/lib/api.ts:480",
       "src/lib/api.ts:484",
-      "src/lib/api.ts:485",
-      "src/lib/api.ts:486",
-      "src/lib/api.ts:487",
+      "src/lib/api.ts:508",
+      "src/lib/api.ts:510",
+      "src/lib/api.ts:512",
+      "src/lib/api.ts:513",
+      "src/lib/api.ts:514",
+      "src/lib/api.ts:515",
+      "src/lib/api.ts:516",
     ],
   },
   {
@@ -4159,7 +4175,7 @@ export const extractedMessages = [
     key: "source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e",
     defaultMessage: "No MCP tools are available for this tenant.",
     sources: [
-      "src/pages/Assistant.tsx:406",
+      "src/pages/Assistant.tsx:439",
     ],
   },
   {
@@ -4513,9 +4529,9 @@ export const extractedMessages = [
     key: "source.optional.59be71333c",
     defaultMessage: "Optional",
     sources: [
-      "src/pages/Assistant.tsx:328",
-      "src/pages/Assistant.tsx:382",
-      "src/pages/Assistant.tsx:431",
+      "src/pages/Assistant.tsx:361",
+      "src/pages/Assistant.tsx:415",
+      "src/pages/Assistant.tsx:464",
     ],
   },
   {
@@ -4620,14 +4636,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:289",
+      "src/lib/api.ts:303",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:252",
+      "src/lib/api.ts:266",
     ],
   },
   {
@@ -4837,10 +4853,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:466",
-      "src/lib/api.ts:467",
-      "src/lib/api.ts:468",
-      "src/lib/api.ts:470",
+      "src/lib/api.ts:494",
+      "src/lib/api.ts:496",
+      "src/lib/api.ts:497",
+      "src/lib/api.ts:499",
     ],
   },
   {
@@ -5108,43 +5124,43 @@ export const extractedMessages = [
     key: "source.query.b80a37564f",
     defaultMessage: "Query",
     sources: [
-      "src/pages/Assistant.tsx:278",
+      "src/pages/Assistant.tsx:311",
     ],
   },
   {
     key: "source.query.rca.and.mcp.are.served.behind.ai.ena.74bb83b5f8",
     defaultMessage: "Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.",
     sources: [
-      "src/pages/Assistant.tsx:107",
+      "src/pages/Assistant.tsx:115",
     ],
   },
   {
     key: "source.question.289aff12b0",
     defaultMessage: "Question",
     sources: [
-      "src/pages/Assistant.tsx:312",
-      "src/pages/Assistant.tsx:366",
+      "src/pages/Assistant.tsx:345",
+      "src/pages/Assistant.tsx:399",
     ],
   },
   {
     key: "source.rca.answers.are.sufficient.or.insufficient.17af357508",
     defaultMessage: "RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a served remediation workflow exists.",
     sources: [
-      "src/pages/Assistant.tsx:151",
+      "src/pages/Assistant.tsx:183",
     ],
   },
   {
     key: "source.rca.d93580ed3a",
     defaultMessage: "RCA",
     sources: [
-      "src/pages/Assistant.tsx:285",
+      "src/pages/Assistant.tsx:318",
     ],
   },
   {
     key: "source.rca.evidence.workspace.418f458f5f",
     defaultMessage: "RCA evidence workspace",
     sources: [
-      "src/pages/Assistant.tsx:148",
+      "src/pages/Assistant.tsx:180",
     ],
   },
   {
@@ -5333,36 +5349,40 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:382",
-      "src/lib/api.ts:393",
-      "src/lib/api.ts:395",
-      "src/lib/api.ts:397",
-      "src/lib/api.ts:399",
-      "src/lib/api.ts:400",
+      "src/lib/api.ts:402",
+      "src/lib/api.ts:413",
       "src/lib/api.ts:415",
       "src/lib/api.ts:417",
+      "src/lib/api.ts:419",
       "src/lib/api.ts:420",
-      "src/lib/api.ts:423",
-      "src/lib/api.ts:425",
       "src/lib/api.ts:435",
-      "src/lib/api.ts:436",
-      "src/lib/api.ts:438",
-      "src/lib/api.ts:441",
+      "src/lib/api.ts:437",
+      "src/lib/api.ts:440",
       "src/lib/api.ts:443",
-      "src/lib/api.ts:444",
-      "src/lib/api.ts:446",
-      "src/lib/api.ts:447",
-      "src/lib/api.ts:450",
-      "src/lib/api.ts:451",
-      "src/lib/api.ts:452",
-      "src/lib/api.ts:457",
-      "src/lib/api.ts:460",
-      "src/lib/api.ts:462",
+      "src/lib/api.ts:445",
+      "src/lib/api.ts:455",
+      "src/lib/api.ts:456",
+      "src/lib/api.ts:458",
+      "src/lib/api.ts:461",
       "src/lib/api.ts:463",
       "src/lib/api.ts:464",
-      "src/lib/api.ts:465",
-      "src/lib/api.ts:469",
-      "src/lib/api.ts:480",
+      "src/lib/api.ts:466",
+      "src/lib/api.ts:467",
+      "src/lib/api.ts:470",
+      "src/lib/api.ts:471",
+      "src/lib/api.ts:472",
+      "src/lib/api.ts:477",
+      "src/lib/api.ts:482",
+      "src/lib/api.ts:485",
+      "src/lib/api.ts:487",
+      "src/lib/api.ts:488",
+      "src/lib/api.ts:490",
+      "src/lib/api.ts:491",
+      "src/lib/api.ts:492",
+      "src/lib/api.ts:493",
+      "src/lib/api.ts:495",
+      "src/lib/api.ts:498",
+      "src/lib/api.ts:509",
     ],
   },
   {
@@ -5661,7 +5681,7 @@ export const extractedMessages = [
     key: "source.root.cause.analysis.fde4017d48",
     defaultMessage: "Root-cause analysis",
     sources: [
-      "src/pages/Assistant.tsx:360",
+      "src/pages/Assistant.tsx:393",
     ],
   },
   {
@@ -6535,17 +6555,17 @@ export const extractedMessages = [
     key: "source.structured.query.preview.706d53d9be",
     defaultMessage: "Structured query preview",
     sources: [
-      "src/pages/Assistant.tsx:121",
+      "src/pages/Assistant.tsx:153",
     ],
   },
   {
     key: "source.subject.6897128384",
     defaultMessage: "Subject",
     sources: [
-      "src/pages/Assistant.tsx:130",
-      "src/pages/Assistant.tsx:322",
-      "src/pages/Assistant.tsx:376",
-      "src/pages/Assistant.tsx:425",
+      "src/pages/Assistant.tsx:162",
+      "src/pages/Assistant.tsx:355",
+      "src/pages/Assistant.tsx:409",
+      "src/pages/Assistant.tsx:458",
       "src/pages/Certificates.tsx:399",
       "src/pages/Platform.tsx:361",
       "src/pages/Platform.tsx:433",
@@ -6587,6 +6607,7 @@ export const extractedMessages = [
     key: "source.surface.0905f7f590",
     defaultMessage: "Surface",
     sources: [
+      "src/pages/Assistant.tsx:121",
       "src/pages/Protocols.tsx:460",
     ],
   },
@@ -6594,7 +6615,7 @@ export const extractedMessages = [
     key: "source.surfaces.fbb4dbb2d8",
     defaultMessage: "Surfaces",
     sources: [
-      "src/pages/Assistant.tsx:126",
+      "src/pages/Assistant.tsx:158",
     ],
   },
   {
@@ -6723,6 +6744,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.the.console.could.not.read.runtime.status.a01258a71d",
+    defaultMessage: "The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.",
+    sources: [
+      "src/pages/Assistant.tsx:142",
+    ],
+  },
+  {
     key: "source.the.console.is.currently.loaded.over.an.en.4e9bab4e91",
     defaultMessage: "The console is currently loaded over an encrypted browser connection.",
     sources: [
@@ -6838,7 +6866,7 @@ export const extractedMessages = [
     key: "source.tool.2e53bdcd07",
     defaultMessage: "Tool",
     sources: [
-      "src/pages/Assistant.tsx:411",
+      "src/pages/Assistant.tsx:444",
     ],
   },
   {
@@ -7112,14 +7140,14 @@ export const extractedMessages = [
     key: "source.which.certificates.should.rotate.first.218489c622",
     defaultMessage: "Which certificates should rotate first?",
     sources: [
-      "src/pages/Assistant.tsx:318",
+      "src/pages/Assistant.tsx:351",
     ],
   },
   {
     key: "source.why.did.this.identity.become.high.risk.d0f95f73e1",
     defaultMessage: "Why did this identity become high risk?",
     sources: [
-      "src/pages/Assistant.tsx:372",
+      "src/pages/Assistant.tsx:405",
     ],
   },
   {

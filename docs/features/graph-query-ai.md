@@ -61,13 +61,18 @@ read-only MCP tools. The standalone Go API remains available for embedded consum
 ### The pluggable AI model adapter (F76)
 
 trstctl's AI features are model-agnostic: a thin adapter routes reasoning to either a
-cloud LLM or a **local** Ollama/vLLM endpoint by config, for air-gapped or
-data-sovereign deployments. Critically, a **redactor** runs before any prompt leaves the
+cloud LLM gateway or a **local** Ollama/vLLM endpoint by config, for air-gapped or
+data-sovereign deployments. The served binary validates `ai.model.mode` as `off`,
+`local`, or `cloud`; `off` is the default, `local` uses an operator-owned completion
+endpoint, and `cloud` requires an explicit `allow_egress=true`. `GET
+/api/v1/ai/status` reports the live mode, endpoint host, egress class, and
+redaction/refusal posture. Critically, a **redactor** runs before any prompt leaves the
 process — stripping PEM blocks, secret/token assignments, and long base64 runs (**AN-8**)
 — so key material cannot reach a model or its logs. If no model is configured, the served
 AI surface still returns grounded evidence/citations without model egress. *Code:*
-`internal/aimodel` (`Adapter`, `DefaultRedactor`, `CloudModel`, `LocalModel`). **Served
-as an optional adapter behind `ai.enable_api`; no model is configured by default.**
+`internal/aimodel` (`Adapter`, `DefaultRedactor`, `CloudModel`, `LocalModel`) plus
+`internal/server/aisurface.go` for served config construction. **Served as an optional
+adapter behind `ai.enable_api`; no model is configured by default.**
 
 ### Grounded RCA & natural-language query (F77)
 

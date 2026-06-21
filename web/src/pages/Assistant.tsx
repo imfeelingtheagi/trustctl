@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Bot, Search, ShieldAlert, Wrench } from "lucide-react";
-import { api, ApiError, type AIAnswer } from "@/lib/api";
+import { api, ApiError, type AIAnswer, type AIStatus } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,7 +97,15 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
   );
 }
 
-function AssistantRuntimeDisclosure() {
+function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStatus | null; error: string | null; loading: boolean }) {
+  const enabled = status?.enabled ? "enabled" : "disabled";
+  const model = status?.model_configured
+    ? status.model_name
+      ? `${status.model_mode}: ${status.model_name}`
+      : status.model_mode
+    : "not configured";
+  const egress = status?.egress ?? "none";
+  const endpoint = status?.endpoint_host ?? "not disclosed";
   return (
     <section aria-labelledby="assistant-runtime-heading" className="mb-6 grid gap-3 border-b border-border pb-6">
       <div>
@@ -108,9 +116,33 @@ function AssistantRuntimeDisclosure() {
           Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
         </p>
       </div>
-      <UnavailableState title="AI model and runtime status not served yet">
-        Enabled state, model mode, egress posture, redaction/refusal counters, and last model error are not shown in the console yet. Until then the console states the safe default: no model configured means nothing phones home, and every model path must cross the redaction boundary before egress.
-      </UnavailableState>
+      <dl className="grid gap-3 md:grid-cols-4">
+        <div className="ui-panel p-comfortable">
+          <dt className="text-caption text-muted-foreground">Surface</dt>
+          <dd className="mt-1 text-title font-semibold">{loading ? "loading" : enabled}</dd>
+        </div>
+        <div className="ui-panel p-comfortable">
+          <dt className="text-caption text-muted-foreground">Model</dt>
+          <dd className="mt-1 text-title font-semibold">{loading ? "loading" : model}</dd>
+        </div>
+        <div className="ui-panel p-comfortable">
+          <dt className="text-caption text-muted-foreground">Egress</dt>
+          <dd className="mt-1 text-title font-semibold">{loading ? "loading" : egress}</dd>
+        </div>
+        <div className="ui-panel p-comfortable">
+          <dt className="text-caption text-muted-foreground">Endpoint host</dt>
+          <dd className="mt-1 break-words text-title font-semibold">{loading ? "loading" : endpoint}</dd>
+        </div>
+      </dl>
+      <p className="text-body text-muted-foreground">
+        Redaction boundary: {status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
+        {status?.residual_refusal_gate === false ? "inactive" : "active"}.
+      </p>
+      {error && (
+        <UnavailableState title="AI runtime status unavailable">
+          The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.
+        </UnavailableState>
+      )}
     </section>
   );
 }
@@ -162,7 +194,7 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
         MCP permission boundary
       </h3>
       <p className="mt-2 text-muted-foreground">
-        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Runtime status, tool audit event ids, and enabled-state reads are not shown in the console yet.
+        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Model egress and redaction posture are read from the served runtime status above.
       </p>
     </section>
   );
@@ -182,6 +214,7 @@ export function Assistant() {
   const [toolAnswer, setToolAnswer] = useState<(AIAnswer & { tool?: string }) | null>(null);
   const [loading, setLoading] = useState<Tab | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const runtime = useResource(api.aiStatus);
   const tools = useResource(api.mcpTools);
 
   useEffect(() => {
@@ -268,7 +301,7 @@ export function Assistant() {
           ) : undefined
         }
       />
-      <AssistantRuntimeDisclosure />
+      <AssistantRuntimeDisclosure status={runtime.data} error={runtime.error} loading={runtime.loading} />
 
       <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Assistant workflow">
         <ToggleTab

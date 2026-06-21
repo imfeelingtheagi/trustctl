@@ -234,6 +234,33 @@ together (the CA-key recovery set) per the
 [`docker-compose.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/docker/docker-compose.yml)
 runs the signer as its **own service** in `external` mode.
 
+## Served AI surface and model adapter
+
+The AI/RCA/MCP surface is off by default and read-only when enabled. The model
+adapter is separately off by default: with `TRSTCTL_AI_MODEL_MODE=off` (or unset),
+query/RCA still return grounded citations, but no prompt leaves the process.
+`GET /api/v1/ai/status` reports the live enabled state, model mode, endpoint host,
+egress class, and redaction/refusal posture without echoing the full endpoint URL.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AI_ENABLE_API` | `false` | Serve `/api/v1/ai/status`, `/api/v1/ai/query`, `/api/v1/ai/rca`, and `/api/v1/mcp/tools*` behind auth/RBAC. |
+| `TRSTCTL_AI_MCP_IDENTITY` | — | Workload identity label the read-only MCP server presents. |
+| `TRSTCTL_AI_RATE_MAX` | `60` | Per-caller MCP tool-call budget per window. |
+| `TRSTCTL_AI_RATE_WINDOW_SECONDS` | `60` | MCP tool-call rate window in seconds. |
+| `TRSTCTL_AI_MODEL_MODE` | `off` | `off`, `local`, or `cloud`. `off` means no model adapter and no prompt egress. |
+| `TRSTCTL_AI_MODEL_RUNTIME` | — | Local runtime label, required with `mode=local`: `ollama` or `vllm`. |
+| `TRSTCTL_AI_MODEL_PROVIDER` | — | Cloud/gateway provider label, required with `mode=cloud`. |
+| `TRSTCTL_AI_MODEL_ENDPOINT` | — | Completion endpoint. Local `http://` endpoints must be loopback; otherwise use HTTPS. Cloud endpoints must be HTTPS. URL userinfo is rejected so credentials are not stored in config. |
+| `TRSTCTL_AI_MODEL_NAME` | — | Model name sent to the configured endpoint. Required with `mode=local` or `mode=cloud`. |
+| `TRSTCTL_AI_MODEL_ALLOW_EGRESS` | `false` | Required as `true` with `mode=cloud`; invalid for `off` and `local`. |
+
+Ollama local mode sends the native generate shape to the endpoint. vLLM and cloud
+mode send an OpenAI-compatible chat-completions shape. Every model path goes
+through the boundary redactor and residual-secret refusal gate before the HTTP
+request is made; if no model is configured, the answer remains citation-grounded
+and air-gapped.
+
 ## Served enrollment protocols
 
 ACME, EST, SCEP, CMP, SPIFFE, and SSH protocol surfaces are opt-in until they are

@@ -199,8 +199,12 @@ type Deps struct {
 	// still work, and nothing phones home (the product's "self-hosted / nothing phones
 	// home" posture). When set, every prompt crosses the adapter's boundary redactor +
 	// residual-entropy refuse-gate before any egress (AN-8 / SURFACE-004). Run leaves it
-	// nil today (no model); an operator opts in by wiring a provider.
+	// nil unless config.AI.Model opts into a local or cloud provider.
 	AIModel *aimodel.Adapter
+	// AIModelStatus is the non-secret status metadata the browser/API can show for the
+	// configured model: mode, runtime/provider label, model name, endpoint host, and
+	// egress class. The full endpoint URL is never echoed.
+	AIModelStatus api.AIModelStatus
 	// AIMCPIdentity is the workload identity the served MCP server presents (dogfooding
 	// the F61 broker). Informational; empty is fine.
 	AIMCPIdentity string

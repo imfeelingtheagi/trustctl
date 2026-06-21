@@ -72,6 +72,10 @@ type AISurfaceBackend struct {
 	// answer is the cited evidence. When set, every prompt crosses the adapter's
 	// boundary redactor + residual-entropy refuse-gate before any egress (AN-8).
 	Model *aimodel.Adapter
+	// ModelStatus is the operator-visible posture of the configured model adapter.
+	// It deliberately carries only non-secret facts: mode, provider/runtime label,
+	// model name, endpoint host, and whether egress is none/local/cloud.
+	ModelStatus AIModelStatus
 	// MCPIdentity is the workload identity this MCP server presents (dogfooding the
 	// F61 broker). Informational; empty is fine.
 	MCPIdentity string
@@ -79,6 +83,18 @@ type AISurfaceBackend struct {
 	// (enumeration-abuse protection). Zero selects a conservative default.
 	RateMax    int
 	RateWindow time.Duration
+}
+
+// AIModelStatus is the safe, non-secret model posture the server passes to the API.
+// EndpointHost is a host[:port] only; the full URL can carry paths or query values an
+// operator may not want echoed in a browser.
+type AIModelStatus struct {
+	Mode         string
+	Runtime      string
+	Provider     string
+	ModelName    string
+	EndpointHost string
+	Egress       string
 }
 
 // aiSurface is the assembled served AI/RCA/MCP surface. It is read-only and
@@ -111,6 +127,8 @@ func newAISurface(be AISurfaceBackend) *aiSurface {
 	if window <= 0 {
 		window = time.Minute
 	}
+	be.RateMax = max
+	be.RateWindow = window
 	return &aiSurface{be: be, rate: mcpserver.NewRateLimiter(max, window)}
 }
 

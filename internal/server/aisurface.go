@@ -1,10 +1,14 @@
 package server
 
 import (
+	"net/url"
+	"strings"
+
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/query"
 )
 
@@ -47,6 +51,7 @@ func (s *Server) buildAISurfaceBackend(d Deps) api.AISurfaceBackend {
 		Query:       engine,
 		Audit:       audit.NewAuditor(s.log),
 		Model:       d.AIModel, // nil → air-gapped (no model); opt-in only (AN-8 posture)
+		ModelStatus: d.AIModelStatus,
 		MCPIdentity: d.AIMCPIdentity,
 		RateMax:     d.AIRateMax,
 		RateWindow:  d.AIRateWindow,
@@ -58,11 +63,43 @@ func (s *Server) buildAISurfaceBackend(d Deps) api.AISurfaceBackend {
 // AISurfaceServed). A startup log and the acceptance test consult it.
 func (s *Server) apiAISurfaceServed() bool { return s.api != nil && s.api.AISurfaceServed() }
 
-// aiModelFromConfig is the seam where a configured model provider (F76) would be
-// constructed. Per the product posture the AI model adapter is AIR-GAPPED / OPT-IN by
-// default: the served surface ships with NO model (Deps.AIModel nil), so grounding +
-// citations work but nothing phones home. An operator that opts into a local
-// (Ollama/vLLM) or cloud model wires the provider here; whatever the choice, the
-// adapter's boundary redactor + residual-entropy refuse-gate (aimodel.Adapter) sit
-// between any prompt and the model (AN-8). It returns nil today (no model) by design.
-func aiModelFromConfig() *aimodel.Adapter { return aimodel.New(nil, nil) }
+// aiModelFromConfig builds the optional F76 model adapter from validated config. The
+// default mode is off: no adapter is returned, grounding/citations still work, and no
+// prompt leaves the process. Local mode targets an operator-owned Ollama/vLLM endpoint.
+// Cloud mode is only reachable after config validation sees allow_egress=true. In all
+// non-off modes, aimodel.Adapter remains the hard redaction/refusal boundary.
+func aiModelFromConfig(cfg config.AIModel) (*aimodel.Adapter, api.AIModelStatus, error) {
+	mode := cfg.ModeValue()
+	status := api.AIModelStatus{Mode: mode, Egress: "none"}
+	if cfg.Endpoint != "" {
+		if u, err := url.Parse(cfg.Endpoint); err == nil {
+			status.EndpointHost = u.Host
+		} else {
+			return nil, status, err
+		}
+	}
+	switch mode {
+	case config.AIModelOff:
+		return nil, status, nil
+	case config.AIModelLocal:
+		runtime := strings.ToLower(strings.TrimSpace(cfg.Runtime))
+		format := aimodel.FormatOpenAIChat
+		if runtime == config.AIModelRuntimeOllama {
+			format = aimodel.FormatOllama
+		}
+		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, format, nil)
+		status.Runtime = runtime
+		status.ModelName = cfg.Name
+		status.Egress = "local-endpoint"
+		return aimodel.New(aimodel.LocalModel{Runtime: runtime, Client: client}, nil), status, nil
+	case config.AIModelCloud:
+		provider := strings.TrimSpace(cfg.Provider)
+		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, aimodel.FormatOpenAIChat, nil)
+		status.Provider = provider
+		status.ModelName = cfg.Name
+		status.Egress = "cloud-allowed"
+		return aimodel.New(aimodel.CloudModel{Provider: provider, Client: client}, nil), status, nil
+	default:
+		return nil, status, nil
+	}
+}

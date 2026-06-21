@@ -48,6 +48,58 @@
         ],
         "type": "object"
       },
+      "AIStatus": {
+        "properties": {
+          "egress": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_host": {
+            "type": "string"
+          },
+          "mcp_identity": {
+            "type": "string"
+          },
+          "model_configured": {
+            "type": "boolean"
+          },
+          "model_mode": {
+            "type": "string"
+          },
+          "model_name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "rate_max": {
+            "type": "integer"
+          },
+          "rate_window_seconds": {
+            "type": "integer"
+          },
+          "redaction": {
+            "type": "string"
+          },
+          "residual_refusal_gate": {
+            "type": "boolean"
+          },
+          "runtime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "model_configured",
+          "model_mode",
+          "egress",
+          "redaction",
+          "residual_refusal_gate"
+        ],
+        "type": "object"
+      },
       "APIToken": {
         "properties": {
           "created_at": {
@@ -3256,6 +3308,53 @@
           }
         ],
         "summary": "Answer a grounded root-cause / NL question from cited tenant records (read-only)",
+        "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/ai/status": {
+      "get": {
+        "operationId": "aiStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report the served AI runtime/model posture without leaking model endpoint secrets",
         "x-trstctl-permission": "graph:read"
       }
     },
