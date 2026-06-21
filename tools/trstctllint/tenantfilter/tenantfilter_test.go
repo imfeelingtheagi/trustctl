@@ -1,6 +1,9 @@
 package tenantfilter_test
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/go/analysis/analysistest"
@@ -35,4 +38,25 @@ func TestBootstrapTokenSystemQueryFixture(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), tenantfilter.Analyzer,
 		"trstctl.com/trstctl/internal/store",
 	)
+}
+
+func TestTenantFilterLintGateFailsClosed(t *testing.T) {
+	makefile, err := os.ReadFile(filepath.Join("..", "..", "..", "Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	body := string(makefile)
+	for _, want := range []string{
+		"lint: ## Run the full lint gate",
+		"$(GO) build -o \"$$vettool\" ./tools/trstctllint",
+		"$(GO) vet -vettool=\"$$vettool\" ./...",
+		"golangci-lint run ./...",
+		"FAIL: golangci-lint is not installed",
+		"FAIL: actionlint is not installed",
+		"lint-partial",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("Makefile no longer contains %q; tenantfilter may no longer be a fail-closed release gate", want)
+		}
+	}
 }

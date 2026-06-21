@@ -3430,6 +3430,7 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/store", "TestBootstrapTokenRedeemIsMarkedSystemQueryAndSingleUse"},
 		{"../tools/trstctllint/tenantfilter", "TestTenantFilter"},
 		{"../tools/trstctllint/tenantfilter", "TestBootstrapTokenSystemQueryFixture"},
+		{"../tools/trstctllint/tenantfilter", "TestTenantFilterLintGateFailsClosed"},
 		{"../internal/api", "TestServedAPIRejectsClientSuppliedIdentityHeaders"},
 		{"../internal/api", "TestProductionBinaryDoesNotLinkHeaderTrust"},
 		{"../internal/projections", "TestHeaderOnlyRequestIsRejected"},
