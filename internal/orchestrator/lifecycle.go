@@ -48,6 +48,7 @@ var sideEffects = map[edge]string{
 	{StateRequested, StateIssued}:  "ca.issue",
 	{StateIssued, StateDeployed}:   "connector.deploy",
 	{StateDeployed, StateRenewing}: "ca.renew",
+	{StateRenewing, StateDeployed}: "connector.deploy",
 	{StateIssued, StateRevoked}:    "revocation.publish",
 	{StateDeployed, StateRevoked}:  "revocation.publish",
 	{StateRenewing, StateRevoked}:  "revocation.publish",

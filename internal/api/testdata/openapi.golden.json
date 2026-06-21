@@ -319,6 +319,134 @@
         ],
         "type": "object"
       },
+      "ConnectorCatalog": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorCatalogItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ConnectorCatalogItem": {
+        "properties": {
+          "delivery_mode": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rollback": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "delivery_mode",
+          "rollback"
+        ],
+        "type": "object"
+      },
+      "ConnectorDelivery": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unrouted",
+              "delivered",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "destination",
+          "connector",
+          "target",
+          "status",
+          "attempts",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ConnectorDeliveryList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorDelivery"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "CredentialRisk": {
         "properties": {
           "components": {
@@ -1413,6 +1541,93 @@
         ],
         "type": "object"
       },
+      "RotationRun": {
+        "properties": {
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "predecessor_fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "successor_fingerprint": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "identity_id",
+          "status",
+          "trigger",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "RotationRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RotationRun"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "SecretMeta": {
         "properties": {
           "created_at": {
@@ -2185,6 +2400,185 @@
         ],
         "summary": "Get an inventoried certificate",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/connectors/catalog": {
+      "get": {
+        "operationId": "listConnectorCatalog",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List served connector kinds and rollback posture",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
+    "/api/v1/connectors/deliveries": {
+      "get": {
+        "operationId": "listConnectorDeliveries",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only records for this identity",
+            "in": "query",
+            "name": "identity_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorDeliveryList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List connector delivery receipts",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
+    "/api/v1/connectors/deliveries/{id}": {
+      "get": {
+        "operationId": "getConnectorDelivery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorDelivery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a connector delivery receipt",
+        "x-trstctl-permission": "connectors:read"
       }
     },
     "/api/v1/discovery/findings": {
@@ -3379,6 +3773,138 @@
         ],
         "summary": "Get an issuer",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/lifecycle/rotation-runs": {
+      "get": {
+        "operationId": "listRotationRuns",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only records for this identity",
+            "in": "query",
+            "name": "identity_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotationRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List lifecycle rotation runs",
+        "x-trstctl-permission": "lifecycle:read"
+      }
+    },
+    "/api/v1/lifecycle/rotation-runs/{id}": {
+      "get": {
+        "operationId": "getRotationRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a lifecycle rotation run",
+        "x-trstctl-permission": "lifecycle:read"
       }
     },
     "/api/v1/mcp/tools": {

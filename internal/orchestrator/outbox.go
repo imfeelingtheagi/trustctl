@@ -15,10 +15,12 @@ import (
 // dispatcher hands it to a Handler; the IdempotencyKey lets the receiver collapse
 // at-least-once redeliveries to a single effect (the AN-5 ↔ AN-6 bridge).
 type Message struct {
+	ID             int64
 	TenantID       string
 	Destination    string
 	IdempotencyKey string
 	Payload        []byte
+	Attempts       int
 }
 
 // Entry is a new outbox row to enqueue alongside a state change.
@@ -348,6 +350,8 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	if err := tx.Commit(ctx); err != nil {
 		return claimedOutboxEntry{}, false, err
 	}
+	claim.msg.ID = claim.id
+	claim.msg.Attempts = claim.attempts
 	return claim, true, nil
 }
 

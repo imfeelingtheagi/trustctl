@@ -17,6 +17,8 @@ const { apiMock } = vi.hoisted(() => ({
     transitionIdentity: vi.fn(),
     approveIdentityAction: vi.fn(),
     graphBlastRadius: vi.fn(),
+    connectorDeliveries: vi.fn(),
+    rotationRuns: vi.fn(),
   },
 }));
 
@@ -48,6 +50,8 @@ describe("lifecycle actions from the UI", () => {
       affected: [],
       by_kind: {},
     });
+    apiMock.connectorDeliveries.mockReset().mockResolvedValue({ items: [] });
+    apiMock.rotationRuns.mockReset().mockResolvedValue({ items: [] });
     apiMock.identities.mockReset();
   });
 
@@ -217,14 +221,14 @@ describe("lifecycle actions from the UI", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Identity detail" });
     expect(within(dialog).getByText("Credential activity timeline")).toBeInTheDocument();
-    expect(within(dialog).getByText("Delivery status not exposed yet")).toBeInTheDocument();
-    expect(within(dialog).getByText(/isn't shown in the console yet/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/No delivery status request is made/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/last_error/)).toBeInTheDocument();
-    for (const state of ["Accepted", "Issuing", "Deploying", "Delivered / failed"]) {
+    expect(within(dialog).getByText(/projected connector and rotation evidence/i)).toBeInTheDocument();
+    for (const state of ["Lifecycle accepted", "Connector delivery", "Rotation run", "Rollback evidence"]) {
       expect(within(dialog).getByText(state)).toBeInTheDocument();
     }
-    expect(apiMock).not.toHaveProperty("outboxStatus");
+    expect(within(dialog).getByText("no connector delivery receipt yet")).toBeInTheDocument();
+    expect(within(dialog).getByText("no lifecycle rotation run yet")).toBeInTheDocument();
+    expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 50 });
+    expect(apiMock.rotationRuns).toHaveBeenCalledWith({ limit: 50 });
   });
 
   it("disables invalid state-machine targets and sends the captured transition reason", async () => {
@@ -493,33 +497,75 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.queryByRole("button", { name: /approve issue for jit-db/i })).not.toBeInTheDocument();
   });
 
-  it("labels outbox delivery state as unavailable instead of claiming synchronous deploy", async () => {
+  it("labels served connector receipts instead of claiming synchronous deploy", async () => {
     apiMock.identities.mockResolvedValue([
       { id: "iss-1", name: "issued-svc", kind: "x509_certificate", status: "issued" },
     ]);
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          id: "receipt-1",
+          tenant_id: "tenant-1",
+          identity_id: "iss-1",
+          destination: "connector.deploy",
+          connector: "nginx",
+          target: "edge-1",
+          fingerprint: "abc123",
+          status: "unrouted",
+          attempts: 1,
+          reason: "plugin_not_loaded",
+          detail: "connector is not owned by a loaded signed plugin",
+          rollback_ref: "",
+          idempotency_key: "event-1",
+          created_at: "2026-06-20T00:00:00Z",
+          updated_at: "2026-06-20T00:00:00Z",
+        },
+      ],
+    });
     renderIdentities();
 
-    expect(await screen.findByText(/Outbox delivery status not served yet/i)).toBeInTheDocument();
-    expect(document.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();
+    expect(await screen.findByText(/Delivery and rotation evidence/i)).toBeInTheDocument();
+    expect(screen.getByText("plugin_not_loaded")).toBeInTheDocument();
     const row = screen.getByText("issued-svc").closest("tr")!;
-    expect(row).toHaveTextContent(/Deploy can be requested; outbox delivery receipt is not served/i);
+    expect(row).toHaveTextContent(/Delivery receipt unrouted for nginx\/edge-1/i);
   });
 
-  it("discloses lifecycle automation as manual until schedules and outbox status are served", async () => {
+  it("discloses scheduler-backed lifecycle automation and served run evidence boundaries", async () => {
     apiMock.identities.mockResolvedValue([
       { id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" },
     ]);
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "run-1",
+          tenant_id: "tenant-1",
+          identity_id: "ren-1",
+          status: "succeeded",
+          trigger: "scheduler",
+          reason: "scheduled renewal before expiry",
+          predecessor_fingerprint: "old",
+          successor_fingerprint: "new",
+          rollback_ref: "restore certificate fingerprint old",
+          idempotency_key: "event-2",
+          created_at: "2026-06-20T00:00:00Z",
+          updated_at: "2026-06-20T00:01:00Z",
+          completed_at: "2026-06-20T00:01:00Z",
+        },
+      ],
+    });
     renderIdentities();
 
     expect(await screen.findByText("Lifecycle automation")).toBeInTheDocument();
-    expect(screen.getByText(/renewal is manual today/i)).toBeInTheDocument();
+    expect(screen.getByText(/Automatic renewal runs in the leader scheduler/i)).toBeInTheDocument();
+    expect(screen.getByText("Delivery and rotation evidence")).toBeInTheDocument();
+    expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("Automation layout preview")).toBeInTheDocument();
     expect(screen.getByText("Renew before")).toBeInTheDocument();
     expect(screen.getByText("Alert before")).toBeInTheDocument();
     expect(screen.getByText("Dry run")).toBeInTheDocument();
-    expect(screen.getByText("Rollback")).toBeInTheDocument();
-    expect(screen.getByText(/aren't managed from the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/delivery status isn't shown here yet either/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Rollback").length).toBeGreaterThan(0);
+    expect(screen.getByText(/editing schedules, alert timing, and dry-run execution/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /use manual lifecycle transitions/i })).toHaveAttribute(
       "href",
       "#manual-lifecycle-transitions",

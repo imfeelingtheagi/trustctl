@@ -284,6 +284,10 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 	if err != nil {
 		return Deps{}, fmt.Errorf("audit retention: %w", err)
 	}
+	renewBefore, err := cfg.Lifecycle.RenewBeforeDuration()
+	if err != nil {
+		return Deps{}, fmt.Errorf("lifecycle renew before: %w", err)
+	}
 	pluginCfg, err := buildPluginConfig(cfg.Plugins)
 	if err != nil {
 		return Deps{}, fmt.Errorf("plugins: %w", err)
@@ -294,7 +298,8 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
 		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
-		Logger: logger, RateLimiter: rateLimiter,
+		LifecycleRenewBefore: renewBefore,
+		Logger:               logger, RateLimiter: rateLimiter,
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       cfg.Protocols, Plugins: pluginCfg, OIDC: cfg.Auth.OIDC,
 		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret,
@@ -361,6 +366,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
+			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
 		}
 		<-workCtx.Done()

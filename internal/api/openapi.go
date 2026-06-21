@@ -283,6 +283,27 @@ func componentSchemas() map[string]*Schema {
 		"kind": str(), "ref": str(), "provenance": str(), "fingerprint": str(),
 		"risk_score": {Type: "integer"}, "metadata": {Type: "object"}, "discovered_at": timestamp(),
 	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at")
+	connectorCatalogItem := object(map[string]*Schema{
+		"name": str(), "kind": str(), "delivery_mode": str(), "rollback": str(),
+	}, "name", "kind", "delivery_mode", "rollback")
+	connectorCatalog := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
+	}, "items")
+	connectorDelivery := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "outbox_id": {Type: "integer"}, "identity_id": uuid(),
+		"destination": str(), "connector": str(), "target": str(), "fingerprint": str(),
+		"status":   {Type: "string", Enum: []string{"unrouted", "delivered", "failed"}},
+		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
+		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")
+	rotationRun := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "identity_id": uuid(), "outbox_id": {Type: "integer"},
+		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed"}},
+		"trigger": str(), "reason": str(), "predecessor_fingerprint": str(),
+		"successor_fingerprint": str(), "rollback_ref": str(), "error": str(),
+		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
+		"completed_at": timestamp(),
+	}, "id", "tenant_id", "identity_id", "status", "trigger", "created_at", "updated_at")
 
 	auditEvent := object(map[string]*Schema{
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
@@ -453,6 +474,12 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryRunList":         list("DiscoveryRun"),
 		"DiscoveryFinding":         discoveryFinding,
 		"DiscoveryFindingList":     list("DiscoveryFinding"),
+		"ConnectorCatalogItem":     connectorCatalogItem,
+		"ConnectorCatalog":         connectorCatalog,
+		"ConnectorDelivery":        connectorDelivery,
+		"ConnectorDeliveryList":    list("ConnectorDelivery"),
+		"RotationRun":              rotationRun,
+		"RotationRunList":          list("RotationRun"),
 		"AuditEvent":               auditEvent,
 		"AuditEventList":           auditEventList,
 		"AuditBundle":              auditBundle,

@@ -47,6 +47,8 @@ const (
 	EventDiscoveryRunStarted       = "discovery.run.started"
 	EventDiscoveryFindingRecorded  = "discovery.finding.recorded"
 	EventDiscoveryRunCompleted     = "discovery.run.completed"
+	EventConnectorDeliveryRecorded = "connector.delivery.recorded"
+	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -295,6 +297,41 @@ type DiscoveryRunCompleted struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// ConnectorDeliveryRecorded is the payload of connector.delivery.recorded.
+// It is delivery evidence only: no certificate PEM, key PEM, token, or secret
+// bytes may appear here.
+type ConnectorDeliveryRecorded struct {
+	ID             string  `json:"id"`
+	OutboxID       *int64  `json:"outbox_id,omitempty"`
+	IdentityID     *string `json:"identity_id,omitempty"`
+	Destination    string  `json:"destination"`
+	Connector      string  `json:"connector"`
+	Target         string  `json:"target"`
+	Fingerprint    string  `json:"fingerprint,omitempty"`
+	Status         string  `json:"status"`
+	Attempts       int     `json:"attempts,omitempty"`
+	Reason         string  `json:"reason,omitempty"`
+	Detail         string  `json:"detail,omitempty"`
+	RollbackRef    string  `json:"rollback_ref,omitempty"`
+	IdempotencyKey string  `json:"idempotency_key,omitempty"`
+}
+
+// LifecycleRotationRecorded is the payload of lifecycle.rotation.recorded.
+type LifecycleRotationRecorded struct {
+	ID                     string     `json:"id"`
+	IdentityID             string     `json:"identity_id"`
+	OutboxID               *int64     `json:"outbox_id,omitempty"`
+	Status                 string     `json:"status"`
+	Trigger                string     `json:"trigger"`
+	Reason                 string     `json:"reason,omitempty"`
+	PredecessorFingerprint string     `json:"predecessor_fingerprint,omitempty"`
+	SuccessorFingerprint   string     `json:"successor_fingerprint,omitempty"`
+	RollbackRef            string     `json:"rollback_ref,omitempty"`
+	Error                  string     `json:"error,omitempty"`
+	IdempotencyKey         string     `json:"idempotency_key,omitempty"`
+	CompletedAt            *time.Time `json:"completed_at,omitempty"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -407,6 +444,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunStarted:       {1: true},
 	EventDiscoveryFindingRecorded:  {1: true},
 	EventDiscoveryRunCompleted:     {1: true},
+	EventConnectorDeliveryRecorded: {1: true},
+	EventLifecycleRotationRecorded: {1: true},
 }
 
 var lifecycleEventTypes = map[string]bool{
@@ -688,6 +727,36 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, Status: pl.Status, Targets: pl.Targets,
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Error: pl.Error, CompletedAt: &completedAt,
+		})
+	case EventConnectorDeliveryRecorded:
+		var pl ConnectorDeliveryRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Status == "" {
+			return fmt.Errorf("projections: %s requires id and status", e.Type)
+		}
+		return p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+			ID: pl.ID, TenantID: e.TenantID, OutboxID: pl.OutboxID, IdentityID: pl.IdentityID,
+			Destination: pl.Destination, Connector: pl.Connector, Target: pl.Target,
+			Fingerprint: pl.Fingerprint, Status: pl.Status, Attempts: pl.Attempts,
+			Reason: pl.Reason, Detail: pl.Detail, RollbackRef: pl.RollbackRef,
+			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventLifecycleRotationRecorded:
+		var pl LifecycleRotationRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.IdentityID == "" || pl.Status == "" {
+			return fmt.Errorf("projections: %s requires id, identity_id, and status", e.Type)
+		}
+		return p.store.ApplyRotationRunRecordedTx(ctx, tx, store.RotationRun{
+			ID: pl.ID, TenantID: e.TenantID, IdentityID: pl.IdentityID, OutboxID: pl.OutboxID,
+			Status: pl.Status, Trigger: pl.Trigger, Reason: pl.Reason,
+			PredecessorFingerprint: pl.PredecessorFingerprint, SuccessorFingerprint: pl.SuccessorFingerprint,
+			RollbackRef: pl.RollbackRef, Error: pl.Error, IdempotencyKey: pl.IdempotencyKey,
+			CreatedAt: e.Time, UpdatedAt: e.Time, CompletedAt: pl.CompletedAt,
 		})
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the

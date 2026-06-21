@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, ApiError, identityState, type GraphImpact, type Identity, type TransitionTo } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  identityState,
+  type ConnectorDelivery,
+  type GraphImpact,
+  type Identity,
+  type RotationRun,
+  type TransitionTo,
+} from "@/lib/api";
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -141,27 +150,73 @@ function terminalMessage(state: string): string | null {
   return null;
 }
 
-function deliveryEvidence(state: string): string {
+function evidenceTime(value: { created_at?: string; updated_at?: string }): number {
+  const parsed = Date.parse(value.updated_at || value.created_at || "");
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function latestDeliveryByIdentity(deliveries: ConnectorDelivery[] | null): Map<string, ConnectorDelivery> {
+  const out = new Map<string, ConnectorDelivery>();
+  for (const receipt of deliveries ?? []) {
+    if (!receipt.identity_id) continue;
+    const current = out.get(receipt.identity_id);
+    if (!current || evidenceTime(receipt) >= evidenceTime(current)) out.set(receipt.identity_id, receipt);
+  }
+  return out;
+}
+
+function latestRotationByIdentity(runs: RotationRun[] | null): Map<string, RotationRun> {
+  const out = new Map<string, RotationRun>();
+  for (const run of runs ?? []) {
+    const current = out.get(run.identity_id);
+    if (!current || evidenceTime(run) >= evidenceTime(current)) out.set(run.identity_id, run);
+  }
+  return out;
+}
+
+function shortFingerprint(value?: string): string {
+  if (!value) return "-";
+  return value.length <= 16 ? value : `${value.slice(0, 12)}...${value.slice(-8)}`;
+}
+
+function deliveryEvidence(identity: Identity, delivery?: ConnectorDelivery, rotation?: RotationRun): string {
+  const state = identityState(identity);
+  if (rotation?.status === "running") {
+    return `Rotation running (${rotation.trigger}); predecessor ${shortFingerprint(rotation.predecessor_fingerprint)}.`;
+  }
+  if (rotation?.status === "failed") {
+    return `Rotation failed (${rotation.trigger}): ${rotation.error || rotation.reason || "worker error"}.`;
+  }
+  if (rotation?.status === "succeeded" && !delivery) {
+    return `Rotation succeeded (${rotation.trigger}); successor ${shortFingerprint(rotation.successor_fingerprint)}.`;
+  }
+  if (delivery) {
+    const target = `${delivery.connector}/${delivery.target}`;
+    const fp = shortFingerprint(delivery.fingerprint);
+    if (delivery.status === "delivered") return `Delivered to ${target}; fingerprint ${fp}.`;
+    if (delivery.status === "failed") return `Delivery failed for ${target}: ${delivery.reason || delivery.detail || "worker error"}.`;
+    return `Delivery receipt ${delivery.status} for ${target}; ${delivery.reason || delivery.detail || "awaiting plugin"}.`;
+  }
   switch (state) {
     case "requested":
       return "Awaiting issue approval or issue request; no downstream delivery yet.";
     case "issued":
-      return "Issued. Deploy can be requested; outbox delivery receipt is not served.";
+      return "Issued. Deploy can be requested; no connector delivery receipt yet.";
     case "deployed":
-      return "Backend state says deployed; connector delivery proof is not served.";
+      return "Backend state says deployed; no connector delivery receipt has been projected yet.";
     case "renewing":
-      return "Renewal in progress; rotation worker status is not served.";
+      return "Renewal in progress; waiting for a rotation-run receipt.";
     case "revoked":
       return "Revoked. OCSP/CRL health needs protocol status before it can be shown here.";
     case "retired":
       return "Terminal retired state; no next lifecycle action.";
     default:
-      return "Lifecycle state is served; downstream delivery status is not served.";
+      return "Lifecycle state is served; no downstream delivery receipt yet.";
   }
 }
 
 function transitionNotice(to: TransitionTo): string {
-  return `${to} request accepted. Idempotency-Key protects retried submissions from duplicate execution; downstream outbox delivery status is not served yet.`;
+  return `${to} request accepted. Idempotency-Key protects retried submissions from duplicate execution; downstream outbox delivery receipts update asynchronously.`;
 }
 
 function deniedKey(id: string, to: TransitionTo): string {
@@ -214,6 +269,9 @@ function attributeRows(identity: Identity): Array<[string, string]> {
 export function Identities() {
   const [items, setItems] = useState<Identity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deliveryReceipts, setDeliveryReceipts] = useState<ConnectorDelivery[] | null>(null);
+  const [rotationRuns, setRotationRuns] = useState<RotationRun[] | null>(null);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deniedTransitions, setDeniedTransitions] = useState<Record<string, string>>({});
@@ -243,6 +301,8 @@ export function Identities() {
     () => filteredItems.filter((identity) => selectedIds.has(identity.id)),
     [filteredItems, selectedIds],
   );
+  const latestDelivery = useMemo(() => latestDeliveryByIdentity(deliveryReceipts), [deliveryReceipts]);
+  const latestRotation = useMemo(() => latestRotationByIdentity(rotationRuns), [rotationRuns]);
 
   const load = useCallback(async () => {
     try {
@@ -253,9 +313,24 @@ export function Identities() {
     }
   }, []);
 
+  const loadEvidence = useCallback(async () => {
+    try {
+      const [deliveries, rotations] = await Promise.all([
+        api.connectorDeliveries({ limit: 50 }),
+        api.rotationRuns({ limit: 50 }),
+      ]);
+      setDeliveryReceipts(deliveries.items ?? []);
+      setRotationRuns(rotations.items ?? []);
+      setEvidenceError(null);
+    } catch (err) {
+      setEvidenceError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadEvidence();
+  }, [load, loadEvidence]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -282,6 +357,7 @@ export function Identities() {
     try {
       await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`);
       await load();
+      await loadEvidence();
       if (selectedId === id) {
         await loadDetail(id);
       }
@@ -384,6 +460,7 @@ export function Identities() {
     setBulkConfirmOpen(false);
     setBulkBusy(false);
     await load();
+    await loadEvidence();
   }
 
   const identityColumns = useMemo<Array<DataGridColumn<Identity>>>(
@@ -413,7 +490,9 @@ export function Identities() {
         id: "delivery",
         header: "Delivery evidence",
         cell: (identity) => (
-          <span className="text-muted-foreground">{deliveryEvidence(identityState(identity))}</span>
+          <span className="text-muted-foreground">
+            {deliveryEvidence(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}
+          </span>
         ),
       },
       {
@@ -454,7 +533,7 @@ export function Identities() {
         },
       },
     ],
-    [busyId, deniedTransitions],
+    [busyId, deniedTransitions, latestDelivery, latestRotation],
   );
 
   return (
@@ -498,13 +577,11 @@ export function Identities() {
         </div>
       </section>
 
-      <div className="mb-4">
-        <UnavailableState title="Outbox delivery status not served yet">
-          Deploy, renew, revoke, and connector side effects are queued server-side, but
-          pending, processing, delivered, failed, and replayed delivery states do not
-          have a served read API yet.
-        </UnavailableState>
-      </div>
+      <DeliveryEvidencePanel
+        deliveries={deliveryReceipts}
+        rotations={rotationRuns}
+        error={evidenceError}
+      />
 
       <LifecycleAutomationDisclosure />
 
@@ -709,6 +786,8 @@ export function Identities() {
           error={detailError}
           busy={busyId === selectedId}
           deniedTransitions={deniedTransitions}
+          deliveryReceipt={selectedId ? latestDelivery.get(selectedId) : undefined}
+          rotationRun={selectedId ? latestRotation.get(selectedId) : undefined}
           reason={selectedId ? transitionReasons[selectedId] ?? "" : ""}
           onReasonChange={(value) => {
             if (!selectedId) return;
@@ -720,6 +799,107 @@ export function Identities() {
           }}
         />
       </DetailDrawer>
+    </section>
+  );
+}
+
+function DeliveryEvidencePanel({
+  deliveries,
+  rotations,
+  error,
+}: {
+  deliveries: ConnectorDelivery[] | null;
+  rotations: RotationRun[] | null;
+  error: string | null;
+}) {
+  const loading = !deliveries && !rotations && !error;
+  const recentDeliveries = (deliveries ?? []).slice(0, 5);
+  const recentRotations = (rotations ?? []).slice(0, 5);
+
+  return (
+    <section aria-labelledby="delivery-evidence-heading" className="mb-4 border-y border-border py-4">
+      <div className="mb-3">
+        <h2 id="delivery-evidence-heading" className="text-title font-semibold">
+          Delivery and rotation evidence
+        </h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          The console reads projected connector delivery receipts and lifecycle rotation runs. These are audit-safe
+          routing records: no certificate private key or secret value is returned.
+        </p>
+      </div>
+      {loading && <LoadingState>Loading delivery evidence...</LoadingState>}
+      {error && <ErrorState title="Delivery evidence failed to load">{error}</ErrorState>}
+      {!loading && !error && recentDeliveries.length === 0 && recentRotations.length === 0 && (
+        <EmptyState title="No delivery or rotation receipts yet">
+          Issue, deploy, or renew an identity to produce outbox-backed evidence.
+        </EmptyState>
+      )}
+      {(recentDeliveries.length > 0 || recentRotations.length > 0) && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="ui-panel overflow-x-auto">
+            <table className="ui-table min-w-[42rem]">
+              <caption className="sr-only">Recent connector delivery receipts</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Status</th>
+                  <th scope="col">Connector</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Fingerprint</th>
+                  <th scope="col">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentDeliveries.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-muted-foreground">No connector receipts.</td>
+                  </tr>
+                ) : (
+                  recentDeliveries.map((receipt) => (
+                    <tr key={receipt.id} className="align-top">
+                      <td className="font-mono text-xs">{receipt.status}</td>
+                      <td>{receipt.connector}</td>
+                      <td>{receipt.target}</td>
+                      <td className="break-all font-mono text-xs">{shortFingerprint(receipt.fingerprint)}</td>
+                      <td>{receipt.reason || receipt.detail || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="ui-panel overflow-x-auto">
+            <table className="ui-table min-w-[42rem]">
+              <caption className="sr-only">Recent lifecycle rotation runs</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Status</th>
+                  <th scope="col">Trigger</th>
+                  <th scope="col">Successor</th>
+                  <th scope="col">Rollback</th>
+                  <th scope="col">Completed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentRotations.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-muted-foreground">No rotation runs.</td>
+                  </tr>
+                ) : (
+                  recentRotations.map((run) => (
+                    <tr key={run.id} className="align-top">
+                      <td className="font-mono text-xs">{run.status}</td>
+                      <td>{run.trigger}</td>
+                      <td className="break-all font-mono text-xs">{shortFingerprint(run.successor_fingerprint)}</td>
+                      <td>{run.rollback_ref || run.error || "-"}</td>
+                      <td>{formatDate(run.completed_at || run.updated_at)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -773,10 +953,10 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
 
 function LifecycleAutomationDisclosure() {
   const previewRows = [
-    ["Renew before", "Preview only: schedule window is not served"],
+    ["Renew before", "Served from runtime configuration"],
     ["Alert before", "Preview only: notification timing is not served"],
     ["Dry run", "Preview only: no served dry-run endpoint"],
-    ["Rollback", "Preview only: rollback status needs outbox delivery state"],
+    ["Rollback", "Served on successful rotation-run receipts"],
   ];
   return (
     <section aria-labelledby="lifecycle-automation-heading" className="mb-4 border-y border-border py-4">
@@ -786,7 +966,7 @@ function LifecycleAutomationDisclosure() {
             Lifecycle automation
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Renewal is manual today. Auto-renewal, rotation schedules, pending runs, dry-run results, and rollback evidence aren't managed from the console yet, and delivery status isn't shown here yet either.
+            Automatic renewal runs in the leader scheduler when a deployed X.509 identity reaches the configured renew-before window. This console reads rotation-run and delivery evidence; editing schedules, alert timing, and dry-run execution still live outside this view.
           </p>
           <a className="mt-3 inline-flex text-sm font-medium text-primary underline" href="#manual-lifecycle-transitions">
             Use manual lifecycle transitions
@@ -890,6 +1070,8 @@ function IdentityDetailPanel({
   error,
   busy,
   deniedTransitions,
+  deliveryReceipt,
+  rotationRun,
   reason,
   onReasonChange,
   onTransition,
@@ -899,6 +1081,8 @@ function IdentityDetailPanel({
   error: string | null;
   busy: boolean;
   deniedTransitions: Record<string, string>;
+  deliveryReceipt?: ConnectorDelivery;
+  rotationRun?: RotationRun;
   reason: string;
   onReasonChange: (value: string) => void;
   onTransition: (to: TransitionTo, label: string) => void;
@@ -1009,7 +1193,11 @@ function IdentityDetailPanel({
             )}
           </section>
 
-          <CredentialActivityTimeline credentialLabel={identity.name} />
+          <CredentialActivityTimeline
+            credentialLabel={identity.name}
+            deliveryReceipt={deliveryReceipt}
+            rotationRun={rotationRun}
+          />
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">

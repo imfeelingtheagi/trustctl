@@ -19,6 +19,10 @@ import type {
   Certificate as GenCertificate,
   CertificateIngest,
   CertificateList,
+  ConnectorCatalog,
+  ConnectorCatalogItem,
+  ConnectorDelivery,
+  ConnectorDeliveryList,
   CredentialRisk as GenCredentialRisk,
   CredentialRiskList,
   DiscoveryFinding,
@@ -56,6 +60,8 @@ import type {
   PKISecret,
   PKISecretRequest,
   RCARequest,
+  RotationRun,
+  RotationRunList,
   SecretMeta,
   SecretMetaList,
   SecretRequest,
@@ -98,6 +104,10 @@ export type {
   DiscoverySource,
   DiscoverySourceList,
   DiscoverySourceRequest,
+  ConnectorCatalog,
+  ConnectorCatalogItem,
+  ConnectorDelivery,
+  ConnectorDeliveryList,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -107,6 +117,8 @@ export type {
   MachineLoginResponse,
   PKISecret,
   PKISecretRequest,
+  RotationRun,
+  RotationRunList,
   SecretMeta,
   SecretMetaList,
   SecretRequest,
@@ -299,6 +311,9 @@ export interface Api {
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
+  connectorCatalog(): Promise<ConnectorCatalog>;
+  connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
+  rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
@@ -378,6 +393,11 @@ export const api: Api = {
     const suffix = qs.toString();
     return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
   },
+  connectorCatalog: () => req<ConnectorCatalog>("/api/v1/connectors/catalog"),
+  connectorDeliveries: (options) =>
+    req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
+  rotationRuns: (options) =>
+    req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   risk: (options) =>
     req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
@@ -438,10 +458,11 @@ function riskQueryString(options?: RiskQuery): string {
   return suffix ? `?${suffix}` : "";
 }
 
-function pageQueryString(options?: { limit?: number; cursor?: string }): string {
+function pageQueryString(options?: { limit?: number; cursor?: string }, identityId?: string): string {
   const qs = new URLSearchParams();
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
+  if (identityId) qs.set("identity_id", identityId);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

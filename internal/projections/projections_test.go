@@ -84,7 +84,8 @@ func newStore(t *testing.T) *store.Store {
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, policy_bindings, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
-		          ca_issued_certs, ca_crls, credentials, certificate_profiles, read_model_snapshots
+		          ca_issued_certs, ca_crls, credentials, certificate_profiles,
+		          connector_delivery_receipts, lifecycle_rotation_runs, read_model_snapshots
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

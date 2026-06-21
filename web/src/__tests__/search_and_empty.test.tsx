@@ -228,12 +228,11 @@ describe("certificate inventory gap closure", () => {
     expect(screen.getByRole("link", { name: "owner-1" })).toHaveAttribute("href", "/owners?owner=owner-1");
     expect(dialog).toHaveTextContent(/certificate chain not served yet/i);
     expect(dialog).toHaveTextContent("Credential activity timeline");
-    expect(dialog).toHaveTextContent("Delivery status not exposed yet");
-    expect(dialog).toHaveTextContent(/isn't shown in the console yet/i);
-    expect(dialog).toHaveTextContent(/No delivery status request is made/i);
-    expect(dialog).toHaveTextContent(/last_error/);
-    expect(dialog).toHaveTextContent("Delivered / failed");
-    expect(document.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(/projected connector and rotation evidence/i);
+    expect(dialog).toHaveTextContent("Connector delivery");
+    expect(dialog).toHaveTextContent("no connector delivery receipt yet");
+    expect(dialog).toHaveTextContent("Rotation run");
+    expect(dialog).toHaveTextContent("no lifecycle rotation run yet");
   });
 
   it("ingests a PEM through the served mutation and prepends the returned row", async () => {

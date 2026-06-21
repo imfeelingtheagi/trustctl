@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { UnavailableState } from "@/components/StatePrimitives";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { api, type ConnectorCatalogItem, type ConnectorDelivery } from "@/lib/api";
 
 const coreConnectors = [
   {
@@ -58,13 +61,6 @@ const coreConnectors = [
     dryRun: "validates alias, store type, and chain order",
     rollback: "restore previous keystore object",
   },
-  {
-    target: "Kubernetes",
-    grant: "connector.deploy + kubernetes.secret.patch",
-    secretRef: "secret://connectors/kubernetes/prod",
-    dryRun: "server-side apply preview for TLS secret",
-    rollback: "reapply previous Secret resourceVersion",
-  },
 ];
 
 const applianceConnectors = [
@@ -96,24 +92,131 @@ const applianceConnectors = [
 ];
 
 const outboxStates = [
-  { state: "queued", meaning: "intent was written in the same transaction as the lifecycle state change" },
-  { state: "dispatching", meaning: "bounded connector worker owns the delivery attempt" },
-  { state: "acked", meaning: "connector.deploy was acknowledged by the outbox" },
-  { state: "held", meaning: "not routed until a signed connector plugin with matching capability grants is loaded" },
+  { state: "pending", meaning: "intent was written in the same transaction as the lifecycle state change" },
+  { state: "processing", meaning: "bounded connector worker owns the delivery attempt" },
+  { state: "delivered", meaning: "a signed connector plugin accepted the deployment" },
+  { state: "unrouted", meaning: "the outbox acknowledged the attempt, but no matching signed plugin was loaded" },
+  { state: "failed", meaning: "the plugin returned an error and the outbox retry policy remains authoritative" },
 ];
 
 export function Connectors() {
+  const [catalog, setCatalog] = useState<ConnectorCatalogItem[] | null>(null);
+  const [deliveries, setDeliveries] = useState<ConnectorDelivery[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.connectorCatalog(), api.connectorDeliveries({ limit: 20 })])
+      .then(([catalogResult, deliveryResult]) => {
+        if (cancelled) return;
+        setCatalog(catalogResult.items ?? []);
+        setDeliveries(deliveryResult.items ?? []);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section aria-labelledby="connectors-heading" className="grid gap-6">
       <PageHeader
         titleId="connectors-heading"
         title="Deployment connectors"
-        description="Connector deployment is an outbox-backed worker path. This console shows destination shape, capability grants, masked target secret references, dry-run posture, reachability, and rollback evidence without performing a live deploy."
+        description="Connector deployment is an outbox-backed worker path. This console reads the served connector registry and delivery receipts without performing a live deploy."
       />
 
-      <UnavailableState title="Connector routing is not served">
-        Connector deployment runs in the outbox worker today; console management is coming soon. Signed plugin inventory, worker queue state, delivery attempts, rollback receipts, and live delivery status are not surfaced here. `connector.deploy` can be acknowledged by the outbox, but it is not routed unless a signed connector plugin is loaded.
-      </UnavailableState>
+      {error && <ErrorState title="Connector evidence failed to load">{error}</ErrorState>}
+      {!catalog && !error && <LoadingState>Loading connector registry...</LoadingState>}
+
+      {catalog && (
+        <section aria-labelledby="served-connectors-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="served-connectors-heading" className="text-title font-semibold">
+              Served connector registry
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              These rows are returned by the authenticated API. Delivery still moves through the outbox, so the registry is read evidence, not a deploy button.
+            </p>
+          </div>
+          {catalog.length === 0 ? (
+            <EmptyState title="No connectors registered">No served connector catalog rows were returned.</EmptyState>
+          ) : (
+            <div className="ui-panel overflow-x-auto">
+              <table className="ui-table min-w-[54rem]">
+                <caption className="sr-only">Served connector registry</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Connector</th>
+                    <th scope="col">Kind</th>
+                    <th scope="col">Delivery mode</th>
+                    <th scope="col">Rollback evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.map((connector) => (
+                    <tr key={connector.name} className="align-top">
+                      <td className="font-mono text-xs font-semibold">{connector.name}</td>
+                      <td>{connector.kind}</td>
+                      <td>{connector.delivery_mode}</td>
+                      <td>{connector.rollback}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {deliveries && (
+        <section aria-labelledby="delivery-receipts-heading" className="grid gap-3 border-y border-border py-4">
+          <div>
+            <h2 id="delivery-receipts-heading" className="text-title font-semibold">
+              Recent delivery receipts
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Receipts are projected from `connector.delivery.recorded` events. They contain routing, status, attempts, fingerprint, and rollback references, never certificate private-key bytes.
+            </p>
+          </div>
+          {deliveries.length === 0 ? (
+            <EmptyState title="No connector delivery receipts">No deploy outbox attempt has produced a receipt yet.</EmptyState>
+          ) : (
+            <div className="ui-panel overflow-x-auto">
+              <table className="ui-table min-w-[76rem]">
+                <caption className="sr-only">Recent connector delivery receipts</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Status</th>
+                    <th scope="col">Connector</th>
+                    <th scope="col">Target</th>
+                    <th scope="col">Attempts</th>
+                    <th scope="col">Fingerprint</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col">Rollback</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.map((receipt) => (
+                    <tr key={receipt.id} className="align-top">
+                      <td className="font-mono text-xs">{receipt.status}</td>
+                      <td>{receipt.connector}</td>
+                      <td>{receipt.target}</td>
+                      <td>{receipt.attempts}</td>
+                      <td className="break-all font-mono text-xs">{receipt.fingerprint || "-"}</td>
+                      <td>{receipt.reason || receipt.detail || "-"}</td>
+                      <td>{receipt.rollback_ref || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="core-connectors-heading" className="grid gap-3 border-y border-border py-4">
         <div>

@@ -53,6 +53,12 @@ var commandTable = []Command{
 	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
 	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id"}, Summary: "List discovery findings"},
 
+	{Name: []string{"connectors", "catalog"}, Method: "GET", Path: "/api/v1/connectors/catalog", Summary: "List connector kinds"},
+	{Name: []string{"connectors", "deliveries", "list"}, Method: "GET", Path: "/api/v1/connectors/deliveries", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List connector delivery receipts"},
+	{Name: []string{"connectors", "deliveries", "get"}, Method: "GET", Path: "/api/v1/connectors/deliveries/{id}", Summary: "Get a connector delivery receipt"},
+	{Name: []string{"lifecycle", "rotation-runs", "list"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List lifecycle rotation runs"},
+	{Name: []string{"lifecycle", "rotation-runs", "get"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs/{id}", Summary: "Get a lifecycle rotation run"},
+
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
 	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},
 	{Name: []string{"profiles", "get-version"}, Method: "GET", Path: "/api/v1/profiles/{name}/versions/{version}", Summary: "Get a certificate-profile version"},

@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -29,6 +30,7 @@ const leafTTL = 30 * 24 * time.Hour
 // never changes, so a CA's ca_id is the same across restarts and the
 // issued/revoked records for it line up over time.
 var caNamespace = uuid.MustParse("8f6a0c1e-4d2b-5a3c-9e7f-1b2c3d4e5f60")
+var evidenceNamespace = uuid.MustParse("d3f1677d-2e53-5d77-9c7f-8895a74f5c31")
 
 // IssuingCAID is the deterministic ca_id of the served binary's single issuing
 // CA (keyed off the stable issuing-CA signer handle). It is the CA identifier
@@ -258,28 +260,52 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 	}
 	idemKey := "renew:" + m.IdempotencyKey
 	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+		run := rotationRunEvidence{
+			ID:             evidenceID("rotation", m.TenantID, m.IdempotencyKey, m.ID),
+			IdentityID:     p.IdentityID,
+			OutboxID:       outboxPtr(m.ID),
+			Trigger:        rotationTrigger(p.Reason),
+			Reason:         p.Reason,
+			IdempotencyKey: m.IdempotencyKey,
+		}
+		if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
+			return nil, err
+		}
 		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
 		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, err
 		}
 		if len(recovered) > 0 {
 			if err := d.completeRecoveredRenewal(ctx, m.TenantID, p.IdentityID, p.Reason); err != nil {
+				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, fmt.Errorf("server: complete recovered renewal transition: %w", err)
+			}
+			run.SuccessorFingerprint = recovered[len(recovered)-1].Fingerprint
+			if err := d.recordRotationRun(ctx, m.TenantID, run, "succeeded", ""); err != nil {
+				return nil, err
 			}
 			return []byte(fmt.Sprintf("renewed:%d", len(recovered))), nil
 		}
 		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
 		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
 		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
 		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: find issued certs for identity %s: %w", p.IdentityID, err)
 		}
 		if len(certs) == 0 {
-			return nil, fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
+			err := fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
 		}
 		for _, old := range certs {
+			if run.PredecessorFingerprint == "" {
+				run.PredecessorFingerprint = old.Fingerprint
+			}
 			dnsNames := old.SANs
 			if len(dnsNames) == 0 {
 				dnsNames = []string{ident.Name}
@@ -290,24 +316,36 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			}
 			successor, err := d.mintServedLeaf(ctx, m.TenantID, ident.OwnerID, commonName, dnsNames)
 			if err != nil {
+				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
 			}
 			successor.IssuanceIdempotencyKey = idemKey
-			if _, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID); err != nil {
+			recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
+			if err != nil {
+				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, fmt.Errorf("server: record renewal successor: %w", err)
 			}
+			run.SuccessorFingerprint = recorded.Fingerprint
 		}
 		reason := p.Reason
 		if reason == "" {
 			reason = "renewal completed"
 		}
 		if err := d.orch.Transition(ctx, m.TenantID, p.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: complete renewal transition: %w", err)
 		}
 		if d.afterIssueSideEffects != nil {
 			if err := d.afterIssueSideEffects(ctx); err != nil {
+				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
 			}
+		}
+		if run.RollbackRef == "" && run.PredecessorFingerprint != "" {
+			run.RollbackRef = "restore certificate fingerprint " + run.PredecessorFingerprint
+		}
+		if err := d.recordRotationRun(ctx, m.TenantID, run, "succeeded", ""); err != nil {
+			return nil, err
 		}
 		return []byte(fmt.Sprintf("renewed:%d", len(certs))), nil
 	})
@@ -465,39 +503,223 @@ func (d *issuanceDispatcher) ensureTenantCRL(ctx context.Context, tenantID strin
 }
 
 // handleDeploy processes a connector.deploy outbox entry (the side effect of an
-// issued→deployed lifecycle transition). When a served WASM connector plugin is
-// configured and owns the named connector (ARCH-007), the deployment is pushed
-// through the capability sandbox; the plugin runs in its own wazero runtime with
-// no store/signer handle, and an operation outside its grant fails the deploy. It
-// is idempotent on the outbox key (AN-5) so a redelivery does not re-run the
-// plugin, tenant-scoped (AN-1), and event-sourced (AN-2 — the plugin outcome is
-// recorded by the manager). When no plugin owns the connector the entry is
-// acknowledged unrouted, exactly as before, so first-party in-process connectors
-// (still routed elsewhere) and not-yet-wired targets do not dead-letter.
+// issued→deployed lifecycle transition, or a direct connector deployment payload).
+// Every attempt records a tenant-scoped, event-sourced delivery receipt before the
+// outbox row is acknowledged or retried. The receipt carries only routing evidence
+// (connector, target, fingerprint, status, rollback reference), never PEM/key
+// material (AN-8). When a served WASM connector plugin is configured and owns the
+// named connector, the deployment is pushed through the capability sandbox; when no
+// plugin owns it the row is acknowledged as "unrouted" and the reason is visible.
 func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Message) error {
+	p, identityID, detail, err := d.resolveDeployPayload(ctx, m)
+	if err != nil {
+		return err
+	}
+	receipt := connectorDeliveryEvidence{
+		ID:             evidenceID("connector-delivery", m.TenantID, m.IdempotencyKey, m.ID),
+		OutboxID:       outboxPtr(m.ID),
+		IdentityID:     identityID,
+		Destination:    m.Destination,
+		Connector:      nonempty(p.Connector, "unconfigured"),
+		Target:         nonempty(p.Target, "unconfigured"),
+		Fingerprint:    p.Fingerprint,
+		Attempts:       m.Attempts,
+		IdempotencyKey: m.IdempotencyKey,
+		Detail:         detail,
+	}
+	if p.Connector == "" {
+		receipt.Detail = nonempty(receipt.Detail, "identity has no connector target configured")
+		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "missing_connector")
+	}
 	if d.plugins == nil {
-		return nil // no served plugin surface: ack unrouted (prior behavior)
+		receipt.Detail = "no signed connector plugin surface is configured"
+		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "plugin_surface_unconfigured")
 	}
-	var p connector.DeployPayload
-	if err := json.Unmarshal(m.Payload, &p); err != nil {
-		return fmt.Errorf("server: decode connector.deploy payload: %w", err)
-	}
-	if p.Connector == "" || !d.plugins.Has(p.Connector) {
-		return nil // not a plugin-owned connector: ack unrouted
+	if !d.plugins.Has(p.Connector) {
+		receipt.Detail = "connector is not owned by a loaded signed plugin"
+		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "plugin_not_loaded")
 	}
 	// Idempotent on the outbox key (AN-5 ↔ AN-6): a redelivery returns the recorded
 	// result without invoking the plugin again.
-	_, err := d.idem.Do(ctx, m.TenantID, "deploy:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	_, err = d.idem.Do(ctx, m.TenantID, "deploy:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
 		handled, derr := d.plugins.Deploy(ctx, m.TenantID, p)
 		if derr != nil {
+			_ = d.recordConnectorDelivery(ctx, m.TenantID, receipt, "failed", derr.Error())
 			return nil, derr
 		}
 		if !handled {
+			receipt.Detail = "loaded plugin declined this connector payload"
+			if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "plugin_declined"); err != nil {
+				return nil, err
+			}
 			return []byte("unrouted"), nil
+		}
+		receipt.RollbackRef = "restore previous certificate for " + p.Target
+		if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, "delivered", "plugin_delivered"); err != nil {
+			return nil, err
 		}
 		return []byte("deployed:" + p.Connector), nil
 	})
 	return err
+}
+
+type connectorDeliveryEvidence struct {
+	ID             string
+	OutboxID       *int64
+	IdentityID     *string
+	Destination    string
+	Connector      string
+	Target         string
+	Fingerprint    string
+	Attempts       int
+	Reason         string
+	Detail         string
+	RollbackRef    string
+	IdempotencyKey string
+}
+
+type rotationRunEvidence struct {
+	ID                     string
+	IdentityID             string
+	OutboxID               *int64
+	Trigger                string
+	Reason                 string
+	PredecessorFingerprint string
+	SuccessorFingerprint   string
+	RollbackRef            string
+	IdempotencyKey         string
+}
+
+func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchestrator.Message) (connector.DeployPayload, *string, string, error) {
+	var p connector.DeployPayload
+	if err := json.Unmarshal(m.Payload, &p); err == nil && (p.Connector != "" || p.Target != "" || p.Fingerprint != "" || len(p.CertPEM) > 0 || len(p.KeyPEM) > 0) {
+		return p, nil, "direct connector deploy payload", nil
+	}
+	var trig transitionTrigger
+	if err := json.Unmarshal(m.Payload, &trig); err != nil {
+		return connector.DeployPayload{}, nil, "", fmt.Errorf("server: decode connector.deploy payload: %w", err)
+	}
+	if trig.IdentityID == "" {
+		return connector.DeployPayload{}, nil, "connector.deploy payload did not name an identity", nil
+	}
+	ident, err := d.store.GetIdentity(ctx, m.TenantID, trig.IdentityID)
+	if err != nil {
+		return connector.DeployPayload{}, nil, "", fmt.Errorf("server: load identity %s for deploy receipt: %w", trig.IdentityID, err)
+	}
+	connName, target := deploymentRoutingAttrs(ident.Attributes)
+	p.Connector = connName
+	p.Target = nonempty(target, ident.Name)
+	certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
+	if err != nil {
+		return connector.DeployPayload{}, nil, "", fmt.Errorf("server: load active certificate for deploy receipt %s: %w", trig.IdentityID, err)
+	}
+	if len(certs) > 0 {
+		p.Fingerprint = certs[len(certs)-1].Fingerprint
+	}
+	identityID := trig.IdentityID
+	return p, &identityID, "lifecycle transition deploy payload", nil
+}
+
+func deploymentRoutingAttrs(raw json.RawMessage) (string, string) {
+	if len(raw) == 0 {
+		return "", ""
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal(raw, &attrs); err != nil {
+		return "", ""
+	}
+	connectorName := firstStringAttr(attrs, "connector", "deployment_connector", "connector_name")
+	target := firstStringAttr(attrs, "target", "deployment_target", "deployment_target_id", "deployment_location")
+	return connectorName, target
+}
+
+func firstStringAttr(attrs map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := attrs[key]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return ""
+}
+
+func (d *issuanceDispatcher) recordConnectorDelivery(ctx context.Context, tenantID string, r connectorDeliveryEvidence, status, reason string) error {
+	if d.log == nil || d.store == nil {
+		return nil
+	}
+	if r.Destination == "" {
+		r.Destination = "connector.deploy"
+	}
+	if r.ID == "" {
+		r.ID = evidenceID("connector-delivery", tenantID, r.IdempotencyKey, 0)
+	}
+	payload := projections.ConnectorDeliveryRecorded{
+		ID: r.ID, OutboxID: r.OutboxID, IdentityID: r.IdentityID, Destination: r.Destination,
+		Connector: r.Connector, Target: r.Target, Fingerprint: r.Fingerprint, Status: status,
+		Attempts: r.Attempts, Reason: reason, Detail: r.Detail, RollbackRef: r.RollbackRef,
+		IdempotencyKey: r.IdempotencyKey,
+	}
+	return d.appendProjected(ctx, tenantID, projections.EventConnectorDeliveryRecorded, payload)
+}
+
+func (d *issuanceDispatcher) recordRotationRun(ctx context.Context, tenantID string, r rotationRunEvidence, status, msg string) error {
+	if d.log == nil || d.store == nil {
+		return nil
+	}
+	if r.ID == "" {
+		r.ID = evidenceID("rotation", tenantID, r.IdempotencyKey, 0)
+	}
+	var completedAt *time.Time
+	if status == "succeeded" || status == "failed" {
+		now := time.Now().UTC()
+		completedAt = &now
+	}
+	payload := projections.LifecycleRotationRecorded{
+		ID: r.ID, IdentityID: r.IdentityID, OutboxID: r.OutboxID, Status: status,
+		Trigger: r.Trigger, Reason: r.Reason, PredecessorFingerprint: r.PredecessorFingerprint,
+		SuccessorFingerprint: r.SuccessorFingerprint, RollbackRef: r.RollbackRef, Error: msg,
+		IdempotencyKey: r.IdempotencyKey, CompletedAt: completedAt,
+	}
+	return d.appendProjected(ctx, tenantID, projections.EventLifecycleRotationRecorded, payload)
+}
+
+func (d *issuanceDispatcher) appendProjected(ctx context.Context, tenantID, eventType string, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	ev, err := d.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: data})
+	if err != nil {
+		return err
+	}
+	return projections.New(d.store).Apply(ctx, ev)
+}
+
+func evidenceID(kind, tenantID, idempotencyKey string, outboxID int64) string {
+	key := fmt.Sprintf("%s:%s:%s:%d", kind, tenantID, idempotencyKey, outboxID)
+	return uuid.NewSHA1(evidenceNamespace, []byte(key)).String()
+}
+
+func outboxPtr(id int64) *int64 {
+	if id == 0 {
+		return nil
+	}
+	return &id
+}
+
+func rotationTrigger(reason string) string {
+	if strings.Contains(strings.ToLower(reason), "scheduled") {
+		return "scheduler"
+	}
+	return "manual"
+}
+
+func nonempty(v, fallback string) string {
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	return v
 }
 
 // sansOf collects the subject alternative names from a parsed certificate.

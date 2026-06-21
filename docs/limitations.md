@@ -17,6 +17,11 @@ out-of-process child (AN-4). What you can do end to end against the running bina
 
 - **Inventory and lifecycle** for owners, issuers, identities, and certificates —
   create, read, list (keyset-paginated), and drive the lifecycle state machine.
+- **Connector delivery and lifecycle rotation evidence**: deployment attempts emit
+  `connector.delivery.recorded` receipts, scheduled renewals emit
+  `lifecycle.rotation.recorded` runs, and both are readable through the API, CLI,
+  and console. The receipt is routing/status metadata only: no private key or secret
+  bytes are returned.
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
@@ -56,11 +61,12 @@ remaining integration work.
 - **CA integrations** (9 under `internal/ca/`) and the **private CA hierarchy**
   (root/intermediate, cross-sign, rotation, and the m-of-n key ceremony — see the
   [key-ceremony runbook](runbooks/key-ceremony.md)).
-- **Deployment connectors** (**13** under `internal/connector/`: nginx, Apache,
-  IIS, HAProxy, F5, NetScaler, plus the network-appliance set Cisco, FortiGate, and
-  Palo Alto, plus AWS ACM, Azure Key Vault, GCP Certificate Manager, and Java
-  keystore — plus the Kubernetes destination). The lifecycle's `connector.deploy`
-  step is acknowledged by the outbox but not yet routed to these in the served path.
+- **Deployment connector implementation bodies** (**13** under `internal/connector/`:
+  nginx, Apache, IIS, HAProxy, F5, NetScaler, Cisco, FortiGate, Palo Alto, AWS ACM,
+  Azure Key Vault, GCP Certificate Manager, and Java keystore). The running binary
+  serves the connector catalog and delivery receipts. Actual target mutation is
+  routed only when a provenance-verified signed connector plugin is loaded; otherwise
+  `connector.deploy` is acknowledged as an `unrouted` receipt with the reason.
 - **Discovery**: network/filesystem scans, SSH key & trust inventory, agentless
   cloud-certificate enumeration, the **CBOM** with post-quantum posture, and
   **Certificate Transparency** monitoring.

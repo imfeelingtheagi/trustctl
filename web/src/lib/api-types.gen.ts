@@ -100,6 +100,41 @@ export interface CertificateList {
   next_cursor?: string;
 }
 
+export interface ConnectorCatalog {
+  items: ConnectorCatalogItem[];
+}
+
+export interface ConnectorCatalogItem {
+  delivery_mode: string;
+  kind: string;
+  name: string;
+  rollback: string;
+}
+
+export interface ConnectorDelivery {
+  attempts: number;
+  connector: string;
+  created_at: string;
+  destination: string;
+  detail?: string;
+  fingerprint?: string;
+  id: string;
+  idempotency_key?: string;
+  identity_id?: string;
+  outbox_id?: number;
+  reason?: string;
+  rollback_ref?: string;
+  status: "unrouted" | "delivered" | "failed";
+  target: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface ConnectorDeliveryList {
+  items: ConnectorDelivery[];
+  next_cursor?: string;
+}
+
 export interface CredentialRisk {
   components: RiskComponents;
   credential_id: string;
@@ -399,6 +434,29 @@ export interface RiskComponents {
   privilege: number;
   rotation: number;
   sensitivity: number;
+}
+
+export interface RotationRun {
+  completed_at?: string;
+  created_at: string;
+  error?: string;
+  id: string;
+  idempotency_key?: string;
+  identity_id: string;
+  outbox_id?: number;
+  predecessor_fingerprint?: string;
+  reason?: string;
+  rollback_ref?: string;
+  status: "running" | "succeeded" | "failed";
+  successor_fingerprint?: string;
+  tenant_id: string;
+  trigger: string;
+  updated_at: string;
+}
+
+export interface RotationRunList {
+  items: RotationRun[];
+  next_cursor?: string;
 }
 
 export interface SecretMeta {
