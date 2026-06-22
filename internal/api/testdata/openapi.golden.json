@@ -3565,6 +3565,22 @@
             }
           },
           {
+            "description": "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit",
+            "in": "query",
+            "name": "feature_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "catalog action (e.g. revoke); returns only events that action emits, optionally scoped by feature_id",
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "RFC3339 inclusive lower time bound",
             "in": "query",
             "name": "since",
@@ -3657,6 +3673,22 @@
             "description": "comma-separated event types to include",
             "in": "query",
             "name": "type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit",
+            "in": "query",
+            "name": "feature_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "catalog action (e.g. revoke); returns only events that action emits, optionally scoped by feature_id",
+            "in": "query",
+            "name": "action",
             "schema": {
               "type": "string"
             }

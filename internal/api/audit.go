@@ -13,7 +13,12 @@ import (
 // auditQueryFromRequest builds an audit query from the request's tenant
 // (authoritative, from the principal) and its query parameters.
 func (a *API) auditQueryFromRequest(r *http.Request, tenantID string) (audit.Query, error) {
-	q := audit.Query{TenantID: tenantID, Contains: r.URL.Query().Get("q")}
+	q := audit.Query{
+		TenantID:  tenantID,
+		Contains:  r.URL.Query().Get("q"),
+		FeatureID: strings.TrimSpace(r.URL.Query().Get("feature_id")),
+		Action:    strings.TrimSpace(r.URL.Query().Get("action")),
+	}
 	if t := r.URL.Query().Get("type"); t != "" {
 		for _, name := range strings.Split(t, ",") {
 			if name = strings.TrimSpace(name); name != "" {

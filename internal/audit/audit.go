@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/eventledger"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 )
@@ -51,11 +52,23 @@ var ErrMissingTenant = errors.New("audit: query requires a tenant id (AN-1)")
 type Query struct {
 	TenantID     string    `json:"tenant_id"`
 	Types        []string  `json:"types,omitempty"`          // exact event-type filter
+	FeatureID    string    `json:"feature_id,omitempty"`     // catalog feature id (COVER-008); resolved to event types via the ledger
+	Action       string    `json:"action,omitempty"`         // catalog action (COVER-008); resolved to event types via the ledger
 	Since        time.Time `json:"since,omitempty"`          // inclusive lower time bound
 	Until        time.Time `json:"until,omitempty"`          // inclusive upper time bound
 	AsOfSequence uint64    `json:"as_of_sequence,omitempty"` // point-in-time over tenant-local Sequence
 	Contains     string    `json:"contains,omitempty"`       // substring match on type or data
 	Limit        int       `json:"limit,omitempty"`          // cap on records returned (0 = all)
+}
+
+// featureActionTypes resolves the query's feature_id/action selector to the event
+// types catalogued for it in the ledger (COVER-008). It returns (nil, false) when
+// no feature/action filter is set, so callers leave the type filter untouched; it
+// returns (types, true) — possibly an empty slice — when a selector is set, so a
+// selector that names no catalogued events filters everything out rather than
+// silently matching the whole log.
+func (q Query) featureActionTypes() (types []string, set bool) {
+	return eventledger.EventTypesForFeatureAction(q.FeatureID, q.Action)
 }
 
 // Checkpoint is a sealed retention boundary (R4.4): every audit record up to
@@ -213,6 +226,14 @@ func (q Query) matches(e events.Event, tenantSequence uint64) bool {
 		return false
 	}
 	if len(q.Types) > 0 && !contains(q.Types, e.Type) {
+		return false
+	}
+	// feature_id/action filter (COVER-008): when set, the event's type must be one
+	// the ledger catalogues for that feature/action. A selector that resolves to no
+	// types matches nothing, so filtering by an action with no events returns an
+	// empty result rather than the unfiltered log. Combined with an explicit Types
+	// filter, both must hold (the type is both named and ledger-bound).
+	if ftypes, set := q.featureActionTypes(); set && !contains(ftypes, e.Type) {
 		return false
 	}
 	if q.Contains != "" && !strings.Contains(e.Type, q.Contains) && !strings.Contains(string(e.Data), q.Contains) {

@@ -67,6 +67,19 @@ func EventTypeFor(from, to State) (string, bool) {
 	return t, ok
 }
 
+// LifecycleEventTypes returns the distinct set of event types the lifecycle state
+// machine emits, derived from the transition registry (the source of truth). The
+// COVER-008 completeness test uses it to assert every served lifecycle transition
+// maps to a catalogued event name in the event ledger — so a new transition cannot
+// ship an event type the audit catalog does not know about.
+func LifecycleEventTypes() map[string]struct{} {
+	out := make(map[string]struct{}, len(transitionEvents))
+	for _, t := range transitionEvents {
+		out[t] = struct{}{}
+	}
+	return out
+}
+
 func sideEffectFor(from, to State) (string, bool) {
 	d, ok := sideEffects[edge{from, to}]
 	return d, ok

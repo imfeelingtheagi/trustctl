@@ -349,6 +349,8 @@ func (a *API) routes() []route {
 	}
 	auditQuery := []param{
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
+		{name: "feature_id", typ: "string", desc: "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit"},
+		{name: "action", typ: "string", desc: "catalog action (e.g. revoke); returns only events that action emits, optionally scoped by feature_id"},
 		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
 		{name: "until", typ: "string", desc: "RFC3339 inclusive upper time bound"},
 		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
