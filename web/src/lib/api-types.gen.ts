@@ -453,6 +453,22 @@ export interface MachineLoginResponse {
   session_id: string;
 }
 
+export interface ManagedKey {
+  algorithm: string;
+  key_id: string;
+  public_der?: string;
+  state: string;
+  version: number;
+}
+
+export interface ManagedKeyActionRequest {
+  key_id: string;
+}
+
+export interface ManagedKeyGenerateRequest {
+  algorithm: string;
+}
+
 export interface Member {
   created_at: string;
   display_name?: string;

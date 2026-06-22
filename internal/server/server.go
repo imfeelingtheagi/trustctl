@@ -53,9 +53,16 @@ type Deps struct {
 	Signer            SignerProvider            // may be nil → issuance is unavailable (fail closed)
 	SignAuthorizer    *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
 	SignTokenProvider signing.SignTokenProvider // independent approval-token source for dual-control signer handles
-	OutboxHandler     orchestrator.Handler      // delivers outbox entries; defaults to a no-op success
-	APIOptions        []api.Option              // auth/audit/etc.
-	SignTimeout       time.Duration             // per-issuance signer deadline (slow → fail closed)
+	// ManagedKeyCustody is the BYOK/HSM remote-custody backend (a KMS/HSM whose
+	// private material never enters this process). When set, the running binary serves
+	// the /api/v1/managed-keys/* lifecycle (generate/rotate/revoke/zeroize) — event-
+	// sourced (AN-2), idempotent (AN-5), tenant-scoped (AN-1), with dual control on the
+	// destructive transitions when RequireApproval is on (CRYPTO-005). Nil leaves the
+	// surface off and its routes fail closed.
+	ManagedKeyCustody crypto.RemoteKeyLifecycle
+	OutboxHandler     orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions        []api.Option         // auth/audit/etc.
+	SignTimeout       time.Duration        // per-issuance signer deadline (slow → fail closed)
 	CACommonName      string
 	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
 	LeafProfile       crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
@@ -564,6 +571,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 			return nil, nil, errors.New("server: secrets API enabled but no KEK provided (envelope encryption at rest is required)")
 		}
 		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
+	}
+	if mk, err := buildManagedKeyService(d, idem); err != nil {
+		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
+	} else if mk != nil {
+		defaults = append(defaults, api.WithManagedKeys(mk))
 	}
 	if d.EnableAISurface {
 		defaults = append(defaults, api.WithAISurface(s.buildAISurfaceBackend(d)))

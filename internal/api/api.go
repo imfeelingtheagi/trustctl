@@ -58,8 +58,9 @@ type API struct {
 	rateLimiter             RateLimiter
 	gate                    MutationGate
 	approvals               ApprovalRecorder
-	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
-	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
+	secrets                 *secretsService   // served secrets/identity surface (GAP-006); nil = not enabled
+	ai                      *aiSurface        // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	mux                     *http.ServeMux
@@ -86,6 +87,7 @@ type config struct {
 	rateLimiter             RateLimiter
 	gate                    MutationGate
 	approvals               ApprovalRecorder
+	managedKeys             ManagedKeyService
 	secrets                 *secretsService
 	ai                      *aiSurface
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
@@ -181,7 +183,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai, outboxCircuits: cfg.outboxCircuits, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, outboxCircuits: cfg.outboxCircuits, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -478,6 +480,16 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200"},
+
+		// Managed-key (BYOK/HSM) lifecycle (CRYPTO-005 / EXC-CRYPTO-01). The private
+		// material lives in the KMS/HSM and never enters this process. Generate mints
+		// new material (no prior approval); rotate/revoke/zeroize are destructive and
+		// require a distinct-approver approval (dual control) enforced by the service.
+		// All four are idempotent (AN-5) and event-sourced (AN-2).
+		{method: "POST", path: "/api/v1/managed-keys", opID: "generateManagedKey", summary: "Generate a BYOK/HSM-resident managed key (private material stays in the provider)", handler: a.generateManagedKey, reqSchema: "ManagedKeyGenerateRequest", resSchema: "ManagedKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/managed-keys/rotate", opID: "rotateManagedKey", summary: "Rotate a managed key (mint a successor; requires dual-control approval)", handler: a.rotateManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/managed-keys/revoke", opID: "revokeManagedKey", summary: "Revoke a managed key at the provider (requires dual-control approval)", handler: a.revokeManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/managed-keys/zeroize", opID: "zeroizeManagedKey", summary: "Zeroize a managed key's material at the provider (requires dual-control approval)", handler: a.zeroizeManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}

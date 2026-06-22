@@ -56,6 +56,14 @@ const (
 	ProfilesWrite Permission = "profiles:write"
 	CertsRequest  Permission = "certs:request"
 	CertsIssue    Permission = "certs:issue"
+
+	// Managed-key (BYOK/HSM) lifecycle permissions (CRYPTO-005 / EXC-CRYPTO-01).
+	// KeysRead lists managed keys; KeysWrite drives the remote-custody lifecycle
+	// (generate/rotate/revoke/zeroize). The destructive transitions additionally
+	// require a distinct-approver approval (dual control) enforced by the served
+	// gate — KeysWrite alone never authorizes a one-person rotate/revoke/zeroize.
+	KeysRead  Permission = "keys:read"
+	KeysWrite Permission = "keys:write"
 )
 
 // Wildcard is a permission that allows every action; it is held by admin.
@@ -73,6 +81,7 @@ func allResourcePermissions() []Permission {
 		AccessRead, AccessWrite,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
+		KeysRead, KeysWrite,
 	}
 }
 
@@ -96,7 +105,7 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},

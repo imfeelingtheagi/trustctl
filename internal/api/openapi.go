@@ -485,6 +485,18 @@ func componentSchemas() map[string]*Schema {
 	secretMeta := object(map[string]*Schema{
 		"name": str(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "name", "version")
+	// Managed-key (BYOK/HSM) lifecycle schemas (CRYPTO-005). public_der is the PKIX
+	// public key (base64 in JSON); the private material is never represented here.
+	managedKeyGenerateReq := object(map[string]*Schema{
+		"algorithm": str(),
+	}, "algorithm")
+	managedKeyActionReq := object(map[string]*Schema{
+		"key_id": str(),
+	}, "key_id")
+	managedKey := object(map[string]*Schema{
+		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": str(),
+		"public_der": {Type: "string", Format: "byte"},
+	}, "key_id", "algorithm", "version", "state")
 	secretValue := object(map[string]*Schema{
 		"name": str(), "value": str(), "version": {Type: "integer"},
 	}, "name", "value")
@@ -654,6 +666,9 @@ func componentSchemas() map[string]*Schema {
 		"SecretMeta":                   secretMeta,
 		"SecretMetaList":               list("SecretMeta"),
 		"SecretValue":                  secretValue,
+		"ManagedKeyGenerateRequest":    managedKeyGenerateReq,
+		"ManagedKeyActionRequest":      managedKeyActionReq,
+		"ManagedKey":                   managedKey,
 		"ShareRequest":                 shareReq,
 		"ShareToken":                   shareToken,
 		"ShareRedeemRequest":           shareRedeemReq,

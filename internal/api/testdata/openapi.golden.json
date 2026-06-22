@@ -1621,6 +1621,55 @@
         ],
         "type": "object"
       },
+      "ManagedKey": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "public_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key_id",
+          "algorithm",
+          "version",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyActionRequest": {
+        "properties": {
+          "key_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyGenerateRequest": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm"
+        ],
+        "type": "object"
+      },
       "Member": {
         "properties": {
           "created_at": {
@@ -5533,6 +5582,234 @@
         ],
         "summary": "Get a lifecycle rotation run",
         "x-trstctl-permission": "lifecycle:read"
+      }
+    },
+    "/api/v1/managed-keys": {
+      "post": {
+        "operationId": "generateManagedKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Generate a BYOK/HSM-resident managed key (private material stays in the provider)",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-keys/revoke": {
+      "post": {
+        "operationId": "revokeManagedKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a managed key at the provider (requires dual-control approval)",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-keys/rotate": {
+      "post": {
+        "operationId": "rotateManagedKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rotate a managed key (mint a successor; requires dual-control approval)",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-keys/zeroize": {
+      "post": {
+        "operationId": "zeroizeManagedKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedKeyActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Zeroize a managed key's material at the provider (requires dual-control approval)",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/mcp/tools": {

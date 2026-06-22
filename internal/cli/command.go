@@ -115,6 +115,14 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "shares", "create"}, Method: "POST", Path: "/api/v1/secrets/shares", Body: bodyFile, Summary: "Create a secret share"},
 	{Name: []string{"secrets", "shares", "redeem"}, Method: "POST", Path: "/api/v1/secrets/shares/redeem", Body: bodyFile, Summary: "Redeem a secret share"},
 	{Name: []string{"secrets", "pki"}, Method: "POST", Path: "/api/v1/secrets/pki", Body: bodyFile, Summary: "Issue a dynamic PKI secret"},
+
+	// BYOK/HSM managed-key lifecycle (CRYPTO-005). Generate mints provider-resident
+	// material; rotate/revoke/zeroize are destructive and require a distinct-approver
+	// approval (dual control) recorded out of band before the command succeeds.
+	{Name: []string{"managed-keys", "generate"}, Method: "POST", Path: "/api/v1/managed-keys", Body: bodyFile, Summary: "Generate a BYOK/HSM-resident managed key"},
+	{Name: []string{"managed-keys", "rotate"}, Method: "POST", Path: "/api/v1/managed-keys/rotate", Body: bodyFile, Summary: "Rotate a managed key (requires dual-control approval)"},
+	{Name: []string{"managed-keys", "revoke"}, Method: "POST", Path: "/api/v1/managed-keys/revoke", Body: bodyFile, Summary: "Revoke a managed key at the provider (requires dual-control approval)"},
+	{Name: []string{"managed-keys", "zeroize"}, Method: "POST", Path: "/api/v1/managed-keys/zeroize", Body: bodyFile, Summary: "Zeroize a managed key's material at the provider (requires dual-control approval)"},
 }
 
 // Commands returns the CLI's command set.

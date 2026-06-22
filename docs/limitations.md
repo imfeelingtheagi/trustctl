@@ -626,10 +626,23 @@ key-encryption key (KEK):
   the key (the provider refuses further signatures), and zeroize schedules the
   provider's destruction of the material — the durable custody story.
 
-Today these are **library-tier capabilities** with end-to-end tests; the served
-REST/gRPC verbs that drive this lifecycle from the running control plane (and a
-served, m-of-n break-glass flow) remain the wiring tracked under `EXC-CRYPTO-01`.
-The signer's at-rest CA key is still sealed under a local key-encryption file by
+The **HSM/KMS-resident lifecycle is now served end to end** (CRYPTO-005): the running
+control plane exposes `POST /api/v1/managed-keys` (generate) and
+`/api/v1/managed-keys/{rotate,revoke,zeroize}`, with a matching `trstctl managed-keys
+{generate,rotate,revoke,zeroize}` CLI. Each verb is tenant-scoped (AN-1), idempotent
+(AN-5), and event-sourced (AN-2); the three **destructive** transitions
+(rotate/revoke/zeroize) require a **distinct-approver dual-control approval** — the same
+four-eyes machinery the issuance gate uses — before the provider is ever called, so no
+single operator can rotate, disable, or destroy a managed key. The surface is served
+only when a KMS/HSM custody backend is configured (`Deps.ManagedKeyCustody`); otherwise
+the routes fail closed. *Code:* `internal/managedkeys` (served service + fake-KMS E2E),
+`internal/api` (routes + handlers), `internal/cli`, wired in `internal/server`.
+
+Still **library-tier** (reachable from no served verb yet): the **in-process**
+`internal/crypto/byok` lifecycle for the local CA/issuing signing key and the secrets
+KEK (generate-or-import → rotate → revoke → zeroize is implemented and end-to-end
+tested but not yet exposed as its own served route), and a served **m-of-n break-glass**
+flow. The signer's at-rest CA key is still sealed under a local key-encryption file by
 default. See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md). The remaining external residual of
