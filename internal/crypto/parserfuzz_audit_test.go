@@ -27,19 +27,24 @@ var fuzzFuncNameRE = regexp.MustCompile(`(?m)^func (Fuzz\w+)\(`)
 // test's working directory.
 func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	parsers := map[string]string{
-		".":                   "PKCS#10 CSR (VerifyCertificateRequest)",
-		"certinfo":            "X.509 certificate (Inspect)",
-		"ctlog":               "CT-log RFC 6962 (ParseSTH / ParseEntries)",
-		"sshkeys":             "SSH keys (authorized_keys / known_hosts / .pub)",
-		"jose":                "JOSE / ACME JWS",
-		"../protocols/acme":   "ACME new-order / finalize",
-		"../protocols/ari":    "ARI CertID",
-		"../protocols/est":    "EST enroll body (base64 PKCS#10)",
-		"../signing":          "signer SignRequest (protobuf)",
-		"../secretscan":       "scanner-report ingest (untrusted JSON)",
-		"../kmip":             "KMIP TTLV wire frame parser",
-		"../attest/awsiid":    "AWS IID attester Attest (untrusted CMS pre-verification)",
-		"../attest/azureimds": "Azure IMDS attester Attest (untrusted CMS pre-verification)",
+		".":                    "PKCS#10 CSR (VerifyCertificateRequest)",
+		"certinfo":             "X.509 certificate (Inspect)",
+		"ctlog":                "CT-log RFC 6962 (ParseSTH / ParseEntries)",
+		"sshkeys":              "SSH keys (authorized_keys / known_hosts / .pub)",
+		"jose":                 "JOSE / ACME JWS",
+		"seal":                 "binary seal container (seal.Open)",
+		"../protocols/acme":    "ACME new-order / finalize",
+		"../protocols/ari":     "ARI CertID",
+		"../protocols/est":     "EST enroll body (base64 PKCS#10)",
+		"../signing":           "signer SignRequest (protobuf)",
+		"../secretscan":        "scanner-report ingest (untrusted JSON)",
+		"../kmip":              "KMIP TTLV wire frame parser",
+		"../attest/awsiid":     "AWS IID attester Attest (untrusted CMS pre-verification)",
+		"../attest/azureimds":  "Azure IMDS attester Attest (untrusted CMS pre-verification)",
+		"../attest/gcpmeta":    "GCP IIT attester Attest (untrusted JWT/JSON claims)",
+		"../attest/githuboidc": "GitHub Actions OIDC attester Attest (untrusted JWT/JSON claims)",
+		"../attest/k8ssat":     "Kubernetes projected SAT attester Attest (untrusted JWT/JSON claims)",
+		"../attest/tpmquote":   "TPM 2.0 quote attester Attest (untrusted JSON quote envelope)",
 	}
 	for dir, what := range parsers {
 		if !dirHasFuzzTarget(t, dir) {
@@ -63,6 +68,12 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		// and dropping the CMP harness trips this guard (FUZZ-004).
 		"FuzzParseCMPRequest":        "CMP PKIMessage (cmp.go ParseCMPRequest) — untrusted ASN.1 enrollment envelope",
 		"FuzzParseOCSPRequestSerial": "served RFC 6960 OCSP request DER (revocation.go ParseOCSPRequestSerial)",
+		// crypto.InspectCSR (csr.go) is the profile-validation CSR-inspection seam and
+		// runs its own EKU extension ASN.1 decode (eku.go); certinfo.Inspect being
+		// fuzzed (FuzzInspect) did not cover it. Pin FuzzInspectCSR by name so the
+		// CSR-inspection + EKU-decode boundary stays fuzzed and dropping its harness
+		// trips this guard (FUZZ-002).
+		"FuzzInspectCSR": "profile-validation CSR inspection + EKU ASN.1 decode (csr.go InspectCSR, eku.go)",
 	})
 
 	// The cloud instance-identity attesters parse the same untrusted CMS family at
@@ -79,6 +90,33 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	})
 	requireFuzzFuncByName(t, "../kmip", map[string]string{
 		"FuzzParseTTLV": "KMIP TTLV wire frame decoder (kmip ttlv.go) — enterprise key-management client bytes",
+	})
+
+	// The binary sealed-blob decoder (seal.Open) parses an at-rest/backup container —
+	// magic, version dispatch, the 2-byte wrappedLen, and stored-byte slices — before
+	// any AEAD verification (FUZZ-001). Pin FuzzOpenSeal by name so the container
+	// decode stays fuzzed and dropping its harness trips this guard.
+	requireFuzzFuncByName(t, "seal", map[string]string{
+		"FuzzOpenSeal": "binary seal container decode (seal.go Open) — at-rest/backup bytes, pre-AEAD",
+	})
+
+	// The non-CMS instance/workload attesters each parse an UNTRUSTED token/envelope
+	// at their Attest entry point before trust is established (FUZZ-003): the GCP/
+	// GitHub/k8s attesters take an attacker-supplied JWT and JSON-decode its claims,
+	// and the TPM attester JSON-decodes a quote envelope. Pin each harness by name so
+	// the JWT/JSON parse + selector extraction stays fuzzed and dropping any one trips
+	// this guard.
+	requireFuzzFuncByName(t, "../attest/gcpmeta", map[string]string{
+		"FuzzGCPMetaAttest": "GCP IIT attester Attest (gcpmeta.go) — untrusted JWT + JSON claims",
+	})
+	requireFuzzFuncByName(t, "../attest/githuboidc", map[string]string{
+		"FuzzGitHubOIDCAttest": "GitHub Actions OIDC attester Attest (githuboidc.go) — untrusted JWT + JSON claims",
+	})
+	requireFuzzFuncByName(t, "../attest/k8ssat", map[string]string{
+		"FuzzK8sSATAttest": "Kubernetes projected SAT attester Attest (k8ssat.go) — untrusted JWT + JSON claims",
+	})
+	requireFuzzFuncByName(t, "../attest/tpmquote", map[string]string{
+		"FuzzTPMQuoteAttest": "TPM 2.0 quote attester Attest (tpmquote.go) — untrusted JSON quote envelope",
 	})
 }
 
