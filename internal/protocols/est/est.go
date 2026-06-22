@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -237,7 +238,12 @@ func (s *Server) audit(ctx context.Context, opType, decision, reason string) {
 		Reason   string `json:"reason,omitempty"`
 		Profile  string `json:"profile,omitempty"`
 	}{opType, decision, reason, s.profile})
-	_, _ = s.log.Append(ctx, events.Event{Type: "protocol.est." + opType, TenantID: tenantFromCtx(ctx), Data: payload})
+	// CORRECT-004: account for a dropped audit emit (metric + WARN) instead of
+	// swallowing the append error with `_, _ =`.
+	_ = auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
+		_, err := s.log.Append(ctx, events.Event{Type: et, TenantID: tid, Data: d})
+		return err
+	}), nil, "protocol.est."+opType, tenantFromCtx(ctx), payload)
 }
 
 // tenantFromCtx resolves the tenant the EST endpoint serves. EST endpoints are

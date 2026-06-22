@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -210,7 +211,12 @@ func (s *Server) audit(ctx context.Context, decision, reason, txid string) {
 		TransactionID string `json:"transaction_id,omitempty"`
 		Profile       string `json:"profile,omitempty"`
 	}{"scep-enroll", decision, reason, txid, s.profile})
-	_, _ = s.log.Append(ctx, events.Event{Type: "protocol.scep.enroll", TenantID: tenantFromCtx(ctx), Data: payload})
+	// CORRECT-004: account for a dropped audit emit (metric + WARN) instead of
+	// swallowing the append error with `_, _ =`.
+	_ = auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
+		_, err := s.log.Append(ctx, events.Event{Type: et, TenantID: tid, Data: d})
+		return err
+	}), nil, "protocol.scep.enroll", tenantFromCtx(ctx), payload)
 }
 
 type tenantKey struct{}

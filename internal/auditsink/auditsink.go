@@ -69,6 +69,22 @@ func Emit(ctx context.Context, a Auditor, logger *slog.Logger, eventType, tenant
 	return err
 }
 
+// AuditorFunc adapts a plain append function to the Auditor interface so a caller
+// that holds a concrete event-log handle (e.g. *events.Log) can route an
+// after-the-fact emit through Emit and get its dropped-event accounting + WARN log
+// instead of swallowing the error with `_, _ = log.Append(...)` (CORRECT-004). The
+// adapter exists here, not in the event-log package, so auditsink keeps no
+// dependency on the NATS-backed log.
+type AuditorFunc func(ctx context.Context, eventType, tenantID string, data []byte) error
+
+// Audit implements Auditor.
+func (f AuditorFunc) Audit(ctx context.Context, eventType, tenantID string, data []byte) error {
+	if f == nil {
+		return nil
+	}
+	return f(ctx, eventType, tenantID, data)
+}
+
 // Nop discards events. A safe default when no auditor is wired.
 type Nop struct{}
 

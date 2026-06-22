@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/ca"
@@ -392,7 +393,21 @@ func (p *protocolIssuer) auditIssued(ctx context.Context, tenantID, protocolName
 	if err != nil {
 		return
 	}
-	_, _ = p.log.Append(ctx, events.Event{Type: "protocol.issued", TenantID: tenantID, Data: payload})
+	p.emitProtocolAudit(ctx, "protocol.issued", tenantID, payload)
+}
+
+// emitProtocolAudit appends an after-the-fact AN-2 protocol audit event and, on
+// append failure, accounts for the drop through auditsink (the process-wide
+// dropped-event metric + a WARN log) instead of silently swallowing it the way a
+// bare `_, _ = p.log.Append(...)` did (CORRECT-004). The authoritative inventory
+// mutation already committed before this is called (the certificate is recorded /
+// certificate.revoked is projected); a lost protocol audit emit must still be
+// visible to an operator rather than disappearing without a trace.
+func (p *protocolIssuer) emitProtocolAudit(ctx context.Context, eventType, tenantID string, data []byte) {
+	_ = auditsink.Emit(ctx, auditsink.AuditorFunc(func(ctx context.Context, et, tid string, d []byte) error {
+		_, err := p.log.Append(ctx, events.Event{Type: et, TenantID: tid, Data: d})
+		return err
+	}), nil, eventType, tenantID, data)
 }
 
 // auditRevoked emits the served protocol revocation decision as an AN-2 audit
@@ -412,7 +427,7 @@ func (p *protocolIssuer) auditRevoked(ctx context.Context, tenantID, protocolNam
 	if err != nil {
 		return
 	}
-	_, _ = p.log.Append(ctx, events.Event{Type: "protocol.revoked", TenantID: tenantID, Data: payload})
+	p.emitProtocolAudit(ctx, "protocol.revoked", tenantID, payload)
 }
 
 // auditProfileDecision emits the served profile-gated decision for a protocol mint
@@ -433,7 +448,7 @@ func (p *protocolIssuer) auditProfileDecision(ctx context.Context, tenantID, pro
 	if err != nil {
 		return
 	}
-	_, _ = p.log.Append(ctx, events.Event{Type: "issuance.profile_evaluated", TenantID: tenantID, Data: payload})
+	p.emitProtocolAudit(ctx, "issuance.profile_evaluated", tenantID, payload)
 }
 
 // fingerprintOf returns a stable hex fingerprint of arbitrary request bytes through
