@@ -80,6 +80,35 @@ no identifier leaks into a label.
 Scrape it with the example config in
 [`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/observability/prometheus.example.yml).
 
+## Endurance / soak gate (PERF-004)
+
+Metrics existing is not the same as a metric being _gated_. The **soak gate** ties a
+sustained-load profile to pass/fail thresholds so a slow leak or creeping saturation
+fails CI instead of surfacing in production. It tracks, over a time-ordered series:
+p95/p99 latency, RSS and heap, goroutines, open file descriptors, DB pool
+utilization, queue rejections, signer restarts, projection lag, outbox lag, and
+storage growth. The gate **fails** on either an SLO breach (a metric exceeds its
+ceiling) or a **leak slope** (a gauge trends upward faster than its allowed
+per-minute drift, even if no single sample breached a ceiling), and it emits a JSON
+**trend report** so a regression is diagnosable.
+
+The threshold contract and the analyzer are code-owned in
+[`internal/perf/soak.go`](https://github.com/imfeelingtheagi/trstctl/blob/main/internal/perf/soak.go)
+(`SoakThresholds`, `DefaultSoakThresholds`, `AnalyzeSoak`), so docs, the local gate,
+and CI share one denominator — the same pattern as the hot-path smoke gate
+(`PERF-001/002/003`). Run it via:
+
+```sh
+make soak                          # self-test: induced leak must fail, healthy must pass
+scripts/perf/soak.sh --selftest-fail   # induced leak/saturation  -> exit non-zero
+scripts/perf/soak.sh --selftest-ok     # healthy steady state     -> exit zero
+scripts/perf/soak.sh --in series.json --out trend.json   # analyze a captured run
+```
+
+The self-test modes make the gate provably correct without a heavyweight,
+server-backed run (a real soak needs embedded/external PostgreSQL and a multi-minute
+budget, so it runs in the nightly CI profile, feeding a captured series via `--in`).
+
 ## Tracing
 
 Every request is part of a distributed trace using the **W3C Trace Context**
