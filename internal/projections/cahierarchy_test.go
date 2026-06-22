@@ -144,7 +144,17 @@ func TestRootIntermediateAndEndEntity(t *testing.T) {
 		t.Fatalf("intermediate = %+v", inter)
 	}
 
-	chain, err := m.IssueEndEntity(ctx, tenantA, inter.ID, caHierCSR(t, "svc.corp.internal", []string{"svc.corp.internal"}), 90*24*time.Hour)
+	// PKIGOV-002: a hierarchy-issued leaf must carry the SAME served
+	// certificate-profile shape as broker issuance — CRL DP, AIA (OCSP +
+	// CA-issuers), certificatePolicies, SKI, AKI — not the bare legacy leaf.
+	prof := crypto.LeafProfile{
+		CRLDistributionPoints: []string{"http://crl.corp.internal/issuing.crl"},
+		OCSPServers:           []string{"http://ocsp.corp.internal"},
+		IssuingCertificateURL: []string{"http://pki.corp.internal/issuing.crt"},
+		CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
+		MaxValidity:           398 * 24 * time.Hour,
+	}
+	chain, err := m.IssueEndEntity(ctx, tenantA, inter.ID, caHierCSR(t, "svc.corp.internal", []string{"svc.corp.internal"}), 90*24*time.Hour, prof)
 	if err != nil {
 		t.Fatalf("IssueEndEntity: %v", err)
 	}
@@ -161,6 +171,21 @@ func TestRootIntermediateAndEndEntity(t *testing.T) {
 	if !found {
 		t.Errorf("issued cert SANs = %v, want svc.corp.internal", info.DNSNames)
 	}
+	if info.SubjectKeyID == "" {
+		t.Error("hierarchy leaf is missing the Subject Key Identifier (PKIGOV-002)")
+	}
+	if info.AuthorityKeyID == "" {
+		t.Error("hierarchy leaf is missing the Authority Key Identifier (PKIGOV-002)")
+	}
+	if len(info.CRLDistributionPoints) == 0 {
+		t.Error("hierarchy leaf is missing CRL distribution points (PKIGOV-002)")
+	}
+	if len(info.OCSPServers) == 0 {
+		t.Error("hierarchy leaf is missing the OCSP AIA (PKIGOV-002)")
+	}
+	if len(info.IssuingCertificateURL) == 0 {
+		t.Error("hierarchy leaf is missing the CA-issuers AIA (PKIGOV-002)")
+	}
 }
 
 // TestInternalCAConstraintViolationRejected is the acceptance "constraints are
@@ -176,10 +201,10 @@ func TestInternalCAConstraintViolationRejected(t *testing.T) {
 		t.Fatalf("CreateRoot: %v", err)
 	}
 
-	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "ok", []string{"ok.corp.internal"}), time.Hour); err != nil {
+	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "ok", []string{"ok.corp.internal"}), time.Hour, crypto.LeafProfile{}); err != nil {
 		t.Errorf("a permitted issuance was rejected: %v", err)
 	}
-	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "evil", []string{"evil.example.com"}), time.Hour); err == nil {
+	if _, err := m.IssueEndEntity(ctx, tenantA, root.ID, caHierCSR(t, "evil", []string{"evil.example.com"}), time.Hour, crypto.LeafProfile{}); err == nil {
 		t.Error("an issuance violating the name constraints was accepted")
 	}
 }

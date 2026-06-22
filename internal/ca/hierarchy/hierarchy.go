@@ -251,14 +251,24 @@ func (m *Manager) CreateIntermediate(ctx context.Context, tenantID, ceremonyID, 
 	return rec, nil
 }
 
-// IssueEndEntity issues an end-entity certificate from caID, enforcing the CA's
-// name and EKU constraints; a violating request is rejected.
-func (m *Manager) IssueEndEntity(ctx context.Context, tenantID, caID string, csr []byte, ttl time.Duration) ([]byte, error) {
+// IssueEndEntity issues an end-entity certificate from caID under the served
+// certificate-profile shape, enforcing the CA's name and EKU constraints; a
+// violating request is rejected. The required prof carries the RFC 5280 /
+// CA-Browser-Forum fields the served issuance applies — CRL distribution points,
+// AIA (OCSP + CA issuers), certificatePolicies, the validity ceiling, the EKU
+// allow-list, and DNS name constraints — so a hierarchy-issued leaf is the SAME
+// shape as a broker-issued one (PKIGOV-002): it carries revocation pointers, AIA,
+// policies, SKI, AKI, and a bounded validity rather than the bare legacy leaf. The
+// signing routes through the crypto boundary's single leaf signer (AN-3); the CA's
+// own lane is additionally folded in so the leaf can never exceed the CA's
+// constraints. The zero profile is accepted (the in-process reference shape) for
+// callers with no served revocation infrastructure.
+func (m *Manager) IssueEndEntity(ctx context.Context, tenantID, caID string, csr []byte, ttl time.Duration, prof boundarycrypto.LeafProfile) ([]byte, error) {
 	ca, err := m.get(caID)
 	if err != nil {
 		return nil, err
 	}
-	issued, err := ca.IssueLeaf(csr, ttl)
+	issued, err := ca.IssueLeafWithProfile(csr, ttl, prof)
 	if err != nil {
 		return nil, fmt.Errorf("hierarchy: issue: %w", err)
 	}

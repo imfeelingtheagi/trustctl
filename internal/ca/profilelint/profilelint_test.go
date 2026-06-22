@@ -11,6 +11,8 @@ import (
 
 	"trstctl.com/trstctl/internal/ca/profilelint"
 	"trstctl.com/trstctl/internal/crypto"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // issueProfiledLeaf mints a real end-entity leaf through the served issuing path
@@ -348,4 +350,137 @@ func firstPEMCert(chain []byte) ([]byte, error) {
 		return nil, fmt.Errorf("chain does not start with a certificate PEM block")
 	}
 	return block.Bytes, nil
+}
+
+// issueHierarchyLeaf mints a real end-entity leaf through the hierarchy/reference
+// CA path (cryptoca.CA.IssueLeafWithProfile, the machinery Manager.IssueEndEntity
+// serves), carrying the full served certificate-profile shape. This is the exact
+// artifact a hierarchy-issued leaf is, so linting it exercises the real path, not a
+// hand-rolled fixture. All crypto stays behind the AN-3 boundary.
+func issueHierarchyLeaf(t *testing.T, prof crypto.LeafProfile, cn string, dns []string, ttl time.Duration) []byte {
+	t.Helper()
+	root, err := cryptoca.NewRoot(cryptoca.CASpec{
+		CommonName:          "Hierarchy Profile Root CA",
+		PermittedDNSDomains: []string{"profile.test"},
+		MaxPathLen:          1,
+		TTL:                 10 * 365 * 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewRoot: %v", err)
+	}
+	t.Cleanup(root.Destroy)
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(leafKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn, DNSNames: dns}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := root.IssueLeafWithProfile(csr, ttl, prof)
+	if err != nil {
+		t.Fatalf("IssueLeafWithProfile: %v", err)
+	}
+	leaf, err := firstPEMCert(issued.CertificatePEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return leaf
+}
+
+// TestHierarchyIssueEndEntityProfileLint is the PKIGOV-002 acceptance: a
+// hierarchy/reference-issued leaf must carry the SAME served certificate-profile
+// shape as broker issuance — SKI, AKI, CRL distribution points, AIA (OCSP +
+// CA-issuers), and certificatePolicies — so the structural RFC 5280 linter passes
+// AND every served-shape pointer is present. Before PKIGOV-002 the hierarchy leaf
+// template set none of SKI/AKI/CRLDP/AIA, so this test was RED (e_ski_absent,
+// e_aki_absent, plus the missing-pointer assertions); routing IssueEndEntity
+// through SignLeafFromCSRWithProfile makes it GREEN.
+func TestHierarchyIssueEndEntityProfileLint(t *testing.T) {
+	prof := crypto.LeafProfile{
+		CRLDistributionPoints: []string{"http://crl.profile.test/issuing.crl"},
+		OCSPServers:           []string{"http://ocsp.profile.test"},
+		IssuingCertificateURL: []string{"http://pki.profile.test/issuing.crt"},
+		CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
+		MaxValidity:           398 * 24 * time.Hour,
+	}
+	leaf := issueHierarchyLeaf(t, prof, "svc.profile.test", []string{"svc.profile.test"}, 90*24*time.Hour)
+
+	findings, err := profilelint.Lint(leaf, profilelint.Options{Leaf: true, MaxValidity: 398 * 24 * time.Hour})
+	if err != nil {
+		t.Fatalf("Lint: %v", err)
+	}
+	if profilelint.HasErrors(findings) {
+		t.Fatalf("hierarchy-issued leaf was flagged by the profile linter (PKIGOV-002): %v", profilelint.Errors(findings))
+	}
+
+	info, err := certinfo.Inspect(leaf)
+	if err != nil {
+		t.Fatalf("inspect: %v", err)
+	}
+	if info.SubjectKeyID == "" {
+		t.Error("hierarchy leaf is missing the Subject Key Identifier (PKIGOV-002)")
+	}
+	if info.AuthorityKeyID == "" {
+		t.Error("hierarchy leaf is missing the Authority Key Identifier (PKIGOV-002)")
+	}
+	if len(info.CRLDistributionPoints) == 0 {
+		t.Error("hierarchy leaf is missing the CRL distribution points (PKIGOV-002)")
+	}
+	if len(info.OCSPServers) == 0 {
+		t.Error("hierarchy leaf is missing the OCSP AIA (PKIGOV-002)")
+	}
+	if len(info.IssuingCertificateURL) == 0 {
+		t.Error("hierarchy leaf is missing the CA-issuers AIA (PKIGOV-002)")
+	}
+}
+
+// TestHierarchyIssueEndEntityProfileLintNegative is the PKIGOV-002 negative
+// fixture: the linter and the served profile machinery must be RED on a
+// non-conformant hierarchy issuance. A leaf whose validity exceeds the bound
+// profile ceiling is rejected before signing (no out-of-profile leaf is minted),
+// and the hierarchy CA certificate linted as if it were an end-entity leaf trips
+// the structural linter (IsCA=true, no SAN). Both prove the gate fails on a
+// regression rather than silently passing.
+func TestHierarchyIssueEndEntityProfileLintNegative(t *testing.T) {
+	// (a) An over-long request is refused before any certificate is signed.
+	root, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "Hierarchy Negative Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	if err != nil {
+		t.Fatalf("NewRoot: %v", err)
+	}
+	t.Cleanup(root.Destroy)
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(leafKey.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "too-long.test", DNSNames: []string{"too-long.test"}}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.IssueLeafWithProfile(csr, 30*24*time.Hour, crypto.LeafProfile{MaxValidity: time.Hour}); err == nil {
+		t.Fatal("a request exceeding the profile validity ceiling was issued (PKIGOV-002)")
+	} else if !crypto.IsLeafProfileViolation(err) {
+		t.Fatalf("over-long issuance was rejected, but not as a leaf-profile violation: %v", err)
+	}
+
+	// (b) The hierarchy CA certificate itself, linted as a leaf, must be RED.
+	findings, err := profilelint.Lint(root.CertificateDER(), profilelint.Options{Leaf: true})
+	if err != nil {
+		t.Fatalf("Lint: %v", err)
+	}
+	if !profilelint.HasErrors(findings) {
+		t.Fatal("profile linter did not flag a hierarchy CA certificate linted as an end-entity leaf (PKIGOV-002)")
+	}
+	codes := map[string]bool{}
+	for _, f := range profilelint.Errors(findings) {
+		codes[f.Code] = true
+	}
+	if !codes["e_leaf_is_ca"] {
+		t.Error("linter did not flag CA=true on a hierarchy leaf (e_leaf_is_ca)")
+	}
+	if !codes["e_leaf_without_san"] {
+		t.Error("linter did not flag a missing SAN on a hierarchy leaf (e_leaf_without_san)")
+	}
 }

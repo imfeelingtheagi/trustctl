@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // This file adds private/enterprise CA hierarchy support (F48) inside the AN-3
@@ -134,55 +136,89 @@ func (c *CA) CreateIntermediate(spec CASpec) (*CA, error) {
 // IssueLeaf validates a CSR and signs an end-entity certificate, enforcing the
 // CA's name constraints (every SAN must be permitted) and EKU policy. The
 // returned PEM is the leaf followed by this CA's chain to the root.
+//
+// It is shorthand for IssueLeafWithProfile with the empty LeafProfile, preserving
+// the in-process reference shape for callers that have no served revocation
+// infrastructure (tests, breakglass). The served hierarchy path supplies a
+// populated profile so the leaf carries CRL DP, AIA, certificatePolicies, and a
+// bounded validity — see IssueLeafWithProfile (PKIGOV-002).
 func (c *CA) IssueLeaf(csrDER []byte, ttl time.Duration) (Issued, error) {
-	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil {
-		return Issued{}, fmt.Errorf("ca: parse csr: %w", err)
-	}
-	if err := csr.CheckSignature(); err != nil {
-		return Issued{}, fmt.Errorf("ca: csr signature: %w", err)
-	}
-	if len(c.permittedDNS) > 0 {
-		for _, name := range csr.DNSNames {
-			if !dnsPermitted(name, c.permittedDNS) {
-				return Issued{}, fmt.Errorf("ca: SAN %q violates the CA name constraints %v", name, c.permittedDNS)
-			}
-		}
-	}
-	serial, err := randomSerial()
+	return c.IssueLeafWithProfile(csrDER, ttl, boundarycrypto.LeafProfile{})
+}
+
+// IssueLeafWithProfile signs an end-entity certificate from a CSR through the SAME
+// served LeafProfile machinery as the broker issuance path
+// (crypto.SignLeafFromCSRWithProfile), so a hierarchy-issued leaf carries the
+// identical RFC 5280 / CA-Browser-Forum shape: the Subject Key Identifier and
+// Authority Key Identifier, the revocation pointers (CRL distribution points), the
+// AIA (OCSP responder + CA-issuers), the certificatePolicies OIDs, a bounded
+// validity ceiling, the EKU policy, and the DNS name constraints (PKIGOV-002). The
+// leaf signing is not duplicated here — it is delegated to the crypto boundary's
+// single leaf signer, which also verifies the issued certificate against this CA
+// before returning it (fail closed).
+//
+// This CA's own lane is folded into the supplied profile so a hierarchy leaf can
+// never be issued outside the CA's name-constraint / EKU policy even when the
+// caller's profile is more permissive: the CA's permittedDNS is intersected into
+// the profile's permitted DNS suffixes (a CA with constraints clamps them), and
+// the CA's EKU policy supplies the allowed-EKU set when the profile names none.
+// The returned PEM is the leaf followed by this CA's chain to the root.
+func (c *CA) IssueLeafWithProfile(csrDER []byte, ttl time.Duration, prof boundarycrypto.LeafProfile) (Issued, error) {
+	prof = c.applyCALane(prof)
+	signer, err := c.digestSigner()
 	if err != nil {
 		return Issued{}, err
 	}
-	eku := c.ekus
-	if len(eku) == 0 {
-		eku = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+	defer signer.Destroy()
+	leafDER, err := boundarycrypto.SignLeafFromCSRWithProfile(c.der, signer, csrDER, ttl, prof)
+	if err != nil {
+		return Issued{}, fmt.Errorf("ca: issue leaf: %w", err)
 	}
-	now := time.Now()
-	notAfter := now.Add(ttl)
-	tmpl := &x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               csr.Subject,
-		DNSNames:              csr.DNSNames,
-		IPAddresses:           csr.IPAddresses,
-		EmailAddresses:        csr.EmailAddresses,
-		URIs:                  csr.URIs,
-		NotBefore:             now.Add(-time.Minute),
-		NotAfter:              notAfter,
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           eku,
-		BasicConstraintsValid: true,
-	}
-	var leafDER []byte
-	if err := c.key.sign(func(priv *ecdsa.PrivateKey) error {
-		var e error
-		leafDER, e = x509.CreateCertificate(rand.Reader, tmpl, c.cert, csr.PublicKey, priv)
-		return e
-	}); err != nil {
-		return Issued{}, fmt.Errorf("ca: sign certificate: %w", err)
+	leaf, err := x509.ParseCertificate(leafDER)
+	if err != nil {
+		return Issued{}, fmt.Errorf("ca: parse issued leaf: %w", err)
 	}
 	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
 	out = append(out, c.ChainPEM()...)
-	return Issued{CertificatePEM: out, Serial: serial.Text(16), NotAfter: notAfter}, nil
+	return Issued{CertificatePEM: out, Serial: leaf.SerialNumber.Text(16), NotAfter: leaf.NotAfter}, nil
+}
+
+// applyCALane folds this CA's own name-constraint and EKU policy into prof so the
+// issued leaf is clamped to the CA's lane regardless of the caller-supplied
+// profile. A CA that permits no DNS domains and no EKUs imposes no extra clamp
+// (the profile governs alone); a CA with constraints narrows the profile to them.
+func (c *CA) applyCALane(prof boundarycrypto.LeafProfile) boundarycrypto.LeafProfile {
+	if len(c.permittedDNS) > 0 {
+		if len(prof.PermittedDNSSuffixes) == 0 {
+			prof.PermittedDNSSuffixes = append([]string(nil), c.permittedDNS...)
+		} else {
+			prof.PermittedDNSSuffixes = intersectDNS(prof.PermittedDNSSuffixes, c.permittedDNS)
+		}
+	}
+	if len(prof.AllowedExtKeyUsage) == 0 {
+		if ekus := ekuStrings(c.ekus); len(ekus) > 0 {
+			prof.AllowedExtKeyUsage = ekus
+		}
+	}
+	return prof
+}
+
+// digestSigner reconstructs a boundary DigestSigner over this CA's locked PKCS#8
+// signing key so the leaf signer (crypto.SignLeafFromCSRWithProfile) can drive it
+// without leaving the AN-3 boundary. The returned signer holds its own locked
+// secret buffer (the private key materializes in the clear only for the instant of
+// each SignDigest, AN-8); the caller MUST Destroy it when done. The in-process CA
+// key is always ECDSA-P256 (NewRoot/CreateIntermediate generate P256).
+func (c *CA) digestSigner() (*boundarycrypto.LockedSigner, error) {
+	der := c.key.der.Bytes()
+	if der == nil {
+		return nil, fmt.Errorf("ca: CA key has been destroyed")
+	}
+	signer, err := boundarycrypto.NewLockedSignerFromPKCS8(boundarycrypto.ECDSAP256, der)
+	if err != nil {
+		return nil, fmt.Errorf("ca: load CA signing key: %w", err)
+	}
+	return signer, nil
 }
 
 // CrossSign issues a cross-certificate for another CA's certificate: it carries
