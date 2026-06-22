@@ -352,6 +352,14 @@ func readOCSPRequest(r *http.Request) ([]byte, error) {
 		if enc == "" {
 			return nil, errors.New("GET OCSP requires a base64-encoded request in the path")
 		}
+		// FUZZ-005: the GET form decodes the base64 request from the path directly,
+		// bypassing the POST body cap. Reject an over-cap encoded value BEFORE base64
+		// decode (the decoded DER is bounded by maxOCSPRequest, and base64 inflates by
+		// 4/3) so a hostile GET cannot allocate an unbounded decode buffer. Surface
+		// ErrTooLarge so the handler maps it to 413 exactly like the POST path.
+		if len(enc) > base64.StdEncoding.EncodedLen(maxOCSPRequest) {
+			return nil, bodylimit.ErrTooLarge
+		}
 		// The encoded request can contain '/' which a client may percent-decode; the
 		// router gives us the already-unescaped segment, so decode it directly.
 		der, err := base64.StdEncoding.DecodeString(enc)

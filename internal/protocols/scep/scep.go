@@ -176,6 +176,14 @@ func readPKIMessage(r *http.Request) ([]byte, error) {
 	if msg == "" {
 		return nil, errors.New("scep: missing message")
 	}
+	// FUZZ-005: the GET form decodes the base64 `message` directly, bypassing the
+	// POST body cap. Reject an over-cap encoded value BEFORE base64 decode (the
+	// decoded DER is bounded by maxPKIBody, and base64 inflates by 4/3), so a
+	// hostile GET cannot allocate an unbounded decode buffer. Surface ErrTooLarge
+	// so the handler maps it to 413 exactly like the POST path.
+	if len(msg) > base64.StdEncoding.EncodedLen(maxPKIBody) {
+		return nil, bodylimit.ErrTooLarge
+	}
 	der, err := base64.StdEncoding.DecodeString(msg)
 	if err != nil {
 		return nil, errors.New("scep: message is not valid base64")

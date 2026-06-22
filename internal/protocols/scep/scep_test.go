@@ -3,10 +3,12 @@ package scep_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,5 +212,30 @@ func TestPKIOperationRejectsOverLimitBody(t *testing.T) {
 
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("over-limit PKIOperation status %d, want 413", rec.Code)
+	}
+}
+
+// TestSCEPGETMessageTooLarge proves FUZZ-005: the base64 GET `message` form is
+// capped like the POST body. Before the fix the GET path base64-decoded an
+// arbitrarily large `message` directly (no cap), so a hostile client could force
+// an unbounded decode-buffer allocation that the POST path already rejects. An
+// over-cap encoded value is now rejected with 413 BEFORE base64 decode runs.
+func TestSCEPGETMessageTooLarge(t *testing.T) {
+	srv := scep.New(scep.Config{})
+
+	// base64.StdEncoding.EncodedLen(256 KiB) is the largest legitimate encoded
+	// length; one full base64 quantum (4 chars) past it must be rejected. 'A' is a
+	// valid base64 symbol, so the value would decode fine if it were not capped —
+	// this proves the cap, not a base64 parse error.
+	const maxPKIBody = 1 << 18
+	over := base64.StdEncoding.EncodedLen(maxPKIBody) + 4
+	msg := strings.Repeat("A", over)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/scep?operation=PKIOperation&message="+msg, nil)
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-cap GET message status %d, want 413", rec.Code)
 	}
 }
