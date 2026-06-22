@@ -33,6 +33,19 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Journeys:
+      - Issue your first certificate: journeys/first-certificate.md
+      - Automate TLS across your fleet: journeys/automate-fleet-tls.md
+      - Kubernetes workload identity: journeys/kubernetes-workload-identity.md
+      - Enroll devices & IoT fleets: journeys/enroll-devices.md
+      - Migrate from your existing CA: journeys/migrate-from-existing-ca.md
+      - Onboard a team as a tenant: journeys/onboard-a-team.md
+      - Manage application secrets: journeys/manage-secrets.md
+      - SSH access at scale: journeys/ssh-at-scale.md
+      - Respond to a compromise: journeys/respond-to-compromise.md
+      - Run in production: journeys/run-in-production.md
+      - Build on the API, CLI & SDKs: journeys/build-on-the-api.md
+      - Crypto-agility & PQC migration: journeys/crypto-agility-pqc.md
   - Current limitations: limitations.md
   - Features:
       - All features (index): features.md

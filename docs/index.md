@@ -15,8 +15,25 @@ binary serves today versus what is built as library code but not yet served.
 
 ## Where to start
 
-- **[Getting started](getting-started.md)** — bring up trstctl and issue your
-  first certificate in under 15 minutes.
+New here? **[Getting started](getting-started.md)** brings up trstctl and gets you your
+first certificate in minutes. Then **pick the journey that matches your goal** — each is
+an end-to-end walkthrough that chains the features you need:
+
+- **[Issue your first certificate](journeys/first-certificate.md)** — zero to a trusted cert.
+- **[Automate TLS across your fleet](journeys/automate-fleet-tls.md)** — ACME, DNS-01, renewal, deploy.
+- **[Give Kubernetes workloads an identity](journeys/kubernetes-workload-identity.md)** — SPIFFE, no static secrets.
+- **[Enroll devices & IoT fleets](journeys/enroll-devices.md)** — EST, SCEP, CMP.
+- **[Migrate from your existing CA](journeys/migrate-from-existing-ca.md)** — discover, stand up, cut over.
+- **[Onboard a team as a tenant](journeys/onboard-a-team.md)** — SSO, RBAC, policy, audit.
+- **[Manage application secrets](journeys/manage-secrets.md)** — rotation, dynamic secrets, sharing.
+- **[Issue & trust SSH at scale](journeys/ssh-at-scale.md)** — SSH CA, deploy/trust, attested certs.
+- **[Respond to a compromise](journeys/respond-to-compromise.md)** — revoke, re-issue, break-glass.
+- **[Run in production](journeys/run-in-production.md)** — TLS, monitoring, backup/DR, compliance.
+- **[Build on the API, CLI & SDKs](journeys/build-on-the-api.md)** — OpenAPI, Go/TS SDKs, the graph.
+- **[Stay crypto-agile & migrate to PQC](journeys/crypto-agility-pqc.md)** — inventory, plan, migrate.
+
+Reference docs:
+
 - **[All features](features.md)** — the full catalog of all 78 capabilities, each
   with its own deep-dive page written for both newcomers and experts; start here to
   find anything, and keep the **[glossary](glossary.md)** open if a term is new.
