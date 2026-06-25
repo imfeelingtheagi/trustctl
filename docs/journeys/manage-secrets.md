@@ -27,11 +27,11 @@ Be precise here (see [Current limitations](../limitations.md) and
 [Secrets](../features/secrets.md)):
 
 - **Served** on the running binary under `/api/v1/secrets/*`: the secret store
-  (create, read, **rotate**, delete), one-time secret sharing, the dynamic PKI secret
-  (a short-lived certificate *and* its key), and machine login.
-- **Library-only** (built and tested, no served endpoint yet): outbound **secret-sync**
-  to external stores, and the **transit / KMIP** encryption-as-a-service surface. The
-  rotation engine, dynamic database secrets, ephemeral attestation-gated API keys, the
+  (create, read, **rotate**, delete), dynamic secret leases, one-time secret sharing,
+  the dynamic PKI secret (a short-lived certificate *and* its key), machine login, and
+  outbound **secret-sync** to configured external stores.
+- **Library-only** (built and tested, no served endpoint yet): the **transit / KMIP**
+  encryption-as-a-service surface. Ephemeral attestation-gated API keys, the
   gitleaks/trufflehog scanning bridge, and secret-store / API-key *discovery* are driven
   through their Go APIs today.
 
@@ -63,15 +63,38 @@ Be precise here (see [Current limitations](../limitations.md) and
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
-     -d '{"value":"s3cr3t"}'
+     -d '{"name":"db/password","value":"s3cr3t"}'
    ```
 
    -> the secret is stored as version 1; reading it back returns the latest live
    version.
 
-3. Rotate a long-lived secret to a new version. The served store creates a new version
+3. Import a small tree and resolve references deliberately. Imports are all-or-nothing:
+   every value is sealed as version 1, and if one path already exists the import is
+   rejected. References use `${secret.path}` and expand only when the caller asks for
+   `resolve=true`, so a normal read does not fan out across hidden dependencies.
+
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/import \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"prefix":"app","values":{"db/user":"payments","db/dsn":"postgres://${secret.app/db/user}@db.service.local/payments"}}'
+
+   curl -fksS "https://localhost:8443/api/v1/secrets/store/app/db/dsn?resolve=true" \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN"
+   ```
+
+   -> the first response lists only imported metadata; the second response expands the
+   referenced value for this tenant. A circular reference is a `409` problem response
+   with a `cycle` field.
+
+4. Rotate a long-lived secret to a new version. The served store creates a new version
    on write (old versions stay queryable), so a `PUT` rolls forward without losing
-   history. See [Secrets](../features/secrets.md).
+   history. For backend static credentials, the served rotation API stages a new
+   credential, cuts the consumer pointer over, verifies the new login, retires the old
+   reference, and rolls back automatically if cutover or verification fails. See
+   [Secrets](../features/secrets.md).
 
    ```sh
    curl -fksS -X PUT https://localhost:8443/api/v1/secrets/store/db/password \
@@ -81,14 +104,75 @@ Be precise here (see [Current limitations](../limitations.md) and
      -d '{"value":"r0tat3d"}'
    ```
 
-   -> a new version is recorded. The four-phase rollback-safe rotation *engine* (stage,
-   cut over, verify, retire, with automatic rollback) is library code today — drive it
-   in Go; see [Secrets](../features/secrets.md).
+   -> a new native-store version is recorded.
 
-4. Hand an application a short-lived credential it cannot hoard. The dynamic PKI secret
-   issues a usable TLS identity — a certificate **and** its private key — through the
-   issuing authority in the separate signing service, recorded on the revocation
-   pipeline so a revoked one stops validating. See [Secrets](../features/secrets.md).
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotations \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}'
+   ```
+
+   -> a rollback-safe static credential rotation runs through the served API. The
+   response contains only metadata such as `old_ref`, `new_ref`, `completed`,
+   `rolled_back`, and `failed_phase`; it never returns the new credential value.
+
+5. Read history or recover to a timestamp. Historical reads are explicit value reads,
+   and point-in-time recovery republishes the version that was current at `at` as the
+   next monotonic version.
+
+   ```sh
+   curl -fksS "https://localhost:8443/api/v1/secrets/store/history/db/password?version=1" \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN"
+
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/recover/db/password \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"at":"2026-06-25T12:00:00Z"}'
+   ```
+
+   -> the recovered value becomes the latest version; metadata and audit records do not
+   contain plaintext secret material.
+
+6. Hand an application a short-lived backend credential it cannot hoard. Dynamic leases
+   return the credential once, then later reads show only metadata. When the TTL expires,
+   the served leaseworker queues backend revocation through the outbox, so a crash does
+   not silently drop the revoke. Operators must wire the named provider backend before a
+   tenant can issue from it. The built-in backend names are `postgresql`, `mysql`,
+   `mongodb`, `aws-iam`, `gcp-iam`, `azure-entra`, `kubernetes`, and `redis`; each
+   creates a scoped credential in the target system and revokes it when the lease
+   closes.
+
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/leases \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"provider":"postgresql","role":"readonly","ttl_seconds":900}'
+
+   curl -fksS https://localhost:8443/api/v1/secrets/leases/<lease-id> \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN"
+
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/leases/<lease-id>/renew \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"extend_seconds":900}'
+
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/leases/<lease-id>/revoke \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)"
+   ```
+
+   -> the issue response contains the credential; the get, renew, and revoke responses
+   contain only lease id, provider, role, state, and timestamps.
+
+7. Hand an application a short-lived certificate identity it cannot hoard. The dynamic
+   PKI secret issues a usable TLS identity — a certificate **and** its private key —
+   through the issuing authority in the separate signing service, recorded on the
+   revocation pipeline so a revoked one stops validating. See [Secrets](../features/secrets.md).
 
    ```sh
    curl -fksS -X POST https://localhost:8443/api/v1/secrets/pki \
@@ -99,11 +183,10 @@ Be precise here (see [Current limitations](../limitations.md) and
    ```
 
    -> you get back a short-lived certificate and key your app can load directly, with no
-   long-lived secret to steal. Dynamic *database* secrets (PostgreSQL, MySQL, and the
-   rest) and ephemeral attestation-gated API keys are library-tier — see
-   [Secrets](../features/secrets.md) and [Platform & API](../features/platform-and-api.md).
+   long-lived secret to steal. Ephemeral attestation-gated API keys are library-tier —
+   see [Secrets](../features/secrets.md) and [Platform & API](../features/platform-and-api.md).
 
-5. Share a one-off secret that destroys itself after a single read.
+8. Share a one-off secret that destroys itself after a single read.
 
    ```sh
    curl -fksS -X POST https://localhost:8443/api/v1/secrets/shares \
@@ -116,16 +199,28 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the share redeems exactly once at `POST /api/v1/secrets/shares/.../redeem`; a
    second redeem fails, and the bearer token is never written to the audit log.
 
-6. Know the edges before you rely on them. Outbound secret-sync (push + drift detection
-   to Kubernetes, GitHub Actions, GitLab CI, and the rest) and the transit/KMIP
-   encryption surface are **library-only** — there is no served endpoint yet, so you
-   drive them through their Go APIs. Finding secrets already scattered across your
-   estate (secret-store and API-key discovery) records references only, never values —
-   see [Discovery & inventory](../features/discovery-and-inventory.md) and
-   [Current limitations](../limitations.md).
+9. Push a stored secret to a configured external target when a platform needs a copy.
+   The served sync path writes a sealed outbox row first, then delivers through the
+   configured pusher. GitHub Actions, AWS Secrets Manager, and Kubernetes have concrete
+   pushers; Vercel/GitLab/Terraform/GCP/Azure style targets can use the JSON/manual
+   pusher until deeper native APIs are configured.
 
-   -> plan around this: the served pieces are the store, sharing, dynamic PKI, and
-   machine login; sync and transit/KMIP are programmatic today.
+   ```sh
+   cat > secret-sync.json <<'JSON'
+   {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
+   JSON
+   trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
+   ```
+
+   -> the response returns only metadata and delivery flags; it never echoes the secret
+   value.
+
+10. Know the edges before you rely on them. The transit/KMIP encryption surface remains
+    **library-only** — there is no served endpoint yet, so you drive it through Go APIs.
+    Finding secrets already scattered across your estate (secret-store and API-key
+    discovery) records references only, never values — see
+    [Discovery & inventory](../features/discovery-and-inventory.md) and
+    [Current limitations](../limitations.md).
 
 ## Where next
 

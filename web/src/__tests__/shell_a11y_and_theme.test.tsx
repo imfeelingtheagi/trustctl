@@ -409,7 +409,7 @@ describe("app shell accessibility and theme", () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByText(/38 served REST paths/i)).toBeInTheDocument();
+    expect(screen.getByText(/47 served REST paths/i)).toBeInTheDocument();
     expect(screen.getByText("/api/v1/secrets/store/{name}")).toBeInTheDocument();
     expect(screen.getByText("/api/v1/graph/query")).toBeInTheDocument();
     expect(screen.getByText("Spec view")).toBeInTheDocument();

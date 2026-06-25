@@ -8,11 +8,14 @@ package secretsync
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sync"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Pusher delivers a key/value to one external platform.
@@ -68,9 +71,14 @@ func New(tenantID string, target *Target, outbox Outbox, audit auditsink.Auditor
 
 // Sync records the desired value and durably enqueues a delivery to the target.
 func (e *Engine) Sync(ctx context.Context, key string, value []byte) error {
+	nonce, err := crypto.RandomBytes(16)
+	if err != nil {
+		return err
+	}
+	id := "sync-" + hex.EncodeToString(nonce)
+	secret.Wipe(nonce)
 	e.mu.Lock()
 	e.n++
-	id := fmt.Sprintf("sync-%d", e.n)
 	e.desired[key] = crypto.SHA256Hex(value)
 	e.mu.Unlock()
 	if err := e.outbox.Enqueue(ctx, SyncItem{ID: id, Key: key, Target: e.target.Name(), Value: value}); err != nil {
@@ -89,7 +97,9 @@ func (e *Engine) RunDeliveries(ctx context.Context) (int, error) {
 	}
 	done := 0
 	for _, it := range items {
-		if err := e.target.pusher.Push(ctx, it.Key, it.Value); err != nil {
+		err := e.target.pusher.Push(ctx, it.Key, it.Value)
+		secret.Wipe(it.Value)
+		if err != nil {
 			continue // fail-safe: keep queued, retry later
 		}
 		if err := e.outbox.Done(ctx, it.ID); err != nil {
@@ -124,11 +134,23 @@ func NewGitLabCITarget(p Pusher) *Target { return NewTarget("gitlab-ci", p) }
 // NewTerraformTarget syncs secrets to Terraform/OpenTofu.
 func NewTerraformTarget(p Pusher) *Target { return NewTarget("terraform", p) }
 
+// NewTerraformCloudTarget syncs secrets to Terraform Cloud/OpenTofu.
+func NewTerraformCloudTarget(p Pusher) *Target { return NewTarget("terraform-cloud", p) }
+
 // NewVercelTarget syncs secrets to Vercel/Netlify.
 func NewVercelTarget(p Pusher) *Target { return NewTarget("vercel-netlify", p) }
 
 // NewAWSParamStoreTarget syncs secrets to AWS Parameter Store / Secrets Manager.
 func NewAWSParamStoreTarget(p Pusher) *Target { return NewTarget("aws-parameter-store", p) }
+
+// NewAWSSecretsManagerTarget syncs secrets to AWS Secrets Manager.
+func NewAWSSecretsManagerTarget(p Pusher) *Target { return NewTarget("aws-secrets-manager", p) }
+
+// NewGCPSecretManagerTarget syncs secrets to GCP Secret Manager.
+func NewGCPSecretManagerTarget(p Pusher) *Target { return NewTarget("gcp-secret-manager", p) }
+
+// NewAzureKeyVaultTarget syncs secrets to Azure Key Vault.
+func NewAzureKeyVaultTarget(p Pusher) *Target { return NewTarget("azure-key-vault", p) }
 
 // NewWebhookTarget syncs secrets to a generic signed webhook.
 func NewWebhookTarget(p Pusher) *Target { return NewTarget("webhook", p) }
@@ -146,6 +168,7 @@ func NewMemoryOutbox() *MemoryOutbox { return &MemoryOutbox{pending: map[string]
 func (o *MemoryOutbox) Enqueue(_ context.Context, item SyncItem) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	item.Value = secrettext.Clone(item.Value)
 	o.pending[item.ID] = item
 	return nil
 }
@@ -156,6 +179,7 @@ func (o *MemoryOutbox) Pending(_ context.Context) ([]SyncItem, error) {
 	defer o.mu.Unlock()
 	out := make([]SyncItem, 0, len(o.pending))
 	for _, it := range o.pending {
+		it.Value = secrettext.Clone(it.Value)
 		out = append(out, it)
 	}
 	return out, nil

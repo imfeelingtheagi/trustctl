@@ -1208,6 +1208,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/leases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a dynamic secret lease */
+        post: operations["issueDynamicSecretLease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/leases/{lease_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read dynamic secret lease metadata */
+        get: operations["getDynamicSecretLease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/leases/{lease_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renew a dynamic secret lease */
+        post: operations["renewDynamicSecretLease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/leases/{lease_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a dynamic secret lease */
+        post: operations["revokeDynamicSecretLease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/login": {
         parameters: {
             query?: never;
@@ -1236,6 +1304,23 @@ export interface paths {
         put?: never;
         /** Issue a dynamic PKI secret (short-lived cert + key) */
         post: operations["issuePKISecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/rotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a rollback-safe static secret rotation */
+        post: operations["rotateStaticSecret"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1294,6 +1379,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/store/history/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one historical application-secret version */
+        get: operations["getSecretVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/store/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import a tree of application secrets (sealed at rest) */
+        post: operations["importSecrets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/store/recover/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover an application secret to a point in time */
+        post: operations["recoverSecretAt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/store/{name}": {
         parameters: {
             query?: never;
@@ -1308,6 +1444,23 @@ export interface paths {
         post?: never;
         /** Delete an application secret */
         delete: operations["deleteSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/syncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Push a stored secret to a configured external sync target */
+        post: operations["syncSecret"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1812,6 +1965,25 @@ export interface components {
             /** @enum {string} */
             kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
             name: string;
+        };
+        DynamicLease: {
+            credential?: string;
+            /** Format: date-time */
+            expires_at: string;
+            id: string;
+            /** Format: date-time */
+            issued_at: string;
+            provider: string;
+            role: string;
+            state: string;
+        };
+        DynamicLeaseRenewRequest: {
+            extend_seconds: number;
+        };
+        DynamicLeaseRequest: {
+            provider: string;
+            role: string;
+            ttl_seconds: number;
         };
         EnrollmentToken: {
             enroll_path?: string;
@@ -2341,6 +2513,10 @@ export interface components {
             items: components["schemas"]["RotationRun"][];
             next_cursor?: string;
         };
+        SecretImportRequest: {
+            prefix?: string;
+            values: Record<string, never>;
+        };
         SecretMeta: {
             /** Format: date-time */
             created_at?: string;
@@ -2353,9 +2529,42 @@ export interface components {
             items: components["schemas"]["SecretMeta"][];
             next_cursor?: string;
         };
+        SecretRecoverRequest: {
+            /** Format: date-time */
+            at: string;
+        };
         SecretRequest: {
             name: string;
             value: string;
+        };
+        SecretRotation: {
+            completed: boolean;
+            error?: string;
+            failed_phase?: string;
+            key: string;
+            new_ref: string;
+            old_ref: string;
+            rollback_attempted: boolean;
+            rollback_error?: string;
+            rollback_failed: boolean;
+            rolled_back: boolean;
+        };
+        SecretRotationRequest: {
+            key: string;
+            old_ref: string;
+            provider: string;
+        };
+        SecretSync: {
+            delivered: boolean;
+            enqueued: boolean;
+            name: string;
+            remote_key: string;
+            target: string;
+        };
+        SecretSyncRequest: {
+            name: string;
+            remote_key?: string;
+            target: string;
         };
         SecretValue: {
             name: string;
@@ -5910,6 +6119,175 @@ export interface operations {
             };
         };
     };
+    issueDynamicSecretLease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DynamicLeaseRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DynamicLease"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDynamicSecretLease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description dynamic secret lease id */
+                lease_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DynamicLease"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    renewDynamicSecretLease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description dynamic secret lease id */
+                lease_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DynamicLeaseRenewRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DynamicLease"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeDynamicSecretLease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description dynamic secret lease id */
+                lease_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DynamicLease"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     machineLogin: {
         parameters: {
             query?: never;
@@ -5972,6 +6350,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PKISecret"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateStaticSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRotation"];
                 };
             };
             /** @description client error */
@@ -6163,9 +6583,143 @@ export interface operations {
             };
         };
     };
-    getSecret: {
+    getSecretVersion: {
+        parameters: {
+            query?: {
+                /** @description historical version number to read */
+                version?: number;
+            };
+            header?: never;
+            path: {
+                /** @description hierarchical secret name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretValue"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importSecrets: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretImportRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetaList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    recoverSecretAt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description hierarchical secret name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRecoverRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMeta"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecret: {
+        parameters: {
+            query?: {
+                /** @description expand ${secret.path} references in the returned value */
+                resolve?: boolean;
+            };
             header?: never;
             path: {
                 /** @description hierarchical secret name */
@@ -6267,6 +6821,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    syncSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSync"];
+                };
             };
             /** @description client error */
             "4XX": {

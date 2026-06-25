@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/pqc"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/idemgc"
 	"trstctl.com/trstctl/internal/lifecycle"
@@ -39,6 +40,8 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/ari"
+	"trstctl.com/trstctl/internal/rotation"
+	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/webui"
@@ -241,6 +244,18 @@ type Deps struct {
 	// configured (the secret store / share / pki sub-features still work). Run derives
 	// it from a configured key file.
 	SecretsAuthSecret []byte
+	// DynamicSecretProviders are the configured dynamic-secret providers exposed by
+	// /api/v1/secrets/leases (F65). Empty keeps the route fail-closed.
+	DynamicSecretProviders []dynsecret.Provider
+	// SecretRotators are the configured rollback-safe static secret rotators exposed
+	// by /api/v1/secrets/rotations (F37). Empty keeps the route fail-closed.
+	SecretRotators map[string]rotation.Rotator
+	// SecretSyncTargets are the configured external secret-sync destinations exposed
+	// by /api/v1/secrets/syncs (F68). Empty keeps the route fail-closed.
+	SecretSyncTargets map[string]*secretsync.Target
+	// DynamicLeaseWorkerInterval controls the served dynamic leaseworker cadence.
+	// Zero uses the production default.
+	DynamicLeaseWorkerInterval time.Duration
 
 	// EnableAISurface turns on the served AI / RCA / NL-query / MCP surface (SURFACE-003;
 	// F75/F76/F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. OFF by default (fail closed):

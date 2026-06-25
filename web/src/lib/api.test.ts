@@ -171,6 +171,85 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
 
+  it("drives dynamic lease issue, renew, and revoke through served mutations", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-lease; path=/";
+    mockFetchSequence([
+      {
+        status: 201,
+        body: JSON.stringify({
+          id: "lease/one",
+          provider: "postgres",
+          role: "readonly",
+          state: "active",
+          credential: "user=lease password=secret",
+          issued_at: "2026-06-24T12:00:00Z",
+          expires_at: "2026-06-24T12:15:00Z",
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({
+          id: "lease/one",
+          provider: "postgres",
+          role: "readonly",
+          state: "active",
+          issued_at: "2026-06-24T12:00:00Z",
+          expires_at: "2026-06-24T12:30:00Z",
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({
+          id: "lease/one",
+          provider: "postgres",
+          role: "readonly",
+          state: "revoked",
+          issued_at: "2026-06-24T12:00:00Z",
+          expires_at: "2026-06-24T12:30:00Z",
+        }),
+      },
+    ]);
+
+    await api.issueDynamicLease({ provider: "postgres", role: "readonly", ttl_seconds: 900 });
+    await api.renewDynamicLease("lease/one", { extend_seconds: 900 });
+    await api.revokeDynamicLease("lease/one");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.map((call) => call[0])).toEqual([
+      "/api/v1/secrets/leases",
+      "/api/v1/secrets/leases/lease%2Fone/renew",
+      "/api/v1/secrets/leases/lease%2Fone/revoke",
+    ]);
+    for (const call of calls) {
+      const headers = call[1]?.headers as Record<string, string>;
+      expect(call[1]?.method).toBe("POST");
+      expect(headers["X-CSRF-Token"]).toBe("csrf-token-lease");
+      expect(headers["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    }
+    expect(new Set(calls.map((call) => (call[1]?.headers as Record<string, string>)["Idempotency-Key"])).size).toBe(3);
+  });
+
+  it("reads dynamic lease metadata without replaying a credential or idempotency key", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        id: "lease/one",
+        provider: "postgres",
+        role: "readonly",
+        state: "active",
+        issued_at: "2026-06-24T12:00:00Z",
+        expires_at: "2026-06-24T12:15:00Z",
+      }),
+    );
+
+    const lease = await api.getDynamicLease("lease/one");
+
+    expect(lease.id).toBe("lease/one");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/leases/lease%2Fone");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+  });
+
   it("builds the internal-CA first certificate identity request without an issuer", () => {
     expect(firstCertificateIdentityRequest({ name: "payments" }, "owner-1")).toEqual({
       kind: "x509_certificate",
@@ -294,11 +373,18 @@ describe("secrets contract", () => {
   });
 
   it("reads and rotates URL-encoded secret names", async () => {
-    mockFetch(200, JSON.stringify({ name: "app/db/password", value: "read-once", version: 3 }));
+    mockFetchSequence([
+      { status: 200, body: JSON.stringify({ name: "app/db/password", value: "read-once", version: 3 }) },
+      { status: 200, body: JSON.stringify({ name: "app/db/dsn", value: "postgres://app:secret@db/internal", version: 1 }) },
+    ]);
 
     await api.getSecret("app/db/password");
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
+
+    await api.getSecret("app/db/dsn", { resolve: true });
+
+    expect(vi.mocked(fetch).mock.calls[1][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fdsn?resolve=true");
 
     document.cookie = "trstctl_csrf=csrf-secret-rotate; path=/";
     mockFetch(200, JSON.stringify({ name: "app/db/password", version: 4 }));
@@ -308,6 +394,51 @@ describe("secrets contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("PUT");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-rotate");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+
+  it("imports a secret tree as an idempotent mutation", async () => {
+    document.cookie = "trstctl_csrf=csrf-secret-import; path=/";
+    mockFetch(
+      201,
+      JSON.stringify({
+        items: [
+          { name: "imported/api/token", version: 1 },
+          { name: "imported/api/url", version: 1 },
+        ],
+      }),
+    );
+
+    const page = await api.importSecrets({
+      prefix: "imported",
+      values: {
+        "api/token": "tok-1",
+        "api/url": "https://svc.internal?token=${secret.imported/api/token}",
+      },
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/import");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-import");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(JSON.stringify(page)).not.toContain("tok-1");
+  });
+
+  it("reads historical secret versions and recovers by timestamp", async () => {
+    mockFetch(200, JSON.stringify({ name: "app/db/password", value: "old-value", version: 2 }));
+
+    await api.getSecretVersion("app/db/password", 2);
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/history/app%2Fdb%2Fpassword?version=2");
+
+    document.cookie = "trstctl_csrf=csrf-secret-recover; path=/";
+    mockFetch(200, JSON.stringify({ name: "app/db/password", version: 5 }));
+
+    await api.recoverSecret("app/db/password", { at: "2026-06-25T12:00:00Z" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/store/recover/app%2Fdb%2Fpassword");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-secret-recover");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
   });
 

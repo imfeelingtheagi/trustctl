@@ -167,7 +167,7 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, "TRUNCATE "+joinQuotedTables(postgresStateTables())); err != nil {
+	if _, err := tx.Exec(ctx, "TRUNCATE "+joinQuotedTables(postgresStateTables())+" CASCADE"); err != nil {
 		return summary, fmt.Errorf("backup: clear postgres state tables: %w", err)
 	}
 	for _, table := range postgresStateRestoreOrder() {
@@ -305,6 +305,7 @@ func postgresStateRestoreOrder() []string {
 		"outbox",
 		"policy_bindings",
 		"secret_store",
+		"secret_store_versions",
 		"ssh_keys",
 	}
 	if err := validatePostgresStateTables(parentFirst); err != nil {

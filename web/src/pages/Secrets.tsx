@@ -45,18 +45,32 @@ const scanningRows = [
 
 const dynamicSecretRows = [
   {
-    backend: "postgres",
+    backend: "postgresql",
     role: "readonly-reporting",
     lease: "TTL 20 minutes",
-    health: "backend health unknown",
-    status: "issue/revoke lease verbs are library-only",
+    health: "provider configured by operator",
+    status: "real PostgreSQL login role is dropped on revoke",
   },
   {
-    backend: "aws-sts",
+    backend: "aws-iam",
     role: "s3-audit-writer",
     lease: "TTL 10 minutes",
-    health: "renewal window not served",
-    status: "copy-once generated credential is library-only",
+    health: "provider configured by operator",
+    status: "IAM access key is deleted on revoke",
+  },
+  {
+    backend: "kubernetes",
+    role: "namespace-reader",
+    lease: "TTL 15 minutes",
+    health: "provider configured by operator",
+    status: "ServiceAccount token lease deletes its account",
+  },
+  {
+    backend: "redis",
+    role: "cache-reader",
+    lease: "TTL 10 minutes",
+    health: "provider configured by operator",
+    status: "ACL user is deleted on revoke",
   },
 ];
 
@@ -542,13 +556,13 @@ export function Secrets() {
             Manual rotation and delete
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manual native-store rotation is served with <code>PUT /api/v1/secrets/store/{"{name}"}</code>. Scheduled rotation, rollback evidence, and downstream
-            sync remain backend gaps.
+            Manual native-store rotation is served with <code>PUT /api/v1/secrets/store/{"{name}"}</code>. Rollback-safe static credential rotation is served with{" "}
+            <code>POST /api/v1/secrets/rotations</code>. Scheduled rotation and downstream sync remain backend gaps.
           </p>
         </div>
         <UnavailableState title="Scheduled rotation and downstream sync not served yet">
-          The broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet. This page exposes only the
-          served per-secret rotate/delete controls.
+          The rollback-safe static rotation engine is served by API for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not
+          served by API or CLI yet, so this page exposes only the served per-secret rotate/delete controls.
         </UnavailableState>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -897,14 +911,17 @@ export function Secrets() {
             Dynamic secrets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Dynamic backends produce lease-scoped credentials with issue, revoke, lease status, backend health, and copy-once generated credential handling. The
-            browser only shows the shape today.
+            Dynamic backends produce lease-scoped credentials with issue, renew, revoke, expiry, and copy-once generated credential handling. The served API and
+            CLI are live; a full lease-request UI remains a later workflow.
           </p>
         </div>
-        <UnavailableState title="Dynamic secret leases are not served">
-          Backend health, role catalogs, lease issue/revoke, and lease status are library-only. This page cannot request generated credentials because no served
-          dynamic-secret API or CLI command exists yet.
-        </UnavailableState>
+        <div className="ui-panel grid gap-2 p-comfortable text-body">
+          <h3 className="text-title font-semibold">Dynamic secret leases are served</h3>
+          <p className="text-sm text-muted-foreground">
+            `POST /api/v1/secrets/leases` returns the generated credential once. `GET`, `renew`, and `revoke` return metadata only and stay guarded by
+            `secrets:read` / `secrets:write` plus idempotency on mutations.
+          </p>
+        </div>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">
             <caption className="sr-only">Dynamic secret backend fixtures</caption>
@@ -979,13 +996,13 @@ export function Secrets() {
             Secret sync and platform integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Secret sync needs target platform mappings, masked target credentials, push status, drift detection, rollback, and outbox delivery receipts. No live
-            sync is routed today.
+            Secret sync pushes stored values to configured external targets through a sealed outbox before delivery. GitHub Actions, AWS Secrets Manager, and
+            Kubernetes are served today; deeper target authoring and drift workflows stay guarded behind operator configuration.
           </p>
         </div>
-        <UnavailableState title="Secret sync is not served">
-          Target mappings, push attempts, drift status, rollback receipts, and delivery state are library-only. No served secret-sync API/CLI surface exists
-          yet.
+        <UnavailableState title="Secret sync is served by API and CLI">
+          Use POST /api/v1/secrets/syncs or trstctl-cli secrets syncs run with a configured target. This console shows masked mappings and delivery posture
+          only; it does not expose target credentials or push raw secret values from the browser.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[72rem]">

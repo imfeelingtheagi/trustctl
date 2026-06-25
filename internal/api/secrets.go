@@ -1,11 +1,15 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,9 +20,12 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/leaseworker"
 	"trstctl.com/trstctl/internal/pkisecret"
+	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretsdk"
 	"trstctl.com/trstctl/internal/secretshare"
+	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -83,6 +90,28 @@ type SecretsBackend struct {
 	AuthSecret []byte
 	// SessionTTL bounds a machine-login session; zero selects one hour.
 	SessionTTL time.Duration
+	// DynamicProviders are the configured dynamic-secret backends exposed by the
+	// served lease API (F65). Empty means the API is mounted but lease issuance fails
+	// closed with 503.
+	DynamicProviders []dynsecret.Provider
+	// DynamicRevokeQueue returns the tenant-scoped durable revocation queue. The
+	// server wires this to the PostgreSQL outbox; embedders may supply their own.
+	DynamicRevokeQueue func(tenantID string) dynsecret.RevokeQueue
+	// DynamicLeaseWorkerInterval controls the served leaseworker cadence. Zero uses
+	// the leaseworker default.
+	DynamicLeaseWorkerInterval time.Duration
+	// SecretRotators are the configured static-credential rotation engines exposed by
+	// POST /api/v1/secrets/rotations (F37). Empty means the route is mounted but fails
+	// closed with 503.
+	SecretRotators map[string]rotation.Rotator
+	// SecretSyncTargets are the configured outbound secret-sync targets exposed by
+	// POST /api/v1/secrets/syncs (F68). Empty means the route is mounted but fails
+	// closed with 503.
+	SecretSyncTargets map[string]*secretsync.Target
+	// SecretSyncOutbox returns the tenant/target durable outbox used before any
+	// external sync write is attempted (AN-6). The server wires this to the sealed
+	// PostgreSQL outbox; embedders may supply their own.
+	SecretSyncOutbox func(tenantID, target string) secretsync.Outbox
 }
 
 // secretsService is the assembled served secrets surface. It owns the per-request
@@ -93,6 +122,7 @@ type secretsService struct {
 
 	mu      sync.Mutex
 	sharers map[string]*secretshare.Sharer // tenant -> its pending one-time shares
+	leases  map[string]*dynsecret.Engine   // tenant -> dynamic lease engine
 }
 
 // WithSecrets mounts the served secrets/identity surface (GAP-006). The KEK, store,
@@ -100,12 +130,27 @@ type secretsService struct {
 // their sub-features. When unset, the /api/v1/secrets/* routes fail closed with a
 // clear "not enabled" problem.
 func WithSecrets(be SecretsBackend) Option {
-	return func(c *config) { c.secrets = &secretsService{be: be, sharers: map[string]*secretshare.Sharer{}} }
+	return func(c *config) {
+		c.secrets = &secretsService{
+			be: be, sharers: map[string]*secretshare.Sharer{}, leases: map[string]*dynsecret.Engine{},
+		}
+	}
 }
 
 // SecretsServed reports whether the served secrets surface is wired (WithSecrets was
 // given). It is the GAP-006 wiring assertion the acceptance test consults.
 func (a *API) SecretsServed() bool { return a.secrets != nil }
+
+// RunDynamicLeaseWorker runs the served dynamic-secret leaseworker until ctx is
+// cancelled. server.Run starts this alongside the other bounded background workers;
+// tests call it directly against the assembled server.
+func (a *API) RunDynamicLeaseWorker(ctx context.Context) {
+	if a.secrets == nil {
+		<-ctx.Done()
+		return
+	}
+	a.secrets.runDynamicLeaseWorker(ctx)
+}
 
 // secretStoreScope is the seal AAD scope binding application secrets in the secret
 // store, so a sealed blob cannot be lifted to another row and still open.
@@ -122,6 +167,11 @@ func sealAAD(tenantID, name string) []byte {
 type secretWriteRequest struct {
 	Name  string          `json:"name"`
 	Value secretJSONBytes `json:"value"`
+}
+
+type secretImportRequest struct {
+	Prefix string                     `json:"prefix"`
+	Values map[string]secretJSONBytes `json:"values"`
 }
 
 // secretMetaResponse is the metadata view of a secret. It NEVER carries the value —
@@ -147,6 +197,65 @@ type secretValueResponse struct {
 }
 
 func (r secretValueResponse) wipeSecrets() { r.Value.wipe() }
+
+type secretRecoverRequest struct {
+	At time.Time `json:"at"`
+}
+
+type secretRotationRequest struct {
+	Provider string `json:"provider"`
+	Key      string `json:"key"`
+	OldRef   string `json:"old_ref"`
+}
+
+type secretRotationResponse struct {
+	Key               string `json:"key"`
+	OldRef            string `json:"old_ref"`
+	NewRef            string `json:"new_ref"`
+	Completed         bool   `json:"completed"`
+	RolledBack        bool   `json:"rolled_back"`
+	RollbackAttempted bool   `json:"rollback_attempted"`
+	RollbackFailed    bool   `json:"rollback_failed"`
+	RollbackError     string `json:"rollback_error,omitempty"`
+	FailedPhase       string `json:"failed_phase,omitempty"`
+	Error             string `json:"error,omitempty"`
+}
+
+type secretSyncRequest struct {
+	Name      string `json:"name"`
+	Target    string `json:"target"`
+	RemoteKey string `json:"remote_key"`
+}
+
+type secretSyncResponse struct {
+	Name      string `json:"name"`
+	Target    string `json:"target"`
+	RemoteKey string `json:"remote_key"`
+	Enqueued  bool   `json:"enqueued"`
+	Delivered bool   `json:"delivered"`
+}
+
+type dynamicLeaseIssueRequest struct {
+	Provider   string `json:"provider"`
+	Role       string `json:"role"`
+	TTLSeconds int    `json:"ttl_seconds"`
+}
+
+type dynamicLeaseRenewRequest struct {
+	ExtendSeconds int `json:"extend_seconds"`
+}
+
+type dynamicLeaseResponse struct {
+	ID         string          `json:"id"`
+	Provider   string          `json:"provider"`
+	Role       string          `json:"role"`
+	State      string          `json:"state"`
+	Credential secretJSONBytes `json:"credential,omitempty"`
+	IssuedAt   time.Time       `json:"issued_at"`
+	ExpiresAt  time.Time       `json:"expires_at"`
+}
+
+func (r dynamicLeaseResponse) wipeSecrets() { r.Credential.wipe() }
 
 // createSecret stores a new application secret (version 1), sealed at rest. The reply
 // is metadata only (no value, AN-8). Idempotent (AN-5).
@@ -181,6 +290,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, err
 		}
+		a.auditSecretVersion(ctx, tenantID, rec, nil)
 		a.auditSecret(ctx, "secret.created", tenantID, rec.Name, rec.Version)
 		return http.StatusCreated, toSecretMeta(rec), nil
 	})
@@ -199,6 +309,17 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
+	if r.URL.Query().Get("resolve") == "true" {
+		value, version, err := a.resolveSecretValue(r.Context(), tenantID, name, nil)
+		if err != nil {
+			a.writeSecretReferenceError(w, err)
+			return
+		}
+		resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
+		a.writeJSON(w, http.StatusOK, resp)
+		secret.Wipe(value)
+		return
+	}
 	// Read through the secretsdk client (F64): the Fetcher unseals the stored blob for
 	// THIS tenant; the SDK caches/auto-refreshes and fails safe. Closed after the read
 	// so no secret lingers (AN-8).
@@ -218,6 +339,44 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 		version = rec.Version
 	}
 	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
+	a.writeJSON(w, http.StatusOK, resp)
+	secret.Wipe(value)
+}
+
+// getSecretVersion reads one historical sealed version through the same explicit
+// value-returning path as getSecret. It never lists values and never crosses tenant
+// boundaries; the version row is tenant-RLS-scoped in PostgreSQL.
+func (a *API) getSecretVersion(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	name := r.PathValue("name")
+	version, err := strconv.Atoi(r.URL.Query().Get("version"))
+	if err != nil || version <= 0 {
+		a.writeProblem(w, problem.New(http.StatusBadRequest, "version query parameter must be a positive integer"))
+		return
+	}
+	rec, err := a.secrets.be.Store.GetSecretVersion(r.Context(), tenantID, name, version)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretNotFound) {
+			a.writeProblem(w, problem.New(http.StatusNotFound, "no such secret version"))
+			return
+		}
+		a.writeError(w, err)
+		return
+	}
+	value, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, name))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: rec.Version}
 	a.writeJSON(w, http.StatusOK, resp)
 	secret.Wipe(value)
 }
@@ -253,8 +412,207 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, err
 		}
+		a.auditSecretVersion(ctx, tenantID, rec, nil)
 		a.auditSecret(ctx, "secret.rotated", tenantID, rec.Name, rec.Version)
 		return http.StatusOK, toSecretMeta(rec), nil
+	})
+}
+
+// recoverSecretAt republishes the version that was current at req.At as a new
+// current version. The response is metadata only; callers use getSecret to read the
+// recovered value deliberately.
+//
+//trstctl:mutation
+func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	name := r.PathValue("name")
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretRecoverRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if req.At.IsZero() {
+			return 0, nil, errStatus(http.StatusBadRequest, "at is required")
+		}
+		rec, src, err := a.secrets.be.Store.RecoverSecretAt(ctx, tenantID, name, req.At)
+		if err != nil {
+			if errors.Is(err, store.ErrSecretNotFound) {
+				return 0, nil, errStatus(http.StatusNotFound, "no such secret version")
+			}
+			return 0, nil, err
+		}
+		a.auditSecretVersion(ctx, tenantID, rec, &src.Version)
+		a.auditSecret(ctx, "secret.recovered", tenantID, rec.Name, rec.Version)
+		return http.StatusOK, toSecretMeta(rec), nil
+	})
+}
+
+// rotateStaticSecret drives a rollback-safe static credential rotation through the
+// configured provider. The generated backend credential is published by the provider's
+// cutover path and never returned by this API.
+//
+//trstctl:mutation
+func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretRotationRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		req.Provider = strings.TrimSpace(req.Provider)
+		req.Key = strings.TrimSpace(req.Key)
+		req.OldRef = strings.TrimSpace(req.OldRef)
+		if req.Provider == "" || req.Key == "" || req.OldRef == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "provider, key, and old_ref are required")
+		}
+		rotator := a.secrets.be.SecretRotators[req.Provider]
+		if rotator == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret rotation provider is not configured")
+		}
+		engine := rotation.New(tenantID, rotator, a.secrets.be.Audit)
+		rep, err := engine.Rotate(ctx, req.Key, req.OldRef)
+		resp := toSecretRotationResponse(rep)
+		if err != nil {
+			resp.Error = err.Error()
+			if rep.RollbackAttempted {
+				return http.StatusConflict, resp, nil
+			}
+			return 0, nil, err
+		}
+		a.auditSecret(ctx, "secret.rotation.completed", tenantID, req.Key, 0)
+		return http.StatusOK, resp, nil
+	})
+}
+
+// syncSecret pushes a stored secret to a configured external target. The secret value
+// is read internally, enqueued through the sync outbox first (AN-6), delivered by the
+// pusher, and wiped before the metadata-only response is returned.
+//
+//trstctl:mutation
+func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretSyncRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		req.Name = strings.TrimSpace(req.Name)
+		req.Target = strings.TrimSpace(req.Target)
+		req.RemoteKey = strings.TrimSpace(req.RemoteKey)
+		if req.Name == "" || req.Target == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "name and target are required")
+		}
+		if req.RemoteKey == "" {
+			req.RemoteKey = req.Name
+		}
+		target := a.secrets.be.SecretSyncTargets[req.Target]
+		if target == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
+		}
+		if a.secrets.be.SecretSyncOutbox == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret sync outbox is not configured")
+		}
+		rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
+		if err != nil {
+			if errors.Is(err, store.ErrSecretNotFound) {
+				return 0, nil, errStatus(http.StatusNotFound, "no such secret")
+			}
+			return 0, nil, err
+		}
+		value, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, req.Name))
+		if err != nil {
+			return 0, nil, err
+		}
+		defer secret.Wipe(value)
+		outbox := a.secrets.be.SecretSyncOutbox(tenantID, req.Target)
+		engine := secretsync.New(tenantID, target, outbox, a.secrets.be.Audit)
+		if err := engine.Sync(ctx, req.RemoteKey, value); err != nil {
+			return 0, nil, err
+		}
+		delivered, err := engine.RunDeliveries(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		a.auditSecret(ctx, "secret.sync.requested", tenantID, req.Name, rec.Version)
+		return http.StatusOK, secretSyncResponse{
+			Name: req.Name, Target: req.Target, RemoteKey: req.RemoteKey,
+			Enqueued: true, Delivered: delivered > 0,
+		}, nil
+	})
+}
+
+// importSecrets atomically imports a flat tree of application secrets under an
+// optional prefix. Each value is sealed independently, and the response returns only
+// metadata. Idempotent (AN-5).
+//
+//trstctl:mutation
+func (a *API) importSecrets(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretImportRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if len(req.Values) == 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "values must contain at least one secret")
+		}
+		keys := make([]string, 0, len(req.Values))
+		for key := range req.Values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		seen := map[string]bool{}
+		entries := make([]store.SecretImportEntry, 0, len(keys))
+		for _, key := range keys {
+			name, err := normalizeImportedSecretName(req.Prefix, key)
+			if err != nil {
+				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			}
+			if seen[name] {
+				return 0, nil, errStatus(http.StatusBadRequest, "import contains duplicate secret path "+name)
+			}
+			seen[name] = true
+			value := req.Values[key]
+			if len(value) == 0 {
+				return 0, nil, errStatus(http.StatusBadRequest, "value is required for "+name)
+			}
+			sealed, err := seal.Seal(a.secrets.be.KEK, []byte(value), sealAAD(tenantID, name))
+			value.wipe()
+			if err != nil {
+				return 0, nil, err
+			}
+			entries = append(entries, store.SecretImportEntry{Name: name, Sealed: sealed})
+		}
+		recs, err := a.secrets.be.Store.PutSecrets(ctx, tenantID, entries)
+		if err != nil {
+			if errors.Is(err, store.ErrSecretExists) {
+				return 0, nil, errStatus(http.StatusConflict, "a secret in this import already exists; rotate it instead")
+			}
+			return 0, nil, err
+		}
+		items := make([]secretMetaResponse, 0, len(recs))
+		for _, rec := range recs {
+			a.auditSecretVersion(ctx, tenantID, rec, nil)
+			a.auditSecret(ctx, "secret.imported", tenantID, rec.Name, rec.Version)
+			items = append(items, toSecretMeta(rec))
+		}
+		return http.StatusCreated, listResponse{Items: items}, nil
 	})
 }
 
@@ -306,6 +664,313 @@ func (a *API) listSecrets(w http.ResponseWriter, r *http.Request) {
 		items = append(items, toSecretMeta(rec))
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
+
+func normalizeImportedSecretName(prefix, key string) (string, error) {
+	prefix = strings.Trim(prefix, "/")
+	key = strings.Trim(key, "/")
+	if key == "" {
+		return "", errors.New("import secret path is required")
+	}
+	if strings.Contains(key, "//") || strings.Contains(prefix, "//") {
+		return "", errors.New("import secret paths must not contain empty segments")
+	}
+	if prefix == "" {
+		return key, nil
+	}
+	return prefix + "/" + key, nil
+}
+
+func toSecretRotationResponse(rep rotation.Report) secretRotationResponse {
+	return secretRotationResponse{
+		Key: rep.Key, OldRef: rep.OldRef, NewRef: rep.NewRef, Completed: rep.Completed,
+		RolledBack: rep.RolledBack, RollbackAttempted: rep.RollbackAttempted,
+		RollbackFailed: rep.RollbackFailed, RollbackError: rep.RollbackError,
+		FailedPhase: rep.FailedPhase,
+	}
+}
+
+type secretReferenceCycleError struct {
+	Cycle []string
+}
+
+func (e secretReferenceCycleError) Error() string { return "secret reference cycle detected" }
+
+type secretReferenceDepthError struct{}
+
+func (secretReferenceDepthError) Error() string { return "secret reference depth exceeded" }
+
+const (
+	secretReferenceStart = "${secret."
+	secretReferenceEnd   = byte('}')
+	secretReferenceLimit = 32
+)
+
+func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, stack []string) ([]byte, int, error) {
+	if len(stack) >= secretReferenceLimit {
+		return nil, 0, secretReferenceDepthError{}
+	}
+	for _, current := range stack {
+		if current == name {
+			cycle := append(append([]string(nil), stack...), name)
+			return nil, 0, secretReferenceCycleError{Cycle: cycle}
+		}
+	}
+	rec, err := a.secrets.be.Store.GetSecret(ctx, tenantID, name)
+	if err != nil {
+		return nil, 0, err
+	}
+	plain, err := seal.Open(a.secrets.be.KEK, rec.Sealed, sealAAD(tenantID, name))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer secret.Wipe(plain)
+	resolved, err := a.expandSecretReferences(ctx, tenantID, plain, append(stack, name))
+	if err != nil {
+		return nil, 0, err
+	}
+	return resolved, rec.Version, nil
+}
+
+func (a *API) expandSecretReferences(ctx context.Context, tenantID string, value []byte, stack []string) ([]byte, error) {
+	out := make([]byte, 0, len(value))
+	rest := value
+	for {
+		idx := bytes.Index(rest, []byte(secretReferenceStart))
+		if idx < 0 {
+			out = append(out, rest...)
+			return out, nil
+		}
+		out = append(out, rest[:idx]...)
+		refBody := rest[idx+len(secretReferenceStart):]
+		end := bytes.IndexByte(refBody, secretReferenceEnd)
+		if end < 0 {
+			out = append(out, rest[idx:]...)
+			return out, nil
+		}
+		refName := string(refBody[:end])
+		if refName == "" {
+			secret.Wipe(out)
+			return nil, errStatus(http.StatusBadRequest, "secret reference path is required")
+		}
+		refValue, _, err := a.resolveSecretValue(ctx, tenantID, refName, stack)
+		if err != nil {
+			secret.Wipe(out)
+			return nil, err
+		}
+		out = append(out, refValue...)
+		secret.Wipe(refValue)
+		rest = refBody[end+1:]
+	}
+}
+
+func (a *API) writeSecretReferenceError(w http.ResponseWriter, err error) {
+	var cycle secretReferenceCycleError
+	var depth secretReferenceDepthError
+	switch {
+	case errors.As(err, &cycle):
+		a.writeProblem(w, problem.New(http.StatusConflict, "secret reference cycle detected").WithExtension("cycle", cycle.Cycle))
+	case errors.As(err, &depth):
+		a.writeProblem(w, problem.New(http.StatusConflict, "secret reference depth exceeded"))
+	case errors.Is(err, store.ErrSecretNotFound):
+		a.writeProblem(w, problem.New(http.StatusNotFound, "no such secret reference"))
+	default:
+		a.writeError(w, err)
+	}
+}
+
+// ---- dynamic secret leases (dynsecret, F65) --------------------------------
+
+// issueDynamicLease generates one scoped backend credential and opens a lease. The
+// credential is returned only in this response (or an idempotent replay of it);
+// later reads return metadata only.
+//
+//trstctl:mutation
+func (a *API) issueDynamicLease(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req dynamicLeaseIssueRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if req.Provider == "" || req.Role == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "provider and role are required")
+		}
+		if req.TTLSeconds <= 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "ttl_seconds must be positive")
+		}
+		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
+		if err != nil {
+			return 0, nil, err
+		}
+		lease, credential, err := engine.Issue(ctx, req.Provider, req.Role, time.Duration(req.TTLSeconds)*time.Second, idempotencyKey)
+		if err != nil {
+			return 0, nil, dynamicLeaseError(err)
+		}
+		resp := toDynamicLeaseResponse(lease, credential)
+		secret.Wipe(credential)
+		return http.StatusCreated, resp, nil
+	})
+}
+
+func (a *API) getDynamicLease(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	engine, err := a.secrets.dynamicLeaseEngine(tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	lease, err := engine.GetLease(r.PathValue("lease_id"))
+	if err != nil {
+		a.writeError(w, dynamicLeaseError(err))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toDynamicLeaseResponse(lease, nil))
+}
+
+//trstctl:mutation
+func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	leaseID := r.PathValue("lease_id")
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req dynamicLeaseRenewRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if req.ExtendSeconds <= 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "extend_seconds must be positive")
+		}
+		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
+		if err != nil {
+			return 0, nil, err
+		}
+		lease, err := engine.Renew(ctx, leaseID, time.Duration(req.ExtendSeconds)*time.Second)
+		if err != nil {
+			return 0, nil, dynamicLeaseError(err)
+		}
+		return http.StatusOK, toDynamicLeaseResponse(lease, nil), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) revokeDynamicLease(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	leaseID := r.PathValue("lease_id")
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := engine.Revoke(ctx, leaseID); err != nil {
+			return 0, nil, dynamicLeaseError(err)
+		}
+		lease, err := engine.GetLease(leaseID)
+		if err != nil {
+			return 0, nil, dynamicLeaseError(err)
+		}
+		_, _ = engine.RunRevocations(ctx)
+		return http.StatusOK, toDynamicLeaseResponse(lease, nil), nil
+	})
+}
+
+func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseResponse {
+	return dynamicLeaseResponse{
+		ID: l.ID, Provider: l.Provider, Role: l.Role, State: string(l.State),
+		Credential: secretJSONBytes(credential), IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt,
+	}
+}
+
+func dynamicLeaseError(err error) error {
+	switch {
+	case errors.Is(err, dynsecret.ErrUnknownProvider):
+		return errStatus(http.StatusUnprocessableEntity, err.Error())
+	case errors.Is(err, dynsecret.ErrLeaseNotFound):
+		return errStatus(http.StatusNotFound, "no such dynamic secret lease")
+	case errors.Is(err, dynsecret.ErrLeaseNotActive):
+		return errStatus(http.StatusConflict, "dynamic secret lease is not active")
+	default:
+		return err
+	}
+}
+
+func (s *secretsService) dynamicLeaseEngine(tenantID string) (*dynsecret.Engine, error) {
+	if len(s.be.DynamicProviders) == 0 {
+		return nil, errStatus(http.StatusServiceUnavailable, "dynamic secret lease providers are not configured")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if engine, ok := s.leases[tenantID]; ok {
+		return engine, nil
+	}
+	queue := dynsecret.RevokeQueue(dynsecret.NewMemoryQueue())
+	if s.be.DynamicRevokeQueue != nil {
+		queue = s.be.DynamicRevokeQueue(tenantID)
+	}
+	engine, err := dynsecret.New(dynsecret.Config{
+		TenantID: tenantID, Providers: s.be.DynamicProviders, Queue: queue, Audit: s.be.Audit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.leases[tenantID] = engine
+	return engine, nil
+}
+
+func (s *secretsService) dynamicLeaseEngines() []*dynsecret.Engine {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	engines := make([]*dynsecret.Engine, 0, len(s.leases))
+	for _, engine := range s.leases {
+		engines = append(engines, engine)
+	}
+	return engines
+}
+
+func (s *secretsService) tickDynamicLeases(ctx context.Context) {
+	for _, engine := range s.dynamicLeaseEngines() {
+		worker := leaseworker.New(engine, s.be.DynamicLeaseWorkerInterval)
+		_, _, _ = worker.Tick(ctx)
+	}
+}
+
+func (s *secretsService) runDynamicLeaseWorker(ctx context.Context) {
+	interval := s.be.DynamicLeaseWorkerInterval
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			for _, engine := range s.dynamicLeaseEngines() {
+				_, _ = leaseworker.New(engine, interval).Recover(context.Background())
+			}
+			return
+		case <-t.C:
+			s.tickDynamicLeases(ctx)
+		}
+	}
 }
 
 // ---- one-time secret share + redeem (secretshare, F60) ---------------------
@@ -640,6 +1305,21 @@ func (a *API) auditSecret(ctx context.Context, eventType, tenantID, name string,
 	}
 	payload, _ := json.Marshal(map[string]any{"name": name, "version": version})
 	_ = auditsink.Emit(ctx, a.secrets.be.Audit, nil, eventType, tenantID, payload)
+}
+
+// auditSecretVersion records the sealed version-written event. The payload contains
+// ciphertext only, never the plaintext value; it is what lets the version-history
+// projection be rebuilt without exposing a secret (AN-2/AN-8).
+func (a *API) auditSecretVersion(ctx context.Context, tenantID string, rec store.Secret, recoveredFrom *int) {
+	if a.secrets == nil || a.secrets.be.Audit == nil {
+		return
+	}
+	payload := map[string]any{"name": rec.Name, "version": rec.Version, "sealed": rec.Sealed, "written_at": rec.UpdatedAt}
+	if recoveredFrom != nil {
+		payload["recovered_from_version"] = *recoveredFrom
+	}
+	data, _ := json.Marshal(payload)
+	_ = auditsink.Emit(ctx, a.secrets.be.Audit, nil, "secret.version.written", tenantID, data)
 }
 
 // secretsDisabledProblem is returned when the secrets surface was not wired

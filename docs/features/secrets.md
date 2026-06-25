@@ -16,9 +16,10 @@ master key (encryption-as-a-service). And every action needs ID and is logged
 (auth + approvals + audit).
 
 > **One honest note up front.** Most of the *secrets* domain is now **served**: the
-> **secret store** (CRUD + rotation), **one-time secret sharing**, the **dynamic PKI
-> secret**, and **machine login** are mounted on the running control plane under
-> `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when off).
+> **secret store** (CRUD + rotation), **dynamic secret leases**, **one-time secret
+> sharing**, the **dynamic PKI secret**, and **machine login** are mounted on the
+> running control plane under `/api/v1/secrets/*` (off by default —
+> `secrets.enable_api` — and fail-closed when off).
 > **Secret-sync to external stores** is still built-and-tested **library** code with no
 > served surface yet. So most of this page is a live endpoint today; sync you still drive
 > via its programmatic APIs. See [Current limitations](../limitations.md). This page is
@@ -50,14 +51,35 @@ your data.
 
 ### The native secret store (F63)
 
-A versioned key-value store: every `Put` creates a new version (old versions stay
-queryable), `Delete` writes a tombstone (history is retained), and the whole version list
-can be **reconstructed from the event log** — every change is recorded as an immutable
-event, and the store is a projection rebuilt from that history, never a primary write.
-Writes are idempotent by key (a retry refreshes the same version instead of writing a
-second), tenant-isolated with cross-tenant denial (one tenant can never read another's
-secrets, enforced at the database layer), and the ready-to-mount `APIServer` enforces
-per-secret RBAC.
+A served, tenant-isolated key-value store for application secrets. `POST
+/api/v1/secrets/store` creates version 1, `PUT /api/v1/secrets/store/{name}` writes the
+next version, and `GET /api/v1/secrets/store/{name}` explicitly reveals only the latest
+value to a caller with `secrets:read`. Metadata responses list names, versions, and
+timestamps only; they never carry values.
+
+SEC-01 adds durable sealed version history. Every create, rotation, and recovery stores a
+row in `secret_store_versions` under PostgreSQL row-level security, and emits
+`secret.version.written` without plaintext. Operators can read a prior version with
+`GET /api/v1/secrets/store/history/{name}?version=N`, then recover the version that was
+current at a timestamp with `POST /api/v1/secrets/store/recover/{name}` and body
+`{"at":"2026-06-25T12:00:00Z"}`. Recovery creates the next monotonic version, so
+rollbacks are auditable instead of overwriting history. `DELETE
+/api/v1/secrets/store/{name}` purges the current row and its sealed history for that
+tenant; another tenant still gets a 404 because both tables are RLS-scoped.
+
+SEC-02 adds explicit reference resolution and imports to that same served path.
+Secret values may contain `${secret.path}` placeholders. A normal read returns the
+literal stored value, so callers do not accidentally expand more secret material than
+they asked for; `GET /api/v1/secrets/store/{name}?resolve=true` expands references
+for the same tenant and permission scope. Cycles such as `a -> b -> a` are rejected
+with a structured `409` problem response that includes the cycle path. Missing
+references return a normal `404`.
+
+Bulk imports use `POST /api/v1/secrets/store/import` with a body like
+`{"prefix":"app","values":{"db/user":"svc","db/dsn":"postgres://${secret.app/db/user}@db"}}`.
+Each imported value is sealed independently as version 1, the response contains only
+metadata, and if any imported name already exists the whole import is rejected so a
+tree cannot half-land.
 
 The credential store the running control plane mounts is the **served seal path**: it
 seals through a versioned binary container, and its key-encryption key is loaded into
@@ -77,15 +99,38 @@ variable *names* are audited, never values). An **SDK** caches secrets and auto-
 them before expiry, and on a revocation it evicts the cache and fails safe rather than
 serving a stale, revoked secret.
 
+Developers can also load application configuration as a tree with `trstctl-cli secrets
+store import --body-file import.json` and can ask for an explicit resolved read with
+`trstctl-cli secrets store get NAME --resolve=true`. This is intentionally opt-in:
+plain reads show the stored value, while resolved reads expand `${secret.path}`
+references, detect cycles, and stay within the caller's tenant/RBAC scope.
+
 ### Dynamic secrets (F65) and PKI-as-a-secrets-engine (F67)
 
 Instead of a long-lived secret to steal, **dynamic secrets** are minted on demand,
 scoped, and time-limited by a [lease](../glossary.md); when the lease expires trstctl
 revokes the underlying credential automatically — even across a restart, because the
 revocation intent is journaled first to a durable [outbox](../glossary.md) and delivered
-at-least-once, so a crash can't silently drop it. Seven backends ship behind one
-interface: PostgreSQL, MySQL, MongoDB, AWS STS, GCP IAM, Azure service principal, and
-Redis/SSH; all pass a lifecycle conformance test. **PKI-as-a-secrets-engine** plugs the
+at-least-once, so a crash can't silently drop it. Eight concrete backends ship behind
+one interface: PostgreSQL, MySQL, MongoDB, AWS IAM, GCP IAM, Azure Entra, Kubernetes
+ServiceAccount tokens, and Redis ACL users. PostgreSQL is exercised against a real
+database process in CI; Redis, Kubernetes, and the cloud IAM providers speak their real
+wire protocols against in-process emulators; MySQL and MongoDB expose driver-facing
+admin seams so production adapters create and revoke actual scoped users.
+
+The running control plane mounts the dynamic lease lifecycle when `secrets.enable_api`
+is on and the operator wires provider backends:
+
+- `POST /api/v1/secrets/leases` issues exactly one credential copy for a provider,
+  role, and TTL, guarded by `secrets:write` plus `Idempotency-Key`.
+- `GET /api/v1/secrets/leases/{lease_id}` returns lease metadata only; it does not
+  replay the credential value after first issue.
+- `POST /api/v1/secrets/leases/{lease_id}/renew` extends an active lease without
+  returning the credential again.
+- `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
+  revocation through the outbox-backed worker.
+
+**PKI-as-a-secrets-engine** plugs the
 same lease machinery into certificate issuance — a developer requests a short-lived
 certificate exactly like a database password, and the leaf key is generated in wipeable
 memory and zeroed immediately after use.
@@ -97,9 +142,16 @@ the new version, cut consumers over, verify they're healthy, retire the old one.
 cutover or verification fails, it **automatically rolls back** so the application is never
 left broken. If backend rollback itself fails, the report sets `RollbackAttempted` and
 `RollbackFailed`, leaves `RolledBack` false, and audits `rotation.rollback_failed` so
-operators know the consumer may be on the new secret and needs intervention. Each phase is
-audited and, in production, delivered via the outbox so a crash mid-rotation strands
-nothing.
+operators know the consumer may be on the new secret and needs intervention.
+
+The running control plane serves that workflow at `POST /api/v1/secrets/rotations`.
+The request names a provider, the consumer key, and the current backend reference; the
+response returns only non-secret rotation evidence (`old_ref`, `new_ref`, completed /
+rolled-back flags, and failure phase). PostgreSQL, MySQL, and AWS IAM rotators ship as
+concrete backends. PostgreSQL is verified against a real database process: stage creates
+a new login, cutover publishes the new credential to the configured consumer pointer,
+verify logs in with it, retire drops the old login, and rollback restores the old
+credential while revoking the staged login.
 
 ### Ephemeral API keys (F38)
 
@@ -121,9 +173,15 @@ surface exists yet; the console marks it library-only until a listener is mounte
 ### Secret sync (F68)
 
 trstctl can push secrets *outward* to the platforms that need them — Kubernetes, GitHub
-Actions, GitLab CI, Terraform, Vercel, AWS Parameter Store, or a generic webhook — via the
-durable outbox (journaled first, delivered at-least-once, no half-writes), and it
-**detects drift** by comparing hashes when a target is changed out-of-band.
+Actions, AWS Secrets Manager, GitLab CI, Terraform Cloud, Vercel, Azure Key Vault, GCP
+Secret Manager, or a generic webhook-style target — via the durable outbox (journaled
+first, delivered at-least-once, no half-writes). The running control plane serves this
+at `POST /api/v1/secrets/syncs`: it reads a stored secret, writes a sealed outbox row in
+the same tenant-scoped transaction path, delivers through the configured target pusher,
+and returns metadata only (`name`, `target`, `remote_key`, enqueued/delivered flags).
+The shipped concrete pushers cover GitHub Actions, AWS Secrets Manager, and Kubernetes;
+the JSON pusher covers Vercel/GitLab/Terraform/GCP/Azure style fixtures and manual
+integrations until those providers grow deeper native APIs.
 
 ### The auth-method framework (F58)
 
@@ -145,7 +203,8 @@ approvals** put a dual-control [approval](incident-and-jit.md) gate on secret mu
 
 ## Use it
 
-These run through their Go APIs today. The shapes:
+The served pieces run through the API/CLI; the remaining library-only pieces are still
+available through their Go APIs. The shapes:
 
 ```go
 // Native store: versioned, envelope-encrypted put/get
@@ -162,13 +221,21 @@ ct, _ := keyring.Encrypt(ctx, "app-key", []byte("hello"), nil) // -> "trv:1:..."
 The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path>`, with
 `Idempotency-Key` and tenant headers) once mounted.
 
+```bash
+cat > secret-sync.json <<'JSON'
+{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
+JSON
+trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
+```
+
 ## Pitfalls & limits
 
-- **Serving status:** the secret store, one-time sharing, the dynamic PKI secret, and
-  machine login are **served** on the running control plane under `/api/v1/secrets/*`
-  (enable with `secrets.enable_api`, off by default and fail-closed). **Secret sync** is
-  **not yet wired** — it remains library code. Track the remaining tail in
-  [Current limitations](../limitations.md).
+- **Serving status:** the secret store, rollback-safe static secret rotations, dynamic
+  secret leases, one-time sharing, the dynamic PKI secret, machine login, and outbound
+  secret sync are **served** on the running control plane under `/api/v1/secrets/*`
+  (enable with `secrets.enable_api`, off by default and fail-closed). Secret sync also
+  needs named targets configured by the operator; an unconfigured target fails closed
+  with `503` instead of dropping the write.
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the
   `machine-login` audience, principal, and expiry. `X-Tenant-ID` is a lookup hint on
   the public login route; a token for tenant A is rejected if presented with tenant B.
@@ -188,8 +255,8 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
   `TRSTCTL_SECRETS_KEK_FILE`.
 - **Store:** `Put/Get/GetVersion/Versions/Rollback/Delete/Purge`; `APIServer`
   (`PUT/GET /secrets/<path>`, `Idempotency-Key`).
-- **Dynamic backends:** `postgresql`, `mysql`, `mongodb`, `aws-sts`, `gcp-iam`,
-  `azure-sp`, `redis-ssh`, plus `pki`.
+- **Dynamic backends:** `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
+  `azure-entra`, `kubernetes`, `redis`, plus `pki`.
 - **Transit:** `Encrypt/Decrypt/Rewrap/HMAC/Sign/Verify`, versioned `trv:<n>:` ciphertext.
 - **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
   Parameter Store, webhook.

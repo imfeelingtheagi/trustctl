@@ -1663,6 +1663,72 @@
         ],
         "type": "object"
       },
+      "DynamicLease": {
+        "properties": {
+          "credential": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "role",
+          "state",
+          "issued_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "DynamicLeaseRenewRequest": {
+        "properties": {
+          "extend_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "extend_seconds"
+        ],
+        "type": "object"
+      },
+      "DynamicLeaseRequest": {
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "role",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "enroll_path": {
@@ -3553,6 +3619,20 @@
         ],
         "type": "object"
       },
+      "SecretImportRequest": {
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object"
+      },
       "SecretMeta": {
         "properties": {
           "created_at": {
@@ -3593,6 +3673,18 @@
         ],
         "type": "object"
       },
+      "SecretRecoverRequest": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at"
+        ],
+        "type": "object"
+      },
       "SecretRequest": {
         "properties": {
           "name": {
@@ -3605,6 +3697,114 @@
         "required": [
           "name",
           "value"
+        ],
+        "type": "object"
+      },
+      "SecretRotation": {
+        "properties": {
+          "completed": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "failed_phase": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "new_ref": {
+            "type": "string"
+          },
+          "old_ref": {
+            "type": "string"
+          },
+          "rollback_attempted": {
+            "type": "boolean"
+          },
+          "rollback_error": {
+            "type": "string"
+          },
+          "rollback_failed": {
+            "type": "boolean"
+          },
+          "rolled_back": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "old_ref",
+          "new_ref",
+          "completed",
+          "rolled_back",
+          "rollback_attempted",
+          "rollback_failed"
+        ],
+        "type": "object"
+      },
+      "SecretRotationRequest": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "old_ref": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "key",
+          "old_ref"
+        ],
+        "type": "object"
+      },
+      "SecretSync": {
+        "properties": {
+          "delivered": {
+            "type": "boolean"
+          },
+          "enqueued": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remote_key": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "target",
+          "remote_key",
+          "enqueued",
+          "delivered"
+        ],
+        "type": "object"
+      },
+      "SecretSyncRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "remote_key": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "target"
         ],
         "type": "object"
       },
@@ -8749,6 +8949,247 @@
         "x-trstctl-permission": "risk:read"
       }
     },
+    "/api/v1/secrets/leases": {
+      "post": {
+        "operationId": "issueDynamicSecretLease",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DynamicLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicLease"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue a dynamic secret lease",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/leases/{lease_id}": {
+      "get": {
+        "operationId": "getDynamicSecretLease",
+        "parameters": [
+          {
+            "description": "dynamic secret lease id",
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicLease"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read dynamic secret lease metadata",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/leases/{lease_id}/renew": {
+      "post": {
+        "operationId": "renewDynamicSecretLease",
+        "parameters": [
+          {
+            "description": "dynamic secret lease id",
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DynamicLeaseRenewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicLease"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Renew a dynamic secret lease",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/leases/{lease_id}/revoke": {
+      "post": {
+        "operationId": "revokeDynamicSecretLease",
+        "parameters": [
+          {
+            "description": "dynamic secret lease id",
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicLease"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a dynamic secret lease",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
     "/api/v1/secrets/login": {
       "post": {
         "operationId": "machineLogin",
@@ -8852,6 +9293,63 @@
           }
         ],
         "summary": "Issue a dynamic PKI secret (short-lived cert + key)",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/rotations": {
+      "post": {
+        "operationId": "rotateStaticSecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRotation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run a rollback-safe static secret rotation",
         "x-trstctl-permission": "secrets:write"
       }
     },
@@ -9089,6 +9587,197 @@
         "x-trstctl-permission": "secrets:write"
       }
     },
+    "/api/v1/secrets/store/history/{name}": {
+      "get": {
+        "operationId": "getSecretVersion",
+        "parameters": [
+          {
+            "description": "hierarchical secret name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "historical version number to read",
+            "in": "query",
+            "name": "version",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretValue"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one historical application-secret version",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/store/import": {
+      "post": {
+        "operationId": "importSecrets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMetaList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Import a tree of application secrets (sealed at rest)",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/store/recover/{name}": {
+      "post": {
+        "operationId": "recoverSecretAt",
+        "parameters": [
+          {
+            "description": "hierarchical secret name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRecoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretMeta"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Recover an application secret to a point in time",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
     "/api/v1/secrets/store/{name}": {
       "delete": {
         "operationId": "deleteSecret",
@@ -9149,6 +9838,14 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "description": "expand ${secret.path} references in the returned value",
+            "in": "query",
+            "name": "resolve",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -9259,6 +9956,63 @@
           }
         ],
         "summary": "Rotate an application secret (new value, bumped version)",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/syncs": {
+      "post": {
+        "operationId": "syncSecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSync"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Push a stored secret to a configured external sync target",
         "x-trstctl-permission": "secrets:write"
       }
     },

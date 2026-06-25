@@ -85,6 +85,11 @@ import type {
   RotationRunList,
   SecretMeta,
   SecretMetaList,
+  DynamicLease,
+  DynamicLeaseRequest,
+  DynamicLeaseRenewRequest,
+  SecretImportRequest,
+  SecretRecoverRequest,
   SecretRequest,
   SecretValue,
   ShareRedeemRequest,
@@ -161,8 +166,13 @@ export type {
   RotationRun,
   RotationRunList,
   RoleList,
+  SecretImportRequest,
   SecretMeta,
   SecretMetaList,
+  DynamicLease,
+  DynamicLeaseRequest,
+  DynamicLeaseRenewRequest,
+  SecretRecoverRequest,
   SecretRequest,
   SecretValue,
   ShareRedeemRequest,
@@ -382,9 +392,16 @@ export interface Api {
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
   createSecret(input: SecretRequest): Promise<SecretMeta>;
-  getSecret(name: string): Promise<SecretValue>;
+  importSecrets(input: SecretImportRequest): Promise<SecretMetaList>;
+  getSecret(name: string, options?: { resolve?: boolean }): Promise<SecretValue>;
+  getSecretVersion(name: string, version: number): Promise<SecretValue>;
+  recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
   deleteSecret(name: string): Promise<void>;
+  issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
+  getDynamicLease(leaseId: string): Promise<DynamicLease>;
+  renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
+  revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
   createShare(input: ShareRequest): Promise<ShareToken>;
@@ -482,9 +499,22 @@ export const api: Api = {
     return req<SecretMetaList>(`/api/v1/secrets/store${suffix ? `?${suffix}` : ""}`);
   },
   createSecret: (input) => mutate<SecretMeta>("POST", "/api/v1/secrets/store", input),
-  getSecret: (name) => req<SecretValue>(`/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  importSecrets: (input) => mutate<SecretMetaList>("POST", "/api/v1/secrets/store/import", input),
+  getSecret: (name, options) => {
+    const qs = new URLSearchParams();
+    if (options?.resolve) qs.set("resolve", "true");
+    const suffix = qs.toString();
+    return req<SecretValue>(`/api/v1/secrets/store/${encodeURIComponent(name)}${suffix ? `?${suffix}` : ""}`);
+  },
+  getSecretVersion: (name, version) =>
+    req<SecretValue>(`/api/v1/secrets/store/history/${encodeURIComponent(name)}?version=${encodeURIComponent(String(version))}`),
+  recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
   rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
   deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
+  getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
+  renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
+  revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
   createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),

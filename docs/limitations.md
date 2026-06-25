@@ -286,7 +286,7 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   acceptance tests (served grounded NL-query/RCA citing real records, cross-tenant
   denial, injection-inert + secret-redacted, and an MCP list+invoke). **Status:
   served.**
-- **The secrets/identity frameworks — now SERVED (four of five).** Four of
+- **The secrets/identity frameworks — now SERVED (six of six).** Six of
   the secrets/identity frameworks are **mounted on the running binary** under
   `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when
   off, requiring a KEK when on):
@@ -296,9 +296,30 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
     credentials MAC-bind tenant, audience, principal, and expiry; `X-Tenant-ID` is only
     the lookup hint and mismatched tenant headers are rejected;
   - the **application secrets SDK** (F64) backs the secret store
-    `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, **rotate**, delete);
-    values are sealed at rest under the KEK and the read path fetches through the SDK
-    client;
+    `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, **rotate**, delete),
+    `POST /api/v1/secrets/store/import` (all-or-nothing tree import),
+    `GET /api/v1/secrets/store/{name}?resolve=true` (explicit `${secret.path}`
+    reference expansion with cycle rejection),
+    `GET /api/v1/secrets/store/history/{name}?version=N` (read one prior sealed
+    version), and `POST /api/v1/secrets/store/recover/{name}` (point-in-time recovery
+    to the next monotonic version); values are sealed at rest under the KEK and the
+    latest-value read path fetches through the SDK client;
+  - **dynamic secrets** (F65) back `POST /api/v1/secrets/leases`,
+    `GET /api/v1/secrets/leases/{lease_id}`,
+    `POST /api/v1/secrets/leases/{lease_id}/renew`, and
+    `POST /api/v1/secrets/leases/{lease_id}/revoke` — issue returns the backend
+    credential once, later reads return metadata only, renew extends an active lease,
+    revoke closes it, and the served leaseworker expires leases through an
+    outbox-backed backend revocation queue. The concrete backend family covers
+    `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`, `azure-entra`,
+    `kubernetes`, and `redis`; operators still have to provide the target connection
+    and cloud credentials for the providers they expose;
+  - **static secret rotation** (F37) backs `POST /api/v1/secrets/rotations` — the
+    running control plane drives the four-phase stage, cutover, verify, retire flow
+    through concrete PostgreSQL, MySQL, and AWS IAM rotators. A failed cutover or
+    verification returns rollback metadata only, restores the previous consumer
+    pointer when possible, and revokes the staged backend credential without returning
+    secret material;
   - **PKI-as-a-secret / dynamic certificate leasing** (F67) backs
     `POST /api/v1/secrets/pki` — it issues a short-lived certificate **and its private
     key** (a usable TLS identity, `tls.X509KeyPair`-loadable) through the issuing CA in
@@ -315,15 +336,16 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   (so state is reconstructable from history); secret values are held in wipeable,
   zeroed memory (never as a string), never logged, and never returned beyond their
   design. The surface is proven end-to-end by acceptance tests.
-- **Secret-sync to external stores (F60) — still library-only.**
-  The outbound secret-sync engine (push + drift detection to Kubernetes, GitHub
-  Actions, GitLab CI, Terraform, Vercel/Netlify, AWS Parameter Store, and a generic
-  webhook) is real, tested **library** code with **no path into the served binary** —
-  the running binary does not yet mount a secret-sync surface. It is **built and tested
-  but not yet mounted on the served binary**; serving it depends on the
-  connector-target surface and remains a follow-up. Its deliveries go through the
-  journaled outbox (at-least-once delivery), are tenant-scoped, and are recorded as
-  immutable events in library code today.
+- **Secret sync external stores (F68) — served, target-configured, and intentionally
+  fail-closed.**
+  The running binary mounts `POST /api/v1/secrets/syncs` and `trstctl-cli secrets syncs
+  run`. A request reads one stored secret, writes a sealed tenant-scoped outbox row
+  before any external write, delivers through the configured target pusher, records
+  immutable sync events, and returns metadata only. Native pushers currently cover
+  GitHub Actions, AWS Secrets Manager, and Kubernetes; Vercel, GitLab, Terraform Cloud,
+  GCP Secret Manager, and Azure Key Vault use the JSON/manual pusher shape until those
+  providers receive deeper first-class APIs. If a target is not configured, the route
+  returns `503` and does not attempt an external call.
 - **Transit/KMIP (F66) — still library-only.**
   The KMIP package now has a bounded TTLV RequestMessage parser with frame-size,
   field-count, and nesting-depth caps plus a fuzz test on that parser, and its library

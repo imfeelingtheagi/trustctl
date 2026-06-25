@@ -11,8 +11,8 @@
 -- bound to (tenant_id, name, version) as AAD, so a blob cannot be lifted to another
 -- row/tenant and still open (AN-8). A rotation bumps `version` and replaces the
 -- sealed bytes in place; `version` is the monotonic rotation counter surfaced to the
--- caller (the plaintext of prior versions is overwritten — this is a current-value
--- store, not a history of plaintexts).
+-- caller. This table is intentionally latest-only; migration 0046 adds
+-- `secret_store_versions` for sealed historical versions and point-in-time recovery.
 --
 -- Per AN-1 every row carries tenant_id and isolation is enforced by row-level
 -- security that is ENABLED and FORCE-d (the owner cannot bypass it), with a

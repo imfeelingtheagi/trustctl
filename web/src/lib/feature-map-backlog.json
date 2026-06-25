@@ -4517,36 +4517,36 @@
       "phase": "P1",
       "priority": 32,
       "served_state": "partial",
-      "backend_status": "served store rotation plus library rotation engine",
-      "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; coverage ledger: /coverage",
+      "backend_status": "served native-store rotation plus rollback-safe static rotation API",
+      "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API exposes rollback-safe static rotation at /api/v1/secrets/rotations; coverage ledger: /coverage",
       "target_gui_mapping": "Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status.",
       "acceptance_test": "UI calls served rotate path for native store and hides backend-specific rotation controls until served.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["/api/v1/secrets/store/{name}", "internal/rotation"],
+      "source_backend": ["/api/v1/secrets/store/{name}", "/api/v1/secrets/rotations", "internal/rotation"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["rotateSecret"],
+      "api_surface": ["rotateSecret", "rotateStaticSecret"],
       "api_na": "",
-      "cli_surface": ["secrets store update"],
+      "cli_surface": ["secrets store update", "secrets rotations run"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=served store rotation plus library rotation engine"]
+          "evidence": ["served_state=partial", "backend_status=served native-store rotation plus rollback-safe static rotation API"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; coverage ledger: /coverage",
+            "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API exposes rollback-safe static rotation at /api/v1/secrets/rotations; coverage ledger: /coverage",
             "target_gui_mapping: Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: secrets store update"],
+          "evidence": ["CLI commands: secrets store update, secrets rotations run"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: rotateSecret"],
+          "evidence": ["OpenAPI operationIds: rotateSecret, rotateStaticSecret"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
@@ -4567,7 +4567,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret, rotateStaticSecret",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4580,7 +4580,7 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: rotateSecret",
+            "mutating served surface requires audit/event evidence: rotateSecret, rotateStaticSecret",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
@@ -4754,17 +4754,17 @@
       "priority": 33,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete; coverage ledger: /coverage",
-      "target_gui_mapping": "Secrets store UI for create/list/read-with-confirmation/rotate/delete, version metadata, owner, access policy, and value reveal guard.",
+      "current_frontend_mapping": "operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete plus typed client helpers for history/recovery; coverage ledger: /coverage",
+      "target_gui_mapping": "Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard.",
       "acceptance_test": "Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["/api/v1/secrets/store"],
+      "source_backend": ["/api/v1/secrets/store", "/api/v1/secrets/store/history/{name}", "/api/v1/secrets/store/recover/{name}"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["createSecret", "listSecrets", "getSecret", "rotateSecret", "deleteSecret"],
+      "api_surface": ["createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret"],
       "api_na": "",
-      "cli_surface": ["secrets store put", "secrets store list", "secrets store get", "secrets store update", "secrets store delete"],
+      "cli_surface": ["secrets store put", "secrets store list", "secrets store get", "secrets store history", "secrets store recover", "secrets store update", "secrets store delete"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -4772,8 +4772,8 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete; coverage ledger: /coverage",
-            "target_gui_mapping: Secrets store UI for create/list/read-with-confirmation/rotate/delete, version metadata, owner, access policy, and value reveal guard."
+            "current_frontend_mapping: operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete plus typed client helpers for history/recovery; coverage ledger: /coverage",
+            "target_gui_mapping: Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
@@ -4782,6 +4782,8 @@
             "CLI command: secrets store put",
             "CLI command: secrets store list",
             "CLI command: secrets store get",
+            "CLI command: secrets store history",
+            "CLI command: secrets store recover",
             "CLI command: secrets store update",
             "CLI command: secrets store delete"
           ],
@@ -4792,6 +4794,8 @@
             "OpenAPI operationId: createSecret",
             "OpenAPI operationId: listSecrets",
             "OpenAPI operationId: getSecret",
+            "OpenAPI operationId: getSecretVersion",
+            "OpenAPI operationId: recoverSecretAt",
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: deleteSecret"
           ],
@@ -4815,7 +4819,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, getSecret, getSecretVersion, recoverSecretAt, rotateSecret, deleteSecret",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4828,7 +4832,7 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
+            "mutating served surface requires audit/event evidence: createSecret, listSecrets, getSecret, getSecretVersion, recoverSecretAt, rotateSecret, deleteSecret",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
@@ -4855,27 +4859,27 @@
       "phase": "P1",
       "priority": 34,
       "served_state": "conditional",
-      "backend_status": "conditional served SDK path plus CLI",
-      "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store; coverage ledger: /coverage",
-      "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, and least-privilege policy explanation.",
-      "acceptance_test": "UI examples match CLI/API contract and never include real secret values in generated snippets.",
+      "backend_status": "conditional served SDK path plus CLI with reference resolution and imports",
+      "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads/imports, and coverage ledger: /coverage",
+      "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation.",
+      "acceptance_test": "UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/secretsdk", "internal/secretscli"],
+      "source_backend": ["internal/secretsdk", "internal/secretscli", "/api/v1/secrets/store/import", "/api/v1/secrets/store/{name}?resolve=true"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["createSecret", "listSecrets", "getSecret", "rotateSecret", "deleteSecret"],
+      "api_surface": ["createSecret", "listSecrets", "importSecrets", "getSecret", "rotateSecret", "deleteSecret"],
       "api_na": "",
-      "cli_surface": ["secrets store put", "secrets store list", "secrets store get", "secrets store update", "secrets store delete"],
+      "cli_surface": ["secrets store put", "secrets store list", "secrets store import", "secrets store get", "secrets store update", "secrets store delete"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served SDK path plus CLI"]
+          "evidence": ["served_state=conditional", "backend_status=conditional served SDK path plus CLI with reference resolution and imports"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Secrets at /secrets - developer snippets plus access test against served store; coverage ledger: /coverage",
-            "target_gui_mapping: Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, and least-privilege policy explanation."
+            "current_frontend_mapping: observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads/imports, and coverage ledger: /coverage",
+            "target_gui_mapping: Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
@@ -4883,6 +4887,7 @@
           "evidence": [
             "CLI command: secrets store put",
             "CLI command: secrets store list",
+            "CLI command: secrets store import",
             "CLI command: secrets store get",
             "CLI command: secrets store update",
             "CLI command: secrets store delete"
@@ -4893,6 +4898,7 @@
           "evidence": [
             "OpenAPI operationId: createSecret",
             "OpenAPI operationId: listSecrets",
+            "OpenAPI operationId: importSecrets",
             "OpenAPI operationId: getSecret",
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: deleteSecret"
@@ -4901,7 +4907,7 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI examples match CLI/API contract and never include real secret values in generated snippets.",
+            "acceptance_test: UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -4917,7 +4923,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createSecret, listSecrets, importSecrets, getSecret, rotateSecret, deleteSecret",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4930,7 +4936,7 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: createSecret, listSecrets, getSecret, rotateSecret, deleteSecret",
+            "mutating served surface requires audit/event evidence: createSecret, listSecrets, importSecrets, getSecret, rotateSecret, deleteSecret",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
@@ -4956,61 +4962,85 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 77,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - dynamic backend, role, lease TTL, issue/revoke, health, and lease status disclosure without live lease issue; coverage ledger: /coverage",
+      "served_state": "conditional",
+      "backend_status": "served",
+      "current_frontend_mapping": "API/CLI served: /api/v1/secrets/leases issues, reads, renews, and revokes dynamic secret leases when secrets.enable_api is on and providers are configured; coverage ledger: /coverage",
       "target_gui_mapping": "Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow.",
-      "acceptance_test": "UI shows library-only state until each backend is served and tests lease expiry/revocation fixtures.",
+      "acceptance_test": "Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/dynsecret"],
+      "source_backend": ["internal/dynsecret", "internal/leaseworker", "internal/api/secrets.go", "internal/server/secrets.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. Test evidence: internal/server/secrets_served_test.go issues, renews, revokes, and leaseworker-expires leases through the API; web/src/lib/api.test.ts verifies the typed client routes and mutation idempotency. Coverage evidence: the OpenAPI golden, CLI catalog, /coverage catalog, and customer docs list the served lease surface.",
+      "api_surface": ["issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease"],
+      "cli_surface": ["secrets leases issue", "secrets leases get", "secrets leases renew", "secrets leases revoke"],
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "POST /api/v1/secrets/leases issues one copy-once credential through dynsecret.Engine.",
+            "POST /api/v1/secrets/leases/{lease_id}/renew extends an active lease idempotently.",
+            "POST /api/v1/secrets/leases/{lease_id}/revoke and the served leaseworker enqueue revocation through the outbox-backed queue."
+          ],
+          "refs": ["internal/api/secrets.go", "internal/server/secrets.go", "internal/server/run.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Secrets at /secrets - dynamic backend, role, lease TTL, issue/revoke, health, and lease status disclosure without live lease issue; coverage ledger: /coverage",
+            "current_frontend_mapping: API/CLI served: /api/v1/secrets/leases issues, reads, renews, and revokes dynamic secret leases when secrets.enable_api is on and providers are configured; coverage ledger: /coverage",
             "target_gui_mapping: Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
+          "refs": ["web/src/lib/api.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "trstctl-cli secrets leases issue posts a provider/role/ttl body.",
+            "trstctl-cli secrets leases get reads metadata only.",
+            "trstctl-cli secrets leases renew and revoke send Idempotency-Key-protected mutations."
+          ],
+          "refs": ["internal/cli/command.go", "docs/cli.md"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI exposes issueDynamicSecretLease, getDynamicSecretLease, renewDynamicSecretLease, and revokeDynamicSecretLease.",
+            "The generated TypeScript client re-exports DynamicLease request/response types."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go", "web/src/lib/api.ts"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows library-only state until each backend is served and tests lease expiry/revocation fixtures.",
+            "acceptance_test: Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
+            "internal/server/secrets_served_test.go asserts issue -> renew -> revoke plus scheduled expiry, event names, no credential logs, and backend revocation.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/secrets_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/secrets.md"],
-          "refs": ["docs/features/secrets.md"]
+          "evidence": ["documented in docs/features/secrets.md, docs/journeys/manage-secrets.md, docs/limitations.md, and docs/cli.md"],
+          "refs": ["docs/features/secrets.md", "docs/journeys/manage-secrets.md", "docs/limitations.md", "docs/cli.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "lease issue/renew/revoke require secrets:write.",
+            "lease metadata reads require secrets:read.",
+            "feature authz manifest maps api_surface operations to secrets:read and secrets:write permissions."
+          ],
+          "refs": ["internal/api/api.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F65; current mapping is disclosure: Secrets at /secrets - dynamic backend, role, lease TTL, issue/revoke, health, and lease status disclosure without live lease issue; coverage ledger: /coverage."
+          "evidence": [
+            "dynsecret.lease.issued, dynsecret.lease.renewed, and dynsecret.lease.revoked events are emitted for the served lifecycle.",
+            "revocation intents are journaled to the outbox before backend revoke delivery."
+          ],
+          "refs": ["internal/dynsecret/dynsecret.go", "internal/server/secrets.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F65 has a served API/protocol entrypoint."
+          "evidence": ["served HTTP entrypoints are covered by normalized request metrics and tracing; leaseworker runs on its own served runtime lane."],
+          "refs": ["internal/observ/middleware.go", "internal/server/run.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -5192,40 +5222,42 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 79,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - secret sync target mappings, masked credentials, push/drift/rollback/outbox disclosure without live sync; coverage ledger: /coverage",
+      "served_state": "conditional",
+      "backend_status": "conditional served for configured sync targets",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - served secret sync API/CLI posture, masked target mappings, and sealed-outbox delivery disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt.",
-      "acceptance_test": "UI marks sync as library-only until served and tests target credential masking.",
+      "acceptance_test": "Served test pushes a stored secret to GitHub Actions, AWS Secrets Manager, and Kubernetes fixtures through configured targets, verifies idempotent replay, and proves responses/events do not leak the secret value.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/secretsync"],
+      "source_backend": ["/api/v1/secrets/syncs", "internal/secretsync"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["syncSecret"],
+      "api_na": "",
+      "cli_surface": ["secrets syncs run"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": ["served_state=conditional", "backend_status=conditional served for configured sync targets"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Secrets at /secrets - secret sync target mappings, masked credentials, push/drift/rollback/outbox disclosure without live sync; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Secrets at /secrets - served secret sync API/CLI posture, masked target mappings, and sealed-outbox delivery disclosure; coverage ledger: /coverage",
             "target_gui_mapping: Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command: secrets syncs run"],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: syncSecret"],
+          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI marks sync as library-only until served and tests target credential masking.",
+            "acceptance_test: Served test pushes a stored secret to GitHub Actions, AWS Secrets Manager, and Kubernetes fixtures through configured targets, verifies idempotent replay, and proves responses/events do not leak the secret value.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -5240,13 +5272,29 @@
           "refs": ["docs/features/secrets.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: syncSecret",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations.",
+            "syncSecret requires secrets:write and uses the standard idempotent mutation path."
+          ],
+          "refs": [
+            "internal/featureparity/authz_manifest.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
+            "internal/api/failclosed_guard_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F68; current mapping is disclosure: Secrets at /secrets - secret sync target mappings, masked credentials, push/drift/rollback/outbox disclosure without live sync; coverage ledger: /coverage."
+          "evidence": [
+            "mutating served surface requires audit/event evidence: syncSecret",
+            "syncSecret emits secret.sync.requested plus secretsync enqueued/delivered events without secret values."
+          ],
+          "refs": ["internal/api/secrets.go", "internal/secretsync/secretsync.go", "internal/server/secrets_sync_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F68 has a served API/protocol entrypoint."
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

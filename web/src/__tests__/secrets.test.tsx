@@ -81,7 +81,7 @@ describe("served secrets surface", () => {
     expect(screen.getByText("v3")).toBeInTheDocument();
     expect(screen.getByText("Scheduled rotation and downstream sync not served yet")).toBeInTheDocument();
     expect(
-      screen.getByText(/broader rotation engine, downstream sync, rollback evidence, and delivery receipts are not served by API or CLI yet/i),
+      screen.getByText(/rollback-safe static rotation engine is served by API for configured backends/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Auth-method administration not served yet")).toBeInTheDocument();
     expect(screen.getByText(/revoked methods aren't available in the console yet/i)).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe("served secrets surface", () => {
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
   });
 
-  it("renders ephemeral API keys, secret scanning, and dynamic secrets as library-only disclosures", async () => {
+  it("renders ephemeral/scanning library-only gaps while showing dynamic leases as served", async () => {
     renderSecrets();
     await screen.findByText("app/db/password");
 
@@ -177,12 +177,15 @@ describe("served secrets surface", () => {
     expect(screen.getAllByText(/redacted snippet/i).length).toBeGreaterThan(0);
 
     expect(screen.getByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
-    expect(screen.getByText("postgres")).toBeInTheDocument();
+    expect(screen.getByText("postgresql")).toBeInTheDocument();
     expect(screen.getByText("readonly-reporting")).toBeInTheDocument();
-    expect(screen.getByText("aws-sts")).toBeInTheDocument();
+    expect(screen.getByText("aws-iam")).toBeInTheDocument();
+    expect(screen.getByText("kubernetes")).toBeInTheDocument();
+    expect(screen.getByText("redis")).toBeInTheDocument();
     expect(screen.getByText("Secret-scanning triage is library-only")).toBeInTheDocument();
-    expect(screen.getByText("Dynamic secret leases are not served")).toBeInTheDocument();
-    expect(screen.getByText(/Backend health, role catalogs, lease issue\/revoke, and lease status are library-only/i)).toBeInTheDocument();
+    expect(screen.getByText("Dynamic secret leases are served")).toBeInTheDocument();
+    expect(screen.getByText(/POST \/api\/v1\/secrets\/leases/)).toBeInTheDocument();
+    expect(screen.getByText(/IAM access key is deleted on revoke/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /issue api key|mint key|triage leak|rotate leaked|issue lease|revoke lease/i })).not.toBeInTheDocument();
   });
 
@@ -203,8 +206,8 @@ describe("served secrets surface", () => {
       expect(screen.getByText(target)).toBeInTheDocument();
     }
     expect(screen.getByText("secret://sync/github/prod:****")).toBeInTheDocument();
-    expect(screen.getByText("Secret sync is not served")).toBeInTheDocument();
-    expect(screen.getByText(/No served secret-sync API\/CLI surface exists yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Secret sync is served by API and CLI")).toBeInTheDocument();
+    expect(screen.getByText(/POST \/api\/v1\/secrets\/syncs/i)).toBeInTheDocument();
     expect(screen.queryByText(/raw target token|BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /encrypt|decrypt|sign|verify|rewrap|sync|push|rollback/i })).not.toBeInTheDocument();
   });

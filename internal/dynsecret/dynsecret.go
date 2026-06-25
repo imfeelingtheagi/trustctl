@@ -10,6 +10,7 @@ package dynsecret
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -49,6 +50,12 @@ type LeaseState string
 const (
 	LeaseActive  LeaseState = "active"
 	LeaseRevoked LeaseState = "revoked"
+)
+
+var (
+	ErrUnknownProvider = errors.New("dynsecret: unknown provider")
+	ErrLeaseNotFound   = errors.New("dynsecret: lease not found")
+	ErrLeaseNotActive  = errors.New("dynsecret: lease not active")
 )
 
 // Lease is the durable record of a generated credential's lifecycle.
@@ -125,7 +132,7 @@ func New(cfg Config) (*Engine, error) {
 func (e *Engine) Issue(ctx context.Context, provider, role string, ttl time.Duration, idempotencyKey string) (Lease, []byte, error) {
 	p, ok := e.providers[provider]
 	if !ok {
-		return Lease{}, nil, fmt.Errorf("dynsecret: unknown provider %q", provider)
+		return Lease{}, nil, fmt.Errorf("%w %q", ErrUnknownProvider, provider)
 	}
 	if e.cfg.Gate != nil {
 		if allowed, reason := e.cfg.Gate(ctx, provider, role); !allowed {
@@ -165,8 +172,11 @@ func (e *Engine) Renew(ctx context.Context, leaseID string, extend time.Duration
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	l, ok := e.leases[leaseID]
-	if !ok || l.State != LeaseActive {
-		return Lease{}, fmt.Errorf("dynsecret: lease %q not active", leaseID)
+	if !ok {
+		return Lease{}, fmt.Errorf("%w %q", ErrLeaseNotFound, leaseID)
+	}
+	if l.State != LeaseActive {
+		return Lease{}, fmt.Errorf("%w %q", ErrLeaseNotActive, leaseID)
 	}
 	l.ExpiresAt = l.ExpiresAt.Add(extend)
 	e.leases[leaseID] = l
@@ -181,7 +191,7 @@ func (e *Engine) Revoke(ctx context.Context, leaseID string) error {
 	l, ok := e.leases[leaseID]
 	if !ok {
 		e.mu.Unlock()
-		return fmt.Errorf("dynsecret: unknown lease %q", leaseID)
+		return fmt.Errorf("%w %q", ErrLeaseNotFound, leaseID)
 	}
 	if l.State == LeaseRevoked {
 		e.mu.Unlock()
@@ -196,6 +206,18 @@ func (e *Engine) Revoke(ctx context.Context, leaseID string) error {
 	}
 	e.audit(ctx, "dynsecret.lease.revoked", l)
 	return nil
+}
+
+// GetLease returns one lease metadata record. The generated credential itself is
+// intentionally not retained here; callers only get it from Issue's first response.
+func (e *Engine) GetLease(leaseID string) (Lease, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	l, ok := e.leases[leaseID]
+	if !ok {
+		return Lease{}, fmt.Errorf("%w %q", ErrLeaseNotFound, leaseID)
+	}
+	return l, nil
 }
 
 // ExpireDue revokes every active lease whose expiry has passed (the expiry sweep).

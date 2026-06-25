@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -238,6 +241,339 @@ func TestServedSecretStoreCreateReadRotate(t *testing.T) {
 	if rv.Version != 3 {
 		t.Fatalf("after idempotent double-rotate, version = %d, want 3 (a single bump — AN-5)", rv.Version)
 	}
+}
+
+// TestServedSecretStoreVersionHistoryAndPITR is the SEC-01 proof: the served secret
+// store keeps prior sealed versions, can read an old version, can recover current
+// state to a point in time, and keeps tenant B outside tenant A's version history.
+func TestServedSecretStoreVersionHistoryAndPITR(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	tokA := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tokA,
+		map[string]any{"name": "db/password", "value": "pitr-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("create secret: status %d body %s", status, body)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", tokA,
+		map[string]any{"value": "pitr-v2"})
+	if status != http.StatusOK {
+		t.Fatalf("rotate to v2: status %d body %s", status, body)
+	}
+	var meta struct {
+		Version   int       `json:"version"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+	if err := json.Unmarshal(body, &meta); err != nil {
+		t.Fatalf("decode v2 meta: %v (%s)", err, body)
+	}
+	if meta.Version != 2 {
+		t.Fatalf("v2 rotate returned version %d, want 2", meta.Version)
+	}
+	recoverAt := meta.UpdatedAt.Add(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", tokA,
+		map[string]any{"value": "pitr-v3"})
+	if status != http.StatusOK {
+		t.Fatalf("rotate to v3: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/history/db/password?version=1", tokA, nil)
+	if status != http.StatusOK {
+		t.Fatalf("read prior version: status %d body %s", status, body)
+	}
+	var rv struct {
+		Value   string `json:"value"`
+		Version int    `json:"version"`
+	}
+	if err := json.Unmarshal(body, &rv); err != nil {
+		t.Fatalf("decode historical read: %v (%s)", err, body)
+	}
+	if rv.Value != "pitr-v1" || rv.Version != 1 {
+		t.Fatalf("historical version read = value %q version %d, want pitr-v1/1", rv.Value, rv.Version)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store/recover/db/password", tokA,
+		map[string]any{"at": recoverAt.Format(time.RFC3339Nano)})
+	if status != http.StatusOK {
+		t.Fatalf("recover to point in time: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "pitr-v2") {
+		t.Fatalf("recover reply leaked the recovered secret value (AN-8): %s", body)
+	}
+	if err := json.Unmarshal(body, &meta); err != nil {
+		t.Fatalf("decode recover meta: %v (%s)", err, body)
+	}
+	if meta.Version != 4 {
+		t.Fatalf("recover created version %d, want 4", meta.Version)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", tokA, nil)
+	if status != http.StatusOK {
+		t.Fatalf("read after recover: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &rv); err != nil {
+		t.Fatalf("decode recovered read: %v (%s)", err, body)
+	}
+	if rv.Value != "pitr-v2" || rv.Version != 4 {
+		t.Fatalf("after recover = value %q version %d, want pitr-v2/4", rv.Value, rv.Version)
+	}
+
+	if !h.hasEvent(t, "secret.version.written") || !h.hasEvent(t, "secret.recovered") {
+		t.Fatalf("served PITR did not emit secret.version.written and secret.recovered events")
+	}
+	if h.logContains(t, "pitr-v1") || h.logContains(t, "pitr-v2") || h.logContains(t, "pitr-v3") {
+		t.Fatal("secret version history or recovery logged plaintext secret material")
+	}
+
+	const tenantB = "22222222-2222-2222-2222-222222222222"
+	if _, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: tenantB, Kind: store.OwnerWorkload, Name: "tenant-b-pitr"}); err != nil {
+		t.Fatalf("create tenant B owner: %v", err)
+	}
+	tokB := seedScopedToken(t, h.store, tenantB, "secrets:read", "secrets:write")
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/history/db/password?version=1", tokB, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("tenant B read tenant A history: status %d body %s", status, body)
+	}
+}
+
+// TestServedSecretStoreReferencesAndImport is the SEC-02 proof: the served secret
+// store resolves ${secret.path} references only when a caller explicitly requests
+// resolution, imports a small tree of secrets, and rejects circular references with a
+// structured problem response.
+func TestServedSecretStoreReferencesAndImport(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+
+	for _, seed := range []struct {
+		name  string
+		value string
+	}{
+		{name: "db/user", value: "payments"},
+		{name: "db/password", value: "s3cr3t"},
+		{name: "db/dsn", value: "postgres://${secret.db/user}:${secret.db/password}@db.internal/app"},
+	} {
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+			map[string]any{"name": seed.name, "value": seed.value})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s: status %d body %s", seed.name, status, body)
+		}
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/dsn?resolve=true", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("resolve dsn: status %d body %s", status, body)
+	}
+	var rv struct {
+		Value   string `json:"value"`
+		Version int    `json:"version"`
+	}
+	if err := json.Unmarshal(body, &rv); err != nil {
+		t.Fatalf("decode resolved dsn: %v (%s)", err, body)
+	}
+	if rv.Value != "postgres://payments:s3cr3t@db.internal/app" {
+		t.Fatalf("resolved dsn = %q, want references expanded", rv.Value)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store/import", tok,
+		map[string]any{
+			"prefix": "imported",
+			"values": map[string]string{
+				"api/token": "tok-1",
+				"api/url":   "https://svc.internal?token=${secret.imported/api/token}",
+			},
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("import tree: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "tok-1") {
+		t.Fatalf("import reply leaked imported secret material: %s", body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/imported/api/url?resolve=true", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("resolve imported tree: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &rv); err != nil {
+		t.Fatalf("decode resolved import: %v (%s)", err, body)
+	}
+	if rv.Value != "https://svc.internal?token=tok-1" {
+		t.Fatalf("resolved import = %q, want imported reference expanded", rv.Value)
+	}
+
+	for _, seed := range []struct {
+		name  string
+		value string
+	}{
+		{name: "loop/a", value: "${secret.loop/b}"},
+		{name: "loop/b", value: "${secret.loop/a}"},
+	} {
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+			map[string]any{"name": seed.name, "value": seed.value})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s: status %d body %s", seed.name, status, body)
+		}
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/loop/a?resolve=true", tok, nil)
+	if status != http.StatusConflict {
+		t.Fatalf("circular reference status = %d body %s, want 409", status, body)
+	}
+	if !strings.Contains(string(body), "secret reference cycle") || !strings.Contains(string(body), `"cycle"`) {
+		t.Fatalf("cycle response is not structured enough: %s", body)
+	}
+}
+
+type servedDynamicSecretBackend struct {
+	mu      sync.Mutex
+	n       int
+	live    map[string]bool
+	revoked map[string]bool
+}
+
+func newServedDynamicSecretBackend() *servedDynamicSecretBackend {
+	return &servedDynamicSecretBackend{live: map[string]bool{}, revoked: map[string]bool{}}
+}
+
+func (b *servedDynamicSecretBackend) Create(_ context.Context, role string) (string, []byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.n++
+	ref := fmt.Sprintf("dyn-ref-%d", b.n)
+	b.live[ref] = true
+	return ref, []byte("dynamic-secret-" + ref + "-" + role), nil
+}
+
+func (b *servedDynamicSecretBackend) Revoke(_ context.Context, ref string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.live, ref)
+	b.revoked[ref] = true
+	return nil
+}
+
+func (b *servedDynamicSecretBackend) revokedCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.revoked)
+}
+
+func withDynamicSecretBackend(b dynsecret.Backend, interval time.Duration) func(*Deps) {
+	return func(d *Deps) {
+		d.DynamicSecretProviders = []dynsecret.Provider{dynsecret.NewProvider("stub", b)}
+		d.DynamicLeaseWorkerInterval = interval
+	}
+}
+
+// TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire is the SEC-03 proof: the
+// served API mounts internal/dynsecret.Engine for issue/renew/revoke, returns the
+// generated credential only on issue, and the served leaseworker expires and revokes
+// a short TTL lease through the durable revocation queue.
+func TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire(t *testing.T) {
+	backend := newServedDynamicSecretBackend()
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		withDynamicSecretBackend(backend, 10*time.Millisecond),
+	)
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+
+	worker, ok := any(h.srv).(interface{ RunDynamicLeaseWorker(context.Context) })
+	if !ok {
+		t.Fatal("served dynamic lease worker is not wired")
+	}
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		worker.RunDynamicLeaseWorker(workerCtx)
+	}()
+	t.Cleanup(func() {
+		cancelWorker()
+		<-workerDone
+	})
+
+	type leaseValue struct {
+		ID         string    `json:"id"`
+		Provider   string    `json:"provider"`
+		Role       string    `json:"role"`
+		State      string    `json:"state"`
+		Credential string    `json:"credential,omitempty"`
+		IssuedAt   time.Time `json:"issued_at"`
+		ExpiresAt  time.Time `json:"expires_at"`
+	}
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases", tok,
+		map[string]any{"provider": "stub", "role": "readonly", "ttl_seconds": 60})
+	if status != http.StatusCreated {
+		t.Fatalf("issue dynamic lease: status %d body %s", status, body)
+	}
+	var issued leaseValue
+	if err := json.Unmarshal(body, &issued); err != nil {
+		t.Fatalf("decode issued lease: %v (%s)", err, body)
+	}
+	if issued.ID == "" || issued.State != "active" || issued.Provider != "stub" || issued.Credential == "" {
+		t.Fatalf("issued lease missing served fields: %+v", issued)
+	}
+	if h.logContains(t, issued.Credential) {
+		t.Fatal("dynamic lease event log leaked generated credential material")
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases/"+issued.ID+"/renew", tok,
+		map[string]any{"extend_seconds": 60})
+	if status != http.StatusOK {
+		t.Fatalf("renew dynamic lease: status %d body %s", status, body)
+	}
+	var renewed leaseValue
+	if err := json.Unmarshal(body, &renewed); err != nil {
+		t.Fatalf("decode renewed lease: %v (%s)", err, body)
+	}
+	if !renewed.ExpiresAt.After(issued.ExpiresAt) || renewed.Credential != "" {
+		t.Fatalf("renewed lease = %+v, want later expiry and no credential replay", renewed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases/"+issued.ID+"/revoke", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("revoke dynamic lease: status %d body %s", status, body)
+	}
+	var revoked leaseValue
+	if err := json.Unmarshal(body, &revoked); err != nil {
+		t.Fatalf("decode revoked lease: %v (%s)", err, body)
+	}
+	if revoked.State != "revoked" || revoked.Credential != "" {
+		t.Fatalf("revoked lease = %+v, want revoked metadata only", revoked)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases", tok,
+		map[string]any{"provider": "stub", "role": "short", "ttl_seconds": 1})
+	if status != http.StatusCreated {
+		t.Fatalf("issue expiring lease: status %d body %s", status, body)
+	}
+	var expiring leaseValue
+	if err := json.Unmarshal(body, &expiring); err != nil {
+		t.Fatalf("decode expiring lease: %v (%s)", err, body)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
+		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/leases/"+expiring.ID, tok, nil)
+		if status != http.StatusOK {
+			t.Fatalf("read expiring lease: status %d body %s", status, body)
+		}
+		var current leaseValue
+		if err := json.Unmarshal(body, &current); err != nil {
+			t.Fatalf("decode expiring lease read: %v (%s)", err, body)
+		}
+		if current.State == "revoked" && backend.revokedCount() >= 2 {
+			if !h.hasEvent(t, "dynsecret.lease.issued") || !h.hasEvent(t, "dynsecret.lease.renewed") || !h.hasEvent(t, "dynsecret.lease.revoked") {
+				t.Fatalf("dynamic lease lifecycle did not emit issue/renew/revoke events")
+			}
+			return
+		}
+	}
+	t.Fatalf("served leaseworker did not expire and revoke short lease; backend revoked %d", backend.revokedCount())
 }
 
 // TestServedSecretShareRedeemOnce is the one-time-share (secretshare/F60, GAP-001)

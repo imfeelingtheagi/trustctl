@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -27,6 +28,24 @@ type Secret struct {
 	UpdatedAt time.Time
 }
 
+// SecretVersion is one sealed historical version of an application secret. Sealed
+// is ciphertext only; opening it happens through the crypto/seal boundary.
+type SecretVersion struct {
+	TenantID             string
+	Name                 string
+	Version              int
+	Sealed               []byte
+	WrittenAt            time.Time
+	RecoveredFromVersion *int
+}
+
+// SecretImportEntry is one already-sealed secret to import atomically into the
+// served secret store.
+type SecretImportEntry struct {
+	Name   string
+	Sealed []byte
+}
+
 // PutSecret stores a NEW sealed application secret (version 1) for (tenant, name).
 // It returns ErrSecretExists when the name already exists in the tenant — creation
 // is distinct from rotation so a create never silently clobbers an existing secret
@@ -35,13 +54,16 @@ type Secret struct {
 func (s *Store) PutSecret(ctx context.Context, tenantID, name string, sealed []byte) (Secret, error) {
 	var out Secret
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
+		if err := tx.QueryRow(ctx,
 			`INSERT INTO secret_store (tenant_id, name, sealed, version)
 			 VALUES ($1, $2, $3, 1)
 			 ON CONFLICT (tenant_id, name) DO NOTHING
 			 RETURNING id::text, tenant_id::text, name, version, created_at, updated_at`,
 			tenantID, name, sealed).
-			Scan(&out.ID, &out.TenantID, &out.Name, &out.Version, &out.CreatedAt, &out.UpdatedAt)
+			Scan(&out.ID, &out.TenantID, &out.Name, &out.Version, &out.CreatedAt, &out.UpdatedAt); err != nil {
+			return err
+		}
+		return insertSecretVersion(ctx, tx, tenantID, name, out.Version, sealed, out.UpdatedAt, nil)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		// ON CONFLICT DO NOTHING returned no row: the secret already exists.
@@ -57,6 +79,40 @@ func (s *Store) PutSecret(ctx context.Context, tenantID, name string, sealed []b
 // ErrSecretExists is returned by PutSecret when a secret with the same name
 // already exists in the tenant (create must not clobber; rotate instead).
 var ErrSecretExists = errors.New("store: secret already exists")
+
+// PutSecrets atomically imports multiple NEW sealed application secrets for a
+// tenant. Each secret starts at version 1 and receives a matching history row in
+// the same transaction. If any name already exists, no import rows are committed.
+func (s *Store) PutSecrets(ctx context.Context, tenantID string, entries []SecretImportEntry) ([]Secret, error) {
+	out := make([]Secret, 0, len(entries))
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		for _, entry := range entries {
+			var rec Secret
+			if err := tx.QueryRow(ctx,
+				`INSERT INTO secret_store (tenant_id, name, sealed, version)
+				 VALUES ($1, $2, $3, 1)
+				 ON CONFLICT (tenant_id, name) DO NOTHING
+				 RETURNING id::text, tenant_id::text, name, version, created_at, updated_at`,
+				tenantID, entry.Name, entry.Sealed).
+				Scan(&rec.ID, &rec.TenantID, &rec.Name, &rec.Version, &rec.CreatedAt, &rec.UpdatedAt); err != nil {
+				return err
+			}
+			rec.Sealed = entry.Sealed
+			if err := insertSecretVersion(ctx, tx, tenantID, rec.Name, rec.Version, rec.Sealed, rec.UpdatedAt, nil); err != nil {
+				return err
+			}
+			out = append(out, rec)
+		}
+		return nil
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrSecretExists
+	}
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 // GetSecret loads a sealed application secret for (tenant, name). It returns
 // ErrSecretNotFound when absent. Tenant-scoped under RLS (AN-1).
@@ -84,13 +140,16 @@ func (s *Store) GetSecret(ctx context.Context, tenantID, name string) (Secret, e
 func (s *Store) RotateSecret(ctx context.Context, tenantID, name string, sealed []byte) (Secret, error) {
 	var out Secret
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
+		if err := tx.QueryRow(ctx,
 			`UPDATE secret_store
 			    SET sealed = $3, version = version + 1, updated_at = now()
 			  WHERE tenant_id = $1 AND name = $2
 			  RETURNING id::text, tenant_id::text, name, version, created_at, updated_at`,
 			tenantID, name, sealed).
-			Scan(&out.ID, &out.TenantID, &out.Name, &out.Version, &out.CreatedAt, &out.UpdatedAt)
+			Scan(&out.ID, &out.TenantID, &out.Name, &out.Version, &out.CreatedAt, &out.UpdatedAt); err != nil {
+			return err
+		}
+		return insertSecretVersion(ctx, tx, tenantID, name, out.Version, sealed, out.UpdatedAt, nil)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Secret{}, ErrSecretNotFound
@@ -100,6 +159,79 @@ func (s *Store) RotateSecret(ctx context.Context, tenantID, name string, sealed 
 	}
 	out.Sealed = sealed
 	return out, nil
+}
+
+// GetSecretVersion loads one sealed historical version for (tenant, name, version).
+// It returns ErrSecretNotFound when the tenant/name/version is absent. Tenant-scoped
+// under RLS (AN-1).
+func (s *Store) GetSecretVersion(ctx context.Context, tenantID, name string, version int) (SecretVersion, error) {
+	var out SecretVersion
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var recovered sql.NullInt64
+		if err := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, name, version, sealed, written_at, recovered_from_version
+			   FROM secret_store_versions
+			  WHERE tenant_id = $1 AND name = $2 AND version = $3`,
+			tenantID, name, version).
+			Scan(&out.TenantID, &out.Name, &out.Version, &out.Sealed, &out.WrittenAt, &recovered); err != nil {
+			return err
+		}
+		if recovered.Valid {
+			v := int(recovered.Int64)
+			out.RecoveredFromVersion = &v
+		}
+		return nil
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SecretVersion{}, ErrSecretNotFound
+	}
+	return out, err
+}
+
+// RecoverSecretAt republishes the newest historical version written at or before at
+// as the current value, creating a new monotonic version. It returns the new current
+// row plus the historical source version used for recovery. Tenant-scoped under RLS
+// (AN-1); plaintext never leaves the store.
+func (s *Store) RecoverSecretAt(ctx context.Context, tenantID, name string, at time.Time) (Secret, SecretVersion, error) {
+	var (
+		out Secret
+		src SecretVersion
+	)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var recovered sql.NullInt64
+		if err := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, name, version, sealed, written_at, recovered_from_version
+			   FROM secret_store_versions
+			  WHERE tenant_id = $1 AND name = $2 AND written_at <= $3
+			  ORDER BY written_at DESC, version DESC
+			  LIMIT 1`,
+			tenantID, name, at.UTC()).
+			Scan(&src.TenantID, &src.Name, &src.Version, &src.Sealed, &src.WrittenAt, &recovered); err != nil {
+			return err
+		}
+		if recovered.Valid {
+			v := int(recovered.Int64)
+			src.RecoveredFromVersion = &v
+		}
+		if err := tx.QueryRow(ctx,
+			`UPDATE secret_store
+			    SET sealed = $3, version = version + 1, updated_at = now()
+			  WHERE tenant_id = $1 AND name = $2
+			  RETURNING id::text, tenant_id::text, name, version, created_at, updated_at`,
+			tenantID, name, src.Sealed).
+			Scan(&out.ID, &out.TenantID, &out.Name, &out.Version, &out.CreatedAt, &out.UpdatedAt); err != nil {
+			return err
+		}
+		return insertSecretVersion(ctx, tx, tenantID, name, out.Version, src.Sealed, out.UpdatedAt, &src.Version)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Secret{}, SecretVersion{}, ErrSecretNotFound
+	}
+	if err != nil {
+		return Secret{}, SecretVersion{}, err
+	}
+	out.Sealed = src.Sealed
+	return out, src, nil
 }
 
 // PurgeSecret removes an application secret for (tenant, name) from the sealed
@@ -124,7 +256,10 @@ func (s *Store) PurgeSecret(ctx context.Context, tenantID, name string) error {
 		if ct.RowsAffected() == 0 {
 			return ErrSecretNotFound
 		}
-		return nil
+		_, err = tx.Exec(ctx,
+			`DELETE FROM secret_store_versions WHERE tenant_id = $1 AND name = $2`,
+			tenantID, name)
+		return err
 	})
 }
 
@@ -156,4 +291,12 @@ func (s *Store) ListSecretNames(ctx context.Context, tenantID string, limit int)
 		return rows.Err()
 	})
 	return out, err
+}
+
+func insertSecretVersion(ctx context.Context, tx pgx.Tx, tenantID, name string, version int, sealed []byte, writtenAt time.Time, recoveredFromVersion *int) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO secret_store_versions (tenant_id, name, version, sealed, written_at, recovered_from_version)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		tenantID, name, version, sealed, writtenAt.UTC(), recoveredFromVersion)
+	return err
 }

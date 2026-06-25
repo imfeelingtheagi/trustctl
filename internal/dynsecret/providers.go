@@ -2,12 +2,13 @@ package dynsecret
 
 import "context"
 
-// This file is the dynamic-secret provider family (S17.2–S17.8): seven providers
+// This file is the dynamic-secret provider family (S17.2–S17.8): the concrete
+// database, cloud IAM, Kubernetes, and Redis providers
 // built from one template (BackendProvider) over the Backend seam, so each backend
 // is a small, uniform instance that inherits the engine's AN-5/AN-6/AN-8
 // guarantees. The realism of each lives in its Backend implementation (Postgres
-// GRANT/REVOKE, AWS STS AssumeRole + revoke, an SSH cert from the S13.1 CA, …);
-// the template handles the lease-facing contract identically for all.
+// GRANT/DROP ROLE, IAM access keys, Kubernetes TokenRequest, Redis ACL, …); the
+// template handles the lease-facing contract identically for all.
 
 // Backend is the per-target seam a provider drives: create a scoped credential and
 // revoke it (idempotently). Real backends implement this against the live system;
@@ -55,14 +56,26 @@ func NewMySQLProvider(b Backend) *BackendProvider { return NewProvider("mysql", 
 // NewMongoProvider builds the MongoDB dynamic-secret provider (S17.4).
 func NewMongoProvider(b Backend) *BackendProvider { return NewProvider("mongodb", b) }
 
-// NewAWSSTSProvider builds the AWS IAM (STS) dynamic-secret provider (S17.5).
+// NewAWSIAMProvider builds the AWS IAM dynamic-secret provider (S17.5).
+func NewAWSIAMProvider(b Backend) *BackendProvider { return NewProvider("aws-iam", b) }
+
+// NewAWSSTSProvider builds the legacy AWS STS-named dynamic-secret provider alias.
 func NewAWSSTSProvider(b Backend) *BackendProvider { return NewProvider("aws-sts", b) }
 
 // NewGCPIAMProvider builds the GCP IAM dynamic-secret provider (S17.6).
 func NewGCPIAMProvider(b Backend) *BackendProvider { return NewProvider("gcp-iam", b) }
 
-// NewAzureSPProvider builds the Azure service-principal dynamic-secret provider (S17.7).
+// NewAzureEntraProvider builds the Azure Entra dynamic-secret provider (S17.7).
+func NewAzureEntraProvider(b Backend) *BackendProvider { return NewProvider("azure-entra", b) }
+
+// NewAzureSPProvider builds the legacy Azure service-principal provider alias.
 func NewAzureSPProvider(b Backend) *BackendProvider { return NewProvider("azure-sp", b) }
 
-// NewRedisSSHProvider builds the Redis / dynamic-SSH provider (S17.8).
+// NewRedisProvider builds the Redis ACL dynamic-secret provider (S17.8).
+func NewRedisProvider(b Backend) *BackendProvider { return NewProvider("redis", b) }
+
+// NewRedisSSHProvider builds the legacy Redis/dynamic-SSH provider alias.
 func NewRedisSSHProvider(b Backend) *BackendProvider { return NewProvider("redis-ssh", b) }
+
+// NewKubernetesProvider builds the Kubernetes ServiceAccount token provider.
+func NewKubernetesProvider(b Backend) *BackendProvider { return NewProvider("kubernetes", b) }

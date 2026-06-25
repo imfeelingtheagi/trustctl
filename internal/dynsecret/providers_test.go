@@ -36,18 +36,19 @@ func (m *memBackend) Revoke(_ context.Context, ref string) error {
 	return nil
 }
 
-func TestAllSevenProvidersConform(t *testing.T) {
+func TestConcreteProviderFamilyConforms(t *testing.T) {
 	providers := []*BackendProvider{
 		NewPostgresProvider(newMemBackend("pg_user_")),
 		NewMySQLProvider(newMemBackend("mysql_user_")),
 		NewMongoProvider(newMemBackend("mongo_user_")),
-		NewAWSSTSProvider(newMemBackend("AKIA")),
+		NewAWSIAMProvider(newMemBackend("AKIA")),
 		NewGCPIAMProvider(newMemBackend("sa-")),
-		NewAzureSPProvider(newMemBackend("sp-")),
-		NewRedisSSHProvider(newMemBackend("ssh-")),
+		NewAzureEntraProvider(newMemBackend("sp-")),
+		NewRedisProvider(newMemBackend("redis-")),
+		NewKubernetesProvider(newMemBackend("sa-")),
 	}
-	if len(providers) != 7 {
-		t.Fatalf("expected 7 providers (S17.2–S17.8), have %d", len(providers))
+	if len(providers) != 8 {
+		t.Fatalf("expected 8 concrete providers (SEC-04), have %d", len(providers))
 	}
 	names := map[string]bool{}
 	for _, p := range providers {

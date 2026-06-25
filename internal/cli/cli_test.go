@@ -217,6 +217,50 @@ func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	}
 }
 
+func TestStaticRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"key":"db/reporting","old_ref":"old","new_ref":"new","completed":true}`, &cap)
+	body := `{"provider":"postgresql","key":"db/reporting","old_ref":"old"}`
+	code, _, _ := run(t, []string{"secrets", "rotations", "run", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/rotations" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("static rotation mutation should send an Idempotency-Key")
+	}
+}
+
+func TestSecretSyncCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD","enqueued":true,"delivered":true}`, &cap)
+	body := `{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}`
+	code, _, _ := run(t, []string{"secrets", "syncs", "run", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/syncs" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("secret sync mutation should send an Idempotency-Key")
+	}
+}
+
 func TestQueryFlag(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{}`, &cap)

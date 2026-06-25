@@ -97,7 +97,16 @@ const staticAPIRoutes: StaticAPIRoute[] = [
   { group: "Secrets", path: "/api/v1/secrets/pki", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
   { group: "Secrets", path: "/api/v1/secrets/shares", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
   { group: "Secrets", path: "/api/v1/secrets/shares/redeem", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/leases", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/leases/{lease_id}", methods: ["GET"], auth: "session or API token" },
+  { group: "Secrets", path: "/api/v1/secrets/leases/{lease_id}/renew", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/leases/{lease_id}/revoke", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/rotations", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/syncs", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
   { group: "Secrets", path: "/api/v1/secrets/store", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/store/import", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Secrets", path: "/api/v1/secrets/store/history/{name}", methods: ["GET"], auth: "session or API token" },
+  { group: "Secrets", path: "/api/v1/secrets/store/recover/{name}", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
   { group: "Secrets", path: "/api/v1/secrets/store/{name}", methods: ["GET", "PUT", "DELETE"], auth: "session; mutations add CSRF + Idempotency-Key" },
 ];
 

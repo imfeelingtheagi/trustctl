@@ -325,24 +325,26 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 }
 
 // ---- TRACE-005: secrets expansion (ephemeral keys, scanning triage, dynamic
-//      secrets, transit/KMIP, secret-sync) — disclosed library-only in-product ----
+//      secrets, transit/KMIP, secret-sync) — disclosed at the right served state ----
 
 // TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs pins TRACE-005. The web
 // console honestly labels the not-yet-served secrets surfaces as library-only/
-// unavailable, and limitations.md discloses secret-sync and transit/KMIP as still
-// library-only. This binds the in-product disclosure to the web source and the docs
-// disclosure to the code reality.
+// unavailable, labels dynamic leases as served, and limitations.md discloses
+// secret-sync and transit/KMIP as still library-only. This binds the in-product
+// disclosure to the web source and the docs disclosure to the code reality.
 func TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs(t *testing.T) {
 	// In-product disclosure: the Secrets page must label the not-yet-served slices.
 	secretsPage := strings.ToLower(read(t, "../web/src/pages/Secrets.tsx"))
 	for _, m := range []string{
 		"ephemeral api-key issuance is library-only",
 		"secret-scanning triage is library-only",
-		"library-only", // dynamic-secret lease verbs
 	} {
 		if !strings.Contains(secretsPage, m) {
 			t.Errorf("web/src/pages/Secrets.tsx must keep the honest library-only label for the secrets-expansion surfaces (missing %q) — TRACE-005", m)
 		}
+	}
+	if !containsAll(secretsPage, []string{"dynamic secret leases are served", "post /api/v1/secrets/leases", "secrets:read"}) {
+		t.Error("web/src/pages/Secrets.tsx must disclose dynamic-secret leases as served now that F65 has API/CLI routes — TRACE-005")
 	}
 	// It must use the UnavailableState primitive (the honest "not served yet" UI), not
 	// silently present these as working.

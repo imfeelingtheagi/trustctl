@@ -675,9 +675,38 @@ func componentSchemas() map[string]*Schema {
 	secretReq := object(map[string]*Schema{
 		"name": str(), "value": str(),
 	}, "name", "value")
+	secretImportReq := object(map[string]*Schema{
+		"prefix": str(), "values": {Type: "object"},
+	}, "values")
 	secretMeta := object(map[string]*Schema{
 		"name": str(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "name", "version")
+	dynamicLeaseReq := object(map[string]*Schema{
+		"provider": str(), "role": str(), "ttl_seconds": {Type: "integer"},
+	}, "provider", "role", "ttl_seconds")
+	secretRotationReq := object(map[string]*Schema{
+		"provider": str(), "key": str(), "old_ref": str(),
+	}, "provider", "key", "old_ref")
+	secretRotation := object(map[string]*Schema{
+		"key": str(), "old_ref": str(), "new_ref": str(),
+		"completed": {Type: "boolean"}, "rolled_back": {Type: "boolean"},
+		"rollback_attempted": {Type: "boolean"}, "rollback_failed": {Type: "boolean"},
+		"rollback_error": str(), "failed_phase": str(), "error": str(),
+	}, "key", "old_ref", "new_ref", "completed", "rolled_back", "rollback_attempted", "rollback_failed")
+	secretSyncReq := object(map[string]*Schema{
+		"name": str(), "target": str(), "remote_key": str(),
+	}, "name", "target")
+	secretSync := object(map[string]*Schema{
+		"name": str(), "target": str(), "remote_key": str(),
+		"enqueued": {Type: "boolean"}, "delivered": {Type: "boolean"},
+	}, "name", "target", "remote_key", "enqueued", "delivered")
+	dynamicLeaseRenewReq := object(map[string]*Schema{
+		"extend_seconds": {Type: "integer"},
+	}, "extend_seconds")
+	dynamicLease := object(map[string]*Schema{
+		"id": str(), "provider": str(), "role": str(), "state": str(),
+		"credential": str(), "issued_at": timestamp(), "expires_at": timestamp(),
+	}, "id", "provider", "role", "state", "issued_at", "expires_at")
 	// Managed-key (BYOK/HSM) lifecycle schemas (CRYPTO-005). public_der is the PKIX
 	// public key (base64 in JSON); the private material is never represented here.
 	managedKeyGenerateReq := object(map[string]*Schema{
@@ -705,6 +734,9 @@ func componentSchemas() map[string]*Schema {
 	shareValue := object(map[string]*Schema{
 		"value": str(),
 	}, "value")
+	secretRecoverReq := object(map[string]*Schema{
+		"at": timestamp(),
+	}, "at")
 	pkiSecretReq := object(map[string]*Schema{
 		"common_name": str(), "ttl_seconds": {Type: "integer"},
 	}, "common_name")
@@ -890,9 +922,18 @@ func componentSchemas() map[string]*Schema {
 		"ApprovalRequest":              approvalReq,
 		"Approval":                     approval,
 		"SecretRequest":                secretReq,
+		"SecretImportRequest":          secretImportReq,
+		"SecretRecoverRequest":         secretRecoverReq,
 		"SecretMeta":                   secretMeta,
 		"SecretMetaList":               list("SecretMeta"),
 		"SecretValue":                  secretValue,
+		"SecretRotationRequest":        secretRotationReq,
+		"SecretRotation":               secretRotation,
+		"SecretSyncRequest":            secretSyncReq,
+		"SecretSync":                   secretSync,
+		"DynamicLeaseRequest":          dynamicLeaseReq,
+		"DynamicLeaseRenewRequest":     dynamicLeaseRenewReq,
+		"DynamicLease":                 dynamicLease,
 		"ManagedKeyGenerateRequest":    managedKeyGenerateReq,
 		"ManagedKeyActionRequest":      managedKeyActionReq,
 		"ManagedKey":                   managedKey,

@@ -59,6 +59,12 @@ One command per core API operation:
 | `cbom` | `scan` · `assets` |
 | `pqc migrations` | `start` · `rollback` |
 | `agents` | `list` · `enroll-token` |
+| `secrets store` | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete` |
+| `secrets leases` | `issue` · `get` · `renew` · `revoke` |
+| `secrets rotations` | `run` |
+| `secrets syncs` | `run` |
+| `secrets shares` | `create` · `redeem` |
+| `secrets` | `login` · `pki` |
 
 Plus `version`.
 
@@ -152,6 +158,28 @@ JSON
 trstctl-cli --idempotency-key jit-agent-7-request-1 ephemeral issue -f ephemeral-jit.json
 printf '{"action":"issue"}' | trstctl-cli --idempotency-key jit-agent-7-approve-1 ephemeral approve jit-agent-7 -f -
 trstctl-cli --idempotency-key jit-agent-7-issue-1 ephemeral issue -f ephemeral-jit.json
+
+# Issue, renew, read, and revoke a dynamic secret lease from a configured provider.
+cat > dynamic-lease.json <<'JSON'
+{"provider":"postgresql","role":"readonly","ttl_seconds":900}
+JSON
+trstctl-cli --idempotency-key lease-issue-1 secrets leases issue -f dynamic-lease.json
+trstctl-cli secrets leases get <lease-id>
+printf '{"extend_seconds":900}' | trstctl-cli --idempotency-key lease-renew-1 secrets leases renew <lease-id> -f -
+trstctl-cli --idempotency-key lease-revoke-1 secrets leases revoke <lease-id>
+
+# Run rollback-safe static credential rotation through a configured backend rotator.
+cat > static-rotation.json <<'JSON'
+{"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}
+JSON
+trstctl-cli --idempotency-key static-rotation-1 secrets rotations run -f static-rotation.json
+
+# Push a stored secret to a configured external sync target. The response contains
+# metadata only; the secret value is never echoed back.
+cat > secret-sync.json <<'JSON'
+{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
+JSON
+trstctl-cli --idempotency-key secret-sync-1 secrets syncs run -f secret-sync.json
 
 # On an enrolled host, report local public certificate files over the agent channel.
 trstctl-agent --enroll-url https://localhost:8443 \

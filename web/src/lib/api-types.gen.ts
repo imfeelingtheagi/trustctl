@@ -463,6 +463,26 @@ export interface DiscoverySourceRequest {
   name: string;
 }
 
+export interface DynamicLease {
+  credential?: string;
+  expires_at: string;
+  id: string;
+  issued_at: string;
+  provider: string;
+  role: string;
+  state: string;
+}
+
+export interface DynamicLeaseRenewRequest {
+  extend_seconds: number;
+}
+
+export interface DynamicLeaseRequest {
+  provider: string;
+  role: string;
+  ttl_seconds: number;
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;
@@ -989,6 +1009,11 @@ export interface RotationRunList {
   next_cursor?: string;
 }
 
+export interface SecretImportRequest {
+  prefix?: string;
+  values: Record<string, unknown>;
+}
+
 export interface SecretMeta {
   created_at?: string;
   name: string;
@@ -1001,9 +1026,46 @@ export interface SecretMetaList {
   next_cursor?: string;
 }
 
+export interface SecretRecoverRequest {
+  at: string;
+}
+
 export interface SecretRequest {
   name: string;
   value: string;
+}
+
+export interface SecretRotation {
+  completed: boolean;
+  error?: string;
+  failed_phase?: string;
+  key: string;
+  new_ref: string;
+  old_ref: string;
+  rollback_attempted: boolean;
+  rollback_error?: string;
+  rollback_failed: boolean;
+  rolled_back: boolean;
+}
+
+export interface SecretRotationRequest {
+  key: string;
+  old_ref: string;
+  provider: string;
+}
+
+export interface SecretSync {
+  delivered: boolean;
+  enqueued: boolean;
+  name: string;
+  remote_key: string;
+  target: string;
+}
+
+export interface SecretSyncRequest {
+  name: string;
+  remote_key?: string;
+  target: string;
 }
 
 export interface SecretValue {

@@ -423,6 +423,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),
+			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),

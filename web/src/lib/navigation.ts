@@ -396,7 +396,13 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "observe",
     evidence: "served api_key discovery source, schedule, run, and metadata-only findings",
   },
-  { featureId: "F37", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "manual native-store rotate/delete through served secrets store" },
+  {
+    featureId: "F37",
+    routes: ["/secrets"],
+    component: "Secrets",
+    kind: "operate",
+    evidence: "manual native-store rotate/delete through served secrets store plus rollback-safe static rotation at /api/v1/secrets/rotations",
+  },
   {
     featureId: "F38",
     routes: ["/secrets"],
@@ -538,7 +544,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "observe",
-    evidence: "dynamic backend, role, lease TTL, issue/revoke, health, and lease status disclosure without live lease issue",
+    evidence: "served dynamic lease API/CLI disclosure with provider role, TTL, issue, renew, revoke, and expiry status",
   },
   {
     featureId: "F66",
@@ -553,7 +559,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "observe",
-    evidence: "secret sync target mappings, masked credentials, push/drift/rollback/outbox disclosure without live sync",
+    evidence: "served secret sync API/CLI posture, masked target mappings, and outbox delivery disclosure",
   },
   {
     featureId: "F69",
