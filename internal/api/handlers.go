@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -356,8 +357,17 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		// check require. The gate is fail-closed; the zero gate is a no-op. Doing this
 		// inside the idempotency closure means a denial is the recorded result for the
 		// key (a replay re-denies, never silently mints — AN-5).
+		var resourceAttrs map[string]string
+		if a.gate.ABAC != nil {
+			var err error
+			resourceAttrs, err = a.identityABACResourceAttrs(ctx, tenantID, id)
+			if err != nil {
+				return 0, nil, err
+			}
+			resourceAttrs["transition.to"] = req.To
+		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if err := a.gate.check(ctx, principal, tenantID, id, orchestrator.State(req.To)); err != nil {
+		if err := a.gate.check(ctx, principal, tenantID, id, orchestrator.State(req.To), resourceAttrs); err != nil {
 			var ge *gateError
 			if errors.As(err, &ge) {
 				return 0, nil, errStatus(ge.status, ge.detail)
@@ -382,4 +392,42 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, toIdentityResponse(updated), nil
 	})
+}
+
+func (a *API) identityABACResourceAttrs(ctx context.Context, tenantID, id string) (map[string]string, error) {
+	it, err := a.store.GetIdentity(ctx, tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{
+		"identity.id":     it.ID,
+		"identity.kind":   string(it.Kind),
+		"identity.name":   it.Name,
+		"identity.status": it.Status,
+		"owner_id":        it.OwnerID,
+	}
+	if len(it.Attributes) > 0 {
+		var attrs map[string]any
+		if err := json.Unmarshal(it.Attributes, &attrs); err == nil {
+			flattenABACResource("", attrs, out)
+		}
+	}
+	return out, nil
+}
+
+func flattenABACResource(prefix string, attrs map[string]any, out map[string]string) {
+	for k, v := range attrs {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch x := v.(type) {
+		case map[string]any:
+			flattenABACResource(key, x, out)
+		case string:
+			out[key] = x
+		case bool, float64, json.Number:
+			out[key] = fmt.Sprint(x)
+		}
+	}
 }

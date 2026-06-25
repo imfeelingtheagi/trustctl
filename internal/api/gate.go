@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -36,6 +38,13 @@ type PolicyEvaluator interface {
 	Evaluate(ctx context.Context, in policy.Input) (policy.Decision, error)
 }
 
+// ABACDenyEvaluator is the deny-only attribute overlay. It can veto a request
+// that RBAC and the primary policy gate otherwise allow, but it never grants a
+// permission by itself.
+type ABACDenyEvaluator interface {
+	EvaluateDeny(ctx context.Context, in policy.ABACInput) (policy.ABACDecision, error)
+}
+
 // ApprovalChecker reports whether a privileged action has a recorded approval by a
 // principal DISTINCT from the requester (dual control). It returns approved=false
 // with a human reason when the action is not yet approved, when the only approval
@@ -63,6 +72,15 @@ type MutationGate struct {
 	// explicitly allowed by policy or it is denied (fail closed). When nil, the
 	// policy check is skipped (RA + dual-control still apply).
 	Policy PolicyEvaluator
+	// ABAC is the deny overlay layered over RBAC and the primary policy gate. When
+	// set, a matching deny policy vetoes the transition. Evaluation errors fail
+	// closed.
+	ABAC ABACDenyEvaluator
+	// ABACEnvironment carries operator-provided deployment state (for example
+	// change_window=true). It is copied into each ABAC input as input.env.
+	ABACEnvironment map[string]string
+	// ABACNow optionally supplies deterministic time for tests. Nil uses time.Now.
+	ABACNow func() time.Time
 	// Profile is the certificate-profile name bound to the served issuance path, fed
 	// into the policy input so a Rego rule can require a bound profile (the base
 	// policy denies issue/deploy with an empty profile). Empty leaves input.profile
@@ -124,7 +142,7 @@ func (e *gateError) Error() string { return e.detail }
 //     enforces it too).
 //  2. Policy — the default-deny OPA/Rego gate must explicitly allow the action.
 //  3. Dual control — when enabled, a distinct-approver approval must be on record.
-func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, identityID string, to orchestrator.State) error {
+func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, identityID string, to orchestrator.State, resource map[string]string) error {
 	action, privileged, ok := privilegedActionFor(to)
 	if !ok {
 		// Not an issue/deploy/revoke transition — out of this gate's scope; the
@@ -133,6 +151,7 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 	}
 
 	target := authz.Scope{TenantID: tenantID}
+	permission := permissionForPolicyAction(action)
 
 	// (1) RA separation: certs:issue is required to issue or revoke. The requester
 	// scope (certs:request) is deliberately insufficient — a requester cannot
@@ -142,7 +161,26 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 			detail: "forbidden: a privileged " + string(action) + " requires the " + string(authz.CertsIssue) + " authority (the requester scope cannot self-issue)"}
 	}
 
-	// (2) Policy default-deny. The engine is fail-closed, audited (AN-2), and
+	// (2) ABAC deny overlay. RBAC has allowed the principal; ABAC can only narrow
+	// that decision, never widen it.
+	if g.ABAC != nil {
+		in := g.abacInput(p, tenantID, identityID, action, permission, resource)
+		d, err := g.ABAC.EvaluateDeny(ctx, in)
+		switch {
+		case errors.Is(err, bulkhead.ErrRejected):
+			return &gateError{status: http.StatusServiceUnavailable, detail: "ABAC engine busy; retry"}
+		case err != nil:
+			return &gateError{status: http.StatusForbidden, detail: "denied by ABAC (evaluation error)"}
+		case d.Deny:
+			reason := d.Reason
+			if reason == "" {
+				reason = "denied by ABAC"
+			}
+			return &gateError{status: http.StatusForbidden, detail: "denied by ABAC: " + reason}
+		}
+	}
+
+	// (3) Policy default-deny. The engine is fail-closed, audited (AN-2), and
 	// bulkheaded (AN-7) internally; we translate its outcome to allow/deny here.
 	if g.Policy != nil {
 		in := policy.Input{
@@ -169,7 +207,7 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 		}
 	}
 
-	// (3) Dual control (distinct approver) for privileged actions, when enabled.
+	// (4) Dual control (distinct approver) for privileged actions, when enabled.
 	if privileged && g.RequireApproval {
 		if g.Checker == nil {
 			// Misconfiguration must fail closed, never silently allow a privileged mint.
@@ -185,4 +223,52 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 	}
 
 	return nil
+}
+
+func permissionForPolicyAction(action policy.Action) authz.Permission {
+	switch action {
+	case policy.ActionIssue, policy.ActionRevoke:
+		return authz.CertsIssue
+	case policy.ActionDeploy:
+		return authz.IdentitiesWrite
+	default:
+		return ""
+	}
+}
+
+func (g MutationGate) abacInput(p authz.Principal, tenantID, identityID string, action policy.Action, perm authz.Permission, resource map[string]string) policy.ABACInput {
+	now := time.Now().UTC()
+	if g.ABACNow != nil {
+		now = g.ABACNow().UTC()
+	}
+	actorAttrs := map[string]string{
+		"subject": p.Subject,
+		"roles":   strings.Join(principalRoles(p), ","),
+	}
+	return policy.ABACInput{
+		Permission: string(perm),
+		Action:     action,
+		TenantID:   tenantID,
+		Profile:    g.Profile,
+		Subject:    identityID,
+		Actor:      p.Subject,
+		ActorAttrs: actorAttrs,
+		Resource:   copyStringMap(resource),
+		Env:        copyStringMap(g.ABACEnvironment),
+		Now:        now.Format(time.RFC3339),
+		NowUnix:    now.Unix(),
+		NowHourUTC: now.Hour(),
+		NowWeekday: now.Weekday().String(),
+	}
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

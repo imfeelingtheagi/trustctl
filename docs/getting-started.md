@@ -137,9 +137,10 @@ track it and alert before expiry. Renewal is a manual, one-click action today.
 ## Get your first API token
 
 A freshly booted control plane **fails closed**: every API route returns `401`
-until you present a credential. Interactive OIDC login is served when
-`auth.oidc.enabled` is configured, but the zero-dependency first credential is still
-the host-local bootstrap token. Run the network-trust-free bootstrap verb on the
+until you present a credential. Interactive OIDC, SAML, and LDAP / Active Directory
+login are served when their `auth.*.enabled` blocks are configured, and SCIM 2.0 can
+provision users after you configure a tenant-bound SCIM token, but the
+zero-dependency first credential is still the host-local bootstrap token. Run the network-trust-free bootstrap verb on the
 host (it talks straight to the datastore — no existing token required) and it
 prints a tenant-scoped token **once**:
 

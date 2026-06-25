@@ -243,6 +243,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/breakglass/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify break-glass bundles and reconcile them into audit */
+        post: operations["reconcileBreakglass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/broker/agent-identities": {
         parameters: {
             query?: never;
@@ -1674,6 +1691,24 @@ export interface components {
         AuditEventList: {
             count?: number;
             events: components["schemas"]["AuditEvent"][];
+        };
+        BreakglassBundle: {
+            approvals: string[];
+            /** Format: byte */
+            cert_der: string;
+            /** Format: date-time */
+            issued_at: string;
+            reason: string;
+            request_id: string;
+            /** Format: byte */
+            signature: string;
+            subject: string;
+        };
+        BreakglassReconcileRequest: {
+            bundles: components["schemas"]["BreakglassBundle"][];
+        };
+        BreakglassReconcileResponse: {
+            reconciled: number;
         };
         BrokerAgentIdentity: {
             agent_id: string;
@@ -3316,6 +3351,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reconcileBreakglass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassReconcileResponse"];
                 };
             };
             /** @description client error */

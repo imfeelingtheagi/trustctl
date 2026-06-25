@@ -72,8 +72,10 @@ never live in the API process. What you can do end to end against the running bi
   history-reconstructable single-identity remediation — replacement issue/deploy,
   revocation, blast-radius capture, and a
   sealed evidence pack readable via `GET /api/v1/incidents/executions{,/{id}}`.
-  *Fleet-wide* re-issuance and m-of-n break-glass are not this surface; they remain
-  library/API-only (see "Incident response" notes below).
+  *Fleet-wide* re-issuance and online m-of-n break-glass issuance are not this
+  surface. Break-glass recovery reconciliation is served separately at
+  `POST /api/v1/breakglass/reconcile`, where signed offline bundles are verified and
+  recorded as `breakglass.issued` audit events.
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
@@ -91,19 +93,26 @@ never live in the API process. What you can do end to end against the running bi
   and a **tamper-evident audit chain**. A fresh boot fails closed (every route
   `401`s until a credential exists); mint the first tenant-scoped token on the host
   with `trstctl token create --tenant <uuid>` (it writes through the store and
-  prints the token once). Interactive **OIDC SSO login is served by the binary**
-  when `auth.oidc.enabled` is set (see "Single sign-on" below): the browser
-  authorization-code flow mints an `HttpOnly` session cookie that authorizes API
-  calls under the **same RBAC + per-tenant database-isolation scoping** as an API
-  token, and each user is mapped to its real tenant. API-token auth remains the
-  default when OIDC is disabled.
+  prints the token once). Interactive **OIDC, SAML, and LDAP / Active Directory login
+  are served by the binary** when `auth.oidc.enabled`, `auth.saml.enabled`, or
+  `auth.ldap.enabled` is set (see "Single sign-on" below): the browser flow mints an
+  `HttpOnly` session cookie that
+  authorizes API calls under the **same RBAC + per-tenant database-isolation
+  scoping** as an API token, and each user is mapped to its real tenant. API-token
+  auth remains the default when SSO is disabled.
+- **SCIM 2.0 provisioning** is served when `auth.scim.enabled` is set. IdPs call
+  `/scim/v2/Users` and `/scim/v2/Groups` with a tenant-bound bearer token; user
+  create/update/deprovision writes the tenant-member event stream, and group
+  membership maps to existing RBAC role names. A deprovisioned user loses session
+  authorization because RBAC reads the current tenant-member state.
 - **Transport security** (TLS, internal or file-based), **idempotency** and the
   **outbox**, **observability** (`/metrics`, `/readyz`, W3C trace headers),
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
   and **safe schema migrations**.
 
-The `trstctl-cli` drives this same served surface. **Interactive OIDC browser
-login + sessions are served by the binary** (behind `auth.oidc.enabled`) — see
+The `trstctl-cli` drives this same served surface. **Interactive OIDC, SAML, and
+LDAP / Active Directory browser login + sessions are served by the binary** (behind
+`auth.oidc.enabled`, `auth.saml.enabled`, or `auth.ldap.enabled`) — see
 "Single sign-on" below. The **React web console is now shipped in the binary**: a
 clean build of the control-plane binary embeds the real built Vite bundle and serves
 it at `/`, and the frontend's API types are **generated from the served OpenAPI
@@ -210,7 +219,7 @@ the running binary serves**:
   TypeScript types from the served API spec (pinned equal to the live served spec),
   and the API client re-exports those types so a backend field add/rename/remove that
   is not regenerated fails the TypeScript build. A CI regenerate-and-diff gate fails
-  the build on drift — so a `certificate.status` mismatch between frontend and backend
+  the build on drift — so a certificate status mismatch between frontend and backend
   can no longer recur silently.
 - **Operational console routes.** The console has first-class routes,
   nav entries, typed API wrappers, and route-test coverage for the GA operator slice:
@@ -221,8 +230,9 @@ the running binary serves**:
   sealed audit bundle), and the existing
   **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**
   surfaces remain labeled here until they receive their own served UI: fleet
-  reissuance/break-glass workflows, secret-sync dispatch, connector-driven deploy
-  actions, discovery scan scheduling, and very-large-list cursor/virtualized browsing.
+  reissuance/break-glass workflows (with API-served break-glass reconciliation but no
+  console workflow), secret-sync dispatch, connector-driven deploy actions, discovery
+  scan scheduling, and very-large-list cursor/virtualized browsing.
 - **Console UX hardening.** A **destructive-transition confirmation**
   (revoke/retire require an explicit, credential-named confirm dialog) and
   **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"
@@ -231,33 +241,60 @@ the running binary serves**:
   `next_cursor`) and **list virtualization** for large tables; both remain not yet
   served.
 
-## Interactive OIDC browser login & sessions: served by the binary
+## Interactive OIDC, SAML, and LDAP / Active Directory browser login & sessions: served by the binary
 
-The OIDC authorization-code login + sessions are **served by the running binary**
-(behind `auth.oidc.enabled`). The served control plane mounts the `/auth/*` routes
-(the IdP redirect, the callback, the current-principal endpoint, and logout). The
-callback verifies the id_token's **signature, issuer, audience, nonce, and temporal
-claims (exp/nbf/iat)** through the single isolated cryptography path, then sets an
-**`HttpOnly` + `SameSite=Strict` session cookie** (marked `Secure` whenever the
-control plane serves TLS) plus a **double-submit CSRF token**. A session cookie
-authorizes API calls under the **same RBAC + per-tenant database-isolation scoping**
-as an API token; mutations on the cookie path require the CSRF header. When
-`auth.oidc.enabled` is false the binary authenticates with scoped API tokens only,
-exactly as before; an enabled-but-misconfigured block **fails closed at startup**.
+The OIDC authorization-code login, SAML 2.0 Service Provider login, and LDAP /
+Active Directory bind login + sessions are **served by the running binary** (behind
+`auth.oidc.enabled`, `auth.saml.enabled`, and `auth.ldap.enabled`). OIDC mounts
+`/auth/login` and `/auth/callback`; SAML mounts `/auth/saml/login`,
+`/auth/saml/acs`, and `/auth/saml/metadata`; LDAP mounts `POST /auth/ldap/login`;
+all three share `/auth/me` and `/auth/logout`. OIDC verifies the id_token's
+**signature, issuer, audience, nonce, and temporal claims (exp/nbf/iat)**. SAML
+verifies signed POST-binding assertions against configured IdP metadata through the
+same isolated cryptography boundary. LDAP binds the user, then performs a configured
+group search; production directories should use `ldaps://` while plaintext `ldap://`
+is accepted only for loopback development fixtures. All paths set an **`HttpOnly` +
+`SameSite=Strict` session cookie** (marked `Secure`
+whenever the control plane serves TLS) plus a **double-submit CSRF token**. A session
+cookie authorizes API calls under the **same RBAC + per-tenant database-isolation
+scoping** as an API token; mutations on the cookie path require the CSRF header. When
+browser sign-on is disabled the binary authenticates with scoped API tokens only,
+exactly as before; an enabled-but-misconfigured OIDC, SAML, or LDAP block **fails
+closed at startup**.
 
 - **Per-user → tenant mapping is served.** Each authenticated user is mapped to its
-  **real tenant** at session issue — by a configurable id_token claim
-  (`auth.oidc.tenant_claim`, optionally used directly as the tenant id), by an
-  IdP-group → tenant table, or by an explicit subject/claim/group → tenant mapping
-  (`auth.oidc.tenant_mappings`) — instead of collapsing every browser user to one
+  **real tenant** at session issue — by a configurable OIDC claim or SAML attribute
+  (`auth.oidc.tenant_claim` / `auth.saml.tenant_claim`, optionally used directly as
+  the tenant id), by an IdP or LDAP group → tenant table, or by an explicit
+  subject/claim/group → tenant mapping (`auth.*.tenant_mappings`) — instead of
+  collapsing every browser user to one
   tenant. A user that maps to **no tenant is rejected** (the login fails closed, never
   minting a session in a fallback tenant unless an operator explicitly opts into
   `allow_default_tenant`). Per-tenant database isolation then confines each session to
-  its mapped tenant, so two OIDC users in different tenants see only their own data via
+  its mapped tenant, so two SSO users in different tenants see only their own data via
   the served API. The legacy single default tenant is retained only as that opt-in
   fallback. This is the served half of the defense against cross-tenant leakage; a
   freshly logged-in user still cannot self-issue (issuance stays behind the served
   RA/policy gate and the requester scope excludes `certs:issue`).
+
+## SCIM 2.0 provisioning: served by the binary
+
+The SCIM 2.0 provisioning surface is **served by the running binary** behind
+`auth.scim.enabled`. It mounts `GET /scim/v2/ServiceProviderConfig`,
+`/scim/v2/Users`, and `/scim/v2/Groups`; bearer tokens are loaded from configured
+token files, hashed, and bound to one tenant before a request body is trusted.
+SCIM user create/update/PATCH writes the same tenant-member event path used by
+RBAC. SCIM `active:false`, DELETE, or group removal changes the projected
+tenant-member roles, so the next browser-session API request sees the new
+authorization result.
+
+Current SCIM limits are deliberate and fail closed: SCIM Bulk is not implemented;
+password management and password-change flows are not implemented; SCIM groups do
+not create new custom roles. A group's `displayName` or id must match a configured RBAC role
+such as `admin`, `operator`, `viewer`, `auditor`, or `ra-officer`.
+Directory writeback is not implemented. Token rotation is operator-managed by
+writing a new token file and restarting the control plane so the new hash is loaded.
+
 - **The AI surface — model adapter (F76), grounded RCA / NL query (F75/F77), and the
   read-only MCP tool server (F78) — now SERVED.** The AI surface is **mounted on the
   running binary** under `/api/v1/ai/*` and `/api/v1/mcp/*` (off by default —
@@ -365,14 +402,17 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   console. Keep channel secrets in operator-managed secret references until that
   authoring surface is mounted.
 
-## Authorization policy gates: served on the issue/deploy/revoke path
+## Authorization policy gates and ABAC overlays: served by the binary
 
-The OPA/Rego default-deny policy gate, the RA scope split, and dual-control approval
-are **enforced on the served mutating issuance path** of the running binary — not just
-in library code. They gate the served lifecycle transition
+The RBAC guard, ABAC deny overlay, OPA/Rego default-deny policy gate, RA scope split,
+and dual-control approval are **enforced by the running binary** — not just in library
+code. The RBAC guard runs on every guarded API route. When `auth.abac.enabled` is set,
+the ABAC deny overlay runs after RBAC on guarded routes with request, actor,
+environment, and time attributes; on the served lifecycle transition
 (`POST /api/v1/identities/{id}/transitions`) for issue, deploy, and revoke,
-fail-closed, before the orchestrator records the transition or enqueues the
-mint/revoke effect. The gate is tenant-scoped under per-tenant database isolation,
+trstctl adds identity resource tags before the deny check. The OPA/Rego lifecycle
+policy gate then gates issue/deploy/revoke fail-closed before the orchestrator records
+the transition or enqueues the mint/revoke effect. The gate is tenant-scoped under per-tenant database isolation,
 recorded as immutable events (reconstructable from history), and runs the policy
 engine on its own bounded worker lane so a policy flood fast-rejects rather than
 starving other subsystems.
@@ -403,6 +443,17 @@ starving other subsystems.
   **off by default** (`ca.policy.enabled=false`) so an in-place upgrade does not
   silently start denying; the RA scope split is enforced for privileged transitions
   regardless of this flag.
+- **ABAC deny overlay — now served.** With `auth.abac.enabled` set, the served binary
+  compiles a `package trstctl.abac` Rego module at startup and evaluates it after RBAC.
+  It is deny-only: it cannot grant access that RBAC refused. Every guarded route carries
+  `input.permission`, `input.resource.request.method`, `input.resource.request.path`,
+  actor roles, `input.env`, and UTC time fields; issue/deploy/revoke transitions also
+  carry identity metadata and flattened identity attributes such as
+  `input.resource.env` and `input.resource.tags.service`. This supports controls like
+  "prod certs may issue only during a change window." Bad Rego is a startup error,
+  evaluation errors deny with `403`, saturated policy workers return `503`, and
+  decisions are recorded as `policy.abac.decision` events. ABAC policy authoring is
+  config-driven today; there is not yet a tenant-facing policy-management UI/API.
 
 **Served-leaf profile enforcement.** Independently of the policy flag, when a default
 certificate profile is bound (`ca.default_profile`) the served mint validates the
@@ -713,17 +764,20 @@ discover and fetch revocation status automatically. trstctl revocation is now
 both authoritative in the product's own inventory/records **and** publishable to
 external relying parties over served OCSP/CRL.
 
-## Single sign-on (OIDC only)
+## Single sign-on
 
-trstctl's interactive SSO is **OIDC only**: the UI and CLI authenticate against any
-OpenID Connect provider (Microsoft Entra ID / Azure AD, Okta, Ping, Google, Auth0,
-Keycloak, and the like), and API/CI access uses scoped API tokens. **SAML 2.0 is
-not supported.** SAML was originally considered as a Phase-1 SSO method (F13), but
-trstctl is **OIDC-only by decision**: OIDC covers the modern identity-provider
-landscape, and SAML's XML-signature handling is a security-sensitive surface we
-chose not to carry. A SAML 2.0 Service Provider is a candidate for a future epoch —
-it would route through the same single isolated cryptography path — but it is
-**not present today**, and no part of the product claims it is.
+trstctl's interactive sign-on is **served for OIDC, SAML 2.0, and LDAP / Active
+Directory**. OIDC supports the authorization-code flow against Microsoft Entra ID /
+Azure AD, Okta, Ping, Google, Auth0, Keycloak, and similar providers. SAML serves a Service Provider with
+SP-initiated login (`/auth/saml/login`), IdP-initiated login through the ACS
+(`/auth/saml/acs`), and SP metadata (`/auth/saml/metadata`). SAML assertion
+verification requires configured IdP metadata and accepts signed HTTP-POST binding
+responses; it does not yet expose artifact binding, encrypted assertion decryption,
+or SLO/logout propagation. LDAP / Active Directory serves username/password bind at
+`POST /auth/ldap/login`, supports direct-bind or service-account user search plus
+group search, and maps directory groups to tenant roles. It does not yet implement
+Kerberos/GSSAPI, NTLM, password-change flows, nested-group expansion, or directory
+writeback. API/CI access still uses scoped API tokens.
 
 ## CA key custody
 
@@ -731,8 +785,10 @@ The assembled issuing CA's key is now **persisted, sealed at rest** in the
 signer's key store: a signer restart **preserves** the CA instead of
 silently rotating it, and the key survives across restarts. Root/intermediate
 m-of-n ceremonies and signer-backed leaf issuance are now served; **HSM/KMS-backed
-custody** (rather than a local sealed key file) and break-glass rotation/cross-sign
-workflows are still future work. The key-encryption key is a local file by default.
+custody** (rather than a local sealed key file), online break-glass emergency
+issuance, and break-glass rotation/cross-sign workflows are still future work.
+Break-glass bundle reconciliation is served separately at
+`POST /api/v1/breakglass/reconcile`. The key-encryption key is a local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
@@ -778,8 +834,11 @@ custody backend is configured; otherwise the routes fail closed.
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import
 → rotate → revoke → zeroize is implemented and end-to-end tested but not yet exposed as
-its own served route), and a served **m-of-n break-glass** flow. The signer's at-rest
-CA key is still sealed under a local key-encryption file by default. See the
+its own served route), plus online **m-of-n break-glass issuance**, rotation, and
+cross-signing. Break-glass reconciliation is served at
+`POST /api/v1/breakglass/reconcile`, but emergency issuance remains the offline
+operator ceremony. The signer's at-rest CA key is still sealed under a local
+key-encryption file by default. See the
 [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md). The remaining external residual is the

@@ -78,8 +78,10 @@ architectural guarantees that back those defenses.
 
 - **CA-key custody at rest.** The issuing CA key is **persisted, sealed at rest** in
   the signer's key store and **preserved across restarts** (R3.2). What remains
-  future work is **HSM/KMS-backed** custody (instead of a local sealed key file) and a
-  served m-of-n break-glass flow ([limitations](../limitations.md),
+  future work is **HSM/KMS-backed** custody (instead of a local sealed key file) and
+  online m-of-n break-glass issuance. Recovery reconciliation of signed break-glass
+  bundles is served at `POST /api/v1/breakglass/reconcile` and records
+  `breakglass.issued` audit events ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
 - **Plugin trust model & blast radius.** The shipped first-party CA and connector
   integrations run as **trusted in-process Go code**, not in the WASM sandbox. Their

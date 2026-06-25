@@ -210,8 +210,8 @@ func managedKeysServed(t *testing.T) bool {
 // TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest pins TRACE-003. The
 // HSM/KMS-resident managed-key lifecycle (generate/rotate/revoke/zeroize, dual
 // control) is SERVED. What remains library-tier is the in-process local CA/KEK BYOK
-// verbs and a served m-of-n break-glass flow. The disclosure must reflect the served
-// surface AND keep the residual gap honest.
+// verbs and online m-of-n break-glass issuance. The disclosure must reflect the
+// served surface AND keep the residual gap honest.
 func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 	low := limLower(t)
 
@@ -376,12 +376,13 @@ func TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs(t *testing.T) {
 }
 
 // ---- TRACE-006: incident execution served; fleet-wide re-issuance + break-glass
-//      library/API-only ----------------------------------------------------------
+//      reconciliation/issuance state --------------------------------------------
 
 // TestIncidentExecutionServedVsFleetReissuanceLibraryIsHonest pins TRACE-006. A
 // single-identity credential-compromise incident IS served end-to-end
-// (POST /api/v1/incidents/executions, with a sealed evidence pack). What is NOT a
-// served end-to-end workflow is fleet-wide re-issuance and m-of-n break-glass.
+// (POST /api/v1/incidents/executions, with a sealed evidence pack). Break-glass
+// reconciliation is served separately, but online m-of-n emergency issuance and
+// fleet-wide re-issuance are not served end-to-end workflows.
 func TestIncidentExecutionServedVsFleetReissuanceLibraryIsHonest(t *testing.T) {
 	low := limLower(t)
 
@@ -393,29 +394,36 @@ func TestIncidentExecutionServedVsFleetReissuanceLibraryIsHonest(t *testing.T) {
 	if !strings.Contains(read(t, "../internal/api/incidents.go"), "executeIncident") {
 		t.Fatal("internal/api/incidents.go no longer serves executeIncident; the TRACE-006 served-incident disclosure has no code anchor — revisit this reality test")
 	}
+	if !strings.Contains(read(t, "../internal/api/api.go"), `path: "/api/v1/breakglass/reconcile"`) {
+		t.Fatal("internal/api/api.go no longer registers /api/v1/breakglass/reconcile; the TRACE-006 break-glass reconciliation disclosure has no code anchor — revisit this reality test")
+	}
+	if !strings.Contains(read(t, "../internal/server/breakglass.go"), "ReconcileBreakglass") {
+		t.Fatal("internal/server/breakglass.go no longer wires break-glass reconciliation; revisit this TRACE-006 reality test")
+	}
 
 	// The served single-identity incident half must always be stated.
 	if !strings.Contains(low, "incident execution") || !strings.Contains(low, "/api/v1/incidents/executions") {
 		t.Error("limitations.md must disclose that single-identity incident execution is served at /api/v1/incidents/executions — TRACE-006")
 	}
-	// The fleet-wide re-issuance + break-glass gap must always be disclosed in the
-	// INCIDENT context (not merely mentioned elsewhere): the served-list bullet states
-	// it is "not this surface", and the React-console section labels the
-	// reissuance/break-glass workflows API-only. Bind to those exact phrases so the
-	// disclosure cannot be removed while an unrelated break-glass mention elsewhere
-	// keeps a looser check green.
+	// The fleet-wide re-issuance + online break-glass issuance gap must always be
+	// disclosed in the INCIDENT context (not merely mentioned elsewhere), while the
+	// served reconciliation route must be named.
 	// (Start the marker after "fleet-wide", which the source emphasizes with Markdown
 	// asterisks that survive the lowercase collapse.)
-	if !strings.Contains(low, "re-issuance and m-of-n break-glass are not this surface") {
-		t.Error("limitations.md must disclose, in the incident-execution context, that fleet-wide re-issuance and m-of-n break-glass are NOT the served incident surface — TRACE-006")
+	if !strings.Contains(low, "re-issuance and online m-of-n break-glass issuance are not this") {
+		t.Error("limitations.md must disclose, in the incident-execution context, that fleet-wide re-issuance and online m-of-n break-glass issuance are NOT the served incident surface — TRACE-006")
+	}
+	if !strings.Contains(low, "/api/v1/breakglass/reconcile") || !strings.Contains(low, "breakglass.issued") {
+		t.Error("limitations.md must disclose the served break-glass reconciliation route and audit event — TRACE-006")
 	}
 	if !strings.Contains(low, "reissuance/break-glass workflows") {
-		t.Error("limitations.md must keep the React-console label that fleet reissuance/break-glass workflows are API-only/library-only — TRACE-006")
+		t.Error("limitations.md must keep the React-console label that fleet reissuance/break-glass workflows still lack a served UI — TRACE-006")
 	}
 	for _, oc := range []string{
 		"fleet-wide re-issuance is served",
 		"fleet reissuance is served",
-		"break-glass is served",
+		"online break-glass issuance is served",
+		"m-of-n break-glass issuance is served",
 	} {
 		if strings.Contains(low, oc) {
 			t.Errorf("limitations.md over-claims fleet re-issuance / break-glass as served (%q) — TRACE-006", oc)

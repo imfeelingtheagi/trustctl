@@ -49,6 +49,23 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set) (api.MutationGate, api.Approv
 		// profile). This ties the policy gate to PKIGOV-002's profile model.
 		gate.Profile = d.DefaultProfile
 	}
+	if d.EnableABAC {
+		var pool *bulkhead.Pool
+		if bulk != nil {
+			pool = bulk.Pool(bulkhead.SubsystemPolicy)
+		}
+		eng, err := policy.NewABAC(policy.ABACConfig{
+			Module: d.ABACModule,
+			Pool:   pool,
+			Log:    d.Log,
+		})
+		if err != nil {
+			return api.MutationGate{}, nil, err
+		}
+		gate.ABAC = eng
+		gate.ABACEnvironment = d.ABACEnvironment
+		gate.Profile = d.DefaultProfile
+	}
 
 	var recorder api.ApprovalRecorder
 	if d.RequireApproval {

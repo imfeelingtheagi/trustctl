@@ -676,12 +676,11 @@ func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	mustContainAny(t, "release records the pinned bases", rel, "GITHUB_STEP_SUMMARY", "pinned container base")
 }
 
-// TestPgxIsBumpedAndClean encodes the R4.5 dependency bump: go.mod pins
-// jackc/pgx/v5 at the advisory-clearing v5.9.0 (GO-2026-4772 / GO-2026-4771), not
-// the older v5.6.0.
+// TestPgxIsBumpedAndClean encodes the dependency bump: go.mod pins jackc/pgx/v5
+// at the advisory-clearing v5.9.2 floor, not older vulnerable releases.
 func TestPgxIsBumpedAndClean(t *testing.T) {
 	gomod := repoFile(t, "go.mod")
-	mustContainAll(t, "go.mod pins pgx v5.9.0", gomod, "github.com/jackc/pgx/v5 v5.9.0")
+	mustContainAll(t, "go.mod pins pgx v5.9.2", gomod, "github.com/jackc/pgx/v5 v5.9.2")
 	if strings.Contains(gomod, "github.com/jackc/pgx/v5 v5.6.0") {
 		t.Error("go.mod still references the vulnerable pgx v5.6.0")
 	}

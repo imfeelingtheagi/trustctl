@@ -20,7 +20,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -40,6 +43,18 @@ type fakePolicy struct {
 
 func (f fakePolicy) Evaluate(_ context.Context, _ policy.Input) (policy.Decision, error) {
 	return policy.Decision{Allow: f.allow, Reason: f.reason}, f.err
+}
+
+type fakeABAC struct {
+	deny   bool
+	reason string
+	err    error
+	got    policy.ABACInput
+}
+
+func (f *fakeABAC) EvaluateDeny(_ context.Context, in policy.ABACInput) (policy.ABACDecision, error) {
+	f.got = in
+	return policy.ABACDecision{Deny: f.deny, Reason: f.reason}, f.err
 }
 
 // fakeChecker is a deterministic ApprovalChecker recording the last call so a test
@@ -92,20 +107,20 @@ func TestGateRASeparationDeniesRequesterSelfIssue(t *testing.T) {
 
 	// A certs:request-only principal (the RA requester) cannot drive an issue.
 	reqr := principalWith("alice", roleRequester)
-	err := g.check(ctx, reqr, gateTenant, "id-1", "issued")
+	err := g.check(ctx, reqr, gateTenant, "id-1", "issued", nil)
 	ge := asGateErr(t, err)
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("requester self-issue must be 403-denied, got %v", err)
 	}
 
 	// Same for a privileged revoke.
-	if ge := asGateErr(t, g.check(ctx, reqr, gateTenant, "id-1", "revoked")); ge == nil || ge.status != http.StatusForbidden {
+	if ge := asGateErr(t, g.check(ctx, reqr, gateTenant, "id-1", "revoked", nil)); ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("requester self-revoke must be 403-denied, got %v", ge)
 	}
 
 	// A principal holding certs:issue passes the RA gate (no policy/approval wired).
 	issuer := principalWith("bob", roleIssuer)
-	if err := g.check(ctx, issuer, gateTenant, "id-1", "issued"); err != nil {
+	if err := g.check(ctx, issuer, gateTenant, "id-1", "issued", nil); err != nil {
 		t.Fatalf("certs:issue holder should pass the RA gate, got %v", err)
 	}
 }
@@ -114,7 +129,7 @@ func TestGateDeployIsNotPrivileged(t *testing.T) {
 	// A deploy is gated by policy when wired but is NOT a privileged issue/revoke, so
 	// it does not require certs:issue and never needs dual control.
 	g := MutationGate{}
-	if err := g.check(context.Background(), principalWith("alice", roleRequester), gateTenant, "id-1", "deployed"); err != nil {
+	if err := g.check(context.Background(), principalWith("alice", roleRequester), gateTenant, "id-1", "deployed", nil); err != nil {
 		t.Fatalf("deploy must not require certs:issue, got %v", err)
 	}
 }
@@ -123,7 +138,7 @@ func TestGateIgnoresNonGatedTransitions(t *testing.T) {
 	// A transition that is neither issue/deploy/revoke (e.g. retired) is out of the
 	// gate's scope and always allowed here (the orchestrator validates the edge).
 	g := MutationGate{Policy: fakePolicy{allow: false}, RequireApproval: true, Checker: &fakeChecker{}}
-	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "retired"); err != nil {
+	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "retired", nil); err != nil {
 		t.Fatalf("a non-gated transition must pass, got %v", err)
 	}
 }
@@ -133,7 +148,7 @@ func TestGateIgnoresNonGatedTransitions(t *testing.T) {
 func TestGatePolicyDeniesByDefault(t *testing.T) {
 	g := MutationGate{Policy: fakePolicy{allow: false, reason: "no rule matched"}}
 	// certs:issue holder, but policy denies -> 403.
-	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"))
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("policy deny must be 403, got %v", ge)
 	}
@@ -141,7 +156,7 @@ func TestGatePolicyDeniesByDefault(t *testing.T) {
 
 func TestGatePolicyAllows(t *testing.T) {
 	g := MutationGate{Policy: fakePolicy{allow: true}}
-	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"); err != nil {
+	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil); err != nil {
 		t.Fatalf("policy allow + certs:issue should pass, got %v", err)
 	}
 }
@@ -150,7 +165,7 @@ func TestGatePolicyShedFailsClosed(t *testing.T) {
 	// A saturated policy pool (AN-7) surfaces bulkhead.ErrRejected; the gate must
 	// fail closed with a retryable 503, never allow.
 	g := MutationGate{Policy: fakePolicy{allow: true, err: bulkhead.ErrRejected}}
-	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"))
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusServiceUnavailable {
 		t.Fatalf("a shed policy pool must fail closed with 503, got %v", ge)
 	}
@@ -158,9 +173,63 @@ func TestGatePolicyShedFailsClosed(t *testing.T) {
 
 func TestGatePolicyErrorFailsClosed(t *testing.T) {
 	g := MutationGate{Policy: fakePolicy{allow: true, err: errors.New("boom")}}
-	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"))
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("a policy evaluation error must fail closed (deny), got %v", ge)
+	}
+}
+
+// --- ABAC deny overlay -------------------------------------------------------
+
+func TestGateABACDeniesAfterRBAC(t *testing.T) {
+	abac := &fakeABAC{deny: true, reason: "outside change window"}
+	g := MutationGate{ABAC: abac, Policy: fakePolicy{allow: true}, Profile: "tls-server", ABACEnvironment: map[string]string{"change_window": "false"}}
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", map[string]string{"env": "prod"}))
+	if ge == nil || ge.status != http.StatusForbidden {
+		t.Fatalf("ABAC deny must be 403, got %v", ge)
+	}
+	if abac.got.Permission != string(authz.CertsIssue) || abac.got.Resource["env"] != "prod" || abac.got.Env["change_window"] != "false" {
+		t.Fatalf("ABAC input did not carry permission/resource/env: %+v", abac.got)
+	}
+}
+
+func TestGateABACErrorFailsClosed(t *testing.T) {
+	g := MutationGate{ABAC: &fakeABAC{err: errors.New("boom")}, Policy: fakePolicy{allow: true}}
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
+	if ge == nil || ge.status != http.StatusForbidden {
+		t.Fatalf("ABAC error must fail closed with 403, got %v", ge)
+	}
+}
+
+func TestGateABACShedFailsClosed(t *testing.T) {
+	g := MutationGate{ABAC: &fakeABAC{err: bulkhead.ErrRejected}, Policy: fakePolicy{allow: true}}
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
+	if ge == nil || ge.status != http.StatusServiceUnavailable {
+		t.Fatalf("ABAC shed must fail closed with 503, got %v", ge)
+	}
+}
+
+func TestGuardABACDenyOverlayAfterRBAC(t *testing.T) {
+	abac := &fakeABAC{deny: true, reason: "outside change window"}
+	reader := authz.Role{Name: "owner-reader", Permissions: []authz.Permission{authz.OwnersRead}}
+	principal := principalWith("carol", reader)
+	api := New(nil, nil, nil,
+		WithRoles(reader),
+		WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }),
+		WithABACDenyOverlay(abac, map[string]string{"change_window": "false"}, func() time.Time {
+			return time.Date(2026, 6, 25, 13, 0, 0, 0, time.UTC)
+		}),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/owners", nil)
+	rr := httptest.NewRecorder()
+	api.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), "outside change window") {
+		t.Fatalf("ABAC guard deny = %d body=%s, want 403 with reason", rr.Code, rr.Body.String())
+	}
+	if abac.got.Permission != string(authz.OwnersRead) || abac.got.Resource["request.path"] != "/api/v1/owners" || abac.got.Env["change_window"] != "false" || abac.got.NowHourUTC != 13 {
+		t.Fatalf("ABAC guard input missing permission/resource/env/time: %+v", abac.got)
 	}
 }
 
@@ -169,7 +238,7 @@ func TestGatePolicyErrorFailsClosed(t *testing.T) {
 func TestGateDualControlRequiresApproval(t *testing.T) {
 	checker := &fakeChecker{approved: false, reason: "needs a distinct approver"}
 	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true, Checker: checker}
-	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"))
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("dual control with no approval must be 403, got %v", ge)
 	}
@@ -180,7 +249,7 @@ func TestGateDualControlRequiresApproval(t *testing.T) {
 
 func TestGateDualControlAllowsWhenApproved(t *testing.T) {
 	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true, Checker: &fakeChecker{approved: true}}
-	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"); err != nil {
+	if err := g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil); err != nil {
 		t.Fatalf("approved dual-control action should pass, got %v", err)
 	}
 }
@@ -189,7 +258,7 @@ func TestGateDualControlNoCheckerFailsClosed(t *testing.T) {
 	// Misconfiguration (RequireApproval with no Checker) must never silently allow a
 	// privileged mint.
 	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true}
-	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued"))
+	ge := asGateErr(t, g.check(context.Background(), principalWith("bob", roleIssuer), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("dual control with no approval store must fail closed, got %v", ge)
 	}
@@ -200,7 +269,7 @@ func TestGateDualControlNoCheckerFailsClosed(t *testing.T) {
 // an approval existed — the requester can never self-issue.
 func TestGateRABeatsApproval(t *testing.T) {
 	g := MutationGate{Policy: fakePolicy{allow: true}, RequireApproval: true, Checker: &fakeChecker{approved: true}}
-	ge := asGateErr(t, g.check(context.Background(), principalWith("alice", roleRequester), gateTenant, "id-1", "issued"))
+	ge := asGateErr(t, g.check(context.Background(), principalWith("alice", roleRequester), gateTenant, "id-1", "issued", nil))
 	if ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("a requester (no certs:issue) must be denied regardless of approvals, got %v", ge)
 	}
@@ -220,18 +289,18 @@ func TestBaseModuleDeniesIssueWithoutProfile(t *testing.T) {
 
 	// No profile bound -> the base policy denies an issue.
 	gNoProfile := MutationGate{Policy: eng}
-	if ge := asGateErr(t, gNoProfile.check(ctx, issuer, gateTenant, "id-1", "issued")); ge == nil || ge.status != http.StatusForbidden {
+	if ge := asGateErr(t, gNoProfile.check(ctx, issuer, gateTenant, "id-1", "issued", nil)); ge == nil || ge.status != http.StatusForbidden {
 		t.Fatalf("base policy must deny issue without a bound profile, got %v", ge)
 	}
 
 	// A bound profile -> the base policy allows the issue.
 	gProfile := MutationGate{Policy: eng, Profile: "tls-server"}
-	if err := gProfile.check(ctx, issuer, gateTenant, "id-1", "issued"); err != nil {
+	if err := gProfile.check(ctx, issuer, gateTenant, "id-1", "issued", nil); err != nil {
 		t.Fatalf("base policy must allow issue with a bound profile, got %v", err)
 	}
 
 	// Revoke is always allowed by the base policy (a credential must be revocable).
-	if err := gProfile.check(ctx, issuer, gateTenant, "id-1", "revoked"); err != nil {
+	if err := gProfile.check(ctx, issuer, gateTenant, "id-1", "revoked", nil); err != nil {
 		t.Fatalf("base policy must allow revoke, got %v", err)
 	}
 }

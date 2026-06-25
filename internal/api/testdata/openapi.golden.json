@@ -482,6 +482,72 @@
         ],
         "type": "object"
       },
+      "BreakglassBundle": {
+        "properties": {
+          "approvals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cert_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "signature": {
+            "format": "byte",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "subject",
+          "cert_der",
+          "reason",
+          "approvals",
+          "issued_at",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "BreakglassReconcileRequest": {
+        "properties": {
+          "bundles": {
+            "items": {
+              "$ref": "#/components/schemas/BreakglassBundle"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "bundles"
+        ],
+        "type": "object"
+      },
+      "BreakglassReconcileResponse": {
+        "properties": {
+          "reconciled": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reconciled"
+        ],
+        "type": "object"
+      },
       "BrokerAgentIdentity": {
         "properties": {
           "agent_id": {
@@ -4040,7 +4106,7 @@
         "type": "http"
       },
       "SessionCookie": {
-        "description": "Verified OIDC browser session; mutating requests also require the double-submit CSRF token.",
+        "description": "Verified browser session from OIDC, SAML, or LDAP; mutating requests also require the double-submit CSRF token.",
         "in": "cookie",
         "name": "trstctl_session",
         "type": "apiKey"
@@ -5041,6 +5107,63 @@
         ],
         "summary": "Export a signed audit evidence bundle",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/breakglass/reconcile": {
+      "post": {
+        "operationId": "reconcileBreakglass",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassReconcileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassReconcileResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Verify break-glass bundles and reconcile them into audit",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/broker/agent-identities": {

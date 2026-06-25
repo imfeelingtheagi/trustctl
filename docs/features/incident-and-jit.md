@@ -82,9 +82,13 @@ ceremony gated by an **m-of-n operator quorum**: a sub-quorum request fails clos
 escrow signing key is a handle into the separate, isolated signing service, never in the
 control-plane process, and it lives in wipeable memory that is zeroed after use. The
 result is a **self-verifying signed bundle** — anyone can verify it offline (signature +
-chain to the CA), and a tampered bundle is rejected. On recovery, `Reconcile` replays the
-bundles into the audit log as immutable `breakglass.issued` events; a bundle that fails
-verification stops the batch, so a forged emergency issuance can't be silently absorbed.
+chain to the CA), and a tampered bundle is rejected. On recovery,
+`POST /api/v1/breakglass/reconcile` verifies those bundles against deployment-pinned
+break-glass verifier material and replays them into the hash-chained audit log as
+immutable `breakglass.issued` events. A bundle that fails verification stops the batch,
+so a forged emergency issuance can't be silently absorbed. The served route does **not**
+issue emergency certificates online; offline m-of-n issuance remains the operator
+ceremony.
 
 ## Use it
 
@@ -106,6 +110,19 @@ trstctl incidents executions get 22222222-2222-2222-2222-222222222222
   "delivery_rollback_ref": "restore previous fullchain"
 }
 ```
+
+Break-glass reconciliation is API-served after recovery:
+
+```bash
+curl -X POST "https://trstctl.example.com/api/v1/breakglass/reconcile" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: incident-2026-06-25-bg-reconcile" \
+  -H "Content-Type: application/json" \
+  -d '{"bundles":[{"request_id":"bg-001","subject":"recovery.svc.example.test","cert_der":"...base64...","reason":"regional outage","approvals":["op1","op2"],"issued_at":"2026-06-25T17:00:00Z","signature":"...base64..."}]}'
+```
+
+The caller needs `certs:issue`; audit readers can then confirm the result with
+`GET /api/v1/audit/events?type=breakglass.issued`.
 
 The lower-level library shapes remain useful for tests and future batch workflows:
 
@@ -129,8 +146,10 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 - **Serving status:** credential-compromise execution (F31) is served through
   `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`.
-  Fleet reissue, JIT, and break-glass still expose their current library/procedure
-  limits until their own served surfaces land.
+  JIT issuance is served. Break-glass reconciliation is served at
+  `/api/v1/breakglass/reconcile`, while online emergency issuance and fleet reissue
+  still expose their current library/operator limits until their own served surfaces
+  land.
 - **Order matters in remediation.** The reissue-before-revoke ordering is deliberate;
   don't shortcut it, or you risk an outage mid-incident.
 - **JIT needs real approvers configured** and a notifier wired, or requests will sit in
@@ -145,7 +164,8 @@ notifications use the [notification integrations](policy-and-governance.md).
 - **Fleet:** `Fleet.ReissueFleet(issuerID, runID)` — staged, health-checked, resumable.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.
-- **Break-glass:** `IssueOffline` (quorum-gated), `Verify`, `Reconcile`.
+- **Break-glass:** `IssueOffline` (offline quorum ceremony), `Verify`,
+  `POST /api/v1/breakglass/reconcile`.
 - **Events:** `incident.*`, `fleet.*`, `approval.*`, `breakglass.issued`.
 
 ## See also

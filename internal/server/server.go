@@ -87,6 +87,23 @@ type Deps struct {
 	// allows it (fail closed). Off (the zero value) preserves the prior served
 	// behavior so an upgrade does not silently start denying.
 	EnablePolicyGate bool
+	// ABACModule is a deny-only OPA/Rego overlay (package trstctl.abac) layered over
+	// RBAC and the primary policy gate. It may inspect input.env, input.now_*,
+	// input.actor_attrs, and resource metadata such as input.resource.env. It can
+	// only deny; it never grants access beyond RBAC. EnableABAC compiles and wires it
+	// fail-closed.
+	ABACModule string
+	// EnableABAC turns on the ABAC deny overlay. Invalid Rego or evaluator errors
+	// deny rather than silently allowing. Off preserves prior RBAC/policy behavior.
+	EnableABAC bool
+	// ABACEnvironment is copied into input.env for every ABAC evaluation.
+	ABACEnvironment map[string]string
+	// BreakglassCACertDER and BreakglassPublicKeyDER pin the recovery-side verifier
+	// material for the served break-glass reconciliation endpoint. The route accepts
+	// only signed offline bundles; it never trusts verifier material supplied by the
+	// caller and never performs online emergency issuance.
+	BreakglassCACertDER    []byte
+	BreakglassPublicKeyDER []byte
 	// RequireApproval turns on served dual-control for privileged transitions (issue
 	// and revoke): the transition is denied unless a DISTINCT approver has recorded an
 	// approval (the served half of RED-004 / SEC-002). Backed by the store's issuance
@@ -216,6 +233,15 @@ type Deps struct {
 	// value) preserves the prior token-only behavior. An enabled-but-misconfigured
 	// block makes Build fail closed. Run fills this from config.Auth.OIDC.
 	OIDC config.OIDC
+	// SAML configures the served SAML 2.0 SP login + session + per-user → tenant
+	// mapping. Run fills this from config.Auth.SAML.
+	SAML config.SAML
+	// LDAP configures served LDAP / Active Directory username-password bind login
+	// and group-to-role mapping. Run fills this from config.Auth.LDAP.
+	LDAP config.LDAP
+	// SCIM configures served SCIM 2.0 provisioning under /scim/v2. Run fills this
+	// from config.Auth.SCIM.
+	SCIM config.SCIM
 	// AuthHTTPClient performs the OIDC code→token exchange. Production leaves it nil
 	// (a default 10s client). The end-to-end acceptance test injects a client that can
 	// reach a loopback mock IdP, without weakening the production default.
@@ -670,16 +696,30 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if s.outbox != nil {
 		defaults = append(defaults, api.WithOutboxCircuitStatus(s.outbox.CircuitStates))
 	}
+	breakglassReconciler, err := buildBreakglassReconciler(d)
+	if err != nil {
+		return nil, nil, err
+	}
+	if breakglassReconciler != nil {
+		defaults = append(defaults, api.WithBreakglass(breakglassReconciler))
+	}
 	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
 	if err := s.configurePolicyGate(d, &defaults); err != nil {
 		return nil, nil, err
 	}
-	authOpt, err := buildOIDCAuth(d.OIDC, d.SecurityHeaders.TLS, d.AuthHTTPClient)
+	authOpt, err := buildBrowserAuth(d.OIDC, d.SAML, d.LDAP, d.SecurityHeaders.TLS, d.AuthHTTPClient)
 	if err != nil {
 		return nil, nil, err
 	}
 	if authOpt != nil {
 		defaults = append(defaults, authOpt)
+	}
+	scimOpt, err := buildSCIMOption(d.SCIM)
+	if err != nil {
+		return nil, nil, fmt.Errorf("server: configure SCIM: %w", err)
+	}
+	if scimOpt != nil {
+		defaults = append(defaults, scimOpt)
 	}
 	if d.EnableSecretsAPI {
 		if d.KEK == nil {
@@ -718,6 +758,9 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 		return err
 	}
 	*defaults = append(*defaults, api.WithMutationGate(gate))
+	if gate.ABAC != nil {
+		*defaults = append(*defaults, api.WithABACDenyOverlay(gate.ABAC, gate.ABACEnvironment, gate.ABACNow))
+	}
 	if approvals != nil {
 		*defaults = append(*defaults, api.WithApprovals(approvals))
 	}
@@ -997,6 +1040,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/auth/", apiHandler)
 	mux.Handle("/enroll/", apiHandler)
+	mux.Handle("/scim/", apiHandler)
 	if s.revoc != nil {
 		revMux := http.NewServeMux()
 		s.revoc.routes(revMux)

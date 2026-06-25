@@ -122,7 +122,7 @@ func buildSpec(routes []route) *Document {
 					Type:        "apiKey",
 					In:          "cookie",
 					Name:        sessionCookieName,
-					Description: "Verified OIDC browser session; mutating requests also require the double-submit CSRF token.",
+					Description: "Verified browser session from OIDC, SAML, or LDAP; mutating requests also require the double-submit CSRF token.",
 				},
 			},
 		},
@@ -273,6 +273,21 @@ func componentSchemas() map[string]*Schema {
 		"resource": str(), "action": {Type: "string", Enum: []string{"issue", "revoke"}},
 		"approver": str(), "approvals": {Type: "integer"},
 	}, "resource", "action", "approver", "approvals")
+	breakglassBundle := object(map[string]*Schema{
+		"request_id": str(),
+		"subject":    str(),
+		"cert_der":   {Type: "string", Format: "byte"},
+		"reason":     str(),
+		"approvals":  {Type: "array", Items: str()},
+		"issued_at":  timestamp(),
+		"signature":  {Type: "string", Format: "byte"},
+	}, "request_id", "subject", "cert_der", "reason", "approvals", "issued_at", "signature")
+	breakglassReconcileReq := object(map[string]*Schema{
+		"bundles": {Type: "array", Items: ref("BreakglassBundle")},
+	}, "bundles")
+	breakglassReconcileResp := object(map[string]*Schema{
+		"reconciled": {Type: "integer"},
+	}, "reconciled")
 
 	list := func(item string) *Schema {
 		return object(map[string]*Schema{
@@ -941,6 +956,9 @@ func componentSchemas() map[string]*Schema {
 		"TransitionRequest":            transitionReq,
 		"ApprovalRequest":              approvalReq,
 		"Approval":                     approval,
+		"BreakglassBundle":             breakglassBundle,
+		"BreakglassReconcileRequest":   breakglassReconcileReq,
+		"BreakglassReconcileResponse":  breakglassReconcileResp,
 		"SecretRequest":                secretReq,
 		"SecretImportRequest":          secretImportReq,
 		"SecretRecoverRequest":         secretRecoverReq,

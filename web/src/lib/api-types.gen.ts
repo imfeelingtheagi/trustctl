@@ -145,6 +145,24 @@ export interface AuditEventList {
   events: AuditEvent[];
 }
 
+export interface BreakglassBundle {
+  approvals: string[];
+  cert_der: string;
+  issued_at: string;
+  reason: string;
+  request_id: string;
+  signature: string;
+  subject: string;
+}
+
+export interface BreakglassReconcileRequest {
+  bundles: BreakglassBundle[];
+}
+
+export interface BreakglassReconcileResponse {
+  reconciled: number;
+}
+
 export interface BrokerAgentIdentity {
   agent_id: string;
   attestation: Attestation;

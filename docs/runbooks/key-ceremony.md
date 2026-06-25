@@ -9,7 +9,9 @@ unilaterally stand up or rotate a CA.
 > **Maturity note.** Root and intermediate CA ceremonies are now served over REST.
 > The served path still keeps CA private keys in the isolated signer process and
 > stores only signer handles in the control plane. Rotation, cross-signing, and
-> break-glass remain library/operator procedures until their own served routes ship.
+> online break-glass issuance remain library/operator procedures. Break-glass bundle
+> reconciliation is served separately at `POST /api/v1/breakglass/reconcile` so
+> operators can verify signed emergency bundles into the audit chain after recovery.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
 > signer reloads it after a restart, so the CA is not silently rotated (see
 > [Configuration -> Signer](../configuration.md#signer-topology--ca-custody) and
@@ -125,5 +127,5 @@ Rotation is the same ceremony model, but the purpose is bound to the exact CA:
   ceremony).
 
 See [Current limitations](../limitations.md) for the remaining rotation,
-cross-signing, HSM/KMS-local-CA, and break-glass gaps, and
+cross-signing, HSM/KMS-local-CA, and online break-glass issuance gaps, and
 [Disaster recovery](../disaster-recovery.md) for CA-key loss handling.

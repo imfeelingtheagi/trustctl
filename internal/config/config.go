@@ -72,26 +72,27 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server    Server    `json:"server"`
-	Postgres  Postgres  `json:"postgres"`
-	NATS      NATS      `json:"nats"`
-	Log       Log       `json:"log"`
-	Lifecycle Lifecycle `json:"lifecycle"`
-	Telemetry Telemetry `json:"telemetry"`
-	Audit     Audit     `json:"audit"`
-	Privacy   Privacy   `json:"privacy"`
-	Backup    Backup    `json:"backup"`
-	RateLimit RateLimit `json:"rate_limit"`
-	Bulkheads Bulkheads `json:"bulkheads"`
-	Migrate   Migrate   `json:"migrate"`
-	Secrets   Secrets   `json:"secrets"`
-	Signer    Signer    `json:"signer"`
-	CA        CA        `json:"ca"`
-	Protocols Protocols `json:"protocols"`
-	Auth      Auth      `json:"auth"`
-	Plugins   Plugins   `json:"plugins"`
-	HA        HA        `json:"ha"`
-	AI        AI        `json:"ai"`
+	Server     Server     `json:"server"`
+	Postgres   Postgres   `json:"postgres"`
+	NATS       NATS       `json:"nats"`
+	Log        Log        `json:"log"`
+	Lifecycle  Lifecycle  `json:"lifecycle"`
+	Telemetry  Telemetry  `json:"telemetry"`
+	Audit      Audit      `json:"audit"`
+	Breakglass Breakglass `json:"breakglass"`
+	Privacy    Privacy    `json:"privacy"`
+	Backup     Backup     `json:"backup"`
+	RateLimit  RateLimit  `json:"rate_limit"`
+	Bulkheads  Bulkheads  `json:"bulkheads"`
+	Migrate    Migrate    `json:"migrate"`
+	Secrets    Secrets    `json:"secrets"`
+	Signer     Signer     `json:"signer"`
+	CA         CA         `json:"ca"`
+	Protocols  Protocols  `json:"protocols"`
+	Auth       Auth       `json:"auth"`
+	Plugins    Plugins    `json:"plugins"`
+	HA         HA         `json:"ha"`
+	AI         AI         `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
@@ -207,11 +208,15 @@ type Plugins struct {
 	PathPrefixes []string `json:"path_prefixes,omitempty"`
 }
 
-// Auth configures interactive authentication for the served control plane. Today
-// it carries the OIDC browser-login + session bridge (EXC-WIRE-01); scoped API
-// tokens always authenticate the binary regardless of this block.
+// Auth configures interactive authentication for the served control plane. It
+// carries the OIDC and SAML browser-login + session bridges; scoped API tokens
+// always authenticate the binary regardless of this block.
 type Auth struct {
 	OIDC OIDC `json:"oidc"`
+	SAML SAML `json:"saml"`
+	LDAP LDAP `json:"ldap"`
+	SCIM SCIM `json:"scim"`
+	ABAC ABAC `json:"abac"`
 }
 
 // OIDC configures the served browser single-sign-on flow (EXC-WIRE-01, closing
@@ -288,6 +293,125 @@ type OIDC struct {
 	AllowDefaultTenant bool `json:"allow_default_tenant,omitempty"`
 }
 
+// SAML configures the served SAML 2.0 Service Provider (IAM-02): SP-initiated
+// login, IdP-initiated login, signed assertion verification, the shared browser
+// session cookie, and the same per-user → tenant mapping table the OIDC path uses.
+// It is OFF by default. When enabled, the binary mounts /auth/saml/login,
+// /auth/saml/acs, and /auth/saml/metadata. Misconfiguration fails closed at
+// startup, so the binary never exposes a half-wired SAML ACS endpoint.
+type SAML struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// EntityID is this service provider's stable SAML entity ID.
+	EntityID string `json:"entity_id,omitempty"`
+	// MetadataURL is the externally reachable /auth/saml/metadata URL.
+	MetadataURL string `json:"metadata_url,omitempty"`
+	// ACSURL is the externally reachable /auth/saml/acs URL registered with the IdP.
+	ACSURL string `json:"acs_url,omitempty"`
+	// IDPMetadataFile points at the IdP metadata XML. One of IDPMetadataFile or
+	// IDPMetadataXML is required so IdP certificates verify offline.
+	IDPMetadataFile string `json:"idp_metadata_file,omitempty"`
+	// IDPMetadataXML is inline IdP metadata XML.
+	IDPMetadataXML string `json:"idp_metadata_xml,omitempty"`
+	// SessionSecretFile persists the HMAC secret that signs browser sessions.
+	SessionSecretFile string `json:"session_secret_file,omitempty"`
+	// SessionTTL is the lifetime of a session cookie. Empty defaults to 12h.
+	SessionTTL string `json:"session_ttl,omitempty"`
+	// LoginRedirect is where the browser lands after a successful login. Empty -> "/".
+	LoginRedirect string `json:"login_redirect,omitempty"`
+
+	// SubjectAttribute optionally overrides the assertion NameID as the session
+	// subject. It is useful for IdPs that keep the stable user id in an attribute.
+	SubjectAttribute string `json:"subject_attribute,omitempty"`
+	// EmailAttribute names the SAML attribute carrying the user's email address.
+	EmailAttribute string `json:"email_attribute,omitempty"`
+	// TenantClaim names the SAML attribute whose value identifies the user's tenant.
+	TenantClaim string `json:"tenant_claim,omitempty"`
+	// GroupsClaim names the SAML attribute carrying group memberships.
+	GroupsClaim string `json:"groups_claim,omitempty"`
+	// ClaimIsTenant, when true, uses TenantClaim directly as the trstctl tenant id.
+	ClaimIsTenant bool `json:"claim_is_tenant,omitempty"`
+	// TenantMappings binds SAML subject / tenant-claim value / group to a tenant and
+	// roles. It reuses the OIDC mapping shape deliberately.
+	TenantMappings []TenantMapping `json:"tenant_mappings,omitempty"`
+	DefaultRoles   []string        `json:"default_roles,omitempty"`
+	DefaultTenant  string          `json:"default_tenant,omitempty"`
+	// AllowDefaultTenant opts into the DefaultTenant fallback. Off by default.
+	AllowDefaultTenant bool `json:"allow_default_tenant,omitempty"`
+}
+
+// LDAP configures served LDAP / Active Directory browser login (IAM-03):
+// username/password bind, directory group lookup, shared browser session cookies,
+// and group-to-tenant/role mapping through the same tenant mapper as OIDC/SAML.
+// It is OFF by default. When enabled, the binary mounts /auth/ldap/login and fails
+// closed at startup if the directory, search, session, or tenant mapping config is
+// incomplete.
+type LDAP struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// URL is the LDAP endpoint. Use ldaps:// for production directories; ldap:// is
+	// accepted only on loopback so local OpenLDAP fixtures do not need TLS.
+	URL string `json:"url,omitempty"`
+	// UserDNTemplate enables direct bind without a service-account search, e.g.
+	// "uid={username},ou=people,dc=example,dc=org". The username is DN-escaped.
+	UserDNTemplate string `json:"user_dn_template,omitempty"`
+	// BindDN and BindPasswordFile optionally configure a service account for user
+	// and group searches. The password is file-backed so it is loaded as []byte.
+	BindDN           string `json:"bind_dn,omitempty"`
+	BindPasswordFile string `json:"bind_password_file,omitempty"`
+	// UserSearchBaseDN and UserFilter locate the user DN when UserDNTemplate is not
+	// used. UserFilter may contain {username}, which is LDAP-filter escaped.
+	UserSearchBaseDN string `json:"user_search_base_dn,omitempty"`
+	UserFilter       string `json:"user_filter,omitempty"`
+	// GroupSearchBaseDN and GroupFilter locate directory groups after bind.
+	// GroupFilter may contain {user_dn} and {username}; both are filter-escaped.
+	GroupSearchBaseDN  string `json:"group_search_base_dn,omitempty"`
+	GroupFilter        string `json:"group_filter,omitempty"`
+	GroupNameAttribute string `json:"group_name_attribute,omitempty"`
+	EmailAttribute     string `json:"email_attribute,omitempty"`
+	SessionSecretFile  string `json:"session_secret_file,omitempty"`
+	SessionTTL         string `json:"session_ttl,omitempty"`
+	LoginRedirect      string `json:"login_redirect,omitempty"`
+	Timeout            string `json:"timeout,omitempty"`
+
+	TenantMappings     []TenantMapping `json:"tenant_mappings,omitempty"`
+	DefaultRoles       []string        `json:"default_roles,omitempty"`
+	DefaultTenant      string          `json:"default_tenant,omitempty"`
+	AllowDefaultTenant bool            `json:"allow_default_tenant,omitempty"`
+}
+
+// SCIM configures served SCIM 2.0 provisioning (IAM-04). Each bearer token is
+// tenant-bound before any provisioning request runs, so /scim/v2 never trusts a
+// tenant id supplied by the IdP payload.
+type SCIM struct {
+	Enabled bool        `json:"enabled,omitempty"`
+	Tokens  []SCIMToken `json:"tokens,omitempty"`
+}
+
+// SCIMToken configures one IdP bearer token. TokenFile points at the raw token
+// bytes; startup hashes them through internal/crypto and retains only the hash.
+type SCIMToken struct {
+	Name      string `json:"name,omitempty"`
+	TenantID  string `json:"tenant_id,omitempty"`
+	TokenFile string `json:"token_file,omitempty"`
+}
+
+// ABAC configures the served attribute-based deny overlay. The Rego module must
+// declare package trstctl.abac and boolean `deny`; it may define string `reason`.
+type ABAC struct {
+	Enabled     bool              `json:"enabled,omitempty"`
+	Module      string            `json:"module,omitempty"`
+	Environment map[string]string `json:"environment,omitempty"`
+}
+
+// Breakglass configures the served recovery-side break-glass reconciliation route.
+// Offline issuance still happens outside the control plane; this block pins the CA
+// certificate and break-glass public key the running server uses to verify bundles
+// before reconciling them into the audit chain.
+type Breakglass struct {
+	Enabled       bool   `json:"enabled,omitempty"`
+	CACertFile    string `json:"ca_cert_file,omitempty"`
+	PublicKeyFile string `json:"public_key_file,omitempty"`
+}
+
 // TenantMapping binds an OIDC user (by subject, by tenant-claim value, or by IdP
 // group) to a tenant and the roles its session receives (the config mirror of
 // auth.TenantMapping).
@@ -314,6 +438,48 @@ func (o OIDC) SessionTTLDuration() (time.Duration, error) {
 	}
 	return time.ParseDuration(o.SessionTTL)
 }
+
+// ValidateEnabled reports the configuration problems of the SAML block as if it
+// were enabled.
+func (s SAML) ValidateEnabled() error { return errors.Join(s.validate()...) }
+
+// SessionTTLDuration parses the SAML session cookie lifetime, defaulting to 12h
+// when empty.
+func (s SAML) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(s.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(s.SessionTTL)
+}
+
+// ValidateEnabled reports LDAP configuration problems as if the block were enabled.
+func (l LDAP) ValidateEnabled() error { return errors.Join(l.validate()...) }
+
+// SessionTTLDuration parses the LDAP-backed browser session lifetime.
+func (l LDAP) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(l.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(l.SessionTTL)
+}
+
+// TimeoutDuration parses the LDAP network/search timeout.
+func (l LDAP) TimeoutDuration() (time.Duration, error) {
+	if strings.TrimSpace(l.Timeout) == "" {
+		return 5 * time.Second, nil
+	}
+	return time.ParseDuration(l.Timeout)
+}
+
+// ValidateEnabled reports SCIM configuration problems as if the block were enabled.
+func (s SCIM) ValidateEnabled() error { return errors.Join(s.validate()...) }
+
+// ValidateEnabled reports ABAC configuration problems as if the block were enabled.
+func (a ABAC) ValidateEnabled() error { return errors.Join(a.validate()...) }
+
+// ValidateEnabled reports break-glass configuration problems as if the block were
+// enabled.
+func (b Breakglass) ValidateEnabled() error { return errors.Join(b.validate()...) }
 
 // Protocols enables/disables the served issuance-protocol endpoints (EXC-WIRE-02).
 // Each enrollment protocol server (ACME, EST, SCEP, CMP, SPIFFE Workload API, SSH
@@ -1205,6 +1371,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setBool(getenv, "TRSTCTL_BREAKGLASS_ENABLED", &c.Breakglass.Enabled)
+	setString(getenv, "TRSTCTL_BREAKGLASS_CA_CERT_FILE", &c.Breakglass.CACertFile)
+	setString(getenv, "TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE", &c.Breakglass.PublicKeyFile)
 	applyPrivacyEnv(getenv, &c.Privacy)
 	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
 	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
@@ -1255,27 +1424,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	applyProtocolsEnv(getenv, &c.Protocols)
-	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01).
-	// The structured TenantMappings table is file-only (it is a list of objects); the
-	// scalar knobs overlay from the environment like the rest of the config.
-	setBool(getenv, "TRSTCTL_AUTH_OIDC_ENABLED", &c.Auth.OIDC.Enabled)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET", &c.Auth.OIDC.ClientSecret)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &c.Auth.OIDC.AuthEndpoint)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT", &c.Auth.OIDC.TokenEndpoint)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_REDIRECT_URI", &c.Auth.OIDC.RedirectURI)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_JWKS_FILE", &c.Auth.OIDC.JWKSFile)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_JWKS_JSON", &c.Auth.OIDC.JWKSJSON)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE", &c.Auth.OIDC.SessionSecretFile)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_SESSION_TTL", &c.Auth.OIDC.SessionTTL)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT", &c.Auth.OIDC.LoginRedirect)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_TENANT_CLAIM", &c.Auth.OIDC.TenantClaim)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_GROUPS_CLAIM", &c.Auth.OIDC.GroupsClaim)
-	setBool(getenv, "TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT", &c.Auth.OIDC.ClaimIsTenant)
-	setString(getenv, "TRSTCTL_AUTH_OIDC_DEFAULT_TENANT", &c.Auth.OIDC.DefaultTenant)
-	setBool(getenv, "TRSTCTL_AUTH_OIDC_ALLOW_DEFAULT_TENANT", &c.Auth.OIDC.AllowDefaultTenant)
-	setCSV(getenv, "TRSTCTL_AUTH_OIDC_DEFAULT_ROLES", &c.Auth.OIDC.DefaultRoles)
+	applyAuthEnv(getenv, &c.Auth)
 	// Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004). Off by default;
 	// when enabled the binary loads + provenance-verifies connector plugins from the
 	// directory against the trusted keys, failing closed on an unverified module.
@@ -1292,6 +1441,80 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBoolPtr(getenv, "TRSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
 	setString(getenv, "TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
 	setString(getenv, "TRSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
+}
+
+// applyAuthEnv overlays browser-auth environment knobs. The structured
+// TenantMappings tables are file-only (lists of objects); scalar knobs overlay from
+// the environment like the rest of the config.
+func applyAuthEnv(getenv func(string) string, a *Auth) {
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_ENABLED", &a.OIDC.Enabled)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_ISSUER", &a.OIDC.Issuer)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_ID", &a.OIDC.ClientID)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET", &a.OIDC.ClientSecret)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &a.OIDC.AuthEndpoint)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT", &a.OIDC.TokenEndpoint)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_REDIRECT_URI", &a.OIDC.RedirectURI)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_JWKS_FILE", &a.OIDC.JWKSFile)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_JWKS_JSON", &a.OIDC.JWKSJSON)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE", &a.OIDC.SessionSecretFile)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_SESSION_TTL", &a.OIDC.SessionTTL)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT", &a.OIDC.LoginRedirect)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_TENANT_CLAIM", &a.OIDC.TenantClaim)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_GROUPS_CLAIM", &a.OIDC.GroupsClaim)
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT", &a.OIDC.ClaimIsTenant)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_DEFAULT_TENANT", &a.OIDC.DefaultTenant)
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_ALLOW_DEFAULT_TENANT", &a.OIDC.AllowDefaultTenant)
+	setCSV(getenv, "TRSTCTL_AUTH_OIDC_DEFAULT_ROLES", &a.OIDC.DefaultRoles)
+
+	setBool(getenv, "TRSTCTL_AUTH_SAML_ENABLED", &a.SAML.Enabled)
+	setString(getenv, "TRSTCTL_AUTH_SAML_ENTITY_ID", &a.SAML.EntityID)
+	setString(getenv, "TRSTCTL_AUTH_SAML_METADATA_URL", &a.SAML.MetadataURL)
+	setString(getenv, "TRSTCTL_AUTH_SAML_ACS_URL", &a.SAML.ACSURL)
+	setString(getenv, "TRSTCTL_AUTH_SAML_IDP_METADATA_FILE", &a.SAML.IDPMetadataFile)
+	setString(getenv, "TRSTCTL_AUTH_SAML_IDP_METADATA_XML", &a.SAML.IDPMetadataXML)
+	setString(getenv, "TRSTCTL_AUTH_SAML_SESSION_SECRET_FILE", &a.SAML.SessionSecretFile)
+	setString(getenv, "TRSTCTL_AUTH_SAML_SESSION_TTL", &a.SAML.SessionTTL)
+	setString(getenv, "TRSTCTL_AUTH_SAML_LOGIN_REDIRECT", &a.SAML.LoginRedirect)
+	setString(getenv, "TRSTCTL_AUTH_SAML_SUBJECT_ATTRIBUTE", &a.SAML.SubjectAttribute)
+	setString(getenv, "TRSTCTL_AUTH_SAML_EMAIL_ATTRIBUTE", &a.SAML.EmailAttribute)
+	setString(getenv, "TRSTCTL_AUTH_SAML_TENANT_CLAIM", &a.SAML.TenantClaim)
+	setString(getenv, "TRSTCTL_AUTH_SAML_GROUPS_CLAIM", &a.SAML.GroupsClaim)
+	setBool(getenv, "TRSTCTL_AUTH_SAML_CLAIM_IS_TENANT", &a.SAML.ClaimIsTenant)
+	setString(getenv, "TRSTCTL_AUTH_SAML_DEFAULT_TENANT", &a.SAML.DefaultTenant)
+	setBool(getenv, "TRSTCTL_AUTH_SAML_ALLOW_DEFAULT_TENANT", &a.SAML.AllowDefaultTenant)
+	setCSV(getenv, "TRSTCTL_AUTH_SAML_DEFAULT_ROLES", &a.SAML.DefaultRoles)
+
+	setBool(getenv, "TRSTCTL_AUTH_LDAP_ENABLED", &a.LDAP.Enabled)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_URL", &a.LDAP.URL)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_USER_DN_TEMPLATE", &a.LDAP.UserDNTemplate)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_BIND_DN", &a.LDAP.BindDN)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_BIND_PASSWORD_FILE", &a.LDAP.BindPasswordFile)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_USER_SEARCH_BASE_DN", &a.LDAP.UserSearchBaseDN)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_USER_FILTER", &a.LDAP.UserFilter)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_GROUP_SEARCH_BASE_DN", &a.LDAP.GroupSearchBaseDN)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_GROUP_FILTER", &a.LDAP.GroupFilter)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_GROUP_NAME_ATTRIBUTE", &a.LDAP.GroupNameAttribute)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_EMAIL_ATTRIBUTE", &a.LDAP.EmailAttribute)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_SESSION_SECRET_FILE", &a.LDAP.SessionSecretFile)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_SESSION_TTL", &a.LDAP.SessionTTL)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_LOGIN_REDIRECT", &a.LDAP.LoginRedirect)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_TIMEOUT", &a.LDAP.Timeout)
+	setString(getenv, "TRSTCTL_AUTH_LDAP_DEFAULT_TENANT", &a.LDAP.DefaultTenant)
+	setBool(getenv, "TRSTCTL_AUTH_LDAP_ALLOW_DEFAULT_TENANT", &a.LDAP.AllowDefaultTenant)
+	setCSV(getenv, "TRSTCTL_AUTH_LDAP_DEFAULT_ROLES", &a.LDAP.DefaultRoles)
+
+	setBool(getenv, "TRSTCTL_AUTH_SCIM_ENABLED", &a.SCIM.Enabled)
+	scimToken := SCIMToken{}
+	setString(getenv, "TRSTCTL_AUTH_SCIM_TOKEN_NAME", &scimToken.Name)
+	setString(getenv, "TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID", &scimToken.TenantID)
+	setString(getenv, "TRSTCTL_AUTH_SCIM_TOKEN_FILE", &scimToken.TokenFile)
+	if scimToken.Name != "" || scimToken.TenantID != "" || scimToken.TokenFile != "" {
+		a.SCIM.Tokens = []SCIMToken{scimToken}
+	}
+
+	setBool(getenv, "TRSTCTL_AUTH_ABAC_ENABLED", &a.ABAC.Enabled)
+	setString(getenv, "TRSTCTL_AUTH_ABAC_MODULE", &a.ABAC.Module)
+	setStringMap(getenv, "TRSTCTL_AUTH_ABAC_ENVIRONMENT", &a.ABAC.Environment)
 }
 
 // applyProtocolsEnv overlays the served issuance-protocol environment knobs
@@ -1407,6 +1630,34 @@ func setCSV(getenv func(string) string, key string, dst *[]string) {
 	for _, part := range strings.Split(v, ",") {
 		if p := strings.TrimSpace(part); p != "" {
 			out = append(out, p)
+		}
+	}
+	if len(out) > 0 {
+		*dst = out
+	}
+}
+
+// setStringMap overlays comma-separated key=value pairs into a string map. It is
+// used for small operator-state maps such as ABAC environment attributes.
+func setStringMap(getenv func(string) string, key string, dst *map[string]string) {
+	v := getenv(key)
+	if v == "" {
+		return
+	}
+	out := map[string]string{}
+	for _, part := range strings.Split(v, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		k, val, ok := strings.Cut(p, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		val = strings.TrimSpace(val)
+		if k != "" {
+			out[k] = val
 		}
 	}
 	if len(out) > 0 {
@@ -1682,6 +1933,21 @@ func validateServedSurfaces(c *Config) []error {
 	// block is ignored.
 	if c.Auth.OIDC.Enabled {
 		errs = append(errs, c.Auth.OIDC.validate()...)
+	}
+	if c.Auth.SAML.Enabled {
+		errs = append(errs, c.Auth.SAML.validate()...)
+	}
+	if c.Auth.LDAP.Enabled {
+		errs = append(errs, c.Auth.LDAP.validate()...)
+	}
+	if c.Auth.SCIM.Enabled {
+		errs = append(errs, c.Auth.SCIM.validate()...)
+	}
+	if c.Auth.ABAC.Enabled {
+		errs = append(errs, c.Auth.ABAC.validate()...)
+	}
+	if c.Breakglass.Enabled {
+		errs = append(errs, c.Breakglass.validate()...)
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	// Served enrollment protocols are public protocol endpoints. When one is
@@ -1988,13 +2254,147 @@ func (o OIDC) validate() []error {
 	} else if d <= 0 {
 		errs = append(errs, errors.New("auth.oidc.session_ttl must be positive"))
 	}
-	// There must be SOME way to resolve a tenant, otherwise every login fails closed
-	// (TENANT-004): a tenant claim, a mappings table, or an explicit allowed default.
-	hasMapping := len(o.TenantMappings) > 0 || strings.TrimSpace(o.TenantClaim) != "" || (o.AllowDefaultTenant && strings.TrimSpace(o.DefaultTenant) != "")
-	if !hasMapping {
-		errs = append(errs, errors.New("auth.oidc needs a tenant mapping when enabled: set tenant_claim, tenant_mappings, or allow_default_tenant+default_tenant — otherwise every login fails closed"))
+	errs = append(errs, validateTenantMappings("auth.oidc", o.TenantMappings, o.TenantClaim, o.AllowDefaultTenant, o.DefaultTenant)...)
+	return errs
+}
+
+func (s SAML) validate() []error {
+	var errs []error
+	req := func(v, name string) {
+		if strings.TrimSpace(v) == "" {
+			errs = append(errs, fmt.Errorf("auth.saml.%s is required when auth.saml.enabled is true", name))
+		}
 	}
-	for i, m := range o.TenantMappings {
+	req(s.EntityID, "entity_id")
+	req(s.MetadataURL, "metadata_url")
+	req(s.ACSURL, "acs_url")
+	req(s.SessionSecretFile, "session_secret_file")
+	if strings.TrimSpace(s.IDPMetadataFile) == "" && strings.TrimSpace(s.IDPMetadataXML) == "" {
+		errs = append(errs, errors.New("auth.saml requires idp_metadata_file or idp_metadata_xml (the IdP signing metadata) when enabled"))
+	}
+	for _, e := range []struct{ v, name string }{
+		{s.EntityID, "entity_id"}, {s.MetadataURL, "metadata_url"}, {s.ACSURL, "acs_url"},
+	} {
+		if strings.TrimSpace(e.v) == "" {
+			continue
+		}
+		u, err := url.Parse(e.v)
+		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname()))) {
+			errs = append(errs, fmt.Errorf("auth.saml.%s %q must be an absolute https URL (http is allowed only for a loopback host)", e.name, e.v))
+		}
+	}
+	if d, err := s.SessionTTLDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.saml.session_ttl %q is invalid: %w", s.SessionTTL, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.saml.session_ttl must be positive"))
+	}
+	errs = append(errs, validateTenantMappings("auth.saml", s.TenantMappings, s.TenantClaim, s.AllowDefaultTenant, s.DefaultTenant)...)
+	return errs
+}
+
+func (l LDAP) validate() []error {
+	var errs []error
+	req := func(v, name string) {
+		if strings.TrimSpace(v) == "" {
+			errs = append(errs, fmt.Errorf("auth.ldap.%s is required when auth.ldap.enabled is true", name))
+		}
+	}
+	req(l.URL, "url")
+	req(l.SessionSecretFile, "session_secret_file")
+	req(l.GroupSearchBaseDN, "group_search_base_dn")
+	req(l.GroupFilter, "group_filter")
+	if strings.TrimSpace(l.GroupNameAttribute) == "" {
+		errs = append(errs, errors.New("auth.ldap.group_name_attribute is required when auth.ldap.enabled is true"))
+	}
+	if strings.TrimSpace(l.UserDNTemplate) == "" {
+		req(l.UserSearchBaseDN, "user_search_base_dn")
+		req(l.UserFilter, "user_filter")
+	}
+	if strings.TrimSpace(l.BindPasswordFile) != "" && strings.TrimSpace(l.BindDN) == "" {
+		errs = append(errs, errors.New("auth.ldap.bind_dn is required when auth.ldap.bind_password_file is set"))
+	}
+	if strings.TrimSpace(l.BindDN) != "" && strings.TrimSpace(l.BindPasswordFile) == "" {
+		errs = append(errs, errors.New("auth.ldap.bind_password_file is required when auth.ldap.bind_dn is set"))
+	}
+	if strings.TrimSpace(l.URL) != "" {
+		u, err := url.Parse(l.URL)
+		if err != nil || u.Host == "" {
+			errs = append(errs, fmt.Errorf("auth.ldap.url %q must be an absolute ldap:// or ldaps:// URL", l.URL))
+		} else {
+			switch u.Scheme {
+			case "ldaps":
+			case "ldap":
+				if !isLoopbackHost(u.Hostname()) {
+					errs = append(errs, fmt.Errorf("auth.ldap.url %q uses plaintext ldap://; use ldaps:// for non-loopback directories", l.URL))
+				}
+			default:
+				errs = append(errs, fmt.Errorf("auth.ldap.url %q must use ldap:// or ldaps://", l.URL))
+			}
+		}
+	}
+	if d, err := l.SessionTTLDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.ldap.session_ttl %q is invalid: %w", l.SessionTTL, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.ldap.session_ttl must be positive"))
+	}
+	if d, err := l.TimeoutDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.ldap.timeout %q is invalid: %w", l.Timeout, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.ldap.timeout must be positive"))
+	}
+	errs = append(errs, validateTenantMappings("auth.ldap", l.TenantMappings, "", l.AllowDefaultTenant, l.DefaultTenant)...)
+	return errs
+}
+
+func (s SCIM) validate() []error {
+	var errs []error
+	if len(s.Tokens) == 0 {
+		errs = append(errs, errors.New("auth.scim.tokens requires at least one tenant-bound token when auth.scim.enabled is true"))
+	}
+	for i, tok := range s.Tokens {
+		if strings.TrimSpace(tok.TenantID) == "" {
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].tenant_id is required", i))
+		}
+		if strings.TrimSpace(tok.TokenFile) == "" {
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].token_file is required", i))
+		}
+	}
+	return errs
+}
+
+func (a ABAC) validate() []error {
+	var errs []error
+	if strings.TrimSpace(a.Module) == "" {
+		errs = append(errs, errors.New("auth.abac.module is required when auth.abac.enabled is true"))
+	}
+	for k := range a.Environment {
+		if strings.TrimSpace(k) == "" {
+			errs = append(errs, errors.New("auth.abac.environment keys must be non-empty"))
+		}
+	}
+	return errs
+}
+
+func (b Breakglass) validate() []error {
+	var errs []error
+	if strings.TrimSpace(b.CACertFile) == "" {
+		errs = append(errs, errors.New("breakglass.ca_cert_file is required when breakglass.enabled is true"))
+	}
+	if strings.TrimSpace(b.PublicKeyFile) == "" {
+		errs = append(errs, errors.New("breakglass.public_key_file is required when breakglass.enabled is true"))
+	}
+	return errs
+}
+
+func validateTenantMappings(prefix string, mappings []TenantMapping, tenantClaim string, allowDefault bool, defaultTenant string) []error {
+	var errs []error
+	// There must be SOME way to resolve a tenant, otherwise every login fails closed:
+	// a tenant claim, a mappings table, or an explicit allowed default.
+	hasMapping := len(mappings) > 0 || strings.TrimSpace(tenantClaim) != "" || (allowDefault && strings.TrimSpace(defaultTenant) != "")
+	if !hasMapping {
+		errs = append(errs, fmt.Errorf("%s needs a tenant mapping when enabled: set tenant_claim, tenant_mappings, or allow_default_tenant+default_tenant — otherwise every login fails closed", prefix))
+	}
+	for i, m := range mappings {
 		keys := 0
 		for _, k := range []string{m.Subject, m.Claim, m.Group} {
 			if strings.TrimSpace(k) != "" {
@@ -2002,10 +2402,10 @@ func (o OIDC) validate() []error {
 			}
 		}
 		if keys != 1 {
-			errs = append(errs, fmt.Errorf("auth.oidc.tenant_mappings[%d] must set exactly one of subject/claim/group", i))
+			errs = append(errs, fmt.Errorf("%s.tenant_mappings[%d] must set exactly one of subject/claim/group", prefix, i))
 		}
 		if strings.TrimSpace(m.TenantID) == "" {
-			errs = append(errs, fmt.Errorf("auth.oidc.tenant_mappings[%d].tenant_id is required", i))
+			errs = append(errs, fmt.Errorf("%s.tenant_mappings[%d].tenant_id is required", prefix, i))
 		}
 	}
 	return errs

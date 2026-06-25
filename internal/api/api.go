@@ -18,9 +18,11 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -52,12 +54,18 @@ type API struct {
 	principal               func(*http.Request) (authz.Principal, error)
 	audit                   *audit.Service
 	auth                    *AuthConfig
+	scim                    *SCIMConfig
+	scimTokens              map[string]scimToken
 	agentTokens             BootstrapTokenIssuer
 	agentEnroller           BootstrapEnroller
 	agentEnrollmentObserver func(result string)
 	rateLimiter             RateLimiter
 	gate                    MutationGate
+	abac                    ABACDenyEvaluator
+	abacEnvironment         map[string]string
+	abacNow                 func() time.Time
 	approvals               ApprovalRecorder
+	breakglass              BreakglassReconciler
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
 	attestedIssuer          AttestedIssuerService
@@ -92,12 +100,17 @@ type config struct {
 	principalFromReg        func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
 	audit                   *audit.Service
 	auth                    *AuthConfig
+	scim                    *SCIMConfig
 	agentTokens             BootstrapTokenIssuer
 	agentEnroller           BootstrapEnroller
 	agentEnrollmentObserver func(result string)
 	rateLimiter             RateLimiter
 	gate                    MutationGate
+	abac                    ABACDenyEvaluator
+	abacEnvironment         map[string]string
+	abacNow                 func() time.Time
 	approvals               ApprovalRecorder
+	breakglass              BreakglassReconciler
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
 	attestedIssuer          AttestedIssuerService
@@ -238,6 +251,18 @@ func WithMutationGate(g MutationGate) Option {
 	return func(c *config) { c.gate = g }
 }
 
+// WithABACDenyOverlay wires the deny-only attribute overlay onto every guarded API
+// route. RBAC must allow first; ABAC can only veto with request, actor, time, and
+// deployment environment attributes. Rich identity resource tags are added by the
+// lifecycle MutationGate for issue/deploy/revoke transitions.
+func WithABACDenyOverlay(eval ABACDenyEvaluator, environment map[string]string, now func() time.Time) Option {
+	return func(c *config) {
+		c.abac = eval
+		c.abacEnvironment = copyStringMap(environment)
+		c.abacNow = now
+	}
+}
+
 // New builds the API over its dependencies and wires the routes. The static
 // OpenAPI document is built once from the route registry. The dependencies may
 // be nil when only the spec is needed (e.g. for documentation tooling).
@@ -251,7 +276,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, caHierarchy: cfg.caHierarchy, externalCAs: cfg.externalCAs, attestedIssuer: cfg.attestedIssuer, broker: cfg.broker, ephemeral: cfg.ephemeral, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, cbom: cfg.cbom, pqcMigration: cfg.pqcMigration, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, scim: cfg.scim, scimTokens: normalizeSCIM(cfg.scim), agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, abac: cfg.abac, abacEnvironment: copyStringMap(cfg.abacEnvironment), abacNow: cfg.abacNow, approvals: cfg.approvals, breakglass: cfg.breakglass, caHierarchy: cfg.caHierarchy, externalCAs: cfg.externalCAs, attestedIssuer: cfg.attestedIssuer, broker: cfg.broker, ephemeral: cfg.ephemeral, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, cbom: cfg.cbom, pqcMigration: cfg.pqcMigration, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -268,12 +293,22 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	for _, r := range a.routes() {
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.handler))
 	}
-	// The browser OIDC login + session bridge for the web UI (S7.2). These are
+	// The browser SSO login + session bridge for the web UI. These routes are
 	// registered outside the route registry so they stay out of the CLI/OpenAPI
 	// surface.
 	if a.auth != nil {
-		mux.HandleFunc("GET /auth/login", a.authLogin)
-		mux.HandleFunc("GET /auth/callback", a.authCallback)
+		if a.auth.OIDCEnabled || a.auth.Exchange != nil || a.auth.VerifyIDToken != nil {
+			mux.HandleFunc("GET /auth/login", a.authLogin)
+			mux.HandleFunc("GET /auth/callback", a.authCallback)
+		}
+		if a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil {
+			mux.HandleFunc("GET /auth/saml/login", a.authSAMLLogin)
+			mux.HandleFunc("POST /auth/saml/acs", a.authSAMLACS)
+			mux.HandleFunc("GET /auth/saml/metadata", a.authSAMLMetadata)
+		}
+		if a.auth.LDAPEnabled || a.auth.VerifyLDAPLogin != nil {
+			mux.HandleFunc("POST /auth/ldap/login", a.authLDAPLogin)
+		}
 		mux.HandleFunc("GET /auth/me", a.authMe)
 		mux.HandleFunc("POST /auth/logout", a.authLogout)
 	}
@@ -282,6 +317,20 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	// /api, CLI, and OpenAPI surfaces — the same treatment as the OIDC bridge.
 	if a.agentEnroller != nil {
 		mux.HandleFunc("POST /enroll/bootstrap", a.enrollBootstrap)
+	}
+	if len(a.scimTokens) > 0 {
+		mux.HandleFunc("GET /scim/v2/ServiceProviderConfig", a.scimServiceProviderConfig)
+		mux.HandleFunc("POST /scim/v2/Users", a.scimCreateUser)
+		mux.HandleFunc("GET /scim/v2/Users", a.scimListUsers)
+		mux.HandleFunc("GET /scim/v2/Users/{id}", a.scimGetUser)
+		mux.HandleFunc("PUT /scim/v2/Users/{id}", a.scimPutUser)
+		mux.HandleFunc("PATCH /scim/v2/Users/{id}", a.scimPatchUser)
+		mux.HandleFunc("DELETE /scim/v2/Users/{id}", a.scimDeleteUser)
+		mux.HandleFunc("POST /scim/v2/Groups", a.scimCreateGroup)
+		mux.HandleFunc("GET /scim/v2/Groups", a.scimListGroups)
+		mux.HandleFunc("GET /scim/v2/Groups/{id}", a.scimGetGroup)
+		mux.HandleFunc("PATCH /scim/v2/Groups/{id}", a.scimPatchGroup)
+		mux.HandleFunc("DELETE /scim/v2/Groups/{id}", a.scimDeleteGroup)
 	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux
@@ -480,6 +529,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: idPath, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: idPath, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "POST", path: "/api/v1/identities/{id}/approvals", opID: "approveIdentityAction", summary: "Approve a pending privileged action (dual control)", handler: a.approveIdentityAction, pathParams: idPath, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/breakglass/reconcile", opID: "reconcileBreakglass", summary: "Verify break-glass bundles and reconcile them into audit", handler: a.reconcileBreakglass, reqSchema: "BreakglassReconcileRequest", resSchema: "BreakglassReconcileResponse", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
@@ -664,7 +714,7 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 	}
 	if a.auth != nil {
 		if sess, ok := a.sessionFrom(r); ok {
-			return a.sessionPrincipal(sess), nil
+			return a.sessionPrincipal(r.Context(), sess), nil
 		}
 	}
 	return authz.Principal{}, errors.New("api: unauthenticated")
@@ -674,14 +724,38 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 // session's role names resolve (against the role registry) to grants held
 // tenant-wide within the session's tenant. This is what makes a browser login
 // authorize API calls, not just /auth/me.
-func (a *API) sessionPrincipal(sess auth.Session) authz.Principal {
-	grants := make([]authz.Grant, 0, len(sess.Roles))
-	for _, name := range sess.Roles {
+func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) authz.Principal {
+	roleNames := append([]string(nil), sess.Roles...)
+	if a.store != nil && sess.TenantID != "" && sess.Subject != "" {
+		if member, err := a.store.GetTenantMember(ctx, sess.TenantID, sess.Subject); err == nil {
+			if member.Status == "offboarded" {
+				roleNames = nil
+			} else {
+				roleNames = mergeRoleNames(roleNames, member.Roles)
+			}
+		}
+	}
+	grants := make([]authz.Grant, 0, len(roleNames))
+	for _, name := range roleNames {
 		if role, ok := a.roles.Role(name); ok {
 			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
 		}
 	}
 	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}
+}
+
+func mergeRoleNames(base, extra []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(base)+len(extra))
+	for _, role := range append(append([]string(nil), base...), extra...) {
+		role = strings.TrimSpace(role)
+		if role == "" || seen[role] {
+			continue
+		}
+		seen[role] = true
+		out = append(out, role)
+	}
+	return out
 }
 
 func bearerToken(r *http.Request) string {
@@ -720,6 +794,10 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
 		}
+		if err := a.checkABAC(r.Context(), r, principal, perm, target); err != nil {
+			a.writeError(w, err)
+			return
+		}
 		// Shed load per tenant (R2.3): an authenticated-but-over-budget caller is
 		// rejected with 429 + Retry-After so one noisy tenant cannot exhaust the
 		// control plane. Checked after authz so denials don't consume quota.
@@ -742,6 +820,54 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 		ctx := context.WithValue(r.Context(), principalCtxKey, principal)
 		ctx = events.ContextWithActor(ctx, events.Actor{Subject: principal.Subject, Roles: principalRoles(principal)})
 		h(w, r.WithContext(ctx))
+	}
+}
+
+func (a *API) checkABAC(ctx context.Context, r *http.Request, principal authz.Principal, perm authz.Permission, target authz.Scope) error {
+	if a.abac == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	if a.abacNow != nil {
+		now = a.abacNow().UTC()
+	}
+	resource := map[string]string{
+		"request.method": r.Method,
+		"request.path":   r.URL.Path,
+	}
+	if target.Project != "" {
+		resource["request.project"] = target.Project
+		resource["project"] = target.Project
+	}
+	in := policy.ABACInput{
+		Permission: string(perm),
+		TenantID:   principal.TenantID,
+		Actor:      principal.Subject,
+		ActorAttrs: map[string]string{
+			"subject": principal.Subject,
+			"roles":   strings.Join(principalRoles(principal), ","),
+		},
+		Resource:   resource,
+		Env:        copyStringMap(a.abacEnvironment),
+		Now:        now.Format(time.RFC3339),
+		NowUnix:    now.Unix(),
+		NowHourUTC: now.Hour(),
+		NowWeekday: now.Weekday().String(),
+	}
+	d, err := a.abac.EvaluateDeny(ctx, in)
+	switch {
+	case errors.Is(err, bulkhead.ErrRejected):
+		return errStatus(http.StatusServiceUnavailable, "ABAC engine busy; retry")
+	case err != nil:
+		return errStatus(http.StatusForbidden, "denied by ABAC (evaluation error)")
+	case d.Deny:
+		reason := d.Reason
+		if reason == "" {
+			reason = "denied by ABAC"
+		}
+		return errStatus(http.StatusForbidden, "denied by ABAC: "+reason)
+	default:
+		return nil
 	}
 }
 

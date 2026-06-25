@@ -55,7 +55,8 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 
 > **Status — active development.** A core slice is **served end to end by the running
 > binary today** (certificate inventory, real X.509 issuance, the credential graph,
-> risk scoring, OIDC login, the hash-chained audit log, observability, resilience,
+> risk scoring, OIDC/SAML/LDAP login, SCIM provisioning, RBAC plus ABAC authorization,
+> the hash-chained audit log, observability, resilience,
 > backup/DR, migrations). Much of the broader surface is **library-complete and tested
 > but not yet wired into the served binary.** Each feature page states its own status,
 > and **[Current limitations](docs/limitations.md) is the single authority** on what
@@ -121,8 +122,9 @@ trstctl is organized around the questions operators actually ask:
   radius** ([graph, query & AI](docs/features/graph-query-ai.md)).
 - *"What should we rotate first?"* → composite **risk scoring**
   ([observability & risk](docs/features/observability-and-risk.md)).
-- *"Who is allowed to issue — and can the requester quietly self-issue?"* → RBAC + the
-  registration-authority split ([policy & governance](docs/features/policy-and-governance.md)).
+- *"Who is allowed to issue — and can the requester quietly self-issue, or issue prod
+  outside a change window?"* → RBAC + ABAC + the registration-authority split
+  ([policy & governance](docs/features/policy-and-governance.md)).
 - *"Where are we still using weak or quantum-vulnerable crypto?"* → the **CBOM**
   (Cryptographic Bill of Materials) ([observability & risk](docs/features/observability-and-risk.md)).
 - *"Did someone get a certificate in our name that we didn't request?"* → **Certificate
@@ -191,7 +193,7 @@ number below is grounded in the repository.
 | **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM + PQC posture, CT monitoring, drift, risk scoring, the credential graph |
 | **Key protection** | **6** HSM/KMS backends (PKCS#11, TPM 2.0, YubiHSM 2, AWS/Azure/GCP KMS), the isolated signer |
 | **Crypto-agility** | classical + post-quantum (ML-DSA, ML-KEM, SLH-DSA, hybrid) behind one boundary, plus a PQC-migration orchestrator |
-| **Platform** | REST API (OpenAPI 3.1), CLI at full parity, web UI with a first-run wizard, OIDC SSO, RBAC, append-only audit, multi-tenancy |
+| **Platform** | REST API (OpenAPI 3.1), CLI at full parity, web UI with a first-run wizard, OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC + ABAC, append-only audit, multi-tenancy |
 | **Supply chain** | reproducible builds, cosign-signed images, and an SBOM |
 
 ## How it's built
@@ -221,7 +223,7 @@ flowchart TB
   agent["In-network agents"] -- mTLS --> api
 
   subgraph cp["Control plane — Go, event-sourced, multi-tenant"]
-    api["REST (OpenAPI 3.1) + gRPC API<br/>OIDC · RBAC · audit · tenant-first"] --> orch["Orchestrator<br/>idempotency · outbox"]
+    api["REST (OpenAPI 3.1) + gRPC API<br/>OIDC/SAML/LDAP · RBAC/ABAC · audit · tenant-first"] --> orch["Orchestrator<br/>idempotency · outbox"]
     orch --> log[("Event log — NATS JetStream<br/>source of truth")]
     log --> proj["Projections"]
     proj --> pg[("PostgreSQL<br/>row-level security")]
@@ -238,7 +240,7 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1063 Go files across the internal subsystem packages**, with
+Under the hood: **~1095 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
 
@@ -286,8 +288,8 @@ through the REST API, which publishes its **OpenAPI 3.1** spec at
 trstctl is honest about its edges by design:
 
 - **It manages machines, not people.** It is *not* a human IAM/SSO product for your
-  employees' accounts — it uses OIDC to log *operators* in, and complements your human
-  identity provider rather than replacing it.
+  employees' accounts — it uses OIDC, SAML, or LDAP / Active Directory to log
+  *operators* in, and complements your human identity provider rather than replacing it.
 - **It is self-hosted, not a SaaS.** Nothing phones home; you run it on your own
   infrastructure.
 - **Its AI is grounded and read-only.** The assistant answers from cited evidence and

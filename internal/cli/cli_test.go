@@ -196,6 +196,28 @@ func TestEphemeralCommandsSendBodiesAndIdempotencyKeys(t *testing.T) {
 	}
 }
 
+func TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"reconciled":1}`, &cap)
+	body := `{"bundles":[{"request_id":"bg-1","subject":"svc.example","cert_der":"Y2VydA==","reason":"restore production","approvals":["alice"],"issued_at":"2026-06-25T17:00:00Z","signature":"c2ln"}]}`
+	code, _, _ := run(t, []string{"breakglass", "reconcile", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/breakglass/reconcile" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("break-glass reconcile mutation should send an Idempotency-Key")
+	}
+}
+
 func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)

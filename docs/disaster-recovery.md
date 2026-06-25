@@ -274,11 +274,13 @@ If the CA key **and** its backup are both lost (true catastrophe), fall back to 
 planned CA rotation: already-issued certificates remain valid until expiry, stand
 up a new CA, re-issue, and distribute the new bundle — see the
 [incident-response runbook](runbooks/incident-response.md) and the m-of-n
-[key-ceremony runbook](runbooks/key-ceremony.md). HSM/KMS-backed custody and a
-served break-glass flow remain future work. Because that custody path is not yet
-wired, the Helm chart **rejects** `externalKMS.enabled=true` (it fails the render
-with an actionable error) rather than letting a regulated deployment believe its
-KEK is HSM/KMS-protected when it is still sealed under the local deployment KEK.
+[key-ceremony runbook](runbooks/key-ceremony.md). HSM/KMS-backed custody and online
+m-of-n break-glass issuance remain future work; recovery reconciliation is served at
+`POST /api/v1/breakglass/reconcile` after operators bring signed emergency bundles
+back to the control plane. Because the external custody path is not yet wired, the
+Helm chart **rejects** `externalKMS.enabled=true` (it fails the render with an
+actionable error) rather than letting a regulated deployment believe its KEK is
+HSM/KMS-protected when it is still sealed under the local deployment KEK.
 
 See [Configuration → Datastores](configuration.md#datastores) and
 [Configuration → Signer](configuration.md#signer-topology--ca-custody) for the

@@ -181,6 +181,188 @@ Operators can trigger and inspect the same served path with
 `POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`, or
 the matching `trstctl privacy retention run/list` CLI commands.
 
+## Browser SSO
+
+Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.
+When it is on, each verified OIDC, SAML, or LDAP / Active Directory user must map to
+exactly one trstctl tenant by subject, tenant claim, directory group, or an explicit
+single-tenant fallback. Missing mappings fail the login closed instead of silently
+dropping a user into the wrong tenant.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AUTH_OIDC_ENABLED` | `false` | Enables served OIDC login at `/auth/login` and `/auth/callback`. |
+| `TRSTCTL_AUTH_OIDC_ISSUER` | unset | Expected OIDC issuer. |
+| `TRSTCTL_AUTH_OIDC_CLIENT_ID` | unset | Expected OIDC audience / client id. |
+| `TRSTCTL_AUTH_OIDC_REDIRECT_URI` | unset | External callback URL, usually `https://trstctl.example.com/auth/callback`. |
+| `TRSTCTL_AUTH_OIDC_JWKS_FILE` / `TRSTCTL_AUTH_OIDC_JWKS_JSON` | unset | IdP signing keys used for offline id_token verification. |
+| `TRSTCTL_AUTH_SAML_ENABLED` | `false` | Enables the served SAML 2.0 SP. |
+| `TRSTCTL_AUTH_SAML_ENTITY_ID` | unset | Stable SP entity ID, often the metadata URL. |
+| `TRSTCTL_AUTH_SAML_METADATA_URL` | unset | External URL for `/auth/saml/metadata`. |
+| `TRSTCTL_AUTH_SAML_ACS_URL` | unset | External assertion consumer service URL for `/auth/saml/acs`. |
+| `TRSTCTL_AUTH_SAML_IDP_METADATA_FILE` / `TRSTCTL_AUTH_SAML_IDP_METADATA_XML` | unset | IdP metadata XML containing the signing certificate. |
+| `TRSTCTL_AUTH_SAML_SESSION_SECRET_FILE` | unset | HMAC secret file used to sign browser sessions. |
+| `TRSTCTL_AUTH_SAML_TENANT_CLAIM` | unset | SAML attribute whose value feeds tenant mapping. |
+| `TRSTCTL_AUTH_SAML_GROUPS_CLAIM` | unset | SAML attribute whose values feed group-to-tenant mapping. |
+| `TRSTCTL_AUTH_LDAP_ENABLED` | `false` | Enables served LDAP / Active Directory login at `POST /auth/ldap/login`. |
+| `TRSTCTL_AUTH_LDAP_URL` | unset | Directory URL. Use `ldaps://` for production; `ldap://` is accepted only on loopback. |
+| `TRSTCTL_AUTH_LDAP_USER_DN_TEMPLATE` | unset | Direct-bind DN template such as `uid={username},ou=people,dc=example,dc=org`. |
+| `TRSTCTL_AUTH_LDAP_BIND_DN` / `TRSTCTL_AUTH_LDAP_BIND_PASSWORD_FILE` | unset | Optional read-only service bind for user and group searches. |
+| `TRSTCTL_AUTH_LDAP_USER_SEARCH_BASE_DN` / `TRSTCTL_AUTH_LDAP_USER_FILTER` | unset | User lookup when no direct-bind template is used. |
+| `TRSTCTL_AUTH_LDAP_GROUP_SEARCH_BASE_DN` / `TRSTCTL_AUTH_LDAP_GROUP_FILTER` | unset | Group lookup; `{user_dn}` and `{username}` are escaped before search. |
+| `TRSTCTL_AUTH_LDAP_GROUP_NAME_ATTRIBUTE` | unset | Group attribute mapped to `tenant_mappings[].group`, usually `cn`. |
+| `TRSTCTL_AUTH_LDAP_SESSION_SECRET_FILE` | unset | HMAC secret file used to sign browser sessions. |
+
+## SCIM provisioning
+
+SCIM 2.0 provisioning is optional and separate from browser sign-on. Enable it when
+your identity provider should push users and groups into trstctl instead of an
+operator maintaining role membership by hand. The served endpoint is `/scim/v2`:
+IdPs use `POST /scim/v2/Users`, `PATCH /scim/v2/Users/{id}`,
+`POST /scim/v2/Groups`, and `PATCH /scim/v2/Groups/{id}`.
+
+Each SCIM bearer token is bound to exactly one tenant in config. trstctl reads the raw
+token from `auth.scim.tokens[].token_file`, hashes it at startup, wipes the raw bytes,
+and keeps only the hash. The token selects the tenant for every SCIM request; tenant
+ids in SCIM payloads are ignored. Groups map to configured RBAC role names, so an IdP
+group with display name `viewer` grants the built-in `viewer` role to its members.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AUTH_SCIM_ENABLED` | `false` | Enables the served SCIM 2.0 provisioning surface under `/scim/v2`. |
+| `TRSTCTL_AUTH_SCIM_TOKEN_NAME` | `scim` | Human label used in audit actor metadata for the single env-configured token. |
+| `TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID` | unset | Tenant this SCIM token may provision. Required when SCIM is enabled through env. |
+| `TRSTCTL_AUTH_SCIM_TOKEN_FILE` | unset | File containing the raw bearer token. Required when SCIM is enabled through env. |
+
+Example multi-token SCIM config:
+
+```yaml
+auth:
+  scim:
+    enabled: true
+    tokens:
+      - name: okta-payments
+        tenant_id: 22222222-2222-2222-2222-222222222222
+        token_file: /etc/trstctl/scim/okta-payments.token
+      - name: entra-platform
+        tenant_id: 33333333-3333-3333-3333-333333333333
+        token_file: /etc/trstctl/scim/entra-platform.token
+```
+
+Example SAML config:
+
+```yaml
+auth:
+  saml:
+    enabled: true
+    entity_id: https://trstctl.example.com/auth/saml/metadata
+    metadata_url: https://trstctl.example.com/auth/saml/metadata
+    acs_url: https://trstctl.example.com/auth/saml/acs
+    idp_metadata_file: /etc/trstctl/idp-metadata.xml
+    session_secret_file: /var/lib/trstctl/saml-session.secret
+    tenant_claim: tenant
+    groups_claim: groups
+    tenant_mappings:
+      - subject: alice@example.com
+        tenant_id: 11111111-1111-1111-1111-111111111111
+        roles: [admin]
+```
+
+Example LDAP / Active Directory config:
+
+```yaml
+auth:
+  ldap:
+    enabled: true
+    url: ldaps://ad.example.com:636
+    bind_dn: cn=trstctl-reader,ou=service-accounts,dc=example,dc=com
+    bind_password_file: /etc/trstctl/ldap-bind.secret
+    user_search_base_dn: ou=people,dc=example,dc=com
+    user_filter: "(sAMAccountName={username})"
+    group_search_base_dn: ou=groups,dc=example,dc=com
+    group_filter: "(member={user_dn})"
+    group_name_attribute: cn
+    email_attribute: mail
+    session_secret_file: /var/lib/trstctl/ldap-session.secret
+    tenant_mappings:
+      - group: payments-trstctl-admins
+        tenant_id: 22222222-2222-2222-2222-222222222222
+        roles: [admin]
+```
+
+## ABAC deny overlay
+
+ABAC is an optional deny-only overlay on top of RBAC. RBAC must grant the permission
+first; the ABAC Rego module can then block the request using request attributes,
+identity tags, operator-provided environment state, and time. This is useful for rules
+such as "prod certs may issue only during change windows" or "break-glass actions may
+run only from the platform project."
+
+The module must declare `package trstctl.abac`, define boolean `deny`, and may define
+string `reason`. Bad Rego fails startup. Runtime evaluation errors deny the request, and
+policy-worker saturation returns `503` instead of allowing.
+
+In a config file, the keys are `auth.abac.enabled`, `auth.abac.module`, and
+`auth.abac.environment`.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AUTH_ABAC_ENABLED` | `false` | Enables the ABAC deny overlay after RBAC on guarded API routes and on served issue/deploy/revoke lifecycle decisions. |
+| `TRSTCTL_AUTH_ABAC_MODULE` | unset | Inline Rego module with `package trstctl.abac`, boolean `deny`, and optional string `reason`. Required when ABAC is enabled. |
+| `TRSTCTL_AUTH_ABAC_ENVIRONMENT` | unset | Comma-separated operator state copied into `input.env`, for example `change_window=true,region=us-east-1`. |
+
+Example ABAC config:
+
+```yaml
+auth:
+  abac:
+    enabled: true
+    environment:
+      change_window: "false"
+    module: |
+      package trstctl.abac
+      default deny := false
+      default reason := ""
+
+      deny if {
+        input.permission == "certs:issue"
+        input.resource.env == "prod"
+        input.env.change_window != "true"
+      }
+
+      reason := "prod certificates may issue only during a change window" if {
+        deny
+      }
+```
+
+## Break-glass reconciliation
+
+Break-glass emergency issuance is an offline m-of-n operator ceremony. The served
+control plane handles the recovery side: `POST /api/v1/breakglass/reconcile` accepts
+signed offline bundles, verifies them against trust anchors pinned in process config,
+and records verified facts as `breakglass.issued` events in the hash-chained audit log.
+The request cannot supply its own verifier keys.
+
+In a config file, the keys are `breakglass.enabled`, `breakglass.ca_cert_file`, and
+`breakglass.public_key_file`. The files may be DER, or PEM with `CERTIFICATE` and
+`PUBLIC KEY` blocks. If `breakglass.enabled=true`, both files are required and startup
+fails closed when either is missing or unreadable.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_BREAKGLASS_ENABLED` | `false` | Enables `POST /api/v1/breakglass/reconcile`; offline issuance is still an operator ceremony. |
+| `TRSTCTL_BREAKGLASS_CA_CERT_FILE` | unset | DER or PEM CA certificate that emergency bundle certificates must chain to. Required when enabled. |
+| `TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE` | unset | DER or PEM public key that verifies the emergency bundle manifest signature. Required when enabled. |
+
+Example break-glass reconciliation config:
+
+```yaml
+breakglass:
+  enabled: true
+  ca_cert_file: /etc/trstctl/breakglass-ca.pem
+  public_key_file: /etc/trstctl/breakglass-public-key.pem
+```
+
 ## Secrets (credentials at rest)
 
 Upstream CA and connector credentials — API keys, passwords, client secrets — are

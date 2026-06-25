@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"runtime"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
@@ -10,11 +12,13 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// Cookie names for the browser OIDC login + session flow.
+// Cookie names for the browser SSO login + session flow.
 const (
-	sessionCookieName = "trstctl_session"
-	stateCookieName   = "trstctl_oidc_state"
-	nonceCookieName   = "trstctl_oidc_nonce"
+	sessionCookieName       = "trstctl_session"
+	stateCookieName         = "trstctl_oidc_state"
+	nonceCookieName         = "trstctl_oidc_nonce"
+	samlStateCookieName     = "trstctl_saml_state"
+	samlRequestIDCookieName = "trstctl_saml_request_id"
 	// csrfCookieName carries the double-submit CSRF token. Unlike the session
 	// cookie it is NOT HttpOnly: the SPA reads it and echoes it in the
 	// X-CSRF-Token header on every mutating request, which a cross-site attacker
@@ -22,6 +26,12 @@ const (
 	csrfCookieName = "trstctl_csrf"
 	// csrfHeaderName is the header the SPA echoes the CSRF token in.
 	csrfHeaderName = "X-CSRF-Token"
+	// maxSAMLResponseBytes bounds ACS form parsing. A SAML response is XML and
+	// signature material; 2 MiB is generous for enterprise assertions while still
+	// preventing unbounded reads on the public ACS endpoint.
+	maxSAMLResponseBytes = 2 << 20
+	// maxLDAPLoginBytes bounds the public username/password login body.
+	maxLDAPLoginBytes = 16 << 10
 )
 
 // AuthTenantMapping is the non-secret part of an OIDC tenant mapping published
@@ -70,6 +80,27 @@ type AuthConfig struct {
 	// When nil, the login fails closed (no tenant can be resolved) — the composition
 	// always sets it when OIDC is enabled.
 	ResolveTenant func(auth.Claims) (tenantID string, roles []string, err error)
+
+	SAMLEnabled bool
+	// SAMLLoginRedirect creates an SP-initiated AuthnRequest redirect URL and returns
+	// the generated request ID, so the ACS can correlate the signed response.
+	SAMLLoginRedirect func(relayState string) (redirectURL string, requestID string, err error)
+	// VerifySAMLResponse validates the ACS POST's SAMLResponse and returns claims in
+	// the same shape as OIDC. Production wires auth.SAMLVerifier.Verify.
+	VerifySAMLResponse func(r *http.Request, possibleRequestIDs []string) (auth.Claims, error)
+	// ResolveSAMLTenant maps SAML claims to the tenant/roles for the browser session.
+	ResolveSAMLTenant func(auth.Claims) (tenantID string, roles []string, err error)
+	// SAMLMetadata returns the SP metadata document served at /auth/saml/metadata.
+	SAMLMetadata func() ([]byte, error)
+
+	LDAPEnabled bool
+	// VerifyLDAPLogin binds the supplied directory credentials and returns normalized
+	// claims with directory groups. Production wires auth.LDAPVerifier.Verify.
+	VerifyLDAPLogin func(ctx context.Context, username string, password []byte) (auth.Claims, error)
+	// ResolveLDAPTenant maps LDAP claims/groups to the tenant/roles for the browser
+	// session.
+	ResolveLDAPTenant func(auth.Claims) (tenantID string, roles []string, err error)
+
 	Sessions      *auth.SessionIssuer
 	LoginRedirect string // where to send the browser after login (default "/")
 	Secure        bool   // set the Secure flag on cookies (true behind TLS)
@@ -79,6 +110,29 @@ type meResponse struct {
 	Subject  string `json:"subject"`
 	TenantID string `json:"tenant_id"`
 	Email    string `json:"email,omitempty"`
+}
+
+type ldapLoginRequest struct {
+	Username string       `json:"username"`
+	Password ldapPassword `json:"password"`
+}
+
+type ldapPassword []byte
+
+func (p *ldapPassword) UnmarshalJSON(raw []byte) error {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return err
+	}
+	*p = append((*p)[:0], []byte(s)...)
+	return nil
+}
+
+func (p ldapPassword) wipe() {
+	for i := range p {
+		p[i] = 0
+	}
+	runtime.KeepAlive(p)
 }
 
 // authLogin starts the OIDC flow: it sets short-lived state and nonce cookies
@@ -143,6 +197,124 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
+	a.issueLoginSession(w, r, claims, tenantID, roles, stateCookieName, nonceCookieName)
+}
+
+// authSAMLLogin starts an SP-initiated SAML flow and redirects the browser to the
+// IdP's SSO endpoint.
+func (a *API) authSAMLLogin(w http.ResponseWriter, r *http.Request) {
+	if a.auth.SAMLLoginRedirect == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "SAML login is not configured"))
+		return
+	}
+	state, err := auth.RandomState()
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	redirectURL, requestID, err := a.auth.SAMLLoginRedirect(state)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadGateway, "SAML AuthnRequest failed"))
+		return
+	}
+	a.setTransientCookie(w, samlStateCookieName, state)
+	a.setTransientCookie(w, samlRequestIDCookieName, requestID)
+	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
+// authSAMLACS completes both SP-initiated and IdP-initiated SAML POST-binding
+// login, then mints the normal browser session.
+func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
+	if a.auth.VerifySAMLResponse == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "SAML login is not configured"))
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxSAMLResponseBytes)
+	if err := r.ParseForm(); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid SAML response"))
+		return
+	}
+	var possibleRequestIDs []string
+	clearCookies := []string{}
+	if relayState := r.Form.Get("RelayState"); relayState != "" {
+		stateCookie, err := r.Cookie(samlStateCookieName)
+		if err != nil || stateCookie.Value == "" || stateCookie.Value != relayState {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid SAML state"))
+			return
+		}
+		requestIDCookie, err := r.Cookie(samlRequestIDCookieName)
+		if err != nil || requestIDCookie.Value == "" {
+			a.writeError(w, errStatus(http.StatusBadRequest, "missing SAML request ID"))
+			return
+		}
+		possibleRequestIDs = []string{requestIDCookie.Value}
+		clearCookies = []string{samlStateCookieName, samlRequestIDCookieName}
+	}
+	claims, err := a.auth.VerifySAMLResponse(r, possibleRequestIDs)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "SAML response verification failed"))
+		return
+	}
+	resolve := a.auth.ResolveSAMLTenant
+	if resolve == nil {
+		resolve = a.auth.ResolveTenant
+	}
+	tenantID, roles, err := a.resolveLoginTenantWith(claims, resolve)
+	if err != nil {
+		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
+		return
+	}
+	a.issueLoginSession(w, r, claims, tenantID, roles, clearCookies...)
+}
+
+func (a *API) authSAMLMetadata(w http.ResponseWriter, _ *http.Request) {
+	if a.auth.SAMLMetadata == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "SAML metadata is not configured"))
+		return
+	}
+	data, err := a.auth.SAMLMetadata()
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/samlmetadata+xml")
+	_, _ = w.Write(data)
+}
+
+// authLDAPLogin completes a username/password directory bind, maps directory
+// groups to tenant roles, then mints the normal browser session.
+func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
+	if a.auth.VerifyLDAPLogin == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "LDAP login is not configured"))
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLDAPLoginBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var req ldapLoginRequest
+	if err := dec.Decode(&req); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid LDAP login request"))
+		return
+	}
+	defer req.Password.wipe()
+	claims, err := a.auth.VerifyLDAPLogin(r.Context(), req.Username, []byte(req.Password))
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "LDAP bind failed"))
+		return
+	}
+	resolve := a.auth.ResolveLDAPTenant
+	if resolve == nil {
+		resolve = a.auth.ResolveTenant
+	}
+	tenantID, roles, err := a.resolveLoginTenantWith(claims, resolve)
+	if err != nil {
+		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
+		return
+	}
+	a.issueLoginSession(w, r, claims, tenantID, roles)
+}
+
+func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, clearCookies ...string) {
 	token, err := a.auth.Sessions.Issue(claims.Subject, tenantID, claims.Email, roles)
 	if err != nil {
 		a.writeError(w, err)
@@ -160,8 +332,9 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.setCSRFCookie(w, csrf)
-	a.clearCookie(w, stateCookieName)
-	a.clearCookie(w, nonceCookieName)
+	for _, name := range clearCookies {
+		a.clearCookie(w, name)
+	}
 	redirect := a.auth.LoginRedirect
 	if redirect == "" {
 		redirect = "/"
@@ -175,10 +348,14 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 // single default — a session is never minted without a real, per-user tenant. A
 // resolved-but-empty tenant is also rejected (fail closed under RLS, AN-1).
 func (a *API) resolveLoginTenant(claims auth.Claims) (string, []string, error) {
-	if a.auth.ResolveTenant == nil {
+	return a.resolveLoginTenantWith(claims, a.auth.ResolveTenant)
+}
+
+func (a *API) resolveLoginTenantWith(claims auth.Claims, resolve func(auth.Claims) (string, []string, error)) (string, []string, error) {
+	if resolve == nil {
 		return "", nil, auth.ErrNoTenant
 	}
-	tenantID, roles, err := a.auth.ResolveTenant(claims)
+	tenantID, roles, err := resolve(claims)
 	if err != nil {
 		return "", nil, err
 	}

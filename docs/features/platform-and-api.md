@@ -3,9 +3,11 @@
 ## What it is
 
 This page covers the "platform plumbing" — the surfaces you use to operate trstctl and
-the properties of how it runs: the **REST API**, the **CLI**, the **web UI**, **OIDC
-single sign-on**, **single-binary distribution**, **encrypted transport**, **multi-tenant
-topology**, and **federation**. These aren't glamorous features, but they're what make
+the properties of how it runs: the **REST API**, the **CLI**, the **web UI**, **OIDC,
+SAML, and LDAP / Active Directory sign-on**, **SCIM 2.0 provisioning**,
+**RBAC plus ABAC authorization controls**,
+**single-binary distribution**, **encrypted transport**,
+**multi-tenant topology**, and **federation**. These aren't glamorous features, but they're what make
 trstctl usable, secure, and operable in a real organization.
 
 The mental model: if the [feature pages](../features.md) are the appliances, this is the
@@ -32,7 +34,10 @@ CLI can't drift apart. Errors are RFC 7807 `application/problem+json`. Every mut
 requires an [`Idempotency-Key`](../glossary.md), recorded in PostgreSQL so a retry returns
 the original result instead of applying the change twice. Tenant comes from the
 authenticated principal (so one tenant can never act on another's data), pagination uses
-opaque cursors, and over-budget callers get `429` with `Retry-After`. **Served.**
+opaque cursors, and over-budget callers get `429` with `Retry-After`. Every guarded
+route checks RBAC first; when `auth.abac.enabled` is configured, a deny-only ABAC
+overlay can then block the request using route, actor, environment, and time attributes.
+**Served.**
 
 ### The CLI (F11)
 
@@ -52,18 +57,41 @@ owned by the API handler. No separate static server is required. **Served.** The
 `index.html` references the real Vite bundle, and tests fail if a clean build regresses to
 the placeholder.
 
-### OIDC single sign-on (F13)
+### OIDC, SAML, and LDAP / Active Directory sign-on (F13)
 
-People log in through **OIDC** (OpenID Connect) against any standards-compliant provider.
-The authorization-code flow uses random `state` (CSRF protection) and a mandatory `nonce`
-(replay protection); the returned id_token is verified — signature (via JWKS through the
-single isolated cryptography path), issuer, audience, expiry, nonce — and on success
-trstctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
-session resolves to an [RBAC](policy-and-governance.md) principal, so a browser login
-authorizes API calls. CI/CD instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash
-stored). **Served when `auth.oidc.enabled` is configured.** API tokens remain the default
-auth path when OIDC is disabled; an enabled-but-incomplete OIDC block fails closed at
-startup.
+People log in through **OIDC** (OpenID Connect), **SAML 2.0**, or **LDAP / Active
+Directory** against a standards-compliant provider. OIDC uses the authorization-code flow with random `state`
+(CSRF protection) and a mandatory `nonce` (replay protection); the returned id_token is
+verified — signature (via JWKS through the single isolated cryptography path), issuer,
+audience, expiry, nonce — before session issue. SAML serves a Service Provider at
+`/auth/saml/metadata`, starts SP-initiated login at `/auth/saml/login`, and accepts
+signed POST-binding assertions at `/auth/saml/acs`; IdP metadata and XML signature
+verification stay behind the same isolated cryptography boundary. LDAP / Active
+Directory mounts `POST /auth/ldap/login`, binds the user to the directory, searches
+directory groups, and maps those groups to tenant roles. All three paths mint the same
+short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie and resolve the verified
+subject, tenant claim, or groups through the same per-user tenant-mapping table. CI/CD
+instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash stored). **Served when
+`auth.oidc.enabled`, `auth.saml.enabled`, or `auth.ldap.enabled` is configured.** API
+tokens remain the zero-dependency auth path when SSO is disabled; an
+enabled-but-incomplete OIDC, SAML, or LDAP block fails closed at startup.
+
+### SCIM 2.0 provisioning
+
+Directory provisioning is served under `/scim/v2` when `auth.scim.enabled` is on.
+An IdP such as Okta or Microsoft Entra sends a tenant-bound bearer token to
+`/scim/v2/Users` and `/scim/v2/Groups`; trstctl hashes the configured token file at
+startup and keeps only the hash in memory. The token chooses the tenant before any
+payload is read, so a SCIM request cannot smuggle a tenant id in its JSON body.
+
+SCIM users project into the same tenant-member read model used by RBAC. Creating or
+updating a user appends a tenant-member upsert event; `active:false` or DELETE appends
+an offboarding event. SCIM groups map to existing RBAC role names: a group named
+`viewer` gives its members the `viewer` role, and removing a member removes that role.
+Browser sessions consult the current tenant-member roles on each API request, so
+SCIM provisioning and deprovisioning change real authorization, not just an admin list.
+Supported IdP operations are SCIM Users create/get/list/put/patch/delete and Groups
+create/get/list/patch/delete. **Served when `auth.scim.enabled` is configured.**
 
 ### Single-binary distribution (F14)
 
@@ -129,9 +157,11 @@ trstctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
 TRSTCTL_POSTGRES_MODE=bundled TRSTCTL_NATS_MODE=embedded ./trstctl
 ```
 
-The web console, browser `/auth/login` flow, REST API, and CLI all drive the same
-served control plane. API tokens are still the zero-dependency bootstrap path; OIDC
-turns on only when configured. See [Current limitations](../limitations.md),
+The web console, browser `/auth/login` flow, SCIM `/scim/v2` provisioning surface,
+REST API, and CLI all drive the same served control plane. API tokens are still the
+zero-dependency bootstrap path; OIDC, SCIM, and the ABAC deny overlay turn on only when
+configured. See
+[Current limitations](../limitations.md),
 [Install](../install.md), and [Configuration](../configuration.md) for production setup.
 
 ## Pitfalls & limits
@@ -155,9 +185,21 @@ turns on only when configured. See [Current limitations](../limitations.md),
 - **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `workloads`,
   `broker`, `ephemeral`, `profiles`, `audit`, `graph`, `risk`, `agents`.
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when
-  `auth.oidc.enabled` is on); API tokens prefixed `trst_`. Config:
+  `auth.oidc.enabled` is on); `/auth/saml/login`, `/auth/saml/acs`, and
+  `/auth/saml/metadata` (SAML when `auth.saml.enabled` is on); `POST
+  /auth/ldap/login` (LDAP / Active Directory when `auth.ldap.enabled` is on); API
+  tokens prefixed `trst_`. Config:
   `TRSTCTL_AUTH_OIDC_ISSUER`, `TRSTCTL_AUTH_OIDC_CLIENT_ID`,
-  `TRSTCTL_AUTH_OIDC_REDIRECT_URI`.
+  `TRSTCTL_AUTH_OIDC_REDIRECT_URI`, `TRSTCTL_AUTH_SAML_ENTITY_ID`,
+  `TRSTCTL_AUTH_SAML_ACS_URL`, `TRSTCTL_AUTH_SAML_IDP_METADATA_FILE`,
+  `TRSTCTL_AUTH_LDAP_URL`, `TRSTCTL_AUTH_LDAP_GROUP_FILTER`.
+- **SCIM provisioning:** `GET /scim/v2/ServiceProviderConfig`, `/scim/v2/Users`,
+  and `/scim/v2/Groups` when `auth.scim.enabled` is on. Config:
+  `TRSTCTL_AUTH_SCIM_ENABLED`, `TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID`,
+  `TRSTCTL_AUTH_SCIM_TOKEN_FILE`.
+- **Authorization overlays:** RBAC on every guarded route; ABAC deny overlay when
+  `auth.abac.enabled` is on. Config: `TRSTCTL_AUTH_ABAC_ENABLED`,
+  `TRSTCTL_AUTH_ABAC_MODULE`, `TRSTCTL_AUTH_ABAC_ENVIRONMENT`.
 - **Run modes:** `TRSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRSTCTL_NATS_MODE`
   (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
 - **Federation (F41):** planned, not implemented.

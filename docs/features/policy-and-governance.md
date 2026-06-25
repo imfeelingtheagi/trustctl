@@ -3,10 +3,12 @@
 ## What it is
 
 Governance is the layer that decides *whether* an action may happen, *who* may do it,
-*who gets told*, and *what record is kept*. trstctl's governance is five capabilities:
-a **policy engine** that allows or denies each operation, **RBAC** that enforces who can
-do what, **notifications** that alert the right people, a **tamper-evident audit log**
-that records everything, and **compliance reporting** that turns that record into signed
+*which runtime attributes narrow that permission*, *who gets told*, and *what record is
+kept*. trstctl's governance is six capabilities: a **policy engine** that allows or
+denies each operation, **RBAC** that enforces who can do what, an **ABAC deny overlay**
+that blocks requests using environment, time, actor, and resource attributes,
+**notifications** that alert the right people, a **tamper-evident audit log** that
+records everything, and **compliance reporting** that turns that record into signed
 evidence for auditors.
 
 The mental model: this is the rulebook, the ID checkpoint, the pager, the flight
@@ -50,6 +52,48 @@ API's `guard` middleware evaluates the required permission on every route and re
 immutable event record for audit attribution.
 
 **Status: enforced** on every served route.
+
+### ABAC deny overlay
+
+Attribute-based access control (ABAC) narrows a permission that RBAC already granted.
+The model is deliberately one-way: ABAC can **deny**, but it can never grant a route or
+certificate action the caller did not already hold through RBAC. This keeps the mental
+model simple: RBAC answers "is this caller allowed in principle?", then ABAC answers
+"is this exact request allowed right now?"
+
+Enable it with `auth.abac.enabled` and a Rego module that declares
+`package trstctl.abac`. The module evaluates after RBAC on every guarded API route with
+request attributes (`input.permission`, `input.resource.request.method`,
+`input.resource.request.path`, optional project, actor roles, configured
+`input.env`, and time fields such as `input.now_hour_utc`). On the served
+issue/deploy/revoke lifecycle route, trstctl also adds identity resource attributes:
+`identity.id`, `identity.kind`, `identity.name`, `identity.status`, `owner_id`,
+`transition.to`, and flattened identity attributes such as `input.resource.env` or
+`input.resource.tags.service`.
+
+ABAC fails closed. A non-compiling ABAC module stops startup; an evaluation error
+denies with `403`; a saturated policy worker lane returns `503`; and every decision is
+recorded as an immutable `policy.abac.decision` event. A practical change-window
+overlay looks like this:
+
+```text
+package trstctl.abac
+
+default deny := false
+default reason := ""
+
+deny if {
+  input.permission == "certs:issue"
+  input.resource.env == "prod"
+  input.env.change_window != "true"
+}
+
+reason := "prod certificates may issue only during a change window" if {
+  input.permission == "certs:issue"
+  input.resource.env == "prod"
+  input.env.change_window != "true"
+}
+```
 
 ### The audit log (F9)
 
@@ -117,15 +161,41 @@ allow { input.action == "revoke" }
 allow { input.action == "issue"; input.profile != "" }
 ```
 
+Turn on the ABAC deny overlay when a decision depends on current deployment state or
+resource tags:
+
+```yaml
+auth:
+  abac:
+    enabled: true
+    environment:
+      change_window: "false"
+    module: |
+      package trstctl.abac
+      default deny := false
+      default reason := ""
+      deny if {
+        input.permission == "certs:issue"
+        input.resource.env == "prod"
+        input.env.change_window != "true"
+      }
+      reason := "prod certificates may issue only during a change window" if {
+        deny
+      }
+```
+
 ## Pitfalls & limits
 
-- **Served vs library:** RBAC (F8) is enforced and the audit log (F9) is served. The
+- **Served vs library:** RBAC (F8) is enforced, the ABAC deny overlay is served, and
+  the audit log (F9) is served. The
   **policy engine (F28) and the RA/dual-control gate are now served on the issuance
   path**: with `ca.policy.enabled` the default-deny OPA/Rego gate runs
   on every served issue/deploy/revoke transition (fail-closed), the RA scope split
   (`certs:request` ≠ `certs:issue`) is enforced so a requester cannot self-issue, and
   with `ca.policy.require_approval` a privileged action needs a **distinct** approver
-  (self-approval rejected). Notifications (F29) now have served expiry-alert dispatch
+  (self-approval rejected). With `auth.abac.enabled`, the ABAC deny overlay runs after
+  RBAC on guarded API routes and with identity tags on issue/deploy/revoke.
+  Notifications (F29) now have served expiry-alert dispatch
   through operator-wired channels, but a dedicated notification *authoring* config API
   is still the remaining integration step; compliance reporting (F62) remains
   library-complete and tested — see [Current limitations](../limitations.md).
@@ -139,6 +209,9 @@ allow { input.action == "issue"; input.profile != "" }
 
 - **Policy:** `Engine.Evaluate(Input{Action, Profile, Actor, TenantID, Attrs})`;
   actions `issue`, `deploy`, `revoke`; fail-closed; `policy.decision` events.
+- **ABAC deny overlay:** `package trstctl.abac`; `input.permission`,
+  `input.resource.*`, `input.env.*`, `input.now_hour_utc`; deny-only; fail-closed;
+  `policy.abac.decision` events.
 - **RBAC:** permissions `<resource>:<verb>`; roles `admin`, `operator`, `viewer`,
   `auditor`, `ra-officer`; `guard` middleware.
 - **Audit (served):** `GET /api/v1/audit/events` (`type`, `since`, `until`, `as_of`, `q`,

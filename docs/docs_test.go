@@ -1034,7 +1034,7 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 	claims := []servedClaim{
 		{
 			name:              "OIDC browser login & sessions (F13)",
-			disclosureMarkers: []string{"oidc", "/auth/login", "not yet served by the binary"},
+			disclosureMarkers: []string{"oidc browser login", "/auth/login", "not yet served by the binary"},
 			epic:              "EXC-WIRE-01",
 			// Must not assert the browser login routes are served.
 			overClaims: []string{
@@ -2655,35 +2655,174 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	}
 }
 
-// TestSSOIsOIDCOnlyAndDisclosed encodes the R4.1 decision (Path B): trstctl's SSO
-// is OIDC-only, and SAML 2.0 (PRD F13) is formally rescoped out and DISCLOSED —
-// not silently dropped. limitations.md must say so, no shipped doc may claim SAML
-// support, and the auth package must not frame SAML as a "planned" login method.
-func TestSSOIsOIDCOnlyAndDisclosed(t *testing.T) {
-	// (1) limitations.md discloses the OIDC-only scope honestly.
+// TestSSOIncludesOIDCSAMLLDAPAndIsDisclosed pins IAM-02/IAM-03: trstctl serves
+// OIDC, SAML, and LDAP browser sign-on. Docs must name the served routes and
+// current limits, while code must keep SAML XML signature verification behind
+// internal/crypto and LDAP wired through the served browser auth config.
+func TestSSOIncludesOIDCSAMLLDAPAndIsDisclosed(t *testing.T) {
 	lim := strings.ToLower(read(t, "limitations.md"))
-	disclosed := strings.Contains(lim, "saml") &&
-		(strings.Contains(lim, "not supported") || strings.Contains(lim, "oidc only") || strings.Contains(lim, "oidc-only"))
-	if !disclosed {
-		t.Error("limitations.md should disclose that SSO is OIDC-only and SAML 2.0 is not supported")
-	}
-
-	// (2) The SAML disclosure lives only in limitations.md (the canonical scope
-	// page). No other shipped doc may mention SAML, which would risk a stray
-	// feature claim re-appearing.
-	for _, f := range append(allMarkdown(t), "../README.md") {
-		if f == "limitations.md" {
-			continue
-		}
-		if strings.Contains(strings.ToLower(read(t, f)), "saml") {
-			t.Errorf("%s mentions SAML; the OIDC-only disclosure belongs only in limitations.md", f)
+	for _, want := range []string{"oidc", "saml 2.0", "ldap / active directory", "/auth/saml/login", "/auth/saml/acs", "/auth/saml/metadata", "/auth/ldap/login", "signed http-post", "kerberos/gssapi"} {
+		if !strings.Contains(lim, want) {
+			t.Errorf("limitations.md should disclose served SSO support/detail %q", want)
 		}
 	}
 
-	// (3) The auth package must not frame SAML as a planned/coming login method.
+	platform := strings.ToLower(read(t, "features/platform-and-api.md"))
+	for _, want := range []string{"oidc, saml, and ldap", "auth.saml.enabled", "auth.ldap.enabled", "/auth/saml/acs", "/auth/ldap/login"} {
+		if !strings.Contains(platform, want) {
+			t.Errorf("platform-and-api.md should document SSO marker %q", want)
+		}
+	}
+
+	cfg := strings.ToLower(read(t, "configuration.md"))
+	for _, want := range []string{"trstctl_auth_saml_enabled", "trstctl_auth_saml_idp_metadata_file", "trstctl_auth_ldap_enabled", "trstctl_auth_ldap_group_filter", "tenant_mappings"} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("configuration.md should document SSO config marker %q", want)
+		}
+	}
+
 	oidc := strings.ToLower(read(t, "../internal/auth/oidc.go"))
-	if strings.Contains(oidc, "planned login method") || strings.Contains(oidc, "saml 2.0 sso is a planned") {
-		t.Error("internal/auth/oidc.go still frames SAML as a planned login method; SSO is OIDC-only")
+	if !strings.Contains(oidc, "saml xml signature verification via internal/crypto/samlsp") {
+		t.Error("internal/auth/oidc.go should state that SAML verification stays behind internal/crypto/samlsp")
+	}
+	if !strings.Contains(read(t, "../internal/server/auth.go"), "buildSAMLAuthConfig") {
+		t.Error("internal/server/auth.go should wire the served SAML auth config")
+	}
+	if !strings.Contains(read(t, "../internal/server/auth.go"), "buildLDAPAuthConfig") {
+		t.Error("internal/server/auth.go should wire the served LDAP auth config")
+	}
+	if !strings.Contains(read(t, "../internal/api/api.go"), `mux.HandleFunc("POST /auth/ldap/login"`) {
+		t.Error("internal/api/api.go should mount the served LDAP login route")
+	}
+}
+
+// TestSCIMProvisioningIsServedAndDisclosed pins IAM-04: trstctl serves a SCIM
+// 2.0 provisioning surface, and that surface must be documented as real RBAC
+// membership plumbing rather than a library-only parser.
+func TestSCIMProvisioningIsServedAndDisclosed(t *testing.T) {
+	lim := strings.ToLower(read(t, "limitations.md"))
+	for _, want := range []string{"scim 2.0 provisioning", "auth.scim.enabled", "/scim/v2/users", "/scim/v2/groups", "scim bulk", "configured rbac role"} {
+		if !strings.Contains(lim, want) {
+			t.Errorf("limitations.md should disclose served SCIM support/detail %q", want)
+		}
+	}
+
+	platform := strings.ToLower(read(t, "features/platform-and-api.md"))
+	for _, want := range []string{"scim 2.0 provisioning", "/scim/v2/users", "/scim/v2/groups", "tenant-member", "rbac"} {
+		if !strings.Contains(platform, want) {
+			t.Errorf("platform-and-api.md should document SCIM marker %q", want)
+		}
+	}
+
+	cfg := strings.ToLower(read(t, "configuration.md"))
+	for _, want := range []string{"trstctl_auth_scim_enabled", "trstctl_auth_scim_token_file", "auth.scim.tokens", "tenant_id", "scim 2.0"} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("configuration.md should document SCIM config marker %q", want)
+		}
+	}
+
+	apiRoutes := read(t, "../internal/api/api.go")
+	for _, want := range []string{
+		`mux.HandleFunc("GET /scim/v2/ServiceProviderConfig"`,
+		`mux.HandleFunc("POST /scim/v2/Users"`,
+		`mux.HandleFunc("PATCH /scim/v2/Users/{id}"`,
+		`mux.HandleFunc("POST /scim/v2/Groups"`,
+		`mux.HandleFunc("PATCH /scim/v2/Groups/{id}"`,
+	} {
+		if !strings.Contains(apiRoutes, want) {
+			t.Errorf("internal/api/api.go should mount served SCIM route %q", want)
+		}
+	}
+	apiSCIM := read(t, "../internal/api/scim.go")
+	for _, want := range []string{"scimMutate", "UpsertTenantMember", "OffboardTenantMember", "ListTenantMembersByRole"} {
+		if !strings.Contains(apiSCIM, want) {
+			t.Errorf("internal/api/scim.go should keep SCIM wired into RBAC membership via %q", want)
+		}
+	}
+	server := read(t, "../internal/server/server.go")
+	if !strings.Contains(server, `mux.Handle("/scim/", apiHandler)`) {
+		t.Error("internal/server/server.go should forward /scim/ to the served API handler")
+	}
+	if !strings.Contains(read(t, "../internal/server/scim.go"), "buildSCIMOption") {
+		t.Error("internal/server/scim.go should load tenant-bound SCIM token files")
+	}
+	if !strings.Contains(read(t, "../internal/api/api.go"), "mergeRoleNames(roleNames, member.Roles)") {
+		t.Error("session RBAC should merge current tenant-member roles so SCIM group changes affect served authorization")
+	}
+}
+
+// TestABACOverlayIsServedAndDisclosed pins IAM-05: ABAC is a deny-only overlay after
+// RBAC, served through the API guard and the richer issue/deploy/revoke lifecycle
+// gate. Docs must disclose config, input attributes, fail-closed behavior, and audit
+// events.
+func TestABACOverlayIsServedAndDisclosed(t *testing.T) {
+	policyDoc := strings.ToLower(read(t, "features/policy-and-governance.md"))
+	for _, want := range []string{
+		"abac deny overlay",
+		"package trstctl.abac",
+		"policy.abac.decision",
+		"input.resource.env",
+		"input.env.change_window",
+		"deny-only",
+	} {
+		if !strings.Contains(policyDoc, want) {
+			t.Errorf("policy-and-governance.md should document ABAC marker %q", want)
+		}
+	}
+	configDoc := read(t, "configuration.md")
+	for _, want := range []string{
+		"auth.abac.enabled",
+		"TRSTCTL_AUTH_ABAC_ENABLED",
+		"TRSTCTL_AUTH_ABAC_MODULE",
+		"TRSTCTL_AUTH_ABAC_ENVIRONMENT",
+		"package trstctl.abac",
+	} {
+		if !strings.Contains(configDoc, want) {
+			t.Errorf("configuration.md should document ABAC config marker %q", want)
+		}
+	}
+	for _, file := range []string{
+		"features/platform-and-api.md",
+		"journeys/onboard-a-team.md",
+		"limitations.md",
+		"glossary.md",
+		"../README.md",
+	} {
+		body := strings.ToLower(read(t, file))
+		if !strings.Contains(body, "abac") {
+			t.Errorf("%s should disclose ABAC", file)
+		}
+	}
+	policyCode := read(t, "../internal/policy/abac.go")
+	for _, want := range []string{"type ABACInput struct", "func NewABAC", "EvaluateDeny", "policy.abac.decision"} {
+		if !strings.Contains(policyCode, want) {
+			t.Errorf("internal/policy/abac.go should keep ABAC code anchor %q", want)
+		}
+	}
+	apiCode := read(t, "../internal/api/api.go")
+	for _, want := range []string{"WithABACDenyOverlay", "func (a *API) checkABAC", `"request.path"`} {
+		if !strings.Contains(apiCode, want) {
+			t.Errorf("internal/api/api.go should keep API ABAC guard anchor %q", want)
+		}
+	}
+	handlers := read(t, "../internal/api/handlers.go")
+	for _, want := range []string{"identityABACResourceAttrs", `"transition.to"`, "flattenABACResource"} {
+		if !strings.Contains(handlers, want) {
+			t.Errorf("internal/api/handlers.go should keep lifecycle ABAC resource anchor %q", want)
+		}
+	}
+	server := read(t, "../internal/server/server.go")
+	if !strings.Contains(server, "api.WithABACDenyOverlay") {
+		t.Error("internal/server/server.go should wire ABAC into the served API guard")
+	}
+	if !strings.Contains(read(t, "../internal/server/approval_gate.go"), "policy.NewABAC") {
+		t.Error("internal/server/approval_gate.go should compile ABAC for the served mutation gate")
+	}
+	configCode := read(t, "../internal/config/config.go")
+	for _, want := range []string{"TRSTCTL_AUTH_ABAC_ENABLED", "TRSTCTL_AUTH_ABAC_MODULE", "TRSTCTL_AUTH_ABAC_ENVIRONMENT", "auth.abac.module"} {
+		if !strings.Contains(configCode, want) {
+			t.Errorf("internal/config/config.go should keep ABAC config anchor %q", want)
+		}
 	}
 }
 

@@ -226,6 +226,13 @@ A PostgreSQL feature that filters every query by a policy the database enforces 
 even a buggy query physically cannot return another tenant's rows. trstctl uses RLS
 as the floor of its multi-tenancy guarantee.
 
+### ABAC (Attribute-Based Access Control)
+
+An authorization rule that looks at attributes on the actor, request, resource,
+environment, or time before allowing an action. In trstctl, ABAC is a deny-only overlay:
+RBAC must grant the permission first, then ABAC can block a request such as "prod
+certificates may issue only during a change window."
+
 ### Bulkhead
 
 A wall between subsystems so a failure in one cannot sink the whole ship (the term is
@@ -346,11 +353,30 @@ A standard sign-in protocol built on top of OAuth 2.0 that lets a person log in 
 trstctl with an identity they already have at a provider (Okta, Google, Entra),
 instead of a trstctl-specific password. It is how browser logins and **SSO** work.
 
+### LDAP (Lightweight Directory Access Protocol)
+
+A standard protocol for reading users and groups from a directory. trstctl can bind a
+browser user to LDAP, read that user's groups, and map those groups to tenant roles.
+
+### Active Directory (AD)
+
+Microsoft's directory service for users, groups, devices, and policies. For trstctl
+browser login it behaves like an LDAP directory: authenticate the user, read group
+membership, then map those groups to tenant roles.
+
+### SCIM (System for Cross-domain Identity Management)
+
+A standard protocol identity providers use to push users and groups into an
+application. In trstctl, SCIM 2.0 provisions tenant members and maps SCIM groups to
+RBAC roles, so adding or removing a person in the IdP changes what that person can do
+in trstctl.
+
 ### SSO (Single sign-on)
 
 Signing in once to your organization's identity provider and then reaching many
 applications without re-entering credentials. trstctl's browser login uses SSO via
-**OIDC**, so operators authenticate with the account they already manage centrally.
+**OIDC**, **SAML**, or **LDAP / Active Directory**, so operators authenticate with the
+account they already manage centrally.
 
 ### MDM (Mobile Device Management)
 

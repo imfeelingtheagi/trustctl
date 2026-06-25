@@ -1,9 +1,9 @@
-// Package auth implements authentication for trstctl: OIDC login (UI/CLI),
-// session issuance, and scoped API tokens (CI/CD). All cryptography routes
+// Package auth implements authentication for trstctl: OIDC, SAML, and LDAP browser
+// login, session issuance, and scoped API tokens (CI/CD). All cryptography routes
 // through the internal/crypto boundary (AN-3): JWS/JWKS via internal/crypto/jose,
-// hashing/RNG via internal/crypto. Nothing here is gated — every auth method is
-// in the one source-available build. Interactive SSO is OIDC only; SAML 2.0 is not a
-// supported login method (see docs/limitations.md, "Single sign-on (OIDC only)").
+// SAML XML signature verification via internal/crypto/samlsp, and hashing/RNG via
+// internal/crypto. Nothing here is gated — every auth method is in the one
+// source-available build.
 package auth
 
 import (

@@ -113,3 +113,34 @@ func (s *Store) ListTenantMembersPage(ctx context.Context, tenantID, afterSubjec
 	})
 	return out, err
 }
+
+// ListTenantMembersByRole returns active tenant members carrying role. SCIM group
+// membership maps onto this roles array, so the query stays tenant-filtered and
+// bounded while the event log remains the source of truth for writes.
+func (s *Store) ListTenantMembersByRole(ctx context.Context, tenantID, role string) ([]TenantMember, error) {
+	var out []TenantMember
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, subject, display_name, email, roles, source, status,
+			        created_at, updated_at, offboarded_at, offboarded_by, offboard_reason
+			   FROM tenant_members
+			  WHERE tenant_id = $1
+			    AND status <> 'offboarded'
+			    AND $2 = ANY(roles)
+			  ORDER BY subject LIMIT 10000`,
+			tenantID, role)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var m TenantMember
+			if err := rows.Scan(&m.TenantID, &m.Subject, &m.DisplayName, &m.Email, &m.Roles, &m.Source, &m.Status, &m.CreatedAt, &m.UpdatedAt, &m.OffboardedAt, &m.OffboardedBy, &m.OffboardReason); err != nil {
+				return err
+			}
+			out = append(out, m)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
