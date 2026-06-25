@@ -653,6 +653,7 @@ type Bulkheads struct {
 	Policy      BulkheadLimit `json:"policy"`
 	Protocols   BulkheadLimit `json:"protocols"`
 	Agent       BulkheadLimit `json:"agent"`
+	CBOM        BulkheadLimit `json:"cbom"`
 }
 
 type bulkheadLimitItem struct {
@@ -681,6 +682,8 @@ func defaultBulkheads() Bulkheads {
 			out.Protocols = limit
 		case bulkhead.SubsystemAgent:
 			out.Agent = limit
+		case bulkhead.SubsystemCBOM:
+			out.CBOM = limit
 		}
 	}
 	return out
@@ -696,6 +699,7 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
 		{name: bulkhead.SubsystemProtocols, limit: b.Protocols},
 		{name: bulkhead.SubsystemAgent, limit: b.Agent},
+		{name: bulkhead.SubsystemCBOM, limit: b.CBOM},
 	}
 }
 
@@ -1326,6 +1330,8 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE", &b.Protocols.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_WORKERS", &b.Agent.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_QUEUE", &b.Agent.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_WORKERS", &b.CBOM.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_CBOM_QUEUE", &b.CBOM.Queue)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {

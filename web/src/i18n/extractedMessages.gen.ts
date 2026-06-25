@@ -10,21 +10,21 @@ export const extractedMessages = [
     key: "source.00.00.issued.aad88c19ce",
     defaultMessage: "00:00 issued",
     sources: [
-      "src/pages/Workloads.tsx:120",
+      "src/pages/Workloads.tsx:121",
     ],
   },
   {
     key: "source.00.45.renew.window.8d7c81197f",
     defaultMessage: "00:45 renew window",
     sources: [
-      "src/pages/Workloads.tsx:124",
+      "src/pages/Workloads.tsx:125",
     ],
   },
   {
     key: "source.01.00.expires.92ecaaf8bd",
     defaultMessage: "01:00 expires",
     sources: [
-      "src/pages/Workloads.tsx:128",
+      "src/pages/Workloads.tsx:129",
     ],
   },
   {
@@ -134,15 +134,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.a.broker.turns.an.agent.identity.plus.poli.b99a700578",
-    defaultMessage: "A broker turns an agent identity plus policy into a short credential lease. Broker issuance is library-only, so this fixture shows scope and audit shape only.",
-    sources: [
-      "src/pages/Workloads.tsx:203",
-    ],
-  },
-  {
-    key: "source.a.ceremony.purpose.is.a.tamper.evident.lab.3c11b267bc",
-    defaultMessage: "A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The library consumes a quorum once, emits tenant-scoped events, and rejects purpose mismatch or replay.",
+    key: "source.a.ceremony.purpose.is.a.tamper.evident.lab.44272c4043",
+    defaultMessage: "A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The served API consumes root/intermediate quorums once, emits tenant-scoped events, and rejects purpose mismatch or replay.",
     sources: [
       "src/pages/CAHierarchy.tsx:126",
     ],
@@ -151,7 +144,7 @@ export const extractedMessages = [
     key: "source.a.lease.is.a.short.promise.a.workload.prov.6a4823524a",
     defaultMessage: "A lease is a short promise: a workload proves who it is, receives one credential class, and loses it at expiry unless it re-attests.",
     sources: [
-      "src/pages/Workloads.tsx:114",
+      "src/pages/Workloads.tsx:115",
     ],
   },
   {
@@ -225,10 +218,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.accepted.rejected.expired.and.wrong.tenant.19ec18506a",
-    defaultMessage: "Accepted, rejected, expired, and wrong-tenant attestation decisions are library-only. This page cannot show live workload evidence because no served attestation API or CLI command exists yet.",
+    key: "source.accepted.rejected.expired.and.wrong.tenant.a95304e0d2",
+    defaultMessage: "Accepted, rejected, expired, and wrong-tenant fixtures show the served decision shape. Use the attested-issuance or ephemeral REST/CLI paths for live proofs so raw tokens and signed evidence never enter this console.",
     sources: [
-      "src/pages/Workloads.tsx:192",
+      "src/pages/Workloads.tsx:197",
     ],
   },
   {
@@ -347,10 +340,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.agent.scoped.broker.issuance.expiry.and.au.e0ecfb0f71",
-    defaultMessage: "Agent-scoped broker issuance, expiry, and audit reads are library-only. No served broker API or CLI command can mint live broker credentials yet.",
+    key: "source.agent.scoped.broker.issuance.is.served.at.b9149d8160",
+    defaultMessage: "Agent-scoped broker issuance is served at POST /api/v1/broker/agent-identities and by the broker agent-identities issue CLI command. This console does not mint live broker credentials because the request carries raw proof material.",
     sources: [
-      "src/pages/Workloads.tsx:223",
+      "src/pages/Workloads.tsx:228",
     ],
   },
   {
@@ -364,14 +357,14 @@ export const extractedMessages = [
     key: "source.ai.agent.broker.lifecycle.fixture.f0856e845b",
     defaultMessage: "AI agent broker lifecycle fixture",
     sources: [
-      "src/pages/Workloads.tsx:210",
+      "src/pages/Workloads.tsx:215",
     ],
   },
   {
     key: "source.ai.agent.nhi.broker.3c610aca90",
     defaultMessage: "AI-agent / NHI broker",
     sources: [
-      "src/pages/Workloads.tsx:200",
+      "src/pages/Workloads.tsx:205",
     ],
   },
   {
@@ -392,14 +385,14 @@ export const extractedMessages = [
     key: "source.alert.routing.is.not.configured.here.ea2801cf3b",
     defaultMessage: "Alert routing is not configured here",
     sources: [
-      "src/pages/Posture.tsx:299",
+      "src/pages/Posture.tsx:300",
     ],
   },
   {
-    key: "source.algorithm.inventory.not.served.yet.b44a58be9f",
-    defaultMessage: "Algorithm inventory not served yet",
+    key: "source.algorithm.inventory.dashboard.not.served.y.7560ec9591",
+    defaultMessage: "Algorithm inventory dashboard not served yet",
     sources: [
-      "src/pages/Posture.tsx:252",
+      "src/pages/Posture.tsx:253",
     ],
   },
   {
@@ -638,13 +631,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.attestation.api.is.library.only.cb904fcad3",
-    defaultMessage: "Attestation API is library-only",
-    sources: [
-      "src/pages/Workloads.tsx:192",
-    ],
-  },
-  {
     key: "source.attestation.e52a82c98b",
     defaultMessage: "Attestation",
     sources: [
@@ -655,7 +641,7 @@ export const extractedMessages = [
     key: "source.attestation.evidence.9ea11d60fd",
     defaultMessage: "Attestation evidence",
     sources: [
-      "src/pages/Workloads.tsx:139",
+      "src/pages/Workloads.tsx:140",
     ],
   },
   {
@@ -676,7 +662,7 @@ export const extractedMessages = [
     key: "source.attestation.proves.the.workload.and.its.pl.62dd35ed72",
     defaultMessage: "Attestation proves the workload and its platform. This preview keeps raw tokens and signed evidence out of the browser and shows only decision fixtures.",
     sources: [
-      "src/pages/Workloads.tsx:164",
+      "src/pages/Workloads.tsx:169",
     ],
   },
   {
@@ -916,10 +902,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.broker.issuance.is.library.only.bc1003ac14",
-    defaultMessage: "Broker issuance is library-only",
+    key: "source.broker.issuance.is.rest.and.cli.only.6218cb53d0",
+    defaultMessage: "Broker issuance is REST and CLI only",
     sources: [
-      "src/pages/Workloads.tsx:223",
+      "src/pages/Workloads.tsx:228",
+    ],
+  },
+  {
+    key: "source.browser.lease.controls.are.not.served.yet.0f9d3533e4",
+    defaultMessage: "Browser lease controls are not served yet",
+    sources: [
+      "src/pages/Workloads.tsx:105",
     ],
   },
   {
@@ -993,8 +986,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ca.hierarchy.ceremony.api.not.served.yet.15f64a3ac1",
-    defaultMessage: "CA hierarchy ceremony API not served yet",
+    key: "source.ca.hierarchy.create.ui.not.served.yet.84c36b8481",
+    defaultMessage: "CA hierarchy create UI not served yet",
     sources: [
       "src/pages/CAHierarchy.tsx:93",
     ],
@@ -1058,17 +1051,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.cbom.findings.api.not.served.yet.15d6373569",
-    defaultMessage: "CBOM findings API not served yet",
+    key: "source.cbom.dashboard.controls.not.served.yet.77f4d5d841",
+    defaultMessage: "CBOM dashboard controls not served yet",
     sources: [
       "src/pages/Posture.tsx:212",
     ],
   },
   {
-    key: "source.ceremonies.quorum.approvals.root.intermedi.1c5f032896",
-    defaultMessage: "Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are library-tier only. There is no served API or CLI ceremony route yet, so this page renders no create-root, rotate-root, or ceremony execution controls.",
+    key: "source.cbom.scanning.is.served.through.api.v1.cbo.985a28b221",
+    defaultMessage: "CBOM scanning is served through `/api/v1/cbom/scans` and `/api/v1/cbom/assets`. Scan triggers, asset-level triage controls, graph links, and posture timestamps are not surfaced here, so no Run CBOM scan control is rendered.",
     sources: [
-      "src/pages/CAHierarchy.tsx:93",
+      "src/pages/Posture.tsx:212",
     ],
   },
   {
@@ -1706,6 +1699,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.createroot.and.createintermediate.are.serv.8142ecbf01",
+    defaultMessage: "`CreateRoot` and `CreateIntermediate` are served through authenticated REST routes. `Rotate` and `CrossSign` remain implemented in `internal/ca/hierarchy` without served REST/UI controls yet.",
+    sources: [
+      "src/pages/CAHierarchy.tsx:156",
+    ],
+  },
+  {
     key: "source.credential.activity.timeline.e03f707dcc",
     defaultMessage: "Credential activity timeline",
     sources: [
@@ -1725,7 +1725,7 @@ export const extractedMessages = [
     key: "source.credential.class.faf7cd23ae",
     defaultMessage: "Credential class",
     sources: [
-      "src/pages/Workloads.tsx:137",
+      "src/pages/Workloads.tsx:138",
     ],
   },
   {
@@ -1760,7 +1760,7 @@ export const extractedMessages = [
     key: "source.credential.is.no.longer.trusted.by.policy.769f8213d2",
     defaultMessage: "credential is no longer trusted by policy",
     sources: [
-      "src/pages/Workloads.tsx:129",
+      "src/pages/Workloads.tsx:130",
     ],
   },
   {
@@ -1844,21 +1844,21 @@ export const extractedMessages = [
     key: "source.crypto.agility.and.pqc.readiness.2e66bc5a55",
     defaultMessage: "Crypto-agility and PQC readiness",
     sources: [
-      "src/pages/Posture.tsx:243",
+      "src/pages/Posture.tsx:244",
     ],
   },
   {
     key: "source.crypto.agility.means.the.system.can.see.we.e8d0c85c8e",
     defaultMessage: "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan a move to PQC or hybrid algorithms without guessing from browser-only state.",
     sources: [
-      "src/pages/Posture.tsx:246",
+      "src/pages/Posture.tsx:247",
     ],
   },
   {
     key: "source.crypto.agility.readiness.fixtures.158b09cf65",
     defaultMessage: "Crypto-agility readiness fixtures",
     sources: [
-      "src/pages/Posture.tsx:256",
+      "src/pages/Posture.tsx:257",
     ],
   },
   {
@@ -1876,31 +1876,24 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ct.anomalies.drift.findings.and.weak.crypt.1883ff2153",
-    defaultMessage: "CT anomalies, drift findings, and weak-crypto findings will need served notification-channel configuration before operators can route alerts. That remains a backend gap, not a browser-only setting.",
+    key: "source.ct.anomalies.and.drift.findings.can.be.rou.9b66032844",
+    defaultMessage: "CT anomalies and drift findings can be routed through operator-wired notification channels. Tenant self-service channel setup remains a backend gap, not a browser-only setting.",
     sources: [
-      "src/pages/Posture.tsx:302",
+      "src/pages/Posture.tsx:303",
     ],
   },
   {
-    key: "source.ct.findings.api.not.served.yet.7cdadcce64",
-    defaultMessage: "CT findings API not served yet",
-    sources: [
-      "src/pages/Posture.tsx:138",
-    ],
-  },
-  {
-    key: "source.ct.monitoring.drift.detection.and.cbom.sca.ce5956ea03",
-    defaultMessage: "CT monitoring, drift detection, and CBOM scanning run in the agent and library today. Console management of watchlists, scan triggers, findings, and cited evidence is coming soon.",
-    sources: [
-      "src/pages/Posture.tsx:120",
-    ],
-  },
-  {
-    key: "source.ct.monitoring.watches.public.logs.for.cert.47f9d6be66",
-    defaultMessage: "CT monitoring watches public logs for certificates your tenant did not request. Watchlists, checkpoints, and unexpected-issuance alerts need the missing CT findings API.",
+    key: "source.ct.monitoring.watches.public.logs.for.cert.b856c5380a",
+    defaultMessage: "CT monitoring watches public logs for certificates your tenant did not request. The served discovery worker polls configured logs, records tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.",
     sources: [
       "src/pages/Posture.tsx:132",
+    ],
+  },
+  {
+    key: "source.ct.runs.are.served.through.discovery.sourc.f45960008a",
+    defaultMessage: "CT runs are served through Discovery sources of kind `ct_log`. Domain watchlists, log checkpoints, poll state, and unexpected-certificate findings are not managed on this page, and there is no live Add watchlist or Poll CT control here.",
+    sources: [
+      "src/pages/Posture.tsx:138",
     ],
   },
   {
@@ -1949,7 +1942,7 @@ export const extractedMessages = [
     key: "source.decision.640ae4baf9",
     defaultMessage: "Decision",
     sources: [
-      "src/pages/Workloads.tsx:176",
+      "src/pages/Workloads.tsx:181",
     ],
   },
   {
@@ -1957,6 +1950,20 @@ export const extractedMessages = [
     defaultMessage: "Decision surface",
     sources: [
       "src/pages/Identities.tsx:970",
+    ],
+  },
+  {
+    key: "source.dedicated.ct.dashboard.not.served.yet.5f83c5f19c",
+    defaultMessage: "Dedicated CT dashboard not served yet",
+    sources: [
+      "src/pages/Posture.tsx:138",
+    ],
+  },
+  {
+    key: "source.dedicated.posture.dashboards.not.served.ye.6e265724ca",
+    defaultMessage: "Dedicated posture dashboards not served yet",
+    sources: [
+      "src/pages/Posture.tsx:120",
     ],
   },
   {
@@ -2232,15 +2239,22 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.drift.detection.compares.what.trstctl.inte.a5d4cc980d",
-    defaultMessage: "Drift detection compares what trstctl intended to deploy with what an enrolled agent actually sees. Deleted, replaced, relocated, and permission-changed credentials remain agent-only until findings are served.",
+    key: "source.drift.detection.compares.what.trstctl.inte.0b0d1314c2",
+    defaultMessage: "Drift detection compares what trstctl intended to deploy with what the served worker can verify from a configured watched credential path. Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.",
     sources: [
       "src/pages/Posture.tsx:161",
     ],
   },
   {
-    key: "source.drift.findings.api.not.served.yet.d820e840b0",
-    defaultMessage: "Drift findings API not served yet",
+    key: "source.drift.remediation.ui.not.served.yet.87deb93fc6",
+    defaultMessage: "Drift remediation UI not served yet",
+    sources: [
+      "src/pages/Posture.tsx:167",
+    ],
+  },
+  {
+    key: "source.drift.runs.are.served.through.discovery.so.da0b47f66e",
+    defaultMessage: "Drift runs are served through Discovery sources of kind `drift`. Dedicated per-agent grouping, resolution state, severity tuning, and remediation actions are not surfaced here, so preview remediation buttons remain disabled.",
     sources: [
       "src/pages/Posture.tsx:167",
     ],
@@ -2457,14 +2471,21 @@ export const extractedMessages = [
     key: "source.ephemeral.credential.lease.fixture.7108b60e3b",
     defaultMessage: "Ephemeral credential lease fixture",
     sources: [
-      "src/pages/Workloads.tsx:134",
+      "src/pages/Workloads.tsx:135",
     ],
   },
   {
     key: "source.ephemeral.credential.leases.8a9a0ee8cb",
     defaultMessage: "Ephemeral credential leases",
     sources: [
-      "src/pages/Workloads.tsx:111",
+      "src/pages/Workloads.tsx:112",
+    ],
+  },
+  {
+    key: "source.ephemeral.jit.issuance.is.rest.and.cli.onl.b30647b4e0",
+    defaultMessage: "Ephemeral JIT issuance is REST and CLI only",
+    sources: [
+      "src/pages/Workloads.tsx:158",
     ],
   },
   {
@@ -2496,7 +2517,7 @@ export const extractedMessages = [
       "src/pages/Platform.tsx:739",
       "src/pages/Profiles.tsx:126",
       "src/pages/SSHTrust.tsx:114",
-      "src/pages/Workloads.tsx:174",
+      "src/pages/Workloads.tsx:179",
     ],
   },
   {
@@ -2567,6 +2588,13 @@ export const extractedMessages = [
     defaultMessage: "Expiry",
     sources: [
       "src/pages/Secrets.tsx:833",
+    ],
+  },
+  {
+    key: "source.expiry.alert.dispatch.is.served.through.th.21d8f99e37",
+    defaultMessage: "Expiry-alert dispatch is served through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not served by API or CLI yet, so this page cannot operate notification integrations.",
+    sources: [
+      "src/pages/Policy.tsx:205",
     ],
   },
   {
@@ -2740,7 +2768,7 @@ export const extractedMessages = [
     defaultMessage: "Fixture",
     sources: [
       "src/pages/SSHTrust.tsx:113",
-      "src/pages/Workloads.tsx:175",
+      "src/pages/Workloads.tsx:180",
     ],
   },
   {
@@ -2790,6 +2818,13 @@ export const extractedMessages = [
     defaultMessage: "From",
     sources: [
       "src/pages/Graph.tsx:311",
+    ],
+  },
+  {
+    key: "source.get.api.v1.issuers.exposes.issuer.name.kin.e55c2e2b10",
+    defaultMessage: "`GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated `/api/v1/ca/ceremonies` and `/api/v1/ca/authorities` API.",
+    sources: [
+      "src/pages/CAHierarchy.tsx:105",
     ],
   },
   {
@@ -2932,13 +2967,6 @@ export const extractedMessages = [
     defaultMessage: "Health / resume",
     sources: [
       "src/pages/Incidents.tsx:230",
-    ],
-  },
-  {
-    key: "source.hierarchy.mutations.are.library.tier.009a47c95b",
-    defaultMessage: "Hierarchy mutations are library-tier",
-    sources: [
-      "src/pages/CAHierarchy.tsx:156",
     ],
   },
   {
@@ -3336,7 +3364,7 @@ export const extractedMessages = [
     key: "source.lease.expiry.b29c547b92",
     defaultMessage: "Lease expiry",
     sources: [
-      "src/pages/Workloads.tsx:140",
+      "src/pages/Workloads.tsx:141",
     ],
   },
   {
@@ -3347,8 +3375,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.lease.state.attestation.decisions.and.brok.263d7667ab",
-    defaultMessage: "Lease state, attestation decisions, and broker issuance are not served by API or CLI yet. No live issue, revoke, approve, or mint controls are rendered.",
+    key: "source.lease.state.and.browser.side.approval.cont.1a14d4ffd3",
+    defaultMessage: "Lease state and browser-side approval controls are not served yet. Attested issuance, approval-gated ephemeral JIT issuance, and broker minting are available through REST and CLI, so no live issue, revoke, approve, or mint controls are rendered here.",
     sources: [
       "src/pages/Workloads.tsx:105",
     ],
@@ -4038,6 +4066,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.dedicated.posture.dashboard.yet.b75d17cb8b",
+    defaultMessage: "No dedicated posture dashboard yet",
+    sources: [
+      "src/pages/Posture.tsx:234",
+    ],
+  },
+  {
     key: "source.no.delivery.or.rotation.receipts.yet.21fb574bf8",
     defaultMessage: "No delivery or rotation receipts yet",
     sources: [
@@ -4228,13 +4263,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.served.posture.findings.yet.5fd5d7ff00",
-    defaultMessage: "No served posture findings yet",
-    sources: [
-      "src/pages/Posture.tsx:234",
-    ],
-  },
-  {
     key: "source.no.source.2eca7a588d",
     defaultMessage: "No source",
     sources: [
@@ -4333,24 +4361,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.notification.channel.controls.not.served.y.670400406d",
+    defaultMessage: "Notification channel controls not served yet",
+    sources: [
+      "src/pages/Policy.tsx:205",
+    ],
+  },
+  {
     key: "source.notification.channel.fixtures.b482a6afdb",
     defaultMessage: "Notification channel fixtures",
     sources: [
       "src/pages/Policy.tsx:211",
-    ],
-  },
-  {
-    key: "source.notification.channels.are.library.only.cha.1d1c2ae7ae",
-    defaultMessage: "Notification channels are library-only. Channel config reads, test delivery, retry state, and delivery receipts are not served by API or CLI yet, so this page cannot operate notification integrations.",
-    sources: [
-      "src/pages/Policy.tsx:205",
-    ],
-  },
-  {
-    key: "source.notification.channels.are.library.only.fc372beb87",
-    defaultMessage: "Notification channels are library-only",
-    sources: [
-      "src/pages/Policy.tsx:205",
     ],
   },
   {
@@ -4776,7 +4797,7 @@ export const extractedMessages = [
     key: "source.policy.and.attestation.digest.bind.the.lea.d2cb9fd8e8",
     defaultMessage: "policy and attestation digest bind the lease",
     sources: [
-      "src/pages/Workloads.tsx:121",
+      "src/pages/Workloads.tsx:122",
     ],
   },
   {
@@ -4853,38 +4874,31 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.posture.collector.apis.not.served.yet.6b7e48a0c0",
-    defaultMessage: "Posture collector APIs not served yet",
-    sources: [
-      "src/pages/Posture.tsx:120",
-    ],
-  },
-  {
     key: "source.pqc.migration.is.a.staged.rollout.inventor.75f4cc20d4",
     defaultMessage: "PQC migration is a staged rollout: inventory first, hybrid canary second, workload rotation third, with rollback and resume points at every wave.",
     sources: [
-      "src/pages/Posture.tsx:275",
+      "src/pages/Posture.tsx:276",
     ],
   },
   {
     key: "source.pqc.migration.orchestration.2253b6b839",
     defaultMessage: "PQC migration orchestration",
     sources: [
-      "src/pages/Posture.tsx:272",
+      "src/pages/Posture.tsx:273",
     ],
   },
   {
     key: "source.pqc.migration.orchestration.is.library.onl.6f3c3062c5",
     defaultMessage: "PQC migration orchestration is library-only",
     sources: [
-      "src/pages/Posture.tsx:280",
+      "src/pages/Posture.tsx:281",
     ],
   },
   {
     key: "source.pqc.migration.plan.fixture.34e53979be",
     defaultMessage: "PQC migration plan fixture",
     sources: [
-      "src/pages/Posture.tsx:284",
+      "src/pages/Posture.tsx:285",
     ],
   },
   {
@@ -5123,6 +5137,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc",
+    defaultMessage: "Raw attestation evidence stays out of the browser",
+    sources: [
+      "src/pages/Workloads.tsx:197",
+    ],
+  },
+  {
     key: "source.rca.answers.are.sufficient.or.insufficient.17af357508",
     defaultMessage: "RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a served remediation workflow exists.",
     sources: [
@@ -5186,7 +5207,7 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:798",
       "src/pages/Incidents.tsx:149",
       "src/pages/Platform.tsx:491",
-      "src/pages/Workloads.tsx:177",
+      "src/pages/Workloads.tsx:182",
     ],
   },
   {
@@ -5541,7 +5562,7 @@ export const extractedMessages = [
     key: "source.revoke.now.posture.1a2f052186",
     defaultMessage: "Revoke-now posture",
     sources: [
-      "src/pages/Workloads.tsx:141",
+      "src/pages/Workloads.tsx:142",
     ],
   },
   {
@@ -5691,6 +5712,13 @@ export const extractedMessages = [
     defaultMessage: "rotation 61d > policy 30d",
     sources: [
       "src/lib/demoData.ts:45",
+    ],
+  },
+  {
+    key: "source.rotation.and.cross.sign.remain.library.tie.6a67849eef",
+    defaultMessage: "Rotation and cross-sign remain library-tier",
+    sources: [
+      "src/pages/CAHierarchy.tsx:156",
     ],
   },
   {
@@ -6374,8 +6402,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.slack.teams.email.pagerduty.opsgenie.and.w.713dfed6e0",
-    defaultMessage: "Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels need tenant-scoped channel config, masked secret references, test delivery, duplicate-safe outbox delivery, and redacted failure evidence. The served API does not configure or test channels yet.",
+    key: "source.slack.teams.email.pagerduty.opsgenie.and.w.f2e5d2ab97",
+    defaultMessage: "Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into the served process. The served API does not configure or test channels yet.",
     sources: [
       "src/pages/Policy.tsx:200",
     ],
@@ -6476,13 +6504,6 @@ export const extractedMessages = [
     defaultMessage: "Stale heartbeat",
     sources: [
       "src/pages/Agents.tsx:237",
-    ],
-  },
-  {
-    key: "source.startceremony.approve.createroot.createint.fc8c439f8d",
-    defaultMessage: "`StartCeremony`, `Approve`, `CreateRoot`, `CreateIntermediate`, `Rotate`, and `CrossSign` are implemented in `internal/ca/hierarchy`, but there is no authenticated REST/UI ceremony flow yet.",
-    sources: [
-      "src/pages/CAHierarchy.tsx:156",
     ],
   },
   {
@@ -6767,6 +6788,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.the.rest.api.now.serves.ceremonies.quorum.630de457d0",
+    defaultMessage: "The REST API now serves ceremonies, quorum approvals, root/intermediate creation, and signer-backed leaf issuance. This page is still read-only, so it renders no create-root, rotate-root, or ceremony execution controls.",
+    sources: [
+      "src/pages/CAHierarchy.tsx:93",
+    ],
+  },
+  {
     key: "source.the.served.graph.api.returned.no.nodes.or.e72a1f95ea",
     defaultMessage: "The served graph API returned no nodes or edges for this tenant. Ingest certificates or issue identities first.",
     sources: [
@@ -6799,13 +6827,6 @@ export const extractedMessages = [
     defaultMessage: "This JSON is sent to the served `POST /api/v1/profiles` endpoint. The backend remains the source of truth.",
     sources: [
       "src/pages/Profiles.tsx:265",
-    ],
-  },
-  {
-    key: "source.this.page.intentionally.shows.preview.rows.4332823e6e",
-    defaultMessage: "This page intentionally shows preview rows only. Live CT, drift, and CBOM evidence becomes observable when the backend mounts the collector APIs.",
-    sources: [
-      "src/pages/Posture.tsx:234",
     ],
   },
   {
@@ -6917,7 +6938,7 @@ export const extractedMessages = [
     key: "source.ttl.policy.409fe5c65d",
     defaultMessage: "TTL policy",
     sources: [
-      "src/pages/Workloads.tsx:138",
+      "src/pages/Workloads.tsx:139",
     ],
   },
   {
@@ -6986,6 +7007,13 @@ export const extractedMessages = [
       "src/pages/Discovery.tsx:297",
       "src/pages/Platform.tsx:547",
       "src/pages/Secrets.tsx:523",
+    ],
+  },
+  {
+    key: "source.use.discovery.to.create.ct.log.and.drift.s.0b4562fd99",
+    defaultMessage: "Use Discovery to create `ct_log` and `drift` sources, start runs, and read findings. This page does not yet manage watchlists, drift baselines, triage history, or cited remediation evidence.",
+    sources: [
+      "src/pages/Posture.tsx:120",
     ],
   },
   {
@@ -7135,14 +7163,14 @@ export const extractedMessages = [
     key: "source.workload.attestation.chain.a47a1a4310",
     defaultMessage: "Workload attestation chain",
     sources: [
-      "src/pages/Workloads.tsx:161",
+      "src/pages/Workloads.tsx:166",
     ],
   },
   {
     key: "source.workload.attestation.fixtures.3e82a2b523",
     defaultMessage: "Workload attestation fixtures",
     sources: [
-      "src/pages/Workloads.tsx:171",
+      "src/pages/Workloads.tsx:176",
     ],
   },
   {
@@ -7161,17 +7189,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.workload.lease.apis.are.not.served.yet.6d5d9cc9bf",
-    defaultMessage: "Workload lease APIs are not served yet",
-    sources: [
-      "src/pages/Workloads.tsx:105",
-    ],
-  },
-  {
     key: "source.workload.must.re.attest.before.renewal.c05cf9ffa5",
     defaultMessage: "workload must re-attest before renewal",
     sources: [
-      "src/pages/Workloads.tsx:125",
+      "src/pages/Workloads.tsx:126",
     ],
   },
   {

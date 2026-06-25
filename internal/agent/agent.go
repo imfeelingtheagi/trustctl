@@ -174,6 +174,7 @@ func (a *Agent) CertificateNotAfter() time.Time {
 type ChannelClient interface {
 	Heartbeat(ctx context.Context, req *HeartbeatRequest) (*HeartbeatResponse, error)
 	Renew(ctx context.Context, req *RenewRequest) (*RenewResponse, error)
+	ReportInventory(ctx context.Context, req *InventoryRequest) (*InventoryResponse, error)
 }
 
 // HeartbeatRequest / Response and RenewRequest / Response mirror the transport
@@ -200,6 +201,28 @@ type (
 		CertChainPEM []byte
 		NotAfterUnix int64
 	}
+	// InventoryFinding is one metadata-only local credential reference. Values and
+	// private key material do not belong here.
+	InventoryFinding struct {
+		Kind        string
+		Ref         string
+		Provenance  string
+		Fingerprint string
+		RiskScore   int
+		Metadata    map[string]string
+	}
+	// InventoryRequest carries one local discovery batch to the control plane.
+	InventoryRequest struct {
+		SourceKind string
+		Findings   []InventoryFinding
+	}
+	// InventoryResponse summarizes the evented discovery run created by the server.
+	InventoryResponse struct {
+		TenantID string
+		RunID    string
+		Recorded int
+		Rejected int
+	}
 )
 
 // Heartbeat sends one steady-state beat over the agent channel, reporting the agent's
@@ -213,6 +236,13 @@ func (a *Agent) Heartbeat(ctx context.Context, ch ChannelClient, inventory map[s
 		CertSerial: a.CertificateSerial(),
 		Inventory:  inventory,
 	})
+}
+
+// ReportInventory sends metadata-only host discovery findings over the steady-state
+// channel. The control plane derives tenant scope from the agent certificate; this
+// call carries no tenant field.
+func (a *Agent) ReportInventory(ctx context.Context, ch ChannelClient, sourceKind string, findings []InventoryFinding) (*InventoryResponse, error) {
+	return ch.ReportInventory(ctx, &InventoryRequest{SourceKind: sourceKind, Findings: findings})
 }
 
 // RenewOverChannel rotates the agent's certificate over the steady-state gRPC channel

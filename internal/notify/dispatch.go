@@ -70,6 +70,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Certificate expiring")
 	case KindUnexpectedIssuance:
 		b.WriteString("Unexpected certificate issuance")
+	case KindCredentialDrift:
+		b.WriteString("Credential drift")
 	default:
 		b.WriteString("trstctl alert")
 		if a.Kind != "" {

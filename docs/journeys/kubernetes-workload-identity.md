@@ -60,10 +60,11 @@ needs access, and gets a pass (an SVID) that expires in minutes.
 4. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
    presents its selectors (e.g. `k8s:ns:default`, `k8s:sa:web`) over the socket; the
    server matches them against registration entries and returns an SVID plus the
-   trust bundle. With a stock client this is a `FetchX509SVID` call against the
-   served socket. You should see the workload receive an X.509-SVID — a single
-   `spiffe://` URI identity, signed through the separate signing service — that
-   expires in minutes, not months. The wire details are in
+   trust bundle. With a stock client this is a `FetchX509SVID` call for mTLS or a
+   `FetchJWTSVID` call for an audience-bound JWT; the same served socket also answers
+   `FetchJWTBundles` and `ValidateJWTSVID`. You should see the workload receive an
+   X.509-SVID or JWT-SVID for a single `spiffe://` URI identity, signed through the
+   separate signing service, that expires in minutes, not months. The wire details are in
    [Workload identity](../features/workload-identity.md).
 
 5. **Confirm there is no static secret to steal.** Because the SVID is short-lived
@@ -85,10 +86,15 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    in [Discovery & inventory](../features/discovery-and-inventory.md).
 
    > Honest status: the SPIFFE Workload API is served over the socket and proven
-   > end-to-end against stock go-spiffe and `spiffe-helper` clients in CI. The
-   > attestation, ephemeral-issuance, and AI-agent-broker components are built and
-   > tested behind their interfaces with their own served surfaces tracked in
-   > [Current limitations](../limitations.md).
+   > end-to-end against stock go-spiffe for X.509-SVID and JWT-SVID flows, plus
+   > `spiffe-helper` for X.509 file output, in CI. The
+   > attestation and direct ephemeral X.509-SVID issuance are served through
+   > `POST /api/v1/workloads/attested-issuance`; approval-gated JIT ephemeral issuance
+   > is served through `POST /api/v1/ephemeral` plus
+   > `/api/v1/ephemeral/{request_id}/approvals`; and the AI-agent broker is served
+   > through `POST /api/v1/broker/agent-identities` when its attestors, policy, trust
+   > domain, and signer-backed issuing CA are configured. See
+   > [Current limitations](../limitations.md) for the exact served-vs-library split.
 
 ## Where next
 

@@ -18,6 +18,10 @@ type CertificateRequestTemplate struct {
 	CommonName    string
 	DNSNames      []string
 	RequestedEKUs []string
+	// ExtraExtensions are CSR extension requests already DER-encoded by a helper
+	// inside the crypto boundary. They let protocol-specific request proofs travel
+	// in PKCS#10 without callers importing crypto/x509.
+	ExtraExtensions []CertificateExtension
 }
 
 // CreateCertificateRequest builds and signs a CSR using signer. The private key
@@ -38,6 +42,13 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 			return nil, err
 		}
 		req.ExtraExtensions = append(req.ExtraExtensions, ext)
+	}
+	if len(tmpl.ExtraExtensions) > 0 {
+		exts, err := x509Extensions(tmpl.ExtraExtensions)
+		if err != nil {
+			return nil, err
+		}
+		req.ExtraExtensions = append(req.ExtraExtensions, exts...)
 	}
 	return x509.CreateCertificateRequest(rand.Reader, req, adapter)
 }
@@ -88,6 +99,11 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 		info.KeyAlgorithm, info.KeyBits = "Ed25519", 256
 	default:
 		info.KeyAlgorithm = "unknown"
+	}
+	if alg, found, err := HybridKeyAlgorithmFromExtensions(certificateExtensionsFromPKIX(csr.Extensions)); err != nil {
+		return CSRInfo{}, err
+	} else if found {
+		info.KeyAlgorithm = alg
 	}
 	return info, nil
 }

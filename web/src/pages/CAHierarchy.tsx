@@ -36,7 +36,7 @@ const custodyRows = [
     backend: "Local sealed key file",
     handle: "sealed://tenant-ca/root",
     purpose: "evaluation and single-node deployments",
-    status: "served signer can use sealed keys; hierarchy ceremony API is not served",
+    status: "served hierarchy API binds root/intermediate CAs to signer handles",
   },
   {
     backend: "PKCS#11 HSM",
@@ -81,7 +81,7 @@ export function CAHierarchy() {
       <PageHeader
         titleId="ca-heading"
         title="CA hierarchy"
-        description="Issuers are visible through the served API. Root, intermediate, rotation, cross-sign, and HSM/KMS lifecycle workflows remain library-tier and require purpose-bound m-of-n ceremonies before they can be exposed safely."
+        description="Root and intermediate CA ceremonies are served through the API with signer-backed custody. Rotation, cross-sign, and HSM/KMS lifecycle workflows remain library-tier until their own served controls ship."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
@@ -90,9 +90,9 @@ export function CAHierarchy() {
         }
       />
 
-      <UnavailableState title="CA hierarchy ceremony API not served yet">
-        Ceremonies, quorum approvals, root/intermediate creation, rotation, and cross-sign requests are library-tier only. There is no served API or CLI
-        ceremony route yet, so this page renders no create-root, rotate-root, or ceremony execution controls.
+      <UnavailableState title="CA hierarchy create UI not served yet">
+        The REST API now serves ceremonies, quorum approvals, root/intermediate creation, and signer-backed leaf issuance. This page is still read-only, so it
+        renders no create-root, rotate-root, or ceremony execution controls.
       </UnavailableState>
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
@@ -103,8 +103,8 @@ export function CAHierarchy() {
               Served issuer visibility
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              `GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. It is visibility only; hierarchy mutation is
-              intentionally absent.
+              `GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated
+              `/api/v1/ca/ceremonies` and `/api/v1/ca/authorities` API.
             </p>
           </div>
         </div>
@@ -124,8 +124,8 @@ export function CAHierarchy() {
               m-of-n key ceremony model
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The library consumes a quorum once, emits tenant-scoped events, and
-              rejects purpose mismatch or replay.
+              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The served API consumes root/intermediate quorums once, emits
+              tenant-scoped events, and rejects purpose mismatch or replay.
             </p>
           </div>
         </div>
@@ -153,9 +153,9 @@ export function CAHierarchy() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Hierarchy mutations are library-tier">
-          `StartCeremony`, `Approve`, `CreateRoot`, `CreateIntermediate`, `Rotate`, and `CrossSign` are implemented in `internal/ca/hierarchy`, but there is no
-          authenticated REST/UI ceremony flow yet.
+        <UnavailableState title="Rotation and cross-sign remain library-tier">
+          `CreateRoot` and `CreateIntermediate` are served through authenticated REST routes. `Rotate` and `CrossSign` remain implemented in
+          `internal/ca/hierarchy` without served REST/UI controls yet.
         </UnavailableState>
       </section>
 

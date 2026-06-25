@@ -50,9 +50,9 @@ This file is the human-readable companion to the git tags; the
 ## [0.1] - 2026-05-31
 - Initial tagged development milestone.
 
-[Unreleased]: https://github.com/imfeelingtheagi/trstctl/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.5.0
-[0.4]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.4
-[0.3]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.3
-[0.2]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.2
-[0.1]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.1
+[Unreleased]: https://github.com/ctlplne/trstctl/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.0
+[0.4]: https://github.com/ctlplne/trstctl/releases/tag/v0.4
+[0.3]: https://github.com/ctlplne/trstctl/releases/tag/v0.3
+[0.2]: https://github.com/ctlplne/trstctl/releases/tag/v0.2
+[0.1]: https://github.com/ctlplne/trstctl/releases/tag/v0.1

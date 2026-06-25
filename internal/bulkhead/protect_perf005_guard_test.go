@@ -164,6 +164,7 @@ func TestProtectPERF005_DefaultSetRegistersIsolatedSubsystemPools(t *testing.T) 
 		bulkhead.SubsystemPolicy,
 		bulkhead.SubsystemProtocols,
 		bulkhead.SubsystemAgent,
+		bulkhead.SubsystemCBOM,
 	}
 	seen := map[*bulkhead.Pool]string{}
 	for _, name := range subsystems {

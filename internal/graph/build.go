@@ -182,6 +182,32 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		}
 	}
 
+	findings, err := allDiscoveryFindings(ctx, st, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range findings {
+		nid := "disc:" + f.ID
+		g.AddNode(Node{
+			ID:   nid,
+			Kind: KindCredential,
+			Name: f.Ref,
+			Attrs: map[string]string{
+				"credential_kind": f.Kind,
+				"discovery_ref":   f.Ref,
+				"source_id":       f.SourceID,
+				"run_id":          f.RunID,
+				"provenance":      f.Provenance,
+				"fingerprint":     f.Fingerprint,
+				"risk_score":      strconv.Itoa(f.RiskScore),
+			},
+		})
+		if f.Provenance != "" {
+			ensureResource(g, f.Provenance)
+			g.AddEdge(Edge{From: nid, To: resourceID(f.Provenance), Type: EdgeDeployedTo})
+		}
+	}
+
 	return g, nil
 }
 
@@ -232,6 +258,25 @@ func allSSHKeys(ctx context.Context, st *store.Store, tenantID string) ([]store.
 	after := store.ZeroUUID
 	for {
 		page, err := st.ListSSHKeysPage(ctx, tenantID, after, pageSize)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, page...)
+		if len(page) < pageSize {
+			return out, nil
+		}
+		after = page[len(page)-1].ID
+	}
+}
+
+// allDiscoveryFindings reads every metadata-only discovery finding for the tenant by
+// paging the keyset. These are credential references such as secret handles, API-key
+// ids, and agent-host inventory records.
+func allDiscoveryFindings(ctx context.Context, st *store.Store, tenantID string) ([]store.DiscoveryFinding, error) {
+	var out []store.DiscoveryFinding
+	after := store.ZeroUUID
+	for {
+		page, err := st.ListDiscoveryFindingsPage(ctx, tenantID, "", after, pageSize)
 		if err != nil {
 			return nil, err
 		}

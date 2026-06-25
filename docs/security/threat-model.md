@@ -103,5 +103,5 @@ architectural guarantees that back those defenses.
 ## Reporting
 
 Security issues: see
-[SECURITY.md](https://github.com/imfeelingtheagi/trstctl/blob/main/SECURITY.md) for
+[SECURITY.md](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md) for
 the private disclosure process and contact.

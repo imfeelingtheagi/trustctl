@@ -57,6 +57,12 @@ RFC 6962 binary parsing stays inside the single crypto path; checkpoints persist
 monitoring resumes across restarts, with each tenant's data isolated at the database
 layer.
 
+**Status: partially served.** Create a Discovery source of kind `ct_log`, start a run,
+and read the resulting `ct_unexpected_issuance` findings through the served Discovery API
+or CLI. The served worker polls configured logs, records tenant-scoped findings, and
+queues unexpected-issuance notifications through the outbox. A dedicated CT triage
+dashboard and tenant self-service watchlist UI are still future work.
+
 ### Drift detection (F18)
 
 After the agent installs a credential, drift detection notices if reality diverges from
@@ -68,6 +74,12 @@ mode bits; Windows DACL for broad-access ACEs), and the agent honestly reports a
 whether the platform can detect permission loosening at all. Content hashing goes through
 the single crypto path; nothing secret is stored, and any secret material is held in
 wipeable memory and zeroed after use.
+
+**Status: partially served.** Create a Discovery source of kind `drift` with watched
+paths, expected fingerprints, and expected modes, then start a run. The served worker
+records `credential_drift` findings and queues drift notifications. Dedicated per-agent
+drift dashboards, resolution state, and automated remediation controls are not served
+yet.
 
 ### The CBOM — cryptographic bill of materials (F52)
 
@@ -82,6 +94,28 @@ into the [PQC migration](lifecycle-and-pqc.md) that consumes it. Scanning runs i
 bounded lane and is non-fatal per source, keeps each tenant's data isolated at the
 database layer, and keeps TLS/cert parsing behind the single crypto path.
 
+**Status: served.** `POST /api/v1/cbom/scans` runs the scanner in the serving binary and
+`GET /api/v1/cbom/assets` returns the tenant-scoped inventory plus migration progress.
+The scan route requires `discovery:write`, accepts an `Idempotency-Key`, and records each
+observation as an immutable `cbom.asset.observed` event before the read model is
+projected. The read route requires `risk:read`. CBOM work has its own bulkhead, so a wide
+TLS/config sweep rejects fast instead of starving the regular API or enrollment lanes.
+
+Each returned asset includes the discovered algorithm, source, policy result, PQC
+posture, and a **migration target**:
+
+| Observation | Migration target |
+|---|---|
+| RSA, ECDSA, Ed25519/EdDSA certificate signatures | `ML-DSA-65` (`FIPS 204`) |
+| DSA certificate signatures | `SLH-DSA-SHA2-128s` (`FIPS 205`) |
+| TLS protocol/cipher findings such as TLS 1.0 or 3DES | `ML-KEM-768` (`FIPS 203`) |
+| Already quantum-safe ML-DSA, ML-KEM, or SLH-DSA observations | marked post-quantum-ready |
+
+`migration_progress` is computed from the stored inventory: total assets, how many are
+already post-quantum-ready, how many are still quantum-vulnerable, and the ready
+percentage. ELI5: the CBOM is the list of every lock type you found, and the migration
+progress tells you how many locks are already the new quantum-safe kind.
+
 ## Use it
 
 Risk scoring is live — find your riskiest credentials:
@@ -91,19 +125,81 @@ Risk scoring is live — find your riskiest credentials:
 trstctl-cli risk credentials --min_score 50 --privilege high --sort score
 ```
 
-That maps to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`. The
-CT monitor, drift detector, and CBOM scanner are driven through their Go APIs today —
-e.g. `monitor.PollAll(ctx, tenant, logs)` to sweep CT logs, or `scanner.Scan(ctx, sources)`
-to build a CBOM from your TLS endpoints and config files.
+That maps to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`.
+CT monitoring and drift detection are driven through the served Discovery API:
+
+```sh
+# CT-log monitoring source: poll the log and alert on unexpected certificates.
+trstctl-cli discovery sources create --body ct-log-source.json
+trstctl-cli discovery runs start --body ct-log-run.json
+trstctl-cli discovery findings list --run_id "$RUN_ID"
+```
+
+`ct-log-source.json` carries `kind: "ct_log"` and a config like:
+
+```json
+{
+  "name": "public-ct-watch",
+  "kind": "ct_log",
+  "config": {
+    "logs": ["https://ct.example.test/log"],
+    "watched_domains": ["example.com"]
+  }
+}
+```
+
+Drift uses the same source/run/finding path:
+
+```json
+{
+  "name": "edge-cert-drift",
+  "kind": "drift",
+  "config": {
+    "watched": [
+      {
+        "path": "/etc/nginx/tls/edge.crt",
+        "class": "certificate",
+        "fingerprint": "sha256:...",
+        "mode": "0644"
+      }
+    ]
+  }
+}
+```
+
+The CBOM scanner is served by the API:
+
+```sh
+curl -sS \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: cbom-demo-001" \
+  -X POST https://trstctl.example.com/api/v1/cbom/scans \
+  -d '{
+    "tls_endpoints": ["payments.internal.example:443"],
+    "host_configs": ["/etc/nginx/sites-enabled/payments.conf"]
+  }'
+```
+
+Then read the migration inventory:
+
+```sh
+curl -sS \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  https://trstctl.example.com/api/v1/cbom/assets
+```
+
+The response contains `items` and `migration_progress`. A non-empty
+`quantum_vulnerable` count means you have crypto that needs a migration target.
 
 ## Pitfalls & limits
 
 | Capability | Status today |
 |---|---|
 | Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `risk` CLI |
-| CT monitoring (F17) | **Library-complete**, tested (incl. outbox-backed alerts); no scheduler wired |
-| Drift detection (F18) | **Library-complete**, tested; agent loop not yet wired |
-| CBOM (F52) | **Library-complete**, tested; store + graph wired, no scan trigger yet |
+| CT monitoring (F17) | **Partially served** — Discovery `ct_log` source/run/finding execution plus outbox-backed alerts; dedicated CT dashboard/watchlist UI not served |
+| Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
+| CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |
 
 Other notes: CT monitoring depends on you listing the logs and domains to watch. Drift
 permission detection is best-effort on platforms whose ACL model it can't fully read —
@@ -117,9 +213,15 @@ only as complete as the sources you point it at (TLS endpoints + config files). 
   `owner`); CLI `risk credentials`.
 - **Risk factors:** age, exposure, privilege, rotation staleness, owner activity,
   sensitivity (weighted; defaults favor exposure + privilege).
-- **CT:** `Monitor.Poll` / `PollAll`; idempotency key `ct:<log>:<index>`; RFC 6962.
-- **Drift types:** `Deleted`, `Replaced`, `Relocated`, `PermissionChanged`.
+- **CT:** Discovery source kind `ct_log`; finding kind `ct_unexpected_issuance`;
+  idempotency key `ct:<log>:<index>`; RFC 6962.
+- **Drift:** Discovery source kind `drift`; finding kind `credential_drift`; drift types
+  `Deleted`, `Replaced`, `Relocated`, `PermissionChanged`.
+- **CBOM API:** `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key`
+  required); `GET /api/v1/cbom/assets` (`risk:read`).
 - **CBOM policy floor:** RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5.
+- **CBOM event/read model:** `cbom.asset.observed` projects into `crypto_assets`; rebuilds
+  and snapshots replay the same inventory.
 
 ## See also
 

@@ -496,7 +496,7 @@ func TestPatchedGoToolchainPinned(t *testing.T) {
 }
 
 func TestProductionInstallPathsAvoidMutableLatest(t *testing.T) {
-	forbidden := regexp.MustCompile(`ghcr\.io/imfeelingtheagi/trstctl:latest|(?m)^\s*image:\s+.*:latest\b`)
+	forbidden := regexp.MustCompile(`ghcr\.io/ctlplne/trstctl:latest|(?m)^\s*image:\s+.*:latest\b`)
 	for _, path := range []string{
 		"README.md",
 		"deploy/docker/docker-compose.yml",
@@ -512,7 +512,7 @@ func TestProductionInstallPathsAvoidMutableLatest(t *testing.T) {
 	}
 	mustContainAll(t, "Sigstore admission policy", repoFile(t, "deploy", "kubernetes", "sigstore-policy.yaml"),
 		"ClusterImagePolicy",
-		"ghcr.io/imfeelingtheagi/trstctl@sha256:*",
+		"ghcr.io/ctlplne/trstctl@sha256:*",
 		"https://token.actions.githubusercontent.com",
 		"release.yml")
 }

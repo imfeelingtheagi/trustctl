@@ -294,6 +294,10 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 	if err != nil {
 		return Deps{}, fmt.Errorf("lifecycle renew before: %w", err)
 	}
+	alertBefore, err := cfg.Lifecycle.AlertBeforeDuration()
+	if err != nil {
+		return Deps{}, fmt.Errorf("lifecycle alert before: %w", err)
+	}
 	pluginCfg, err := buildPluginConfig(cfg.Plugins)
 	if err != nil {
 		return Deps{}, fmt.Errorf("plugins: %w", err)
@@ -311,6 +315,7 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
 		PrivacyRetentionPolicy: privacyRetentionPolicy,
 		LifecycleRenewBefore:   renewBefore,
+		LifecycleAlertBefore:   alertBefore,
 		Logger:                 logger, RateLimiter: rateLimiter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},

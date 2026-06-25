@@ -84,6 +84,57 @@ func Decode(jksData []byte, password, alias string) (keyPEM, certChainPEM []byte
 	return keyPEM, certChainPEM, nil
 }
 
+// EncodeTrustStoreDeterministic packages public trusted certificates into a JKS
+// trust store. It stores certificate-only entries: no private key material is
+// accepted or written. The entry timestamp is fixed and aliases are ordered, so the
+// same input produces byte-identical output.
+func EncodeTrustStoreDeterministic(certs map[string][]byte, password string) ([]byte, error) {
+	ks := keystore.New(keystore.WithOrderedAliases())
+	for alias, cert := range certs {
+		der, err := certDER(cert)
+		if err != nil {
+			return nil, fmt.Errorf("jks: trust entry %q: %w", alias, err)
+		}
+		if err := ks.SetTrustedCertificateEntry(alias, keystore.TrustedCertificateEntry{
+			CreationTime: epoch,
+			Certificate:  keystore.Certificate{Type: "X509", Content: der},
+		}); err != nil {
+			return nil, fmt.Errorf("jks: set trust entry %q: %w", alias, err)
+		}
+	}
+	var buf bytes.Buffer
+	if err := ks.Store(&buf, []byte(password)); err != nil {
+		return nil, fmt.Errorf("jks: store trust: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// DecodeTrustedCertificates loads certificate-only entries from a JKS trust store,
+// keyed by alias, and returns each certificate as PEM. Private-key entries are
+// deliberately ignored because trust-store discovery inventories public trust
+// anchors only.
+func DecodeTrustedCertificates(jksData []byte, password string) (map[string][]byte, error) {
+	ks := keystore.New(keystore.WithOrderedAliases())
+	if err := ks.Load(bytes.NewReader(jksData), []byte(password)); err != nil {
+		return nil, fmt.Errorf("jks: load trust: %w", err)
+	}
+	out := make(map[string][]byte)
+	for _, alias := range ks.Aliases() {
+		if !ks.IsTrustedCertificateEntry(alias) {
+			continue
+		}
+		entry, err := ks.GetTrustedCertificateEntry(alias)
+		if err != nil {
+			return nil, fmt.Errorf("jks: get trust entry %q: %w", alias, err)
+		}
+		if len(entry.Certificate.Content) == 0 {
+			continue
+		}
+		out[alias] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: entry.Certificate.Content})
+	}
+	return out, nil
+}
+
 // pkcs8DER returns the private key as PKCS#8 DER (the form a JKS key entry
 // stores), converting from PKCS#1 or SEC1 if necessary.
 func pkcs8DER(keyPEM []byte) ([]byte, error) {
@@ -103,6 +154,24 @@ func pkcs8DER(keyPEM []byte) ([]byte, error) {
 		return nil, errors.New("jks: unrecognized private-key format")
 	}
 	return x509.MarshalPKCS8PrivateKey(key)
+}
+
+func certDER(cert []byte) ([]byte, error) {
+	block, _ := pem.Decode(cert)
+	if block == nil {
+		if len(cert) == 0 {
+			return nil, errors.New("empty certificate")
+		}
+		out := make([]byte, len(cert))
+		copy(out, cert)
+		return out, nil
+	}
+	if block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("first PEM block is %s, not CERTIFICATE", block.Type)
+	}
+	out := make([]byte, len(block.Bytes))
+	copy(out, block.Bytes)
+	return out, nil
 }
 
 func certChain(certChainPEM []byte) ([]keystore.Certificate, error) {

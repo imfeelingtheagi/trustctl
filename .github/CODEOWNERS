@@ -11,39 +11,40 @@
 # codified; codifying it here makes the gate provable from the artifact, and
 # docs/codeowners_test.go asserts every security-critical path below stays covered.
 #
-# Owner handle: @imfeelingtheagi is the canonical maintainer namespace (the same one
-# used for the module path, container images, and clone URLs). Replace it with a
-# GitHub team (e.g. @imfeelingtheagi/security) once an org/team exists; the coverage
-# test only requires that each critical path resolves to a non-empty owner.
+# Owner: @ctlplne/security is the maintainer team for these paths (the ctlplne org
+# is now the canonical namespace — the same one used for the module path, container
+# images, and clone URLs). This team must exist on GitHub — create @ctlplne/security
+# and add the maintainer(s) — or CODEOWNERS will not resolve to a valid reviewer.
+# The coverage test only requires that each critical path resolves to a non-empty owner.
 
 # Default owner for everything not matched more specifically below.
-*                               @imfeelingtheagi
+*                               @ctlplne/security
 
 # --- Security-critical: the root of trust (TEST-006) ------------------------
 # A compromise of any of these is, per CLAUDE.md, "the company is over." They get
 # explicit, mandatory ownership so no change lands without a security review.
 
 # AN-3 — the sole cryptography boundary. Nothing else may import crypto/*.
-/internal/crypto/                @imfeelingtheagi
+/internal/crypto/                @ctlplne/security
 
 # AN-4 — the isolated signing service (private-key operations) and its gRPC wire
 # contract (internal/signing/proto — the boundary to the most sensitive process).
-/internal/signing/               @imfeelingtheagi
-/internal/signing/proto/         @imfeelingtheagi
-/cmd/trstctl-signer/            @imfeelingtheagi
+/internal/signing/               @ctlplne/security
+/internal/signing/proto/         @ctlplne/security
+/cmd/trstctl-signer/            @ctlplne/security
 
 # AN-1 — multi-tenant storage, RLS policies, and migrations.
-/internal/store/                 @imfeelingtheagi
+/internal/store/                 @ctlplne/security
 
 # The architecture linter that enforces AN-1/AN-3/AN-5/AN-8 in CI — weakening it
 # silently weakens every guardrail, so it is owned alongside the crypto/signer/store.
-/tools/trstctllint/             @imfeelingtheagi
+/tools/trstctllint/             @ctlplne/security
 
 # --- Security & supply-chain process surfaces -------------------------------
 # CI/release pipelines, the security policy, and the disclosure docs gate what ships
 # and how, so they carry explicit ownership too.
-/.github/                        @imfeelingtheagi
-/.github/workflows/              @imfeelingtheagi
-/.github/CODEOWNERS              @imfeelingtheagi
-/SECURITY.md                     @imfeelingtheagi
-/deploy/                         @imfeelingtheagi
+/.github/                        @ctlplne/security
+/.github/workflows/              @ctlplne/security
+/.github/CODEOWNERS              @ctlplne/security
+/SECURITY.md                     @ctlplne/security
+/deploy/                         @ctlplne/security

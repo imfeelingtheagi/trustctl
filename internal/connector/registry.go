@@ -52,6 +52,37 @@ func (r *Registry) Register(c Connector) {
 	r.connectors[c.Name()] = c
 }
 
+// Has reports whether a connector is registered under name.
+func (r *Registry) Has(name string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.connectors[name] != nil
+}
+
+// Deploy routes an already decoded payload to the named connector.
+func (r *Registry) Deploy(ctx context.Context, p DeployPayload) error {
+	if r == nil {
+		return fmt.Errorf("connector: registry is not configured")
+	}
+	r.mu.RLock()
+	c := r.connectors[p.Connector]
+	r.mu.RUnlock()
+	if c == nil {
+		return fmt.Errorf("connector: no connector registered as %q", p.Connector)
+	}
+	ops := r.opsFor(p.Connector)
+	if ops == nil {
+		return fmt.Errorf("connector: no ops configured for %q", p.Connector)
+	}
+	_, err := Run(ctx, c, ops, Deployment{
+		Target: p.Target, CertPEM: p.CertPEM, KeyPEM: p.KeyPEM, Fingerprint: p.Fingerprint,
+	})
+	return err
+}
+
 // Handle decodes a deploy payload and runs the named connector. It is the body
 // of the outbox handler (AN-6): wire it as
 // outbox.HandlerFunc(func(ctx, m) error { return reg.Handle(ctx, m.Payload) }).
@@ -61,14 +92,5 @@ func (r *Registry) Handle(ctx context.Context, payload []byte) error {
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return fmt.Errorf("connector: decode deploy payload: %w", err)
 	}
-	r.mu.RLock()
-	c := r.connectors[p.Connector]
-	r.mu.RUnlock()
-	if c == nil {
-		return fmt.Errorf("connector: no connector registered as %q", p.Connector)
-	}
-	_, err := Run(ctx, c, r.opsFor(p.Connector), Deployment{
-		Target: p.Target, CertPEM: p.CertPEM, KeyPEM: p.KeyPEM, Fingerprint: p.Fingerprint,
-	})
-	return err
+	return r.Deploy(ctx, p)
 }

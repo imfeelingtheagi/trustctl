@@ -11,13 +11,13 @@ const ctRows = [
     domain: "example.com",
     checkpoint: "RFC 6962 log index + STH",
     signal: "Unexpected SAN outside approved issuer profile",
-    status: "Would create an outbox-backed alert once console CT monitoring ships",
+    status: "Served discovery worker records a finding and queues an alert",
   },
   {
     domain: "api.example.com",
     checkpoint: "issuer/name/serial tuple",
     signal: "Shadow certificate from untracked CA",
-    status: "Preview only - no CT polling endpoint exists",
+    status: "Dedicated triage dashboard pending",
   },
 ];
 
@@ -114,12 +114,12 @@ export function Posture() {
       <PageHeader
         titleId="posture-heading"
         title="Posture"
-        description="CT monitoring, drift detection, and CBOM scanning are library-complete today. This page is a technical preview of the evidence model, not a live scanner."
+        description="CT monitoring and drift detection now run through the served discovery source/run/finding path. This page stays as the posture dashboard preview until dedicated triage and remediation controls land."
       />
 
-      <UnavailableState title="Posture collector APIs not served yet">
-        CT monitoring, drift detection, and CBOM scanning run in the agent and library today. Console management of watchlists, scan triggers, findings, and
-        cited evidence is coming soon.
+      <UnavailableState title="Dedicated posture dashboards not served yet">
+        Use Discovery to create `ct_log` and `drift` sources, start runs, and read findings. This page does not yet manage watchlists, drift baselines, triage
+        history, or cited remediation evidence.
       </UnavailableState>
 
       <section aria-labelledby="ct-heading" className="grid gap-3 border-y border-border py-4">
@@ -130,14 +130,14 @@ export function Posture() {
               Certificate Transparency monitoring
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              CT monitoring watches public logs for certificates your tenant did not request. Watchlists, checkpoints, and unexpected-issuance alerts need the
-              missing CT findings API.
+              CT monitoring watches public logs for certificates your tenant did not request. The served discovery worker polls configured logs, records
+              tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.
             </p>
           </div>
         </div>
-        <UnavailableState title="CT findings API not served yet">
-          CT monitoring is available via the agent and library today; console management is coming soon. Domain watchlists, log checkpoints, poll state, and
-          unexpected-certificate findings are not surfaced here, and there is no live Add watchlist or Poll CT control.
+        <UnavailableState title="Dedicated CT dashboard not served yet">
+          CT runs are served through Discovery sources of kind `ct_log`. Domain watchlists, log checkpoints, poll state, and unexpected-certificate findings are
+          not managed on this page, and there is no live Add watchlist or Poll CT control here.
         </UnavailableState>
         <PreviewTable title="Non-interactive CT triage preview" headers={["Domain", "Checkpoint", "Suspicious certificate", "Triage status"]}>
           {ctRows.map((row) => (
@@ -159,14 +159,14 @@ export function Posture() {
               Drift detection
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Drift detection compares what trstctl intended to deploy with what an enrolled agent actually sees. Deleted, replaced, relocated, and
-              permission-changed credentials remain agent-only until findings are served.
+              Drift detection compares what trstctl intended to deploy with what the served worker can verify from a configured watched credential path.
+              Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.
             </p>
           </div>
         </div>
-        <UnavailableState title="Drift findings API not served yet">
-          Drift detection runs in the agent and library today; console management is coming soon. Per-agent findings, timestamps, severity, and remediation
-          eligibility are not surfaced here, and preview remediation buttons are disabled because no served remediation workflow exists.
+        <UnavailableState title="Drift remediation UI not served yet">
+          Drift runs are served through Discovery sources of kind `drift`. Dedicated per-agent grouping, resolution state, severity tuning, and remediation
+          actions are not surfaced here, so preview remediation buttons remain disabled.
         </UnavailableState>
         <PreviewTable title="Non-interactive drift remediation preview" headers={["Finding", "Severity", "Evidence", "Remediation"]}>
           {driftRows.map((row) => (
@@ -209,9 +209,9 @@ export function Posture() {
             </p>
           </div>
         </div>
-        <UnavailableState title="CBOM findings API not served yet">
-          CBOM scanning is available via the agent and library today; console management is coming soon. Scan triggers, asset-level findings, graph links, and
-          posture timestamps are not surfaced here, so no Run CBOM scan control is rendered.
+        <UnavailableState title="CBOM dashboard controls not served yet">
+          CBOM scanning is served through `/api/v1/cbom/scans` and `/api/v1/cbom/assets`. Scan triggers, asset-level triage controls, graph links, and posture
+          timestamps are not surfaced here, so no Run CBOM scan control is rendered.
         </UnavailableState>
         <PreviewTable title="Non-interactive CBOM preview" headers={["Asset", "Algorithms", "Posture", "Next evidence"]}>
           {cbomRows.map((row) => (
@@ -231,8 +231,9 @@ export function Posture() {
             </tr>
           ))}
         </PreviewTable>
-        <EmptyState title="No served posture findings yet">
-          This page intentionally shows preview rows only. Live CT, drift, and CBOM evidence becomes observable when the backend mounts the collector APIs.
+        <EmptyState title="No dedicated posture dashboard yet">
+          This page intentionally shows preview rows only. Live CT and drift evidence is observable through Discovery findings; CBOM evidence is observable
+          through the CBOM API.
         </EmptyState>
       </section>
 
@@ -249,9 +250,9 @@ export function Posture() {
             </p>
           </div>
         </div>
-        <UnavailableState title="Algorithm inventory not served yet">
-          CBOM algorithm inventory is available via the agent and library today; console management is coming soon. Asset-level inventory, allowed/disallowed
-          state, PQC readiness, hybrid policy, and migration blockers are not surfaced here, so this page cannot operate crypto-agility changes.
+        <UnavailableState title="Algorithm inventory dashboard not served yet">
+          CBOM algorithm inventory is served by the API today; console management is coming soon. Asset-level inventory, allowed/disallowed state, PQC
+          readiness, hybrid policy, and migration blockers are not surfaced here, so this page cannot operate crypto-agility changes.
         </UnavailableState>
         <PreviewTable title="Crypto-agility readiness fixtures" headers={["Asset", "Inventory fixture", "Readiness", "Blocker"]}>
           {cryptoAgilityRows.map((row) => (
@@ -300,8 +301,8 @@ export function Posture() {
             Alert routing is not configured here
           </h2>
           <p className="mt-1 text-muted-foreground">
-            CT anomalies, drift findings, and weak-crypto findings will need served notification-channel configuration before operators can route alerts. That
-            remains a backend gap, not a browser-only setting.
+            CT anomalies and drift findings can be routed through operator-wired notification channels. Tenant self-service channel setup remains a backend gap,
+            not a browser-only setting.
           </p>
         </div>
       </section>

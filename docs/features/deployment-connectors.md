@@ -42,9 +42,13 @@ declares "write to `/etc/nginx/` and exec `nginx`" literally cannot open a socke
 read elsewhere.
 
 Delivery uses reliable, journaled delivery: the orchestrator writes a `connector.deploy`
-message in the *same transaction* as the lifecycle change — so a crash can't drop it — and
-a worker decodes it, finds the connector by name, and runs it at-least-once. Each connector
-must be idempotent on the certificate's fingerprint, so a retry never breaks anything; a
+message in the *same transaction* as the state change that requested deployment — so a
+crash can't drop it — and the running binary's outbox worker decodes it. The worker first
+checks the trusted native `ConnectorRegistry`, then the provenance-verified signed WASM
+connector plugins, and otherwise records an `unrouted` receipt. If a native registry entry
+owns the connector and the payload carries `cert_pem` plus `key_pem`, the worker runs the
+connector at-least-once and records a `delivered` or `failed` receipt. Each connector must
+be idempotent on the certificate's fingerprint, so a retry never breaks anything; a
 conformance suite proves every connector names itself, declares ≥1 capability, deploys, is
 idempotent on re-deploy, and denies an ungranted operation. Connectors compute fingerprints
 and any request signing through the single crypto path — none of them do crypto directly.
@@ -81,31 +85,36 @@ else.
 
 ## Use it
 
-Connectors are wired in code: register the ones you need and let the outbox worker
-drive them. The shape (from the SDK) is:
+Connectors are wired at process composition time: register the trusted in-process
+connectors you need, give each one the narrow `Ops` implementation it is allowed to use,
+and pass that registry to `server.Build`. The same served outbox worker that handles CA
+issuance and revocation then drives deployment.
 
 ```go
-reg := connector.NewRegistry(opsFor)
+reg := connector.NewRegistry(opsFor) // opsFor returns real HTTP/fs/exec Ops per connector.
 reg.Register(nginx.New(nginx.WithBinary("/usr/sbin/nginx")))
-reg.Register(acm.New(acm.Credentials{ /* ... */ }))
+reg.Register(acm.New("us-east-1", acm.Credentials{ /* ... */ }))
 
-// the outbox worker hands each connector.deploy message to the registry
-outbox.HandlerFunc(func(ctx context.Context, m outbox.Message) error {
-    return reg.Handle(ctx, m.Payload)
+srv, err := server.Build(ctx, server.Deps{
+    Store: store,
+    Log:   log,
+    ConnectorRegistry: reg,
 })
 ```
 
-When [lifecycle](lifecycle-and-pqc.md) renews a certificate, it enqueues a deploy to the
-configured target; the worker runs the matching connector inside its sandbox and the new
-certificate lands on the device. To add a target trstctl doesn't ship, follow the
-[connector authoring guide](../guides/connector-authoring.md).
+When an outbox payload contains the issued certificate and private key bytes, the matching
+connector runs inside its sandbox and the new certificate lands on the target. Metadata-only
+lifecycle transitions still produce receipts, but they do not mutate a target unless a
+deployment payload carries the credential bytes; this is deliberate, because the served CA
+destroys generated private keys after issuance. To add a target trstctl doesn't ship,
+follow the [connector authoring guide](../guides/connector-authoring.md).
 
 ## Pitfalls & limits
 
-- **Serving status:** the SDK and all shipped connectors (initial + appliance) are
-  library-complete and pass the conformance suite, but wiring the connector `Registry`
-  into the running server's outbox worker is the integration step — see
-  [Current limitations](../limitations.md). Until then, registration is done in code.
+- **Serving status:** the SDK and all shipped connectors (initial + appliance) are wired
+  into the served outbox path through `server.Deps.ConnectorRegistry`, and signed WASM
+  connector plugins remain a second served path for third-party code. Target setup is still
+  operator wiring, not tenant CRUD.
 - **Grants are deny-by-default.** If a connector seems to "do nothing," check it
   declared the capability for the operation — an ungranted op fails with `ErrDenied`,
   which is the safety net working as designed.

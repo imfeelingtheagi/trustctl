@@ -2,8 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
 	"net"
+	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,10 +17,15 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"trstctl.com/trstctl/internal/agent"
+	"trstctl.com/trstctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/destination/certstore"
+	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jks"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -47,6 +58,21 @@ func (a channelClientAdapter) Renew(ctx context.Context, req *agent.RenewRequest
 		return nil, err
 	}
 	return &agent.RenewResponse{CertChainPEM: resp.CertChainPEM, NotAfterUnix: resp.NotAfterUnix}, nil
+}
+
+func (a channelClientAdapter) ReportInventory(ctx context.Context, req *agent.InventoryRequest) (*agent.InventoryResponse, error) {
+	findings := make([]transport.InventoryFinding, 0, len(req.Findings))
+	for _, f := range req.Findings {
+		findings = append(findings, transport.InventoryFinding{
+			Kind: f.Kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: f.Metadata,
+		})
+	}
+	resp, err := a.c.ReportInventory(ctx, &transport.InventoryRequest{SourceKind: req.SourceKind, Findings: findings})
+	if err != nil {
+		return nil, err
+	}
+	return &agent.InventoryResponse{TenantID: resp.TenantID, RunID: resp.RunID, Recorded: resp.Recorded, Rejected: resp.Rejected}, nil
 }
 
 // enrollAgent issues a one-time bootstrap token through the served enrollment
@@ -231,6 +257,517 @@ func TestServedAgentChannelEndToEnd(t *testing.T) {
 	if string(first.CertChainPEM) != string(second.CertChainPEM) {
 		t.Fatal("a retried renewal (same presented cert + CSR) minted a DIFFERENT certificate — AN-5 idempotency violated")
 	}
+}
+
+// TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph is the DISC-01
+// acceptance proof: an enrolled agent reports host inventory over the served mTLS
+// channel, the control plane derives the tenant from the verified client certificate
+// (AN-1), records the findings through discovery events (AN-2), and exposes them
+// through served discovery inventory and the credential graph. The findings carry
+// only identifiers and metadata, never secret values.
+func TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	if !h.srv.AgentChannelServed() {
+		t.Fatal("agent channel is not served - wire-in failed")
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	t.Cleanup(chCancel)
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	const serverName = "agent.trstctl.local"
+	a := enrollAgent(t, h, "edge-agent-inventory", serverName)
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
+		SourceKind: "filesystem",
+		Findings: []transport.InventoryFinding{
+			{
+				Kind:        "x509_certificate",
+				Ref:         "/etc/ssl/private/web-leaf.pem",
+				Provenance:  "filesystem:/etc/ssl/private/web-leaf.pem",
+				Fingerprint: "sha256:agent-web-leaf",
+				RiskScore:   35,
+				Metadata:    map[string]string{"key_store": "filesystem", "host": "edge-1"},
+			},
+			{
+				Kind:       "secret",
+				Ref:        "k8s://apps/web/tls",
+				Provenance: "k8s-secret:apps/web/tls",
+				RiskScore:  50,
+				Metadata:   map[string]string{"namespace": "apps", "name": "web-tls"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("report inventory over mTLS channel: %v", err)
+	}
+	if inv.TenantID != h.tenant {
+		t.Fatalf("inventory tenant = %q, want certificate tenant %q", inv.TenantID, h.tenant)
+	}
+	if inv.RunID == "" || inv.Recorded != 2 || inv.Rejected != 0 {
+		t.Fatalf("inventory response = %+v, want two recorded findings and a run id", inv)
+	}
+
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "graph:read")
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+inv.RunID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list agent discovery findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string            `json:"kind"`
+			Ref         string            `json:"ref"`
+			Provenance  string            `json:"provenance"`
+			Fingerprint string            `json:"fingerprint"`
+			Metadata    map[string]string `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode agent discovery findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 2 {
+		t.Fatalf("agent discovery findings count = %d body %s, want 2", len(findings.Items), body)
+	}
+	byRef := map[string]struct {
+		Kind        string
+		Provenance  string
+		Fingerprint string
+		Metadata    map[string]string
+	}{}
+	for _, f := range findings.Items {
+		byRef[f.Ref] = struct {
+			Kind        string
+			Provenance  string
+			Fingerprint string
+			Metadata    map[string]string
+		}{f.Kind, f.Provenance, f.Fingerprint, f.Metadata}
+	}
+	if got := byRef["/etc/ssl/private/web-leaf.pem"]; got.Kind != "x509_certificate" || got.Fingerprint != "sha256:agent-web-leaf" || got.Metadata["host"] != "edge-1" {
+		t.Fatalf("filesystem cert finding not recorded as metadata-only inventory: %+v", got)
+	}
+	if got := byRef["k8s://apps/web/tls"]; got.Kind != "secret" || got.Provenance != "k8s-secret:apps/web/tls" || got.Metadata["name"] != "web-tls" {
+		t.Fatalf("kubernetes secret finding not recorded as metadata-only inventory: %+v", got)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/graph", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get graph: status %d body %s", status, body)
+	}
+	var graphResp struct {
+		Nodes []struct {
+			ID    string            `json:"id"`
+			Kind  string            `json:"kind"`
+			Name  string            `json:"name"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(body, &graphResp); err != nil {
+		t.Fatalf("decode graph: %v (%s)", err, body)
+	}
+	var foundCert, foundSecret bool
+	for _, n := range graphResp.Nodes {
+		if n.Kind != "credential" {
+			continue
+		}
+		switch n.Attrs["discovery_ref"] {
+		case "/etc/ssl/private/web-leaf.pem":
+			foundCert = n.Attrs["credential_kind"] == "x509_certificate" && n.Attrs["provenance"] == "filesystem:/etc/ssl/private/web-leaf.pem"
+		case "k8s://apps/web/tls":
+			foundSecret = n.Attrs["credential_kind"] == "secret" && n.Attrs["provenance"] == "k8s-secret:apps/web/tls"
+		}
+	}
+	if !foundCert || !foundSecret {
+		t.Fatalf("agent inventory findings did not appear in credential graph: cert=%v secret=%v nodes=%+v", foundCert, foundSecret, graphResp.Nodes)
+	}
+
+	for _, eventType := range []string{
+		"discovery.source.upserted", "discovery.run.queued", "discovery.run.started",
+		"discovery.finding.recorded", "discovery.run.completed",
+	} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; agent inventory ingest is not event-sourced", eventType)
+		}
+	}
+}
+
+// TestServedTrustStoreCollectorsReportOverAgentChannel is the DISC-02 acceptance
+// proof: agent-side trust-store collectors enumerate public CA certificates from
+// Linux, Java cacerts/JKS, NSS/browser export, and Windows-store fixtures, then reuse
+// the served DISC-01 inventory channel so those metadata-only trust anchors land in
+// served discovery inventory and the credential graph. Private key material is never
+// read or sent.
+func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	t.Cleanup(chCancel)
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	dir := t.TempDir()
+	certs := map[string][]byte{
+		"linux":   trustStoreFixturePEM(t, "linux-os-root.test"),
+		"java":    trustStoreFixturePEM(t, "java-cacerts-root.test"),
+		"nss":     trustStoreFixturePEM(t, "nss-profile-root.test"),
+		"browser": trustStoreFixturePEM(t, "browser-profile-root.test"),
+		"windows": trustStoreFixturePEM(t, "windows-root-store.test"),
+	}
+	linuxRoot := filepath.Join(dir, "linux", "anchors")
+	mustWriteFile(t, filepath.Join(linuxRoot, "corp-root.pem"), certs["linux"])
+	javaStore := filepath.Join(dir, "java", "cacerts")
+	javaBlob, err := jks.EncodeTrustStoreDeterministic(map[string][]byte{"corp-java-root": certs["java"]}, "changeit")
+	if err != nil {
+		t.Fatalf("build java trust-store fixture: %v", err)
+	}
+	mustWriteFile(t, javaStore, javaBlob)
+	nssProfile := filepath.Join(dir, "firefox", "default")
+	mustWriteFile(t, filepath.Join(nssProfile, "certs", "corp-nss-root.pem"), certs["nss"])
+	browserProfile := filepath.Join(dir, "chromium", "Default")
+	mustWriteFile(t, filepath.Join(browserProfile, "trusted-root.der"), firstCertDERFromPEM(t, certs["browser"]))
+	winStore := certstore.NewMemory()
+	winRef := destination.StoreRef{Location: destination.LocalMachine, Name: "ROOT"}
+	if err := winStore.AddCertificate(winRef, "corp-windows-root", certs["windows"]); err != nil {
+		t.Fatalf("seed windows trust-store fixture: %v", err)
+	}
+
+	sources := []agentdiscovery.Source{
+		agentdiscovery.NewOSTrustStoreSource("linux", linuxRoot),
+		agentdiscovery.NewJavaTrustStoreSource(javaStore, "changeit"),
+		agentdiscovery.NewNSSTrustStoreSource("firefox-default", nssProfile),
+		agentdiscovery.NewBrowserTrustStoreSource("chromium", "Default", browserProfile),
+		agentdiscovery.NewWindowsTrustStoreSource(winRef.String(), winStore),
+	}
+	var found []agentdiscovery.Found
+	for _, src := range sources {
+		got, err := src.Discover(context.Background())
+		if err != nil {
+			t.Fatalf("discover %s trust store: %v", src.Kind(), err)
+		}
+		found = append(found, got...)
+	}
+	if len(found) != len(certs) {
+		t.Fatalf("trust-store collectors found %d certs, want %d: %+v", len(found), len(certs), found)
+	}
+
+	a := enrollAgent(t, h, "edge-agent-truststores", "agent.trstctl.local")
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
+		SourceKind: agentdiscovery.SourceTrustStore,
+		Findings:   trustStoreInventoryFindings(found),
+	})
+	if err != nil {
+		t.Fatalf("report trust-store inventory: %v", err)
+	}
+	if inv.TenantID != h.tenant || inv.Recorded != len(certs) || inv.Rejected != 0 || inv.RunID == "" {
+		t.Fatalf("trust-store inventory response = %+v, want tenant %s and %d recorded", inv, h.tenant, len(certs))
+	}
+
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "graph:read")
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+inv.RunID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list trust-store findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			Ref         string            `json:"ref"`
+			Provenance  string            `json:"provenance"`
+			Fingerprint string            `json:"fingerprint"`
+			Metadata    map[string]string `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode trust-store findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != len(certs) {
+		t.Fatalf("served trust-store findings count = %d body %s, want %d", len(findings.Items), body, len(certs))
+	}
+	seenKinds := map[string]bool{}
+	for _, f := range findings.Items {
+		if !strings.HasPrefix(f.Provenance, agentdiscovery.SourceTrustStore+":") {
+			t.Fatalf("trust-store finding has wrong provenance: %+v", f)
+		}
+		if f.Fingerprint == "" {
+			t.Fatalf("trust-store finding missing fingerprint: %+v", f)
+		}
+		seenKinds[f.Metadata["trust_store_kind"]] = true
+		if f.Metadata["private_key_present"] != "false" {
+			t.Fatalf("trust-store finding claims private key material: %+v", f)
+		}
+	}
+	for _, want := range []string{"os", "java", "nss", "browser", "windows"} {
+		if !seenKinds[want] {
+			t.Fatalf("missing %s trust-store finding in served inventory: %+v", want, findings.Items)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/graph", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get graph after trust-store inventory: status %d body %s", status, body)
+	}
+	var graphResp struct {
+		Nodes []struct {
+			Kind  string            `json:"kind"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(body, &graphResp); err != nil {
+		t.Fatalf("decode graph: %v (%s)", err, body)
+	}
+	graphTrustAnchors := 0
+	for _, n := range graphResp.Nodes {
+		if n.Kind == "credential" && n.Attrs["credential_kind"] == "x509_certificate" && strings.HasPrefix(n.Attrs["provenance"], agentdiscovery.SourceTrustStore+":") {
+			graphTrustAnchors++
+		}
+	}
+	if graphTrustAnchors != len(certs) {
+		t.Fatalf("credential graph has %d trust-store cert nodes, want %d", graphTrustAnchors, len(certs))
+	}
+}
+
+// TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly is the DISC-03
+// acceptance proof: an agent-side host fixture contains private-key material, the
+// agent locates and classifies it without exfiltrating bytes, and the served mTLS
+// inventory channel records only public-key-derived identifiers plus metadata.
+func TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	t.Cleanup(chCancel)
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	root := t.TempDir()
+	keyDER, err := crypto.GeneratePKCS8(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate private-key fixture: %v", err)
+	}
+	defer secret.Wipe(keyDER)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	defer secret.Wipe(keyPEM)
+	keyPath := filepath.Join(root, "etc", "ssl", "private", "web-leaf.key")
+	mustWriteFileMode(t, keyPath, keyPEM, 0o600)
+	mustWriteFileMode(t, filepath.Join(root, "noise.txt"), []byte("not a key\n"), 0o644)
+
+	found, err := agentdiscovery.NewPrivateKeySource(root).Discover(context.Background())
+	if err != nil {
+		t.Fatalf("discover private-key fixture: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("private-key discovery found %d keys, want 1: %+v", len(found), found)
+	}
+	if found[0].Location != keyPath || found[0].Algorithm != crypto.ECDSAP256 || found[0].Fingerprint == "" {
+		t.Fatalf("private-key metadata was not classified from the fixture key: %+v", found[0])
+	}
+
+	a := enrollAgent(t, h, "edge-agent-private-keys", "agent.trstctl.local")
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
+		SourceKind: agentdiscovery.SourcePrivateKey,
+		Findings:   privateKeyInventoryFindings(found),
+	})
+	if err != nil {
+		t.Fatalf("report private-key inventory: %v", err)
+	}
+	if inv.TenantID != h.tenant || inv.Recorded != 1 || inv.Rejected != 0 || inv.RunID == "" {
+		t.Fatalf("private-key inventory response = %+v, want one recorded finding for tenant %s", inv, h.tenant)
+	}
+
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "graph:read")
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+inv.RunID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list private-key findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "BEGIN PRIVATE KEY") || strings.Contains(string(body), "PRIVATE KEY-----") {
+		t.Fatalf("served discovery response exposed private-key bytes:\n%s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string            `json:"kind"`
+			Ref         string            `json:"ref"`
+			Provenance  string            `json:"provenance"`
+			Fingerprint string            `json:"fingerprint"`
+			Metadata    map[string]string `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode private-key findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 1 {
+		t.Fatalf("served private-key findings count = %d body %s, want 1", len(findings.Items), body)
+	}
+	got := findings.Items[0]
+	if got.Kind != "private_key" || got.Ref != keyPath || got.Provenance != agentdiscovery.SourcePrivateKey+":"+keyPath || got.Fingerprint == "" {
+		t.Fatalf("served private-key finding has wrong identity metadata: %+v", got)
+	}
+	if got.Metadata["material_class"] != "private-key" || got.Metadata["key_algorithm"] != string(crypto.ECDSAP256) || got.Metadata["key_bytes_present"] != "false" {
+		t.Fatalf("served private-key finding did not prove metadata-only classification: %+v", got.Metadata)
+	}
+	for k, v := range got.Metadata {
+		if strings.Contains(v, "PRIVATE KEY") {
+			t.Fatalf("private-key metadata field %s exposed key material: %q", k, v)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/graph", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get graph after private-key inventory: status %d body %s", status, body)
+	}
+	var graphResp struct {
+		Nodes []struct {
+			Kind  string            `json:"kind"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(body, &graphResp); err != nil {
+		t.Fatalf("decode graph: %v (%s)", err, body)
+	}
+	foundGraphKey := false
+	for _, n := range graphResp.Nodes {
+		if n.Kind == "credential" && n.Attrs["credential_kind"] == "private_key" && n.Attrs["discovery_ref"] == keyPath && n.Attrs["fingerprint"] == got.Fingerprint {
+			foundGraphKey = true
+			break
+		}
+	}
+	if !foundGraphKey {
+		t.Fatalf("credential graph did not include metadata-only private-key finding: %+v", graphResp.Nodes)
+	}
+}
+
+func trustStoreFixturePEM(t *testing.T, commonName string) []byte {
+	t.Helper()
+	ca, err := mtls.NewCA(commonName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ca.BundlePEM()
+}
+
+func firstCertDERFromPEM(t *testing.T, chain []byte) []byte {
+	t.Helper()
+	der, err := mtls.FirstCertDER(chain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	mustWriteFileMode(t, path, data, 0o644)
+}
+
+func mustWriteFileMode(t *testing.T, path string, data []byte, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func trustStoreInventoryFindings(found []agentdiscovery.Found) []transport.InventoryFinding {
+	out := make([]transport.InventoryFinding, 0, len(found))
+	for _, f := range found {
+		meta := map[string]string{
+			"subject":             f.Cert.Subject,
+			"issuer":              f.Cert.Issuer,
+			"serial":              f.Cert.SerialNumber,
+			"key_algorithm":       f.Cert.KeyAlgorithm,
+			"not_after":           f.Cert.NotAfter.Format(time.RFC3339),
+			"private_key_present": "false",
+		}
+		for k, v := range f.Metadata {
+			meta[k] = v
+		}
+		out = append(out, transport.InventoryFinding{
+			Kind:        "x509_certificate",
+			Ref:         f.Location,
+			Provenance:  f.Source + ":" + f.Location,
+			Fingerprint: f.Cert.SHA256Fingerprint,
+			RiskScore:   20,
+			Metadata:    meta,
+		})
+	}
+	return out
+}
+
+func privateKeyInventoryFindings(found []agentdiscovery.PrivateKeyFound) []transport.InventoryFinding {
+	out := make([]transport.InventoryFinding, 0, len(found))
+	for _, f := range found {
+		meta := map[string]string{
+			"material_class":        "private-key",
+			"key_format":            f.Format,
+			"key_algorithm":         string(f.Algorithm),
+			"fingerprint_basis":     f.FingerprintBasis,
+			"encrypted":             fmt.Sprintf("%t", f.Encrypted),
+			"key_bytes_present":     "false",
+			"file_mode_restricted":  fmt.Sprintf("%t", f.Restricted),
+			"source_classification": f.Source,
+		}
+		for k, v := range f.Metadata {
+			meta[k] = v
+		}
+		out = append(out, transport.InventoryFinding{
+			Kind:        "private_key",
+			Ref:         f.Location,
+			Provenance:  f.Source + ":" + f.Location,
+			Fingerprint: f.Fingerprint,
+			RiskScore:   85,
+			Metadata:    meta,
+		})
+	}
+	return out
 }
 
 // newAgentCSR builds a PKCS#10 CSR for a fresh agent key through the mtls boundary, for

@@ -114,7 +114,7 @@ func TestProtectSCHEMA005_ProjectorRejectsUnknownVersionAnchor(t *testing.T) {
 	if gateIdx < 0 || switchIdx < 0 {
 		t.Fatalf("SCHEMA-005: ApplyTx no longer gates on ValidateSchemaVersion before dispatching on e.Type; re-validate the reject path")
 	}
-	if !(gateIdx < switchIdx) {
+	if gateIdx >= switchIdx {
 		t.Errorf("SCHEMA-005: ApplyTx dispatches on e.Type (@%d) before validating the schema version (@%d); a known type at an unknown version could be decoded against the wrong struct", switchIdx, gateIdx)
 	}
 }

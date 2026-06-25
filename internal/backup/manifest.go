@@ -39,7 +39,6 @@ var RecoveredFromPostgresBackup = []string{
 	"ca_ceremony_approvals",
 	"ca_key_ceremonies",
 	"credentials",
-	"crypto_assets",
 	"ct_log_checkpoints",
 	"ct_watched_domains",
 	"deployment_targets",

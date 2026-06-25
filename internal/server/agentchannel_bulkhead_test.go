@@ -24,6 +24,10 @@ func (stubAgentChannelService) Renew(context.Context, *transport.RenewRequest) (
 	return &transport.RenewResponse{CertChainPEM: []byte("chain"), NotAfterUnix: 123}, nil
 }
 
+func (stubAgentChannelService) ReportInventory(context.Context, *transport.InventoryRequest) (*transport.InventoryResponse, error) {
+	return &transport.InventoryResponse{TenantID: "tenant-a", RunID: "run-a", Recorded: 1}, nil
+}
+
 func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAgent, Workers: 1, Queue: 0},
@@ -54,6 +58,9 @@ func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 	}
 	if _, err := svc.Renew(context.Background(), &transport.RenewRequest{CSRDER: []byte{0x30, 0x01}}); status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("saturated renew error = %v, want ResourceExhausted", err)
+	}
+	if _, err := svc.ReportInventory(context.Background(), &transport.InventoryRequest{Findings: []transport.InventoryFinding{{Kind: "secret", Ref: "ref"}}}); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("saturated inventory error = %v, want ResourceExhausted", err)
 	}
 
 	for _, subsystem := range []string{bulkhead.SubsystemAPI, bulkhead.SubsystemProtocols, bulkhead.SubsystemOutbox} {

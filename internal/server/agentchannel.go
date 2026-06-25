@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,6 +53,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -77,6 +79,8 @@ const agentServerCertTTL = 24 * time.Hour
 // connection. The subsystem pool below is the primary AN-7 control; this transport
 // cap prevents one TCP connection from becoming an unbounded stream fan-out.
 const agentMaxConcurrentStreams uint32 = 256
+
+const agentMaxInventoryFindings = 1000
 
 type agentChannelService interface {
 	transport.AgentServiceServer
@@ -183,6 +187,7 @@ func (s *Server) OutOfProcessAgentCA() bool {
 type agentService struct {
 	store        *store.Store
 	log          *events.Log
+	orch         *orchestrator.Orchestrator
 	idem         idempotentRunner
 	caSigner     crypto.DigestSigner
 	caCertDER    []byte
@@ -220,6 +225,12 @@ func (b *bulkheadedAgentService) Heartbeat(ctx context.Context, req *transport.H
 func (b *bulkheadedAgentService) Renew(ctx context.Context, req *transport.RenewRequest) (*transport.RenewResponse, error) {
 	return runAgentBulkhead(ctx, b.pool, "renew", b.metrics, func(ctx context.Context) (*transport.RenewResponse, error) {
 		return b.next.Renew(ctx, req)
+	})
+}
+
+func (b *bulkheadedAgentService) ReportInventory(ctx context.Context, req *transport.InventoryRequest) (*transport.InventoryResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "inventory", b.metrics, func(ctx context.Context) (*transport.InventoryResponse, error) {
+		return b.next.ReportInventory(ctx, req)
 	})
 }
 
@@ -400,6 +411,78 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	}
 	naUnix, _ := mtls.CertNotAfterUnix(out)
 	return &transport.RenewResponse{CertChainPEM: out, NotAfterUnix: naUnix}, nil
+}
+
+// ReportInventory records a metadata-only host inventory batch under the
+// certificate-derived tenant (AN-1). The server creates a discovery source/run and
+// records every valid finding through orchestrator discovery events (AN-2); no
+// read-model table is mutated directly.
+func (a *agentService) ReportInventory(ctx context.Context, req *transport.InventoryRequest) (*transport.InventoryResponse, error) {
+	info, err := peerInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if a.orch == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent inventory orchestrator is not configured")
+	}
+	if req == nil || len(req.Findings) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "inventory report requires at least one finding")
+	}
+	if len(req.Findings) > agentMaxInventoryFindings {
+		return nil, status.Errorf(codes.InvalidArgument, "inventory report has %d findings; maximum is %d", len(req.Findings), agentMaxInventoryFindings)
+	}
+	findings := make([]store.DiscoveryFinding, 0, len(req.Findings))
+	for _, f := range req.Findings {
+		meta, err := metadataJSON(f.Metadata)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q metadata: %v", f.Ref, err)
+		}
+		risk := f.RiskScore
+		if risk < 0 {
+			risk = 0
+		}
+		if risk > 100 {
+			risk = 100
+		}
+		findings = append(findings, store.DiscoveryFinding{
+			Kind: f.Kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: risk, Metadata: meta,
+		})
+	}
+	run, recorded, rejected, err := a.orch.RecordAgentInventory(ctx, info.TenantID, info.CommonName, req.SourceKind, findings)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "record agent inventory: %v", err)
+	}
+	return &transport.InventoryResponse{TenantID: info.TenantID, RunID: run.ID, Recorded: recorded, Rejected: rejected}, nil
+}
+
+func metadataJSON(meta map[string]string) (json.RawMessage, error) {
+	if len(meta) == 0 {
+		return json.RawMessage(`{}`), nil
+	}
+	for k := range meta {
+		if inlineAgentInventorySecretKey(k) {
+			return nil, fmt.Errorf("field %q may contain credential material; use a reference or non-secret metadata", k)
+		}
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(data), nil
+}
+
+func inlineAgentInventorySecretKey(key string) bool {
+	k := strings.ToLower(strings.ReplaceAll(key, "-", "_"))
+	if strings.Contains(k, "ref") || strings.Contains(k, "name") || strings.Contains(k, "id") || strings.Contains(k, "fingerprint") {
+		return false
+	}
+	switch k {
+	case "password", "passphrase", "secret", "token", "private_key", "privatekey", "credential", "value":
+		return true
+	default:
+		return strings.HasSuffix(k, "_secret") || strings.HasSuffix(k, "_token")
+	}
 }
 
 // agentChannelServerCreds mints the agent-channel server's mTLS credentials: it

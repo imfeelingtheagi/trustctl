@@ -30,6 +30,10 @@ func (compatAgentService) Renew(context.Context, *transport.RenewRequest) (*tran
 	return &transport.RenewResponse{CertChainPEM: []byte("test-chain"), NotAfterUnix: time.Now().Add(time.Hour).Unix()}, nil
 }
 
+func (compatAgentService) ReportInventory(context.Context, *transport.InventoryRequest) (*transport.InventoryResponse, error) {
+	return &transport.InventoryResponse{TenantID: "11111111-1111-1111-1111-111111111111", RunID: "run-1", Recorded: 1}, nil
+}
+
 func startCompatAgentService(t *testing.T, svc transport.AgentServiceServer) *grpc.ClientConn {
 	t.Helper()
 	if svc == nil {
@@ -69,6 +73,19 @@ func TestAgentRenewProtocolCompatWindow(t *testing.T) {
 	}
 }
 
+func TestAgentInventoryProtocolCompatWindow(t *testing.T) {
+	conn := startCompatAgentService(t, nil)
+	for _, version := range []int{0, protocol.MinSupportedVersion, protocol.Version, protocol.MaxSupportedVersion} {
+		client := transport.NewAgentClient(conn, transport.WithProtocolVersion(version))
+		if _, err := client.ReportInventory(context.Background(), &transport.InventoryRequest{
+			SourceKind: "filesystem",
+			Findings:   []transport.InventoryFinding{{Kind: "secret", Ref: "ref"}},
+		}); err != nil {
+			t.Fatalf("ReportInventory protocol %d rejected: %v", version, err)
+		}
+	}
+}
+
 func TestAgentProtocolRejectsTooNewHeartbeatAndRenew(t *testing.T) {
 	conn := startCompatAgentService(t, nil)
 	client := transport.NewAgentClient(conn, transport.WithProtocolVersion(protocol.MaxSupportedVersion+1))
@@ -79,6 +96,10 @@ func TestAgentProtocolRejectsTooNewHeartbeatAndRenew(t *testing.T) {
 		},
 		"Renew": func() error {
 			_, err := client.Renew(context.Background(), &transport.RenewRequest{CSRDER: []byte{0x30, 0x01}})
+			return err
+		},
+		"ReportInventory": func() error {
+			_, err := client.ReportInventory(context.Background(), &transport.InventoryRequest{Findings: []transport.InventoryFinding{{Kind: "secret", Ref: "ref"}}})
 			return err
 		},
 	} {
@@ -97,7 +118,7 @@ func TestAgentProtocolResponseHeaderAndLegacyMissingMetadata(t *testing.T) {
 	var hdr metadata.MD
 	ctx := metadata.AppendToOutgoingContext(context.Background(),
 		protocol.MetadataAgentProtocol, strconv.Itoa(protocol.Version),
-		protocol.MetadataAgentCapabilities, transport.AgentCapabilityHeartbeat+","+transport.AgentCapabilityRenew,
+		protocol.MetadataAgentCapabilities, transport.AgentCapabilityHeartbeat+","+transport.AgentCapabilityRenew+","+transport.AgentCapabilityInventory,
 		protocol.MetadataAgentVersion, "test-agent")
 	var out transport.HeartbeatResponse
 	if err := conn.Invoke(ctx, "/trstctl.agent.v1.AgentService/Heartbeat", &transport.HeartbeatRequest{AgentID: "edge"}, &out,
@@ -107,7 +128,7 @@ func TestAgentProtocolResponseHeaderAndLegacyMissingMetadata(t *testing.T) {
 	if got := hdr.Get(protocol.MetadataServerProtocol); len(got) != 1 || got[0] != protocol.VersionString() {
 		t.Fatalf("server protocol header = %v, want %s", got, protocol.VersionString())
 	}
-	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew
+	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew + "," + transport.AgentCapabilityInventory
 	if got := hdr.Get(protocol.MetadataServerCapabilities); len(got) != 1 || got[0] != wantCapabilities {
 		t.Fatalf("server capabilities header = %v, want %s", got, wantCapabilities)
 	}
@@ -141,7 +162,7 @@ func TestAgentClientSendsProtocolCapabilitiesAndVersionMetadata(t *testing.T) {
 	if got := md.Get(protocol.MetadataAgentProtocol); len(got) != 1 || got[0] != protocol.VersionString() {
 		t.Fatalf("agent protocol metadata = %v, want %s", got, protocol.VersionString())
 	}
-	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew
+	wantCapabilities := transport.AgentCapabilityHeartbeat + "," + transport.AgentCapabilityRenew + "," + transport.AgentCapabilityInventory
 	if got := md.Get(protocol.MetadataAgentCapabilities); len(got) != 1 || got[0] != wantCapabilities {
 		t.Fatalf("agent capabilities metadata = %v, want %s", got, wantCapabilities)
 	}

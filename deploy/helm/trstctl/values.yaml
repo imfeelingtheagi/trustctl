@@ -4,7 +4,7 @@
 # against EXTERNAL PostgreSQL and NATS (the tested path).
 
 image:
-  repository: ghcr.io/imfeelingtheagi/trstctl
+  repository: ghcr.io/ctlplne/trstctl
   # Empty => the chart renders `v<appVersion>` (a tag the release pipeline
   # actually publishes, e.g. v0.5.0), NOT a bare `<appVersion>` that was never
   # pushed (OPS-003). Override tag only for controlled non-production installs.

@@ -43,13 +43,21 @@ One command per core API operation:
 | --- | --- |
 | `owners` | `create` · `list` · `get` · `update` · `delete` |
 | `issuers` | `create` · `list` · `get` |
-| `identities` | `create` · `list` · `get` · `transition` |
+| `ca ceremonies` | `start` · `get` · `approve` |
+| `ca authorities` | `list` · `create-root` · `create-intermediate` · `issue` |
+| `external-cas` | `list` · `issue` |
+| `identities` | `create` · `list` · `get` · `transition` · `approve` |
 | `certificates` | `ingest` · `list` · `get` |
+| `workloads` | `attested-issuance` |
+| `broker agent-identities` | `issue` |
+| `ephemeral` | `issue` · `approve` |
 | `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
-| `privacy` | `erasures erase` · `erasures list` · `retention run` · `retention list` · `catalog` |
+| `privacy` | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog` |
 | `graph` | `nodes` · `reachable` · `blast-radius` · `query` |
 | `risk` | `credentials` |
+| `cbom` | `scan` · `assets` |
+| `pqc migrations` | `start` · `rollback` |
 | `agents` | `list` · `enroll-token` |
 
 Plus `version`.
@@ -85,16 +93,86 @@ echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f -
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50
 
+# Start a root CA ceremony, collect two approvals, then create the root.
+cat > root-ceremony.json <<'JSON'
+{"operation":"root","threshold":2,"spec":{"common_name":"Example Root CA","validity":"87600h","is_ca":true,"max_path_len":1}}
+JSON
+trstctl-cli ca ceremonies start -f root-ceremony.json
+# Run each approval with a distinct custodian token.
+trstctl-cli ca ceremonies approve <ceremony-id>
+trstctl-cli ca ceremonies approve <ceremony-id>
+
+cat > root-create.json <<'JSON'
+{"ceremony_id":"<ceremony-id>","spec":{"common_name":"Example Root CA","validity":"87600h","is_ca":true,"max_path_len":1}}
+JSON
+trstctl-cli ca authorities create-root -f root-create.json
+
+# List configured upstream CAs and issue through one of them.
+trstctl-cli external-cas list
+cat > upstream-issue.json <<'JSON'
+{"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","dns_names":["payments.example.com"],"ttl_seconds":86400}
+JSON
+trstctl-cli external-cas issue digicert -f upstream-issue.json
+
 # Rank credentials by risk — what to rotate first.
 trstctl-cli risk credentials --sort score
+
+# Scan TLS endpoints/config files into the cryptographic bill of materials.
+cat > cbom-scan.json <<'JSON'
+{"tls_endpoints":["payments.internal.example:443"],"host_configs":["/etc/nginx/sites-enabled/payments.conf"]}
+JSON
+trstctl-cli cbom scan -f cbom-scan.json
+trstctl-cli cbom assets
+
+# Queue PQC re-issuance for a CBOM certificate-key asset, then rehearse rollback.
+cat > pqc-migration.json <<'JSON'
+{"asset_ids":["<cbom-asset-id>"],"target_algorithm":"ML-DSA-65","protocol":"acme","rollback_on_failure":true}
+JSON
+trstctl-cli pqc migrations start -f pqc-migration.json
+
+cat > pqc-rollback.json <<'JSON'
+{"asset_ids":["<cbom-asset-id>"],"reason":"canary rollback drill"}
+JSON
+trstctl-cli pqc migrations rollback <run-id> -f pqc-rollback.json
 
 # Mint a one-time agent bootstrap token, then list registered agents.
 trstctl-cli agents enroll-token
 trstctl-cli agents list
 
+# Issue a policy-gated short-lived credential for an AI/MCP agent.
+cat > broker-agent.json <<'JSON'
+{"agent_id":"agent-7","method":"k8s_sat","payload_base64":"<proof-base64>","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","scopes":["mcp:graph.read","tool:inventory.read"],"ttl_seconds":600}
+JSON
+trstctl-cli --idempotency-key agent-7-issue-1 broker agent-identities issue -f broker-agent.json
+
+# Open an attestation-gated JIT credential request, approve it, then mint it.
+cat > ephemeral-jit.json <<'JSON'
+{"request_id":"jit-agent-7","method":"k8s_sat","payload_base64":"<proof-base64>","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","ttl_seconds":120}
+JSON
+trstctl-cli --idempotency-key jit-agent-7-request-1 ephemeral issue -f ephemeral-jit.json
+printf '{"action":"issue"}' | trstctl-cli --idempotency-key jit-agent-7-approve-1 ephemeral approve jit-agent-7 -f -
+trstctl-cli --idempotency-key jit-agent-7-issue-1 ephemeral issue -f ephemeral-jit.json
+
+# On an enrolled host, report local public certificate files over the agent channel.
+trstctl-agent --enroll-url https://localhost:8443 \
+  --bootstrap-token-file ./trstctl-bootstrap-token \
+  --server localhost:9443 \
+  --name edge-agent-1 \
+  --ca-bundle ./trstctl-ca.pem \
+  --inventory-cert-roots /etc/ssl,/etc/pki/tls/certs \
+  --inventory-os-trust-roots /etc/ssl/certs \
+  --inventory-java-trust-stores "$JAVA_HOME/lib/security/cacerts" \
+  --inventory-private-key-roots /etc/ssl/private,/etc/ssh
+trstctl-cli discovery findings list
+
 # Run a graph query.
 trstctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
 ```
+
+`--inventory-private-key-roots` locates and classifies private-key files on the host
+but reports only metadata: path, key format, algorithm, file-mode status, and a
+public-key-derived fingerprint when one can be computed. The agent wipes file buffers
+after inspection and never sends PEM/DER key bytes to the control plane.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).

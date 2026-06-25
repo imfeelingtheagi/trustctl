@@ -34,34 +34,43 @@ import "sort"
 // projections test asserts they stay equal so the catalog cannot drift from the
 // shapes the projector actually decodes.
 const (
-	EventCertificateRecorded       = "certificate.recorded"
-	EventCertificateRevoked        = "certificate.revoked"
-	EventCertificateSuperseded     = "certificate.superseded"
-	EventDiscoverySourceUpserted   = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted = "discovery.schedule.upserted"
-	EventDiscoveryRunQueued        = "discovery.run.queued"
-	EventIdentityCreated           = "identity.created"
-	EventIdentityIssued            = "identity.issued"
-	EventIdentityDeployed          = "identity.deployed"
-	EventIdentityRenewing          = "identity.renewing"
-	EventIdentityRenewed           = "identity.renewed"
-	EventIdentityRevoked           = "identity.revoked"
-	EventIdentityRetired           = "identity.retired"
-	EventIssuerCreated             = "issuer.created"
-	EventConnectorDeliveryRecorded = "connector.delivery.recorded"
-	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
-	EventIncidentExecutionRecorded = "incident.execution.recorded"
-	EventOwnerCreated              = "owner.created"
-	EventOwnerUpdated              = "owner.updated"
-	EventOwnerDeleted              = "owner.deleted"
-	EventTenantMemberUpserted      = "tenant.member.upserted"
-	EventTenantMemberOffboarded    = "tenant.member.offboarded"
-	EventAPITokenCreated           = "api_token.created"
-	EventAPITokenRevoked           = "api_token.revoked"
-	EventProfileCreated            = "profile.created"
-	EventProfileUpdated            = "profile.updated"
-	EventPrivacySubjectErased      = "privacy.subject.erased"
-	EventPrivacyRetentionEnforced  = "privacy.retention.enforced"
+	EventCertificateRecorded           = "certificate.recorded"
+	EventCertificateRevoked            = "certificate.revoked"
+	EventCertificateSuperseded         = "certificate.superseded"
+	EventCACeremonyStarted             = "ca.ceremony.started"
+	EventCACeremonyApproved            = "ca.ceremony.approved"
+	EventCARootCreated                 = "ca.root.created"
+	EventCAIntermediateCreated         = "ca.intermediate.created"
+	EventCAEndEntityIssued             = "ca.endentity.issued"
+	EventDiscoverySourceUpserted       = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted     = "discovery.schedule.upserted"
+	EventDiscoveryRunQueued            = "discovery.run.queued"
+	EventCBOMAssetObserved             = "cbom.asset.observed"
+	EventPQCMigrationStarted           = "pqc.migration.started"
+	EventPQCMigrationAssetCompleted    = "pqc.migration.asset_completed"
+	EventPQCMigrationRollbackCompleted = "pqc.migration.rollback_completed"
+	EventIdentityCreated               = "identity.created"
+	EventIdentityIssued                = "identity.issued"
+	EventIdentityDeployed              = "identity.deployed"
+	EventIdentityRenewing              = "identity.renewing"
+	EventIdentityRenewed               = "identity.renewed"
+	EventIdentityRevoked               = "identity.revoked"
+	EventIdentityRetired               = "identity.retired"
+	EventIssuerCreated                 = "issuer.created"
+	EventConnectorDeliveryRecorded     = "connector.delivery.recorded"
+	EventLifecycleRotationRecorded     = "lifecycle.rotation.recorded"
+	EventIncidentExecutionRecorded     = "incident.execution.recorded"
+	EventOwnerCreated                  = "owner.created"
+	EventOwnerUpdated                  = "owner.updated"
+	EventOwnerDeleted                  = "owner.deleted"
+	EventTenantMemberUpserted          = "tenant.member.upserted"
+	EventTenantMemberOffboarded        = "tenant.member.offboarded"
+	EventAPITokenCreated               = "api_token.created"
+	EventAPITokenRevoked               = "api_token.revoked"
+	EventProfileCreated                = "profile.created"
+	EventProfileUpdated                = "profile.updated"
+	EventPrivacySubjectErased          = "privacy.subject.erased"
+	EventPrivacyRetentionEnforced      = "privacy.retention.enforced"
 )
 
 // FeatureEvent is one row of the event-name ledger: the immutable AN-2 event types
@@ -91,6 +100,9 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "create_source", "createDiscoverySource", []string{EventDiscoverySourceUpserted}},
 	{"F2", "Network discovery", "create_schedule", "createDiscoverySchedule", []string{EventDiscoveryScheduleUpserted}},
 	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},
+	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved}},
+	{"F57", "PQC migration orchestration", "start", "startPQCMigration", []string{EventPQCMigrationStarted, EventPQCMigrationAssetCompleted}},
+	{"F57", "PQC migration orchestration", "rollback", "rollbackPQCMigration", []string{EventPQCMigrationRollbackCompleted}},
 
 	// F4/F6 — CA-agnostic issuance and lifecycle automation, driven by the lifecycle
 	// state machine (internal/orchestrator/lifecycle.go). Each transition emits one
@@ -103,8 +115,13 @@ var ledger = []FeatureEvent{
 	{"F6", "Lifecycle automation", "retire", "transitionIdentity", []string{EventIdentityRetired}},
 	{"F6", "Lifecycle automation", "rotation_recorded", "executeIncident", []string{EventLifecycleRotationRecorded}},
 
-	// F48 — Private/enterprise CA hierarchy (issuer registration).
+	// F48 — Private/enterprise CA hierarchy (issuer registration + served hierarchy).
 	{"F48", "Private/enterprise CA hierarchy management", "create_issuer", "createIssuer", []string{EventIssuerCreated}},
+	{"F48", "Private/enterprise CA hierarchy management", "start_ceremony", "createCACeremony", []string{EventCACeremonyStarted}},
+	{"F48", "Private/enterprise CA hierarchy management", "approve_ceremony", "approveCACeremony", []string{EventCACeremonyApproved}},
+	{"F48", "Private/enterprise CA hierarchy management", "create_root", "createRootCA", []string{EventCARootCreated}},
+	{"F48", "Private/enterprise CA hierarchy management", "create_intermediate", "createIntermediateCA", []string{EventCAIntermediateCreated}},
+	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 
 	// F7 — Deployment connectors (delivery receipts are event-sourced evidence).
 	{"F7", "Deployment connectors", "record_delivery", "executeIncident", []string{EventConnectorDeliveryRecorded}},

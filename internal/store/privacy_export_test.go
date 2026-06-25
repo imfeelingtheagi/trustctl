@@ -161,7 +161,7 @@ func seedPrivacySubject(t *testing.T, s *store.Store, tenantID, subject, subject
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO attestations (id, tenant_id, evidence) VALUES ($1,$2,$3::jsonb)`,
+			`INSERT INTO attestations (id, tenant_id, kind, evidence) VALUES ($1,$2,'privacy-export-seed',$3::jsonb)`,
 			uuid(tenantID, 16), tenantID, `{"actor":"`+subject+`"}`); err != nil {
 			return err
 		}

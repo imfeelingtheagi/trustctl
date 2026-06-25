@@ -46,7 +46,7 @@ export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmo
 export TRSTCTL_NATS_MODE=external
 export TRSTCTL_NATS_URL='nats://nats.internal:4222'
 export TRSTCTL_NATS_REPLICAS=3
-export TRSTCTL_IMAGE_REF='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+export TRSTCTL_IMAGE_REF='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
 docker run --rm -e TRSTCTL_POSTGRES_MODE -e TRSTCTL_POSTGRES_DSN \
   -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -e TRSTCTL_NATS_REPLICAS -p 8443:8443 \
@@ -58,7 +58,7 @@ combination (for example, external Postgres with no DSN). Verify a configuration
 without starting the server:
 
 ```bash
-export TRSTCTL_IMAGE_REF='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+export TRSTCTL_IMAGE_REF='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
 docker run --rm -e TRSTCTL_POSTGRES_MODE=external -e TRSTCTL_POSTGRES_DSN=... \
   "$TRSTCTL_IMAGE_REF" -check-config
@@ -96,7 +96,7 @@ or outbox waves.
 Verify a published image:
 
 ```bash
-cosign verify ghcr.io/imfeelingtheagi/trstctl:<tag> \
+cosign verify ghcr.io/ctlplne/trstctl:<tag> \
   --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

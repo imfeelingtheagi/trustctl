@@ -112,7 +112,7 @@ func TestStoreCAAuthorityCrossTenantParentRejected(t *testing.T) {
 	seedTwoTenants(t, s)
 
 	rootA, err := s.InsertCAAuthority(ctx, store.CAAuthority{
-		TenantID: tenantA, CommonName: "root-a", Kind: "root", CertificatePEM: "PEM-A", MaxPathLen: -1,
+		TenantID: tenantA, CommonName: "root-a", Kind: "root", CertificatePEM: "PEM-A", Serial: "A-ROOT", MaxPathLen: -1,
 	})
 	if err != nil {
 		t.Fatalf("InsertCAAuthority(A root): %v", err)
@@ -121,14 +121,14 @@ func TestStoreCAAuthorityCrossTenantParentRejected(t *testing.T) {
 	parent := rootA.ID
 	if _, err := s.InsertCAAuthority(ctx, store.CAAuthority{
 		TenantID: tenantB, ParentID: &parent, CommonName: "evil-sub", Kind: "intermediate",
-		CertificatePEM: "PEM-B", MaxPathLen: -1,
+		CertificatePEM: "PEM-B", Serial: "B-EVIL-SUB", MaxPathLen: -1,
 	}); err == nil {
 		t.Fatal("a cross-tenant parent_id was accepted; the composite self-FK must reject it (TENANT-006)")
 	}
 
 	if _, err := s.InsertCAAuthority(ctx, store.CAAuthority{
 		TenantID: tenantA, ParentID: &parent, CommonName: "good-sub", Kind: "intermediate",
-		CertificatePEM: "PEM-A2", MaxPathLen: -1,
+		CertificatePEM: "PEM-A2", Serial: "A-GOOD-SUB", MaxPathLen: -1,
 	}); err != nil {
 		t.Fatalf("same-tenant child insert failed: %v", err)
 	}
@@ -170,6 +170,7 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/outboxgc/outboxgc.go":         2,
 		"internal/server/server.go":             1,
 		"internal/store/connector_lifecycle.go": 1,
+		"internal/store/lifecycle.go":           1,
 	}
 	found := map[string]int{}
 

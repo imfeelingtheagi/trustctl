@@ -90,11 +90,60 @@ func GenerateKey(algorithm crypto.Algorithm) (*Signer, error) {
 	}, nil
 }
 
+// NewSignerFromPrivateKey reconstructs a PQC signing key from CIRCL-marshaled
+// private-key bytes. The bytes are copied into locked memory; the caller keeps
+// ownership of privateKey and should wipe it after sealing/loading.
+func NewSignerFromPrivateKey(algorithm crypto.Algorithm, privateKey []byte) (*Signer, error) {
+	scheme, ok := schemeFor(algorithm)
+	if !ok {
+		if isKEM(algorithm) {
+			return nil, fmt.Errorf("pqc: %s is a key-encapsulation mechanism, not a signature scheme", algorithm)
+		}
+		return nil, fmt.Errorf("pqc: unsupported algorithm %q", algorithm)
+	}
+	priv, err := scheme.UnmarshalBinaryPrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("pqc: parse private key: %w", err)
+	}
+	defer crypto.WipeBinaryPrivateKey(priv)
+	pub, ok := priv.Public().(sign.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("pqc: private key returned unexpected public key %T", priv.Public())
+	}
+	pubBytes, err := pub.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("pqc: marshal public key: %w", err)
+	}
+	buf, err := secret.NewFrom(privateKey)
+	if err != nil {
+		return nil, err
+	}
+	return &Signer{
+		algorithm: algorithm,
+		scheme:    scheme,
+		public:    crypto.PublicKey{Algorithm: algorithm, DER: pubBytes},
+		priv:      buf,
+	}, nil
+}
+
 // Algorithm reports the key's algorithm.
 func (s *Signer) Algorithm() crypto.Algorithm { return s.algorithm }
 
 // Public returns the public key.
 func (s *Signer) Public() crypto.PublicKey { return s.public }
+
+// PrivateKeyBytes returns a copy of the CIRCL-marshaled private key for sealed
+// persistence. The returned bytes are unprotected memory; callers must wipe them
+// promptly after sealing.
+func (s *Signer) PrivateKeyBytes() ([]byte, error) {
+	sk := s.priv.Bytes()
+	if sk == nil {
+		return nil, errors.New("pqc: signing key has been destroyed")
+	}
+	out := make([]byte, len(sk))
+	copy(out, sk)
+	return out, nil
+}
 
 // Sign signs message. ML-DSA and the hybrid scheme sign the message directly
 // (there is no separate digest step), so SignOptions is ignored.

@@ -203,6 +203,53 @@ func componentSchemas() map[string]*Schema {
 		"chain": {Type: "array", Items: str()}, "public_key": str(), "internal": {Type: "boolean"},
 	}, "kind", "name")
 
+	caSpec := object(map[string]*Schema{
+		"common_name":           str(),
+		"permitted_dns_domains": {Type: "array", Items: str()},
+		"max_path_len":          {Type: "integer"},
+		"extended_key_usages":   {Type: "array", Items: str()},
+		"ttl_seconds":           {Type: "integer"},
+		"signature_algorithm":   str(),
+	}, "common_name")
+	caCeremonyStartReq := object(map[string]*Schema{
+		"operation": {Type: "string", Enum: []string{"create_root", "create_intermediate"}},
+		"parent_id": uuid(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
+	}, "operation", "threshold", "spec")
+	caCeremony := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
+		"status": str(), "approvals": {Type: "integer"}, "opener": str(), "created_at": timestamp(),
+	}, "id", "tenant_id", "purpose", "threshold", "status", "approvals", "created_at")
+	caCreateRootReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "spec": ref("CASpec"),
+	}, "ceremony_id", "spec")
+	caCreateIntermediateReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "parent_id": uuid(), "spec": ref("CASpec"),
+	}, "ceremony_id", "parent_id", "spec")
+	caAuthority := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "parent_id": uuid(), "common_name": str(),
+		"kind": str(), "status": str(), "certificate_pem": str(), "signer_handle": str(),
+		"serial": str(), "not_after": timestamp(), "max_path_len": {Type: "integer"},
+		"permitted_dns_names": {Type: "array", Items: str()},
+		"extended_key_usages": {Type: "array", Items: str()},
+		"created_at":          timestamp(),
+	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")
+	caIssueLeafReq := object(map[string]*Schema{
+		"csr_pem": str(), "ttl_seconds": {Type: "integer"},
+	}, "csr_pem")
+	caIssuedLeaf := object(map[string]*Schema{
+		"certificate_pem": str(), "serial": str(), "not_after": timestamp(),
+	}, "certificate_pem", "serial", "not_after")
+	externalCA := object(map[string]*Schema{
+		"id": str(), "type": str(), "name": str(), "status": str(),
+	}, "id", "type", "name", "status")
+	externalCAIssueReq := object(map[string]*Schema{
+		"csr_pem": str(), "dns_names": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
+		"profile_name": str(), "requested_ekus": {Type: "array", Items: str()},
+	}, "csr_pem", "dns_names")
+	externalCAIssued := object(map[string]*Schema{
+		"certificate_pem": str(), "serial": str(), "not_after": timestamp(), "issuer": str(),
+	}, "certificate_pem", "serial", "not_after", "issuer")
+
 	identityKinds := []string{"x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"}
 	identity := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: identityKinds},
@@ -251,7 +298,7 @@ func componentSchemas() map[string]*Schema {
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
 	}, "pem")
 
-	discoverySourceKinds := []string{"network", "ssh", "cloud_certificate", "secret_store", "api_key", "agent", "manual"}
+	discoverySourceKinds := []string{"network", "ssh", "cloud_certificate", "ct_log", "drift", "secret_store", "api_key", "agent", "manual"}
 	discoverySource := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: discoverySourceKinds},
 		"name": str(), "config": {Type: "object"}, "created_at": timestamp(), "updated_at": timestamp(),
@@ -430,6 +477,72 @@ func componentSchemas() map[string]*Schema {
 		"counts":         {Type: "object"},
 		"generated_at":   timestamp(),
 	}, "tenant_id", "subject", "subject_ref", "counts", "generated_at")
+	attestation := object(map[string]*Schema{
+		"id":          str(),
+		"method":      str(),
+		"subject":     str(),
+		"selectors":   {Type: "array", Items: str()},
+		"claims":      {Type: "object"},
+		"verified_at": timestamp(),
+	}, "id", "method", "subject", "selectors", "verified_at")
+	attestedSVIDReq := object(map[string]*Schema{
+		"method":         {Type: "string", Enum: []string{"aws_iid", "azure_imds", "gcp_iit", "github_oidc", "k8s_sat", "tpm"}},
+		"payload_base64": str(),
+		"public_key_pem": str(),
+		"ttl_seconds":    {Type: "integer"},
+	}, "method", "payload_base64", "public_key_pem")
+	attestedSVID := object(map[string]*Schema{
+		"certificate_pem": str(),
+		"credential_id":   str(),
+		"subject":         str(),
+		"not_after":       timestamp(),
+		"attestation":     ref("Attestation"),
+	}, "certificate_pem", "credential_id", "subject", "not_after", "attestation")
+	brokerAgentIdentityReq := object(map[string]*Schema{
+		"agent_id":       str(),
+		"method":         str(),
+		"payload_base64": str(),
+		"public_key_pem": str(),
+		"scopes":         {Type: "array", Items: str()},
+		"ttl_seconds":    {Type: "integer"},
+	}, "agent_id", "method", "payload_base64", "public_key_pem", "scopes")
+	brokerAgentIdentity := object(map[string]*Schema{
+		"agent_id":        str(),
+		"node_id":         str(),
+		"subject":         str(),
+		"credential_id":   str(),
+		"certificate_id":  uuid(),
+		"certificate_pem": str(),
+		"scopes":          {Type: "array", Items: str()},
+		"not_after":       timestamp(),
+		"attestation":     ref("Attestation"),
+	}, "agent_id", "node_id", "subject", "credential_id", "certificate_id", "certificate_pem", "scopes", "not_after", "attestation")
+	ephemeralCredentialReq := object(map[string]*Schema{
+		"request_id":     str(),
+		"method":         str(),
+		"payload_base64": str(),
+		"public_key_pem": str(),
+		"ttl_seconds":    {Type: "integer"},
+	}, "request_id", "method", "payload_base64", "public_key_pem")
+	ephemeralCredential := object(map[string]*Schema{
+		"state":              {Type: "string", Enum: []string{EphemeralStateAwaitingApproval, EphemeralStateIssued}},
+		"request_id":         str(),
+		"subject":            str(),
+		"credential_id":      str(),
+		"certificate_id":     uuid(),
+		"certificate_pem":    str(),
+		"required_approvals": {Type: "integer"},
+		"approvals":          {Type: "integer"},
+		"expires_at":         timestamp(),
+		"not_after":          timestamp(),
+		"attestation":        ref("Attestation"),
+	}, "state", "request_id", "subject", "required_approvals", "approvals", "expires_at", "attestation")
+	ephemeralApprovalReq := object(map[string]*Schema{
+		"action": {Type: "string", Enum: []string{"issue"}},
+	}, "action")
+	ephemeralApproval := object(map[string]*Schema{
+		"resource": str(), "action": str(), "approver": str(), "approvals": {Type: "integer"},
+	}, "resource", "action", "approver", "approvals")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
 	}, "id", "kind", "name")
@@ -486,6 +599,67 @@ func componentSchemas() map[string]*Schema {
 	credentialRiskList := object(map[string]*Schema{
 		"credentials": {Type: "array", Items: ref("CredentialRisk")},
 	}, "credentials")
+	cbomScanReq := object(map[string]*Schema{
+		"tls_endpoints": {Type: "array", Items: str()},
+		"host_configs":  {Type: "array", Items: str()},
+	})
+	cbomReport := object(map[string]*Schema{
+		"sources":            {Type: "integer"},
+		"findings":           {Type: "integer"},
+		"weak":               {Type: "integer"},
+		"quantum_vulnerable": {Type: "integer"},
+		"out_of_policy":      {Type: "integer"},
+		"failed":             {Type: "integer"},
+	}, "sources", "findings", "weak", "quantum_vulnerable", "out_of_policy", "failed")
+	cbomMigrationProgress := object(map[string]*Schema{
+		"total_assets":              {Type: "integer"},
+		"quantum_vulnerable_assets": {Type: "integer"},
+		"out_of_policy_assets":      {Type: "integer"},
+		"post_quantum_ready_assets": {Type: "integer"},
+		"percent_migrated":          {Type: "number"},
+	}, "total_assets", "quantum_vulnerable_assets", "out_of_policy_assets", "post_quantum_ready_assets", "percent_migrated")
+	cbomAsset := object(map[string]*Schema{
+		"id": uuid(), "kind": str(), "location": str(), "algorithm": str(),
+		"key_bits": {Type: "integer"}, "protocol": str(), "cipher": str(), "library": str(),
+		"strength": str(), "quantum_vulnerable": {Type: "boolean"}, "out_of_policy": {Type: "boolean"},
+		"reasons": {Type: "array", Items: str()}, "migration_target": str(),
+		"migration_standard": str(), "migration_generation": str(),
+	}, "id", "kind", "location", "strength", "quantum_vulnerable", "out_of_policy", "migration_target", "migration_standard", "migration_generation")
+	cbomInventory := object(map[string]*Schema{
+		"items":              {Type: "array", Items: ref("CBOMAsset")},
+		"migration_progress": ref("CBOMMigrationProgress"),
+	}, "items", "migration_progress")
+	cbomScan := object(map[string]*Schema{
+		"report":             ref("CBOMReport"),
+		"migration_progress": ref("CBOMMigrationProgress"),
+	}, "report", "migration_progress")
+	pqcMigrationReq := object(map[string]*Schema{
+		"asset_ids":           {Type: "array", Items: uuid()},
+		"target_algorithm":    str(),
+		"protocol":            str(),
+		"rollback_on_failure": {Type: "boolean"},
+	}, "asset_ids", "target_algorithm")
+	pqcMigration := object(map[string]*Schema{
+		"run_id":              uuid(),
+		"queued":              {Type: "integer"},
+		"target_algorithm":    str(),
+		"effective_algorithm": str(),
+		"protocol":            str(),
+		"rollback_configured": {Type: "boolean"},
+		"migration_progress":  ref("CBOMMigrationProgress"),
+		"queued_at":           timestamp(),
+	}, "run_id", "queued", "target_algorithm", "effective_algorithm", "protocol", "rollback_configured", "migration_progress", "queued_at")
+	pqcRollbackReq := object(map[string]*Schema{
+		"asset_ids": {Type: "array", Items: uuid()},
+		"reason":    str(),
+	}, "asset_ids")
+	pqcRollback := object(map[string]*Schema{
+		"run_id":             uuid(),
+		"queued":             {Type: "integer"},
+		"reason":             str(),
+		"migration_progress": ref("CBOMMigrationProgress"),
+		"queued_at":          timestamp(),
+	}, "run_id", "queued", "reason", "migration_progress", "queued_at")
 
 	profile := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "version": {Type: "integer"},
@@ -609,6 +783,16 @@ func componentSchemas() map[string]*Schema {
 		"RiskComponents":               riskComponents,
 		"CredentialRisk":               credentialRisk,
 		"CredentialRiskList":           credentialRiskList,
+		"CBOMScanRequest":              cbomScanReq,
+		"CBOMReport":                   cbomReport,
+		"CBOMMigrationProgress":        cbomMigrationProgress,
+		"CBOMAsset":                    cbomAsset,
+		"CBOMInventory":                cbomInventory,
+		"CBOMScan":                     cbomScan,
+		"PQCMigrationRequest":          pqcMigrationReq,
+		"PQCMigration":                 pqcMigration,
+		"PQCMigrationRollbackRequest":  pqcRollbackReq,
+		"PQCMigrationRollback":         pqcRollback,
 		"Certificate":                  certificate,
 		"CertificateIngest":            certificateIngest,
 		"CertificateList":              list("Certificate"),
@@ -662,6 +846,15 @@ func componentSchemas() map[string]*Schema {
 		"PrivacyCatalog":               privacyCatalog,
 		"PrivacySubjectExportRequest":  privacySubjectExportReq,
 		"PrivacySubjectExport":         privacySubjectExport,
+		"Attestation":                  attestation,
+		"AttestedSVIDRequest":          attestedSVIDReq,
+		"AttestedSVID":                 attestedSVID,
+		"BrokerAgentIdentityRequest":   brokerAgentIdentityReq,
+		"BrokerAgentIdentity":          brokerAgentIdentity,
+		"EphemeralCredentialRequest":   ephemeralCredentialReq,
+		"EphemeralCredential":          ephemeralCredential,
+		"EphemeralApprovalRequest":     ephemeralApprovalReq,
+		"EphemeralApproval":            ephemeralApproval,
 		"GraphNode":                    graphNode,
 		"GraphEdge":                    graphEdge,
 		"GraphResponse":                graphResponse,
@@ -677,6 +870,19 @@ func componentSchemas() map[string]*Schema {
 		"Issuer":                       issuer,
 		"IssuerRequest":                issuerReq,
 		"IssuerList":                   list("Issuer"),
+		"CASpec":                       caSpec,
+		"CACeremonyStartRequest":       caCeremonyStartReq,
+		"CAKeyCeremony":                caCeremony,
+		"CACreateRootRequest":          caCreateRootReq,
+		"CACreateIntermediateRequest":  caCreateIntermediateReq,
+		"CAAuthority":                  caAuthority,
+		"CAAuthorityList":              list("CAAuthority"),
+		"CAIssueLeafRequest":           caIssueLeafReq,
+		"CAIssuedLeaf":                 caIssuedLeaf,
+		"ExternalCA":                   externalCA,
+		"ExternalCAList":               list("ExternalCA"),
+		"ExternalCAIssueRequest":       externalCAIssueReq,
+		"ExternalCAIssuedCertificate":  externalCAIssued,
 		"Identity":                     identity,
 		"IdentityRequest":              identityReq,
 		"IdentityList":                 list("Identity"),

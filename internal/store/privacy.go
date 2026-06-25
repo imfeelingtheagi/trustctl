@@ -210,8 +210,8 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 		// Certificates (matched by subject or SAN).
 		rows, err = tx.Query(ctx,
 			`SELECT fingerprint, subject, sans, serial, issuer, deployment_location, source, created_at
-			   FROM certificates
-			  WHERE tenant_id = $1 AND (subject = $2 OR $2 = ANY(sans))
+			  FROM certificates
+			  WHERE tenant_id = $1 AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans))
 			  ORDER BY fingerprint`, tenantID, subject)
 		if err != nil {
 			return err
@@ -421,7 +421,7 @@ func (s *Store) SelectPrivacySubjectErasure(ctx context.Context, tenantID, subje
 		}
 		if out.Selectors.CertificateFingerprints, err = selectStrings(ctx, tx,
 			`SELECT fingerprint FROM certificates
-			  WHERE tenant_id = $1 AND (subject = $2 OR $2 = ANY(sans))
+			  WHERE tenant_id = $1 AND (subject = $2 OR subject = 'CN=' || $2 OR $2 = ANY(sans))
 			  ORDER BY fingerprint`, tenantID, subject); err != nil {
 			return err
 		}

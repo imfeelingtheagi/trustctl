@@ -97,7 +97,7 @@ func TestSupply102PluginProvenanceVerifiesBeforeLoad(t *testing.T) {
 	if verifyAt < 0 || earlyReturn < 0 || loadAt < 0 {
 		t.Fatal("SUPPLY-102: LoadVerified no longer verifies-then-loads; provenance gate may have moved")
 	}
-	if !(verifyAt < earlyReturn && earlyReturn < loadAt) {
+	if verifyAt >= earlyReturn || earlyReturn >= loadAt {
 		t.Error("SUPPLY-102: LoadVerified must Verify (and fail closed) BEFORE h.Load; instantiation-before-verification would be a supply-chain bypass")
 	}
 
@@ -178,7 +178,7 @@ func TestSupply104ThirdPartyActionsAreShaPinned(t *testing.T) {
 	}
 	external := 0
 	for _, e := range entries {
-		if e.IsDir() || !(strings.HasSuffix(e.Name(), ".yml") || strings.HasSuffix(e.Name(), ".yaml")) {
+		if e.IsDir() || (!strings.HasSuffix(e.Name(), ".yml") && !strings.HasSuffix(e.Name(), ".yaml")) {
 			continue
 		}
 		body := read(t, filepath.Join("../.github/workflows", e.Name()))

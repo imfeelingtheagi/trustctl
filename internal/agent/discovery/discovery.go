@@ -24,6 +24,7 @@ const (
 	SourcePKCS11      = "pkcs11"
 	SourceWindowsCert = "windows-store"
 	SourceKubernetes  = "k8s-secret"
+	SourceTrustStore  = "trust-store"
 )
 
 // Found is a certificate discovered locally.
@@ -31,6 +32,7 @@ type Found struct {
 	Source   string        // the discovery source kind
 	Location string        // where it was found (a path, label, or secret name)
 	Cert     certinfo.Info // its inventory metadata
+	Metadata map[string]string
 }
 
 // Source enumerates the certificates the agent can see in one place.
@@ -89,9 +91,10 @@ type CertEnumerator interface {
 
 // enumSource adapts a CertEnumerator into a Source.
 type enumSource struct {
-	kind  string
-	scope string // a location prefix (token, store, or namespace)
-	enum  CertEnumerator
+	kind     string
+	scope    string // a location prefix (token, store, or namespace)
+	enum     CertEnumerator
+	metadata map[string]string
 }
 
 // NewPKCS11Source discovers certificates on a PKCS#11 token.
@@ -107,6 +110,13 @@ func NewWindowsStoreSource(storeName string, enum CertEnumerator) Source {
 // NewKubernetesSource discovers certificates in a namespace's TLS Secrets.
 func NewKubernetesSource(namespace string, enum CertEnumerator) Source {
 	return &enumSource{kind: SourceKubernetes, scope: namespace, enum: enum}
+}
+
+// NewTrustStoreEnumSource discovers certificate-only entries in a trust store
+// enumerator. It is used for Windows fixtures and any platform backend that can
+// expose public trust anchors as PEM bytes.
+func NewTrustStoreEnumSource(scope string, enum CertEnumerator, metadata map[string]string) Source {
+	return &enumSource{kind: SourceTrustStore, scope: scope, enum: enum, metadata: metadata}
 }
 
 // Kind names the source.
@@ -125,7 +135,7 @@ func (s *enumSource) Discover(ctx context.Context) ([]Found, error) {
 		if err != nil {
 			continue // not a certificate; skip
 		}
-		out = append(out, Found{Source: s.kind, Location: location(s.scope, label), Cert: info})
+		out = append(out, Found{Source: s.kind, Location: location(s.scope, label), Cert: info, Metadata: cloneMetadata(s.metadata)})
 	}
 	return out, nil
 }
@@ -135,6 +145,17 @@ func location(scope, label string) string {
 		return label
 	}
 	return scope + "/" + label
+}
+
+func cloneMetadata(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // MemorySink records discoveries in memory for tests.

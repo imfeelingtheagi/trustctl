@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/graph"
@@ -86,6 +87,7 @@ type AgentIdentity struct {
 	CertDER      []byte
 	Scopes       []string
 	NotAfter     time.Time
+	Attestation  attest.Attestation
 }
 
 func agentNodeID(id string) string { return "agent:" + id }
@@ -136,7 +138,7 @@ func (b *Broker) Issue(ctx context.Context, req IssueRequest) (AgentIdentity, er
 		[]byte(fmt.Sprintf(`{"agent_id":%q,"credential_id":%q,"subject":%q}`, req.AgentID, res.CredentialID, res.Subject)))
 	return AgentIdentity{
 		AgentID: req.AgentID, NodeID: nodeID, Subject: res.Subject,
-		CredentialID: res.CredentialID, CertDER: res.CertDER, Scopes: req.Scopes, NotAfter: res.NotAfter,
+		CredentialID: res.CredentialID, CertDER: res.CertDER, Scopes: req.Scopes, NotAfter: res.NotAfter, Attestation: res.Attestation,
 	}, nil
 }
 

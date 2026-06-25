@@ -13,7 +13,8 @@
     "server_capabilities_key": "x-trstctl-server-capabilities",
     "capabilities": [
       "heartbeat",
-      "renew"
+      "renew",
+      "inventory"
     ]
   },
   "service": {
@@ -31,6 +32,12 @@
         "full_method": "/trstctl.agent.v1.AgentService/Renew",
         "request": "RenewRequest",
         "response": "RenewResponse"
+      },
+      {
+        "name": "ReportInventory",
+        "full_method": "/trstctl.agent.v1.AgentService/ReportInventory",
+        "request": "InventoryRequest",
+        "response": "InventoryResponse"
       }
     ]
   },
@@ -97,6 +104,78 @@
         {
           "name": "not_after_unix",
           "go_type": "int64",
+          "presence": "required"
+        }
+      ]
+    },
+    "InventoryFinding": {
+      "fields": [
+        {
+          "name": "kind",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "ref",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "provenance",
+          "go_type": "string",
+          "presence": "optional"
+        },
+        {
+          "name": "fingerprint",
+          "go_type": "string",
+          "presence": "optional"
+        },
+        {
+          "name": "risk_score",
+          "go_type": "int",
+          "presence": "optional"
+        },
+        {
+          "name": "metadata",
+          "go_type": "map<string,string>",
+          "presence": "optional"
+        }
+      ]
+    },
+    "InventoryRequest": {
+      "fields": [
+        {
+          "name": "source_kind",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "findings",
+          "go_type": "[]InventoryFinding",
+          "presence": "required"
+        }
+      ]
+    },
+    "InventoryResponse": {
+      "fields": [
+        {
+          "name": "tenant_id",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "run_id",
+          "go_type": "string",
+          "presence": "required"
+        },
+        {
+          "name": "recorded",
+          "go_type": "int",
+          "presence": "required"
+        },
+        {
+          "name": "rejected",
+          "go_type": "int",
           "presence": "required"
         }
       ]

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/protocols/ari"
 )
 
 // TestServedDeployAndRotationPublishReceipts is the JOURNEY-002 proof: the served
@@ -129,6 +130,116 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event", eventType)
 		}
+	}
+}
+
+func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.LifecycleRenewBefore = time.Hour
+	})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write",
+		"identities:read", "identities:write",
+		"certs:read", "certs:issue", "connectors:read", "lifecycle:read",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload",
+		"name": "clm-01-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind":     "x509_certificate",
+		"name":     "clm-01-ari-renew.served.test",
+		"owner_id": owner.ID,
+		"attributes": map[string]any{
+			"connector": "nginx",
+			"target":    "edge-ari",
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create identity: status %d body %s", status, body)
+	}
+	var ident struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &ident); err != nil {
+		t.Fatalf("decode identity: %v", err)
+	}
+
+	transition := func(to, reason string) {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
+			"to":     to,
+			"reason": reason,
+		})
+		if status != http.StatusOK {
+			t.Fatalf("transition %s: status %d body %s", to, status, body)
+		}
+	}
+	transition("issued", "clm-01 initial issue")
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain issue: %v", err)
+	}
+	transition("deployed", "clm-01 deploy")
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain deploy: %v", err)
+	}
+
+	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, "clm-01-ari-renew.served.test")
+	if err != nil {
+		t.Fatalf("load issued cert: %v", err)
+	}
+	if len(certs) != 1 {
+		t.Fatalf("issued certs = %d, want 1", len(certs))
+	}
+	predecessor := certs[0]
+	now := time.Now().UTC()
+	notBefore := now.Add(-20*24*time.Hour - time.Hour)
+	notAfter := now.Add(10 * 24 * time.Hour)
+	if !notAfter.After(now.Add(time.Hour)) {
+		t.Fatalf("test setup invalid: fixed one-hour threshold would also renew not_after=%s", notAfter.Format(time.RFC3339))
+	}
+	window := ari.SuggestWindow(notBefore, notAfter, now, false)
+	if !ari.RenewNow(ari.RenewalInfo{SuggestedWindow: window}, now) {
+		t.Fatalf("test setup invalid: ARI window %s..%s is not due at %s", window.Start.Format(time.RFC3339), window.End.Format(time.RFC3339), now.Format(time.RFC3339))
+	}
+	predecessor.NotBefore = &notBefore
+	predecessor.NotAfter = &notAfter
+	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, predecessor); err != nil {
+		t.Fatalf("record ARI validity window: %v", err)
+	}
+
+	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	if err != nil {
+		t.Fatalf("run lifecycle scheduler: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("scheduled renewals = %d, want 1 from ARI window even though not_after=%s is outside the fixed one-hour threshold", queued, notAfter.Format(time.RFC3339))
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain ARI renewal: %v", err)
+	}
+
+	runs := rotationRunsForIdentity(t, h, tok, ident.ID)
+	if len(runs.Items) != 1 {
+		t.Fatalf("rotation runs = %d, want 1 (%s)", len(runs.Items), runs.Raw)
+	}
+	run := runs.Items[0]
+	if run.Status != "succeeded" || run.Trigger != "scheduler" {
+		t.Fatalf("bad ARI-driven rotation run: %+v", run)
+	}
+	if run.PredecessorFingerprint != predecessor.Fingerprint || run.SuccessorFingerprint == "" || run.SuccessorFingerprint == predecessor.Fingerprint {
+		t.Fatalf("bad ARI-driven successor linkage: predecessor=%s run=%+v", predecessor.Fingerprint, run)
 	}
 }
 

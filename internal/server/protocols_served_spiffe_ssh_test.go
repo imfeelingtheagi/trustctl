@@ -180,6 +180,52 @@ func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
 	}
 }
 
+// TestServedSPIFFEGoSpiffeJWTClient is the NHI-01 acceptance proof: the served
+// SPIFFE Workload API UDS supports the JWT-SVID half of the stock go-spiffe client
+// contract, not only X.509-SVIDs. The client fetches a JWT-SVID, fetches JWT bundles,
+// and validates the token through ValidateJWTSVID against the same served socket.
+func TestServedSPIFFEGoSpiffeJWTClient(t *testing.T) {
+	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-gospiffe-jwt-")
+	if err != nil {
+		t.Fatalf("spiffe socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "s.sock")
+	h := newServedHarness(t, config.Protocols{
+		SPIFFE: config.SPIFFEProtocol{
+			Enabled:     true,
+			TenantID:    servedTestTenant,
+			TrustDomain: "served.test",
+			SocketPath:  socket,
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); h.srv.RunSPIFFE(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	waitForSocket(t, socket, 5*time.Second)
+
+	result := runServedGoSpiffeJWTClient(t, "unix://"+socket)
+	if got := result.ID; got != "spiffe://served.test/workload" {
+		t.Fatalf("go-spiffe JWT-SVID ID = %q, want spiffe://served.test/workload", got)
+	}
+	if result.JWTToken == "" {
+		t.Fatal("go-spiffe JWT-SVID token is empty")
+	}
+	if result.ValidatedID != result.ID {
+		t.Fatalf("ValidateJWTSVID ID = %q, want fetched ID %q", result.ValidatedID, result.ID)
+	}
+	if result.JWTAuthorities == 0 {
+		t.Fatal("go-spiffe JWT bundle did not include a JWT authority for served.test")
+	}
+	if result.Audience != "trstctl-served-jwt" {
+		t.Fatalf("go-spiffe JWT-SVID audience = %q, want trstctl-served-jwt", result.Audience)
+	}
+	if !h.hasEvent(t, "spiffe.svid.issued") {
+		t.Error("no spiffe.svid.issued event after go-spiffe FetchJWTSVID")
+	}
+}
+
 // TestServedSPIFFESpiffeHelperWritesSVID runs stock spiffe-helper in one-shot mode
 // against the served Workload API UDS. CI installs the helper and sets
 // TRSTCTL_REQUIRE_SPIFFE_HELPER=1 so this cannot become a skip-only proof.
@@ -276,6 +322,10 @@ type servedGoSpiffeResult struct {
 	CertDER           string `json:"cert_der"`
 	HasPrivateKey     bool   `json:"has_private_key"`
 	BundleAuthorities int    `json:"bundle_authorities"`
+	JWTToken          string `json:"jwt_token"`
+	ValidatedID       string `json:"validated_id"`
+	JWTAuthorities    int    `json:"jwt_authorities"`
+	Audience          string `json:"audience"`
 }
 
 func runServedGoSpiffeClient(t *testing.T, endpoint string) servedGoSpiffeResult {
@@ -302,6 +352,34 @@ func runServedGoSpiffeClient(t *testing.T, endpoint string) servedGoSpiffeResult
 	var result servedGoSpiffeResult
 	if err := json.Unmarshal(out, &result); err != nil {
 		t.Fatalf("decode go-spiffe client output: %v\n%s", err, out)
+	}
+	return result
+}
+
+func runServedGoSpiffeJWTClient(t *testing.T, endpoint string) servedGoSpiffeResult {
+	t.Helper()
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		if os.Getenv("TRSTCTL_REQUIRE_GOSPIFFE") == "1" {
+			t.Fatalf("TRSTCTL_REQUIRE_GOSPIFFE is set but go is not on PATH: %v", err)
+		}
+		t.Skip("go not on PATH; cannot build the stock go-spiffe JWT client")
+	}
+	clientDir := filepath.Join("testdata", "gospiffe-client")
+	runCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint, "jwt")
+	cmd.Dir = clientDir
+	out, err := cmd.CombinedOutput()
+	if runCtx.Err() != nil {
+		t.Fatalf("go-spiffe JWT client timed out:\n%s", out)
+	}
+	if err != nil {
+		t.Fatalf("go-spiffe JWT client failed against served UDS: %v\n%s", err, out)
+	}
+	var result servedGoSpiffeResult
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("decode go-spiffe JWT client output: %v\n%s", err, out)
 	}
 	return result
 }

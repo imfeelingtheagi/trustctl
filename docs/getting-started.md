@@ -99,12 +99,19 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --bootstrap-token-file ./trstctl-bootstrap-token \
   --server localhost:9443 \
   --name edge-agent-1 \
-  --ca-bundle ./trstctl-ca.pem
+  --ca-bundle ./trstctl-ca.pem \
+  --inventory-cert-roots /etc/ssl,/etc/pki/tls/certs \
+  --inventory-os-trust-roots /etc/ssl/certs \
+  --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 ```
 
 The agent generates its key locally and enrolls with the token — **private keys
-never leave the host**. The wizard polls and advances automatically once the
-agent registers (typically well under five minutes). See [Install](install.md)
+never leave the host**. With `--inventory-cert-roots`, it also reports public
+certificate metadata from those directories over the mTLS agent channel; with
+`--inventory-os-trust-roots`, it reports public CA trust anchors the host trusts; with
+`--inventory-private-key-roots`, it locates private-key files but sends only
+metadata and public-key-derived fingerprints. Findings then show up in discovery inventory and the credential graph. The wizard polls and
+advances automatically once the agent registers (typically well under five minutes). See [Install](install.md)
 for how to get the `trstctl-agent` binary on Linux, macOS, and Windows.
 
 ### Issue your first cert

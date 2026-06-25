@@ -58,9 +58,16 @@ type API struct {
 	rateLimiter             RateLimiter
 	gate                    MutationGate
 	approvals               ApprovalRecorder
+	caHierarchy             CAHierarchyService
+	externalCAs             ExternalCAService
+	attestedIssuer          AttestedIssuerService
+	broker                  BrokerService
+	ephemeral               EphemeralIssuerService
 	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	secrets                 *secretsService   // served secrets/identity surface (GAP-006); nil = not enabled
 	ai                      *aiSurface        // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	cbom                    CBOMService       // served CBOM scanner + PQC migration inventory (PQC-05)
+	pqcMigration            PQCMigrationService
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
@@ -91,9 +98,16 @@ type config struct {
 	rateLimiter             RateLimiter
 	gate                    MutationGate
 	approvals               ApprovalRecorder
+	caHierarchy             CAHierarchyService
+	externalCAs             ExternalCAService
+	attestedIssuer          AttestedIssuerService
+	broker                  BrokerService
+	ephemeral               EphemeralIssuerService
 	managedKeys             ManagedKeyService
 	secrets                 *secretsService
 	ai                      *aiSurface
+	cbom                    CBOMService
+	pqcMigration            PQCMigrationService
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	featureObserver         func(feature, action, outcome string, seconds float64)
@@ -237,7 +251,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, caHierarchy: cfg.caHierarchy, externalCAs: cfg.externalCAs, attestedIssuer: cfg.attestedIssuer, broker: cfg.broker, ephemeral: cfg.ephemeral, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, cbom: cfg.cbom, pqcMigration: cfg.pqcMigration, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -377,6 +391,11 @@ func (a *API) routes() []route {
 	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
 	mcpToolPath := []param{pathString("tool", "MCP tool name")}
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
+	pqcMigrationRunPath := []param{pathString("run_id", "PQC migration run id")}
+	caCeremonyPath := []param{pathUUID("id")}
+	caAuthorityPath := []param{pathUUID("id")}
+	externalCAPath := []param{pathString("id", "configured external CA registry id")}
+	ephemeralRequestPath := []param{pathString("id", "ephemeral JIT request id")}
 	page := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
@@ -440,6 +459,19 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/ca/ceremonies", opID: "createCACeremony", summary: "Start an m-of-n CA key ceremony", handler: a.createCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CAKeyCeremony", successCode: "201", mutation: true, perm: authz.IssuersWrite},
+		{method: "GET", path: "/api/v1/ca/ceremonies/{id}", opID: "getCACeremony", summary: "Get a CA key ceremony", handler: a.getCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/ca/ceremonies/{id}/approvals", opID: "approveCACeremony", summary: "Approve a CA key ceremony", handler: a.approveCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "GET", path: "/api/v1/ca/authorities", opID: "listCAAuthorities", summary: "List served CA authorities", handler: a.listCAAuthorities, resSchema: "CAAuthorityList", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/ca/authorities/roots", opID: "createRootCA", summary: "Create a signer-backed root CA after ceremony quorum", handler: a.createRootCA, reqSchema: "CACreateRootRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/ca/authorities/intermediates", opID: "createIntermediateCA", summary: "Create a signer-backed intermediate CA after ceremony quorum", handler: a.createIntermediateCA, reqSchema: "CACreateIntermediateRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/ca/authorities/{id}/issue", opID: "issueHierarchyLeaf", summary: "Issue a leaf certificate from a served CA authority", handler: a.issueHierarchyLeaf, pathParams: caAuthorityPath, reqSchema: "CAIssueLeafRequest", resSchema: "CAIssuedLeaf", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "GET", path: "/api/v1/external-cas", opID: "listExternalCAs", summary: "List configured upstream CA integrations", handler: a.listExternalCAs, resSchema: "ExternalCAList", successCode: "200", perm: authz.IssuersRead},
+		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/workloads/attested-issuance", opID: "issueAttestedSVID", summary: "Issue an X.509-SVID after workload attestation", handler: a.issueAttestedSVID, reqSchema: "AttestedSVIDRequest", resSchema: "AttestedSVID", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/broker/agent-identities", opID: "issueBrokerAgentIdentity", summary: "Issue a policy-gated short-lived identity for an AI/MCP agent", handler: a.issueBrokerAgentIdentity, reqSchema: "BrokerAgentIdentityRequest", resSchema: "BrokerAgentIdentity", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/ephemeral", opID: "issueEphemeralCredential", summary: "Open or complete an attestation-gated JIT credential request", handler: a.issueEphemeralCredential, reqSchema: "EphemeralCredentialRequest", resSchema: "EphemeralCredential", successCode: "202", mutation: true, perm: authz.CertsRequest},
+		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
@@ -500,6 +532,10 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, resSchema: "GraphQueryResult", successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, resSchema: "CredentialRiskList", successCode: "200", perm: authz.RiskRead},
+		{method: "POST", path: "/api/v1/cbom/scans", opID: "startCBOMScan", summary: "Scan TLS endpoints and host crypto config into the CBOM inventory", handler: a.startCBOMScan, reqSchema: "CBOMScanRequest", resSchema: "CBOMScan", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "GET", path: "/api/v1/cbom/assets", opID: "listCBOMAssets", summary: "List CBOM assets with PQC migration targets and progress", handler: a.listCBOMAssets, resSchema: "CBOMInventory", successCode: "200", perm: authz.RiskRead},
+		{method: "POST", path: "/api/v1/pqc/migrations", opID: "startPQCMigration", summary: "Queue PQC re-issuance for CBOM assets through the served protocol path", handler: a.startPQCMigration, reqSchema: "PQCMigrationRequest", resSchema: "PQCMigration", successCode: "202", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/pqc/migrations/{run_id}/rollback", opID: "rollbackPQCMigration", summary: "Queue rollback for a PQC migration run", handler: a.rollbackPQCMigration, pathParams: pqcMigrationRunPath, reqSchema: "PQCMigrationRollbackRequest", resSchema: "PQCMigrationRollback", successCode: "202", mutation: true, perm: authz.CertsIssue},
 
 		// Served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/F77/F78). All
 		// READ-ONLY and tenant-scoped: the tenant + RBAC scope come from the
@@ -796,6 +832,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 			p = p.WithExtension(k, v)
 		}
 		a.writeProblem(w, p)
+	case a.writeExternalCAError(w, err):
+	case a.writeCAHierarchyError(w, err):
+	case a.writeAttestedIssuanceError(w, err):
+	case a.writeBrokerError(w, err):
+	case a.writeEphemeralError(w, err):
 	case store.IsNotFound(err):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrInvalidTransition):

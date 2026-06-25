@@ -2,14 +2,17 @@ package spiffe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
@@ -28,7 +31,8 @@ const (
 // WorkloadAPIServer adapts the SPIFFE Workload API gRPC contract (workloadpb,
 // vendored from go-spiffe) onto the in-tree spiffe.Server (INTEROP-004). It is the
 // served transport the audit found missing: a real gRPC service on a UDS that a
-// stock go-spiffe / spiffe-helper / Envoy SDS client dials to FetchX509SVID.
+// stock go-spiffe / spiffe-helper / Envoy SDS client dials for X.509-SVID and
+// JWT-SVID issuance, bundle fetches, and JWT validation.
 //
 // Unlike the library FetchX509SVIDs (which signs over a caller-supplied public key),
 // the Workload API mints the key pair server-side and returns the PKCS#8 private key
@@ -150,6 +154,147 @@ func (s *WorkloadAPIServer) FetchX509Bundles(_ *workloadpb.X509BundlesRequest, s
 		Bundles: map[string][]byte{td: concatDER(bundle)},
 	}
 	return stream.Send(resp)
+}
+
+// FetchJWTSVID returns JWT-SVIDs for the caller's authorized SPIFFE identities and
+// requested audiences. It uses the same registration entry matching as X.509-SVIDs,
+// then shapes the result into the SPIFFE Workload API protobuf contract.
+func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JWTSVIDRequest) (*workloadpb.JWTSVIDResponse, error) {
+	if err := requireSecurityHeader(ctx); err != nil {
+		return nil, err
+	}
+	audience := req.GetAudience()
+	if len(audience) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "spiffe: JWT-SVID audience required")
+	}
+	wantID := req.GetSpiffeId()
+	if wantID != "" {
+		if _, err := crypto.ParseSPIFFEID(wantID); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "spiffe: invalid requested SPIFFE ID: %v", err)
+		}
+	}
+	svids, err := s.wl.FetchJWTSVIDs(ctx, audience, s.selectors)
+	if err != nil {
+		if err == ErrNoIdentity {
+			return nil, status.Error(codes.PermissionDenied, "spiffe: no identity issued for caller selectors")
+		}
+		return nil, status.Errorf(codes.Internal, "spiffe: fetch JWT-SVID: %v", err)
+	}
+	resp := &workloadpb.JWTSVIDResponse{}
+	for _, svid := range svids {
+		if wantID != "" && svid.SPIFFEID != wantID {
+			continue
+		}
+		resp.Svids = append(resp.Svids, &workloadpb.JWTSVID{
+			SpiffeId: svid.SPIFFEID,
+			Svid:     svid.Token,
+		})
+	}
+	if len(resp.Svids) == 0 {
+		return nil, status.Error(codes.PermissionDenied, "spiffe: requested SPIFFE ID is not authorized for caller selectors")
+	}
+	return resp, nil
+}
+
+// FetchJWTBundles streams the JWT trust bundle as JWKS bytes keyed by trust domain.
+// The value is a JWKS JSON document because stock go-spiffe parses it through
+// jwtbundle.Parse.
+func (s *WorkloadAPIServer) FetchJWTBundles(_ *workloadpb.JWTBundlesRequest, stream workloadpb.SpiffeWorkloadAPI_FetchJWTBundlesServer) error {
+	ctx := stream.Context()
+	if err := requireSecurityHeader(ctx); err != nil {
+		return err
+	}
+	bundle, err := s.wl.FetchJWTBundle(ctx)
+	if err != nil {
+		return status.Errorf(codes.Internal, "spiffe: fetch JWT bundle: %v", err)
+	}
+	raw, err := json.Marshal(bundle)
+	if err != nil {
+		return status.Errorf(codes.Internal, "spiffe: marshal JWT bundle: %v", err)
+	}
+	td := s.wl.cfg.TrustDomain
+	resp := &workloadpb.JWTBundlesResponse{
+		Bundles: map[string][]byte{td: raw},
+	}
+	return stream.Send(resp)
+}
+
+// ValidateJWTSVID verifies a compact JWT-SVID against the served JWT bundle and
+// requested audience, then returns the validated SPIFFE ID and claims. Signature
+// verification stays inside internal/crypto; this adapter validates the standard JWT
+// fields the Workload API caller asked about.
+func (s *WorkloadAPIServer) ValidateJWTSVID(ctx context.Context, req *workloadpb.ValidateJWTSVIDRequest) (*workloadpb.ValidateJWTSVIDResponse, error) {
+	if err := requireSecurityHeader(ctx); err != nil {
+		return nil, err
+	}
+	if req.GetAudience() == "" {
+		return nil, status.Error(codes.InvalidArgument, "spiffe: validation audience required")
+	}
+	if req.GetSvid() == "" {
+		return nil, status.Error(codes.InvalidArgument, "spiffe: JWT-SVID token required")
+	}
+	bundle, err := s.wl.FetchJWTBundle(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "spiffe: fetch JWT bundle: %v", err)
+	}
+	claimsJSON, err := crypto.VerifyJWT(req.GetSvid(), bundle)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "spiffe: verify JWT-SVID: %v", err)
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "spiffe: parse JWT-SVID claims: %v", err)
+	}
+	sub, ok := claims["sub"].(string)
+	if !ok || sub == "" {
+		return nil, status.Error(codes.InvalidArgument, "spiffe: JWT-SVID subject claim required")
+	}
+	if _, err := crypto.ParseSPIFFEID(sub); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "spiffe: invalid JWT-SVID subject: %v", err)
+	}
+	exp, ok := numericClaim(claims["exp"])
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "spiffe: JWT-SVID exp claim required")
+	}
+	now := time.Now().Unix()
+	if now >= int64(exp) {
+		return nil, status.Error(codes.PermissionDenied, "spiffe: JWT-SVID expired")
+	}
+	if !audienceContains(claims["aud"], req.GetAudience()) {
+		return nil, status.Error(codes.PermissionDenied, "spiffe: JWT-SVID audience mismatch")
+	}
+	pbClaims, err := structpb.NewStruct(claims)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "spiffe: encode JWT-SVID claims: %v", err)
+	}
+	return &workloadpb.ValidateJWTSVIDResponse{SpiffeId: sub, Claims: pbClaims}, nil
+}
+
+func numericClaim(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int64:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	default:
+		return 0, false
+	}
+}
+
+func audienceContains(v any, want string) bool {
+	switch aud := v.(type) {
+	case string:
+		return aud == want
+	case []any:
+		for _, item := range aud {
+			if s, ok := item.(string); ok && s == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // concatDER concatenates DER blocks (the SPIFFE wire form for a cert chain / bundle:

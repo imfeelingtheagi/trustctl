@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/destination/softtoken"
 	"trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jks"
 )
 
 // Four distinct real ECDSA self-signed certificates.
@@ -159,6 +160,72 @@ func TestWindowsStoreSourceDiscoversEntries(t *testing.T) {
 	}
 	if found[0].Source != discovery.SourceWindowsCert {
 		t.Errorf("source = %q, want windows-store", found[0].Source)
+	}
+}
+
+// Trust-store collectors discover public trust anchors from OS, Java, NSS,
+// browser, and Windows-style fixture stores. They report public certificate
+// metadata only: no private-key material is read or returned.
+func TestTrustStoreSourcesDiscoverPublicAnchors(t *testing.T) {
+	dir := t.TempDir()
+	linuxRoot := filepath.Join(dir, "linux")
+	mustWrite(t, filepath.Join(linuxRoot, "corp.pem"), []byte(cert1))
+
+	javaPath := filepath.Join(dir, "java", "cacerts")
+	javaBlob, err := jks.EncodeTrustStoreDeterministic(map[string][]byte{"corp-java": []byte(cert2)}, "changeit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, javaPath, javaBlob)
+
+	nssRoot := filepath.Join(dir, "nss")
+	mustWrite(t, filepath.Join(nssRoot, "profile-root.pem"), []byte(cert3))
+
+	browserRoot := filepath.Join(dir, "browser")
+	block, _ := pem.Decode([]byte(cert4))
+	mustWrite(t, filepath.Join(browserRoot, "browser-root.der"), block.Bytes)
+
+	mem := certstore.NewMemory()
+	ref := destination.StoreRef{Location: destination.LocalMachine, Name: "ROOT"}
+	if err := mem.AddCertificate(ref, "corp-windows", []byte(cert1)); err != nil {
+		t.Fatal(err)
+	}
+
+	sources := []discovery.Source{
+		discovery.NewOSTrustStoreSource("linux", linuxRoot),
+		discovery.NewJavaTrustStoreSource(javaPath, "changeit"),
+		discovery.NewNSSTrustStoreSource("default", nssRoot),
+		discovery.NewBrowserTrustStoreSource("chromium", "Default", browserRoot),
+		discovery.NewWindowsTrustStoreSource(ref.String(), mem),
+	}
+	var found []discovery.Found
+	for _, src := range sources {
+		got, err := src.Discover(context.Background())
+		if err != nil {
+			t.Fatalf("discover %s: %v", src.Kind(), err)
+		}
+		found = append(found, got...)
+	}
+	if len(found) != 5 {
+		t.Fatalf("found %d trust anchors, want 5: %+v", len(found), found)
+	}
+	kinds := map[string]bool{}
+	for _, f := range found {
+		if f.Source != discovery.SourceTrustStore {
+			t.Fatalf("source = %q, want trust-store", f.Source)
+		}
+		if f.Cert.SHA256Fingerprint == "" {
+			t.Fatalf("missing fingerprint for %+v", f)
+		}
+		if f.Metadata["private_key_present"] != "false" {
+			t.Fatalf("trust-store discovery must not report private key material: %+v", f)
+		}
+		kinds[f.Metadata["trust_store_kind"]] = true
+	}
+	for _, want := range []string{"os", "java", "nss", "browser", "windows"} {
+		if !kinds[want] {
+			t.Fatalf("missing trust-store kind %s in %+v", want, found)
+		}
 	}
 }
 

@@ -10,9 +10,9 @@ metadata:
   name: trstctl-release-images
 spec:
   images:
-    - glob: ghcr.io/imfeelingtheagi/trstctl@sha256:*
+    - glob: ghcr.io/ctlplne/trstctl@sha256:*
   authorities:
     - keyless:
         identities:
           - issuer: https://token.actions.githubusercontent.com
-            subjectRegExp: ^https://github.com/imfeelingtheagi/trstctl/.github/workflows/release.yml@refs/tags/v.*$
+            subjectRegExp: ^https://github.com/ctlplne/trstctl/.github/workflows/release.yml@refs/tags/v.*$

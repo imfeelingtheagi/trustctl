@@ -6,12 +6,13 @@ credential leak. It assumes you operate trstctl per the other runbooks
 ([backup/DR](../disaster-recovery.md), [migrations](../migrations.md),
 [key ceremony](key-ceremony.md)).
 
-> **Maturity note.** The served binary now publishes tenant-scoped OCSP/CRL status
-> for issued leaves and the credential graph can answer blast-radius reads. Some
-> response capabilities remain library/operator work — notably CA hierarchy
-> rotation ceremonies, CT alert scheduling, and connector-driven redeploys. Where a
-> step depends on an as-yet-unserved subsystem, this runbook says so and gives the
-> operational alternative.
+> **Maturity note.** The served binary now publishes tenant-scoped OCSP/CRL status,
+> serves root/intermediate CA creation through m-of-n ceremonies, and can answer
+> blast-radius reads from the credential graph. Some response capabilities remain
+> library/operator work - notably CA rotation/cross-sign ceremonies, CT alert
+> scheduling, and connector-driven redeploys. Where a step depends on an
+> as-yet-unserved subsystem, this runbook says so and gives the operational
+> alternative.
 
 ## First moves (any incident)
 
@@ -72,7 +73,7 @@ process; its compromise is the worst case.
 ## Communications & closeout
 
 - Notify affected owners and relying parties per your disclosure policy
-  ([SECURITY.md](https://github.com/imfeelingtheagi/trstctl/blob/main/SECURITY.md)).
+  ([SECURITY.md](https://github.com/ctlplne/trstctl/blob/main/SECURITY.md)).
 - Capture a timeline from the audit chain; write a post-incident review with
   concrete follow-ups (shorter validity, tighter custody, added monitoring).
 - Confirm `/readyz` is green and the inventory is consistent before closing.

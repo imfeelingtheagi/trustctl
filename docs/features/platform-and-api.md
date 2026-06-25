@@ -39,8 +39,9 @@ opaque cursors, and over-budget callers get `429` with `Retry-After`. **Served.*
 `trstctl-cli` is the API's twin: every command is a row in a table that maps
 `trstctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
 with the API and carries no bespoke logic. It auto-supplies idempotency keys on mutations.
-Command groups: `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
-`graph`, `risk`, `agents`. **Served (binary).**
+Command groups: `owners`, `issuers`, `identities`, `certificates`, `workloads`,
+`broker`, `ephemeral`, `profiles`, `audit`, `graph`, `risk`, `agents`. **Served
+(binary).**
 
 ### The web UI (F12)
 
@@ -151,8 +152,8 @@ turns on only when configured. See [Current limitations](../limitations.md),
 - **API:** OpenAPI 3.1 at `GET /api/v1/openapi.json`; RFC 7807 errors; `Idempotency-Key`
   on mutations; cursor pagination; `429` + `Retry-After`; authenticated REST JSON
   request bodies are capped at 1 MiB and reject trailing JSON tokens.
-- **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
-  `graph`, `risk`, `agents`.
+- **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `workloads`,
+  `broker`, `ephemeral`, `profiles`, `audit`, `graph`, `risk`, `agents`.
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when
   `auth.oidc.enabled` is on); API tokens prefixed `trst_`. Config:
   `TRSTCTL_AUTH_OIDC_ISSUER`, `TRSTCTL_AUTH_OIDC_CLIENT_ID`,

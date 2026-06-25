@@ -125,10 +125,10 @@ func NewManager(s *store.Store, log *events.Log) *Manager {
 // no actor is in context (a background/system start), the opener is left
 // unattributed and no opener!=approver constraint is imposed.
 //
-// Note: the served REST/gRPC wiring of the key ceremony — which sets the actor
-// from the resolved principal — is the EXC-WIRE-03 epic; until then the SoD model
-// is enforced at this library boundary and exercised by tests. The custodian
-// binding to an authorized roster is part of that same served gate.
+// The served REST hierarchy path performs the same actor binding against the
+// resolved principal before it records approvals. This library path stays usable
+// for operator workflows and tests, with opener/approver separation enforced when
+// the caller supplies an event actor.
 func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, threshold int) (string, error) {
 	if threshold < 1 {
 		return "", fmt.Errorf("hierarchy: ceremony threshold must be at least 1")

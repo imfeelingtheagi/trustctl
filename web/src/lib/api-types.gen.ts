@@ -100,6 +100,30 @@ export interface ApprovalRequest {
   action: "issue" | "revoke";
 }
 
+export interface Attestation {
+  claims?: Record<string, unknown>;
+  id: string;
+  method: string;
+  selectors: string[];
+  subject: string;
+  verified_at: string;
+}
+
+export interface AttestedSVID {
+  attestation: Attestation;
+  certificate_pem: string;
+  credential_id: string;
+  not_after: string;
+  subject: string;
+}
+
+export interface AttestedSVIDRequest {
+  method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+  payload_base64: string;
+  public_key_pem: string;
+  ttl_seconds?: number;
+}
+
 export interface AuditBundle {
   bundle: string;
   format: string;
@@ -119,6 +143,148 @@ export interface AuditEvent {
 export interface AuditEventList {
   count?: number;
   events: AuditEvent[];
+}
+
+export interface BrokerAgentIdentity {
+  agent_id: string;
+  attestation: Attestation;
+  certificate_id: string;
+  certificate_pem: string;
+  credential_id: string;
+  node_id: string;
+  not_after: string;
+  scopes: string[];
+  subject: string;
+}
+
+export interface BrokerAgentIdentityRequest {
+  agent_id: string;
+  method: string;
+  payload_base64: string;
+  public_key_pem: string;
+  scopes: string[];
+  ttl_seconds?: number;
+}
+
+export interface CAAuthority {
+  certificate_pem: string;
+  common_name: string;
+  created_at: string;
+  extended_key_usages?: string[];
+  id: string;
+  kind: string;
+  max_path_len: number;
+  not_after?: string;
+  parent_id?: string;
+  permitted_dns_names?: string[];
+  serial: string;
+  signer_handle: string;
+  status: string;
+  tenant_id: string;
+}
+
+export interface CAAuthorityList {
+  items: CAAuthority[];
+  next_cursor?: string;
+}
+
+export interface CACeremonyStartRequest {
+  operation: "create_root" | "create_intermediate";
+  parent_id?: string;
+  spec: CASpec;
+  threshold: number;
+}
+
+export interface CACreateIntermediateRequest {
+  ceremony_id: string;
+  parent_id: string;
+  spec: CASpec;
+}
+
+export interface CACreateRootRequest {
+  ceremony_id: string;
+  spec: CASpec;
+}
+
+export interface CAIssueLeafRequest {
+  csr_pem: string;
+  ttl_seconds?: number;
+}
+
+export interface CAIssuedLeaf {
+  certificate_pem: string;
+  not_after: string;
+  serial: string;
+}
+
+export interface CAKeyCeremony {
+  approvals: number;
+  created_at: string;
+  id: string;
+  opener?: string;
+  purpose: string;
+  status: string;
+  tenant_id: string;
+  threshold: number;
+}
+
+export interface CASpec {
+  common_name: string;
+  extended_key_usages?: string[];
+  max_path_len?: number;
+  permitted_dns_domains?: string[];
+  signature_algorithm?: string;
+  ttl_seconds?: number;
+}
+
+export interface CBOMAsset {
+  algorithm?: string;
+  cipher?: string;
+  id: string;
+  key_bits?: number;
+  kind: string;
+  library?: string;
+  location: string;
+  migration_generation: string;
+  migration_standard: string;
+  migration_target: string;
+  out_of_policy: boolean;
+  protocol?: string;
+  quantum_vulnerable: boolean;
+  reasons?: string[];
+  strength: string;
+}
+
+export interface CBOMInventory {
+  items: CBOMAsset[];
+  migration_progress: CBOMMigrationProgress;
+}
+
+export interface CBOMMigrationProgress {
+  out_of_policy_assets: number;
+  percent_migrated: number;
+  post_quantum_ready_assets: number;
+  quantum_vulnerable_assets: number;
+  total_assets: number;
+}
+
+export interface CBOMReport {
+  failed: number;
+  findings: number;
+  out_of_policy: number;
+  quantum_vulnerable: number;
+  sources: number;
+  weak: number;
+}
+
+export interface CBOMScan {
+  migration_progress: CBOMMigrationProgress;
+  report: CBOMReport;
+}
+
+export interface CBOMScanRequest {
+  host_configs?: string[];
+  tls_endpoints?: string[];
 }
 
 export interface Certificate {
@@ -280,7 +446,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "network" | "ssh" | "cloud_certificate" | "secret_store" | "api_key" | "agent" | "manual";
+  kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -293,13 +459,73 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "network" | "ssh" | "cloud_certificate" | "secret_store" | "api_key" | "agent" | "manual";
+  kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
   name: string;
 }
 
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;
+}
+
+export interface EphemeralApproval {
+  action: string;
+  approvals: number;
+  approver: string;
+  resource: string;
+}
+
+export interface EphemeralApprovalRequest {
+  action: "issue";
+}
+
+export interface EphemeralCredential {
+  approvals: number;
+  attestation: Attestation;
+  certificate_id?: string;
+  certificate_pem?: string;
+  credential_id?: string;
+  expires_at: string;
+  not_after?: string;
+  request_id: string;
+  required_approvals: number;
+  state: "awaiting_approval" | "issued";
+  subject: string;
+}
+
+export interface EphemeralCredentialRequest {
+  method: string;
+  payload_base64: string;
+  public_key_pem: string;
+  request_id: string;
+  ttl_seconds?: number;
+}
+
+export interface ExternalCA {
+  id: string;
+  name: string;
+  status: string;
+  type: string;
+}
+
+export interface ExternalCAIssueRequest {
+  csr_pem: string;
+  dns_names: string[];
+  profile_name?: string;
+  requested_ekus?: string[];
+  ttl_seconds?: number;
+}
+
+export interface ExternalCAIssuedCertificate {
+  certificate_pem: string;
+  issuer: string;
+  not_after: string;
+  serial: string;
+}
+
+export interface ExternalCAList {
+  items: ExternalCA[];
+  next_cursor?: string;
 }
 
 export interface GraphEdge {
@@ -570,6 +796,37 @@ export interface PKISecret {
 export interface PKISecretRequest {
   common_name: string;
   ttl_seconds?: number;
+}
+
+export interface PQCMigration {
+  effective_algorithm: string;
+  migration_progress: CBOMMigrationProgress;
+  protocol: string;
+  queued: number;
+  queued_at: string;
+  rollback_configured: boolean;
+  run_id: string;
+  target_algorithm: string;
+}
+
+export interface PQCMigrationRequest {
+  asset_ids: string[];
+  protocol?: string;
+  rollback_on_failure?: boolean;
+  target_algorithm: string;
+}
+
+export interface PQCMigrationRollback {
+  migration_progress: CBOMMigrationProgress;
+  queued: number;
+  queued_at: string;
+  reason: string;
+  run_id: string;
+}
+
+export interface PQCMigrationRollbackRequest {
+  asset_ids: string[];
+  reason?: string;
 }
 
 export interface PrivacyCatalog {

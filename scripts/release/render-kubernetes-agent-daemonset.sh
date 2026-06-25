@@ -8,7 +8,7 @@ fail() {
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 template="${TRSTCTL_AGENT_DAEMONSET_TEMPLATE:-${repo_root}/deploy/kubernetes/daemonset.yaml}"
-placeholder='ghcr.io/imfeelingtheagi/trstctl@sha256:RELEASE_DIGEST_REQUIRED'
+placeholder='ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED'
 
 image="${1:-${TRSTCTL_AGENT_IMAGE:-}}"
 if [[ -z "${image}" ]]; then

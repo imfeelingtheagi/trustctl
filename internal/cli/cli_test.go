@@ -115,6 +115,86 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestAttestedIssuanceCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 201, `{"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","credential_id":"cred:test","subject":"ns/default/sa/web","not_after":"2026-06-24T12:00:00Z","attestation":{"id":"att:k8s","method":"k8s_sat","subject":"ns/default/sa/web","issuer":"kubernetes","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &cap)
+	body := `{"method":"k8s_sat","payload_base64":"c2F0","public_key_pem":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA0DrbFLt03cHuBfOfvt/wL6+9Yv5mzn4XLu9WLCrCx0o=\n-----END PUBLIC KEY-----\n","ttl_seconds":600}`
+	code, _, _ := run(t, []string{"workloads", "attested-issuance", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/workloads/attested-issuance" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("attested issuance mutation should send an Idempotency-Key")
+	}
+}
+
+func TestBrokerAgentIdentityCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 201, `{"agent_id":"agent-7","node_id":"wl:agent-7","subject":"agent-7","credential_id":"cred:test","certificate_id":"cert:test","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","scopes":["mcp:graph.read"],"not_after":"2026-06-24T12:00:00Z","attestation":{"id":"att:broker","method":"stub_broker","subject":"agent-7","issuer":"broker","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &cap)
+	body := `{"agent_id":"agent-7","method":"stub_broker","payload_base64":"Z2VudWluZQ==","public_key_pem":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA0DrbFLt03cHuBfOfvt/wL6+9Yv5mzn4XLu9WLCrCx0o=\n-----END PUBLIC KEY-----\n","scopes":["mcp:graph.read"],"ttl_seconds":600}`
+	code, _, _ := run(t, []string{"broker", "agent-identities", "issue", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/broker/agent-identities" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("broker identity issuance mutation should send an Idempotency-Key")
+	}
+}
+
+func TestEphemeralCommandsSendBodiesAndIdempotencyKeys(t *testing.T) {
+	var issueCap capture
+	issueSrv := mockServer(t, 202, `{"state":"awaiting_approval","request_id":"jit-agent-7","subject":"jit-agent-7","required_approvals":1,"approvals":0,"expires_at":"2026-06-24T12:00:00Z","attestation":{"id":"att:jit","method":"stub_ephemeral","subject":"jit-agent-7","issuer":"jit","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &issueCap)
+	issueBody := `{"request_id":"jit-agent-7","method":"stub_ephemeral","payload_base64":"Z2VudWluZQ==","public_key_pem":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA0DrbFLt03cHuBfOfvt/wL6+9Yv5mzn4XLu9WLCrCx0o=\n-----END PUBLIC KEY-----\n","ttl_seconds":120}`
+	code, _, _ := run(t, []string{"ephemeral", "issue", "-f", "-"}, cli.Env{Server: issueSrv.URL, HTTPClient: issueSrv.Client()}, issueBody)
+	if code != 0 {
+		t.Fatalf("issue exit = %d", code)
+	}
+	if issueCap.Method != "POST" || issueCap.Path != "/api/v1/ephemeral" {
+		t.Errorf("issue request = %s %s", issueCap.Method, issueCap.Path)
+	}
+	if strings.TrimSpace(string(issueCap.Body)) != issueBody {
+		t.Errorf("issue body = %q, want %q", issueCap.Body, issueBody)
+	}
+	if issueCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("ephemeral issue mutation should send an Idempotency-Key")
+	}
+
+	var approveCap capture
+	approveSrv := mockServer(t, 200, `{"resource":"jit-agent-7","action":"issue","approver":"ra-1","approvals":1}`, &approveCap)
+	approveBody := `{"action":"issue"}`
+	code, _, _ = run(t, []string{"ephemeral", "approve", "jit-agent-7", "-f", "-"}, cli.Env{Server: approveSrv.URL, HTTPClient: approveSrv.Client()}, approveBody)
+	if code != 0 {
+		t.Fatalf("approve exit = %d", code)
+	}
+	if approveCap.Method != "POST" || approveCap.Path != "/api/v1/ephemeral/jit-agent-7/approvals" {
+		t.Errorf("approve request = %s %s", approveCap.Method, approveCap.Path)
+	}
+	if strings.TrimSpace(string(approveCap.Body)) != approveBody {
+		t.Errorf("approve body = %q, want %q", approveCap.Body, approveBody)
+	}
+	if approveCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("ephemeral approve mutation should send an Idempotency-Key")
+	}
+}
+
 func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)
@@ -146,6 +226,79 @@ func TestQueryFlag(t *testing.T) {
 	}
 	if cap.Query != "limit=5" {
 		t.Errorf("query = %q, want limit=5", cap.Query)
+	}
+}
+
+func TestCBOMScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 201, `{"items":[],"migration_progress":{"total":0,"post_quantum_ready":0,"quantum_vulnerable":0,"percent_ready":100}}`, &cap)
+	body := `{"tls_endpoints":["payments.internal:443"],"host_configs":["/etc/nginx/site.conf"]}`
+	code, _, _ := run(t, []string{"cbom", "scan", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/cbom/scans" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("CBOM scan mutation should send an Idempotency-Key")
+	}
+}
+
+func TestCBOMAssetsCommandReadsInventory(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"items":[],"migration_progress":{"total":0,"post_quantum_ready":0,"quantum_vulnerable":0,"percent_ready":100}}`, &cap)
+	code, stdout, _ := run(t, []string{"cbom", "assets"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/cbom/assets" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	var j any
+	if err := json.Unmarshal([]byte(stdout), &j); err != nil {
+		t.Errorf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+}
+
+func TestPQCMigrationStartCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 202, `{"run_id":"11111111-1111-4111-8111-111111111111","queued":1}`, &cap)
+	body := `{"asset_ids":["22222222-2222-4222-8222-222222222222"],"target_algorithm":"ML-DSA-65","protocol":"acme","rollback_on_failure":true}`
+	code, _, _ := run(t, []string{"pqc", "migrations", "start", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/pqc/migrations" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("PQC migration start should send an Idempotency-Key")
+	}
+}
+
+func TestPQCMigrationRollbackCommandSendsRunIDBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 202, `{"run_id":"11111111-1111-4111-8111-111111111111","queued":1}`, &cap)
+	body := `{"asset_ids":["22222222-2222-4222-8222-222222222222"],"reason":"rollback drill"}`
+	code, _, _ := run(t, []string{"pqc", "migrations", "rollback", "11111111-1111-4111-8111-111111111111", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/pqc/migrations/11111111-1111-4111-8111-111111111111/rollback" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("PQC migration rollback should send an Idempotency-Key")
 	}
 }
 

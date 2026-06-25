@@ -23,7 +23,21 @@ never live in the API process. What you can do end to end against the running bi
   `lifecycle.rotation.recorded` runs, and both are readable through the API, CLI,
   and console. The receipt is routing/status metadata only: no private key or secret
   bytes are returned.
-- **Discovery control plane + network scan execution**: the running binary serves
+- **Expiry-alert notification delivery**: the leader lifecycle scheduler honors the
+  configured alert window, writes `notification.expiry` outbox work, stamps
+  `alerted_at` in the same transaction so one certificate does not spam, and the
+  served outbox worker dispatches the alert through operator-wired Slack, Teams,
+  email, PagerDuty, OpsGenie, or webhook channels. This is runtime delivery, not a
+  tenant channel-management API.
+- **Deployment connector target mutation** for the shipped connector set is served
+  through the outbox when an operator wires a native `ConnectorRegistry` into the
+  running binary, or when a provenance-verified signed WASM connector plugin owns
+  the connector name. A direct `connector.deploy` payload that carries `cert_pem`
+  and `key_pem` is delivered at-least-once to the registered connector and records
+  a `delivered` or `failed` receipt. A lifecycle transition that contains only
+  routing metadata still records an `unrouted` receipt instead of pretending it
+  deployed bytes the control plane no longer has.
+- **Discovery control plane + network, cloud-certificate, CT-log, and drift execution**: the running binary serves
   discovery sources, schedules, and runs under `/api/v1/discovery/*` — create/list a
   source, create/list a schedule, queue a run (idempotent — deduplicated by
   `Idempotency-Key`), and read runs and findings (keyset-paginated). Queuing a run is
@@ -33,11 +47,26 @@ never live in the API process. What you can do end to end against the running bi
   For a **network** source the served worker runs a real certificate sweep over the
   configured targets/CIDRs on its own bounded worker lane (a flood fast-rejects rather
   than starving other subsystems), records discovered certificates into inventory and
-  findings, and completes the run; a **manual** source records its supplied findings.
-  The **other collectors** — SSH key/trust scan, agentless
-  cloud-certificate enumeration, Certificate Transparency monitoring, and CBOM — are
-  **not** wired into the served worker; see the Discovery bullet under "Built and
-  tested, but not yet served" below.
+  findings, and completes the run. This is the served **network scan execution** path.
+  For a **cloud_certificate** source the served
+  worker executes AWS ACM, Azure Key Vault, and GCP Certificate Manager enumeration
+  through credential references, records discovered certificates into inventory and
+  findings, and completes the run. For a **ct_log** source the worker polls configured
+  RFC 6962 log fixtures or public logs, checkpoints each log, records unexpected
+  issuance as `ct_unexpected_issuance` findings, and queues notification alerts through
+  the same outbox discipline as expiry alerts. For a **drift** source the worker compares
+  configured credential paths against expected fingerprints and permissions, records
+  `credential_drift` findings, and queues drift alerts. A **manual** source records its
+  supplied findings. The remaining **SSH key/trust scan** collector is not wired into the
+  served worker; see the Discovery bullet under "Built and tested, but not yet served"
+  below.
+- **CBOM scan and migration inventory**: `POST /api/v1/cbom/scans` runs the
+  cryptographic bill of materials scanner against TLS endpoints and host config
+  files, records `cbom.asset.observed` events, and projects tenant-scoped
+  `crypto_assets`. `GET /api/v1/cbom/assets` returns the stored inventory plus
+  FIPS 203/204/205 migration targets and `migration_progress` so operators can see
+  which assets are already post-quantum-ready and which are still
+  quantum-vulnerable.
 - **Credential-compromise incident execution**: `POST /api/v1/incidents/executions`
   drives a served, idempotent (deduplicated by `Idempotency-Key`),
   history-reconstructable single-identity remediation — replacement issue/deploy,
@@ -48,6 +77,15 @@ never live in the API process. What you can do end to end against the running bi
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
+- **Attested X.509-SVID issuance**: when the operator wires the six attesters and
+  their trust material into the served binary, `POST /api/v1/workloads/attested-issuance`
+  verifies a workload proof (`aws_iid`, `azure_imds`, `gcp_iit`, `github_oidc`,
+  `k8s_sat`, or `tpm`), signs a short-lived X.509-SVID for the presented public key in
+  the isolated signer, records `certificate.recorded`, binds `attestation.bound`, and
+  returns the certificate plus verified subject metadata. The route requires
+  `certs:issue`, an `Idempotency-Key`, and the authenticated tenant; a forged proof
+  fails closed and mints nothing. There is not yet a tenant self-service UI/API for
+  managing attester roots/JWKS/nonce policy — operators configure those process inputs.
 - **Authentication and RBAC** via **scoped API tokens** (sent as
   `Authorization: Bearer`), **multi-tenancy** with PostgreSQL row-level security,
   and a **tamper-evident audit chain**. A fresh boot fails closed (every route
@@ -96,22 +134,31 @@ tests**, but are **not yet wired into the served API of the running binary**. Th
 are usable from Go today; "served, authenticated, end-to-end in the binary" is the
 remaining integration work.
 
-- **CA integrations** (9 of them) and the **private CA hierarchy**
-  (root/intermediate, cross-sign, rotation, and the m-of-n key ceremony — see the
+- Remaining **private CA hierarchy** operator flows beyond root/intermediate/leaf
+  issuance. Root/intermediate CA creation, m-of-n approvals, signer-backed leaf
+  issuance, and configured upstream CA issuance are now served at
+  `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`, and
+  `/api/v1/external-cas`. Rotation and cross-signing remain library/operator
+  workflows until their served routes ship (see the
   [key-ceremony runbook](runbooks/key-ceremony.md)).
-- **Deployment connector implementation bodies** (**13** of them:
-  nginx, Apache, IIS, HAProxy, F5, NetScaler, Cisco, FortiGate, Palo Alto, AWS ACM,
-  Azure Key Vault, GCP Certificate Manager, and Java keystore). The running binary
-  serves the connector catalog and delivery receipts. Actual target mutation is
-  routed only when a provenance-verified signed connector plugin is loaded; otherwise
-  `connector.deploy` is acknowledged as an `unrouted` receipt with the reason.
-- **Discovery scanners/collectors other than network scan**: SSH key & trust
-  inventory, agentless cloud-certificate enumeration, the **CBOM** with post-quantum
-  posture, and **Certificate Transparency** monitoring. These collectors have **no
-  path into the served worker** and are usable only as library code today. (The
-  **network** collector *is* wired into the served discovery worker — see
-  "Discovery control plane + network scan execution" above — so a queued *network*
-  run is executed end-to-end by the binary; the collectors named here are not.)
+- **10 CA integrations** are present under the served external-CA registry when the
+  operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
+  DigiCert, EJBCA, Google CAS, Let's Encrypt/ACME, Sectigo, Smallstep, and Venafi
+  TPP/TLS Protect.
+- **Connector target configuration CRUD**: the 13 shipped deployment connectors
+  (nginx, Apache, IIS, HAProxy, F5, NetScaler, Cisco, FortiGate, Palo Alto, AWS ACM,
+  Azure Key Vault, GCP Certificate Manager, and Java keystore) are now reachable
+  from the served outbox worker through a native registry or signed plugin, but
+  tenant self-service target setup is not yet a CRUD API. Operators still provide
+  connector instances, endpoints, and credential references at process composition
+  time.
+- **Discovery scanners/collectors still outside served execution**: the **SSH key/trust
+  scan** collector still has **no path into the served worker** and remains agent/library
+  execution today. The **network**, **cloud_certificate**, **ct_log**, **drift**, and
+  **manual** source kinds are wired through the served discovery worker — see "Discovery
+  control plane + network, cloud-certificate, CT-log, and drift execution" above. The
+  **CBOM** scanner is also served, but through its own `/api/v1/cbom/*` API rather than
+  the discovery-run worker.
 - **SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator)**: the
   applier that installs a trusted SSH CA and rolls it back on failure is now **wired
   into the `trstctl-agent` binary** behind a **default-off operator opt-in**
@@ -127,11 +174,17 @@ remaining integration work.
   with the flag off the agent only *discovers* SSH trust (inventory, above), it
   does not *mutate* it. Trust *removal* still requires its own explicit confirmation
   (the safe default).
-- **Posture collectors and agents:** CT monitoring, CBOM scanning triggers, drift
-  detection loops, and the **non-network discovery collectors** (SSH/cloud-cert/CT)
-  remain library/agent work — the discovery *control surface* and the **network**
-  scan executor are served (above), but the other collector kinds are not yet driven
-  by the served worker. The **credential
+- **Posture collectors and agents:** CT-log monitoring and path-based credential drift
+  detection are now executed by the served discovery worker when operators create
+  `ct_log` or `drift` sources; findings are tenant-scoped and alert intents are
+  outbox-backed. Dedicated Posture dashboards, resolution workflows, and automatic
+  remediation remain future UI/workflow work. Server-side execution for the **SSH**
+  discovery collector remains library/agent work with no path into the served worker —
+  the discovery *control surface*, the **network** scan executor,
+  **cloud-certificate discovery execution**, the agent-channel **inventory report** path
+  for metadata-only local findings including trust-store anchors, and the **CBOM**
+  scan/inventory API are served (above), but that remaining collector execution is not
+  yet driven by the served worker. The **credential
   graph** and **risk scoring** read APIs are already served (`/api/v1/graph*`,
   `/api/v1/risk/credentials`), and the **AI/RCA/MCP** surface is served behind
   `ai.enable_api`; they are not part of this not-yet-served bucket.
@@ -278,6 +331,12 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   The running binary does **not** mount a KMIP listener or transit API/CLI surface yet,
   so the console and feature docs must keep disclosing it as library-only until a
   served endpoint is mounted and reference-client appliance profiles are exercised.
+- **Notification channel authoring and test delivery (F29) — not yet tenant-served.**
+  Expiry-alert dispatch itself is served when operators wire notification channels
+  into the process, but tenants cannot yet create, edit, list, test, or view delivery
+  receipts for notification channel configuration through the REST API, CLI, or
+  console. Keep channel secrets in operator-managed secret references until that
+  authoring surface is mounted.
 
 ## Authorization policy gates: served on the issue/deploy/revoke path
 
@@ -429,12 +488,15 @@ This is a deliberate, documented trust boundary (not an accident):
     storage in HA so cached clients survive restarts and rolling deploys.
   - the **SPIFFE Workload API** is served as a **gRPC service on a Unix domain
     socket** (`protocols.spiffe.enabled`), so a `spiffe-helper`/go-spiffe/Envoy-SDS
-    client dials the socket and `FetchX509SVID` returns an SVID + trust bundle signed
-    through the signer; a served acceptance test drives the SPIFFE Workload API wire
-    protocol (with the mandatory `workload.spiffe.io` metadata) over the socket and
-    validates the SVID. A required CI job also runs stock go-spiffe and stock
-    `spiffe-helper` against that served socket; go-spiffe is a test-only dependency so
-    the served binary does not take a new runtime dependency for the proof.
+    client dials the socket and fetches X.509-SVIDs, JWT-SVIDs, X.509 bundles, and JWT
+    bundles. X.509-SVIDs are signed through the isolated signer; JWT-SVIDs use the
+    signer-backed JWT handle and the served `ValidateJWTSVID` RPC validates them
+    against the served JWT bundle. A served acceptance test drives the SPIFFE Workload
+    API wire protocol (with the mandatory `workload.spiffe.io` metadata) over the
+    socket and validates both SVID families. A required CI job also runs stock
+    go-spiffe and stock `spiffe-helper` against that served socket; go-spiffe is a
+    test-only dependency so the served binary does not take a new runtime dependency
+    for the proof.
   - the **SSH CA** is served at `/ssh/...` (`protocols.ssh.enabled`): cert issuance
     plus the **OpenSSH binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it);
     a served acceptance test issues a user cert (verified with `ssh-keygen -L`),
@@ -465,8 +527,9 @@ This is a deliberate, documented trust boundary (not an accident):
     **libest** `estclient` from source and requires it to perform simpleenroll
     against the served EST endpoint. The
     **SPIFFE Workload API** has a **served stock-client differential**: the real
-    go-spiffe `workloadapi` client fetches and validates an SVID over the served UDS,
-    and stock `spiffe-helper` writes the served SVID, key, and trust bundle to disk.
+    go-spiffe `workloadapi` client fetches an X.509-SVID, fetches a JWT-SVID, fetches
+    JWT bundles, and validates the JWT-SVID over the served UDS; stock `spiffe-helper`
+    writes the served X.509-SVID, key, and trust bundle to disk.
     **CMP** has a dedicated stock-client CI transcript: OpenSSL
     `cmp -cmd p10cr` creates the request, enrolls through the served `/cmp` endpoint,
     accepts the protected response, and uploads the request/response/cert/log
@@ -495,16 +558,43 @@ This is a deliberate, documented trust boundary (not an accident):
     **zlint** over the served CA plus that corpus, and uploads the generated fixtures
     and JSON lint transcripts as artifacts. This is a private-CA assurance gate (for
     your own internal PKI), not a claim that trstctl operates as a WebPKI public CA.
-- **SPIFFE transport (Workload API):** the SVID *document* is spec-shaped (a single
-  `spiffe://` URI SAN, correct key usage), and the Workload API is now **served as a
-  gRPC service on a Unix domain socket** (`protocols.spiffe.enabled`), so a
-  `spiffe-helper`/go-spiffe/Envoy-SDS workload dials the socket and `FetchX509SVID`
-  returns an SVID + trust bundle signed through the isolated signer. The SVID's
-  workload key is minted server-side and returned in the response (per the spec); the
-  X.509-SVID CA is the served issuing CA in the signer and the JWT-SVID signing key has
-  its own signer handle. The Workload-API gRPC/protobuf contract is vendored verbatim
-  from go-spiffe so the wire format is byte-identical without a build-time go-spiffe
-  dependency.
+- **SPIFFE transport (Workload API):** the X.509-SVID *document* is spec-shaped (a
+  single `spiffe://` URI SAN, correct key usage), and the Workload API is now
+  **served as a gRPC service on a Unix domain socket** (`protocols.spiffe.enabled`).
+  A `spiffe-helper`/go-spiffe/Envoy-SDS workload dials the socket for
+  `FetchX509SVID`, `FetchX509Bundles`, `FetchJWTSVID`, `FetchJWTBundles`, and
+  `ValidateJWTSVID`. The X.509-SVID workload key is minted server-side and returned in
+  the response (per the spec); the X.509-SVID CA is the served issuing CA in the
+  signer and the JWT-SVID signing key has its own signer handle. The Workload-API
+  gRPC/protobuf contract is vendored verbatim from go-spiffe so the wire format is
+  byte-identical without a build-time go-spiffe dependency.
+- **Attested issuance transport (REST):** `POST /api/v1/workloads/attested-issuance`
+  is the served proof-before-trust mint for workloads that already have their own key
+  pair. The request carries the attestation method, base64 proof payload, public key
+  PEM, and requested TTL; the response carries the signer-issued X.509-SVID PEM,
+  credential id, verified subject, expiry, and attestation metadata. The SPIFFE ID is
+  derived from the verified attestation subject, not caller-supplied text. Acceptance
+  coverage exercises a Kubernetes projected service-account token, an AWS
+  instance-identity document with an emulated trusted root, idempotent replay, and a
+  forged AWS document rejection.
+- **AI-agent broker issuance (REST):** `POST /api/v1/broker/agent-identities` is
+  served when the agent broker is configured with attestors, a policy module, trust
+  domain, and signer-backed issuing CA. The route requires `certs:issue` and an
+  `Idempotency-Key`; it verifies the agent proof, evaluates policy before signing,
+  mints a short-lived X.509-SVID, records `certificate.recorded`, emits
+  `agent.identity.issued` or `agent.identity.refused`, and projects the
+  agent-to-credential edge into the graph. The React Workloads page still does not
+  collect raw broker proof material; use the REST API or CLI for live broker mints.
+- **Ephemeral / JIT issuance (REST):** `POST /api/v1/ephemeral` is served when
+  ephemeral issuance is configured with attestors, approval TTL/threshold, trust
+  domain, and signer-backed issuing CA. A requester with `certs:request` presents a
+  proof and public key; trstctl verifies the proof, opens an approval request, and
+  enqueues the approval notification intent in the same tenant transaction. A
+  distinct approver with `certs:issue` records approval at
+  `POST /api/v1/ephemeral/{request_id}/approvals`; the requester then calls
+  `/api/v1/ephemeral` with a fresh `Idempotency-Key` to mint the short-TTL
+  credential. The React Workloads page still does not collect raw proof material or
+  render approval controls; use REST or `trstctl-cli ephemeral issue/approve`.
 - **Agent ↔ control-plane mTLS gRPC channel:** the agent steady-state channel is now
   **served by the running binary** when `agent_channel.enabled` (off by default — an
   upgrade does not silently open an agent port). The control plane mounts an
@@ -515,7 +605,13 @@ This is a deliberate, documented trust boundary (not an accident):
   certificate** before expiry — a fresh cert is minted through the **signer-custodied
   agent CA** (signed in the isolated signer through the single cryptography path),
   **idempotently** on the presented serial (deduplicated so a retry does not mint
-  twice), recorded as an `agent.cert.renewed` event. The tenant is derived from the
+  twice), recorded as an `agent.cert.renewed` event — and (c) **report local inventory**
+  as metadata-only discovery findings, including public OS/Java/NSS/browser/Windows
+  trust-store anchors and private-key-material locations/classifications from
+  configured roots. Inventory reports create a tenant-scoped discovery source, run,
+  finding rows, `discovery.*` events, and credential-graph nodes; they do not carry
+  private keys, PEM/DER key bytes, or secret values, and secret-looking inline metadata
+  keys are rejected before projection. The tenant is derived from the
   agent's **verified client-certificate SPIFFE SAN**, never a request field. The
   channel is behind its own bounded **agent worker lane** and per-connection gRPC
   stream cap, so a heartbeat or renewal storm sheds with `ResourceExhausted` rather than
@@ -601,20 +697,23 @@ it would route through the same single isolated cryptography path — but it is
 
 The assembled issuing CA's key is now **persisted, sealed at rest** in the
 signer's key store: a signer restart **preserves** the CA instead of
-silently rotating it, and the key survives across restarts. **HSM/KMS-backed
-custody** (rather than a local sealed key file) and a served, m-of-n break-glass
-flow are still future work — the key-encryption key is a local file by default.
+silently rotating it, and the key survives across restarts. Root/intermediate
+m-of-n ceremonies and signer-backed leaf issuance are now served; **HSM/KMS-backed
+custody** (rather than a local sealed key file) and break-glass rotation/cross-sign
+workflows are still future work. The key-encryption key is a local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
 
-**In-memory custody of the reference-path CA keys.** The private-CA hierarchy holds
-its live ECDSA signing keys in **locked, wipeable secret buffers** (`mlock` +
-`MADV_DONTDUMP`) rather than as a bare unprotected key on the garbage-collected heap
-for the lifetime of the in-process CA; the key is reconstructed only for the instant
-of each signature and the transiently parsed copy is best-effort zeroized afterward
-(the same hardening the isolated signer uses). This narrows — but, given Go's runtime,
-does not eliminate — the window in which an unprotected key sits in dumpable heap; it
+**In-memory custody of the reference-path CA keys.** The served CA-hierarchy path
+does not use these in-process reference keys: it binds each served root/intermediate
+to an isolated-signer handle. The library reference manager still holds live ECDSA
+signing keys in **locked, wipeable secret buffers** (`mlock` + `MADV_DONTDUMP`)
+rather than as a bare unprotected key on the garbage-collected heap for the lifetime
+of the in-process CA; the key is reconstructed only for the instant of each
+signature and the transiently parsed copy is best-effort zeroized afterward (the
+same hardening the isolated signer uses). This narrows - but, given Go's runtime,
+does not eliminate - the window in which an unprotected key sits in dumpable heap; it
 is complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`.
 
 **BYOK / HSM key lifecycle.** trstctl provides a full bring-your-own-key / HSM key
@@ -677,28 +776,55 @@ Cloudflare's CIRCL. What is available today:
 - **ML-DSA** (FIPS 204; `mldsa44` / `mldsa65` / `mldsa87`) — the NIST-standard
   lattice signature.
 - **ML-KEM** (FIPS 203; `mlkem512` / `768` / `1024`) — the NIST-standard key
-  encapsulation.
+  encapsulation. trstctl can generate ML-KEM keys, encapsulate to an ML-KEM public key,
+  and decapsulate the resulting ciphertext; all three parameter sets are checked against
+  FIPS 203 known-answer vectors. The served HTTPS and mTLS listeners prefer
+  `X25519MLKEM768` for TLS 1.3 hybrid key exchange when a peer supports it, with
+  classical TLS 1.3 groups retained for compatibility.
 - **SLH-DSA / SPHINCS+** (FIPS 205; `SLH-DSA-SHA2-128s` / `128f` / `192s` / `256s`) —
-  the NIST-standard stateless **hash-based** signature, delivered in the Epoch 14
-  post-quantum-migration work. Its security rests only on the hash function, so it is
-  the conservative choice for long-lived roots where you want assumptions independent
-  of the lattice schemes; the trade-off is much larger signatures.
+  the NIST-standard stateless **hash-based** signature. Its security rests only on the
+  hash function, so it is the conservative choice for long-lived roots where you want
+  assumptions independent of the lattice schemes; the trade-off is much larger
+  signatures.
 - **A hybrid signature** (`HybridEd25519Dilithium3`) — classical Ed25519 paired with
   ML-DSA, so breaking either component alone does not forge a signature.
 
 Private key material is held in locked, zeroized buffers and parsed only for
-the moment of each operation, exactly like classical keys. The discovery side knows
-these algorithms too — the **CBOM** scanner recognizes ML-DSA, ML-KEM, and
-SLH-DSA / SPHINCS+ as quantum-safe when it finds them in your estate. Because all
-cryptography enters through one isolated path, each scheme is a contained,
-single-module registration (a CIRCL scheme plus known-answer tests), with no ripple
-into the rest of the system.
+the moment of each operation, exactly like classical keys. The isolated signer can now
+generate and use signer-held ML-DSA and SLH-DSA keys over its UDS or mTLS gRPC channel,
+and those keys are sealed in the signer key store so a restart does not silently rotate
+them. ML-KEM is not exposed as a signer key because it is encapsulation, not a signature;
+use it as the key-establishment primitive for protocol wiring rather than as an issuing
+CA key.
 
-What is **not yet** end-to-end is PQC *issuance through every enrollment protocol* and
-the fully automated, fleet-wide **migration orchestration** — the crypto primitives
-are in place and the migration tooling is being built out. See
-[Lifecycle & PQC](features/lifecycle-and-pqc.md) for the current state of that
-tooling (F57).
+The served CA can mint a hybrid transition leaf: the certificate remains a normal
+ECDSA P-256 leaf for stock TLS clients, while a signed ML-DSA-44 + ECDSA-P256 composite
+binding is carried inside the certificate for PQ-aware verifiers. That makes the
+migration deployable without forcing every client to understand draft composite public
+keys on day one. The ACME, EST, SCEP, and CMP served enrollment paths all run through
+that same issuer, so a CSR with the hybrid proof can be profile-gated and issued through
+those protocols using the `Hybrid-ML-DSA-44-ECDSA-P256` profile algorithm label.
+
+The discovery side knows these algorithms too — the **CBOM** scanner recognizes ML-DSA,
+ML-KEM, and SLH-DSA / SPHINCS+ as quantum-safe when it finds them in your estate. Because
+all cryptography enters through one isolated path, each scheme is a contained boundary
+implementation (a CIRCL scheme plus known-answer tests), with no ripple into the rest of
+the system. The served CBOM inventory exposes this posture through
+`GET /api/v1/cbom/assets`: classical signing algorithms are mapped to ML-DSA/FIPS 204
+targets, weak TLS protocol or cipher findings are mapped to ML-KEM/FIPS 203, DSA is
+mapped to SLH-DSA/FIPS 205, and `migration_progress` shows how much of the observed
+estate is already post-quantum-ready.
+
+What is **not yet** end-to-end is pure ML-DSA subject certificates through every stock
+client, a multi-key SPIFFE Workload API response for useful hybrid SVID private-key
+delivery, and automated rollout for every TLS protocol/cipher finding. The served PQC
+migration trigger now covers CBOM certificate-key assets: it queues ACME re-issuance
+through the outbox, mints the deployable `Hybrid-ML-DSA-44-ECDSA-P256` transition leaf,
+projects `migration_progress`, and supports evented rollback. The crypto primitives,
+isolated-signer signing path, served hybrid leaf assembly, ACME/EST/SCEP/CMP hybrid
+issuance, and hybrid TLS key exchange are in place; the remaining work is broader
+protocol/client compatibility and deployment automation. See
+[Lifecycle & PQC](features/lifecycle-and-pqc.md) for the current state of that tooling.
 
 ## Kubernetes deployment
 
@@ -768,7 +894,7 @@ and not yet measured** in CI, so neither is silently over-claimed.
 
 ## How to read the roadmap against this
 
-The [README capability table](https://github.com/imfeelingtheagi/trstctl#capabilities)
+The [README capability table](https://github.com/ctlplne/trstctl#capabilities)
 describes what is **built and tested**; this page tells you what is **served by the
 binary today**. When the two differ, this page is the authority for what you can
 rely on at runtime.

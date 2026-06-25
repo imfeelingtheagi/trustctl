@@ -64,7 +64,7 @@ func TestProtectCORRECT102_ProfileValidatedBeforeSigning(t *testing.T) {
 	if signIdx < 0 {
 		t.Fatalf("CORRECT-102: mintServedLeaf no longer calls d.issue (the signer/CA hook); re-point this guard")
 	}
-	if !(enforceIdx < signIdx) {
+	if enforceIdx >= signIdx {
 		t.Fatalf("CORRECT-102: profile validation (enforceProfile @%d) no longer precedes signing (d.issue @%d) in mintServedLeaf; the served path can now sign before validating the profile (fail-open regression)", enforceIdx, signIdx)
 	}
 
@@ -179,7 +179,7 @@ func TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed(t *testing.T) {
 	if retIdx < 0 {
 		t.Fatalf("INTEROP-003: the no-signer branch no longer returns (nil, nil); the fail-closed contract is broken")
 	}
-	if firstEnableIdx >= 0 && !(retIdx < firstEnableIdx) {
+	if firstEnableIdx >= 0 && retIdx >= firstEnableIdx {
 		t.Errorf("INTEROP-003: the no-signer fail-closed return (@%d) no longer precedes the first protocol enablement gate (@%d); a protocol could be assembled without a signer", retIdx, firstEnableIdx)
 	}
 

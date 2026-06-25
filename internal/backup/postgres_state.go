@@ -296,7 +296,6 @@ func postgresStateRestoreOrder() []string {
 		"ca_key_ceremonies",
 		"ca_ceremony_approvals",
 		"credentials",
-		"crypto_assets",
 		"ct_log_checkpoints",
 		"ct_watched_domains",
 		"deployment_targets",

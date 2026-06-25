@@ -1006,7 +1006,7 @@ jobs:
             --from-file=ca-bundle.pem="$ca_bundle" \
             --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
           scripts/release/render-kubernetes-agent-daemonset.sh \
-            "ghcr.io/imfeelingtheagi/trstctl@sha256:1111111111111111111111111111111111111111111111111111111111111111" \
+            "ghcr.io/ctlplne/trstctl@sha256:1111111111111111111111111111111111111111111111111111111111111111" \
             > "$rendered_agent_daemonset"
           kubectl apply --dry-run=server -f "$rendered_agent_daemonset"
 

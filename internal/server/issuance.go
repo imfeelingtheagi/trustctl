@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
@@ -57,10 +58,12 @@ type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafP
 // the outbox message's key (AN-5), so a redelivery never mints a second
 // certificate nor double-revokes.
 type issuanceDispatcher struct {
-	issue issueFunc
-	orch  *orchestrator.Orchestrator
-	idem  *orchestrator.Idempotency
-	store *store.Store
+	issue       issueFunc
+	issueHybrid issueFunc
+	orch        *orchestrator.Orchestrator
+	idem        *orchestrator.Idempotency
+	outbox      *orchestrator.Outbox
+	store       *store.Store
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
@@ -86,6 +89,14 @@ type issuanceDispatcher struct {
 	// acknowledged unrouted as before. Tenant-scoped (AN-1) and event-sourced
 	// (AN-2); the plugin holds no store/signer handle.
 	plugins *PluginManager
+	// connectorRegistry is the trusted native deployment connector registry
+	// (CLM-05/F7/F27). When a connector.deploy payload names a registered native
+	// connector and carries the credential bytes, the served outbox worker performs
+	// the real deploy through the connector SDK sandbox and records a durable receipt.
+	connectorRegistry *connector.Registry
+	// notifications fans notification.* outbox rows to operator-configured channels
+	// (NOTIF-01/F29). Nil preserves the prior no-channel behavior.
+	notifications *notify.Dispatcher
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -110,7 +121,17 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDeploy(ctx, m)
 	case "discovery.run":
 		return d.handleDiscoveryRun(ctx, m)
+	case pqcMigrationReissueDestination:
+		return d.handlePQCReissue(ctx, m)
+	case pqcMigrationRollbackDestination:
+		return d.handlePQCRollback(ctx, m)
 	default:
+		if strings.HasPrefix(m.Destination, "notification.") {
+			if d.notifications == nil {
+				return nil
+			}
+			return d.notifications.Dispatch(ctx, m.Payload)
+		}
 		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") {
 			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
 		}
@@ -509,7 +530,8 @@ func (d *issuanceDispatcher) ensureTenantCRL(ctx context.Context, tenantID strin
 // (connector, target, fingerprint, status, rollback reference), never PEM/key
 // material (AN-8). When a served WASM connector plugin is configured and owns the
 // named connector, the deployment is pushed through the capability sandbox; when no
-// plugin owns it the row is acknowledged as "unrouted" and the reason is visible.
+// native connector nor plugin owns it the row is acknowledged as "unrouted" and
+// the reason is visible.
 func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Message) error {
 	p, identityID, detail, err := d.resolveDeployPayload(ctx, m)
 	if err != nil {
@@ -530,6 +552,27 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 	if p.Connector == "" {
 		receipt.Detail = nonempty(receipt.Detail, "identity has no connector target configured")
 		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "missing_connector")
+	}
+	if d.connectorRegistry != nil && d.connectorRegistry.Has(p.Connector) {
+		if len(p.CertPEM) == 0 || len(p.KeyPEM) == 0 {
+			receipt.Detail = "native connector payload did not carry cert_pem and key_pem"
+			return d.recordConnectorDelivery(ctx, m.TenantID, receipt, "unrouted", "native_payload_missing_credential")
+		}
+		// Idempotent on the outbox key (AN-5 ↔ AN-6): a redelivery returns the
+		// recorded result without pushing the same credential to the target again.
+		_, err = d.idem.Do(ctx, m.TenantID, "deploy:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+			if derr := d.connectorRegistry.Deploy(ctx, p); derr != nil {
+				_ = d.recordConnectorDelivery(ctx, m.TenantID, receipt, "failed", derr.Error())
+				return nil, derr
+			}
+			receipt.Detail = "delivered by served native connector registry"
+			receipt.RollbackRef = "restore previous certificate for " + p.Target
+			if err := d.recordConnectorDelivery(ctx, m.TenantID, receipt, "delivered", "native_delivered"); err != nil {
+				return nil, err
+			}
+			return []byte("deployed:" + p.Connector), nil
+		})
+		return err
 	}
 	if d.plugins == nil {
 		receipt.Detail = "no signed connector plugin surface is configured"

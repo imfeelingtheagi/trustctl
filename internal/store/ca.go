@@ -23,6 +23,7 @@ type CAAuthority struct {
 	Kind              string // root | intermediate
 	Status            string // active | superseded | revoked
 	CertificatePEM    string
+	SignerHandle      string
 	Serial            string
 	NotAfter          *time.Time
 	MaxPathLen        int
@@ -62,11 +63,11 @@ func (s *Store) InsertCAAuthorityTx(ctx context.Context, tx pgx.Tx, c CAAuthorit
 	err := tx.QueryRow(ctx,
 		`INSERT INTO ca_authorities
 		        (id, tenant_id, parent_id, common_name, kind, status, certificate_pem,
-		         serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id)
-		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		         signer_handle, serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id)
+		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, $11, $12, $13)
 		 RETURNING id::text, created_at`,
 		c.TenantID, c.ParentID, c.CommonName, c.Kind, status, c.CertificatePEM,
-		c.Serial, c.NotAfter, c.MaxPathLen, dns, ekus, c.ReplacesID).
+		c.SignerHandle, c.Serial, c.NotAfter, c.MaxPathLen, dns, ekus, c.ReplacesID).
 		Scan(&c.ID, &c.CreatedAt)
 	c.Status = status
 	c.PermittedDNSNames = dns
@@ -76,7 +77,7 @@ func (s *Store) InsertCAAuthorityTx(ctx context.Context, tx pgx.Tx, c CAAuthorit
 
 func scanCAAuthority(row pgx.Row, c *CAAuthority) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.ParentID, &c.CommonName, &c.Kind, &c.Status,
-		&c.CertificatePEM, &c.Serial, &c.NotAfter, &c.MaxPathLen, &c.PermittedDNSNames, &c.EKUs,
+		&c.CertificatePEM, &c.SignerHandle, &c.Serial, &c.NotAfter, &c.MaxPathLen, &c.PermittedDNSNames, &c.EKUs,
 		&c.ReplacesID, &c.CreatedAt)
 }
 
@@ -86,7 +87,7 @@ func (s *Store) GetCAAuthority(ctx context.Context, tenantID, id string) (CAAuth
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCAAuthority(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
-			        certificate_pem, serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
 			   FROM ca_authorities WHERE tenant_id = $1 AND id = $2`, tenantID, id), &c)
 	})
 	return c, err
@@ -98,7 +99,7 @@ func (s *Store) ListCAAuthorities(ctx context.Context, tenantID string) ([]CAAut
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
-			        certificate_pem, serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
 			   FROM ca_authorities WHERE tenant_id = $1 ORDER BY created_at, id`, tenantID)
 		if err != nil {
 			return err

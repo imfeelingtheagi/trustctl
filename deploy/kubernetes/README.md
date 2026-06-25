@@ -28,7 +28,7 @@ DaemonSet with that release digest, and apply the agent manifests:
 ```sh
 export TRSTCTL_SERVER=https://cp.example.com
 export TRSTCTL_TOKEN=trst_...
-export TRSTCTL_AGENT_IMAGE='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
 TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
 rendered_agent_daemonset="$(mktemp)"
@@ -70,6 +70,24 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
 3. if `--cert-manager-issuer` and `--bridge-signer-url` are set, reconciles
    cert-manager `CertificateRequest`s for that issuer, forwarding each CSR to the
    control plane for signing and writing the result back to the request status.
+
+For node-level certificate inventory, add read-only hostPath mounts for the public
+certificate directories you want to enumerate and pass
+`--inventory-cert-roots=/host/etc/ssl,/host/etc/pki/tls/certs`. The agent reports
+fingerprints and metadata over the mTLS agent channel; it does not send private keys or
+secret values.
+
+For node trust-store inventory, add read-only hostPath mounts for the public trust
+anchor directories and pass `--inventory-os-trust-roots=/host/etc/ssl/certs`.
+Java, NSS, and browser trust-store exports use the corresponding
+`--inventory-java-trust-stores`, `--inventory-nss-trust-roots`, and
+`--inventory-browser-trust-roots` flags.
+
+For private-key-material discovery, mount only the directories you intentionally
+want inspected and pass `--inventory-private-key-roots=/host/etc/ssl/private,/host/etc/ssh`.
+The agent classifies key format/algorithm locally, derives a public-key fingerprint
+when possible, wipes file buffers after inspection, and reports `private_key`
+findings without sending PEM/DER key bytes.
 
 ## cert-manager bridge
 

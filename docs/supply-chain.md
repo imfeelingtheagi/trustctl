@@ -24,7 +24,7 @@ A version tag (`vX.Y.Z`) drives `.github/workflows/release.yml`, which:
 ### Verify a published image (signature-on-install)
 
 ```bash
-scripts/verify-image.sh ghcr.io/imfeelingtheagi/trstctl:<tag>
+scripts/verify-image.sh ghcr.io/ctlplne/trstctl:<tag>
 ```
 
 This confirms the image was signed by **this repo's release workflow** (the cosign
@@ -34,7 +34,7 @@ carries the **CycloneDX SBOM** attestation. Only an image built by
 
 For Kubernetes production admission, use digest-pinned image references plus the
 Sigstore policy-controller example in `deploy/kubernetes/sigstore-policy.yaml`.
-It admits only `ghcr.io/imfeelingtheagi/trstctl@sha256:*` images signed by this
+It admits only `ghcr.io/ctlplne/trstctl@sha256:*` images signed by this
 repository's release workflow identity.
 
 ## Software-composition analysis (every dependency surface)
@@ -179,11 +179,11 @@ The architecture linter and the workflow linter (`actionlint`) remain
 required. The full set of **required status checks**, plus enforce-admins, linear
 history, and code-owner review, is now **codified in the repository** — see
 [Branch protection & required checks](branch-protection.md) for the exact list and
-[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/branch-protection.json)
+[`.github/branch-protection.json`](https://github.com/ctlplne/trstctl/blob/main/.github/branch-protection.json)
 for the machine-applicable form (a repo admin applies it once; a reality-test keeps
 the required-check list in sync with the CI job names). Code ownership of the
 root-of-trust paths is codified in
-[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/CODEOWNERS).
+[`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS).
 
 ## Run it yourself
 

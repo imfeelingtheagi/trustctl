@@ -83,16 +83,48 @@ going, so one broken source can't hide the rest. The agent enrolls into the cont
 plane with a one-time bootstrap token (`POST /enroll/bootstrap`), after which the
 control plane lists it at `GET /api/v1/agents`.
 
-The agent's discovery sources are `filesystem`, `pkcs11`, `windows-store`, and
-`k8s-secret`. The discovery loop runs inside the agent binary; agent *enrollment* is
-served by the control plane.
+The agent's discovery sources are `filesystem`, `pkcs11`, `windows-store`,
+`k8s-secret`, `trust-store`, and `private-key`. The local read still runs inside the agent because
+only the host can see its files, tokens, Windows store, trust stores, browser
+profiles, or in-cluster Secrets. The report path is now served by the control plane:
+an enrolled agent sends a metadata-only
+`ReportInventory` batch over the same mTLS channel it uses for heartbeat and renewal,
+and the server creates a tenant-scoped discovery source, run, findings, audit events,
+and credential-graph nodes from that batch. The server rejects inline secret-looking
+metadata keys, caps batch size, and runs ingest in the bounded agent lane, so a noisy
+fleet cannot starve the API.
+
+For Linux certificate files, the shipped agent can inventory public certificate roots
+at startup with `--inventory-cert-roots`. It reports references, fingerprints, and
+certificate metadata only — never private keys or secret values.
+
+Trust-store discovery is a separate agent collector because a trusted CA is not the
+same thing as a deployed service certificate. The agent can read public trust anchors
+from OS trust directories, Java `cacerts`/JKS files, NSS profile exports, browser
+profile exports, and Windows trust-store enumerators. Each finding is tagged with
+`trust_store_kind` (`os`, `java`, `nss`, `browser`, or `windows`) and
+`private_key_present=false`, so the control plane can answer "what does this host
+trust?" without ever moving a key.
+
+Private-key-material discovery is the companion collector for "what sensitive key
+files exist here?" Operators point the agent at canary directories with
+`--inventory-private-key-roots`. The agent reads each regular file locally, classifies
+PKCS#8, PKCS#1 RSA, SEC1 EC, OpenSSH, and encrypted private-key containers through the
+isolated cryptography boundary, wipes the file buffer after inspection, and reports
+only the path, format, algorithm, file-mode metadata, and a fingerprint derived from
+the public key when the key is parseable. Encrypted keys are still located and tagged
+as encrypted, but no passphrase is requested and no private bytes, PEM blocks, or
+secret values are sent to the control plane.
 
 ### SSH credential discovery (F42) — keys and standing access
 
 SSH is where forgotten access hides. trstctl inventories SSH credentials two ways: a
 network-side SSH handshake captures each host's **host key**, and the on-host agent
 reads host keys, user keys, `authorized_keys` grants, `known_hosts` trust anchors, and
-the `TrustedUserCAKeys` directive from `sshd_config`.
+the `TrustedUserCAKeys` directive from `sshd_config`. DISC-03 extends the same agent
+inventory path to private-key files, so SSH host/user key material and TLS key files
+are located and classified as metadata-only `private_key` findings instead of being
+copied into the control plane.
 
 Two flags make the result actionable. **StandingAccess** marks an entry that grants
 persistent login (an `authorized_keys` line). **Orphaned** marks a standing-access
@@ -115,10 +147,33 @@ credentials. Request signing (e.g. AWS SigV4) and all certificate parsing go thr
 single isolated cryptography path, and the enumerators run in their own bounded lane with
 retry/backoff on rate limits — overload is rejected fast instead of starving other work.
 
-The control plane serves `cloud_certificate` discovery source/run/finding records.
-**Status:** cloud source, schedule, run, and metadata-only finding records are served;
-provider API execution remains connector-owned and uses credential references rather than
-inline credentials.
+The control plane serves `cloud_certificate` discovery source/run/finding records and
+executes AWS ACM, Azure Key Vault, and GCP Certificate Manager enumerators from the
+outbox worker. Source configs use credential references such as
+`access_key_id_ref`, `secret_access_key_ref`, and `token_ref`; inline cloud
+credentials are rejected before a source is stored. LocalStack or emulator fixtures
+can opt into a private endpoint, while normal provider endpoints use the public-URL
+SSRF guard.
+
+```json
+{
+  "kind": "cloud_certificate",
+  "name": "aws-acm-east",
+  "config": {
+    "providers": [
+      {
+        "provider": "aws-acm",
+        "region": "us-east-1",
+        "access_key_id_ref": "env:AWS_ACCESS_KEY_ID",
+        "secret_access_key_ref": "env:AWS_SECRET_ACCESS_KEY"
+      }
+    ]
+  }
+}
+```
+
+**Status:** source, schedule, run, provider execution, metadata-only findings, and
+certificate-inventory projection are served.
 
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
@@ -185,6 +240,23 @@ To see enrolled agents that perform local discovery:
 
 ```sh
 trstctl-cli agents list
+
+# On an enrolled host, report public certificate files the agent can see.
+trstctl-agent --enroll-url https://localhost:8443 \
+  --bootstrap-token-file ./trstctl-bootstrap-token \
+  --server localhost:9443 \
+  --name edge-agent-1 \
+  --ca-bundle ./trstctl-ca.pem \
+  --inventory-cert-roots /etc/ssl,/etc/pki/tls/certs \
+  --inventory-os-trust-roots /etc/ssl/certs,/etc/pki/ca-trust/source/anchors \
+  --inventory-java-trust-stores "$JAVA_HOME/lib/security/cacerts" \
+  --inventory-nss-trust-roots "$HOME/.pki/nssdb/exported-roots" \
+  --inventory-browser-trust-roots "$HOME/.config/chromium/Default/exported-roots" \
+  --inventory-private-key-roots /etc/ssl/private,/etc/ssh
+
+# Then read the projected discovery inventory and graph from the control plane.
+trstctl-cli discovery findings list
+trstctl-cli graph nodes
 ```
 
 When you find a credential you didn't expect, follow it into the
@@ -201,9 +273,11 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 |---|---|
 | Certificate inventory (F1) | **Served** — REST + CLI, event-sourced |
 | Agent enrollment (for F3) | **Served** — `/enroll/bootstrap`, `/api/v1/agents` |
-| Agent-based discovery loop (F3) | Runs **inside the agent binary** |
+| Agent-based discovery loop (F3) | **Served report path** — local filesystem, trust-store, private-key-material, token, Windows-store, and Kubernetes enumeration runs inside the agent; mTLS `ReportInventory` records source/run/finding rows and graph nodes |
 | Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox |
-| Agentless cloud discovery (F49) | **Control-plane served** — source/schedule/run/finding records; provider execution is connector-owned |
+| Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
+| CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
+| Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
 | Secret-store & API-key discovery (F35, F36) | **Control-plane served** — metadata-only references/fingerprints, never values |
 
@@ -222,11 +296,20 @@ what it is.
   `GET|POST /api/v1/discovery/sources`, `GET|POST /api/v1/discovery/schedules`,
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
   `GET /api/v1/discovery/findings`, `GET /api/v1/agents`,
-  `POST /api/v1/agents/enrollment-tokens`, `POST /enroll/bootstrap`.
+  `POST /api/v1/agents/enrollment-tokens`, `GET /api/v1/graph`,
+  `POST /enroll/bootstrap`.
+- **Agent channel:** `AgentService.ReportInventory` over the mTLS agent gRPC listener
+  when `agent_channel.enabled` is true.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
+- **Served discovery source kinds:** `network`, `cloud_certificate`, `ct_log`, `drift`,
+  `manual`, plus metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
-  `k8s-secret`.
+  `k8s-secret`, `trust-store`, `private-key`.
+- **Agent inventory flags:** `--inventory-cert-roots`, `--inventory-os-trust-roots`,
+  `--inventory-java-trust-stores`, `--inventory-java-trust-store-password`,
+  `--inventory-nss-trust-roots`, `--inventory-browser-trust-roots`,
+  `--inventory-private-key-roots`.
 - **Audit events:** `certificate.recorded`, `discovery.source.upserted`,
   `discovery.schedule.upserted`, `discovery.run.queued`, `discovery.run.started`,
   `discovery.finding.recorded`, `discovery.run.completed`, `secretscan.finding`.

@@ -237,11 +237,12 @@ func serverTLSConfig(serverCert tls.Certificate, clientCAs *x509.CertPool) *tls.
 // second, differently-keyed certificate from the same CA is still refused.
 func serverTLSConfigPinned(serverCert tls.Certificate, clientCAs *x509.CertPool, clientPin *Pin) *tls.Config {
 	cfg := &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		MaxVersion:   tls.VersionTLS13,
-		Certificates: []tls.Certificate{serverCert},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    clientCAs,
+		MinVersion:       tls.VersionTLS13,
+		MaxVersion:       tls.VersionTLS13,
+		Certificates:     []tls.Certificate{serverCert},
+		ClientAuth:       tls.RequireAndVerifyClientCert,
+		ClientCAs:        clientCAs,
+		CurvePreferences: HybridCurvePreferences(),
 	}
 	if clientPin != nil {
 		p := *clientPin
@@ -254,10 +255,11 @@ func serverTLSConfigPinned(serverCert tls.Certificate, clientCAs *x509.CertPool,
 
 func clientTLSConfig(src ClientCertSource, serverCAs *x509.CertPool, serverName string, pin *Pin) *tls.Config {
 	cfg := &tls.Config{
-		MinVersion: tls.VersionTLS13,
-		MaxVersion: tls.VersionTLS13,
-		RootCAs:    serverCAs,
-		ServerName: serverName,
+		MinVersion:       tls.VersionTLS13,
+		MaxVersion:       tls.VersionTLS13,
+		RootCAs:          serverCAs,
+		ServerName:       serverName,
+		CurvePreferences: HybridCurvePreferences(),
 	}
 	if src != nil {
 		cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {

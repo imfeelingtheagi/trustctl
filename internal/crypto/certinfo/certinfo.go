@@ -12,6 +12,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
@@ -21,6 +22,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 // Info is the inventory metadata of a certificate.
@@ -118,7 +121,24 @@ func Inspect(raw []byte) (Info, error) {
 	info.KeyUsageEncipher = cert.KeyUsage&x509.KeyUsageKeyEncipherment != 0
 	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
 	info.BasicConstraints = cert.BasicConstraintsValid
+	if alg, found, err := boundarycrypto.HybridKeyAlgorithmFromExtensions(certificateExtensions(cert.Extensions)); err != nil {
+		return Info{}, err
+	} else if found {
+		info.KeyAlgorithm = alg
+	}
 	return info, nil
+}
+
+func certificateExtensions(exts []pkix.Extension) []boundarycrypto.CertificateExtension {
+	out := make([]boundarycrypto.CertificateExtension, 0, len(exts))
+	for _, ext := range exts {
+		out = append(out, boundarycrypto.CertificateExtension{
+			OID:      ext.Id.String(),
+			Critical: ext.Critical,
+			Value:    append([]byte(nil), ext.Value...),
+		})
+	}
+	return out
 }
 
 func extKeyUsageStrings(cert *x509.Certificate) []string {

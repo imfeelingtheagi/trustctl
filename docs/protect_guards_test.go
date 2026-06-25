@@ -200,12 +200,14 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 	linterMain := read(t, "../tools/trstctllint/main.go")
 	for _, want := range []string{
 		"tools/trstctllint/cryptoboundary",
+		"tools/trstctllint/cryptoagility",
 		"tools/trstctllint/keymaterial",
 		"cryptoboundary.Analyzer, // AN-3",
+		"cryptoagility.Analyzer,  // PQC-00",
 		"keymaterial.Analyzer,    // AN-8",
 	} {
 		if !strings.Contains(linterMain, want) {
-			t.Errorf("ARCH-008: trstctllint main no longer wires %q; AN-3/AN-8 lint may no longer be required", want)
+			t.Errorf("ARCH-008: trstctllint main no longer wires %q; AN-3/AN-8/PQC-00 lint may no longer be required", want)
 		}
 	}
 
@@ -330,6 +332,85 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 	}
 	if keyStoreAt >= 0 && hardenAt > keyStoreAt {
 		t.Fatal("ARCH-008: trstctl-signer calls signing.Harden() after key-store setup; memory hardening must happen before key material can touch RAM")
+	}
+
+	agilityAnalyzer := read(t, "../tools/trstctllint/cryptoagility/cryptoagility.go")
+	for _, want := range []string{
+		`path == "plugin"`,
+		"func isPolicyImport(",
+		"func isRuntimeMutableRegistryVar(",
+		"func isRuntimeRegistrationFunction(",
+		`strings.HasPrefix(pkgPath, cryptoPkg+"/")`,
+		`strings.HasPrefix(pkgPath, signingPkg+"/")`,
+		"signerCommandPkg",
+	} {
+		if !strings.Contains(agilityAnalyzer, want) {
+			t.Errorf("PQC-00: cryptoagility analyzer no longer contains %q; runtime-engine guardrail weakened", want)
+		}
+	}
+
+	agilityTest := read(t, "../tools/trstctllint/cryptoagility/cryptoagility_test.go")
+	for _, want := range []string{
+		"TestCryptoAgilityGuard",
+		"analysistest.Run",
+		`"trstctl.com/trstctl/internal/crypto/badplugin"`,
+		`"trstctl.com/trstctl/internal/crypto/badpolicy"`,
+		`"trstctl.com/trstctl/internal/signing/badpolicy"`,
+		`"trstctl.com/trstctl/internal/crypto/badregistry"`,
+		`"trstctl.com/trstctl/internal/crypto/badregister"`,
+		`"trstctl.com/trstctl/internal/signing/protoclean"`,
+	} {
+		if !strings.Contains(agilityTest, want) {
+			t.Errorf("PQC-00: cryptoagility test no longer covers %q; planted-violation proof weakened", want)
+		}
+	}
+	for file, wants := range map[string][]string{
+		"../tools/trstctllint/cryptoagility/testdata/src/trstctl.com/trstctl/internal/crypto/badplugin/bad.go": {
+			`import _ "plugin" // want`,
+		},
+		"../tools/trstctllint/cryptoagility/testdata/src/trstctl.com/trstctl/internal/crypto/badpolicy/bad.go": {
+			`import _ "trstctl.com/trstctl/internal/policy" // want`,
+		},
+		"../tools/trstctllint/cryptoagility/testdata/src/trstctl.com/trstctl/internal/signing/badpolicy/bad.go": {
+			`import _ "trstctl.com/trstctl/internal/policy" // want`,
+		},
+		"../tools/trstctllint/cryptoagility/testdata/src/trstctl.com/trstctl/internal/crypto/badregistry/bad.go": {
+			"var providerRegistry = map[string]any{} // want",
+			"var cryptoBackends []any // want",
+		},
+		"../tools/trstctllint/cryptoagility/testdata/src/trstctl.com/trstctl/internal/crypto/badregister/bad.go": {
+			"func RegisterCryptoSuite",
+		},
+		"../tools/trstctllint/cryptoagility/testdata/src/trstctl.com/trstctl/internal/signing/protoclean/protoclean.go": {
+			"func RegisterSignerServiceServer",
+		},
+	} {
+		body := read(t, file)
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("PQC-00: fixture %s no longer contains %q; runtime-engine fixture coverage weakened", file, want)
+			}
+		}
+	}
+
+	agilityADR := read(t, "../docs-internal/crypto-agility-guardrail.md")
+	for _, want := range []string{
+		"compile-time Go interfaces plus dependency injection",
+		"Go's standard `crypto.Signer` interface",
+		"Java JCA provider interfaces",
+		"OpenSSL ENGINE/provider",
+		"PKCS#11",
+		"US 12,340,262",
+		"InfoSec Global",
+		"not legal advice",
+		"not a freedom-to-operate opinion",
+		"runtime crypto engine",
+		"runtime step that registers a new crypto suite",
+		"separate control entity that feeds runtime policy into crypto providers",
+	} {
+		if !strings.Contains(agilityADR, want) {
+			t.Errorf("PQC-00: crypto-agility ADR no longer contains %q; design decision record weakened", want)
+		}
 	}
 }
 
@@ -806,9 +887,16 @@ func gitTrackedFiles(t *testing.T) []string {
 	}
 	var files []string
 	for _, rel := range strings.Split(string(out), "\x00") {
-		if rel != "" {
-			files = append(files, rel)
+		if rel == "" {
+			continue
 		}
+		if _, err := os.Stat(filepath.Join("..", filepath.FromSlash(rel))); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			t.Fatalf("stat tracked file %s: %v", rel, err)
+		}
+		files = append(files, rel)
 	}
 	return files
 }
@@ -2030,7 +2118,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		}
 	}
 	keystore := read(t, "../internal/signing/keystore.go")
-	for _, want := range []string{"metaMagic = []byte(\"CSKM\")", "const metaVersion = 2", "ver != 1 && ver != metaVersion", "seal.Seal", "seal.Open"} {
+	for _, want := range []string{"metaMagic = []byte(\"CSKM\")", "const metaVersion = 3", "ver < 1 || ver > metaVersion", "seal.Seal", "seal.Open"} {
 		if !strings.Contains(keystore, want) {
 			t.Errorf("SCHEMA-105: keystore.go no longer contains %q; signer persisted-format versioning weakened", want)
 		}
@@ -2594,17 +2682,17 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"KeyStore persists signer keys",
 		"metaMagic = []byte(\"CSKM\")",
-		"const metaVersion = 2",
+		"const metaVersion = 3",
 		"const flagRequireAuth = 1 << 0",
 		"func (ks *KeyStore) Save(",
-		"secret.Wipe(der)",
+		"secret.Wipe(keyBytes)",
 		"secret.Wipe(plaintext)",
 		"seal.Seal(ks.wrapper, plaintext, []byte(stem))",
 		"os.MkdirAll(ks.dir, 0o700)",
 		"os.WriteFile(ks.path(stem), sealed, 0o600)",
 		"func (ks *KeyStore) Load()",
 		"seal.Open(ks.wrapper, sealed, []byte(stem))",
-		"crypto.LockedKeyFromPKCS8(der)",
+		"signingKeyFromSealedBytes(alg, privateKey)",
 		"func (ks *KeyStore) LoadHandle(",
 	} {
 		if !strings.Contains(keyStore, want) {
@@ -2709,7 +2797,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "privacy_subject_erasures", "privacy_retention_runs"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "privacy_subject_erasures", "privacy_retention_runs"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",
@@ -3002,6 +3090,9 @@ func TestDebtMarkersRequireOwnerOrIssue(t *testing.T) {
 		}
 		body, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(rel)))
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
 			t.Fatalf("CODE-101: read %s: %v", rel, err)
 		}
 		for i, line := range strings.Split(string(body), "\n") {
@@ -3064,17 +3155,17 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 
 	supplyDocs := read(t, "supply-chain.md")
 	check("docs/supply-chain.md admission guidance", supplyDocs,
-		"scripts/verify-image.sh ghcr.io/imfeelingtheagi/trstctl:<tag>",
+		"scripts/verify-image.sh ghcr.io/ctlplne/trstctl:<tag>",
 		"Sigstore policy-controller example in `deploy/kubernetes/sigstore-policy.yaml`",
-		"ghcr.io/imfeelingtheagi/trstctl@sha256:*",
+		"ghcr.io/ctlplne/trstctl@sha256:*",
 		"repository's release workflow identity",
 	)
 	sigstorePolicy := read(t, "../deploy/kubernetes/sigstore-policy.yaml")
 	check("deploy/kubernetes/sigstore-policy.yaml", sigstorePolicy,
 		"kind: ClusterImagePolicy",
-		"glob: ghcr.io/imfeelingtheagi/trstctl@sha256:*",
+		"glob: ghcr.io/ctlplne/trstctl@sha256:*",
 		"issuer: https://token.actions.githubusercontent.com",
-		"subjectRegExp: ^https://github.com/imfeelingtheagi/trstctl/.github/workflows/release.yml@refs/tags/v.*$",
+		"subjectRegExp: ^https://github.com/ctlplne/trstctl/.github/workflows/release.yml@refs/tags/v.*$",
 	)
 
 	for _, testName := range []string{
@@ -3867,9 +3958,13 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 	)
 	serverTLS := read(t, "../internal/crypto/mtls/server.go")
 	check("internal/crypto/mtls/server.go TLS floor", serverTLS,
+		"func HybridCurvePreferences() []tls.CurveID",
+		"tls.X25519MLKEM768",
+		"tls.SecP256r1MLKEM768",
+		"tls.SecP384r1MLKEM1024",
 		"func (s *ServerCert) ServeHTTPS",
 		"MinVersion:       tls.VersionTLS13",
-		"CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384}",
+		"CurvePreferences: HybridCurvePreferences()",
 	)
 
 	agentMTLS := read(t, "../internal/crypto/mtls/agent.go")

@@ -16,7 +16,7 @@ The published image is distroless, unprivileged, and under 80 MB. Run it
 against your datastores by digest, after verifying the release image:
 
 ```bash
-export TRSTCTL_IMAGE_REF='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+export TRSTCTL_IMAGE_REF='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
 docker run --rm -p 8443:8443 \
   -e TRSTCTL_POSTGRES_MODE=external \
@@ -82,12 +82,12 @@ artifact** to GHCR, so you can verify the chart's provenance before
 installing — the same keyless-OIDC identity that signs the image:
 
 ```bash
-cosign verify ghcr.io/imfeelingtheagi/trstctl/charts/trstctl:<chart-version> \
+cosign verify ghcr.io/ctlplne/trstctl/charts/trstctl:<chart-version> \
   --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-See [`deploy/helm/trstctl/README.md`](https://github.com/imfeelingtheagi/trstctl/tree/main/deploy/helm/trstctl)
+See [`deploy/helm/trstctl/README.md`](https://github.com/ctlplne/trstctl/tree/main/deploy/helm/trstctl)
 for the full values reference. The chart runs the signer co-located (sidecar, over
 an in-memory UDS) by default; set `signer.mode=isolated` plus the required
 `signer.mtls.*` values to render a **separate signer pod reached over mutually
@@ -109,7 +109,7 @@ helm upgrade --install trstctl deploy/helm/trstctl \
   --set agentChannel.enabled=true \
   --set agentChannel.serverName=trstctl
 
-export TRSTCTL_AGENT_IMAGE='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
 rendered_agent_daemonset="$(mktemp)"
 kubectl apply -f deploy/kubernetes/namespace.yaml
@@ -142,7 +142,7 @@ Install from a release binary or build from source.
 **From source** (requires Go 1.26.4+):
 
 ```bash
-git clone https://github.com/imfeelingtheagi/trstctl
+git clone https://github.com/ctlplne/trstctl
 cd trstctl
 make build           # builds ./bin/trstctl, trstctl-signer, and trstctl-agent
 sudo install -m 0755 bin/trstctl /usr/local/bin/trstctl

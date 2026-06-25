@@ -4,12 +4,12 @@
 # signature was produced by this repo's release workflow, and that it carries the
 # CycloneDX SBOM attestation. This is the signature-on-install check.
 #
-# Usage: scripts/verify-image.sh ghcr.io/imfeelingtheagi/trstctl:<tag>
+# Usage: scripts/verify-image.sh ghcr.io/ctlplne/trstctl:<tag>
 set -euo pipefail
 
 image="${1:-}"
 if [ -z "$image" ]; then
-  echo "usage: $0 <image-ref>   e.g. ghcr.io/imfeelingtheagi/trstctl:v0.1.0" >&2
+  echo "usage: $0 <image-ref>   e.g. ghcr.io/ctlplne/trstctl:v0.1.0" >&2
   exit 2
 fi
 

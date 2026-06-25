@@ -15,15 +15,15 @@ import (
 // heldKey is a key the signer holds: its locked private material plus the
 // signer-enforceable usage constraints declared at creation (SIGNER-002/003).
 type heldKey struct {
-	signer      *crypto.LockedSigner
+	signer      signerKey
 	constraints keyConstraints
 }
 
 // Server implements signerpb.SignerServiceServer. Private keys are held as
-// LockedSigner values (AN-8: PKCS#8 DER in mlock'd, non-dumpable, zeroizable
-// memory) in an in-memory store keyed by opaque handle. Private-key bytes never
-// cross the gRPC boundary. Each key carries its usage constraints, which the
-// signer enforces on every Sign (AN-7-bulkheaded at the transport).
+// locked, zeroizable crypto.DigestSigner values in an in-memory store keyed by
+// opaque handle. Private-key bytes never cross the gRPC boundary. Each key
+// carries its usage constraints, which the signer enforces on every Sign
+// (AN-7-bulkheaded at the transport).
 type Server struct {
 	signerpb.UnimplementedSignerServiceServer
 
@@ -112,7 +112,7 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		}
 		constraints.requireAuth = true
 	}
-	ls, err := crypto.GenerateLockedKey(alg)
+	ls, err := generateSigningKey(alg)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "generate key: %v", err)
 	}

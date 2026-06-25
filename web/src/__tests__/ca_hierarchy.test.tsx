@@ -62,7 +62,7 @@ describe("CA hierarchy and custody surface", () => {
   it("explains m-of-n hierarchy ceremonies without create or rotate controls", async () => {
     renderCAHierarchy();
 
-    expect(await screen.findByText("CA hierarchy ceremony API not served yet")).toBeInTheDocument();
+    expect(await screen.findByText("CA hierarchy create UI not served yet")).toBeInTheDocument();
     expect(screen.getByText(/renders no create-root, rotate-root, or ceremony execution controls/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Key ceremony runbook" })).toHaveAttribute("href", "/docs/runbooks/key-ceremony.md");
     expect(screen.getByText("root:<sha256-of-ca-spec>")).toBeInTheDocument();
@@ -90,6 +90,6 @@ describe("CA hierarchy and custody surface", () => {
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
     expect(screen.getByText("missing issuers:read")).toBeInTheDocument();
-    expect(screen.getByText("Hierarchy mutations are library-tier")).toBeInTheDocument();
+    expect(screen.getByText("Rotation and cross-sign remain library-tier")).toBeInTheDocument();
   });
 });

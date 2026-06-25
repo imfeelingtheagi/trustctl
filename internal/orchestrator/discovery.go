@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -14,6 +15,8 @@ import (
 )
 
 const discoveryRunDestination = "discovery.run"
+
+var agentInventorySourceNamespace = uuid.MustParse("d5e0734a-9cc6-53a4-92f3-4f99387f8c3a")
 
 // UpsertDiscoverySource records a tenant discovery source as an event and returns
 // the projected source row. Config is metadata/reference JSON only; API validation
@@ -162,6 +165,88 @@ func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID stri
 	out := in
 	out.ID, out.TenantID, out.Metadata, out.DiscoveredAt = id, tenantID, meta, ev.Time
 	return out, nil
+}
+
+// RecordAgentInventory records one already-executed, metadata-only agent inventory
+// batch. Unlike QueueDiscoveryRun, it does not write an outbox row: the external scan
+// happened on the agent host before the report reached the control plane. The source,
+// run, findings, and terminal counts are still immutable discovery events, so replay
+// rebuilds the served inventory exactly.
+func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agentName, sourceKind string, findings []store.DiscoveryFinding) (store.DiscoveryRun, int, int, error) {
+	agentName = strings.TrimSpace(agentName)
+	sourceKind = strings.TrimSpace(sourceKind)
+	if sourceKind == "" {
+		sourceKind = "agent"
+	}
+	sourceID := uuid.NewSHA1(agentInventorySourceNamespace, []byte(tenantID+"\x00"+agentName+"\x00"+sourceKind)).String()
+	sourceName := "agent:" + agentName + ":" + sourceKind
+	cfg, err := json.Marshal(map[string]string{"agent": agentName, "source_kind": sourceKind})
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+	if _, err := o.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
+		ID: sourceID, Kind: "agent", Name: sourceName, Config: cfg,
+	}); err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+
+	runID := uuid.NewString()
+	requestedBy := "agent:" + agentName
+	payload, err := json.Marshal(projections.DiscoveryRunQueued{
+		ID: runID, SourceID: sourceID, RequestedBy: requestedBy,
+	})
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+	ev, err := o.emit(ctx, projections.EventDiscoveryRunQueued, tenantID, payload)
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+	if err := o.StartDiscoveryRun(ctx, tenantID, runID); err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+
+	recorded, rejected := 0, 0
+	for _, f := range findings {
+		f.Kind = strings.TrimSpace(f.Kind)
+		f.Ref = strings.TrimSpace(f.Ref)
+		if f.Kind == "" || f.Ref == "" {
+			rejected++
+			continue
+		}
+		if f.Provenance == "" {
+			f.Provenance = sourceKind + ":" + f.Ref
+		}
+		f.RunID = runID
+		f.SourceID = sourceID
+		if _, err := o.RecordDiscoveryFinding(ctx, tenantID, f); err != nil {
+			return store.DiscoveryRun{}, recorded, rejected, err
+		}
+		recorded++
+	}
+
+	status := "succeeded"
+	msg := ""
+	if rejected > 0 {
+		status = "partial"
+		msg = "some agent inventory findings were rejected"
+	}
+	if recorded == 0 {
+		status = "failed"
+		if msg == "" {
+			msg = "agent inventory report contained no valid findings"
+		}
+	}
+	if err := o.CompleteDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+		ID: runID, Status: status, Targets: len(findings), Discovered: recorded, Rejected: rejected, Error: msg,
+	}); err != nil {
+		return store.DiscoveryRun{}, recorded, rejected, err
+	}
+	return store.DiscoveryRun{
+		ID: runID, TenantID: tenantID, SourceID: sourceID, Status: status,
+		RequestedBy: requestedBy, Targets: len(findings), Discovered: recorded,
+		Rejected: rejected, Error: msg, CreatedAt: ev.Time,
+	}, recorded, rejected, nil
 }
 
 // CompleteDiscoveryRun records terminal run counts. Status is usually

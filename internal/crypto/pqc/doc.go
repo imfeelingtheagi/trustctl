@@ -1,6 +1,6 @@
-// Package pqc implements post-quantum and hybrid signatures behind the AN-3
-// boundary. It is the only package that imports the post-quantum crypto library
-// (github.com/cloudflare/circl), so callers — including the sacred signer —
+// Package pqc implements post-quantum and hybrid signatures plus ML-KEM key
+// encapsulation behind the AN-3 boundary. It is the only package that imports
+// the post-quantum crypto library (github.com/cloudflare/circl), so callers
 // link that dependency only if they explicitly use this package, keeping their
 // dependency surface minimal.
 //

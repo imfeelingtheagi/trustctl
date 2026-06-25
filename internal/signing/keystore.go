@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
@@ -42,21 +41,23 @@ var metaMagic = []byte("CSKM")
 
 // metaVersion is the current sealed-constraint header version. v1 framed only
 // purposes+hashes; v2 appends a one-byte flags field (bit 0 = dual-control /
-// requireAuth, RED-003). A v1 file still decodes (requireAuth defaults false), so
+// requireAuth, RED-003); v3 appends a one-byte Algorithm enum so non-PKCS#8 PQC
+// key bytes can be reconstructed after restart. Older files still decode
+// (requireAuth defaults false, algorithm defaults to legacy PKCS#8 inference), so
 // an existing keystore keeps working across the upgrade.
-const metaVersion = 2
+const metaVersion = 3
 
 // flagRequireAuth is bit 0 of the v2 flags byte: the key is dual-control.
 const flagRequireAuth = 1 << 0
 
 // encodeConstraintMeta frames the usage constraints into a deterministic,
 // non-secret header: magic | version | nPurposes | purposes... | nHashes |
-// hashes... | flags . Enum values are bounded small (<256), so each fits in one
-// byte. The trailing flags byte is the v2 addition (dual-control).
-func encodeConstraintMeta(kc keyConstraints) []byte {
+// hashes... | flags | algorithm. Enum values are bounded small (<256), so each
+// fits in one byte. The trailing algorithm byte is the v3 addition.
+func encodeConstraintMeta(kc keyConstraints, algorithm signerpb.Algorithm) []byte {
 	purposes := kc.purposeList()
 	hashes := kc.hashList()
-	out := make([]byte, 0, len(metaMagic)+4+len(purposes)+len(hashes))
+	out := make([]byte, 0, len(metaMagic)+5+len(purposes)+len(hashes))
 	out = append(out, metaMagic...)
 	out = append(out, metaVersion)
 	out = append(out, byte(len(purposes)))
@@ -72,24 +73,27 @@ func encodeConstraintMeta(kc keyConstraints) []byte {
 		flags |= flagRequireAuth
 	}
 	out = append(out, flags)
+	out = append(out, byte(algorithm))
 	return out
 }
 
 // decodeConstraintMeta parses a framed plaintext. It returns the constraints and
 // the remaining DER bytes (a sub-slice of plaintext). A plaintext without the
-// magic prefix is a legacy bare-DER key: unconstrained, DER == plaintext. Both
-// header versions are accepted; v1 has no flags byte (requireAuth=false).
-func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
+// magic prefix is a legacy bare-DER key: unconstrained, DER == plaintext. Every
+// historical header version is accepted; v1 has no flags byte
+// (requireAuth=false), and v1/v2 have no algorithm byte (legacy PKCS#8
+// inference).
+func decodeConstraintMeta(plaintext []byte) (keyConstraints, signerpb.Algorithm, []byte, error) {
 	if len(plaintext) < len(metaMagic) || string(plaintext[:len(metaMagic)]) != string(metaMagic) {
-		return keyConstraints{}, plaintext, nil // legacy bare DER
+		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, plaintext, nil // legacy bare DER
 	}
 	off := len(metaMagic)
 	if off >= len(plaintext) {
-		return keyConstraints{}, nil, errors.New("signing: truncated key metadata (version)")
+		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key metadata (version)")
 	}
 	ver := plaintext[off]
-	if ver != 1 && ver != metaVersion {
-		return keyConstraints{}, nil, fmt.Errorf("signing: unsupported key metadata version %d", ver)
+	if ver < 1 || ver > metaVersion {
+		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, fmt.Errorf("signing: unsupported key metadata version %d", ver)
 	}
 	off++
 	readList := func() ([]byte, error) {
@@ -107,11 +111,11 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
 	}
 	pvals, err := readList()
 	if err != nil {
-		return keyConstraints{}, nil, err
+		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
 	}
 	hvals, err := readList()
 	if err != nil {
-		return keyConstraints{}, nil, err
+		return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, err
 	}
 	kc := keyConstraints{}
 	if len(pvals) > 0 {
@@ -129,30 +133,38 @@ func decodeConstraintMeta(plaintext []byte) (keyConstraints, []byte, error) {
 	// v2 appends a single flags byte before the DER; v1 has none.
 	if ver >= 2 {
 		if off >= len(plaintext) {
-			return keyConstraints{}, nil, errors.New("signing: truncated key metadata (flags)")
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key metadata (flags)")
 		}
 		kc.requireAuth = plaintext[off]&flagRequireAuth != 0
 		off++
 	}
-	return kc, plaintext[off:], nil
+	alg := signerpb.Algorithm_ALGORITHM_UNSPECIFIED
+	if ver >= 3 {
+		if off >= len(plaintext) {
+			return keyConstraints{}, signerpb.Algorithm_ALGORITHM_UNSPECIFIED, nil, errors.New("signing: truncated key metadata (algorithm)")
+		}
+		alg = signerpb.Algorithm(plaintext[off])
+		off++
+	}
+	return kc, alg, plaintext[off:], nil
 }
 
 // Save seals the key's PKCS#8 material plus its usage-constraint header (bound to
 // the handle as AAD) and writes it 0600. The unsealed key copy lives only for the
 // moment of sealing, then is wiped (AN-8).
-func (ks *KeyStore) Save(handle string, ls *crypto.LockedSigner, constraints keyConstraints) error {
+func (ks *KeyStore) Save(handle string, ls signerKey, constraints keyConstraints) error {
 	stem := sanitizeHandle(handle)
-	der, err := ls.PKCS8()
+	keyBytes, err := privateKeyBytesForSealing(ls)
 	if err != nil {
 		return err
 	}
-	defer secret.Wipe(der)
+	defer secret.Wipe(keyBytes)
 	// Frame: metadata header || DER. The header is non-secret, but it shares the
 	// plaintext buffer with the key, so the whole buffer is wiped after sealing.
-	meta := encodeConstraintMeta(constraints)
-	plaintext := make([]byte, 0, len(meta)+len(der))
+	meta := encodeConstraintMeta(constraints, algorithmToProto(ls.Algorithm()))
+	plaintext := make([]byte, 0, len(meta)+len(keyBytes))
 	plaintext = append(plaintext, meta...)
-	plaintext = append(plaintext, der...)
+	plaintext = append(plaintext, keyBytes...)
 	defer secret.Wipe(plaintext)
 	sealed, err := seal.Seal(ks.wrapper, plaintext, []byte(stem))
 	if err != nil {
@@ -190,12 +202,12 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 		if err != nil {
 			return nil, fmt.Errorf("signing: open sealed key %q: %w", stem, err)
 		}
-		constraints, der, err := decodeConstraintMeta(plaintext)
+		constraints, alg, privateKey, err := decodeConstraintMeta(plaintext)
 		if err != nil {
 			secret.Wipe(plaintext)
 			return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
 		}
-		ls, err := crypto.LockedKeyFromPKCS8(der)
+		ls, err := signingKeyFromSealedBytes(alg, privateKey)
 		secret.Wipe(plaintext)
 		if err != nil {
 			return nil, fmt.Errorf("signing: load key %q: %w", stem, err)
@@ -226,12 +238,12 @@ func (ks *KeyStore) LoadHandle(handle string) (*heldKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("signing: open sealed key %q: %w", stem, err)
 	}
-	constraints, der, err := decodeConstraintMeta(plaintext)
+	constraints, alg, privateKey, err := decodeConstraintMeta(plaintext)
 	if err != nil {
 		secret.Wipe(plaintext)
 		return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
 	}
-	ls, err := crypto.LockedKeyFromPKCS8(der)
+	ls, err := signingKeyFromSealedBytes(alg, privateKey)
 	secret.Wipe(plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("signing: load key %q: %w", stem, err)

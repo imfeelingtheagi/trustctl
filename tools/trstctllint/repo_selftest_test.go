@@ -40,6 +40,14 @@ func leak(credential []byte) string {
 	return string(credential)
 }
 `)
+	writeFile(t, filepath.Join(fixture, "internal", "crypto", "agility.go"), `package crypto
+
+import _ "trstctl.com/trstctl/internal/policy"
+
+var providerRegistry = map[string]any{}
+`)
+	writeFile(t, filepath.Join(fixture, "internal", "policy", "policy.go"), `package policy
+`)
 
 	planted := exec.Command(bin, "./...")
 	planted.Dir = fixture
@@ -53,6 +61,8 @@ func leak(credential []byte) string {
 		`import "crypto/x509" is not allowed outside internal/crypto`,
 		"secret-bearing API/auth field must not use string",
 		"secret-bearing API/auth code must not convert secret bytes to string",
+		`import "trstctl.com/trstctl/internal/policy" is not allowed in the crypto/signer boundary`,
+		`runtime-mutable crypto provider/engine registry "providerRegistry" is not allowed`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("planted violation output missing %q:\n%s", want, got)

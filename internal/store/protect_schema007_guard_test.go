@@ -96,7 +96,7 @@ func TestProtectSCHEMA007_AdvisoryLockAndLedgerAnchor(t *testing.T) {
 	if lockIdx < 0 || ledgerIdx < 0 {
 		t.Fatalf("SCHEMA-007: migrate.go no longer acquires the migration lock before creating the ledger; re-validate the serialization order")
 	}
-	if !(lockIdx < ledgerIdx) {
+	if lockIdx >= ledgerIdx {
 		t.Errorf("SCHEMA-007: the advisory lock (@%d) is no longer taken before the ledger is created (@%d); concurrent instances could race the migration run", lockIdx, ledgerIdx)
 	}
 }

@@ -2,7 +2,7 @@
   TODO(CODE-101) before going public:
   - set the real license + license badge once finalized
   (GitHub repo is github.com/ctlplne/trstctl — the canonical origin. Container
-   images are still pushed under ghcr.io/imfeelingtheagi/trstctl; reconcile the
+   images are still pushed under ghcr.io/ctlplne/trstctl; reconcile the
    registry namespace to ctlplne before going public.)
 -->
 
@@ -182,7 +182,7 @@ number below is grounded in the repository.
 
 | Area | What's there |
 |---|---|
-| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation, **9** CA integrations |
+| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation, **10** CA integrations |
 | **Enrollment** | EST, SCEP, CMP servers; an embedded/IoT C client; Intune/MDM challenge gating |
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
@@ -238,7 +238,7 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1005 Go files across the internal subsystem packages**, with
+Under the hood: **~1063 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
 

@@ -31,9 +31,13 @@ issuance layer is built to make each of those hard.
 Every certificate trstctl issues goes through a single, uniform interface — a `CA`
 with one real method, `Issue(request)` — no matter who actually signs. The built-in
 in-process CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f48), and
-third-party authorities (AWS Private CA, DigiCert, Sectigo, EJBCA, Microsoft ADCS,
-Google CAS, Smallstep, Let's Encrypt) all implement that same interface, so switching
-or adding a CA changes one wiring line, not your application.
+third-party authorities (Let's Encrypt/ACME, DigiCert, Sectigo, Microsoft AD CS,
+AWS Private CA, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect) all implement
+that same interface.
+The running binary now exposes configured upstreams as a served registry at
+`GET /api/v1/external-cas`; callers issue through one selected CA with
+`POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
+`Idempotency-Key`.
 
 That single path is where the guarantees live. Each issuance carries an
 [`Idempotency-Key`](../glossary.md): the first call mints the certificate *and* writes a
@@ -46,39 +50,45 @@ issuance code never touches the low-level X.509 libraries directly — and the a
 anything is signed, with an `issuance.profile_evaluated` event recorded either way in the
 tamper-evident log.
 
+Upstream CA credentials are configured by the control-plane operator, not written
+through tenant JSON: API keys and provider handles stay in process configuration or
+secret-backed plugin setup, then the API exposes only the non-secret registry row
+(`id`, `type`, `name`, `status`). If a retry reuses the same idempotency key, the API
+returns the cached certificate response and the upstream CA is not asked to sign again.
+If the process crashes after recording the outbox intent, the outbox worker can resume
+delivery without losing the fact that an external issuance happened.
+
 ### Running your own CA hierarchy (F48)
 
 trstctl can *be* your private PKI: a root CA, intermediates beneath it, end-entity
 certificates beneath those — the usual tree where the root is kept offline-precious and
 the intermediates do the day-to-day signing.
 
-The dangerous operations (creating a root or intermediate, rotating a CA, cross-signing)
-are **each** gated by an **m-of-n key ceremony**: nothing happens until *m* of *n* named
-custodians approve. You `StartCeremony(purpose, threshold)`, collect approvals with
-`Approve(...)`, and every key operation consumes one pending ceremony whose purpose
-matches the requested resource: `root:<sha256-of-ca-spec>`,
-`intermediate:<parent-ca-id>:<sha256-of-ca-spec>`, `rotation:<ca-id>`, or
-`cross-sign:<ca-id>:<sha256-of-target-cert-der>`. If approvals are short, the
-operation returns `ErrQuorumNotMet`; if the ceremony was already used or opened for
-a different resource/spec, it refuses before committing the CA mutation. Cross-signing
-is gated for the same reason as creating an intermediate: it mints a CA certificate
-under your signing CA and so extends trust. This is how you stop a single compromised
-admin account from minting a rogue intermediate or cross-cert, and how you stop one
-valid ceremony from being replayed against a different CA or a different CA request.
-Every step (`ca.root.created`, `ca.intermediate.created`, `ca.rotated`,
-`ca.cross_signed`) is a tenant-scoped event carrying its `ceremony_id` — isolated per
-tenant at the database layer and recorded immutably in the tamper-evident log — and all
-the X.509 work happens behind the single isolated cryptography path. Rotation atomically
-consumes the ceremony, supersedes the old authority, and links the new one to it in one
-transaction. The full operator procedure is the
-[CA key-ceremony runbook](../runbooks/key-ceremony.md).
+The dangerous operations are gated by an **m-of-n key ceremony**: nothing happens
+until *m* of *n* named custodians approve. Root and intermediate creation are served
+today: open a ceremony, collect distinct custodian approvals, then create the CA.
+Each operation consumes one pending ceremony whose purpose matches the reviewed
+resource: `root:<sha256-of-ca-spec>` or
+`intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. If approvals are short, the
+operation returns `ErrQuorumNotMet`; if the opener tries to approve their own
+ceremony, or the ceremony was already used or opened for a different resource/spec, it
+fails closed before committing the CA mutation. This is how you stop a single
+compromised admin account from minting a rogue root or intermediate, and how you stop
+one valid ceremony from being replayed against a different CA request.
 
-> **Served status.** The CA-hierarchy + m-of-n ceremony (including the now
-> quorum-gated cross-sign) is implemented and tested as **library code**, driven through
-> the programmatic API; a served REST/UI ceremony flow is future work (see
-> [limitations](../limitations.md)). Being library-only bounds the blast radius, but the
-> quorum and purpose-bound single-use gate is enforced in code on every path, not
-> assumed.
+The served hierarchy API lives at `/api/v1/ca/ceremonies`,
+`/api/v1/ca/authorities`, and `/api/v1/ca/authorities/{id}/issue`. Root and
+intermediate private keys are created in the isolated signing service and referenced
+by signer handles; the control plane stores certificates, chains, metadata, and
+ceremony state, but it never receives the CA private key. Every served step
+(`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
+`ca.intermediate.created`, `ca.endentity.issued`) is a tenant-scoped event carrying
+the ceremony/authority context and is recorded immutably in the tamper-evident log.
+Rotation and cross-signing remain purpose-bound library/operator workflows for now:
+they use `rotation:<ca-id>` and `cross-sign:<ca-id>:<sha256-of-target-cert-der>`
+ceremonies, with the same single-use quorum gate, until served rotation/cross-sign
+routes ship. The full operator procedure is the
+[CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
 ### Profiles and the registration-authority split (F53)
 
@@ -111,8 +121,10 @@ the CA flags a certificate for early renewal, the window jumps to "right now," a
 compliant clients renew immediately. The certificate identifier is built inside the
 single isolated cryptography path.
 
-Served by the ACME server at `GET /acme/renewal-info/{certid}` (window state is currently
-in-memory — see [ACME & DNS](acme-and-dns.md) and [limitations](../limitations.md)).
+Served by the ACME server at `GET /acme/renewal-info/{certid}` and consumed by the
+served lifecycle scheduler for trstctl-issued deployed X.509 identities. That means a
+certificate can renew when its ARI window opens, even if it is not yet inside the fixed
+`renew_before` fallback window.
 
 ### Revocation: OCSP and CRLs (F47)
 
@@ -172,10 +184,25 @@ A profile spec looks like this — note the explicit, enforced constraints:
 }
 ```
 
+For a hybrid transition profile, allow the hybrid key label and bind it to the
+protocols that should be able to request it:
+
+```json
+{
+  "name": "hybrid-web-30d",
+  "spec": {
+    "allowed_key_algorithms": ["Hybrid-ML-DSA-44-ECDSA-P256"],
+    "allowed_protocols": ["acme", "est", "scep", "cmp"],
+    "allowed_ekus": ["serverAuth"],
+    "max_validity": "720h"
+  }
+}
+```
+
 Issuance happens through the enrollment protocols ([ACME](acme-and-dns.md),
-[EST/SCEP/CMP](enrollment-protocols.md)) and the API, each of which calls the one
-issuance path with an `Idempotency-Key`. Revoke from the incident flow in
-[Incident response](incident-and-jit.md).
+[EST/SCEP/CMP](enrollment-protocols.md)), the private-CA hierarchy API, and the
+external CA registry API, each of which calls the one issuance path with an
+`Idempotency-Key`. Revoke from the incident flow in [Incident response](incident-and-jit.md).
 
 ## Pitfalls & limits
 
@@ -186,16 +213,22 @@ issuance path with an `Idempotency-Key`. Revoke from the incident flow in
 - **Hardware bindings vary in maturity.** The KMS/HSM backends are uniform behind the
   interface and tested against doubles; confirm the specific native binding you need is
   wired before relying on it ([limitations](../limitations.md)).
-- **ARI window state is currently in-memory** in the ACME server; durable,
-  event-sourced ARI is the documented integration step.
+- **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**
+  Certificates discovered from another CA can still be inventoried and risk-scored, but
+  renewing them requires a configured issuer path that can replace that outside
+  certificate.
+- **External CA registration is operator configuration.** Tenants can list and use
+  configured upstream CAs, but provider credentials are not created through the tenant
+  REST API.
 - **Revocation covers trstctl's own hierarchy.** Certificates from third-party CAs are
   revoked through those CAs.
 
 ## Reference
 
-- **CLI groups:** `profiles`, `issuers`, `certificates`.
+- **CLI groups:** `profiles`, `issuers`, `external-cas`, `certificates`.
 - **Served routes:** `POST|GET /api/v1/profiles`,
-  `GET /api/v1/profiles/{name}/versions/{version}`, `POST /api/v1/certificates`.
+  `GET /api/v1/profiles/{name}/versions/{version}`, `POST /api/v1/certificates`,
+  `GET /api/v1/external-cas`, `POST /api/v1/external-cas/{id}/issue`.
 - **Key ceremony:** `StartCeremony` → ≥`threshold` × `Approve` → `CreateRoot` /
   `CreateIntermediate`. See the [runbook](../runbooks/key-ceremony.md).
 - **Events:** `ca.issue`, `issuance.profile_evaluated`, `ca.root.created`,

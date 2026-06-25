@@ -17,10 +17,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent"
+	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -41,6 +45,13 @@ func main() {
 	keyPath := flag.String("key", "agent.key", "path to persist the agent private key")
 	certPath := flag.String("cert", "agent.crt", "path to persist the agent certificate")
 	rotateEvery := flag.Duration("rotate-every", 12*time.Hour, "how often to rotate the client certificate")
+	inventoryCertRoots := flag.String("inventory-cert-roots", "", "comma-separated directories whose public certificates the agent inventories and reports over the agent channel")
+	inventoryOSTrustRoots := flag.String("inventory-os-trust-roots", "", "comma-separated OS trust-store files/directories whose public CA certificates the agent inventories")
+	inventoryJavaTrustStores := flag.String("inventory-java-trust-stores", "", "comma-separated Java JKS/cacerts trust stores whose public CA certificates the agent inventories")
+	inventoryJavaTrustStorePassword := flag.String("inventory-java-trust-store-password", "changeit", "password for Java JKS/cacerts trust stores")
+	inventoryNSSTrustRoots := flag.String("inventory-nss-trust-roots", "", "comma-separated NSS profile export files/directories whose public CA certificates the agent inventories")
+	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
+	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	k8sMode := flag.Bool("k8s", false, "run as a Kubernetes DaemonSet: publish the identity into a Secret and bridge cert-manager")
 	k8sSecret := flag.String("k8s-secret", "", "Kubernetes Secret to publish the identity into (namespace/name)")
 	cmIssuer := flag.String("cert-manager-issuer", "", "cert-manager issuerRef name to bridge (enables the external issuer)")
@@ -92,6 +103,13 @@ func main() {
 		tokenFile: *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
 		allowInsecureDevBootstrapTokenArg: *allowInlineToken,
+		inventoryCertRoots:                splitList(*inventoryCertRoots),
+		inventoryOSTrustRoots:             splitList(*inventoryOSTrustRoots),
+		inventoryJavaTrustStores:          splitList(*inventoryJavaTrustStores),
+		inventoryJavaTrustStorePassword:   *inventoryJavaTrustStorePassword,
+		inventoryNSSTrustRoots:            splitList(*inventoryNSSTrustRoots),
+		inventoryBrowserTrustRoots:        splitList(*inventoryBrowserTrustRoots),
+		inventoryPrivateKeyRoots:          splitList(*inventoryPrivateKeyRoots),
 	}
 	if o.inlineToken != "" && !o.allowInsecureDevBootstrapTokenArg {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: inline bootstrap tokens are development-only because process arguments expose bearer credentials; write the token to a 0600 file and use --bootstrap-token-file")
@@ -135,6 +153,13 @@ type agentOptions struct {
 	enrollURL, inlineToken, tokenFile, caBundle, serverAddr, serverName, commonName, keyPath, certPath string
 	rotateEvery                                                                                        time.Duration
 	allowInsecureDevBootstrapTokenArg                                                                  bool
+	inventoryCertRoots                                                                                 []string
+	inventoryOSTrustRoots                                                                              []string
+	inventoryJavaTrustStores                                                                           []string
+	inventoryJavaTrustStorePassword                                                                    string
+	inventoryNSSTrustRoots                                                                             []string
+	inventoryBrowserTrustRoots                                                                         []string
+	inventoryPrivateKeyRoots                                                                           []string
 }
 
 // runAgent bootstraps the agent, connects to the control plane over mTLS, and
@@ -199,6 +224,21 @@ func runAgent(ctx context.Context, o agentOptions) error {
 		fmt.Printf("trstctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
 		nextHeartbeat = heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng)
 	}
+	if len(o.inventoryCertRoots) > 0 {
+		if err := reportFilesystemInventory(ctx, a, ch, o.inventoryCertRoots); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: inventory report failed:", err)
+		}
+	}
+	if hasTrustStoreInventory(o) {
+		if err := reportTrustStoreInventory(ctx, a, ch, o); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: trust-store inventory report failed:", err)
+		}
+	}
+	if len(o.inventoryPrivateKeyRoots) > 0 {
+		if err := reportPrivateKeyInventory(ctx, a, ch, o.inventoryPrivateKeyRoots); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: private-key inventory report failed:", err)
+		}
+	}
 
 	heartbeatTimer := time.NewTimer(nextHeartbeat)
 	defer heartbeatTimer.Stop()
@@ -259,6 +299,136 @@ func bootstrapToken(o agentOptions) ([]byte, error) {
 	return token, nil
 }
 
+func splitList(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func reportFilesystemInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, roots []string) error {
+	found, err := agentdiscovery.NewFilesystemSource(roots...).Discover(ctx)
+	if err != nil {
+		return err
+	}
+	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceFilesystem, found, 10, "inventory")
+}
+
+func hasTrustStoreInventory(o agentOptions) bool {
+	return len(o.inventoryOSTrustRoots) > 0 ||
+		len(o.inventoryJavaTrustStores) > 0 ||
+		len(o.inventoryNSSTrustRoots) > 0 ||
+		len(o.inventoryBrowserTrustRoots) > 0
+}
+
+func reportTrustStoreInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, o agentOptions) error {
+	var sources []agentdiscovery.Source
+	if len(o.inventoryOSTrustRoots) > 0 {
+		sources = append(sources, agentdiscovery.NewOSTrustStoreSource(runtime.GOOS, o.inventoryOSTrustRoots...))
+	}
+	for _, path := range o.inventoryJavaTrustStores {
+		sources = append(sources, agentdiscovery.NewJavaTrustStoreSource(path, o.inventoryJavaTrustStorePassword))
+	}
+	if len(o.inventoryNSSTrustRoots) > 0 {
+		sources = append(sources, agentdiscovery.NewNSSTrustStoreSource("configured", o.inventoryNSSTrustRoots...))
+	}
+	if len(o.inventoryBrowserTrustRoots) > 0 {
+		sources = append(sources, agentdiscovery.NewBrowserTrustStoreSource("configured", "configured", o.inventoryBrowserTrustRoots...))
+	}
+	sink := agentdiscovery.NewMemorySink()
+	rep := agentdiscovery.Discover(ctx, sources, sink)
+	for _, err := range rep.Errors {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: trust-store discovery warning:", err)
+	}
+	found := sink.All()
+	if len(found) == 0 && len(rep.Errors) > 0 {
+		return rep.Errors[0]
+	}
+	return reportFoundInventory(ctx, a, ch, agentdiscovery.SourceTrustStore, found, 20, "trust-store inventory")
+}
+
+func reportPrivateKeyInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, roots []string) error {
+	found, err := agentdiscovery.NewPrivateKeySource(roots...).Discover(ctx)
+	if err != nil {
+		return err
+	}
+	findings := privateKeyInventoryFindings(found)
+	if len(findings) == 0 {
+		return nil
+	}
+	resp, err := a.ReportInventory(ctx, ch, agentdiscovery.SourcePrivateKey, findings)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("trstctl-agent: reported %d private-key inventory findings (run %s, rejected %d)\n", resp.Recorded, resp.RunID, resp.Rejected)
+	return nil
+}
+
+func reportFoundInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, sourceKind string, found []agentdiscovery.Found, risk int, label string) error {
+	findings := make([]agent.InventoryFinding, 0, len(found))
+	for _, f := range found {
+		meta := map[string]string{
+			"subject":       f.Cert.Subject,
+			"issuer":        f.Cert.Issuer,
+			"serial":        f.Cert.SerialNumber,
+			"key_algorithm": f.Cert.KeyAlgorithm,
+			"not_after":     f.Cert.NotAfter.Format(time.RFC3339),
+		}
+		for k, v := range f.Metadata {
+			meta[k] = v
+		}
+		findings = append(findings, agent.InventoryFinding{
+			Kind:        "x509_certificate",
+			Ref:         f.Location,
+			Provenance:  f.Source + ":" + f.Location,
+			Fingerprint: f.Cert.SHA256Fingerprint,
+			RiskScore:   risk,
+			Metadata:    meta,
+		})
+	}
+	if len(findings) == 0 {
+		return nil
+	}
+	resp, err := a.ReportInventory(ctx, ch, sourceKind, findings)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("trstctl-agent: reported %d %s findings (run %s, rejected %d)\n", resp.Recorded, label, resp.RunID, resp.Rejected)
+	return nil
+}
+
+func privateKeyInventoryFindings(found []agentdiscovery.PrivateKeyFound) []agent.InventoryFinding {
+	findings := make([]agent.InventoryFinding, 0, len(found))
+	for _, f := range found {
+		meta := map[string]string{
+			"material_class":        "private-key",
+			"key_format":            f.Format,
+			"key_algorithm":         string(f.Algorithm),
+			"fingerprint_basis":     f.FingerprintBasis,
+			"encrypted":             strconv.FormatBool(f.Encrypted),
+			"key_bytes_present":     "false",
+			"file_mode_restricted":  strconv.FormatBool(f.Restricted),
+			"source_classification": f.Source,
+		}
+		for k, v := range f.Metadata {
+			meta[k] = v
+		}
+		findings = append(findings, agent.InventoryFinding{
+			Kind:        "private_key",
+			Ref:         f.Location,
+			Provenance:  f.Source + ":" + f.Location,
+			Fingerprint: f.Fingerprint,
+			RiskScore:   85,
+			Metadata:    meta,
+		})
+	}
+	return findings
+}
+
 func bootstrapTokenForRun(o agentOptions) ([]byte, error) {
 	if agentIdentityFilesExist(o) {
 		return nil, nil
@@ -310,6 +480,21 @@ func (a channelAdapter) Renew(ctx context.Context, req *agent.RenewRequest) (*ag
 		return nil, err
 	}
 	return &agent.RenewResponse{CertChainPEM: resp.CertChainPEM, NotAfterUnix: resp.NotAfterUnix}, nil
+}
+
+func (a channelAdapter) ReportInventory(ctx context.Context, req *agent.InventoryRequest) (*agent.InventoryResponse, error) {
+	findings := make([]transport.InventoryFinding, 0, len(req.Findings))
+	for _, f := range req.Findings {
+		findings = append(findings, transport.InventoryFinding{
+			Kind: f.Kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: f.Metadata,
+		})
+	}
+	resp, err := a.c.ReportInventory(ctx, &transport.InventoryRequest{SourceKind: req.SourceKind, Findings: findings})
+	if err != nil {
+		return nil, err
+	}
+	return &agent.InventoryResponse{TenantID: resp.TenantID, RunID: resp.RunID, Recorded: resp.Recorded, Rejected: resp.Rejected}, nil
 }
 
 // renewWithBackoff attempts a steady-state channel renewal (a.RenewOverChannel), and on

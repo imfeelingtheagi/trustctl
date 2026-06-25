@@ -82,6 +82,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	}
 	issuer := &protocolIssuer{
 		issue:          s.IssueLeafWithProfile,
+		issueHybrid:    s.IssueHybridLeafWithProfile,
 		orch:           s.orch,
 		idem:           s.idem,
 		store:          s.store,

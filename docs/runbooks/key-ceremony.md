@@ -6,16 +6,16 @@ CA-key operations behind an **m-of-n key ceremony** — the key is created only 
 a configured number of distinct **custodians** approve — so no single operator can
 unilaterally stand up or rotate a CA.
 
-> **Maturity note.** The m-of-n ceremony is implemented and tested as library code
-> in the CA hierarchy manager; it is driven today through the Go API, not yet a
-> served REST/UI flow. The **assembled issuing CA's key is now persisted, sealed at
-> rest** (R3.2): the signer reloads it after a restart, so the CA is not silently
-> rotated (see [Configuration → Signer](../configuration.md#signer-topology--ca-custody)
-> and [disaster recovery](../disaster-recovery.md)). **HSM/KMS-backed custody** (vs.
-> the local sealed key file) and a served, m-of-n break-glass flow remain future
-> work (see [Current limitations](../limitations.md) and the
-> [incident-response runbook](incident-response.md)). This runbook documents the
-> real mechanism and the operating procedure around it.
+> **Maturity note.** Root and intermediate CA ceremonies are now served over REST.
+> The served path still keeps CA private keys in the isolated signer process and
+> stores only signer handles in the control plane. Rotation, cross-signing, and
+> break-glass remain library/operator procedures until their own served routes ship.
+> The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
+> signer reloads it after a restart, so the CA is not silently rotated (see
+> [Configuration -> Signer](../configuration.md#signer-topology--ca-custody) and
+> [disaster recovery](../disaster-recovery.md)). **HSM/KMS-backed custody** for
+> local CA keys remains future work (see [Current limitations](../limitations.md)
+> and the [incident-response runbook](incident-response.md)).
 
 ## The model
 
@@ -58,22 +58,46 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
    (e.g. 3-of-5). More than half is the usual floor; pick *m* so that losing a
    custodian does not block operations but a single compromised custodian cannot
    reach quorum alone.
-2. **Open the ceremony** for the purpose (`root:<sha256-of-ca-spec>` or
-   `intermediate:<parent-ca-id>:<sha256-of-ca-spec>`) with the chosen threshold
-   *m*. In code, use `hierarchy.PurposeRoot(spec)` or
-   `hierarchy.PurposeIntermediate(parentCAID, spec)` so the purpose is derived
-   from the same request the CA operation will execute.
-3. **Collect approvals.** Each custodian independently reviews the request (purpose,
-   key parameters, the parent CA for an intermediate) and approves. Record who
-   approved and when — the approvals are auditable.
-4. **Create the CA.** Once *m* distinct custodians have approved, run the create
-   (root / intermediate). Before quorum the operation fails closed with
-   `ErrQuorumNotMet`; if the ceremony was opened for a different resource, it fails
-   closed with `ErrKeyCeremonyPurposeMismatch`.
+2. **Open the ceremony** for the exact root or intermediate spec. The served route
+   is `POST /api/v1/ca/ceremonies` with bearer auth that has `issuers:write` and an
+   `Idempotency-Key` header:
+
+   ```json
+   {
+     "operation": "root",
+     "threshold": 2,
+     "spec": {
+       "common_name": "Example Root CA",
+       "validity": "87600h",
+       "is_ca": true,
+       "max_path_len": 1
+     }
+   }
+   ```
+
+   For an intermediate, use `"operation": "intermediate"` and include
+   `"parent_id": "<root-ca-id>"`; the server derives
+   `intermediate:<parent-ca-id>:<sha256-of-ca-spec>` from the same request the CA
+   operation will execute.
+3. **Collect approvals.** Each custodian independently reviews the request and calls
+   `POST /api/v1/ca/ceremonies/{id}/approvals` with their own token. The opener is
+   not allowed to approve their own ceremony. Every approval is auditable and emits
+   `ca.ceremony.approved`.
+4. **Create the CA.** Once *m* distinct custodians have approved, call
+   `POST /api/v1/ca/authorities/roots` or
+   `POST /api/v1/ca/authorities/intermediates` with the `ceremony_id` and the same
+   reviewed spec. Before quorum the operation fails closed with `ErrQuorumNotMet`;
+   if the ceremony was opened for a different resource, it fails closed with
+   `ErrKeyCeremonyPurposeMismatch`.
 5. **Distribute trust.** Publish the new CA certificate to relying parties; for an
    intermediate, verify the chain to its parent.
 6. **Record the ceremony** in your change-management system alongside the audit
    trail.
+
+After an intermediate exists, leaf issuance is served at
+`POST /api/v1/ca/authorities/{id}/issue` with a CSR PEM, the desired validity, and a
+token carrying `certs:issue`. The CA private key still signs inside the isolated
+signer process; the API returns the issued certificate and chain.
 
 ## Procedure: rotating a CA
 
@@ -100,6 +124,6 @@ Rotation is the same ceremony model, but the purpose is bound to the exact CA:
 - Treat every approval as a logged, attributable action (it is recorded against the
   ceremony).
 
-See [Current limitations](../limitations.md) for what is served by the binary today
-versus driven through the Go API, and [Disaster recovery](../disaster-recovery.md)
-for CA-key loss handling.
+See [Current limitations](../limitations.md) for the remaining rotation,
+cross-signing, HSM/KMS-local-CA, and break-glass gaps, and
+[Disaster recovery](../disaster-recovery.md) for CA-key loss handling.

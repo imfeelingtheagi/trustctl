@@ -84,6 +84,25 @@ func TestDecodeWrongPasswordFails(t *testing.T) {
 	}
 }
 
+// A Java trust store contains certificate-only entries: discovery can read public
+// trust anchors without ever handling private-key material.
+func TestEncodeDecodeTrustStore(t *testing.T) {
+	blob, err := jks.EncodeTrustStoreDeterministic(map[string][]byte{"root-ca": []byte(certPEM)}, "changeit")
+	if err != nil {
+		t.Fatalf("encode trust store: %v", err)
+	}
+	got, err := jks.DecodeTrustedCertificates(blob, "changeit")
+	if err != nil {
+		t.Fatalf("decode trust store: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("decoded %d trust entries, want 1", len(got))
+	}
+	if !bytes.Equal(der(t, got["root-ca"]), der(t, []byte(certPEM))) {
+		t.Error("decoded trust certificate DER mismatch")
+	}
+}
+
 func der(t *testing.T, pemBytes []byte) []byte {
 	t.Helper()
 	block, _ := pem.Decode(pemBytes)

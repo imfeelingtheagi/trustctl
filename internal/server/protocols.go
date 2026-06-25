@@ -61,6 +61,7 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 // inventory uses.
 type protocolIssuer struct {
 	issue          issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
+	issueHybrid    issueFunc                  // Server.IssueHybridLeafWithProfile — same signer path plus verified ML-DSA binding
 	orch           *orchestrator.Orchestrator // records the cert as an event (AN-2)
 	idem           *orchestrator.Idempotency  // dedupe a retried enrollment (AN-5)
 	store          *store.Store               // tenant-scoped reads/writes under RLS (AN-1)
@@ -134,9 +135,18 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		if err != nil {
 			return nil, err
 		}
-		// Sign through the signer (AN-3/AN-4) — Server.IssueLeafWithProfile fails closed when the
-		// signer is slow/unavailable and never signs in-process.
-		leafPEM, err := p.issue(ctx, csrDER, ttl, leafProfile)
+		// Sign through the signer (AN-3/AN-4). Hybrid CSRs carry their ML-DSA proof in
+		// the request; the hybrid issue path verifies that proof and stamps the
+		// transition extension. This is still compile-time DI — no runtime crypto engine,
+		// provider registry, or policy-fed algorithm loader.
+		issue := p.issue
+		if csrInfo.KeyAlgorithm == crypto.HybridMLDSA44ECDSAP256Algorithm {
+			if p.issueHybrid == nil {
+				return nil, errors.New("server: hybrid protocol issuance unavailable (fail closed)")
+			}
+			issue = p.issueHybrid
+		}
+		leafPEM, err := issue(ctx, csrDER, ttl, leafProfile)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +166,7 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 			CAID: p.caID, Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
 			Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+			Source: "protocol:" + protocolName, CertificateDER: append([]byte(nil), blk.Bytes...),
 			IssuanceIdempotencyKey: idemKey,
 		}); err != nil {
 			return nil, err

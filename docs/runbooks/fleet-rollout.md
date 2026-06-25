@@ -40,7 +40,7 @@ refuses to produce a manifest unless `TRSTCTL_AGENT_IMAGE` is a real
 `.../trstctl@sha256:<release-image-digest>` reference.
 
 ```sh
-export TRSTCTL_AGENT_IMAGE='ghcr.io/imfeelingtheagi/trstctl@sha256:<release-image-digest>'
+export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
 rendered_agent_daemonset="$(mktemp)"
 
@@ -105,6 +105,14 @@ trstctl-agent.exe --service=install --enroll-url https://cp:8443 ^
   heartbeat intervals.
 - `sum(increase(trstctl_agent_bulkhead_rejections_total[5m]))` stays `0`.
 - Kubernetes pod logs contain `trstctl-agent: heartbeat ok`.
+- Hosts using `--inventory-cert-roots` log a successful inventory report, and
+  `trstctl-cli discovery findings list` shows only the expected metadata-only
+  certificate findings from the canary directories.
+- Hosts using trust-store flags log a successful trust-store inventory report, and
+  findings are tagged with `trust_store_kind` plus `private_key_present=false`.
+- Hosts using `--inventory-private-key-roots` log a successful private-key inventory
+  report, and `trstctl-cli discovery findings list` shows `private_key` findings with
+  `key_bytes_present=false`, `material_class=private-key`, and no PEM block text.
 - Windows service logs contain `heartbeat ok` after first enrollment.
 - `trstctl-cli agents list` grows by the number of canary hosts, and each row has
   the expected name/version.

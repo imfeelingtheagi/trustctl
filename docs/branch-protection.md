@@ -66,7 +66,7 @@ required set.
 | `cmp client conformance (OpenSSL transcript)` | `ci.yml` | Stock OpenSSL `cmp p10cr` enrollment against the served CMP endpoint, with request/response transcripts archived |
 | `tsa client conformance (OpenSSL ts transcript)` | `ci.yml` | Stock OpenSSL `ts -query` and `ts -verify` against the served `/tsa` RFC 3161 endpoint, with public request/response transcripts archived |
 | `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
-| `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe and spiffe-helper fetch X.509-SVIDs from the served Workload API Unix socket |
+| `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe fetches and validates X.509-SVID and JWT-SVID paths from the served Workload API Unix socket; spiffe-helper writes the served X.509-SVID, key, and trust bundle |
 | `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
 | `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS crypto self-test path |

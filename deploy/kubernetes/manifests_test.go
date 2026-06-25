@@ -203,7 +203,7 @@ func TestAgentDaemonSetRequiresRenderedReleaseDigest(t *testing.T) {
 	if validReleaseImage.MatchString(image) {
 		return
 	}
-	if image != "ghcr.io/imfeelingtheagi/trstctl@sha256:RELEASE_DIGEST_REQUIRED" {
+	if image != "ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED" {
 		t.Fatalf("DaemonSet image = %q, want a real release digest or the required-digest template marker", image)
 	}
 }
@@ -211,7 +211,7 @@ func TestAgentDaemonSetRequiresRenderedReleaseDigest(t *testing.T) {
 func TestRenderAgentDaemonSetRequiresImmutableDigest(t *testing.T) {
 	root := filepath.Join("..", "..")
 	script := filepath.Join("scripts", "release", "render-kubernetes-agent-daemonset.sh")
-	goodImage := "ghcr.io/imfeelingtheagi/trstctl@sha256:" + strings.Repeat("1", 64)
+	goodImage := "ghcr.io/ctlplne/trstctl@sha256:" + strings.Repeat("1", 64)
 	cmd := exec.Command("bash", script, goodImage)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
@@ -226,9 +226,9 @@ func TestRenderAgentDaemonSetRequiresImmutableDigest(t *testing.T) {
 	}
 
 	for _, bad := range []string{
-		"ghcr.io/imfeelingtheagi/trstctl:latest",
-		"ghcr.io/imfeelingtheagi/trstctl@sha256:" + strings.Repeat("0", 64),
-		"ghcr.io/imfeelingtheagi/trstctl@sha256:abc",
+		"ghcr.io/ctlplne/trstctl:latest",
+		"ghcr.io/ctlplne/trstctl@sha256:" + strings.Repeat("0", 64),
+		"ghcr.io/ctlplne/trstctl@sha256:abc",
 	} {
 		cmd := exec.Command("bash", script, bad)
 		cmd.Dir = root

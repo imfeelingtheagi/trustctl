@@ -20,7 +20,7 @@ const (
 // It names the single multi-binary control-plane image the release pipeline
 // builds (deploy/docker/Dockerfile, .github/workflows/release.yml); the operator
 // runs from that same image via an entrypoint override.
-const defaultControlPlaneImage = "ghcr.io/imfeelingtheagi/trstctl:latest"
+const defaultControlPlaneImage = "ghcr.io/ctlplne/trstctl:latest"
 
 // ControlPlaneSpec is the desired state declared on a TrstctlControlPlane.spec.
 // Only the fields the operator acts on are modelled; unknown fields are ignored.

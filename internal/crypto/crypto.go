@@ -13,6 +13,7 @@ const (
 	ECDSAP256 Algorithm = "ECDSA-P256"
 	ECDSAP384 Algorithm = "ECDSA-P384"
 	ECDSAP521 Algorithm = "ECDSA-P521"
+	Ed25519   Algorithm = "Ed25519"
 )
 
 // Post-quantum and hybrid algorithms. The signing implementations live behind
@@ -59,6 +60,16 @@ const (
 type SignOptions struct {
 	Hash       Hash       // digest algorithm; defaults to SHA-256 when empty
 	RSAPadding RSAPadding // RSA scheme; defaults to PKCS#1 v1.5 when empty
+}
+
+// CertificateExtension is a backend-agnostic X.509 extension. OID is a dotted
+// object identifier, Critical is the X.509 critical bit, and Value is the DER
+// encoded extension value. It lets callers inside the crypto boundary assemble
+// draft/profile extensions without leaking crypto/x509/pkix types outward.
+type CertificateExtension struct {
+	OID      string
+	Critical bool
+	Value    []byte
 }
 
 // PublicKey is a backend-agnostic public key: its algorithm plus the PKIX/DER

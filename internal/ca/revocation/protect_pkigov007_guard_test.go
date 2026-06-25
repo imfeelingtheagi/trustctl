@@ -88,7 +88,7 @@ func TestProtectPKIGOV007_RevocationMachineryAnchor(t *testing.T) {
 	ocspBody := body[ocspIdx:]
 	submitIdx := strings.Index(ocspBody, "s.pool.Submit(")
 	recvIdx := strings.Index(ocspBody, "case r := <-ch:")
-	if submitIdx < 0 || recvIdx < 0 || !(submitIdx < recvIdx) {
+	if submitIdx < 0 || recvIdx < 0 || submitIdx >= recvIdx {
 		t.Error("PKIGOV-007: OCSP no longer submits to the bounded pool before awaiting the response; the AN-7 backpressure gate on OCSP is broken")
 	}
 }

@@ -272,11 +272,94 @@ func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cu
 	return out, err
 }
 
+// RenewalIdentityCandidate is the scheduler input for one deployed X.509
+// identity and the active internally-issued certificate that makes it renewable.
+// The server consumes the certificate validity span through the ARI package, so
+// the renewal decision stays aligned with ACME Renewal Information rather than a
+// fixed expiry cutoff alone.
+type RenewalIdentityCandidate struct {
+	Identity    Identity
+	Certificate Certificate
+}
+
+// ListRenewalIdentityCandidates returns deployed X.509 identities whose active
+// served certificates are eligible for a scheduler decision. Eligibility is a
+// coarse database prefilter: either the old fixed cutoff is already reached, or
+// the normal ARI suggested-window start has reached ariNow. The server still
+// recomputes the final decision with internal/protocols/ari before mutating
+// lifecycle state.
+func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID string, fixedCutoff, ariNow time.Time) ([]RenewalIdentityCandidate, error) {
+	var out []RenewalIdentityCandidate
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT DISTINCT ON (i.id)
+			        i.id::text, i.tenant_id::text, i.kind, i.name, i.owner_id::text,
+			        i.issuer_id::text, i.status, i.not_before, i.not_after, i.attributes, i.created_at,
+			        c.id::text, c.tenant_id::text, c.owner_id::text, c.subject, c.sans, c.issuer, c.serial,
+			        c.fingerprint, c.key_algorithm, c.not_before, c.not_after, c.deployment_location, c.source,
+			        c.certificate_der, c.issuance_idempotency_key, c.created_at,
+			        c.status, c.replaces_id::text, c.revoked_at, c.revocation_reason, c.renewed_at, c.alerted_at
+			   FROM identities i
+			   JOIN certificates c
+			     ON c.tenant_id = i.tenant_id
+			    AND c.owner_id = i.owner_id
+			    AND i.name = ANY(c.sans)
+			  WHERE i.tenant_id = $1
+			    AND i.kind = 'x509_certificate'
+			    AND i.status = 'deployed'
+			    AND c.source = 'issued'
+			    AND c.status = 'active'
+			    AND c.not_after IS NOT NULL
+			    AND (
+			         c.not_after < $2
+			         OR (
+			              c.not_before IS NOT NULL
+			              AND c.not_after - ((c.not_after - c.not_before) / 3.0) <= $3
+			            )
+			        )
+			  ORDER BY i.id, c.not_after, c.created_at`,
+			tenantID, fixedCutoff, ariNow)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				it    Identity
+				kind  string
+				attrs []byte
+				cert  Certificate
+			)
+			if err := rows.Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
+				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt,
+				&cert.ID, &cert.TenantID, &cert.OwnerID, &cert.Subject, &cert.SANs, &cert.Issuer, &cert.Serial,
+				&cert.Fingerprint, &cert.KeyAlgorithm, &cert.NotBefore, &cert.NotAfter, &cert.DeploymentLocation, &cert.Source,
+				&cert.CertificateDER, &cert.IssuanceIdempotencyKey, &cert.CreatedAt,
+				&cert.Status, &cert.ReplacesID, &cert.RevokedAt, &cert.RevocationReason, &cert.RenewedAt, &cert.AlertedAt); err != nil {
+				return err
+			}
+			it.Kind = IdentityKind(kind)
+			it.Attributes = attrs
+			out = append(out, RenewalIdentityCandidate{Identity: it, Certificate: cert})
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // TenantsWithRenewableIdentities returns tenant ids that currently have at least
 // one deployed X.509 identity eligible for scheduled renewal. It is a system
 // enumerator for the leader-only scheduler; each tenant's actual identities are
 // then loaded through ListRenewableIdentities under that tenant's RLS context.
 func (s *Store) TenantsWithRenewableIdentities(ctx context.Context, cutoff time.Time) ([]string, error) {
+	return s.TenantsWithRenewalIdentityCandidates(ctx, cutoff, time.Time{})
+}
+
+// TenantsWithRenewalIdentityCandidates returns tenant ids that currently have at
+// least one deployed X.509 identity whose active issued certificate should be
+// evaluated by the scheduler. It is a system enumerator only: each tenant's rows
+// are loaded through ListRenewalIdentityCandidates under tenant-scoped RLS.
+func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedCutoff, ariNow time.Time) ([]string, error) {
 	rows, err := s.SystemPool().Query(ctx,
 		//trstctl:system-query — cross-tenant by design: the leader scheduler enumerates which tenants have renewal work, then re-enters tenant-scoped RLS for the rows themselves.
 		`SELECT DISTINCT i.tenant_id::text
@@ -290,8 +373,14 @@ func (s *Store) TenantsWithRenewableIdentities(ctx context.Context, cutoff time.
 		    AND c.source = 'issued'
 		    AND c.status = 'active'
 		    AND c.not_after IS NOT NULL
-		    AND c.not_after < $1
-		  ORDER BY 1`, cutoff)
+		    AND (
+		         c.not_after < $1
+		         OR (
+		              c.not_before IS NOT NULL
+		              AND c.not_after - ((c.not_after - c.not_before) / 3.0) <= $2
+		            )
+		        )
+		  ORDER BY 1`, fixedCutoff, ariNow)
 	if err != nil {
 		return nil, err
 	}

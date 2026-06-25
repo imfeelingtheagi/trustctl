@@ -24,34 +24,55 @@ const (
 type Algorithm int32
 
 const (
-	Algorithm_ALGORITHM_UNSPECIFIED Algorithm = 0
-	Algorithm_ALGORITHM_RSA_2048    Algorithm = 1
-	Algorithm_ALGORITHM_RSA_3072    Algorithm = 2
-	Algorithm_ALGORITHM_RSA_4096    Algorithm = 3
-	Algorithm_ALGORITHM_ECDSA_P256  Algorithm = 4
-	Algorithm_ALGORITHM_ECDSA_P384  Algorithm = 5
-	Algorithm_ALGORITHM_ECDSA_P521  Algorithm = 6
+	Algorithm_ALGORITHM_UNSPECIFIED       Algorithm = 0
+	Algorithm_ALGORITHM_RSA_2048          Algorithm = 1
+	Algorithm_ALGORITHM_RSA_3072          Algorithm = 2
+	Algorithm_ALGORITHM_RSA_4096          Algorithm = 3
+	Algorithm_ALGORITHM_ECDSA_P256        Algorithm = 4
+	Algorithm_ALGORITHM_ECDSA_P384        Algorithm = 5
+	Algorithm_ALGORITHM_ECDSA_P521        Algorithm = 6
+	Algorithm_ALGORITHM_ML_DSA_44         Algorithm = 7
+	Algorithm_ALGORITHM_ML_DSA_65         Algorithm = 8
+	Algorithm_ALGORITHM_ML_DSA_87         Algorithm = 9
+	Algorithm_ALGORITHM_SLH_DSA_SHA2_128S Algorithm = 10
+	Algorithm_ALGORITHM_SLH_DSA_SHA2_128F Algorithm = 11
+	Algorithm_ALGORITHM_SLH_DSA_SHA2_192S Algorithm = 12
+	Algorithm_ALGORITHM_SLH_DSA_SHA2_256S Algorithm = 13
 )
 
 // Enum value maps for Algorithm.
 var (
 	Algorithm_name = map[int32]string{
-		0: "ALGORITHM_UNSPECIFIED",
-		1: "ALGORITHM_RSA_2048",
-		2: "ALGORITHM_RSA_3072",
-		3: "ALGORITHM_RSA_4096",
-		4: "ALGORITHM_ECDSA_P256",
-		5: "ALGORITHM_ECDSA_P384",
-		6: "ALGORITHM_ECDSA_P521",
+		0:  "ALGORITHM_UNSPECIFIED",
+		1:  "ALGORITHM_RSA_2048",
+		2:  "ALGORITHM_RSA_3072",
+		3:  "ALGORITHM_RSA_4096",
+		4:  "ALGORITHM_ECDSA_P256",
+		5:  "ALGORITHM_ECDSA_P384",
+		6:  "ALGORITHM_ECDSA_P521",
+		7:  "ALGORITHM_ML_DSA_44",
+		8:  "ALGORITHM_ML_DSA_65",
+		9:  "ALGORITHM_ML_DSA_87",
+		10: "ALGORITHM_SLH_DSA_SHA2_128S",
+		11: "ALGORITHM_SLH_DSA_SHA2_128F",
+		12: "ALGORITHM_SLH_DSA_SHA2_192S",
+		13: "ALGORITHM_SLH_DSA_SHA2_256S",
 	}
 	Algorithm_value = map[string]int32{
-		"ALGORITHM_UNSPECIFIED": 0,
-		"ALGORITHM_RSA_2048":    1,
-		"ALGORITHM_RSA_3072":    2,
-		"ALGORITHM_RSA_4096":    3,
-		"ALGORITHM_ECDSA_P256":  4,
-		"ALGORITHM_ECDSA_P384":  5,
-		"ALGORITHM_ECDSA_P521":  6,
+		"ALGORITHM_UNSPECIFIED":       0,
+		"ALGORITHM_RSA_2048":          1,
+		"ALGORITHM_RSA_3072":          2,
+		"ALGORITHM_RSA_4096":          3,
+		"ALGORITHM_ECDSA_P256":        4,
+		"ALGORITHM_ECDSA_P384":        5,
+		"ALGORITHM_ECDSA_P521":        6,
+		"ALGORITHM_ML_DSA_44":         7,
+		"ALGORITHM_ML_DSA_65":         8,
+		"ALGORITHM_ML_DSA_87":         9,
+		"ALGORITHM_SLH_DSA_SHA2_128S": 10,
+		"ALGORITHM_SLH_DSA_SHA2_128F": 11,
+		"ALGORITHM_SLH_DSA_SHA2_192S": 12,
+		"ALGORITHM_SLH_DSA_SHA2_256S": 13,
 	}
 )
 
@@ -883,7 +904,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_SERVING\x10\x01\x12\x16\n" +
 	"\x12STATUS_NOT_SERVING\x10\x02\x12\x13\n" +
-	"\x0fSTATUS_DRAINING\x10\x03*\xbc\x01\n" +
+	"\x0fSTATUS_DRAINING\x10\x03*\x8b\x03\n" +
 	"\tAlgorithm\x12\x19\n" +
 	"\x15ALGORITHM_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ALGORITHM_RSA_2048\x10\x01\x12\x16\n" +
@@ -891,7 +912,15 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x12ALGORITHM_RSA_4096\x10\x03\x12\x18\n" +
 	"\x14ALGORITHM_ECDSA_P256\x10\x04\x12\x18\n" +
 	"\x14ALGORITHM_ECDSA_P384\x10\x05\x12\x18\n" +
-	"\x14ALGORITHM_ECDSA_P521\x10\x06*O\n" +
+	"\x14ALGORITHM_ECDSA_P521\x10\x06\x12\x17\n" +
+	"\x13ALGORITHM_ML_DSA_44\x10\a\x12\x17\n" +
+	"\x13ALGORITHM_ML_DSA_65\x10\b\x12\x17\n" +
+	"\x13ALGORITHM_ML_DSA_87\x10\t\x12\x1f\n" +
+	"\x1bALGORITHM_SLH_DSA_SHA2_128S\x10\n" +
+	"\x12\x1f\n" +
+	"\x1bALGORITHM_SLH_DSA_SHA2_128F\x10\v\x12\x1f\n" +
+	"\x1bALGORITHM_SLH_DSA_SHA2_192S\x10\f\x12\x1f\n" +
+	"\x1bALGORITHM_SLH_DSA_SHA2_256S\x10\r*O\n" +
 	"\x04Hash\x12\x14\n" +
 	"\x10HASH_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vHASH_SHA256\x10\x01\x12\x0f\n" +

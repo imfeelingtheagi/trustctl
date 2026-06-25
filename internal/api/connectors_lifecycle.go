@@ -99,19 +99,19 @@ func toRotationRunResponse(r store.RotationRun) rotationRunResponse {
 }
 
 var servedConnectorCatalog = []connectorCatalogItem{
-	{Name: "nginx", Kind: "file/process", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous fullchain/key pair and reload nginx"},
-	{Name: "apache", Kind: "file/process", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous SSLCertificateFile and graceful reload"},
-	{Name: "haproxy", Kind: "file/process", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous bundle and reload HAProxy"},
-	{Name: "iis", Kind: "windows", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous binding thumbprint"},
-	{Name: "aws-acm", Kind: "cloud", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "repoint listener to previous ACM ARN"},
-	{Name: "azure-keyvault", Kind: "cloud", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "reactivate prior certificate version"},
-	{Name: "gcp-certificate-manager", Kind: "cloud", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "reattach prior certificate resource"},
-	{Name: "java-keystore", Kind: "keystore", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous keystore object"},
-	{Name: "f5", Kind: "appliance", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "swap virtual server back to previous cert/key object"},
-	{Name: "netscaler", Kind: "appliance", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "bind previous certKey to the service group"},
-	{Name: "cisco", Kind: "appliance", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous trustpoint binding"},
-	{Name: "fortigate", Kind: "appliance", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "restore previous local certificate reference"},
-	{Name: "paloalto", Kind: "appliance", DeliveryMode: "signed plugin or connector outbox receipt", Rollback: "revert candidate config to prior certificate object"},
+	{Name: "nginx", Kind: "file/process", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous fullchain/key pair and reload nginx"},
+	{Name: "apache", Kind: "file/process", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous SSLCertificateFile and graceful reload"},
+	{Name: "haproxy", Kind: "file/process", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous bundle and reload HAProxy"},
+	{Name: "iis", Kind: "windows", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous binding thumbprint"},
+	{Name: "aws-acm", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "repoint listener to previous ACM ARN"},
+	{Name: "azure-keyvault", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "reactivate prior certificate version"},
+	{Name: "gcp-certificate-manager", Kind: "cloud", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "reattach prior certificate resource"},
+	{Name: "java-keystore", Kind: "keystore", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous keystore object"},
+	{Name: "f5", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "swap virtual server back to previous cert/key object"},
+	{Name: "netscaler", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "bind previous certKey to the service group"},
+	{Name: "cisco", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous trustpoint binding"},
+	{Name: "fortigate", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous local certificate reference"},
+	{Name: "paloalto", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "revert candidate config to prior certificate object"},
 }
 
 func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {

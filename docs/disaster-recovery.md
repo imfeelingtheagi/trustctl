@@ -183,8 +183,9 @@ they depend on how often you back up and how fast your datastores restore.
 The default Helm chart runs the control plane **multi-replica** (`replicaCount: 2`)
 with a no-downtime `RollingUpdate` (`maxUnavailable: 0`), a PodDisruptionBudget
 (`minAvailable: 1`), and pod anti-affinity. A node failure
-or a config rollout no longer takes issuance/validation offline. Three mechanisms make
-running more than one control-plane replica **safe**:
+or a config rollout no longer takes issuance/validation offline. The operator-facing
+HA contract is simple: leader election plus shared storage make running more than one
+control-plane replica **safe**:
 
 - **Leader election for the continuous workers.** A single leader — exactly one
   replica — runs the workers that mutate shared state on a continuous cadence:

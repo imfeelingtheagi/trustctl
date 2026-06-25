@@ -78,6 +78,13 @@ never logged. HTTP-based channels default to the shared SSRF-safe client and acc
 public HTTPS endpoints, so an operator-provided callback cannot turn the control plane
 into a request to loopback, RFC1918, or cloud metadata addresses.
 
+**Status: partially served.** Expiry alerts are served by the running binary when an
+operator wires notification channels into the process and sets the lifecycle alert
+window: the leader scheduler writes `notification.expiry` outbox work, stamps the
+certificate as alerted, and the outbox dispatcher fans the alert to Slack, Teams, email,
+PagerDuty, OpsGenie, and webhook channel implementations. Tenant-facing channel CRUD,
+test delivery, and delivery-receipt APIs are still not mounted.
+
 ### Compliance reporting (F62)
 
 Compliance reporting turns the audit log and the [CBOM](observability-and-risk.md) into
@@ -118,9 +125,10 @@ allow { input.action == "issue"; input.profile != "" }
   on every served issue/deploy/revoke transition (fail-closed), the RA scope split
   (`certs:request` ≠ `certs:issue`) is enforced so a requester cannot self-issue, and
   with `ca.policy.require_approval` a privileged action needs a **distinct** approver
-  (self-approval rejected). Notifications (F29) and compliance reporting (F62) remain
-  library-complete and tested; a dedicated policy/notification *authoring* config API
-  is the remaining integration step — see [Current limitations](../limitations.md).
+  (self-approval rejected). Notifications (F29) now have served expiry-alert dispatch
+  through operator-wired channels, but a dedicated notification *authoring* config API
+  is still the remaining integration step; compliance reporting (F62) remains
+  library-complete and tested — see [Current limitations](../limitations.md).
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
 - **Compliance reporting evidences controls; it does not certify you.** It's explicit

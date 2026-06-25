@@ -35,19 +35,19 @@ func readRepoFile(t *testing.T, rel string) string {
 func TestDesignDocCoversRequiredSections(t *testing.T) {
 	doc := readRepoFile(t, "../../docs/design/signing-service.md")
 	for _, want := range []string{
-		"Status:",                   // reviewed/accepted status
-		"AN-4",                      // the architectural non-negotiable
-		"AN-8",                      // memory safety
-		"Threat model",              // threat model section
-		"Process boundary",          // separate, sacred process
-		"Protocol",                  // protocol section
-		"gRPC",                      // transport
-		"Unix domain socket",        // UDS
-		"Memory-safety obligations", // AN-8 obligations
-		"mlock",                     // locked memory
-		"MADV_DONTDUMP",             // dump exclusion
-		"Dependency budget",         // explicit dependency budget
-		"Fuzzing plan",              // fuzzing plan
+		"Status:",                        // reviewed/accepted status
+		"isolated signer process",        // separate, sacred process
+		"wipeable secret-memory buffers", // memory safety
+		"Threat model",                   // threat model section
+		"Process boundary",               // separate, sacred process
+		"Protocol",                       // protocol section
+		"gRPC",                           // transport
+		"Unix domain socket",             // UDS
+		"Memory-safety obligations",      // memory-safety obligations
+		"mlock",                          // locked memory
+		"MADV_DONTDUMP",                  // dump exclusion
+		"Dependency budget",              // explicit dependency budget
+		"Fuzzing plan",                   // fuzzing plan
 	} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("design doc is missing required content: %q", want)

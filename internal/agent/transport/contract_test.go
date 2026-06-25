@@ -117,6 +117,17 @@ func TestAgentSteadyStateWireGoldenFixtures(t *testing.T) {
 			request:    RenewRequest{CSRDER: []byte{0x30, 0x03, 0x02, 0x01, 0x01}},
 			response:   RenewResponse{CertChainPEM: []byte("-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n"), NotAfterUnix: 1893456000},
 		},
+		methodInventory: {
+			fullMethod: fullMethodInventory,
+			request: InventoryRequest{
+				SourceKind: "filesystem",
+				Findings: []InventoryFinding{{
+					Kind: "secret", Ref: "k8s://apps/web/tls", Provenance: "k8s-secret:apps/web/tls",
+					RiskScore: 50, Metadata: map[string]string{"namespace": "apps"},
+				}},
+			},
+			response: InventoryResponse{TenantID: "11111111-1111-1111-1111-111111111111", RunID: "22222222-2222-2222-2222-222222222222", Recorded: 1, Rejected: 0},
+		},
 	}
 	seen := map[string]bool{}
 	for _, call := range fixture.Calls {
@@ -162,7 +173,7 @@ func currentAgentContract() agentContract {
 			AgentCapabilitiesKey:  protocol.MetadataAgentCapabilities,
 			ServerProtocolKey:     protocol.MetadataServerProtocol,
 			ServerCapabilitiesKey: protocol.MetadataServerCapabilities,
-			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew},
+			Capabilities:          []string{AgentCapabilityHeartbeat, AgentCapabilityRenew, AgentCapabilityInventory},
 		},
 		Service: agentContractService{
 			Name:     agentServiceDesc.ServiceName,
@@ -174,6 +185,9 @@ func currentAgentContract() agentContract {
 			"HeartbeatResponse": {Fields: jsonFieldsOf(HeartbeatResponse{})},
 			"RenewRequest":      {Fields: jsonFieldsOf(RenewRequest{})},
 			"RenewResponse":     {Fields: jsonFieldsOf(RenewResponse{})},
+			"InventoryFinding":  {Fields: jsonFieldsOf(InventoryFinding{})},
+			"InventoryRequest":  {Fields: jsonFieldsOf(InventoryRequest{})},
+			"InventoryResponse": {Fields: jsonFieldsOf(InventoryResponse{})},
 		},
 	}
 }
@@ -184,6 +198,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"HeartbeatRequest", "HeartbeatResponse"}
 	case methodRenew:
 		return struct{ request, response string }{"RenewRequest", "RenewResponse"}
+	case methodInventory:
+		return struct{ request, response string }{"InventoryRequest", "InventoryResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}
@@ -213,13 +229,21 @@ func schemaGoType(t reflect.Type) string {
 		return "string"
 	case reflect.Int64:
 		return "int64"
+	case reflect.Int:
+		return "int"
 	case reflect.Slice:
 		if t.Elem().Kind() == reflect.Uint8 {
 			return "bytes_base64"
 		}
+		if t.Elem() == reflect.TypeOf(InventoryFinding{}) {
+			return "[]InventoryFinding"
+		}
 	case reflect.Map:
 		if t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.Int64 {
 			return "map<string,int64>"
+		}
+		if t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.String {
+			return "map<string,string>"
 		}
 	}
 	return t.String()

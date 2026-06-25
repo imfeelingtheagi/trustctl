@@ -243,6 +243,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/broker/agent-identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a policy-gated short-lived identity for an AI/MCP agent */
+        post: operations["issueBrokerAgentIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List served CA authorities */
+        get: operations["listCAAuthorities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/intermediates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a signer-backed intermediate CA after ceremony quorum */
+        post: operations["createIntermediateCA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a signer-backed root CA after ceremony quorum */
+        post: operations["createRootCA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a leaf certificate from a served CA authority */
+        post: operations["issueHierarchyLeaf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/ceremonies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an m-of-n CA key ceremony */
+        post: operations["createCACeremony"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/ceremonies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a CA key ceremony */
+        get: operations["getCACeremony"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/ceremonies/{id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a CA key ceremony */
+        post: operations["approveCACeremony"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cbom/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List CBOM assets with PQC migration targets and progress */
+        get: operations["listCBOMAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cbom/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan TLS endpoints and host crypto config into the CBOM inventory */
+        post: operations["startCBOMScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates": {
         parameters: {
             query?: never;
@@ -428,6 +598,74 @@ export interface paths {
         put?: never;
         /** Create a discovery source */
         post: operations["createDiscoverySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ephemeral": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open or complete an attestation-gated JIT credential request */
+        post: operations["issueEphemeralCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ephemeral/{id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a pending ephemeral JIT credential request */
+        post: operations["approveEphemeralCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-cas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configured upstream CA integrations */
+        get: operations["listExternalCAs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-cas/{id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a certificate through a configured upstream CA */
+        post: operations["issueExternalCA"];
         delete?: never;
         options?: never;
         head?: never;
@@ -814,6 +1052,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pqc/migrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue PQC re-issuance for CBOM assets through the served protocol path */
+        post: operations["startPQCMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pqc/migrations/{run_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue rollback for a PQC migration run */
+        post: operations["rollbackPQCMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/catalog": {
         parameters: {
             query?: never;
@@ -1041,6 +1313,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workloads/attested-issuance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue an X.509-SVID after workload attestation */
+        post: operations["issueAttestedSVID"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1138,6 +1427,30 @@ export interface components {
             /** @enum {string} */
             action: "issue" | "revoke";
         };
+        Attestation: {
+            claims?: Record<string, never>;
+            id: string;
+            method: string;
+            selectors: string[];
+            subject: string;
+            /** Format: date-time */
+            verified_at: string;
+        };
+        AttestedSVID: {
+            attestation: components["schemas"]["Attestation"];
+            certificate_pem: string;
+            credential_id: string;
+            /** Format: date-time */
+            not_after: string;
+            subject: string;
+        };
+        AttestedSVIDRequest: {
+            /** @enum {string} */
+            method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+            payload_base64: string;
+            public_key_pem: string;
+            ttl_seconds?: number;
+        };
         AuditBundle: {
             bundle: string;
             format: string;
@@ -1157,6 +1470,148 @@ export interface components {
         AuditEventList: {
             count?: number;
             events: components["schemas"]["AuditEvent"][];
+        };
+        BrokerAgentIdentity: {
+            agent_id: string;
+            attestation: components["schemas"]["Attestation"];
+            /** Format: uuid */
+            certificate_id: string;
+            certificate_pem: string;
+            credential_id: string;
+            node_id: string;
+            /** Format: date-time */
+            not_after: string;
+            scopes: string[];
+            subject: string;
+        };
+        BrokerAgentIdentityRequest: {
+            agent_id: string;
+            method: string;
+            payload_base64: string;
+            public_key_pem: string;
+            scopes: string[];
+            ttl_seconds?: number;
+        };
+        CAAuthority: {
+            certificate_pem: string;
+            common_name: string;
+            /** Format: date-time */
+            created_at: string;
+            extended_key_usages?: string[];
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            max_path_len: number;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: uuid */
+            parent_id?: string;
+            permitted_dns_names?: string[];
+            serial: string;
+            signer_handle: string;
+            status: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        CAAuthorityList: {
+            items: components["schemas"]["CAAuthority"][];
+            next_cursor?: string;
+        };
+        CACeremonyStartRequest: {
+            /** @enum {string} */
+            operation: "create_root" | "create_intermediate";
+            /** Format: uuid */
+            parent_id?: string;
+            spec: components["schemas"]["CASpec"];
+            threshold: number;
+        };
+        CACreateIntermediateRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            /** Format: uuid */
+            parent_id: string;
+            spec: components["schemas"]["CASpec"];
+        };
+        CACreateRootRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            spec: components["schemas"]["CASpec"];
+        };
+        CAIssueLeafRequest: {
+            csr_pem: string;
+            ttl_seconds?: number;
+        };
+        CAIssuedLeaf: {
+            certificate_pem: string;
+            /** Format: date-time */
+            not_after: string;
+            serial: string;
+        };
+        CAKeyCeremony: {
+            approvals: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            opener?: string;
+            purpose: string;
+            status: string;
+            /** Format: uuid */
+            tenant_id: string;
+            threshold: number;
+        };
+        CASpec: {
+            common_name: string;
+            extended_key_usages?: string[];
+            max_path_len?: number;
+            permitted_dns_domains?: string[];
+            signature_algorithm?: string;
+            ttl_seconds?: number;
+        };
+        CBOMAsset: {
+            algorithm?: string;
+            cipher?: string;
+            /** Format: uuid */
+            id: string;
+            key_bits?: number;
+            kind: string;
+            library?: string;
+            location: string;
+            migration_generation: string;
+            migration_standard: string;
+            migration_target: string;
+            out_of_policy: boolean;
+            protocol?: string;
+            quantum_vulnerable: boolean;
+            reasons?: string[];
+            strength: string;
+        };
+        CBOMInventory: {
+            items: components["schemas"]["CBOMAsset"][];
+            migration_progress: components["schemas"]["CBOMMigrationProgress"];
+        };
+        CBOMMigrationProgress: {
+            out_of_policy_assets: number;
+            percent_migrated: number;
+            post_quantum_ready_assets: number;
+            quantum_vulnerable_assets: number;
+            total_assets: number;
+        };
+        CBOMReport: {
+            failed: number;
+            findings: number;
+            out_of_policy: number;
+            quantum_vulnerable: number;
+            sources: number;
+            weak: number;
+        };
+        CBOMScan: {
+            migration_progress: components["schemas"]["CBOMMigrationProgress"];
+            report: components["schemas"]["CBOMReport"];
+        };
+        CBOMScanRequest: {
+            host_configs?: string[];
+            tls_endpoints?: string[];
         };
         Certificate: {
             /** Format: date-time */
@@ -1341,7 +1796,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "secret_store" | "api_key" | "agent" | "manual";
+            kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
             name: string;
             /** Format: uuid */
             tenant_id: string;
@@ -1355,12 +1810,70 @@ export interface components {
         DiscoverySourceRequest: {
             config?: Record<string, never>;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "secret_store" | "api_key" | "agent" | "manual";
+            kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
             name: string;
         };
         EnrollmentToken: {
             enroll_path?: string;
             token: string;
+        };
+        EphemeralApproval: {
+            action: string;
+            approvals: number;
+            approver: string;
+            resource: string;
+        };
+        EphemeralApprovalRequest: {
+            /** @enum {string} */
+            action: "issue";
+        };
+        EphemeralCredential: {
+            approvals: number;
+            attestation: components["schemas"]["Attestation"];
+            /** Format: uuid */
+            certificate_id?: string;
+            certificate_pem?: string;
+            credential_id?: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            not_after?: string;
+            request_id: string;
+            required_approvals: number;
+            /** @enum {string} */
+            state: "awaiting_approval" | "issued";
+            subject: string;
+        };
+        EphemeralCredentialRequest: {
+            method: string;
+            payload_base64: string;
+            public_key_pem: string;
+            request_id: string;
+            ttl_seconds?: number;
+        };
+        ExternalCA: {
+            id: string;
+            name: string;
+            status: string;
+            type: string;
+        };
+        ExternalCAIssueRequest: {
+            csr_pem: string;
+            dns_names: string[];
+            profile_name?: string;
+            requested_ekus?: string[];
+            ttl_seconds?: number;
+        };
+        ExternalCAIssuedCertificate: {
+            certificate_pem: string;
+            issuer: string;
+            /** Format: date-time */
+            not_after: string;
+            serial: string;
+        };
+        ExternalCAList: {
+            items: components["schemas"]["ExternalCA"][];
+            next_cursor?: string;
         };
         GraphEdge: {
             from: string;
@@ -1636,6 +2149,37 @@ export interface components {
         PKISecretRequest: {
             common_name: string;
             ttl_seconds?: number;
+        };
+        PQCMigration: {
+            effective_algorithm: string;
+            migration_progress: components["schemas"]["CBOMMigrationProgress"];
+            protocol: string;
+            queued: number;
+            /** Format: date-time */
+            queued_at: string;
+            rollback_configured: boolean;
+            /** Format: uuid */
+            run_id: string;
+            target_algorithm: string;
+        };
+        PQCMigrationRequest: {
+            asset_ids: string[];
+            protocol?: string;
+            rollback_on_failure?: boolean;
+            target_algorithm: string;
+        };
+        PQCMigrationRollback: {
+            migration_progress: components["schemas"]["CBOMMigrationProgress"];
+            queued: number;
+            /** Format: date-time */
+            queued_at: string;
+            reason: string;
+            /** Format: uuid */
+            run_id: string;
+        };
+        PQCMigrationRollbackRequest: {
+            asset_ids: string[];
+            reason?: string;
         };
         PrivacyCatalog: {
             items: components["schemas"]["PrivacyCatalogEntry"][];
@@ -2498,6 +3042,416 @@ export interface operations {
             };
         };
     };
+    issueBrokerAgentIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrokerAgentIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokerAgentIdentity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCAAuthorities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthorityList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createIntermediateCA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACreateIntermediateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createRootCA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACreateRootRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueHierarchyLeaf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAIssueLeafRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAIssuedLeaf"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createCACeremony: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACeremonyStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAKeyCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCACeremony: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAKeyCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveCACeremony: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAKeyCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCBOMAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBOMInventory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startCBOMScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CBOMScanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBOMScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listCertificates: {
         parameters: {
             query?: {
@@ -3104,6 +4058,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueEphemeralCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EphemeralCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EphemeralCredential"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveEphemeralCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ephemeral JIT request id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EphemeralApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EphemeralApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listExternalCAs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalCAList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueExternalCA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description configured external CA registry id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalCAIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalCAIssuedCertificate"];
                 };
             };
             /** @description client error */
@@ -4292,6 +5416,93 @@ export interface operations {
             };
         };
     };
+    startPQCMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigration"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rollbackPQCMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description PQC migration run id */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PQCMigrationRollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PQCMigrationRollback"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getPrivacyCatalog: {
         parameters: {
             query?: never;
@@ -5056,6 +6267,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueAttestedSVID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttestedSVIDRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttestedSVID"];
+                };
             };
             /** @description client error */
             "4XX": {

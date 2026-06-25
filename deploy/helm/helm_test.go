@@ -579,10 +579,10 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 	containsAll(t, "values.yaml HA disclosure", values, "RESIL-002", "leader election")
 	dr := readDoc(t, "disaster-recovery.md")
 	containsAll(t, "disaster-recovery HA disclosure", dr,
-		"High availability", "leader election", "RESIL-002")
+		"High availability", "leader election", "shared storage")
 	lim := readDoc(t, "limitations.md")
 	containsAll(t, "limitations multi-replica HA disclosure", lim,
-		"Multi-replica HA", "leader election", "RESIL-002")
+		"Multi-replica HA", "leader election", "multi-replica by")
 }
 
 // renderDeployment renders templates/deployment.yaml with the given Values map,
@@ -702,7 +702,7 @@ func TestImageDigestRendersImmutableReference(t *testing.T) {
 	const digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
 	v := defaultishValues()
 	image := v["image"].(map[string]any)
-	image["repository"] = "ghcr.io/imfeelingtheagi/trstctl"
+	image["repository"] = "ghcr.io/ctlplne/trstctl"
 	image["tag"] = "latest"
 	image["digest"] = digest
 
@@ -719,7 +719,7 @@ func TestImageDigestRendersImmutableReference(t *testing.T) {
 	if pod == nil {
 		t.Fatal("rendered chart has no control-plane Deployment pod spec")
 	}
-	want := "ghcr.io/imfeelingtheagi/trstctl@" + digest
+	want := "ghcr.io/ctlplne/trstctl@" + digest
 	for _, c := range asMaps(pod["containers"]) {
 		if got, _ := c["image"].(string); got != want {
 			t.Fatalf("container %s image = %q, want %q", c["name"], got, want)

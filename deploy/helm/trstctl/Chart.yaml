@@ -24,12 +24,12 @@ keywords:
   - acme
   - non-human-identity
   - certificate-lifecycle
-home: https://github.com/imfeelingtheagi/trstctl
+home: https://github.com/ctlplne/trstctl
 sources:
-  - https://github.com/imfeelingtheagi/trstctl
+  - https://github.com/ctlplne/trstctl
 maintainers:
   - name: trstctl maintainers
-    url: https://github.com/imfeelingtheagi/trstctl
+    url: https://github.com/ctlplne/trstctl
 annotations:
   # Supported signer topologies:
   # - sidecar (default): co-located signer over an in-memory UDS, no network surface.

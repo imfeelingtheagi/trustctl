@@ -3,6 +3,7 @@ package main
 import (
 	"golang.org/x/tools/go/analysis/multichecker"
 
+	"trstctl.com/trstctl/tools/trstctllint/cryptoagility"
 	"trstctl.com/trstctl/tools/trstctllint/cryptoboundary"
 	"trstctl.com/trstctl/tools/trstctllint/eventsource"
 	"trstctl.com/trstctl/tools/trstctllint/idempotency"
@@ -17,5 +18,6 @@ func main() {
 		keymaterial.Analyzer,    // AN-8
 		idempotency.Analyzer,    // AN-5
 		eventsource.Analyzer,    // AN-2
+		cryptoagility.Analyzer,  // PQC-00
 	)
 }

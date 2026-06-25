@@ -296,9 +296,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
 	switch req.Kind {
-	case "network", "ssh", "cloud_certificate", "secret_store", "api_key", "agent", "manual":
+	case "network", "ssh", "cloud_certificate", "ct_log", "drift", "secret_store", "api_key", "agent", "manual":
 	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, secret_store, api_key, agent, manual")
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, ct_log, drift, secret_store, api_key, agent, manual")
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -346,6 +346,9 @@ func inlineSecretKey(key string) bool {
 	k := strings.ToLower(strings.ReplaceAll(key, "-", "_"))
 	if strings.Contains(k, "ref") || strings.Contains(k, "name") || strings.Contains(k, "id") {
 		return false
+	}
+	if strings.Contains(k, "secret") || strings.Contains(k, "password") || strings.Contains(k, "passphrase") || strings.Contains(k, "token") {
+		return true
 	}
 	switch k {
 	case "password", "passphrase", "secret", "token", "private_key", "privatekey", "credential", "value":

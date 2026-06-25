@@ -34,6 +34,16 @@ var commandTable = []Command{
 	{Name: []string{"issuers", "list"}, Method: "GET", Path: "/api/v1/issuers", Query: []string{"limit", "cursor"}, Summary: "List issuers"},
 	{Name: []string{"issuers", "get"}, Method: "GET", Path: "/api/v1/issuers/{id}", Summary: "Get an issuer"},
 
+	{Name: []string{"ca", "ceremonies", "start"}, Method: "POST", Path: "/api/v1/ca/ceremonies", Body: bodyFile, Summary: "Start an m-of-n CA key ceremony"},
+	{Name: []string{"ca", "ceremonies", "get"}, Method: "GET", Path: "/api/v1/ca/ceremonies/{id}", Summary: "Get a CA key ceremony"},
+	{Name: []string{"ca", "ceremonies", "approve"}, Method: "POST", Path: "/api/v1/ca/ceremonies/{id}/approvals", Body: bodyNone, Summary: "Approve a CA key ceremony"},
+	{Name: []string{"ca", "authorities", "list"}, Method: "GET", Path: "/api/v1/ca/authorities", Summary: "List private CA authorities"},
+	{Name: []string{"ca", "authorities", "create-root"}, Method: "POST", Path: "/api/v1/ca/authorities/roots", Body: bodyFile, Summary: "Create a signer-backed root CA after ceremony quorum"},
+	{Name: []string{"ca", "authorities", "create-intermediate"}, Method: "POST", Path: "/api/v1/ca/authorities/intermediates", Body: bodyFile, Summary: "Create a signer-backed intermediate CA after ceremony quorum"},
+	{Name: []string{"ca", "authorities", "issue"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/issue", Body: bodyFile, Summary: "Issue a leaf certificate from a private CA authority"},
+	{Name: []string{"external-cas", "list"}, Method: "GET", Path: "/api/v1/external-cas", Summary: "List configured upstream CA integrations"},
+	{Name: []string{"external-cas", "issue"}, Method: "POST", Path: "/api/v1/external-cas/{id}/issue", Body: bodyFile, Summary: "Issue a certificate through an upstream CA integration"},
+
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
@@ -43,6 +53,11 @@ var commandTable = []Command{
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
+
+	{Name: []string{"workloads", "attested-issuance"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance", Body: bodyFile, Summary: "Issue an attested X.509-SVID"},
+	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
+	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
+	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyFile, Summary: "Approve an ephemeral JIT credential request"},
 
 	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},
 	{Name: []string{"discovery", "sources", "list"}, Method: "GET", Path: "/api/v1/discovery/sources", Query: []string{"limit", "cursor"}, Summary: "List discovery sources"},
@@ -84,6 +99,7 @@ var commandTable = []Command{
 	{Name: []string{"privacy", "erasures", "list"}, Method: "GET", Path: "/api/v1/privacy/subject-erasures", Query: []string{"limit", "cursor"}, Summary: "List subject-erasure evidence"},
 	{Name: []string{"privacy", "retention", "run"}, Method: "POST", Path: "/api/v1/privacy/retention-runs", Body: bodyNone, Summary: "Run non-audit personal-data retention"},
 	{Name: []string{"privacy", "retention", "list"}, Method: "GET", Path: "/api/v1/privacy/retention-runs", Query: []string{"limit", "cursor"}, Summary: "List retention evidence"},
+	{Name: []string{"privacy", "export"}, Method: "POST", Path: "/api/v1/privacy/subject-exports", Body: bodyFile, Summary: "Export all records tied to a data subject"},
 	{Name: []string{"privacy", "catalog"}, Method: "GET", Path: "/api/v1/privacy/catalog", Summary: "Get the personal-data catalog"},
 
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
@@ -92,6 +108,10 @@ var commandTable = []Command{
 	{Name: []string{"graph", "query"}, Method: "POST", Path: "/api/v1/graph/query", Body: bodyCypher, Summary: "Run a Cypher-style query"},
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},
+	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
+	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and PQC migration progress"},
+	{Name: []string{"pqc", "migrations", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Queue PQC re-issuance for CBOM assets"},
+	{Name: []string{"pqc", "migrations", "rollback"}, Method: "POST", Path: "/api/v1/pqc/migrations/{run_id}/rollback", Body: bodyFile, Summary: "Queue rollback for a PQC migration run"},
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyNone, Summary: "Mint a one-time agent bootstrap token"},

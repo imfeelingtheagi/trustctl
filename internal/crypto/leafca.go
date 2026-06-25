@@ -70,6 +70,10 @@ type LeafProfile struct {
 	// omits the extension.
 	CertificatePolicyOIDs []string
 
+	// ExtraExtensions are non-core X.509 extensions already DER-encoded by another
+	// crypto-boundary helper. They are covered by the certificate signature.
+	ExtraExtensions []CertificateExtension
+
 	// Constraints enforced before signing (PKIGOV-002). A request that exceeds them
 	// is rejected with ErrLeafProfileViolation rather than signed. A zero field is
 	// "unconstrained" so the legacy/empty profile enforces nothing.
@@ -178,6 +182,13 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		CRLDistributionPoints: prof.CRLDistributionPoints,
 		OCSPServer:            prof.OCSPServers,
 		IssuingCertificateURL: prof.IssuingCertificateURL,
+	}
+	if len(prof.ExtraExtensions) > 0 {
+		extra, err := x509Extensions(prof.ExtraExtensions)
+		if err != nil {
+			return nil, err
+		}
+		leaf.ExtraExtensions = append(leaf.ExtraExtensions, extra...)
 	}
 	// Authority Key Identifier from the issuing CA's SKI (when it has one) so the
 	// AKI is present and correct even though we set the leaf SKI ourselves.
@@ -487,6 +498,22 @@ func leafKeyUsage(u *KeyUsages) x509.KeyUsage {
 		ku = x509.KeyUsageDigitalSignature
 	}
 	return ku
+}
+
+func x509Extensions(exts []CertificateExtension) ([]pkix.Extension, error) {
+	out := make([]pkix.Extension, 0, len(exts))
+	for _, ext := range exts {
+		oid, err := parseOID(ext.OID)
+		if err != nil {
+			return nil, fmt.Errorf("crypto: extension OID %q: %w", ext.OID, err)
+		}
+		out = append(out, pkix.Extension{
+			Id:       oid,
+			Critical: ext.Critical,
+			Value:    append([]byte(nil), ext.Value...),
+		})
+	}
+	return out, nil
 }
 
 func leafKeyUsageForProfile(prof LeafProfile) x509.KeyUsage {

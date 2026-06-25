@@ -237,7 +237,7 @@ The signer seals its keys with the **same KEK** as credentials
 (`TRSTCTL_SECRETS_KEK_FILE`). Back up the sealed key store, the KEK, and the CA cert
 together (the CA-key recovery set) per the
 [disaster-recovery runbook](disaster-recovery.md). The
-[`docker-compose.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/docker/docker-compose.yml)
+[`docker-compose.yml`](https://github.com/ctlplne/trstctl/blob/main/deploy/docker/docker-compose.yml)
 runs the signer as its **own service** in `external` mode.
 
 ## Regulated CA governance mode
@@ -365,6 +365,7 @@ that is actually saturating.
 | `TRSTCTL_BULKHEAD_POLICY_WORKERS` / `TRSTCTL_BULKHEAD_POLICY_QUEUE` | `4` / `64` | OPA/Rego policy gate work. Saturation fails closed rather than blocking issuance. |
 | `TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS` / `TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE` | `8` / `256` | ACME/EST/SCEP/CMP/SPIFFE/SSH/TSA enrollment protocol work. |
 | `TRSTCTL_BULKHEAD_AGENT_WORKERS` / `TRSTCTL_BULKHEAD_AGENT_QUEUE` | `16` / `1024` | Agent heartbeat and renewal fan-in. Raise this first for large agent fleets. |
+| `TRSTCTL_BULKHEAD_CBOM_WORKERS` / `TRSTCTL_BULKHEAD_CBOM_QUEUE` | `4` / `64` | CBOM TLS/config scans. Raise only when broad crypto-inventory sweeps are saturating and PostgreSQL/NATS have headroom. |
 
 Fleet-size guidance:
 
@@ -372,7 +373,7 @@ Fleet-size guidance:
 | --- | --- |
 | Single-node eval or small production | Use defaults; tune only after `trstctl_*_bulkhead_*` rejection metrics show pressure. |
 | About 1k agents | Increase agent queue first (for example 2048), then agent workers if PostgreSQL/signing have headroom. |
-| Very large fleets | Scale agent, protocols, and outbox independently; keep API workers modest so operator traffic stays responsive while waves shed elsewhere. |
+| Very large fleets | Scale agent, protocols, CBOM, and outbox independently; keep API workers modest so operator traffic stays responsive while waves shed elsewhere. |
 
 `trstctl --check-config` prints the effective `bulkheads.<subsystem>.workers` and
 `bulkheads.<subsystem>.queue` values, so CI/CD can diff the resolved runtime limits

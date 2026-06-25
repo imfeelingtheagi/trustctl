@@ -65,6 +65,15 @@ time). One denial is terminal. When the quorum is met, trstctl issues and transi
 terminal, so a retry never double-acts, and every step is recorded as an immutable event
 (`approval.requested/approved/denied/issued/expired/refused`).
 
+**Status:** the core identity approval gate is served through
+`POST /api/v1/identities/{id}/approvals`, and ephemeral/JIT credential issuance is
+served when configured through `POST /api/v1/ephemeral` plus
+`POST /api/v1/ephemeral/{request_id}/approvals`. The ephemeral path verifies the
+attestation first, writes the approval request and outbox notification intent in the
+same tenant transaction, blocks requester self-approval, then mints a short-TTL
+credential only after a distinct approver records approval. CLI parity is
+`trstctl-cli ephemeral issue` and `trstctl-cli ephemeral approve`.
+
 ### Break-glass procedures (F34)
 
 If the control plane is unreachable during an incident, you still need to be able to

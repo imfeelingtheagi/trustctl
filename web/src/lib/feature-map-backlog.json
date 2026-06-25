@@ -255,58 +255,92 @@
       "domain": "Discovery and inventory",
       "phase": "P1",
       "priority": 20,
-      "served_state": "partial",
-      "backend_status": "partial served agent enrollment plus agent-side loops",
-      "current_frontend_mapping": "thin: Wizard can inspect agents and mint enrollment tokens; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
+      "current_frontend_mapping": "thin: Wizard can inspect agents and mint enrollment tokens; served inventory report evidence is visible through discovery findings, graph, and /coverage",
       "target_gui_mapping": "Agent fleet page with enrollment, heartbeat, capabilities, discovery sources, last scan, drift summary, renewal state, and per-tenant health.",
-      "acceptance_test": "Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
+      "acceptance_test": "Served Go tests cover agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
       "source_docs": ["docs/features/discovery-and-inventory.md"],
-      "source_backend": ["/api/v1/agents", "/api/v1/agents/enrollment-tokens"],
+      "source_backend": [
+        "/api/v1/agents",
+        "/api/v1/agents/enrollment-tokens",
+        "/api/v1/discovery/findings",
+        "/api/v1/graph",
+        "internal/server/agentchannel.go",
+        "internal/agent/transport/agentservice.go",
+        "internal/agent/discovery/truststore.go",
+        "internal/agent/discovery/privatekey.go",
+        "internal/crypto/keyinspect.go",
+        "internal/crypto/jks/jks.go",
+        "cmd/trstctl-agent/main.go"
+      ],
       "source_frontend": ["web/src/pages/Wizard.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listAgents", "createEnrollmentToken"],
+      "notes": "Closed by /coverage feature-map hub and advanced by DISC-01/DISC-03. Backend evidence: served agent mTLS ReportInventory batches are bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the credential graph. DISC-02 adds OS, Java JKS/cacerts, NSS, browser, and Windows trust-store collectors that report public trust anchors with private_key_present=false. DISC-03 adds private-key-material discovery that classifies key files locally, wipes file buffers, and reports private_key findings with key_bytes_present=false.",
+      "api_surface": ["listAgents", "createEnrollmentToken", "listDiscoveryFindings", "getGraph"],
       "api_na": "",
-      "cli_surface": ["agents list", "agents enroll-token"],
+      "cli_surface": ["agents list", "agents enroll-token", "discovery findings list", "graph nodes"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=partial served agent enrollment plus agent-side loops"]
+          "evidence": [
+            "served_state=served",
+            "backend_status=served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
+            "AgentService.ReportInventory runs behind the agent bulkhead and records tenant-scoped discovery source/run/finding rows plus graph credential nodes.",
+            "Trust-store collectors enumerate OS, Java JKS/cacerts, NSS, browser, and Windows fixture anchors as public certificate metadata only.",
+            "Private-key-material collector reports private_key findings with format, algorithm, restricted-file metadata, and public-key-derived fingerprint only."
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: Wizard can inspect agents and mint enrollment tokens; coverage ledger: /coverage",
+            "current_frontend_mapping: thin: Wizard can inspect agents and mint enrollment tokens; served inventory report evidence is visible through discovery findings, graph, and /coverage",
             "target_gui_mapping: Agent fleet page with enrollment, heartbeat, capabilities, discovery sources, last scan, drift summary, renewal state, and per-tenant health."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx", "web/src/pages/Wizard.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: agents list", "CLI command: agents enroll-token"],
+          "evidence": ["CLI command: agents list", "CLI command: agents enroll-token", "CLI command: discovery findings list", "CLI command: graph nodes"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listAgents", "OpenAPI operationId: createEnrollmentToken"],
+          "evidence": [
+            "OpenAPI operationId: listAgents",
+            "OpenAPI operationId: createEnrollmentToken",
+            "OpenAPI operationId: listDiscoveryFindings",
+            "OpenAPI operationId: getGraph"
+          ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
+            "acceptance_test: Served Go tests cover agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
+            "TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph covers agent inventory over the served channel into discovery readback and graph readback.",
+            "TestServedTrustStoreCollectorsReportOverAgentChannel covers Linux, Java, NSS, browser, and Windows trust-store fixtures through the served agent channel.",
+            "TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly covers private-key discovery fixtures through the served agent channel and asserts no PEM key bytes appear in served findings.",
+            "TestTrustStoreSourcesDiscoverPublicAnchors covers the collector layer before channel reporting.",
+            "TestPrivateKeySourceDiscoversMetadataOnly covers agent-side private-key classification before channel reporting.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/agentchannel_served_test.go",
+            "internal/agent/discovery/discovery_test.go",
+            "internal/agent/discovery/privatekey_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/discovery-and-inventory.md"],
+          "evidence": [
+            "documented in docs/features/discovery-and-inventory.md",
+            "Agent trust-store and private-key inventory flags plus metadata-only behavior are documented for operators."
+          ],
           "refs": ["docs/features/discovery-and-inventory.md"]
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken, listDiscoveryFindings, getGraph",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -319,14 +353,17 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: listAgents, createEnrollmentToken",
-            "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
+            "mutating served surface requires audit/event evidence: listAgents, createEnrollmentToken, listDiscoveryFindings, getGraph",
+            "Agent inventory reports emit discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events before read models and graph nodes are inspected."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
+          "refs": ["internal/server/agentchannel.go", "internal/orchestrator/discovery.go", "internal/server/agentchannel_served_test.go"]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.",
+            "Agent inventory ingest shares the bounded agent worker lane, so heartbeat, renewal, and inventory storms fail fast instead of starving API or signer work."
+          ],
+          "refs": ["internal/server/agentchannel.go", "internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -346,14 +383,17 @@
       "phase": "P2",
       "priority": 45,
       "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records; SSH scan execution remains agent/library-owned",
+      "backend_status": "served discovery control-plane source/run/finding records plus served agent private-key-material reports; SSH public-key scan execution remains agent/library-owned",
       "current_frontend_mapping": "partial: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen.",
       "target_gui_mapping": "SSH inventory page showing discovered authorized_keys, trusted CAs, host keys, standing access, weak trust, and agent source evidence.",
-      "acceptance_test": "UI and API tests must prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+      "acceptance_test": "Served Go tests prove private-key-material discovery reports metadata-only private_key findings over the agent channel; UI and API tests prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
       "source_docs": ["docs/features/discovery-and-inventory.md", "docs/features/ssh.md"],
       "source_backend": [
         "internal/agent/sshdiscovery",
+        "internal/agent/discovery/privatekey.go",
+        "internal/crypto/keyinspect.go",
         "internal/sshinv",
+        "cmd/trstctl-agent/main.go",
         "/api/v1/discovery/sources",
         "/api/v1/discovery/schedules",
         "/api/v1/discovery/runs",
@@ -361,7 +401,7 @@
       ],
       "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "Closed by /coverage feature-map hub and advanced by DISC-03. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. DISC-03 evidence: TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly plants a private-key fixture, classifies it through internal/crypto, reports it over the served agent channel, and verifies served findings plus graph nodes contain only metadata with key_bytes_present=false. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -387,9 +427,17 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "SSH discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records; execution-specific SSH scanning remains behind agent/library code."
+            "SSH discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records; execution-specific SSH public-key scanning remains behind agent/library code.",
+            "DISC-03 wires private-key-material discovery through the served agent channel as metadata-only private_key findings."
           ],
-          "refs": ["internal/api/discovery.go", "internal/server/discovery.go", "internal/agent/sshdiscovery", "internal/agent/sshtrust"]
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/agent/sshdiscovery",
+            "internal/agent/discovery/privatekey.go",
+            "internal/crypto/keyinspect.go",
+            "internal/agent/sshtrust"
+          ]
         },
         "ui": {
           "evidence": [
@@ -425,18 +473,27 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI and API tests must prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+            "acceptance_test: Served Go tests prove private-key-material discovery reports metadata-only private_key findings over the agent channel; UI and API tests prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+            "TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly covers host fixture key discovery, served mTLS inventory reporting, discovery readback, graph readback, and no PEM key bytes in served findings.",
+            "TestInspectPrivateKeyReturnsPublicMetadataOnly and TestPrivateKeySourceDiscoversMetadataOnly cover crypto-boundary classification and agent-side metadata-only collection.",
             "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/agentchannel_served_test.go",
+            "internal/crypto/keyinspect_test.go",
+            "internal/agent/discovery/privatekey_test.go",
             "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/discovery-and-inventory.md", "documented in docs/features/ssh.md"],
+          "evidence": [
+            "documented in docs/features/discovery-and-inventory.md",
+            "DISC-03 private-key-material discovery flags and metadata-only behavior are documented for operators.",
+            "documented in docs/features/ssh.md"
+          ],
           "refs": ["docs/features/discovery-and-inventory.md", "docs/features/ssh.md"]
         },
         "rbac": {
@@ -477,14 +534,18 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 46,
-      "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records; cloud API execution remains connector-owned",
-      "current_frontend_mapping": "partial: Discovery at /discovery serves cloud_certificate sources, schedules, runs, and metadata-only findings with credential references only; /secrets stores sealed references.",
+      "served_state": "served",
+      "backend_status": "served discovery control-plane source/run/finding records plus outbox-executed AWS ACM, Azure Key Vault, and GCP Certificate Manager enumeration with credential references",
+      "current_frontend_mapping": "partial: Discovery at /discovery serves cloud_certificate sources, schedules, runs, and metadata-only findings with credential references only; provider execution is observable through run/finding status.",
       "target_gui_mapping": "Cloud discovery source UI for AWS/Azure/GCP account connectors, scoped credentials, dry-run, imported certificate preview, and scheduler status.",
-      "acceptance_test": "UI and API tests must prove cloud_certificate discovery sources use credential references only, can be scheduled and run, and never ask for raw cloud credentials.",
+      "acceptance_test": "Served Go tests prove a cloud_certificate run inventories ACM-compatible certificates through credential references, records discovery findings and certificate inventory, and never stores inline cloud credentials; UI/API tests prove source/run/finding rendering stays metadata-only.",
       "source_docs": ["docs/features/discovery-and-inventory.md"],
       "source_backend": [
         "internal/discovery/cloudcert",
+        "internal/discovery/cloudcert/acmdisc",
+        "internal/discovery/cloudcert/gcmdisc",
+        "internal/discovery/cloudcert/kvdisc",
+        "internal/server/discovery.go",
         "/api/v1/discovery/sources",
         "/api/v1/discovery/schedules",
         "/api/v1/discovery/runs",
@@ -492,7 +553,7 @@
       ],
       "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "Closed by /coverage feature-map hub and advanced by DISC-04. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. DISC-04 evidence: TestServedCloudCertificateDiscoveryACMEndToEnd creates a cloud_certificate source with env credential references, runs an ACM-compatible backend through the served outbox worker, records discovery findings plus certificate inventory, and proves only read-only ACM List/Get operations were invoked. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are mapped; cloud execution is served for AWS ACM/Azure Key Vault/GCP Certificate Manager while SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -518,13 +579,21 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "Cloud certificate discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records with credential references only; provider-specific execution stays connector-owned."
+            "Cloud certificate discovery is served as tenant-scoped discovery source, schedule, run, and finding records with credential references only.",
+            "The served discovery outbox worker constructs AWS ACM, Azure Key Vault, and GCP Certificate Manager enumerators and records findings plus certificate inventory."
           ],
-          "refs": ["internal/api/discovery.go", "internal/server/discovery.go", "internal/discovery/cloudcert", "internal/secrets"]
+          "refs": [
+            "internal/api/discovery.go",
+            "internal/server/discovery.go",
+            "internal/discovery/cloudcert",
+            "internal/discovery/cloudcert/acmdisc",
+            "internal/discovery/cloudcert/gcmdisc",
+            "internal/discovery/cloudcert/kvdisc"
+          ]
         },
         "ui": {
           "evidence": [
-            "partial: Discovery at /discovery serves cloud_certificate sources, schedules, runs, and metadata-only findings with credential references only; /secrets stores sealed references."
+            "partial: Discovery at /discovery serves cloud_certificate sources, schedules, runs, and metadata-only findings with credential references only; provider execution is observable through run/finding status."
           ],
           "refs": ["web/src/pages/Discovery.tsx", "web/src/__tests__/discovery.test.tsx", "web/src/lib/api.ts"]
         },
@@ -556,18 +625,25 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI and API tests must prove cloud_certificate discovery sources use credential references only, can be scheduled and run, and never ask for raw cloud credentials.",
+            "acceptance_test: Served Go tests prove a cloud_certificate run inventories ACM-compatible certificates through credential references, records discovery findings and certificate inventory, and never stores inline cloud credentials; UI/API tests prove source/run/finding rendering stays metadata-only.",
+            "TestServedCloudCertificateDiscoveryACMEndToEnd covers cloud source creation, outbox execution, ACM-compatible enumeration, discovery findings, certificate inventory, and read-only List/Get operation enforcement.",
+            "TestValidateDiscoverySourceRequiresCredentialReferences rejects inline secret_access_key and accepts *_ref cloud credential config.",
             "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/discovery_served_test.go",
+            "internal/api/discovery_test.go",
             "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/discovery-and-inventory.md"],
+          "evidence": [
+            "documented in docs/features/discovery-and-inventory.md",
+            "Cloud provider execution, credential-reference config, and emulator/private-endpoint behavior are documented for operators."
+          ],
           "refs": ["docs/features/discovery-and-inventory.md"]
         },
         "rbac": {
@@ -895,44 +971,75 @@
       "domain": "Observability and risk",
       "phase": "P2",
       "priority": 49,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Posture at /posture - CT monitor library-only disclosure plus non-interactive triage preview; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served",
+      "current_frontend_mapping": "observe: Discovery at /discovery runs ct_log sources and lists findings; Posture at /posture discloses dedicated CT dashboard/watchlist gaps; coverage ledger: /coverage",
       "target_gui_mapping": "CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings.",
-      "acceptance_test": "UI route must show disabled/library-only state until scheduler is served; fixtures must cover unexpected issuance triage.",
+      "acceptance_test": "Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI keeps the dedicated CT dashboard gap visible.",
       "source_docs": ["docs/features/observability-and-risk.md"],
-      "source_backend": ["internal/discovery/ctmonitor"],
-      "source_frontend": [],
+      "source_backend": ["internal/discovery/ctmonitor", "internal/server/discovery.go"],
+      "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/pages/Posture.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "Served discovery worker accepts source kind ct_log, polls CT logs through a bounded lane, persists checkpoints, records ct_unexpected_issuance findings, and enqueues notification.unexpected_issuance alerts.",
+            "Dedicated CT dashboard/watchlist management remains outside the served UI, so the feature is partial rather than fully served."
+          ],
+          "refs": ["internal/server/discovery.go", "internal/server/ct_drift_served_test.go", "internal/discovery/ctmonitor"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Posture at /posture - CT monitor library-only disclosure plus non-interactive triage preview; coverage ledger: /coverage",
+            "current_frontend_mapping: observe: Discovery at /discovery runs ct_log sources and lists findings; Posture at /posture discloses dedicated CT dashboard/watchlist gaps; coverage ledger: /coverage",
             "target_gui_mapping: CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/pages/Discovery.tsx", "web/src/pages/Posture.tsx", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for ct_log sources through the generic discovery surface.",
+            "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by ct_log sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings."
+          ],
+          "refs": ["internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI route must show disabled/library-only state until scheduler is served; fixtures must cover unexpected issuance triage.",
+            "acceptance_test: Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI keeps the dedicated CT dashboard gap visible.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ct_drift_served_test.go",
+            "web/src/__tests__/posture.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -943,13 +1050,22 @@
           "refs": ["docs/features/observability-and-risk.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps Discovery API operations to discovery:read/discovery:write permissions; OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations."
+          ],
+          "refs": ["internal/featureparity/authz_manifest.go", "internal/api/api.go", "internal/api/openapi.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F17; current mapping is disclosure: Posture at /posture - CT monitor library-only disclosure plus non-interactive triage preview; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery source creation, run queue/start/complete, and finding recording emit immutable discovery.* events; CT alerts are enqueued through the outbox with idempotency keys."
+          ],
+          "refs": ["internal/server/discovery.go", "internal/store/discovery.go", "internal/server/ct_drift_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F17 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": ["internal/server/discovery.go", "internal/store/discovery.go", "web/src/pages/Discovery.tsx"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -968,44 +1084,75 @@
       "domain": "Observability and risk",
       "phase": "P2",
       "priority": 50,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Posture at /posture - drift library-only disclosure plus disabled remediation preview; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served",
+      "current_frontend_mapping": "observe: Discovery at /discovery runs drift sources and lists findings; Posture at /posture discloses remediation/dashboard gaps; coverage ledger: /coverage",
       "target_gui_mapping": "Drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, and remediation action.",
-      "acceptance_test": "UI covers empty, drift-found, resolved, and agent-stale states; destructive actions require explicit confirmation.",
+      "acceptance_test": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding and the UI keeps remediation disabled until a served remediation workflow exists.",
       "source_docs": ["docs/features/observability-and-risk.md"],
-      "source_backend": ["internal/agent/drift"],
-      "source_frontend": [],
+      "source_backend": ["internal/agent/drift", "internal/server/discovery.go"],
+      "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/pages/Posture.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": [
+        "createDiscoverySource",
+        "listDiscoverySources",
+        "createDiscoverySchedule",
+        "listDiscoverySchedules",
+        "startDiscoveryRun",
+        "listDiscoveryRuns",
+        "getDiscoveryRun",
+        "listDiscoveryFindings"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "discovery sources create",
+        "discovery sources list",
+        "discovery schedules create",
+        "discovery schedules list",
+        "discovery runs start",
+        "discovery runs list",
+        "discovery runs get",
+        "discovery findings list"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "Served discovery worker accepts source kind drift, compares watched credential paths against expected fingerprints and permissions, records credential_drift findings, and enqueues notification.drift alerts.",
+            "Dedicated drift resolution/remediation workflows remain outside the served UI, so the feature is partial rather than fully served."
+          ],
+          "refs": ["internal/server/discovery.go", "internal/server/ct_drift_served_test.go", "internal/agent/drift"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Posture at /posture - drift library-only disclosure plus disabled remediation preview; coverage ledger: /coverage",
+            "current_frontend_mapping: observe: Discovery at /discovery runs drift sources and lists findings; Posture at /posture discloses remediation/dashboard gaps; coverage ledger: /coverage",
             "target_gui_mapping: Drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, and remediation action."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/pages/Discovery.tsx", "web/src/pages/Posture.tsx", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for drift sources through the generic discovery surface.",
+            "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by drift sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings."
+          ],
+          "refs": ["internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers empty, drift-found, resolved, and agent-stale states; destructive actions require explicit confirmation.",
+            "acceptance_test: Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding and the UI keeps remediation disabled until a served remediation workflow exists.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ct_drift_served_test.go",
+            "web/src/__tests__/posture.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -1016,13 +1163,22 @@
           "refs": ["docs/features/observability-and-risk.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps Discovery API operations to discovery:read/discovery:write permissions; OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations."
+          ],
+          "refs": ["internal/featureparity/authz_manifest.go", "internal/api/api.go", "internal/api/openapi.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F18; current mapping is disclosure: Posture at /posture - drift library-only disclosure plus disabled remediation preview; coverage ledger: /coverage."
+          "evidence": [
+            "Discovery source creation, run queue/start/complete, and finding recording emit immutable discovery.* events; drift alerts are enqueued through the outbox with idempotency keys."
+          ],
+          "refs": ["internal/server/discovery.go", "internal/store/discovery.go", "internal/server/ct_drift_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F18 has a served API/protocol entrypoint."
+          "evidence": [
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+          ],
+          "refs": ["internal/server/discovery.go", "internal/store/discovery.go", "web/src/pages/Discovery.tsx"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -1127,44 +1283,63 @@
       "domain": "Observability and risk",
       "phase": "P2",
       "priority": 51,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Posture at /posture, /risk - CBOM library-only disclosure plus weak-crypto preview linked to risk; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served-cbom-scan-and-inventory",
+      "current_frontend_mapping": "served CBOM scan/inventory API feeds PQC migration posture; UI remains posture/risk disclosure plus coverage ledger until the dedicated CBOM table lands",
       "target_gui_mapping": "CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations.",
-      "acceptance_test": "UI renders CBOM fixture data without credential values and links weak crypto findings into risk and remediation queues.",
+      "acceptance_test": "internal/server/cbom_served_test.go drives POST /api/v1/cbom/scans over a real TLS endpoint and host config, then reads /api/v1/cbom/assets with FIPS 203/204/205 migration progress.",
       "source_docs": ["docs/features/observability-and-risk.md"],
-      "source_backend": ["internal/cbom"],
+      "source_backend": [
+        "internal/cbom",
+        "internal/api/cbom.go",
+        "internal/server/cbom.go",
+        "internal/store/cryptoasset.go",
+        "internal/projections/projections.go"
+      ],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["startCBOMScan", "listCBOMAssets"],
+      "api_na": "",
+      "cli_surface": ["cbom scan", "cbom assets"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "server.Build wires api.WithCBOM, mounting POST /api/v1/cbom/scans and GET /api/v1/cbom/assets on the served handler.",
+            "internal/server/cbom.go invokes tlssource/hostsource through cbom.Scanner and persists observations after cbom.asset.observed is appended."
+          ],
+          "refs": ["internal/server/server.go", "internal/server/cbom.go", "internal/server/cbom_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Posture at /posture, /risk - CBOM library-only disclosure plus weak-crypto preview linked to risk; coverage ledger: /coverage",
+            "current_frontend_mapping: served CBOM scan/inventory API feeds PQC migration posture; UI remains posture/risk disclosure plus coverage ledger until the dedicated CBOM table lands",
             "target_gui_mapping: CBOM UI showing algorithms, key sizes, TLS versions, weak crypto, PQC posture, source host/service, and policy violations."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "cli_surface: cbom scan posts a CBOM scan request body with an Idempotency-Key.",
+            "cli_surface: cbom assets reads the served CBOM inventory and migration_progress."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "api_surface: startCBOMScan and listCBOMAssets are in the served OpenAPI route registry.",
+            "Responses include CBOM assets, FIPS migration targets, and migration_progress."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/cbom.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI renders CBOM fixture data without credential values and links weak crypto findings into risk and remediation queues.",
+            "acceptance_test: internal/server/cbom_served_test.go scans a real TLS endpoint plus host config and verifies stored CBOM assets, FIPS targets, migration percentage, and cbom.asset.observed.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/cbom_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -1175,13 +1350,24 @@
           "refs": ["docs/features/observability-and-risk.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "POST /api/v1/cbom/scans requires discovery:write; GET /api/v1/cbom/assets requires risk:read.",
+            "Feature authz manifest tests bind both operations to OpenAPI security and route permissions."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F52; current mapping is disclosure: Posture at /posture, /risk - CBOM library-only disclosure plus weak-crypto preview linked to risk; coverage ledger: /coverage."
+          "evidence": [
+            "Each served scan observation appends cbom.asset.observed before the inventory row is projected.",
+            "The event ledger maps F52 scan to cbom.asset.observed for audit filtering."
+          ],
+          "refs": ["internal/server/cbom.go", "internal/eventledger/ledger.go", "internal/projections/projections.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F52 has a served API/protocol entrypoint."
+          "evidence": [
+            "startCBOMScan records a low-cardinality feature telemetry signal with feature=cbom and action=scan through the existing feature observer."
+          ],
+          "refs": ["internal/api/cbom.go", "internal/server/server.go", "internal/observ/feature.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -1201,22 +1387,44 @@
       "phase": "P0",
       "priority": 4,
       "served_state": "partial",
-      "backend_status": "served for built-in path; integrations library-complete",
+      "backend_status": "served for built-in path and configured external CA registry",
       "current_frontend_mapping": "partial: Wizard and Identities can issue through served path; coverage ledger: /coverage",
       "target_gui_mapping": "Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states.",
       "acceptance_test": "E2E UI covers request-only principal denied from self-issue, approver approval, successful issue, idempotent replay, and error state.",
       "source_docs": ["docs/features/issuance-and-cas.md"],
-      "source_backend": ["/api/v1/identities/{id}/transitions"],
+      "source_backend": ["/api/v1/identities/{id}/transitions", "/api/v1/external-cas", "/api/v1/external-cas/{id}/issue"],
       "source_frontend": ["web/src/pages/Identities.tsx", "web/src/pages/Wizard.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["createIssuer", "listIssuers", "getIssuer", "createIdentity", "transitionIdentity", "approveIdentityAction"],
+      "notes": "Closed by /coverage feature-map hub. CLM-03 adds served configured external-CA registry and upstream issuance through listExternalCAs/issueExternalCA plus CLI parity; CLM-04 adds Venafi TPP/TLS Protect as a served registry backend. The GUI remains partial until it models external CA-issued and outbox-pending states directly. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "api_surface": [
+        "createIssuer",
+        "listIssuers",
+        "getIssuer",
+        "createIdentity",
+        "transitionIdentity",
+        "approveIdentityAction",
+        "listExternalCAs",
+        "issueExternalCA"
+      ],
       "api_na": "",
-      "cli_surface": ["issuers create", "issuers list", "issuers get", "identities create", "identities transition", "identities approve"],
+      "cli_surface": [
+        "issuers create",
+        "issuers list",
+        "issuers get",
+        "identities create",
+        "identities transition",
+        "identities approve",
+        "external-cas list",
+        "external-cas issue"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=served for built-in path; integrations library-complete"]
+          "evidence": [
+            "served_state=partial",
+            "backend_status=served for built-in path and configured external CA registry",
+            "Venafi TPP/TLS Protect issues through the CLM-03 registry using the same listExternalCAs/issueExternalCA surface."
+          ]
         },
         "ui": {
           "evidence": [
@@ -1232,7 +1440,9 @@
             "CLI command: issuers get",
             "CLI command: identities create",
             "CLI command: identities transition",
-            "CLI command: identities approve"
+            "CLI command: identities approve",
+            "CLI command: external-cas list",
+            "CLI command: external-cas issue"
           ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
@@ -1243,7 +1453,9 @@
             "OpenAPI operationId: getIssuer",
             "OpenAPI operationId: createIdentity",
             "OpenAPI operationId: transitionIdentity",
-            "OpenAPI operationId: approveIdentityAction"
+            "OpenAPI operationId: approveIdentityAction",
+            "OpenAPI operationId: listExternalCAs",
+            "OpenAPI operationId: issueExternalCA"
           ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
@@ -1265,7 +1477,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction, listExternalCAs, issueExternalCA",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -1278,8 +1490,8 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction",
-            "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
+            "mutating served surface requires audit/event evidence: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction, issueExternalCA",
+            "issueExternalCA routes through ca.IssuanceService, which records the ca.issue outbox row under the inner external-CA idempotency key."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
         },
@@ -1304,44 +1516,71 @@
       "domain": "Issuance and CAs",
       "phase": "P2",
       "priority": 52,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy, /certificates - served issuer table plus m-of-n hierarchy ceremony blocked disclosure; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served",
+      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy, /certificates - served CA hierarchy API now exposes ceremonies, authorities, and signer-backed leaf issuance; coverage ledger: /coverage",
       "target_gui_mapping": "CA hierarchy UI for roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution.",
-      "acceptance_test": "UI must not show create-root controls unless served ceremony APIs exist; interim page shows library-only status and runbook links.",
+      "acceptance_test": "Served test creates a root and intermediate through /api/v1/ca/*, enforces m-of-n ceremony approvals, and issues a leaf from the intermediate.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/runbooks/key-ceremony.md"],
-      "source_backend": ["internal/ca/hierarchy"],
-      "source_frontend": [],
+      "source_backend": [
+        "internal/ca/hierarchy",
+        "internal/api/ca_hierarchy.go",
+        "internal/server/ca_hierarchy.go",
+        "internal/crypto/hierarchy_ca.go",
+        "internal/store/ca.go"
+      ],
+      "source_frontend": ["web/src/pages/CAHierarchy.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub; CLM-02 adds served signer-backed CA hierarchy APIs. Test evidence: internal/server/ca_hierarchy_served_test.go drives server.Build over bearer auth, a real signer process, m-of-n ceremony approvals, root/intermediate creation, and hierarchy leaf issuance.",
+      "api_surface": [
+        "createCACeremony",
+        "getCACeremony",
+        "approveCACeremony",
+        "listCAAuthorities",
+        "createRootCA",
+        "createIntermediateCA",
+        "issueHierarchyLeaf"
+      ],
+      "api_na": "",
+      "cli_surface": ["workloads attested-issuance"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "server.Build wires api.WithCAHierarchy when an isolated signer and dual-control sign authorizer are available.",
+            "CA roots and intermediates are created only after store-backed m-of-n ceremony quorum and use signer-held CA key handles."
+          ],
+          "refs": ["internal/server/ca_hierarchy.go", "internal/api/ca_hierarchy.go", "internal/server/ca_hierarchy_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: CAHierarchy at /ca-hierarchy, /certificates - served issuer table plus m-of-n hierarchy ceremony blocked disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: CAHierarchy at /ca-hierarchy, /certificates - served CA hierarchy API now exposes ceremonies, authorities, and signer-backed leaf issuance; coverage ledger: /coverage",
             "target_gui_mapping: CA hierarchy UI for roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "cli_surface: workloads attested-issuance posts the attestation proof and public key body to the served attested issuance route with an Idempotency-Key."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "api_surface: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, createIntermediateCA, issueHierarchyLeaf are in the served OpenAPI route registry.",
+            "OpenAPI schemas define CACeremonyStartRequest, CAKeyCeremony, CAAuthority, and CAIssuedLeaf."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/ca_hierarchy.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI must not show create-root controls unless served ceremony APIs exist; interim page shows library-only status and runbook links.",
+            "acceptance_test: Served test creates a root and intermediate through /api/v1/ca/*, enforces m-of-n ceremony approvals, and issues a leaf from the intermediate.",
+            "internal/server/ca_hierarchy_served_test.go verifies root before quorum fails, self-approval fails, two custodians satisfy quorum, and the issued leaf verifies against the intermediate.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ca_hierarchy_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -1352,13 +1591,21 @@
           "refs": ["docs/features/issuance-and-cas.md", "docs/runbooks/key-ceremony.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "CA hierarchy route registry maps ceremony/authority reads to issuers:read, ceremony/root/intermediate mutations to issuers:write, and leaf issuance to certs:issue.",
+            "feature authz manifest maps api_surface operations to route permissions: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, createIntermediateCA, issueHierarchyLeaf."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F48; current mapping is disclosure: CAHierarchy at /ca-hierarchy, /certificates - served issuer table plus m-of-n hierarchy ceremony blocked disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "F48 mutating API operations append ca.ceremony.started, ca.ceremony.approved, ca.root.created, ca.intermediate.created, and ca.endentity.issued events.",
+            "eventledger maps the F48 ceremony/create/issue operations to those event types for audit feature filtering."
+          ],
+          "refs": ["internal/server/ca_hierarchy.go", "internal/eventledger/ledger.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F48 has a served API/protocol entrypoint."
+          "na": "N/A: CLM-02 adds audit/event evidence and shared HTTP metrics, but no F48-specific metric is claimed."
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -1467,28 +1714,31 @@
       "domain": "Issuance and CAs",
       "phase": "P2",
       "priority": 53,
-      "served_state": "conditional",
-      "backend_status": "conditional served via ACME; durable state caveat",
-      "current_frontend_mapping": "observe: Protocols at /protocols - ARI renewal-window disclosure plus durable-state caveat and protocol-status gate; coverage ledger: /coverage",
-      "target_gui_mapping": "ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and durable-state caveat.",
-      "acceptance_test": "UI shows ARI status only when ACME enabled and includes disabled/unavailable state otherwise.",
+      "served_state": "served",
+      "backend_status": "served via ACME renewal-info plus lifecycle scheduler consumption for trstctl-issued deployed X.509 identities",
+      "current_frontend_mapping": "observe: Protocols at /protocols - ARI renewal-window disclosure plus protocol-status gate; coverage ledger: /coverage",
+      "target_gui_mapping": "ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and scheduler consumption state.",
+      "acceptance_test": "Served lifecycle test proves a deployed short-lived certificate renews on its ARI window even when outside the fixed renew_before threshold.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme", "internal/crypto/certinfo/ari.go"],
+      "source_backend": ["internal/protocols/acme", "internal/protocols/ari", "internal/crypto/certinfo/ari.go", "internal/server/server.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub; CLM-01 adds served lifecycle scheduler consumption of ARI windows. Test evidence: internal/server/journey_delivery_served_test.go proves ARI-window renewal outside the fixed threshold; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage.",
       "api_surface": [],
       "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
       "cli_surface": [],
       "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served via ACME; durable state caveat"]
+          "evidence": [
+            "served_state=served",
+            "backend_status=served via ACME renewal-info plus lifecycle scheduler consumption for trstctl-issued deployed X.509 identities"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - ARI renewal-window disclosure plus durable-state caveat and protocol-status gate; coverage ledger: /coverage",
-            "target_gui_mapping: ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and durable-state caveat."
+            "current_frontend_mapping: observe: Protocols at /protocols - ARI renewal-window disclosure plus protocol-status gate; coverage ledger: /coverage",
+            "target_gui_mapping: ACME/ARI panel showing renewal windows, affected orders/certs, client recommendations, and scheduler consumption state."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
@@ -1500,11 +1750,12 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows ARI status only when ACME enabled and includes disabled/unavailable state otherwise.",
+            "acceptance_test: Served lifecycle test proves a deployed short-lived certificate renews on its ARI window even when outside the fixed renew_before threshold.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/journey_delivery_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -2655,9 +2906,9 @@
       "phase": "P1",
       "priority": 27,
       "served_state": "conditional",
-      "backend_status": "conditional served over UDS",
-      "current_frontend_mapping": "observe: Protocols at /protocols - SPIFFE Workload API socket setup and protocol-status unavailable state; coverage ledger: /coverage",
-      "target_gui_mapping": "SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, and client integration snippets.",
+      "backend_status": "conditional served over UDS for X.509-SVID and JWT-SVID RPCs",
+      "current_frontend_mapping": "observe: Protocols at /protocols - SPIFFE Workload API UDS setup with X.509-SVID and JWT-SVID served-path evidence; coverage ledger: /coverage",
+      "target_gui_mapping": "SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and client integration snippets.",
       "acceptance_test": "UI shows disabled/misconfigured/enabled states and never exposes private key material from SVIDs.",
       "source_docs": ["docs/features/workload-identity.md"],
       "source_backend": ["internal/protocols/spiffe"],
@@ -2670,12 +2921,12 @@
       "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served over UDS"]
+          "evidence": ["served_state=conditional", "backend_status=conditional served over UDS for X.509-SVID and JWT-SVID RPCs"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - SPIFFE Workload API socket setup and protocol-status unavailable state; coverage ledger: /coverage",
-            "target_gui_mapping: SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, and client integration snippets."
+            "current_frontend_mapping: observe: Protocols at /protocols - SPIFFE Workload API UDS setup with X.509-SVID and JWT-SVID served-path evidence; coverage ledger: /coverage",
+            "target_gui_mapping: SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and client integration snippets."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
@@ -2687,12 +2938,13 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows disabled/misconfigured/enabled states and never exposes private key material from SVIDs.",
+            "acceptance_test: served go-spiffe client fetches an X.509-SVID, fetches a JWT-SVID, fetches JWT bundles, and validates the JWT-SVID over the Workload API UDS.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -2733,44 +2985,55 @@
       "domain": "Workload identity",
       "phase": "P2",
       "priority": 62,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Workloads at /workloads - ephemeral credential lease fixture plus library-only disclosure; coverage ledger: /coverage",
+      "served_state": "conditional",
+      "backend_status": "conditional served approval-gated ephemeral/JIT issuance endpoint",
+      "current_frontend_mapping": "disclosure: Workloads at /workloads - ephemeral credential lease fixture plus served REST/CLI JIT disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Ephemeral issuance UI for TTL policy, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action.",
-      "acceptance_test": "UI blocks live issuance until served endpoint exists and tests lease expiry visualization with fixtures.",
+      "acceptance_test": "Served test opens an attestation-gated JIT request through /api/v1/ephemeral, enqueues approval outbox intent, records distinct approval, mints a short-TTL credential, and verifies expiry/idempotency.",
       "source_docs": ["docs/features/workload-identity.md"],
-      "source_backend": ["internal/ephemeral"],
+      "source_backend": ["internal/ephemeral", "internal/server/ephemeral.go", "internal/api/ephemeral.go"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["issueEphemeralCredential", "approveEphemeralCredential"],
+      "api_na": "",
+      "cli_surface": ["ephemeral issue", "ephemeral approve"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=conditional",
+            "backend_status=conditional served approval-gated ephemeral/JIT issuance endpoint",
+            "POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, and mints only after distinct approval."
+          ],
+          "refs": ["internal/server/ephemeral.go", "internal/api/ephemeral.go", "internal/server/ephemeral_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Workloads at /workloads - ephemeral credential lease fixture plus library-only disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Workloads at /workloads - ephemeral credential lease fixture plus served REST/CLI JIT disclosure; coverage ledger: /coverage",
             "target_gui_mapping: Ephemeral issuance UI for TTL policy, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command: ephemeral issue", "CLI command: ephemeral approve"],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: issueEphemeralCredential", "OpenAPI operationId: approveEphemeralCredential"],
+          "refs": ["internal/api/api.go", "internal/api/ephemeral.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI blocks live issuance until served endpoint exists and tests lease expiry visualization with fixtures.",
+            "acceptance_test: Served test opens an attestation-gated JIT request through /api/v1/ephemeral, enqueues approval outbox intent, records distinct approval, mints a short-TTL credential, and verifies expiry/idempotency.",
+            "internal/server/ephemeral_served_test.go drives the assembled HTTP API, idempotent pending/issued replays, outbox intent, approval, event emission, and TTL expiry.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ephemeral_served_test.go",
+            "internal/api/openapi_golden_test.go",
+            "internal/cli/cli_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -2782,16 +3045,22 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps issueEphemeralCredential to certs:request and approveEphemeralCredential to certs:issue.",
             "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded ephemeral/JIT operations."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_spiffe_ssh_test.go"]
+          "refs": ["internal/featureparity/authz_manifest.go", "internal/api/feature_authz_test.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/api/api.go", "internal/api/openapi.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F25; current mapping is disclosure: Workloads at /workloads - ephemeral credential lease fixture plus library-only disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "served JIT emits attestation.verified/rejected/bound, ephemeral.approval.requested/granted, ephemeral.issued, and certificate.recorded evidence.",
+            "approval notification intent is enqueued to outbox in the same tenant transaction as the approval request."
+          ],
+          "refs": ["internal/server/ephemeral.go", "internal/server/ephemeral_served_test.go", "internal/orchestrator/outbox.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F25 has a served API/protocol entrypoint."
+          "evidence": ["issueEphemeralCredential records feature telemetry with feature=ephemeral and action=issue_jit; HTTP metrics/tracing cover the guarded approval route."],
+          "refs": ["internal/api/ephemeral.go", "internal/api/api.go", "internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -2810,23 +3079,28 @@
       "domain": "Workload identity",
       "phase": "P2",
       "priority": 63,
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "served_state": "conditional",
+      "backend_status": "conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
       "current_frontend_mapping": "disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage; coverage ledger: /coverage",
       "target_gui_mapping": "Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons.",
       "acceptance_test": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
       "source_docs": ["docs/features/workload-identity.md"],
-      "source_backend": ["internal/attest"],
+      "source_backend": ["internal/attest", "internal/server/attested_issuance.go", "internal/api/attested_issuance.go"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_surface": ["issueAttestedSVID"],
+      "api_na": "",
       "cli_surface": [],
       "cli_na": "N/A: library-only row; no served CLI command is claimed.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=conditional",
+            "backend_status=conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
+            "POST /api/v1/workloads/attested-issuance verifies the attestation before signing, records certificate.recorded, and fails closed when attester trust material is not configured."
+          ],
+          "refs": ["internal/server/attested_issuance.go", "internal/api/attested_issuance.go", "internal/server/attested_issuance_served_test.go"]
         },
         "ui": {
           "evidence": [
@@ -2839,36 +3113,49 @@
           "na": "N/A: library-only row; no served CLI command is claimed."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "api_surface: issueAttestedSVID is in the served OpenAPI route registry at POST /api/v1/workloads/attested-issuance.",
+            "The route requires certs:issue and an Idempotency-Key; the authenticated principal supplies tenant scope."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/attested_issuance.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
+            "NHI-02 served acceptance test presents k8s_sat and aws_iid proofs to the HTTP API, receives signer-backed SVIDs, replays idempotently, and rejects a forged AWS proof.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/attested_issuance_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/workload-identity.md"],
-          "refs": ["docs/features/workload-identity.md"]
+          "evidence": ["documented in docs/features/workload-identity.md and docs/limitations.md"],
+          "refs": ["docs/features/workload-identity.md", "docs/limitations.md"]
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps api_surface operation issueAttestedSVID to route permission certs:issue.",
             "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
             "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_spiffe_ssh_test.go"]
+          "refs": ["internal/api/feature_authz_test.go", "internal/api/api.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_spiffe_ssh_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F30; current mapping is disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage; coverage ledger: /coverage."
+          "evidence": [
+            "served attested issuance emits attestation.verified or attestation.rejected, binds successful proofs with attestation.bound, emits ephemeral.issued, and records the SVID as certificate.recorded."
+          ],
+          "refs": ["internal/attest/attest.go", "internal/server/attested_issuance.go", "internal/server/attested_issuance_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F30 has a served API/protocol entrypoint."
+          "evidence": [
+            "issueAttestedSVID emits per-feature telemetry labels feature=attestation action=issue_svid with success/error outcome through the shared FeatureMetrics hook."
+          ],
+          "refs": ["internal/api/attested_issuance.go", "internal/api/api.go", "internal/server/server.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -2989,47 +3276,57 @@
       "domain": "Workload identity",
       "phase": "P2",
       "priority": 64,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus library-only disclosure; coverage ledger: /coverage",
+      "served_state": "conditional",
+      "backend_status": "conditional served policy-gated AI/MCP agent identity broker endpoint",
+      "current_frontend_mapping": "disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus served REST/CLI disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail.",
-      "acceptance_test": "UI must not expose broker issuance as live until served; fixtures cover scoped AI agent identity lifecycle.",
+      "acceptance_test": "Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
       "source_docs": ["docs/features/workload-identity.md"],
-      "source_backend": ["internal/broker"],
+      "source_backend": ["internal/broker", "internal/server/agent_broker.go", "internal/api/broker.go"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["issueBrokerAgentIdentity"],
+      "api_na": "",
+      "cli_surface": ["broker agent-identities issue"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=conditional",
+            "internal/server/agent_broker.go wires internal/broker into the served API path when AgentBrokerConfig supplies attestors, policy, trust domain, and signer-backed issuing CA.",
+            "POST /api/v1/broker/agent-identities issues a policy-gated short-lived credential and records the owner/credential edge in the projected graph."
+          ],
+          "refs": ["internal/server/agent_broker.go", "internal/server/broker_served_test.go", "internal/api/broker.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus library-only disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus served REST/CLI disclosure; coverage ledger: /coverage",
             "target_gui_mapping: AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command: broker agent-identities issue"],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: issueBrokerAgentIdentity"],
+          "refs": ["internal/api/api.go", "internal/api/broker.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI must not expose broker issuance as live until served; fixtures cover scoped AI agent identity lifecycle.",
+            "acceptance_test: Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
+            "internal/server/broker_served_test.go drives the assembled HTTP API, idempotent replay, policy denial, event emission, and graph projection.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/broker_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/__tests__/workloads.test.tsx"
           ]
         },
         "docs": {
@@ -3037,13 +3334,22 @@
           "refs": ["docs/features/workload-identity.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps api_surface operation issueBrokerAgentIdentity to route permission certs:issue.",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded broker issuance."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F61; current mapping is disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus library-only disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "served broker emits attestation.verified, attestation.bound, ephemeral.issued, agent.identity.issued/refused, and certificate.recorded events.",
+            "denied broker requests fail closed with agent.identity.refused and no credential."
+          ],
+          "refs": ["internal/server/agent_broker.go", "internal/server/broker_served_test.go", "internal/broker/broker.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F61 has a served API/protocol entrypoint."
+          "evidence": ["issueBrokerAgentIdentity records feature telemetry with feature=agent_broker and action=issue_identity."],
+          "refs": ["internal/api/broker.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -3291,27 +3597,30 @@
       "domain": "Lifecycle and PQC",
       "phase": "P1",
       "priority": 29,
-      "served_state": "partial",
-      "backend_status": "manual transitions served; scheduled loops library-level",
-      "current_frontend_mapping": "partial: identity actions; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "manual transitions plus served ARI-first lifecycle renewal scheduler with outbox-driven ca.renew and rotation evidence",
+      "current_frontend_mapping": "partial UI: identity actions and coverage ledger disclose served lifecycle automation; dedicated scheduler console remains target UI",
       "target_gui_mapping": "Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials.",
-      "acceptance_test": "UI covers manual transition and scheduled automation unavailable/disabled states until served scheduler exists.",
+      "acceptance_test": "Served integration test proves ARI-window renewal queues ca.renew and records rotation evidence when the fixed renew_before threshold would not fire.",
       "source_docs": ["docs/features/lifecycle-and-pqc.md"],
-      "source_backend": ["internal/lifecycle", "/api/v1/identities/{id}/transitions"],
+      "source_backend": ["internal/server/server.go", "internal/store/connector_lifecycle.go", "internal/protocols/ari", "/api/v1/identities/{id}/transitions"],
       "source_frontend": ["web/src/pages/Identities.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub; CLM-01 wires the served scheduler to consume ARI windows before the fixed renew_before fallback. Test evidence: internal/server/journey_delivery_served_test.go covers issue -> deploy -> ARI-window renewal -> outbox ca.renew -> rotation evidence; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search.",
       "api_surface": ["listIdentities", "transitionIdentity", "searchAudit"],
       "api_na": "",
       "cli_surface": ["identities list", "identities transition", "audit events"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=manual transitions served; scheduled loops library-level"]
+          "evidence": [
+            "served_state=served",
+            "backend_status=manual transitions plus served ARI-first lifecycle renewal scheduler with outbox-driven ca.renew and rotation evidence"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: identity actions; coverage ledger: /coverage",
+            "current_frontend_mapping: partial UI: identity actions and coverage ledger disclose served lifecycle automation; dedicated scheduler console remains target UI",
             "target_gui_mapping: Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx", "web/src/pages/Identities.tsx"]
@@ -3326,11 +3635,12 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers manual transition and scheduled automation unavailable/disabled states until served scheduler exists.",
+            "acceptance_test: Served integration test proves ARI-window renewal queues ca.renew and records rotation evidence when the fixed renew_before threshold would not fire.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/journey_delivery_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -3454,44 +3764,51 @@
       "domain": "Lifecycle and PQC",
       "phase": "P2",
       "priority": 68,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Posture at /posture - PQC migration wave fixture plus library-only orchestration disclosure; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served",
+      "current_frontend_mapping": "observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory and migration API evidence; coverage ledger: /coverage",
       "target_gui_mapping": "PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off.",
-      "acceptance_test": "UI shows roadmap/library status until served trigger exists and tests migration plan fixture states.",
+      "acceptance_test": "internal/server/pqc_migration_served_test.go scans a CBOM RSA certificate-key estate, queues served ACME PQC re-issuance through the outbox, verifies 100% migration progress, and exercises rollback.",
       "source_docs": ["docs/features/lifecycle-and-pqc.md"],
-      "source_backend": ["internal/pqcmigration"],
+      "source_backend": ["internal/pqcmigration", "internal/server/pqc_migration.go", "internal/api/pqc_migration.go"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["startPQCMigration", "rollbackPQCMigration"],
+      "api_na": "",
+      "cli_surface": ["pqc migrations start", "pqc migrations rollback"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "POST /api/v1/pqc/migrations queues CBOM asset re-issuance through the outbox.",
+            "POST /api/v1/pqc/migrations/{run_id}/rollback queues evented rollback for migrated CBOM assets."
+          ],
+          "refs": ["internal/server/pqc_migration.go", "internal/api/pqc_migration.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Posture at /posture - PQC migration wave fixture plus library-only orchestration disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory and migration API evidence; coverage ledger: /coverage",
             "target_gui_mapping: PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command: pqc migrations start", "CLI command: pqc migrations rollback"],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: startPQCMigration", "OpenAPI operationId: rollbackPQCMigration"],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows roadmap/library status until served trigger exists and tests migration plan fixture states.",
+            "acceptance_test: internal/server/pqc_migration_served_test.go scans a CBOM RSA certificate-key estate, queues served ACME PQC re-issuance through the outbox, verifies 100% migration progress, and exercises rollback.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/pqc_migration_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -3502,13 +3819,19 @@
           "refs": ["docs/features/lifecycle-and-pqc.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps api_surface operations to certs:issue permissions: startPQCMigration, rollbackPQCMigration.",
+            "startPQCMigration and rollbackPQCMigration are guarded by certs:issue."
+          ],
+          "refs": ["internal/api/api.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F57; current mapping is disclosure: Posture at /posture - PQC migration wave fixture plus library-only orchestration disclosure; coverage ledger: /coverage."
+          "evidence": ["Events: pqc.migration.started, pqc.migration.asset_completed, pqc.migration.rollback_completed, protocol.issued."],
+          "refs": ["internal/projections/projections.go", "internal/server/pqc_migration.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F57 has a served API/protocol entrypoint."
+          "evidence": ["Feature telemetry label pqc_migration records start and rollback outcomes."],
+          "refs": ["internal/api/pqc_migration.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -3527,45 +3850,55 @@
       "domain": "Deployment connectors",
       "phase": "P2",
       "priority": 69,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Connectors at /connectors - connector registry, capability grant, outbox, dry-run, reachability, and rollback disclosure without live deploy; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served native connector registry and signed-plugin outbox delivery; target setup remains operator-wired",
+      "current_frontend_mapping": "partial: Connectors at /connectors shows the served catalog, native/plugin delivery receipts, capability grants, reachability, and rollback evidence; coverage ledger: /coverage",
       "target_gui_mapping": "Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state.",
-      "acceptance_test": "UI shows connector capability grants, dry-run/test deploy, pending/succeeded/failed outbox delivery, and disabled state until dispatcher is wired.",
+      "acceptance_test": "Served acceptance pushes a signer-issued cert through native AWS ACM and Azure KV connector emulators; UI shows capability grants and pending/delivered/failed/unrouted outbox receipts.",
       "source_docs": ["docs/features/deployment-connectors.md"],
-      "source_backend": ["internal/connector", "internal/agent/destination"],
+      "source_backend": ["internal/connector", "internal/server/issuance.go", "internal/api/connectors_lifecycle.go", "internal/agent/destination"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. CLM-05 adds served native connector registry delivery through connector.deploy for credential-carrying payloads, with AWS ACM and Azure Key Vault emulator acceptance. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "api_surface": ["listConnectorCatalog", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
+      "api_na": "",
+      "cli_surface": ["connectors catalog", "connectors deliveries list", "connectors deliveries get", "connectors outbox-circuits"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=partial: server.Deps.ConnectorRegistry routes credential-carrying connector.deploy payloads through trusted native connectors before the signed-plugin path.",
+            "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators proves the running outbox worker pushes a signer-issued cert and key to AWS ACM and Azure Key Vault emulators and records native_delivered receipts."
+          ],
+          "refs": ["internal/server/server.go", "internal/server/issuance.go", "internal/server/native_connectors_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Connectors at /connectors - connector registry, capability grant, outbox, dry-run, reachability, and rollback disclosure without live deploy; coverage ledger: /coverage",
+            "current_frontend_mapping: partial: Connectors at /connectors shows the served catalog, native/plugin delivery receipts, capability grants, reachability, and rollback evidence; coverage ledger: /coverage",
             "target_gui_mapping: Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI exposes connector catalog, delivery receipt list/get, and outbox circuit state against the served API."],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationIds listConnectorCatalog, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits expose the served connector observability plane."
+          ],
+          "refs": ["internal/api/connectors_lifecycle.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows connector capability grants, dry-run/test deploy, pending/succeeded/failed outbox delivery, and disabled state until dispatcher is wired.",
+            "acceptance_test: Served acceptance pushes a signer-issued cert through native AWS ACM and Azure KV connector emulators; UI shows capability grants and pending/delivered/failed/unrouted outbox receipts.",
+            "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators verifies native connector target mutation from the served outbox path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/native_connectors_served_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -3575,13 +3908,23 @@
           "refs": ["docs/features/deployment-connectors.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps listConnectorCatalog, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits to connectors:read.",
+            "Connector catalog, delivery receipts, and outbox circuit reads are guarded by connectors:read; native deploy execution is an outbox worker effect, not a public key-upload route."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/connectors_lifecycle.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F7; current mapping is disclosure: Connectors at /connectors - connector registry, capability grant, outbox, dry-run, reachability, and rollback disclosure without live deploy; coverage ledger: /coverage."
+          "evidence": [
+            "Native connector delivery emits connector.delivery.recorded with delivered, failed, or unrouted status and never returns PEM/key material in receipts."
+          ],
+          "refs": ["internal/server/issuance.go", "internal/store/connector_lifecycle.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F7 has a served API/protocol entrypoint."
+          "evidence": [
+            "Connector delivery runs on the outbox worker with retry/circuit state exposed through /api/v1/connectors/outbox-circuits and outbox circuit metrics."
+          ],
+          "refs": ["internal/orchestrator/outbox.go", "internal/api/connectors_lifecycle.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -3600,51 +3943,60 @@
       "domain": "Deployment connectors",
       "phase": "P2",
       "priority": 70,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Connectors at /connectors - appliance connector reachability, masked target references, and rollback fixtures without live deploy; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors; target setup remains operator-wired",
+      "current_frontend_mapping": "partial: Connectors at /connectors shows appliance reachability, masked target references, native/plugin delivery receipts, and rollback fixtures; coverage ledger: /coverage",
       "target_gui_mapping": "Appliance connector UI for F5, NetScaler, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
-      "acceptance_test": "UI tests appliance connector error states and confirms secret references are masked.",
+      "acceptance_test": "UI tests appliance connector error states and masked references; served tests prove the same native registry path used by appliance connectors delivers to real API emulators.",
       "source_docs": ["docs/features/deployment-connectors.md"],
       "source_backend": [
         "internal/connector/f5",
         "internal/connector/netscaler",
         "internal/connector/cisco",
         "internal/connector/fortigate",
-        "internal/connector/paloalto"
+        "internal/connector/paloalto",
+        "internal/server/issuance.go"
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub. CLM-05 wires the common native connector registry into the served outbox dispatcher, so registered appliance connectors share the same delivered/failed/unrouted receipt path as cloud connectors. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "api_surface": ["listConnectorCatalog", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
+      "api_na": "",
+      "cli_surface": ["connectors catalog", "connectors deliveries list", "connectors deliveries get", "connectors outbox-circuits"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=partial: registered native appliance connectors are routed by the same server.Deps.ConnectorRegistry and connector.deploy outbox worker as the cloud connector acceptance.",
+            "Unknown or metadata-only appliance deploys record unrouted receipts instead of silently claiming target mutation."
+          ],
+          "refs": ["internal/server/server.go", "internal/server/issuance.go", "internal/server/native_connectors_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Connectors at /connectors - appliance connector reachability, masked target references, and rollback fixtures without live deploy; coverage ledger: /coverage",
+            "current_frontend_mapping: partial: Connectors at /connectors shows appliance reachability, masked target references, native/plugin delivery receipts, and rollback fixtures; coverage ledger: /coverage",
             "target_gui_mapping: Appliance connector UI for F5, NetScaler, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI exposes connector catalog, delivery receipt list/get, and outbox circuit state for appliance connector attempts."],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["Connector catalog, delivery receipts, and outbox circuit APIs expose appliance connector route state and delivery outcomes."],
+          "refs": ["internal/api/connectors_lifecycle.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI tests appliance connector error states and confirms secret references are masked.",
+            "acceptance_test: UI tests appliance connector error states and masked references; served tests prove the same native registry path used by appliance connectors delivers to real API emulators.",
+            "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators proves the shared native connector registry path from the served outbox worker.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/native_connectors_served_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -3654,13 +4006,23 @@
           "refs": ["docs/features/deployment-connectors.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps listConnectorCatalog, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits to connectors:read.",
+            "Appliance connector catalog/receipt reads are guarded by connectors:read; native deploy execution remains an outbox worker effect."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/connectors_lifecycle.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F27; current mapping is disclosure: Connectors at /connectors - appliance connector reachability, masked target references, and rollback fixtures without live deploy; coverage ledger: /coverage."
+          "evidence": [
+            "Appliance connector attempts project connector.delivery.recorded receipts with connector, target, fingerprint, status, reason, and rollback reference."
+          ],
+          "refs": ["internal/server/issuance.go", "internal/store/connector_lifecycle.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F27 has a served API/protocol entrypoint."
+          "evidence": [
+            "Appliance connector attempts use the shared outbox retry/circuit machinery and are visible through /api/v1/connectors/outbox-circuits."
+          ],
+          "refs": ["internal/orchestrator/outbox.go", "internal/api/connectors_lifecycle.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -3990,41 +4352,42 @@
       "phase": "P1",
       "priority": 31,
       "served_state": "partial",
-      "backend_status": "core approval gate served; richer JIT library-level",
-      "current_frontend_mapping": "partial: identity approval buttons; coverage ledger: /coverage",
+      "backend_status": "core approval gate and approval-gated JIT issuance served",
+      "current_frontend_mapping": "partial: identity approval buttons plus REST/CLI ephemeral JIT disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant.",
       "acceptance_test": "UI covers requester cannot approve own request and approver can approve/deny with audit link.",
       "source_docs": ["docs/features/incident-and-jit.md"],
-      "source_backend": ["/api/v1/identities/{id}/approvals", "internal/approval"],
+      "source_backend": ["/api/v1/identities/{id}/approvals", "/api/v1/ephemeral", "/api/v1/ephemeral/{id}/approvals", "internal/approval", "internal/server/ephemeral.go"],
       "source_frontend": ["web/src/pages/Identities.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["approveIdentityAction", "transitionIdentity"],
+      "api_surface": ["approveIdentityAction", "transitionIdentity", "issueEphemeralCredential", "approveEphemeralCredential"],
       "api_na": "",
-      "cli_surface": ["identities approve", "identities transition"],
+      "cli_surface": ["identities approve", "identities transition", "ephemeral issue", "ephemeral approve"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=core approval gate served; richer JIT library-level"]
+          "evidence": ["served_state=partial", "backend_status=core approval gate and approval-gated JIT issuance served"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: identity approval buttons; coverage ledger: /coverage",
+            "current_frontend_mapping: partial: identity approval buttons plus REST/CLI ephemeral JIT disclosure; coverage ledger: /coverage",
             "target_gui_mapping: JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx", "web/src/pages/Identities.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: identities approve", "CLI command: identities transition"],
+          "evidence": ["CLI command: identities approve", "CLI command: identities transition", "CLI command: ephemeral issue", "CLI command: ephemeral approve"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: approveIdentityAction", "OpenAPI operationId: transitionIdentity"],
+          "evidence": ["OpenAPI operationId: approveIdentityAction", "OpenAPI operationId: transitionIdentity", "OpenAPI operationId: issueEphemeralCredential", "OpenAPI operationId: approveEphemeralCredential"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+            "internal/server/ephemeral_served_test.go proves an attested JIT request opens approval, enqueues outbox notification intent, blocks self-issue until approval, and then mints a short-TTL credential.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -4040,7 +4403,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: approveIdentityAction, transitionIdentity",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4053,14 +4416,15 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: approveIdentityAction, transitionIdentity",
+            "mutating served surface requires audit/event evidence: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential",
+            "ephemeral JIT emits ephemeral.approval.requested/granted plus ephemeral.issued and certificate.recorded after distinct approval.",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
+          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go", "internal/server/ephemeral.go"]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels; issueEphemeralCredential emits feature=ephemeral action=issue_jit."],
+          "refs": ["internal/observ/middleware.go", "internal/api/ephemeral.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -5224,61 +5588,78 @@
       "domain": "Policy and governance",
       "phase": "P2",
       "priority": 80,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and outbox delivery disclosure without live channel config; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served expiry-alert runtime; channel authoring UI/API pending",
+      "current_frontend_mapping": "disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and served scheduler/outbox delivery disclosure; channel CRUD remains unserved; coverage ledger: /coverage",
       "target_gui_mapping": "Notification channel UI for Slack, Teams, email, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
-      "acceptance_test": "UI uses secret references only and tests redaction of webhook/API keys in errors.",
+      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; UI keeps secret references redacted and exposes no live channel controls.",
       "source_docs": ["docs/features/policy-and-governance.md"],
-      "source_backend": ["internal/notify"],
+      "source_backend": ["internal/notify", "internal/server", "internal/store"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_na": "N/A: NOTIF-01 serves scheduler-driven notification dispatch through Build/RunLifecycleOnce and the outbox worker; tenant-facing channel CRUD/test-delivery APIs are not mounted yet.",
       "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_na": "N/A: served expiry notifications are runtime scheduler/outbox behavior; no tenant-facing notification CLI command is mounted yet.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "LifecycleAlertBefore and NotificationChannels in server.Deps wire configured notify channels into the served lifecycle scheduler.",
+            "RunLifecycleOnce enqueues notification.expiry outbox rows for alertable certificates, and issuanceDispatcher delivers notification.* rows through notify.Dispatcher.",
+            "TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification proves a signer-issued served cert inside the alert window reaches an HMAC-signed webhook sink."
+          ],
+          "refs": ["internal/server/server.go", "internal/server/issuance.go", "internal/server/notifications_served_test.go", "internal/store/lifecycle.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and outbox delivery disclosure without live channel config; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and served scheduler/outbox delivery disclosure; channel CRUD remains unserved; coverage ledger: /coverage",
             "target_gui_mapping: Notification channel UI for Slack, Teams, email, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
+          "refs": ["web/src/pages/Policy.tsx", "web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "na": "N/A: served expiry notifications are runtime scheduler/outbox behavior; no tenant-facing notification CLI command is mounted yet."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: NOTIF-01 serves scheduler-driven notification dispatch through Build/RunLifecycleOnce and the outbox worker; tenant-facing channel CRUD/test-delivery APIs are not mounted yet."
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI uses secret references only and tests redaction of webhook/API keys in errors.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; UI keeps secret references redacted and exposes no live channel controls.",
+            "Focused served test drives the running server scheduler, outbox drain, and httptest webhook sink.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/notifications_served_test.go",
+            "internal/notify/dispatch_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/policy.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/policy-and-governance.md"],
-          "refs": ["docs/features/policy-and-governance.md"]
+          "evidence": [
+            "documented in docs/features/policy-and-governance.md",
+            "limitations page states that expiry alert delivery is served while tenant-facing channel authoring remains pending."
+          ],
+          "refs": ["docs/features/policy-and-governance.md", "docs/limitations.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: notification delivery is an operator-configured background scheduler/outbox path, not a tenant-facing guarded /api/v1 channel-authoring route yet."
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F29; current mapping is disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and outbox delivery disclosure without live channel config; coverage ledger: /coverage."
+          "evidence": [
+            "AlertExpiring emits certificate.expiring events and stamps alerted_at when it enqueues notification.expiry outbox work.",
+            "Served acceptance asserts certificate.expiring event presence for the delivered webhook alert."
+          ],
+          "refs": ["internal/lifecycle/lifecycle.go", "internal/server/notifications_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F29 has a served API/protocol entrypoint."
+          "evidence": [
+            "trstctl_lifecycle_expiry_alerts_queued_total counts expiry notifications queued by the served lifecycle scheduler.",
+            "existing outbox delivery timeout and circuit metrics cover notification.* delivery retries and failures."
+          ],
+          "refs": ["internal/server/server.go", "internal/orchestrator/outbox.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -5774,6 +6155,7 @@
         "audit export",
         "privacy retention run",
         "privacy retention list",
+        "privacy export",
         "graph nodes",
         "graph reachable",
         "graph blast-radius",
@@ -5830,6 +6212,7 @@
             "CLI command: profiles get-version",
             "CLI command: audit events",
             "CLI command: audit export",
+            "CLI command: privacy export",
             "CLI command: graph nodes",
             "CLI command: graph reachable",
             "CLI command: graph blast-radius",

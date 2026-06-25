@@ -198,13 +198,13 @@ export function Policy() {
             Notification integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels need tenant-scoped channel config, masked secret references, test
-            delivery, duplicate-safe outbox delivery, and redacted failure evidence. The served API does not configure or test channels yet.
+            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into
+            the served process. The served API does not configure or test channels yet.
           </p>
         </div>
-        <UnavailableState title="Notification channels are library-only">
-          Notification channels are library-only. Channel config reads, test delivery, retry state, and delivery receipts are not served by API or CLI yet, so
-          this page cannot operate notification integrations.
+        <UnavailableState title="Notification channel controls not served yet">
+          Expiry-alert dispatch is served through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not
+          served by API or CLI yet, so this page cannot operate notification integrations.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[70rem]">

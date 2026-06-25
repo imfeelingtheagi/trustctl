@@ -99,11 +99,12 @@ export function Workloads() {
       <PageHeader
         titleId="workload-heading"
         title="Workload identity"
-        description="Library-only workload workflows are rendered as safe disclosure fixtures. Served SPIFFE and PKI-secret paths can issue credentials, but there is no served lease ledger, attestation API, or broker issuance API yet."
+        description="Served SPIFFE, attested X.509-SVID, approval-gated ephemeral JIT, broker, and PKI-secret paths can issue short-lived credentials. The console keeps raw proofs out of the browser and renders the remaining lease-ledger workflow as a disclosure fixture."
       />
 
-      <UnavailableState title="Workload lease APIs are not served yet">
-        Lease state, attestation decisions, and broker issuance are not served by API or CLI yet. No live issue, revoke, approve, or mint controls are rendered.
+      <UnavailableState title="Browser lease controls are not served yet">
+        Lease state and browser-side approval controls are not served yet. Attested issuance, approval-gated ephemeral JIT issuance, and broker minting are
+        available through REST and CLI, so no live issue, revoke, approve, or mint controls are rendered here.
       </UnavailableState>
 
       <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
@@ -154,6 +155,10 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
+        <UnavailableState title="Ephemeral JIT issuance is REST and CLI only">
+          Approval-gated ephemeral issuance is served at POST /api/v1/ephemeral and POST /api/v1/ephemeral/&lt;request-id&gt;/approvals, plus the ephemeral
+          issue and ephemeral approve CLI commands. This console does not collect live proof payloads or approval actions.
+        </UnavailableState>
       </section>
 
       <section aria-labelledby="attestation-heading" className="grid gap-3 border-y border-border py-4">
@@ -189,9 +194,9 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Attestation API is library-only">
-          Accepted, rejected, expired, and wrong-tenant attestation decisions are library-only. This page cannot show live workload evidence because no served
-          attestation API or CLI command exists yet.
+        <UnavailableState title="Raw attestation evidence stays out of the browser">
+          Accepted, rejected, expired, and wrong-tenant fixtures show the served decision shape. Use the attested-issuance or ephemeral REST/CLI paths for live
+          proofs so raw tokens and signed evidence never enter this console.
         </UnavailableState>
       </section>
 
@@ -201,8 +206,8 @@ export function Workloads() {
             AI-agent / NHI broker
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A broker turns an agent identity plus policy into a short credential lease. Broker issuance is library-only, so this fixture shows scope and audit
-            shape only.
+            A broker turns an agent identity plus policy into a short credential lease. Broker issuance is served through REST and CLI; this fixture shows the
+            scope and audit shape without collecting live proofs in the browser.
           </p>
         </div>
         <div className="ui-panel overflow-x-auto">
@@ -220,8 +225,9 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Broker issuance is library-only">
-          Agent-scoped broker issuance, expiry, and audit reads are library-only. No served broker API or CLI command can mint live broker credentials yet.
+        <UnavailableState title="Broker issuance is REST and CLI only">
+          Agent-scoped broker issuance is served at POST /api/v1/broker/agent-identities and by the broker agent-identities issue CLI command. This console
+          does not mint live broker credentials because the request carries raw proof material.
         </UnavailableState>
       </section>
     </section>

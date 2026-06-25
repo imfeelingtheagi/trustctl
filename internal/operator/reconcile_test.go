@@ -17,7 +17,7 @@ import (
 // when they already match. This is the decision a real controller makes; pinning
 // it here proves the operator is a genuine reconcile, not a stub.
 func TestDecideActionDiff(t *testing.T) {
-	spec := ControlPlaneSpec{Replicas: 3, Image: "ghcr.io/imfeelingtheagi/trstctl:v1.2.3"}
+	spec := ControlPlaneSpec{Replicas: 3, Image: "ghcr.io/ctlplne/trstctl:v1.2.3"}
 
 	cases := []struct {
 		name string
@@ -25,9 +25,9 @@ func TestDecideActionDiff(t *testing.T) {
 		want Action
 	}{
 		{"missing deployment -> create", deploymentState{exists: false}, ActionCreate},
-		{"replica drift -> update", deploymentState{exists: true, replicas: 1, image: "ghcr.io/imfeelingtheagi/trstctl:v1.2.3"}, ActionUpdate},
-		{"image drift -> update", deploymentState{exists: true, replicas: 3, image: "ghcr.io/imfeelingtheagi/trstctl:OLD"}, ActionUpdate},
-		{"in sync -> none", deploymentState{exists: true, replicas: 3, image: "ghcr.io/imfeelingtheagi/trstctl:v1.2.3"}, ActionNone},
+		{"replica drift -> update", deploymentState{exists: true, replicas: 1, image: "ghcr.io/ctlplne/trstctl:v1.2.3"}, ActionUpdate},
+		{"image drift -> update", deploymentState{exists: true, replicas: 3, image: "ghcr.io/ctlplne/trstctl:OLD"}, ActionUpdate},
+		{"in sync -> none", deploymentState{exists: true, replicas: 3, image: "ghcr.io/ctlplne/trstctl:v1.2.3"}, ActionNone},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -177,7 +177,7 @@ func reconcilerForCluster(srv *httptest.Server) *Reconciler {
 // no operator at all).
 func TestReconcileCreatesMissingDeployment(t *testing.T) {
 	f := newFakeCluster()
-	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/imfeelingtheagi/trstctl:v9")}
+	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/ctlplne/trstctl:v9")}
 	srv := httptest.NewServer(f.handler())
 	defer srv.Close()
 
@@ -197,7 +197,7 @@ func TestReconcileCreatesMissingDeployment(t *testing.T) {
 	if got := deploymentReplicas(t, created); got != 2 {
 		t.Errorf("created Deployment replicas = %d, want 2", got)
 	}
-	if got := deploymentImage(t, created); got != "ghcr.io/imfeelingtheagi/trstctl:v9" {
+	if got := deploymentImage(t, created); got != "ghcr.io/ctlplne/trstctl:v9" {
 		t.Errorf("created Deployment image = %q, want the spec image", got)
 	}
 	if name := deploymentName(t, created); name != "prod-control-plane" {
@@ -214,9 +214,9 @@ func TestReconcileCreatesMissingDeployment(t *testing.T) {
 // PATCHes it back (it does not recreate) and marks the CR Reconciling.
 func TestReconcilePatchesDriftedDeployment(t *testing.T) {
 	f := newFakeCluster()
-	f.tcps = []map[string]any{tcpObject("prod", 3, "ghcr.io/imfeelingtheagi/trstctl:NEW")}
+	f.tcps = []map[string]any{tcpObject("prod", 3, "ghcr.io/ctlplne/trstctl:NEW")}
 	// Live deployment is drifted: 1 replica and an OLD image.
-	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 1, "ghcr.io/imfeelingtheagi/trstctl:OLD")
+	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 1, "ghcr.io/ctlplne/trstctl:OLD")
 	srv := httptest.NewServer(f.handler())
 	defer srv.Close()
 
@@ -242,7 +242,7 @@ func TestReconcilePatchesDriftedDeployment(t *testing.T) {
 	if got := deploymentReplicas(t, pj); got != 3 {
 		t.Errorf("patch replicas = %d, want 3", got)
 	}
-	if got := deploymentImage(t, pj); got != "ghcr.io/imfeelingtheagi/trstctl:NEW" {
+	if got := deploymentImage(t, pj); got != "ghcr.io/ctlplne/trstctl:NEW" {
 		t.Errorf("patch image = %q, want the spec image", got)
 	}
 }
@@ -252,8 +252,8 @@ func TestReconcilePatchesDriftedDeployment(t *testing.T) {
 // and the CR is marked Ready.
 func TestReconcileNoopWhenInSync(t *testing.T) {
 	f := newFakeCluster()
-	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/imfeelingtheagi/trstctl:v9")}
-	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 2, "ghcr.io/imfeelingtheagi/trstctl:v9")
+	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/ctlplne/trstctl:v9")}
+	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 2, "ghcr.io/ctlplne/trstctl:v9")
 	srv := httptest.NewServer(f.handler())
 	defer srv.Close()
 

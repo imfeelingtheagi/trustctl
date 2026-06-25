@@ -13,15 +13,18 @@ request cannot merge while any rule is violated.
 | `keymaterial` | **AN-8** | In packages handling key material, fields/params/results must not be **string-backed** — bare `string`, named string types, `[]string`, `map[K]string`, arrays, and pointers to any of those are all flagged (use `[]byte`). |
 | `idempotency` | **AN-5** | Served mutation handlers (either `//trstctl:mutation` or HTTP `route{mutation: true, handler: ...}`) must thread an idempotency key into a **real dedupe sink** (`orchestrator.Idempotency.Do` or a key-accepting forwarder such as `API.mutate`) — not merely name it, log it, or accept an unused parameter. |
 | `eventsource` | **AN-2** | A served mutation handler (either `//trstctl:mutation` or HTTP `route{mutation: true, handler: ...}`) must not write the relational read model directly — neither via a `store.Store` `Create`/`Update`/`Delete`/`Upsert`/`Set` method or projected responder mutator (`RecordIssuedCert`, `RevokeIssuedCert`, `InsertCRL`) NOR via raw `INSERT`/`UPDATE`/`DELETE` SQL targeting a read-model table (`owners`, `issuers`, `identities`, `certificates`, `agents`, `tenants`, `identity_transitions`, `certificate_profiles`, `ca_issued_certs`, `ca_crls`); it must emit a domain event and let a projection build the read model (SPINE-010 closed the raw-SQL evasion). `SELECT` reads are allowed. |
+| `cryptoagility` | **PQC-00** | Crypto and signer packages must keep crypto-agility as compile-time Go interfaces plus dependency injection behind `internal/crypto`: no Go `plugin` imports, no `internal/policy` imports into crypto/signer code, and no runtime-mutable provider/engine/backend registries or `RegisterCryptoSuite`-style functions. |
 
-All five rules resolve types and SQL clauses (not substrings/source spelling), so
+All six rules resolve types, AST shapes, imports, and SQL clauses (not
+substrings/source spelling), so
 a future violation cannot slip past CI by aliasing a receiver, hiding a secret
 behind a named type, mentioning `tenant_id` in a comment, or passing an
 idempotency key to a logger. `cryptoboundary`, `tenantfilter`, and `eventsource`
 run over their whole scope; `keymaterial` applies to a fail-closed default set of
-packages plus any marker opt-in; and served mutation coverage comes from both the
-route registry and marker directives, so a missing comment cannot make an HTTP
-mutation invisible.
+packages plus any marker opt-in; `cryptoagility` applies to the crypto/signer
+boundary where provider selection is dangerous; and served mutation coverage
+comes from both the route registry and marker directives, so a missing comment
+cannot make an HTTP mutation invisible.
 
 ## Marker directives (opt-in extension, fail-closed defaults)
 

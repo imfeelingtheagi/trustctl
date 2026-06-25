@@ -69,7 +69,7 @@ type managedKeyApprovalGate struct {
 }
 
 func (g managedKeyApprovalGate) IsApproved(ctx context.Context, tenantID, keyID, action, requester string) (bool, string) {
-	return storeApprovalChecker{store: g.store, required: g.required}.IsApproved(ctx, tenantID, keyID, action, requester)
+	return storeApprovalChecker(g).IsApproved(ctx, tenantID, keyID, action, requester)
 }
 
 // buildManagedKeyService assembles the served managed-key lifecycle from Deps. It

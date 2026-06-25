@@ -1,0 +1,216 @@
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"encoding/pem"
+	"io"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/ca/digicert"
+	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
+	"trstctl.com/trstctl/internal/ca/letsencrypt"
+	"trstctl.com/trstctl/internal/ca/letsencrypt/acmefake"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+)
+
+// TestServedExternalCARegistryIssuesViaConfiguredBackends is the CLM-03 acceptance
+// test: the running control-plane binary exposes a served external-CA registry and
+// routes issuance through configured upstream CA plugins. The calls are HTTP API
+// requests against server.Build -> Handler, not package-level plugin calls, and the
+// issue path proves both AN-5 replay behavior and the ca.issue outbox record (AN-6).
+func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
+	dc, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dc.Close)
+	acme, err := acmefake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(acme.Close)
+	le, err := letsencrypt.NewPlugin("lets-encrypt", acme.DirectoryURL())
+	if err != nil {
+		t.Fatalf("letsencrypt plugin: %v", err)
+	}
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.ExternalCAs = []ExternalCA{
+			{ID: "digicert", Type: "digicert", CA: digicert.New("digicert", dc.URL(), []byte(dc.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))},
+			{ID: "lets-encrypt", Type: "letsencrypt", CA: le},
+		}
+	})
+
+	var listed struct {
+		Items []externalCAListItem `json:"items"`
+	}
+	code, body := doExternalCARequest(t, h, http.MethodGet, "/api/v1/external-cas", "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("list external CAs = %d, want 200; body=%s", code, body)
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatalf("decode external CA list: %v body=%s", err, body)
+	}
+	if !hasExternalCA(listed.Items, "digicert", "digicert") || !hasExternalCA(listed.Items, "lets-encrypt", "letsencrypt") {
+		t.Fatalf("registry items = %+v, want digicert and lets-encrypt", listed.Items)
+	}
+
+	digi := issueExternalCA(t, h, "digicert", "svc.digicert.served.test", "clm-03-digicert")
+	assertServedCert(t, digi, "digicert", "svc.digicert.served.test")
+	if got := externalCAOutboxCount(t, h, "clm-03-digicert:external-ca:digicert"); got != 1 {
+		t.Fatalf("DigiCert ca.issue outbox rows = %d, want 1", got)
+	}
+	digiReplay := issueExternalCA(t, h, "digicert", "svc.digicert.served.test", "clm-03-digicert")
+	if digiReplay.Serial != digi.Serial || digiReplay.CertificatePEM != digi.CertificatePEM {
+		t.Fatalf("DigiCert replay minted a different cert: first=%s replay=%s", digi.Serial, digiReplay.Serial)
+	}
+	if got := externalCAOutboxCount(t, h, "clm-03-digicert:external-ca:digicert"); got != 1 {
+		t.Fatalf("DigiCert replay ca.issue rows = %d, want still 1", got)
+	}
+
+	acmeCert := issueExternalCA(t, h, "lets-encrypt", "svc.acme.served.test", "clm-03-lets-encrypt")
+	assertServedCert(t, acmeCert, "lets-encrypt", "svc.acme.served.test")
+	if got := externalCAOutboxCount(t, h, "clm-03-lets-encrypt:external-ca:lets-encrypt"); got != 1 {
+		t.Fatalf("Let's Encrypt ca.issue outbox rows = %d, want 1", got)
+	}
+}
+
+type externalCAIssueResponse struct {
+	CertificatePEM string    `json:"certificate_pem"`
+	Serial         string    `json:"serial"`
+	NotAfter       time.Time `json:"not_after"`
+	Issuer         string    `json:"issuer"`
+}
+
+type externalCAListItem struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+func issueExternalCA(t *testing.T, h *servedHarness, caID, dnsName, idem string) externalCAIssueResponse {
+	t.Helper()
+	csrDER := externalCACSR(t, dnsName)
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+	code, body := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idem, map[string]any{
+		"csr_pem":     string(csrPEM),
+		"dns_names":   []string{dnsName},
+		"ttl_seconds": int64((24 * time.Hour).Seconds()),
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("issue through %s = %d, want 201; body=%s", caID, code, body)
+	}
+	var got externalCAIssueResponse
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode issue response from %s: %v body=%s", caID, err, body)
+	}
+	return got
+}
+
+func externalCACSR(t *testing.T, dnsName string) []byte {
+	t.Helper()
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: dnsName, DNSNames: []string{dnsName}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return csr
+}
+
+func doExternalCARequest(t *testing.T, h *servedHarness, method, path, idem string, body any) (int, []byte) {
+	t.Helper()
+	var rdr io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			t.Fatalf("marshal request: %v", err)
+		}
+		rdr = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, h.ts.URL+path, rdr)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-Tenant-ID", h.tenant)
+	req.Header.Set("X-Roles", "admin")
+	req.Header.Set("X-Subject", "clm-03-admin")
+	if idem != "" {
+		req.Header.Set("Idempotency-Key", idem)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, b
+}
+
+func assertServedCert(t *testing.T, cert externalCAIssueResponse, issuer, dnsName string) {
+	t.Helper()
+	if cert.CertificatePEM == "" || cert.Serial == "" || cert.Issuer != issuer {
+		t.Fatalf("issued cert = %+v, want PEM/serial/issuer %s", cert, issuer)
+	}
+	info, err := certinfo.Inspect([]byte(cert.CertificatePEM))
+	if err != nil {
+		t.Fatalf("inspect issued cert: %v", err)
+	}
+	if info.SerialNumber != cert.Serial {
+		t.Fatalf("serial mismatch response=%s cert=%s", cert.Serial, info.SerialNumber)
+	}
+	found := false
+	for _, got := range info.DNSNames {
+		if got == dnsName {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("issued cert SANs = %v, want %s", info.DNSNames, dnsName)
+	}
+	if !info.NotAfter.After(time.Now()) {
+		t.Fatalf("issued cert already expired: %s", info.NotAfter)
+	}
+}
+
+func externalCAOutboxCount(t *testing.T, h *servedHarness, key string) int {
+	t.Helper()
+	var count int
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT count(*)
+			FROM outbox
+			WHERE destination = 'ca.issue'
+			  AND idempotency_key = $1
+		`, key).Scan(&count)
+	})
+	if err != nil {
+		t.Fatalf("count ca.issue outbox rows: %v", err)
+	}
+	return count
+}
+
+func hasExternalCA(items []externalCAListItem, id, typ string) bool {
+	for _, item := range items {
+		if item.ID == id && item.Type == typ && item.Name != "" {
+			return true
+		}
+	}
+	return false
+}

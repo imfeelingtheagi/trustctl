@@ -215,7 +215,7 @@ func TestStoreKEKIsAWrapperNotHeapBytes(t *testing.T) {
 		if f.Type == reflect.TypeOf([]byte(nil)) {
 			t.Fatalf("Store.%s is a []byte on the heap — the KEK must stay in locked memory behind a wrapper (CRYPTO-004)", f.Name)
 		}
-		if f.Type.Implements(wrapperIface) || reflect.PtrTo(f.Type).Implements(wrapperIface) {
+		if f.Type.Implements(wrapperIface) || reflect.PointerTo(f.Type).Implements(wrapperIface) {
 			foundWrapper = true
 		}
 	}

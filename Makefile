@@ -196,7 +196,7 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	fi
 	@echo ">> go vet"
 	$(GO) vet $(GO_PACKAGES)
-	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
+	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8, crypto-agility)"
 	@vettool=$$(mktemp "$${TMPDIR:-/tmp}/trstctllint.XXXXXX"); \
 	trap 'rm -f "$$vettool"' EXIT; \
 	$(GO) build -o "$$vettool" ./tools/trstctllint; \

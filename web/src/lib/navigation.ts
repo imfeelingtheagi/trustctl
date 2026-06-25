@@ -246,7 +246,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/connectors"],
     component: "Connectors",
     kind: "observe",
-    evidence: "connector registry, capability grant, outbox, dry-run, reachability, and rollback disclosure without live deploy",
+    evidence: "served native/plugin connector registry, capability grant, outbox receipts, reachability, and rollback disclosure",
   },
   {
     featureId: "F8",
@@ -289,17 +289,17 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F17",
-    routes: ["/posture"],
+    routes: ["/posture", "/discovery"],
     component: "Posture",
     kind: "observe",
-    evidence: "CT monitor library-only disclosure plus non-interactive triage preview",
+    evidence: "served ct_log discovery source/run/finding path with alert dispatch plus dedicated-dashboard gap",
   },
   {
     featureId: "F18",
-    routes: ["/posture"],
+    routes: ["/posture", "/discovery"],
     component: "Posture",
     kind: "observe",
-    evidence: "drift library-only disclosure plus disabled remediation preview",
+    evidence: "served drift discovery source/run/finding path with disabled remediation preview",
   },
   { featureId: "F19", routes: ["/risk"], component: "Risk", kind: "observe", evidence: "credential risk list" },
   {
@@ -317,14 +317,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "observe",
-    evidence: "SPIFFE Workload API socket setup and protocol-status unavailable state",
+    evidence: "SPIFFE Workload API UDS setup with X.509-SVID and JWT-SVID served-path evidence",
   },
   {
     featureId: "F25",
     routes: ["/workloads"],
     component: "Workloads",
     kind: "observe",
-    evidence: "ephemeral credential lease fixture plus library-only disclosure",
+    evidence: "ephemeral credential lease fixture plus served REST/CLI JIT disclosure",
   },
   {
     featureId: "F26",
@@ -338,7 +338,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/connectors"],
     component: "Connectors",
     kind: "observe",
-    evidence: "appliance connector reachability, masked target references, and rollback fixtures without live deploy",
+    evidence: "appliance connector reachability, masked target references, native/plugin delivery receipts, and rollback fixtures",
   },
   {
     featureId: "F28",
@@ -352,7 +352,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/policy"],
     component: "Policy",
     kind: "observe",
-    evidence: "notification channel fixtures with masked secret references, redacted failures, and outbox delivery disclosure without live channel config",
+    evidence: "served scheduler/outbox expiry-alert disclosure with masked notification-channel references and no live channel config",
   },
   {
     featureId: "F31",
@@ -482,7 +482,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/posture", "/risk"],
     component: "Posture",
     kind: "observe",
-    evidence: "CBOM library-only disclosure plus weak-crypto preview linked to risk",
+    evidence: "served CBOM scan/inventory API disclosure plus weak-crypto preview linked to risk",
   },
   { featureId: "F53", routes: ["/profiles"], component: "Profiles", kind: "operate", evidence: "profile creation" },
   {
@@ -522,7 +522,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/workloads"],
     component: "Workloads",
     kind: "observe",
-    evidence: "AI-agent broker identity/scope/expiry/audit fixture plus library-only disclosure",
+    evidence: "AI-agent broker identity/scope/expiry/audit fixture plus served REST/CLI disclosure",
   },
   {
     featureId: "F62",

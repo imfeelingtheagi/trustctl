@@ -49,9 +49,10 @@ const AgentCodecName = "agent.json"
 const (
 	AgentCapabilityHeartbeat = "heartbeat"
 	AgentCapabilityRenew     = "renew"
+	AgentCapabilityInventory = "inventory"
 )
 
-const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew
+const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew + "," + AgentCapabilityInventory
 
 // HeartbeatRequest is what an agent reports on each steady-state beat: its identity
 // and the inventory/status snapshot the control plane records. The authorizing
@@ -104,6 +105,34 @@ type RenewResponse struct {
 	NotAfterUnix int64 `json:"not_after_unix"`
 }
 
+// InventoryFinding is one metadata-only credential reference found by the agent on
+// its host. It carries identifiers and public metadata only, never secret values or
+// private key material.
+type InventoryFinding struct {
+	Kind        string            `json:"kind"`
+	Ref         string            `json:"ref"`
+	Provenance  string            `json:"provenance,omitempty"`
+	Fingerprint string            `json:"fingerprint,omitempty"`
+	RiskScore   int               `json:"risk_score,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+}
+
+// InventoryRequest carries a bounded batch of local host inventory findings. The
+// tenant is still derived from the verified mTLS peer certificate, not this request.
+type InventoryRequest struct {
+	SourceKind string             `json:"source_kind"`
+	Findings   []InventoryFinding `json:"findings"`
+}
+
+// InventoryResponse summarizes the evented discovery run the server created from an
+// inventory batch.
+type InventoryResponse struct {
+	TenantID string `json:"tenant_id"`
+	RunID    string `json:"run_id"`
+	Recorded int    `json:"recorded"`
+	Rejected int    `json:"rejected"`
+}
+
 // AgentServiceServer is the control-plane side of the agent steady-state channel.
 // Implementations derive the tenant from the verified peer certificate in ctx
 // (never a request field) and enforce AN-1/AN-2/AN-5 there.
@@ -114,6 +143,9 @@ type AgentServiceServer interface {
 	// Renew signs the agent's rotation CSR into a fresh client certificate bound to
 	// the agent's existing tenant, through the signer-held agent CA.
 	Renew(ctx context.Context, req *RenewRequest) (*RenewResponse, error)
+	// ReportInventory records metadata-only host inventory findings under the
+	// certificate-derived tenant.
+	ReportInventory(ctx context.Context, req *InventoryRequest) (*InventoryResponse, error)
 }
 
 // agentServiceName / method names are the gRPC routing identifiers. They are fixed
@@ -122,8 +154,10 @@ const (
 	agentServiceName    = "trstctl.agent.v1.AgentService"
 	methodHeartbeat     = "Heartbeat"
 	methodRenew         = "Renew"
+	methodInventory     = "ReportInventory"
 	fullMethodHeartbeat = "/" + agentServiceName + "/" + methodHeartbeat
 	fullMethodRenew     = "/" + agentServiceName + "/" + methodRenew
+	fullMethodInventory = "/" + agentServiceName + "/" + methodInventory
 )
 
 // RegisterAgentService registers srv on s under the agent service descriptor. The
@@ -139,6 +173,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 	Methods: []grpc.MethodDesc{
 		{MethodName: methodHeartbeat, Handler: heartbeatHandler},
 		{MethodName: methodRenew, Handler: renewHandler},
+		{MethodName: methodInventory, Handler: inventoryHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -174,9 +209,24 @@ func renewHandler(srv any, ctx context.Context, dec func(any) error, interceptor
 	return interceptor(ctx, in, info, handler)
 }
 
+func inventoryHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(InventoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReportInventory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodInventory}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(AgentServiceServer).ReportInventory(ctx, req.(*InventoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func agentProtocolInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	switch info.FullMethod {
-	case fullMethodHeartbeat, fullMethodRenew:
+	case fullMethodHeartbeat, fullMethodRenew, fullMethodInventory:
 	default:
 		return handler(ctx, req)
 	}
@@ -292,6 +342,15 @@ func (c *AgentClient) Heartbeat(ctx context.Context, req *HeartbeatRequest) (*He
 func (c *AgentClient) Renew(ctx context.Context, req *RenewRequest) (*RenewResponse, error) {
 	out := new(RenewResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodRenew, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReportInventory sends one metadata-only host inventory batch.
+func (c *AgentClient) ReportInventory(ctx context.Context, req *InventoryRequest) (*InventoryResponse, error) {
+	out := new(InventoryResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodInventory, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

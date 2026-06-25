@@ -75,12 +75,50 @@ func GenerateSLHDSAKey(a Algorithm) (*SLHDSASigner, error) {
 	return &SLHDSASigner{algorithm: a, der: buf, pubDER: pubDER}, nil
 }
 
+// NewSLHDSAKeyFromPrivateKey reconstructs an SLH-DSA signer from CIRCL-marshaled
+// private-key bytes. The bytes are copied into locked memory; the caller keeps
+// ownership of der and should wipe it after sealing/loading.
+func NewSLHDSAKeyFromPrivateKey(a Algorithm, der []byte) (*SLHDSASigner, error) {
+	id, err := slhdsaID(a)
+	if err != nil {
+		return nil, err
+	}
+	var priv slhdsa.PrivateKey
+	priv.ID = id
+	if err := priv.UnmarshalBinary(der); err != nil {
+		return nil, fmt.Errorf("crypto: parse SLH-DSA key: %w", err)
+	}
+	defer WipeBinaryPrivateKey(&priv)
+	pubDER, err := priv.PublicKey().MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("crypto: marshal SLH-DSA public key: %w", err)
+	}
+	buf, err := secret.NewFrom(der)
+	if err != nil {
+		return nil, err
+	}
+	return &SLHDSASigner{algorithm: a, der: buf, pubDER: pubDER}, nil
+}
+
 // Algorithm implements Signer.
 func (s *SLHDSASigner) Algorithm() Algorithm { return s.algorithm }
 
 // Public implements Signer.
 func (s *SLHDSASigner) Public() PublicKey {
 	return PublicKey{Algorithm: s.algorithm, DER: append([]byte(nil), s.pubDER...)}
+}
+
+// PrivateKeyBytes returns a copy of the CIRCL-marshaled private key for sealed
+// persistence. The returned bytes are unprotected memory; callers must wipe them
+// promptly after sealing.
+func (s *SLHDSASigner) PrivateKeyBytes() ([]byte, error) {
+	der := s.der.Bytes()
+	if der == nil {
+		return nil, fmt.Errorf("crypto: SLH-DSA key has been destroyed")
+	}
+	out := make([]byte, len(der))
+	copy(out, der)
+	return out, nil
 }
 
 // Destroy zeroizes and releases the locked key.
@@ -111,6 +149,12 @@ func (s *SLHDSASigner) Sign(message []byte, _ SignOptions) ([]byte, error) {
 		return nil, fmt.Errorf("crypto: SLH-DSA sign: %w", err)
 	}
 	return sig, nil
+}
+
+// SignDigest lets an SLH-DSA key satisfy DigestSigner. SLH-DSA hashes internally,
+// so it signs the supplied digest bytes directly.
+func (s *SLHDSASigner) SignDigest(digest []byte, opts SignOptions) ([]byte, error) {
+	return s.Sign(digest, opts)
 }
 
 // VerifySLHDSA verifies an SLH-DSA signature over message against pub.

@@ -1,8 +1,8 @@
 # Signing service — threat model and protocol design
 
 - **Status:** Reviewed — accepted as the design of record for the signing-service build.
-- **Implements (design):** the isolated signer process, building on the single crypto
-  boundary and the wipeable secret-memory buffers.
+- **Implements (design):** isolated signer process, building on the single crypto
+  boundary and wipeable secret-memory buffers.
 - **Drives:** the signer implementation, and is revisited by the HSM/KMS-backend and
   break-glass work.
 

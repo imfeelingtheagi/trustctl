@@ -20,6 +20,9 @@ const (
 	// (F17) — a sibling destination on the same notification surface, so the
 	// same channel integrations (Slack, Teams, email, ... F29) consume both.
 	DestinationCTLog = "notification.ct"
+	// DestinationDrift carries credential drift alerts (F18) through the same
+	// notification fanout as expiry and CT monitoring.
+	DestinationDrift = "notification.drift"
 )
 
 // Alert kinds.
@@ -31,6 +34,9 @@ const (
 	// found in a CT log for a watched domain that trstctl did not expect —
 	// shadow IT or rogue issuance (F17).
 	KindUnexpectedIssuance = "certificate.unexpected_issuance"
+	// KindCredentialDrift marks an alert raised because a credential no longer
+	// matches the state the agent/control plane declared.
+	KindCredentialDrift = "credential.drift"
 )
 
 // Alert is one operational alert on the notification surface — the JSON payload

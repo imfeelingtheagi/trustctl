@@ -29,7 +29,7 @@ spec:
           # separate, un-built "-agent" image (OPS-002). This file is a digest
           # template: render it with scripts/release/render-kubernetes-agent-daemonset.sh
           # and a verified release image before applying.
-          image: ghcr.io/imfeelingtheagi/trstctl@sha256:RELEASE_DIGEST_REQUIRED
+          image: ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED
           command: ["/usr/local/bin/trstctl-agent"]
           args:
             - "--k8s"

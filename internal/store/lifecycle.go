@@ -94,3 +94,33 @@ func (s *Store) ListAlertableCertificates(ctx context.Context, tenantID string, 
 	})
 	return out, err
 }
+
+// TenantsWithAlertableCertificates returns tenant ids that currently have at least
+// one active certificate inside the alert window. It is a system enumerator only:
+// each tenant's actual certificate rows are then loaded by ListAlertableCertificates
+// under that tenant's RLS context.
+func (s *Store) TenantsWithAlertableCertificates(ctx context.Context, now, before time.Time) ([]string, error) {
+	rows, err := s.SystemPool().Query(ctx,
+		//trstctl:system-query — cross-tenant by design: the leader scheduler enumerates which tenants have expiry-alert work, then re-enters tenant-scoped RLS for the rows themselves.
+		`SELECT DISTINCT tenant_id::text
+		   FROM certificates
+		  WHERE status = 'active'
+		    AND alerted_at IS NULL
+		    AND not_after IS NOT NULL
+		    AND not_after >= $1
+		    AND not_after < $2
+		  ORDER BY 1`, now, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tenants []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		tenants = append(tenants, tenantID)
+	}
+	return tenants, rows.Err()
+}

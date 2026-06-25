@@ -12,7 +12,7 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
 
-const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "secret_store", "api_key", "agent", "manual"];
+const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "ct_log", "drift", "secret_store", "api_key", "agent", "manual"];
 
 export function Discovery() {
   const [sources, setSources] = useState<DiscoverySource[]>([]);

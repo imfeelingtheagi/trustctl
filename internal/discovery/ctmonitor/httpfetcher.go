@@ -28,6 +28,16 @@ func NewHTTPFetcher() Fetcher {
 	return &httpFetcher{client: &http.Client{Timeout: 30 * time.Second}}
 }
 
+// NewHTTPFetcherWithClient returns a Fetcher that uses the caller's HTTP client.
+// Served composition uses this to enforce the same SSRF-safe client policy as other
+// operator-supplied outbound endpoints, while tests inject loopback-capable clients.
+func NewHTTPFetcherWithClient(client *http.Client) Fetcher {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	return &httpFetcher{client: client}
+}
+
 // TreeSize fetches the signed tree head and returns the log's entry count.
 func (f *httpFetcher) TreeSize(ctx context.Context, logURL string) (int64, error) {
 	body, err := f.get(ctx, logURL, "/ct/v1/get-sth", nil)

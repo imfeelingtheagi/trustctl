@@ -54,6 +54,33 @@ func read(t *testing.T, rel string) string {
 	return string(b)
 }
 
+func TestNHIIdentityLifecycleIsServedOnly(t *testing.T) {
+	if _, err := os.Stat(filepath.FromSlash("../internal/nhi")); err == nil {
+		t.Fatal("internal/nhi still exists as a parallel identity lifecycle package; F59 must use the served PostgreSQL-backed /api/v1/identities path only")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat internal/nhi: %v", err)
+	}
+
+	paths := openAPIPaths(t)
+	for _, path := range []string{"/api/v1/identities", "/api/v1/identities/{id}/transitions"} {
+		if !paths[path] {
+			t.Fatalf("served identity OpenAPI path %s is missing; F59 lost its canonical API surface", path)
+		}
+	}
+
+	wi := strings.Join(strings.Fields(strings.ToLower(read(t, "features/workload-identity.md"))), " ")
+	for _, want := range []string{
+		"served rest routes `post /api/v1/identities`",
+		"`post /api/v1/identities/{id}/transitions`",
+		"idempotency-key",
+		"postgresql-backed identity rows",
+	} {
+		if !strings.Contains(wi, want) {
+			t.Errorf("features/workload-identity.md must document canonical served identity lifecycle detail %q", want)
+		}
+	}
+}
+
 func TestWebAvailabilityCopyIsBackedByOpenAPIAndCLI(t *testing.T) {
 	for _, file := range webClaimFiles(t) {
 		body := strings.ToLower(read(t, file))
@@ -1226,7 +1253,7 @@ func assertClaimReality(t *testing.T, page, body, claim string, served bool, ser
 	}
 }
 
-func apiServesCAHierarchy(t *testing.T) bool {
+func apiServesCAHierarchyRootIntermediate(t *testing.T) bool {
 	t.Helper()
 	const hierarchyImport = `trstctl.com/trstctl/internal/ca/hierarchy"`
 	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
@@ -1237,6 +1264,13 @@ func apiServesCAHierarchy(t *testing.T) bool {
 		}
 	}
 	return false
+}
+
+func apiServesCAHierarchyRotation(t *testing.T) bool {
+	t.Helper()
+	apiRoutes := read(t, "../internal/api/api.go")
+	return strings.Contains(apiRoutes, `"/api/v1/ca/authorities/{id}/rotate"`) ||
+		strings.Contains(apiRoutes, "rotateCA")
 }
 
 // TestHighTrafficClaimLedgerMatchesCodeReality extends the served/library guard
@@ -1296,12 +1330,15 @@ func TestHighTrafficClaimLedgerMatchesCodeReality(t *testing.T) {
 		[]string{"not yet served", "library-only"},
 		[]string{"not wired", "library island"})
 
-	if apiServesCAHierarchy(t) {
+	if apiServesCAHierarchyRootIntermediate(t) && !strings.Contains(incident, "root/intermediate ca creation") {
+		t.Error("runbooks/incident-response.md should mention served root/intermediate CA creation once that CA hierarchy slice is wired")
+	}
+	if apiServesCAHierarchyRotation(t) {
 		if !strings.Contains(incident, "rotate the ca") || !strings.Contains(incident, "yes") {
-			t.Error("runbooks/incident-response.md should mark CA rotation as served once API/server wires the hierarchy manager")
+			t.Error("runbooks/incident-response.md should mark CA rotation as served once API/server wires a rotation route")
 		}
 		if strings.Contains(incident, "library (go api)") {
-			t.Error("runbooks/incident-response.md still marks CA rotation library-only after API/server wires the hierarchy manager")
+			t.Error("runbooks/incident-response.md still marks CA rotation library-only after API/server wires a rotation route")
 		}
 	} else {
 		if !strings.Contains(incidentRaw, "| rotate the ca | m-of-n [key ceremony](key-ceremony.md) | library (go api) |") {
@@ -2033,8 +2070,8 @@ func TestHistoricalParserCrashGuardrailsStayConcrete(t *testing.T) {
 }
 
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
-// canonical namespace (imfeelingtheagi). The audit flagged a bare organization
-// namespace vs imfeelingtheagi/trstctl drift; this fails if it ever returns.
+// canonical namespace (ctlplne). The audit flagged a bare organization
+// namespace vs ctlplne/trstctl drift; this fails if it ever returns.
 func TestCloneAndImageURLsConsistent(t *testing.T) {
 	files := []string{
 		"../README.md",
@@ -2049,10 +2086,10 @@ func TestCloneAndImageURLsConsistent(t *testing.T) {
 		}
 		s := string(body)
 		if strings.Contains(s, "github.com/trstctl/trstctl") {
-			t.Errorf("%s uses github.com/trstctl/trstctl; standardize on github.com/imfeelingtheagi/trstctl", f)
+			t.Errorf("%s uses github.com/trstctl/trstctl; standardize on github.com/ctlplne/trstctl", f)
 		}
 		if strings.Contains(s, "ghcr.io/trstctl/trstctl") {
-			t.Errorf("%s uses ghcr.io/trstctl/trstctl; standardize on ghcr.io/imfeelingtheagi/trstctl", f)
+			t.Errorf("%s uses ghcr.io/trstctl/trstctl; standardize on ghcr.io/ctlplne/trstctl", f)
 		}
 	}
 }

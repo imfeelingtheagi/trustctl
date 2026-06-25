@@ -18,44 +18,53 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered          = "tenant.registered"
-	EventTenantOffboarded          = "tenant.offboarded"
-	EventOwnerCreated              = "owner.created"
-	EventOwnerUpdated              = "owner.updated"
-	EventOwnerDeleted              = "owner.deleted"
-	EventIssuerCreated             = "issuer.created"
-	EventIdentityCreated           = "identity.created"
-	EventIdentityIssued            = "identity.issued"
-	EventIdentityDeployed          = "identity.deployed"
-	EventIdentityRevoked           = "identity.revoked"
-	EventIdentityRenewing          = "identity.renewing"
-	EventIdentityRenewed           = "identity.renewed"
-	EventIdentityRetired           = "identity.retired"
-	EventCertificateRecorded       = "certificate.recorded"
-	EventCertificateRevoked        = "certificate.revoked"
-	EventCertificateSuperseded     = "certificate.superseded"
-	EventCAIssuedCertificate       = "ca.certificate.issued"
-	EventCACertificateRevoked      = "ca.certificate.revoked"
-	EventCRLPublished              = "ca.crl.published"
-	EventAgentHeartbeat            = "agent.heartbeat"
-	EventAgentCertRenewed          = "agent.cert.renewed"
-	EventProfileCreated            = "profile.created"
-	EventProfileUpdated            = "profile.updated"
-	EventDiscoverySourceUpserted   = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted = "discovery.schedule.upserted"
-	EventDiscoveryRunQueued        = "discovery.run.queued"
-	EventDiscoveryRunStarted       = "discovery.run.started"
-	EventDiscoveryFindingRecorded  = "discovery.finding.recorded"
-	EventDiscoveryRunCompleted     = "discovery.run.completed"
-	EventConnectorDeliveryRecorded = "connector.delivery.recorded"
-	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
-	EventIncidentExecutionRecorded = "incident.execution.recorded"
-	EventPrivacySubjectErased      = "privacy.subject.erased"
-	EventPrivacyRetentionEnforced  = "privacy.retention.enforced"
-	EventTenantMemberUpserted      = "tenant.member.upserted"
-	EventTenantMemberOffboarded    = "tenant.member.offboarded"
-	EventAPITokenCreated           = "api_token.created"
-	EventAPITokenRevoked           = "api_token.revoked"
+	EventTenantRegistered              = "tenant.registered"
+	EventTenantOffboarded              = "tenant.offboarded"
+	EventOwnerCreated                  = "owner.created"
+	EventOwnerUpdated                  = "owner.updated"
+	EventOwnerDeleted                  = "owner.deleted"
+	EventIssuerCreated                 = "issuer.created"
+	EventIdentityCreated               = "identity.created"
+	EventIdentityIssued                = "identity.issued"
+	EventIdentityDeployed              = "identity.deployed"
+	EventIdentityRevoked               = "identity.revoked"
+	EventIdentityRenewing              = "identity.renewing"
+	EventIdentityRenewed               = "identity.renewed"
+	EventIdentityRetired               = "identity.retired"
+	EventCertificateRecorded           = "certificate.recorded"
+	EventCertificateRevoked            = "certificate.revoked"
+	EventCertificateSuperseded         = "certificate.superseded"
+	EventCAIssuedCertificate           = "ca.certificate.issued"
+	EventCACertificateRevoked          = "ca.certificate.revoked"
+	EventCACeremonyStarted             = "ca.ceremony.started"
+	EventCACeremonyApproved            = "ca.ceremony.approved"
+	EventCARootCreated                 = "ca.root.created"
+	EventCAIntermediateCreated         = "ca.intermediate.created"
+	EventCAEndEntityIssued             = "ca.endentity.issued"
+	EventCRLPublished                  = "ca.crl.published"
+	EventAgentHeartbeat                = "agent.heartbeat"
+	EventAgentCertRenewed              = "agent.cert.renewed"
+	EventProfileCreated                = "profile.created"
+	EventProfileUpdated                = "profile.updated"
+	EventDiscoverySourceUpserted       = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted     = "discovery.schedule.upserted"
+	EventDiscoveryRunQueued            = "discovery.run.queued"
+	EventDiscoveryRunStarted           = "discovery.run.started"
+	EventDiscoveryFindingRecorded      = "discovery.finding.recorded"
+	EventDiscoveryRunCompleted         = "discovery.run.completed"
+	EventCBOMAssetObserved             = "cbom.asset.observed"
+	EventPQCMigrationStarted           = "pqc.migration.started"
+	EventPQCMigrationAssetCompleted    = "pqc.migration.asset_completed"
+	EventPQCMigrationRollbackCompleted = "pqc.migration.rollback_completed"
+	EventConnectorDeliveryRecorded     = "connector.delivery.recorded"
+	EventLifecycleRotationRecorded     = "lifecycle.rotation.recorded"
+	EventIncidentExecutionRecorded     = "incident.execution.recorded"
+	EventPrivacySubjectErased          = "privacy.subject.erased"
+	EventPrivacyRetentionEnforced      = "privacy.retention.enforced"
+	EventTenantMemberUpserted          = "tenant.member.upserted"
+	EventTenantMemberOffboarded        = "tenant.member.offboarded"
+	EventAPITokenCreated               = "api_token.created"
+	EventAPITokenRevoked               = "api_token.revoked"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -324,6 +333,80 @@ type DiscoveryRunCompleted struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// CBOMAssetObserved is the payload of cbom.asset.observed. It contains only
+// observed public cryptographic facts and classification labels, never key
+// material. The projector rebuilds crypto_assets from these events.
+type CBOMAssetObserved struct {
+	ID                string   `json:"id"`
+	Kind              string   `json:"kind"`
+	Location          string   `json:"location"`
+	Algorithm         string   `json:"algorithm,omitempty"`
+	KeyBits           int      `json:"key_bits,omitempty"`
+	Protocol          string   `json:"protocol,omitempty"`
+	Cipher            string   `json:"cipher,omitempty"`
+	Library           string   `json:"library,omitempty"`
+	Strength          string   `json:"strength"`
+	QuantumVulnerable bool     `json:"quantum_vulnerable"`
+	OutOfPolicy       bool     `json:"out_of_policy"`
+	Reasons           []string `json:"reasons,omitempty"`
+}
+
+// PQCMigrationStarted records the tenant-scoped operator intent to re-issue CBOM
+// assets toward a post-quantum target. The side effect itself is still an outbox
+// row; this event is the immutable request fact.
+type PQCMigrationStarted struct {
+	RunID              string   `json:"run_id"`
+	AssetIDs           []string `json:"asset_ids"`
+	TargetAlgorithm    string   `json:"target_algorithm"`
+	EffectiveAlgorithm string   `json:"effective_algorithm"`
+	Protocol           string   `json:"protocol"`
+	RollbackOnFailure  bool     `json:"rollback_on_failure"`
+	Queued             int      `json:"queued"`
+}
+
+// PQCMigrationAssetCompleted projects a migrated CBOM row after the outbox worker
+// has minted the replacement certificate through the served protocol path.
+type PQCMigrationAssetCompleted struct {
+	RunID                     string   `json:"run_id"`
+	AssetID                   string   `json:"asset_id"`
+	Kind                      string   `json:"kind"`
+	Location                  string   `json:"location"`
+	OriginalAlgorithm         string   `json:"original_algorithm"`
+	OriginalKeyBits           int      `json:"original_key_bits,omitempty"`
+	OriginalProtocol          string   `json:"original_protocol,omitempty"`
+	OriginalCipher            string   `json:"original_cipher,omitempty"`
+	OriginalLibrary           string   `json:"original_library,omitempty"`
+	OriginalStrength          string   `json:"original_strength"`
+	OriginalQuantumVulnerable bool     `json:"original_quantum_vulnerable"`
+	OriginalOutOfPolicy       bool     `json:"original_out_of_policy"`
+	OriginalReasons           []string `json:"original_reasons,omitempty"`
+	TargetAlgorithm           string   `json:"target_algorithm"`
+	EffectiveAlgorithm        string   `json:"effective_algorithm"`
+	EffectiveKeyBits          int      `json:"effective_key_bits,omitempty"`
+	Protocol                  string   `json:"protocol"`
+	CertificateFingerprint    string   `json:"certificate_fingerprint"`
+	RollbackRef               string   `json:"rollback_ref"`
+}
+
+// PQCMigrationRollbackCompleted projects the original CBOM row back after an
+// operator rollback drill or break-glass rollback.
+type PQCMigrationRollbackCompleted struct {
+	RunID             string   `json:"run_id"`
+	AssetID           string   `json:"asset_id"`
+	Kind              string   `json:"kind"`
+	Location          string   `json:"location"`
+	Algorithm         string   `json:"algorithm"`
+	KeyBits           int      `json:"key_bits,omitempty"`
+	Protocol          string   `json:"protocol,omitempty"`
+	Cipher            string   `json:"cipher,omitempty"`
+	Library           string   `json:"library,omitempty"`
+	Strength          string   `json:"strength"`
+	QuantumVulnerable bool     `json:"quantum_vulnerable"`
+	OutOfPolicy       bool     `json:"out_of_policy"`
+	Reasons           []string `json:"reasons,omitempty"`
+	Reason            string   `json:"reason,omitempty"`
+}
+
 // ConnectorDeliveryRecorded is the payload of connector.delivery.recorded.
 // It is delivery evidence only: no certificate PEM, key PEM, token, or secret
 // bytes may appear here.
@@ -527,6 +610,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunStarted:       {1: true},
 	EventDiscoveryFindingRecorded:  {1: true},
 	EventDiscoveryRunCompleted:     {1: true},
+	EventCBOMAssetObserved:         {1: true},
 	EventConnectorDeliveryRecorded: {1: true},
 	EventLifecycleRotationRecorded: {1: true},
 	EventIncidentExecutionRecorded: {1: true},
@@ -536,6 +620,12 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantMemberOffboarded:    {1: true},
 	EventAPITokenCreated:           {1: true},
 	EventAPITokenRevoked:           {1: true},
+}
+
+func init() {
+	knownSchemaVersions[EventPQCMigrationStarted] = map[int]bool{1: true}
+	knownSchemaVersions[EventPQCMigrationAssetCompleted] = map[int]bool{1: true}
+	knownSchemaVersions[EventPQCMigrationRollbackCompleted] = map[int]bool{1: true}
 }
 
 var lifecycleEventTypes = map[string]bool{
@@ -818,6 +908,58 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Error: pl.Error, CompletedAt: &completedAt,
 		})
+	case EventCBOMAssetObserved:
+		var pl CBOMAssetObserved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Kind == "" || pl.Location == "" || pl.Strength == "" {
+			return fmt.Errorf("projections: %s requires id, kind, location, and strength", e.Type)
+		}
+		return p.store.ApplyCryptoAssetObservedTx(ctx, tx, store.CryptoAsset{
+			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
+			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
+			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
+			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
+			Reasons: pl.Reasons,
+		}, e.Time)
+	case EventPQCMigrationStarted:
+		var pl PQCMigrationStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RunID == "" || len(pl.AssetIDs) == 0 || pl.TargetAlgorithm == "" || pl.Protocol == "" {
+			return fmt.Errorf("projections: %s requires run_id, asset_ids, target_algorithm, and protocol", e.Type)
+		}
+		return nil
+	case EventPQCMigrationAssetCompleted:
+		var pl PQCMigrationAssetCompleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RunID == "" || pl.AssetID == "" || pl.Kind == "" || pl.Location == "" || pl.EffectiveAlgorithm == "" {
+			return fmt.Errorf("projections: %s requires run_id, asset_id, kind, location, and effective_algorithm", e.Type)
+		}
+		reasons := []string{"PQC migration run " + pl.RunID + " re-issued through " + pl.Protocol}
+		return p.store.ApplyCryptoAssetMigratedTx(ctx, tx, store.CryptoAsset{
+			ID: pl.AssetID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
+			Algorithm: pl.EffectiveAlgorithm, KeyBits: pl.EffectiveKeyBits, Library: pl.OriginalLibrary,
+			Strength: "strong", QuantumVulnerable: false, OutOfPolicy: false, Reasons: reasons,
+		}, e.Time)
+	case EventPQCMigrationRollbackCompleted:
+		var pl PQCMigrationRollbackCompleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RunID == "" || pl.AssetID == "" || pl.Kind == "" || pl.Location == "" || pl.Strength == "" {
+			return fmt.Errorf("projections: %s requires run_id, asset_id, kind, location, and strength", e.Type)
+		}
+		return p.store.ApplyCryptoAssetRolledBackTx(ctx, tx, store.CryptoAsset{
+			ID: pl.AssetID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
+			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
+			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
+			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy, Reasons: pl.Reasons,
+		}, e.Time)
 	case EventConnectorDeliveryRecorded:
 		var pl ConnectorDeliveryRecorded
 		if err := decode(e, &pl); err != nil {

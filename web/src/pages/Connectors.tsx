@@ -94,9 +94,9 @@ const applianceConnectors = [
 const outboxStates = [
   { state: "pending", meaning: "intent was written in the same transaction as the lifecycle state change" },
   { state: "processing", meaning: "bounded connector worker owns the delivery attempt" },
-  { state: "delivered", meaning: "a signed connector plugin accepted the deployment" },
-  { state: "unrouted", meaning: "the outbox acknowledged the attempt, but no matching signed plugin was loaded" },
-  { state: "failed", meaning: "the plugin returned an error and the outbox retry policy remains authoritative" },
+  { state: "delivered", meaning: "a native registry entry or signed connector plugin accepted the deployment" },
+  { state: "unrouted", meaning: "the outbox acknowledged the attempt, but no native registry entry or signed plugin owned the payload" },
+  { state: "failed", meaning: "the native connector or plugin returned an error and the outbox retry policy remains authoritative" },
 ];
 
 export function Connectors() {

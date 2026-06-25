@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -156,6 +157,10 @@ func wipeStdlibKey(key any) {
 		zeroBigInt(k.Precomputed.Dp)
 		zeroBigInt(k.Precomputed.Dq)
 		zeroBigInt(k.Precomputed.Qinv)
+	case ed25519.PrivateKey:
+		for i := range k {
+			k[i] = 0
+		}
 	}
 	runtime.KeepAlive(key)
 }

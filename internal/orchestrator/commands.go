@@ -98,6 +98,28 @@ func (o *Orchestrator) CreateOwner(ctx context.Context, tenantID, kind, name, em
 	return store.Owner{ID: id, TenantID: tenantID, Kind: store.OwnerKind(kind), Name: name, Email: email, CreatedAt: ev.Time}, nil
 }
 
+// EnsureOwner records an owner.created event with a caller-provided stable ID
+// only when that owner is absent. It is used by served system-owned identities
+// whose graph node must be deterministic across retries and rebuilds.
+func (o *Orchestrator) EnsureOwner(ctx context.Context, tenantID, id string, kind store.OwnerKind, name, email string) (store.Owner, error) {
+	existing, err := o.store.GetOwner(ctx, tenantID, id)
+	if err == nil {
+		return existing, nil
+	}
+	if !store.IsNotFound(err) {
+		return store.Owner{}, err
+	}
+	payload, err := json.Marshal(projections.OwnerCreated{ID: id, Kind: string(kind), Name: name, Email: email})
+	if err != nil {
+		return store.Owner{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventOwnerCreated, tenantID, payload)
+	if err != nil {
+		return store.Owner{}, err
+	}
+	return store.Owner{ID: id, TenantID: tenantID, Kind: kind, Name: name, Email: email, CreatedAt: ev.Time}, nil
+}
+
 // UpdateOwner records an owner.updated event. It returns a not-found error
 // (mapped to 404) when the owner does not exist, without emitting an event — so
 // a no-op never produces a spurious event.

@@ -84,7 +84,7 @@ spec:
           # (deploy/docker/Dockerfile installs /usr/local/bin/trstctl-operator).
           # Replace this placeholder with the immutable digest from a verified
           # release before applying; do not run the operator from a mutable tag.
-          image: ghcr.io/imfeelingtheagi/trstctl@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/ctlplne/trstctl@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: ["/usr/local/bin/trstctl-operator"]
           args: ["--leader-elect"]
           securityContext:

@@ -116,7 +116,7 @@ func TestOutboxBackoffDefersRetry(t *testing.T) {
 func TestOutboxRetryJitterDesynchronizesSameDestinationRows(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	now := time.Date(2026, 6, 21, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
 	jitters := []time.Duration{125 * time.Millisecond, 375 * time.Millisecond}
 	ob := orchestrator.NewOutbox(s,
 		orchestrator.WithNow(func() time.Time { return now }),
@@ -163,7 +163,7 @@ func TestOutboxRetryJitterDesynchronizesSameDestinationRows(t *testing.T) {
 func TestOutboxOpenCircuitPreventsClaimsUntilHalfOpenProbe(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	now := time.Date(2026, 6, 21, 13, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
 	ob := orchestrator.NewOutbox(s,
 		orchestrator.WithNow(func() time.Time { return now }),
 		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),

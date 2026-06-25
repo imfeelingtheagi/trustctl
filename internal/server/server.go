@@ -24,16 +24,21 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/pqc"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/idemgc"
+	"trstctl.com/trstctl/internal/lifecycle"
+	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/outboxgc"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/webui"
@@ -115,12 +120,24 @@ type Deps struct {
 	// outbox path for certificates expiring inside this window. Zero disables the
 	// scheduler (tests can still drive manual renewal transitions).
 	LifecycleRenewBefore time.Duration
+	// LifecycleAlertBefore enables expiry alert sweeps for served notification
+	// channels. When >0 and NotificationChannels is non-empty, the leader scheduler
+	// finds active X.509 certificates expiring inside this window, enqueues a
+	// notification.expiry outbox row, and stamps alerted_at in the same transaction.
+	// The outbox worker then dispatches the alert through the configured notify
+	// channels (Slack, Teams, email, PagerDuty, OpsGenie, webhook). Zero disables
+	// expiry-alert sweeps.
+	LifecycleAlertBefore time.Duration
 	// LifecycleInterval is the scheduler cadence. Zero selects a conservative default.
 	LifecycleInterval time.Duration
-	Logger            *slog.Logger    // structured access log sink (R2.2); nil discards
-	TraceExporter     observ.Exporter // completed-span sink (R2.2); nil is a no-op
-	Bulkhead          *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
-	RateLimiter       api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
+	// NotificationChannels are the operator-configured served notification sinks
+	// (NOTIF-01/F29). They are driven only by notification.* outbox rows; the
+	// scheduler never calls a channel directly, preserving AN-6 at-least-once delivery.
+	NotificationChannels []notify.Notifier
+	Logger               *slog.Logger    // structured access log sink (R2.2); nil discards
+	TraceExporter        observ.Exporter // completed-span sink (R2.2); nil is a no-op
+	Bulkhead             *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
+	RateLimiter          api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
 	// SecurityHeaders configures the web-hardening response headers + CORS policy
 	// applied to the whole served surface (SEC-003/WIRE-005). The zero value is
 	// safe (headers on, HSTS off, same-origin-only CORS); Run sets TLS from the
@@ -137,6 +154,39 @@ type Deps struct {
 	// ProtocolTenant is the platform default tenant a protocol binds when its own
 	// TenantID is unset. Run passes the configured default tenant.
 	ProtocolTenant string
+	// AttestedIssuance enables the served workload attestation → X.509-SVID mint
+	// (NHI-02/F30). The running binary constructs an attest.Verifier from all six
+	// attesters, verifies the presented proof, signs through the out-of-process
+	// issuing CA, and records the SVID as certificate.recorded. The zero value leaves
+	// the route fail-closed with 503.
+	AttestedIssuance AttestedIssuanceConfig
+	// AgentBroker enables the served AI-agent / NHI identity broker (NHI-03/F61).
+	// The running binary composes internal/broker with the policy engine, attesters,
+	// signer-backed short-lived X.509-SVID issuance, and event-sourced certificate
+	// inventory so grants show in the credential graph. The zero value leaves the
+	// route fail-closed with 503.
+	AgentBroker AgentBrokerConfig
+	// EphemeralIssuance enables the served approval-gated JIT credential path
+	// (NHI-04/F25/F33). A request must pass attestation, open/meet dual-control
+	// approval, and then mint through the signer-backed CA. The zero value leaves
+	// the route fail-closed with 503.
+	EphemeralIssuance EphemeralIssuanceConfig
+
+	// ExternalCAs configures the served upstream-CA registry (CLM-03/F4): each entry
+	// is a built-in CA plugin instance (Let's Encrypt/ACME, DigiCert, Sectigo, AD CS,
+	// AWS PCA, GCP CAS, EJBCA, smallstep, ...), and the running binary exposes it
+	// under /api/v1/external-cas. Upstream credentials live in these process
+	// configs/plugins as []byte where secret, never in tenant JSON. Empty leaves the
+	// surface fail-closed.
+	ExternalCAs []ExternalCA
+
+	// ConnectorRegistry configures the trusted, in-process native deployment
+	// connectors (CLM-05/F7/F27). When set, connector.deploy outbox rows whose
+	// connector name is registered here are delivered by the running binary through
+	// the connector SDK sandbox and recorded as event-sourced delivery receipts.
+	// Empty preserves the prior behavior: plugin-owned rows may run through the
+	// signed WASM plugin surface; otherwise they are acknowledged as unrouted.
+	ConnectorRegistry *connector.Registry
 
 	// Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
 	// ARCH-007/SUPPLY-004): the directory of operator-supplied connector plugins, the
@@ -298,6 +348,16 @@ type Server struct {
 	// disabled. Every protocol mints through the signer-backed, tenant-scoped,
 	// event-sourced, idempotent issuance seam (protocolIssuer).
 	protocols *servedProtocols
+	// attestedIssuance is the served verifier + short-lived X.509-SVID issuer
+	// (NHI-02/F30). It is nil unless explicitly configured; the API delegate then
+	// returns 503 so upgrades do not silently expose a new minting path.
+	attestedIssuance *attestedIssuerService
+	// agentBroker is the served policy-gated AI/MCP agent identity broker
+	// (NHI-03/F61). Nil makes the API delegate fail closed with 503.
+	agentBroker *agentBrokerService
+	// ephemeralIssuer is the served approval-gated ephemeral/JIT credential issuer
+	// (NHI-04/F25/F33). Nil makes the API delegate fail closed with 503.
+	ephemeralIssuer *ephemeralIssuerService
 	// protoRACertDER / protoRAKeyPKCS8 are the RSA transport key+cert SCEP/CMP use
 	// for CMS transport (AN-4: NOT the CA key, which stays in the signer). They are
 	// loaded from a sealed, shared RA identity and memoized so SCEP and CMP share one
@@ -318,6 +378,15 @@ type Server struct {
 	// the plugin surface is not configured (the prior behavior — a connector.deploy
 	// is acknowledged unrouted). Wired into the issuance dispatcher's deploy path.
 	plugins *PluginManager
+
+	// connectorRegistry is the trusted native connector registry (CLM-05/F7/F27).
+	// It is operator-configured in Deps and is used only by the outbox dispatcher;
+	// deployment remains outbox-driven, tenant-scoped, and event-sourced.
+	connectorRegistry *connector.Registry
+	// notifications is the served notification dispatcher. It fans notification.*
+	// outbox rows to operator-configured channels; nil preserves the prior no-channel
+	// behavior for notification rows while still letting producers enqueue intents.
+	notifications *notify.Dispatcher
 
 	logger    *slog.Logger
 	registry  *observ.Registry
@@ -390,10 +459,12 @@ type Server struct {
 	mCRLLastOK   *observ.Gauge
 
 	// Lifecycle automation telemetry (JOURNEY-002): identities queued for served
-	// renewal and scheduler failures.
+	// renewal, expiry notifications enqueued, and scheduler failures.
 	lifecycleRenewBefore time.Duration
+	lifecycleAlertBefore time.Duration
 	lifecycleInterval    time.Duration
 	mLifecycleQueued     *observ.Counter
+	mLifecycleAlerts     *observ.Counter
 	mLifecycleFailures   *observ.Counter
 	mLifecycleLastOK     *observ.Gauge
 
@@ -557,7 +628,12 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	s.featureMetrics = observ.NewFeatureMetrics(s.registry)
 	defaults := []api.Option{
 		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
+		api.WithAttestedIssuer(s),
+		api.WithBroker(s),
+		api.WithEphemeralIssuer(s),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
+		api.WithCBOM(s.buildCBOMService(d)),
+		api.WithPQCMigration(s.buildPQCMigrationService(d)),
 	}
 	var auditSvc *audit.Service
 	if d.AuditSigningKey != nil {
@@ -586,6 +662,14 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 			return nil, nil, errors.New("server: secrets API enabled but no KEK provided (envelope encryption at rest is required)")
 		}
 		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
+	}
+	if hierarchySvc := s.buildCAHierarchyService(d); hierarchySvc != nil {
+		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))
+	}
+	if externalCAs, err := s.buildExternalCAService(d, idem); err != nil {
+		return nil, nil, err
+	} else if externalCAs != nil {
+		defaults = append(defaults, api.WithExternalCAs(externalCAs))
 	}
 	if mk, err := buildManagedKeyService(d, idem); err != nil {
 		return nil, nil, fmt.Errorf("server: configure managed-key lifecycle: %w", err)
@@ -637,9 +721,19 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 		return fmt.Errorf("server: load plugins: %w", err)
 	}
 	s.plugins = plugins
+	s.connectorRegistry = d.ConnectorRegistry
 	ensureCRL, publishCRL := s.configureRevocationSurface(d)
 	s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL)
 	if err := s.configureProtocolSurfaces(ctx, d); err != nil {
+		return err
+	}
+	if err := s.configureAttestedIssuanceSurface(d); err != nil {
+		return err
+	}
+	if err := s.configureAgentBrokerSurface(d); err != nil {
+		return err
+	}
+	if err := s.configureEphemeralIssuanceSurface(d, idem); err != nil {
 		return err
 	}
 	return s.configureAgentChannelSurface(d, idem)
@@ -673,12 +767,15 @@ func (s *Server) configureRevocationSurface(d Deps) (func(context.Context, strin
 }
 
 func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) {
+	if len(d.NotificationChannels) > 0 {
+		s.notifications = notify.NewDispatcher(d.NotificationChannels...)
+	}
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, store: d.Store, log: d.Log, plugins: s.plugins}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications}
 	}
 }
 
@@ -697,6 +794,46 @@ func (s *Server) configureProtocolSurfaces(ctx context.Context, d Deps) error {
 	return nil
 }
 
+func (s *Server) configureAttestedIssuanceSurface(d Deps) error {
+	svc, err := newAttestedIssuerService(attestedIssuerDeps{
+		Config: d.AttestedIssuance, Store: d.Store, Log: d.Log, Orch: s.orch,
+		CASigner: s.caSigner, CACertDER: s.caCertDER, CAID: IssuingCAID(),
+		Audit: attestedIssuanceAuditor(d.Log),
+	})
+	if err != nil {
+		return err
+	}
+	s.attestedIssuance = svc
+	return nil
+}
+
+func (s *Server) configureAgentBrokerSurface(d Deps) error {
+	svc, err := newAgentBrokerService(agentBrokerDeps{
+		Config: d.AgentBroker, Store: d.Store, Log: d.Log, Orch: s.orch,
+		CASigner: s.caSigner, CACertDER: s.caCertDER, CAID: IssuingCAID(),
+		Audit: brokerAuditor(d.Log),
+	})
+	if err != nil {
+		return err
+	}
+	s.agentBroker = svc
+	return nil
+}
+
+func (s *Server) configureEphemeralIssuanceSurface(d Deps, idem *orchestrator.Idempotency) error {
+	svc, err := newEphemeralIssuerService(ephemeralIssuerDeps{
+		Config: d.EphemeralIssuance, Store: d.Store, Log: d.Log, Orch: s.orch,
+		Idem: idem, Outbox: s.outbox,
+		CASigner: s.caSigner, CACertDER: s.caCertDER, CAID: IssuingCAID(),
+		Audit: attestedIssuanceAuditor(d.Log),
+	})
+	if err != nil {
+		return err
+	}
+	s.ephemeralIssuer = svc
+	return nil
+}
+
 func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempotency) error {
 	if !d.EnableAgentChannel || s.agentCASigner == nil || len(s.agentCACertDER) == 0 {
 		return nil
@@ -708,7 +845,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	s.agentChannelServerName = d.AgentChannelServerName
 	s.agentHeartbeatInterval = d.AgentHeartbeatInterval
 	agentSvc := &agentService{
-		store: d.Store, log: d.Log, idem: idem, caSigner: s.agentCASigner,
+		store: d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
 		caCertDER: s.agentCACertDER, beatInterval: d.AgentHeartbeatInterval,
 		metrics: s.agentMetrics,
 	}
@@ -755,8 +892,10 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mCRLLastOK = s.registry.Gauge("trstctl_crl_last_regenerated_timestamp_seconds", "Unix timestamp of the last successful CRL regeneration.")
 	s.mCRLFailures = s.registry.CounterVec("trstctl_crl_regeneration_failures_total", "CRL freshness scheduler sweeps that failed.", nil).WithLabelValues()
 	s.lifecycleRenewBefore = d.LifecycleRenewBefore
+	s.lifecycleAlertBefore = d.LifecycleAlertBefore
 	s.lifecycleInterval = d.LifecycleInterval
 	s.mLifecycleQueued = s.registry.CounterVec("trstctl_lifecycle_renewals_queued_total", "Identities queued by the lifecycle renewal scheduler.", nil).WithLabelValues()
+	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()
 	s.mLifecycleLastOK = s.registry.Gauge("trstctl_lifecycle_scheduler_last_success_timestamp_seconds", "Unix timestamp of the last successful lifecycle scheduler sweep.")
 	s.mLifecycleFailures = s.registry.CounterVec("trstctl_lifecycle_scheduler_failures_total", "Lifecycle scheduler sweeps that failed.", nil).WithLabelValues()
 	s.configureRetentionWorker(d, auditSvc)
@@ -819,6 +958,10 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	if s.bulk.Pool(bulkhead.SubsystemQuery) != nil {
 		heavyHandler = bulkheadHandler(s.bulk, bulkhead.SubsystemQuery, a)
 	}
+	cbomHandler := apiHandler
+	if s.bulk.Pool(bulkhead.SubsystemCBOM) != nil {
+		cbomHandler = bulkheadHandler(s.bulk, bulkhead.SubsystemCBOM, a)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.readiness.Handler())
@@ -826,6 +969,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("/api/v1/graph", heavyHandler)
 	mux.Handle("/api/v1/graph/", heavyHandler)
 	mux.Handle("/api/v1/risk/", heavyHandler)
+	mux.Handle("/api/v1/cbom/", cbomHandler)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/auth/", apiHandler)
 	mux.Handle("/enroll/", apiHandler)
@@ -991,6 +1135,52 @@ func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl ti
 	case r := <-ch:
 		if r.err != nil {
 			return nil, fmt.Errorf("server: issuance failed: %w", r.err)
+		}
+		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.der}), nil
+	}
+}
+
+// IssueHybridLeaf signs an end-entity certificate from a classical CSR and adds
+// a verifiable ML-DSA-44 + ECDSA-P256 composite transition extension. The CA
+// signature still goes through the out-of-process signer; the leaf remains a
+// stock ECDSA certificate so existing TLS clients can use it while PQ-aware
+// clients validate the dual public-key binding.
+func (s *Server) IssueHybridLeaf(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	return s.IssueHybridLeafWithProfile(ctx, csrDER, ttl, s.leafProfile)
+}
+
+// IssueHybridLeafWithProfile is IssueHybridLeaf with an explicit served leaf
+// profile, matching IssueLeafWithProfile for tenant profile enforcement.
+func (s *Server) IssueHybridLeafWithProfile(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+	if s.caSigner == nil || s.caCertDER == nil {
+		return nil, errors.New("server: hybrid issuance unavailable — no out-of-process signer (fail closed)")
+	}
+	if s.signer != nil {
+		c := s.signer.Client()
+		hctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		healthy := c != nil && c.Healthy(hctx)
+		cancel()
+		if !healthy {
+			return nil, errors.New("server: signer unavailable (fail closed)")
+		}
+	}
+	type result struct {
+		der []byte
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		der, err := pqc.SignHybridLeafFromCSRWithProfile(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
+		ch <- result{der, err}
+	}()
+	select {
+	case <-time.After(s.signTO):
+		return nil, errors.New("server: signer timed out (fail closed)")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-ch:
+		if r.err != nil {
+			return nil, fmt.Errorf("server: hybrid issuance failed: %w", r.err)
 		}
 		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.der}), nil
 	}
@@ -1459,13 +1649,15 @@ func (s *Server) RunCRLScheduler(ctx context.Context) {
 const defaultLifecycleSchedulerInterval = time.Minute
 
 // RunLifecycleScheduler runs the leader-only certificate renewal scheduler until
-// ctx is cancelled (JOURNEY-002/F6). It does not sign certificates directly. It
-// scans deployed X.509 identities with active served certificates expiring within
-// the configured renewal window and queues the normal deployed->renewing lifecycle
-// transition; the outbox then mints the successor through ca.renew. A sweep error
-// is logged and the next tick retries.
+// ctx is cancelled (JOURNEY-002/F6/NOTIF-01). It does not sign certificates or send
+// notifications directly. It scans deployed X.509 identities with active served
+// certificates expiring within the configured renewal window and queues the normal
+// deployed->renewing lifecycle transition; the outbox then mints the successor
+// through ca.renew. It also scans active certificates inside the alert window and
+// queues notification.expiry rows; the outbox then fans them to configured notify
+// channels. A sweep error is logged and the next tick retries.
 func (s *Server) RunLifecycleScheduler(ctx context.Context) {
-	if s.lifecycleRenewBefore <= 0 || s.orch == nil || s.store == nil {
+	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0) || s.orch == nil || s.store == nil {
 		return
 	}
 	_, _ = s.RunLifecycleOnce(ctx)
@@ -1485,42 +1677,102 @@ func (s *Server) RunLifecycleScheduler(ctx context.Context) {
 	}
 }
 
-// RunLifecycleOnce performs one renewal-scheduler sweep and returns how many
-// identities were moved to renewing. Exported for served-path tests.
+// RunLifecycleOnce performs one lifecycle-scheduler sweep and returns how many
+// identities were moved to renewing. Expiry alerts are also enqueued when configured,
+// but are counted on their own metric so callers that care about renewal behavior keep
+// the old return contract. Exported for served-path tests.
 func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
-	if s.lifecycleRenewBefore <= 0 || s.orch == nil || s.store == nil {
+	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0) || s.orch == nil || s.store == nil {
 		return 0, nil
 	}
-	cutoff := time.Now().UTC().Add(s.lifecycleRenewBefore)
-	tenants, err := s.store.TenantsWithRenewableIdentities(ctx, cutoff)
-	if err != nil {
-		s.observeLifecycleSweep(0, err)
-		return 0, err
-	}
+	now := time.Now().UTC()
 	queued := 0
-	for _, tenant := range tenants {
-		ids, err := s.store.ListRenewableIdentities(ctx, tenant, cutoff)
+	if s.lifecycleRenewBefore > 0 {
+		cutoff := now.Add(s.lifecycleRenewBefore)
+		tenants, err := s.store.TenantsWithRenewalIdentityCandidates(ctx, cutoff, now)
 		if err != nil {
-			s.observeLifecycleSweep(queued, err)
-			return queued, err
+			s.observeLifecycleSweep(queued, 0, err)
+			return 0, err
 		}
-		for _, ident := range ids {
-			reason := "scheduled renewal before " + cutoff.Format(time.RFC3339)
-			if err := s.orch.Transition(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason); err != nil {
-				if errors.Is(err, orchestrator.ErrInvalidTransition) {
-					continue
-				}
-				s.observeLifecycleSweep(queued, err)
+		for _, tenant := range tenants {
+			candidates, err := s.store.ListRenewalIdentityCandidates(ctx, tenant, cutoff, now)
+			if err != nil {
+				s.observeLifecycleSweep(queued, 0, err)
 				return queued, err
 			}
-			queued++
+			seen := make(map[string]struct{}, len(candidates))
+			for _, candidate := range candidates {
+				ident := candidate.Identity
+				if _, ok := seen[ident.ID]; ok {
+					continue
+				}
+				seen[ident.ID] = struct{}{}
+				reason, due := lifecycleRenewalReason(candidate.Certificate, now, cutoff)
+				if !due {
+					continue
+				}
+				if err := s.orch.Transition(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason); err != nil {
+					if errors.Is(err, orchestrator.ErrInvalidTransition) {
+						continue
+					}
+					s.observeLifecycleSweep(queued, 0, err)
+					return queued, err
+				}
+				queued++
+			}
 		}
 	}
-	s.observeLifecycleSweep(queued, nil)
+	alerted, err := s.runLifecycleAlertsOnce(ctx)
+	if err != nil {
+		s.observeLifecycleSweep(queued, alerted, err)
+		return queued, err
+	}
+	s.observeLifecycleSweep(queued, alerted, nil)
 	return queued, nil
 }
 
-func (s *Server) observeLifecycleSweep(queued int, err error) {
+func (s *Server) runLifecycleAlertsOnce(ctx context.Context) (int, error) {
+	if s.lifecycleAlertBefore <= 0 || s.notifications == nil || s.store == nil || s.outbox == nil || s.log == nil {
+		return 0, nil
+	}
+	now := time.Now().UTC()
+	tenants, err := s.store.TenantsWithAlertableCertificates(ctx, now, now.Add(s.lifecycleAlertBefore))
+	if err != nil {
+		return 0, err
+	}
+	m := lifecycle.NewManager(s.store, nil, s.outbox, s.idem, s.log, lifecycle.Config{AlertBefore: s.lifecycleAlertBefore})
+	alerted := 0
+	for _, tenant := range tenants {
+		n, err := m.AlertExpiring(ctx, tenant)
+		if err != nil {
+			return alerted, err
+		}
+		alerted += n
+	}
+	return alerted, nil
+}
+
+func lifecycleRenewalReason(cert store.Certificate, now, fixedCutoff time.Time) (string, bool) {
+	if cert.NotAfter == nil {
+		return "", false
+	}
+	notAfter := cert.NotAfter.UTC()
+	if cert.NotBefore != nil {
+		notBefore := cert.NotBefore.UTC()
+		info := ari.RenewalInfo{SuggestedWindow: ari.SuggestWindow(notBefore, notAfter, now, false)}
+		if ari.RenewNow(info, now) {
+			return fmt.Sprintf("scheduled renewal from ARI window %s..%s",
+				info.SuggestedWindow.Start.Format(time.RFC3339),
+				info.SuggestedWindow.End.Format(time.RFC3339)), true
+		}
+	}
+	if notAfter.Before(fixedCutoff) {
+		return "scheduled renewal before " + fixedCutoff.Format(time.RFC3339), true
+	}
+	return "", false
+}
+
+func (s *Server) observeLifecycleSweep(queued, alerted int, err error) {
 	if err != nil {
 		if s.mLifecycleFailures != nil {
 			s.mLifecycleFailures.Inc()
@@ -1536,6 +1788,14 @@ func (s *Server) observeLifecycleSweep(queued int, err error) {
 		}
 		if s.logger != nil {
 			s.logger.Info("lifecycle scheduler queued renewals", slog.Int("queued", queued))
+		}
+	}
+	if alerted > 0 {
+		if s.mLifecycleAlerts != nil {
+			s.mLifecycleAlerts.Add(float64(alerted))
+		}
+		if s.logger != nil {
+			s.logger.Info("lifecycle scheduler queued expiry alerts", slog.Int("alerts", alerted))
 		}
 	}
 	if s.mLifecycleLastOK != nil {

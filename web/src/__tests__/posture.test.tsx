@@ -12,23 +12,24 @@ function renderPosture() {
 }
 
 describe("posture collector disclosures", () => {
-  it("renders CT monitoring as library-only with a non-interactive triage preview", () => {
+  it("renders CT monitoring as served through Discovery with a dedicated-dashboard gap", () => {
     renderPosture();
 
     expect(screen.getByRole("heading", { name: "Posture" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
-    expect(screen.getByText("CT findings API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/CT monitoring is available via the agent and library today/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Dedicated CT dashboard not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/CT runs are served through Discovery sources of kind `ct_log`/i)).toBeInTheDocument();
+    expect(screen.getByText(/Served discovery worker records a finding and queues an alert/i)).toBeInTheDocument();
     expect(screen.getByText("Unexpected SAN outside approved issuer profile")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add watchlist|poll ct|start monitoring/i })).not.toBeInTheDocument();
   });
 
-  it("renders drift as an agent-only preview with disabled remediation and a reason", () => {
+  it("renders drift as served through Discovery with disabled remediation and a reason", () => {
     renderPosture();
 
     expect(screen.getByRole("heading", { name: "Drift detection" })).toBeInTheDocument();
-    expect(screen.getByText("Drift findings API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/Drift detection runs in the agent and library today/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Drift remediation UI not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/Drift runs are served through Discovery sources of kind `drift`/i)).toBeInTheDocument();
 
     for (const button of screen.getAllByRole("button", { name: /remediation blocked/i })) {
       expect(button).toBeDisabled();
@@ -41,8 +42,8 @@ describe("posture collector disclosures", () => {
     renderPosture();
 
     expect(screen.getByRole("heading", { name: "CBOM and cryptographic observability" })).toBeInTheDocument();
-    expect(screen.getByText("CBOM findings API not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/CBOM scanning is available via the agent and library today/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("CBOM dashboard controls not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/CBOM scanning is served through `\/api\/v1\/cbom\/scans`/i)).toBeInTheDocument();
     expect(screen.getByText(/RSA-2048, EC-256, and TLS 1.2/)).toBeInTheDocument();
     expect(screen.getByText(/3DES\/DES\/RC4\/NULL\/EXPORT\/MD5/)).toBeInTheDocument();
     expect(screen.getByText("ML-DSA, ML-KEM, SLH-DSA")).toBeInTheDocument();
@@ -54,8 +55,8 @@ describe("posture collector disclosures", () => {
     renderPosture();
 
     expect(screen.getByRole("heading", { name: "Crypto-agility and PQC readiness" })).toBeInTheDocument();
-    expect(screen.getByText("Algorithm inventory not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/CBOM algorithm inventory is available via the agent and library today/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Algorithm inventory dashboard not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/CBOM algorithm inventory is served by the API today/i)).toBeInTheDocument();
     expect(screen.getByText("Weak legacy edge")).toBeInTheDocument();
     expect(screen.getByText("PQC-ready workload")).toBeInTheDocument();
     expect(screen.getByText("ML-DSA / ML-KEM / SLH-DSA")).toBeInTheDocument();

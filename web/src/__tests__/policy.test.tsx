@@ -55,7 +55,8 @@ describe("policy governance surface", () => {
     expect(screen.getByText("secret://notify/slack/prod:****")).toBeInTheDocument();
     expect(screen.getByText("secret://notify/webhook/prod:****")).toBeInTheDocument();
     expect(screen.getByText(/response body redacted/i)).toBeInTheDocument();
-    expect(screen.getByText("Notification channels are library-only")).toBeInTheDocument();
+    expect(screen.getByText("Notification channel controls not served yet")).toBeInTheDocument();
+    expect(screen.getByText(/Expiry-alert dispatch is served through the scheduler and outbox/i)).toBeInTheDocument();
     expect(screen.getByText(/cannot operate notification integrations/i)).toBeInTheDocument();
     expect(screen.queryByText(/xoxb-|pagerduty_api_key|webhook-token-/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /test delivery|configure channel|send notification/i })).not.toBeInTheDocument();
