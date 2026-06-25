@@ -28,12 +28,12 @@ Be precise here (see [Current limitations](../limitations.md) and
 
 - **Served** on the running binary under `/api/v1/secrets/*`: the secret store
   (create, read, **rotate**, delete), dynamic secret leases, one-time secret sharing,
-  the dynamic PKI secret (a short-lived certificate *and* its key), machine login, and
-  outbound **secret-sync** to configured external stores.
+  the dynamic PKI secret (a short-lived certificate *and* its key), machine login,
+  outbound **secret-sync** to configured external stores, and Gitleaks-backed
+  code/CI secret scanning.
 - **Library-only** (built and tested, no served endpoint yet): the **transit / KMIP**
-  encryption-as-a-service surface. Ephemeral attestation-gated API keys, the
-  gitleaks/trufflehog scanning bridge, and secret-store / API-key *discovery* are driven
-  through their Go APIs today.
+  encryption-as-a-service surface. Ephemeral attestation-gated API keys and
+  secret-store / API-key *discovery* are driven through their Go APIs today.
 
 ## Steps
 
@@ -215,7 +215,25 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the response returns only metadata and delivery flags; it never echoes the secret
    value.
 
-10. Know the edges before you rely on them. The transit/KMIP encryption surface remains
+10. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
+    on the control-plane host and set `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary.
+    The served scan uses the pinned default rule set (`213` rules), redacts the match,
+    and records only rule/file/line/fingerprint metadata into discovery and graph.
+
+   ```sh
+   cat > secret-scan.json <<'JSON'
+   {"path":"."}
+   JSON
+   trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
+
+   curl -fksS "https://localhost:8443/api/v1/discovery/findings?run_id=<run-id>" \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN"
+   ```
+
+   -> the scan response shows the `run_id`, `rules_active`, and redacted findings.
+   The secret value itself is not returned and is not written to the event log.
+
+11. Know the edges before you rely on them. The transit/KMIP encryption surface remains
     **library-only** — there is no served endpoint yet, so you drive it through Go APIs.
     Finding secrets already scattered across your estate (secret-store and API-key
     discovery) records references only, never values — see

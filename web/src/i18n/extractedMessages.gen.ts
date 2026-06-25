@@ -2733,13 +2733,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.findings.redacted.snippets.rotation.links.1b51627bb8",
-    defaultMessage: "Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. There is no served API or CLI triage path yet.",
-    sources: [
-      "src/pages/Secrets.tsx:877",
-    ],
-  },
-  {
     key: "source.fingerprint.ba7af0b704",
     defaultMessage: "Fingerprint",
     sources: [
@@ -2825,6 +2818,13 @@ export const extractedMessages = [
     defaultMessage: "GetCACert",
     sources: [
       "src/pages/Protocols.tsx:98",
+    ],
+  },
+  {
+    key: "source.gitleaks.scan.ingestion.is.served.through.3fd83a3540",
+    defaultMessage: "Gitleaks scan ingestion is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run. Browser triage still needs source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling.",
+    sources: [
+      "src/pages/Secrets.tsx:872",
     ],
   },
   {
@@ -6004,13 +6004,6 @@ export const extractedMessages = [
     defaultMessage: "Secret scanning finding fixtures",
     sources: [
       "src/pages/Secrets.tsx:883",
-    ],
-  },
-  {
-    key: "source.secret.scanning.findings.need.source.repo.1845632920",
-    defaultMessage: "Secret-scanning findings need source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling. Live triage is not served.",
-    sources: [
-      "src/pages/Secrets.tsx:872",
     ],
   },
   {

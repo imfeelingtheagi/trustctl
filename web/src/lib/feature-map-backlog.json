@@ -4679,61 +4679,70 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 76,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served-api-cli-gitleaks",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; browser triage stays disclosure-only with redacted snippets.",
       "target_gui_mapping": "Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling.",
       "acceptance_test": "UI proves finding snippets are redacted and actions require proper scope.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/secretscan"],
-      "source_frontend": [],
+      "source_backend": ["internal/secretscan", "internal/api/secrets.go", "internal/server/secrets.go"],
+      "source_frontend": ["web/src/pages/Secrets.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["scanSecrets"],
+      "api_na": "",
+      "cli_surface": ["secrets scans run"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "scanSecrets invokes the pinned Gitleaks binary through POST /api/v1/secrets/scans, parses only redacted rule/file/line metadata, and records findings through discovery events.",
+            "The served scan response reports the pinned default 213-rule Gitleaks ruleset, satisfying the 140+ rule floor."
+          ],
+          "refs": ["internal/api/secrets.go", "internal/secretscan/gitleaks.go", "internal/orchestrator/discovery.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Secrets at /secrets - secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; browser triage stays disclosure-only with redacted snippets.",
             "target_gui_mapping: Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
+          "refs": ["web/src/pages/Secrets.tsx", "web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry."],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId scanSecrets is registered at POST /api/v1/secrets/scans as a mutating SecretsWrite operation with SecretScan request/response schemas."],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI proves finding snippets are redacted and actions require proper scope.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
+            "TestServedGitleaksScanDetectsPlantedSecret plants a Slack token, drives POST /api/v1/secrets/scans against the real Gitleaks binary, asserts 140+ active rules, and proves discovery/graph visibility without leaking the value.",
+            "CLI tests prove secrets scans run maps to the served route and sends an Idempotency-Key.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
-            "internal/featureparity/feature_facet_coverage_test.go",
-            "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "internal/server/secrets_scan_served_test.go",
+            "internal/cli/cli_test.go",
+            "internal/featureparity/feature_facet_coverage_test.go"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/secrets.md"],
-          "refs": ["docs/features/secrets.md"]
+          "evidence": ["documented in docs/features/secrets.md, docs/journeys/manage-secrets.md, docs/configuration.md, and docs/cli.md"],
+          "refs": ["docs/features/secrets.md", "docs/journeys/manage-secrets.md", "docs/configuration.md", "docs/cli.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["POST /api/v1/secrets/scans is guarded by the secrets:write permission in the API feature authz manifest; discovery/graph reads remain guarded by discovery:read and graph:read."],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go", "internal/server/secrets_scan_served_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F39; current mapping is disclosure: Secrets at /secrets - secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only; coverage ledger: /coverage."
+          "evidence": ["Served scans record discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events without the secret value."],
+          "refs": ["internal/orchestrator/discovery.go", "internal/server/secrets_scan_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F39 has a served API/protocol entrypoint."
+          "evidence": ["The scan handler emits the low-cardinality feature observer signal secrets/scan with outcome and duration."],
+          "refs": ["internal/api/secrets.go", "internal/server/server.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

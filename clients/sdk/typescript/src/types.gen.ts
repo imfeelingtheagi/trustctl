@@ -1327,6 +1327,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a Gitleaks secret scan and record redacted findings */
+        post: operations["scanSecrets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/shares": {
         parameters: {
             query?: never;
@@ -2553,6 +2570,24 @@ export interface components {
             key: string;
             old_ref: string;
             provider: string;
+        };
+        SecretScan: {
+            engine_version: string;
+            findings: components["schemas"]["SecretScanFinding"][];
+            findings_count: number;
+            rules_active: number;
+            /** Format: uuid */
+            run_id: string;
+            scanner: string;
+        };
+        SecretScanFinding: {
+            credential_ref: string;
+            file: string;
+            line: number;
+            rule_id: string;
+        };
+        SecretScanRequest: {
+            path: string;
         };
         SecretSync: {
             delivered: boolean;
@@ -6392,6 +6427,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretRotation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    scanSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretScanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScan"];
                 };
             };
             /** @description client error */

@@ -33,3 +33,21 @@ func TestSecretsKEKEnvOverride(t *testing.T) {
 		t.Errorf("secrets.kek_file = %q, want the env override", cfg.Secrets.KEKFile)
 	}
 }
+
+func TestSecretsGitleaksEnvOverride(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_POSTGRES_MODE":                       "external",
+		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":                           "external",
+		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_SECRETS_GITLEAKS_BIN":                "/opt/trstctl/tools/gitleaks",
+	}
+	cfg, err := config.Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Secrets.GitleaksBin != "/opt/trstctl/tools/gitleaks" {
+		t.Errorf("secrets.gitleaks_bin = %q, want the env override", cfg.Secrets.GitleaksBin)
+	}
+}

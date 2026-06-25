@@ -253,6 +253,10 @@ type Deps struct {
 	// SecretSyncTargets are the configured external secret-sync destinations exposed
 	// by /api/v1/secrets/syncs (F68). Empty keeps the route fail-closed.
 	SecretSyncTargets map[string]*secretsync.Target
+	// SecretScanGitleaksBin points at the pinned Gitleaks binary used by
+	// POST /api/v1/secrets/scans (SEC-07/F39). Empty resolves
+	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
+	SecretScanGitleaksBin string
 	// DynamicLeaseWorkerInterval controls the served dynamic leaseworker cadence.
 	// Zero uses the production default.
 	DynamicLeaseWorkerInterval time.Duration

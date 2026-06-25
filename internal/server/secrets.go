@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -297,6 +298,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		DynamicLeaseWorkerInterval: d.DynamicLeaseWorkerInterval,
 		SecretRotators:             d.SecretRotators,
 		SecretSyncTargets:          d.SecretSyncTargets,
+		SecretScanner:              secretscan.NewGitleaksRunner(d.SecretScanGitleaksBin),
 	}
 	if s.outbox != nil {
 		be.DynamicRevokeQueue = func(tenantID string) dynsecret.RevokeQueue {

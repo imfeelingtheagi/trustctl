@@ -22,6 +22,7 @@ type Finding struct {
 	RuleID        string
 	File          string
 	Line          int
+	Fingerprint   string
 	CredentialRef string
 }
 
@@ -29,16 +30,17 @@ type Finding struct {
 // secret value (the "Secret"/"Match" fields are never read).
 func ParseGitleaks(b []byte) ([]Finding, error) {
 	var raw []struct {
-		RuleID    string `json:"RuleID"`
-		File      string `json:"File"`
-		StartLine int    `json:"StartLine"`
+		RuleID      string `json:"RuleID"`
+		File        string `json:"File"`
+		StartLine   int    `json:"StartLine"`
+		Fingerprint string `json:"Fingerprint"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, fmt.Errorf("secretscan: parse gitleaks: %w", err)
 	}
 	out := make([]Finding, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Finding{Scanner: "gitleaks", RuleID: r.RuleID, File: r.File, Line: r.StartLine, CredentialRef: r.RuleID + "@" + r.File})
+		out = append(out, Finding{Scanner: "gitleaks", RuleID: r.RuleID, File: r.File, Line: r.StartLine, Fingerprint: r.Fingerprint, CredentialRef: r.RuleID + "@" + r.File})
 	}
 	return out, nil
 }

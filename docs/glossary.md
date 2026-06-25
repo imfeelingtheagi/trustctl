@@ -112,6 +112,14 @@ encryption key. Unlike a certificate, a secret is usually just an opaque string 
 no built-in expiry, which is exactly why leaked secrets are so dangerous. trstctl
 stores, rotates, and issues secrets. See [Secrets](features/secrets.md).
 
+### Secret scan / Gitleaks
+
+A scan of source code or a CI workspace looking for secrets that were accidentally
+committed or copied into build files. trstctl runs the Gitleaks scanner from the
+served secrets API, stores only redacted finding metadata (rule, file, line, and
+fingerprint), and then shows that leaked credential in discovery, graph, and risk
+views. The secret value itself is not stored by trstctl. See [Secrets](features/secrets.md).
+
 ### API key / token
 
 A string a service presents to prove it is allowed to call another service (think of

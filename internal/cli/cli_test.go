@@ -261,6 +261,28 @@ func TestSecretSyncCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestSecretScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 201, `{"run_id":"1f95f7db-4a45-40fe-bb8f-9b7dfc8f6ad8","scanner":"gitleaks","engine_version":"v8.27.2","rules_active":213,"findings_count":1,"findings":[]}`, &cap)
+	body := `{"path":"."}`
+	code, _, _ := run(t, []string{"secrets", "scans", "run", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/scans" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("secret scan mutation should send an Idempotency-Key")
+	}
+}
+
 func TestQueryFlag(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{}`, &cap)

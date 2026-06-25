@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/leaseworker"
 	"trstctl.com/trstctl/internal/pkisecret"
 	"trstctl.com/trstctl/internal/rotation"
+	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretsdk"
 	"trstctl.com/trstctl/internal/secretshare"
 	"trstctl.com/trstctl/internal/secretsync"
@@ -112,6 +113,17 @@ type SecretsBackend struct {
 	// external sync write is attempted (AN-6). The server wires this to the sealed
 	// PostgreSQL outbox; embedders may supply their own.
 	SecretSyncOutbox func(tenantID, target string) secretsync.Outbox
+	// SecretScanner invokes the configured code/CI secret scanner. The served binary
+	// wires this to a Gitleaks subprocess runner; nil leaves POST /secrets/scans
+	// fail-closed while the rest of the secrets surface remains available.
+	SecretScanner SecretScanner
+}
+
+// SecretScanner is the process boundary used by POST /api/v1/secrets/scans.
+// Implementations must return metadata only; secret values stay inside the scanner
+// process and redacted report file.
+type SecretScanner interface {
+	Scan(ctx context.Context, path string) (secretscan.Report, error)
 }
 
 // secretsService is the assembled served secrets surface. It owns the per-request
@@ -233,6 +245,26 @@ type secretSyncResponse struct {
 	RemoteKey string `json:"remote_key"`
 	Enqueued  bool   `json:"enqueued"`
 	Delivered bool   `json:"delivered"`
+}
+
+type secretScanRequest struct {
+	Path string `json:"path"`
+}
+
+type secretScanFindingResponse struct {
+	RuleID        string `json:"rule_id"`
+	File          string `json:"file"`
+	Line          int    `json:"line"`
+	CredentialRef string `json:"credential_ref"`
+}
+
+type secretScanResponse struct {
+	RunID         string                      `json:"run_id"`
+	Scanner       string                      `json:"scanner"`
+	EngineVersion string                      `json:"engine_version"`
+	RulesActive   int                         `json:"rules_active"`
+	FindingsCount int                         `json:"findings_count"`
+	Findings      []secretScanFindingResponse `json:"findings"`
 }
 
 type dynamicLeaseIssueRequest struct {
@@ -551,6 +583,108 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 			Enqueued: true, Delivered: delivered > 0,
 		}, nil
 	})
+}
+
+// scanSecrets invokes the configured Gitleaks binary through the served API and
+// records redacted metadata into discovery findings. The scanner output is parsed
+// for rule/file/line only; the secret value is neither read nor persisted.
+//
+//trstctl:mutation
+func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.secrets == nil {
+			return 0, nil, secretsDisabledProblem()
+		}
+		if a.secrets.be.SecretScanner == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret scanner is not configured")
+		}
+		var req secretScanRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if strings.TrimSpace(req.Path) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "path is required")
+		}
+
+		start := time.Now()
+		report, err := a.secrets.be.SecretScanner.Scan(ctx, req.Path)
+		a.observeFeature("secrets", "scan", start, err)
+		if err != nil {
+			switch {
+			case errors.Is(err, secretscan.ErrInvalidScanTarget):
+				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			case errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
+				return 0, nil, errStatus(http.StatusServiceUnavailable, "gitleaks binary is not configured")
+			default:
+				return 0, nil, errStatus(http.StatusBadGateway, err.Error())
+			}
+		}
+		if report.RulesActive < secretscan.GitleaksMinRulesActive {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "gitleaks rule set is below the required 140-rule floor")
+		}
+
+		rows, findings, err := discoveryFindingsFromSecretScan(report)
+		if err != nil {
+			return 0, nil, err
+		}
+		run, _, _, err := a.orch.RecordSecretScan(ctx, tenantID, report.Scanner, req.Path, report.RulesActive, rows)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, secretScanResponse{
+			RunID:         run.ID,
+			Scanner:       report.Scanner,
+			EngineVersion: report.EngineVersion,
+			RulesActive:   report.RulesActive,
+			FindingsCount: len(findings),
+			Findings:      findings,
+		}, nil
+	})
+}
+
+func discoveryFindingsFromSecretScan(report secretscan.Report) ([]store.DiscoveryFinding, []secretScanFindingResponse, error) {
+	rows := make([]store.DiscoveryFinding, 0, len(report.Findings))
+	out := make([]secretScanFindingResponse, 0, len(report.Findings))
+	for _, f := range report.Findings {
+		if strings.TrimSpace(f.RuleID) == "" || strings.TrimSpace(f.File) == "" {
+			continue
+		}
+		ref := f.CredentialRef
+		if ref == "" {
+			ref = f.RuleID + "@" + f.File
+		}
+		meta, err := json.Marshal(map[string]any{
+			"scanner":        report.Scanner,
+			"engine_version": report.EngineVersion,
+			"rule_id":        f.RuleID,
+			"file":           f.File,
+			"line":           f.Line,
+			"rules_active":   report.RulesActive,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		rows = append(rows, store.DiscoveryFinding{
+			Kind:        "leaked_secret",
+			Ref:         ref,
+			Provenance:  report.Scanner + ":" + f.File,
+			Fingerprint: firstNonEmptyString(f.Fingerprint, ref),
+			RiskScore:   95,
+			Metadata:    json.RawMessage(meta),
+		})
+		out = append(out, secretScanFindingResponse{RuleID: f.RuleID, File: f.File, Line: f.Line, CredentialRef: ref})
+	}
+	return rows, out, nil
+}
+
+func firstNonEmptyString(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // importSecrets atomically imports a flat tree of application secrets under an

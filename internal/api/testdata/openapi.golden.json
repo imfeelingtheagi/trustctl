@@ -3763,6 +3763,75 @@
         ],
         "type": "object"
       },
+      "SecretScan": {
+        "properties": {
+          "engine_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/SecretScanFinding"
+            },
+            "type": "array"
+          },
+          "findings_count": {
+            "type": "integer"
+          },
+          "rules_active": {
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scanner": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "scanner",
+          "engine_version",
+          "rules_active",
+          "findings_count",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "SecretScanFinding": {
+        "properties": {
+          "credential_ref": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "rule_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "file",
+          "line",
+          "credential_ref"
+        ],
+        "type": "object"
+      },
+      "SecretScanRequest": {
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
       "SecretSync": {
         "properties": {
           "delivered": {
@@ -9350,6 +9419,63 @@
           }
         ],
         "summary": "Run a rollback-safe static secret rotation",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scans": {
+      "post": {
+        "operationId": "scanSecrets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run a Gitleaks secret scan and record redacted findings",
         "x-trstctl-permission": "secrets:write"
       }
     },

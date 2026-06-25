@@ -761,6 +761,10 @@ type Secrets struct {
 	// sub-features still work. Like the KEK, it is created (random, 0600) on first boot
 	// if absent. The key is held as []byte and never logged (AN-8).
 	AuthSecretFile string `json:"auth_secret_file,omitempty"`
+	// GitleaksBin points at the pinned Gitleaks v8.27.2 binary used by the served
+	// code/CI secret scan route. Empty resolves TRSTCTL_GITLEAKS_BIN, then
+	// tools/bin/gitleaks, then PATH at request time.
+	GitleaksBin string `json:"gitleaks_bin,omitempty"`
 }
 
 // AI configures the served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/
@@ -1185,6 +1189,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
+	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). OFF by default (fail
 	// closed). The AI model stays air-gapped/opt-in regardless of these flags.
 	setBool(getenv, "TRSTCTL_AI_ENABLE_API", &c.AI.EnableAPI)

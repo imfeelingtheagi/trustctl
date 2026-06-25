@@ -1054,6 +1054,26 @@ export interface SecretRotationRequest {
   provider: string;
 }
 
+export interface SecretScan {
+  engine_version: string;
+  findings: SecretScanFinding[];
+  findings_count: number;
+  rules_active: number;
+  run_id: string;
+  scanner: string;
+}
+
+export interface SecretScanFinding {
+  credential_ref: string;
+  file: string;
+  line: number;
+  rule_id: string;
+}
+
+export interface SecretScanRequest {
+  path: string;
+}
+
 export interface SecretSync {
   delivered: boolean;
   enqueued: boolean;

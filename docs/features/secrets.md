@@ -194,12 +194,31 @@ is recorded as an immutable event in the tamper-evident log.
 
 ### Secret scanning bridge (F39) and sharing & approvals (F60)
 
-The **scanning bridge** ingests findings from gitleaks and trufflehog into the
-[credential graph](graph-query-ai.md) and risk view — structurally excluding the secret
-value (the parsers never read it) — and can auto-trigger the
-[compromise workflow](incident-and-jit.md). **Secret sharing** creates one-time,
-self-destructing links (viewed once, then deleted; expiry-bounded), and **change
-approvals** put a dual-control [approval](incident-and-jit.md) gate on secret mutations.
+The **scanning bridge** runs the pinned Gitleaks scanner from the served control plane
+and records redacted findings into [discovery](discovery-and-inventory.md), the
+[credential graph](graph-query-ai.md), and the risk view. Operators point
+`TRSTCTL_SECRETS_GITLEAKS_BIN` at Gitleaks `v8.27.2`; `POST /api/v1/secrets/scans`
+then scans a repo or build workspace with the pinned default rule set (`213` rules,
+well above the 140-rule acceptance floor). The API response and recorded discovery
+finding carry rule id, file, line, scanner version, and fingerprint metadata only. The
+secret value is redacted by Gitleaks and never written to the API response, event log,
+graph, or audit output.
+
+CI systems use the matching CLI bridge:
+
+```bash
+cat > secret-scan.json <<'JSON'
+{"path":"."}
+JSON
+trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
+```
+
+The returned `run_id` can be inspected with `GET /api/v1/discovery/findings?run_id=...`
+or the graph view. TruffleHog JSON ingestion remains available for offline import and
+contract tests, but the served scanner path uses Gitleaks as the execution engine.
+**Secret sharing** creates one-time, self-destructing links (viewed once, then deleted;
+expiry-bounded), and **change approvals** put a dual-control [approval](incident-and-jit.md)
+gate on secret mutations.
 
 ## Use it
 
@@ -226,16 +245,22 @@ cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
 trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
+
+cat > secret-scan.json <<'JSON'
+{"path":"."}
+JSON
+trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
 ```
 
 ## Pitfalls & limits
 
 - **Serving status:** the secret store, rollback-safe static secret rotations, dynamic
-  secret leases, one-time sharing, the dynamic PKI secret, machine login, and outbound
-  secret sync are **served** on the running control plane under `/api/v1/secrets/*`
-  (enable with `secrets.enable_api`, off by default and fail-closed). Secret sync also
-  needs named targets configured by the operator; an unconfigured target fails closed
-  with `503` instead of dropping the write.
+  secret leases, one-time sharing, the dynamic PKI secret, machine login, outbound
+  secret sync, and Gitleaks secret scanning are **served** on the running control plane
+  under `/api/v1/secrets/*` (enable with `secrets.enable_api`, off by default and
+  fail-closed). Secret sync needs named targets configured by the operator; an
+  unconfigured target fails closed with `503` instead of dropping the write. Secret
+  scanning needs the pinned Gitleaks binary; a missing binary fails closed with `503`.
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the
   `machine-login` audience, principal, and expiry. `X-Tenant-ID` is a lookup hint on
   the public login route; a token for tenant A is rejected if presented with tenant B.
@@ -260,9 +285,10 @@ trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-syn
 - **Transit:** `Encrypt/Decrypt/Rewrap/HMAC/Sign/Verify`, versioned `trv:<n>:` ciphertext.
 - **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
   Parameter Store, webhook.
+- **Scanning:** `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans run`,
+  Gitleaks `v8.27.2`, `213` default rules active, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
-  `auth.session.issued`,
-  `secretscan.finding`.
+  `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 
 ## See also
 

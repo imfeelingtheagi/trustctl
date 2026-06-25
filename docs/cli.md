@@ -63,6 +63,7 @@ One command per core API operation:
 | `secrets leases` | `issue` · `get` · `renew` · `revoke` |
 | `secrets rotations` | `run` |
 | `secrets syncs` | `run` |
+| `secrets scans` | `run` |
 | `secrets shares` | `create` · `redeem` |
 | `secrets` | `login` · `pki` |
 
@@ -180,6 +181,12 @@ cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
 trstctl-cli --idempotency-key secret-sync-1 secrets syncs run -f secret-sync.json
+
+# Run a Gitleaks code scan from CI and record redacted findings in discovery/graph.
+cat > secret-scan.json <<'JSON'
+{"path":"."}
+JSON
+trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f secret-scan.json
 
 # On an enrolled host, report local public certificate files over the agent channel.
 trstctl-agent --enroll-url https://localhost:8443 \

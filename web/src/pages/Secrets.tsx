@@ -870,13 +870,13 @@ export function Secrets() {
             Code and CI secret scanning bridge
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Secret-scanning findings need source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and
-            false-positive handling. Live triage is not served.
+            Gitleaks scan ingestion is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run. Browser triage still needs source repo
+            or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling.
           </p>
         </div>
         <UnavailableState title="Secret-scanning triage is library-only">
-          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. There is no served API or CLI triage path
-          yet.
+          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. Run ingestion through the served API or
+          CLI; this console does not yet submit scans, suppress false positives, or launch rotation actions from findings.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">

@@ -700,6 +700,17 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "target": str(), "remote_key": str(),
 		"enqueued": {Type: "boolean"}, "delivered": {Type: "boolean"},
 	}, "name", "target", "remote_key", "enqueued", "delivered")
+	secretScanReq := object(map[string]*Schema{
+		"path": str(),
+	}, "path")
+	secretScanFinding := object(map[string]*Schema{
+		"rule_id": str(), "file": str(), "line": {Type: "integer"}, "credential_ref": str(),
+	}, "rule_id", "file", "line", "credential_ref")
+	secretScan := object(map[string]*Schema{
+		"run_id": uuid(), "scanner": str(), "engine_version": str(),
+		"rules_active": {Type: "integer"}, "findings_count": {Type: "integer"},
+		"findings": {Type: "array", Items: ref("SecretScanFinding")},
+	}, "run_id", "scanner", "engine_version", "rules_active", "findings_count", "findings")
 	dynamicLeaseRenewReq := object(map[string]*Schema{
 		"extend_seconds": {Type: "integer"},
 	}, "extend_seconds")
@@ -931,6 +942,9 @@ func componentSchemas() map[string]*Schema {
 		"SecretRotation":               secretRotation,
 		"SecretSyncRequest":            secretSyncReq,
 		"SecretSync":                   secretSync,
+		"SecretScanRequest":            secretScanReq,
+		"SecretScanFinding":            secretScanFinding,
+		"SecretScan":                   secretScan,
 		"DynamicLeaseRequest":          dynamicLeaseReq,
 		"DynamicLeaseRenewRequest":     dynamicLeaseRenewReq,
 		"DynamicLease":                 dynamicLease,

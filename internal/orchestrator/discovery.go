@@ -17,6 +17,7 @@ import (
 const discoveryRunDestination = "discovery.run"
 
 var agentInventorySourceNamespace = uuid.MustParse("d5e0734a-9cc6-53a4-92f3-4f99387f8c3a")
+var secretScanSourceNamespace = uuid.MustParse("f2a0de71-857b-5a96-83be-0e65a0f2f107")
 
 // UpsertDiscoverySource records a tenant discovery source as an event and returns
 // the projected source row. Config is metadata/reference JSON only; API validation
@@ -236,6 +237,91 @@ func (o *Orchestrator) RecordAgentInventory(ctx context.Context, tenantID, agent
 		if msg == "" {
 			msg = "agent inventory report contained no valid findings"
 		}
+	}
+	if err := o.CompleteDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+		ID: runID, Status: status, Targets: len(findings), Discovered: recorded, Rejected: rejected, Error: msg,
+	}); err != nil {
+		return store.DiscoveryRun{}, recorded, rejected, err
+	}
+	return store.DiscoveryRun{
+		ID: runID, TenantID: tenantID, SourceID: sourceID, Status: status,
+		RequestedBy: requestedBy, Targets: len(findings), Discovered: recorded,
+		Rejected: rejected, Error: msg, CreatedAt: ev.Time,
+	}, recorded, rejected, nil
+}
+
+// RecordSecretScan records one already-executed code secret-scan batch. The
+// Gitleaks process has already scanned the target before this method is called;
+// this method records the source, run, findings, and terminal counts as immutable
+// discovery events so replay rebuilds the served scan findings and graph nodes.
+func (o *Orchestrator) RecordSecretScan(ctx context.Context, tenantID, scanner, target string, rulesActive int, findings []store.DiscoveryFinding) (store.DiscoveryRun, int, int, error) {
+	scanner = strings.TrimSpace(scanner)
+	target = strings.TrimSpace(target)
+	if scanner == "" {
+		scanner = "gitleaks"
+	}
+	sourceID := uuid.NewSHA1(secretScanSourceNamespace, []byte(tenantID+"\x00"+scanner+"\x00"+target)).String()
+	sourceName := "secretscan:" + scanner
+	if target != "" {
+		sourceName += ":" + target
+	}
+	cfg, err := json.Marshal(map[string]any{"scanner": scanner, "target": target, "rules_active": rulesActive})
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+	if _, err := o.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
+		ID: sourceID, Kind: "secret_scan", Name: sourceName, Config: cfg,
+	}); err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+
+	requestedBy := "api:secrets-scan"
+	if actor, ok := events.ActorFromContext(ctx); ok && strings.TrimSpace(actor.Subject) != "" {
+		requestedBy = actor.Subject
+	}
+	runID := uuid.NewString()
+	payload, err := json.Marshal(projections.DiscoveryRunQueued{
+		ID: runID, SourceID: sourceID, RequestedBy: requestedBy,
+	})
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+	ev, err := o.emit(ctx, projections.EventDiscoveryRunQueued, tenantID, payload)
+	if err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+	if err := o.StartDiscoveryRun(ctx, tenantID, runID); err != nil {
+		return store.DiscoveryRun{}, 0, 0, err
+	}
+
+	recorded, rejected := 0, 0
+	for _, f := range findings {
+		f.Kind = strings.TrimSpace(f.Kind)
+		f.Ref = strings.TrimSpace(f.Ref)
+		if f.Kind == "" || f.Ref == "" {
+			rejected++
+			continue
+		}
+		if f.Provenance == "" {
+			f.Provenance = scanner + ":" + f.Ref
+		}
+		f.RunID = runID
+		f.SourceID = sourceID
+		if _, err := o.RecordDiscoveryFinding(ctx, tenantID, f); err != nil {
+			return store.DiscoveryRun{}, recorded, rejected, err
+		}
+		recorded++
+	}
+
+	status := "succeeded"
+	msg := ""
+	if rejected > 0 {
+		status = "partial"
+		msg = "some secret-scan findings were rejected"
+	}
+	if recorded == 0 {
+		status = "succeeded"
+		msg = "secret scan completed with no findings"
 	}
 	if err := o.CompleteDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
 		ID: runID, Status: status, Targets: len(findings), Discovered: recorded, Rejected: rejected, Error: msg,
