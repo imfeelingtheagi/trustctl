@@ -349,6 +349,14 @@ writing a new token file and restarting the control plane so the new hash is loa
     latest-value read path fetches through the SDK client. `trstctl-cli run --secret
     ENV=path -- <cmd>` is served as a developer wrapper over the same read path and
     injects values only into the child process environment;
+  - the **Vault/OpenBao compatibility shim** backs the common migration paths
+    `GET /v1/auth/token/lookup-self`, Vault KV mount-discovery preflight for
+    `secret/`, `POST/PUT/GET /v1/secret/data/{path}`, and
+    `POST/PUT /v1/pki/issue/{role}` for stock `vault` CLI token lookup, KV v2
+    put/get, and PKI issue. This is deliberately a subset over the native served
+    secret store and dynamic PKI secret; it does not implement Vault mount
+    management, Vault ACL policy authoring, cubbyhole, response wrapping, Vault
+    transit paths, or every Vault/OpenBao secret engine;
   - **dynamic secrets** (F65) back `POST /api/v1/secrets/leases`,
     `GET /api/v1/secrets/leases/{lease_id}`,
     `POST /api/v1/secrets/leases/{lease_id}/renew`, and

@@ -18,7 +18,8 @@ master key (encryption-as-a-service). And every action needs ID and is logged
 > **One honest note up front.** Most of the *secrets* domain is now **served**: the
 > **secret store** (CRUD + rotation), **dynamic secret leases**, **one-time secret
 > sharing**, the **dynamic PKI secret**, **machine login**, **secret-sync**, **secret
-> scanning**, and **ephemeral API keys** are mounted on the running control plane.
+> scanning**, **ephemeral API keys**, and the **Vault/OpenBao common compatibility
+> paths** are mounted on the running control plane.
 > The `/api/v1/secrets/*` surface is off by default (`secrets.enable_api`) and
 > fail-closed when off; ephemeral API keys live under `/api/v1/ephemeral/api-keys`
 > because they mint tenant API credentials, not stored secret values. **Transit**
@@ -94,6 +95,46 @@ holds its KEK behind the same locked-memory boundary and seals with the binary c
 and its reconstruction still replays both the current container and earlier
 JSON-envelope history; new production writes go through the served seal path above, not
 here.
+
+### Vault/OpenBao-compatible common API
+
+Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl for the
+common day-one paths while they move applications over deliberately. This is a
+compatibility shim over the served secret store and dynamic PKI secret, not a second
+secrets platform.
+
+Enable the same secrets surface (`secrets.enable_api`) and use a normal tenant API token
+with `secrets:read` and/or `secrets:write`. The shim accepts that token in
+`X-Vault-Token`, which is what the Vault CLI sends:
+
+```sh
+export VAULT_ADDR=https://trstctl.example.com
+export VAULT_TOKEN=trst_...
+
+vault login -no-store "$VAULT_TOKEN"
+vault kv put secret/payments/db username=payments password='correct horse battery staple'
+vault kv get -format=json secret/payments/db
+vault write -format=json pki/issue/default common_name=payments.internal ttl=1h
+```
+
+Supported paths are intentionally small:
+
+| Vault path | trstctl behavior |
+| --- | --- |
+| `GET /v1/auth/token/lookup-self` | Validates the `trst_...` API token and returns Vault-shaped token metadata without echoing the token. |
+| Vault KV mount-discovery preflight for `secret/` | Lets `vault kv` discover that `secret/` is KV v2. |
+| `POST` / `PUT /v1/secret/data/{path}` | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version. |
+| `GET /v1/secret/data/{path}` | Reads the latest value and returns Vault KV v2 `data.data` plus version metadata. |
+| `POST` / `PUT /v1/pki/issue/{role}` | Issues a short-lived certificate and private key through the signer-backed dynamic PKI secret. |
+
+This subset does **not** implement Vault mount management, Vault ACL policies,
+cubbyhole, response wrapping, Vault transit paths, or every dynamic secret engine. The
+native trstctl API remains the full product surface. Mutating Vault-compatible calls
+accept `Idempotency-Key`; because the stock CLI does not send one by default, trstctl
+synthesizes a deterministic key from method, path, and body so a retry cannot mint a
+duplicate certificate. When you intentionally need a fresh certificate with the same
+common name and TTL, pass a different `Idempotency-Key` header or use the native
+`/api/v1/secrets/pki` route.
 
 ### The developer secrets experience (F64)
 

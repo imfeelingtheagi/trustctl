@@ -1099,6 +1099,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux.Handle("/api/v1/risk/", heavyHandler)
 	mux.Handle("/api/v1/cbom/", cbomHandler)
 	mux.Handle("/api/", apiHandler)
+	mux.Handle("/v1/", apiHandler)
 	mux.Handle("/auth/", apiHandler)
 	mux.Handle("/enroll/", apiHandler)
 	mux.Handle("/scim/", apiHandler)

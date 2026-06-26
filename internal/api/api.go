@@ -335,6 +335,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	for _, r := range a.routes() {
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.handler))
 	}
+	a.mountVaultCompat(mux)
 	// The browser SSO login + session bridge for the web UI. These routes are
 	// registered outside the route registry so they stay out of the CLI/OpenAPI
 	// surface.
@@ -831,6 +832,9 @@ func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if strings.HasPrefix(h, prefix) {
 		return strings.TrimSpace(h[len(prefix):])
+	}
+	if tok := strings.TrimSpace(r.Header.Get("X-Vault-Token")); tok != "" {
+		return tok
 	}
 	return ""
 }

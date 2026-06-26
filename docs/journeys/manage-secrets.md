@@ -34,7 +34,9 @@ Be precise here (see [Current limitations](../limitations.md) and
   outbound **secret-sync** to configured external stores, and Gitleaks-backed
   code/CI secret scanning. Short-lived API keys are served at
   `/api/v1/ephemeral/api-keys`. Transit encryption-as-a-service is served separately
-  at `/api/v1/transit/*` and `trstctl-cli transit`. KMIP is served as an opt-in
+  at `/api/v1/transit/*` and `trstctl-cli transit`. A Vault/OpenBao-compatible
+  common subset is served at `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and
+  `/v1/pki/issue/*` for stock `vault` CLI migration. KMIP is served as an opt-in
   mTLS listener for AES-256 SymmetricKey Create/Get.
 - **Still outside this journey:** broader KMIP appliance profiles and secret-store /
   API-key *discovery* of actual values. Discovery records references only and stays
@@ -82,6 +84,28 @@ Be precise here (see [Current limitations](../limitations.md) and
 
    -> the secret is stored as version 1; reading it back returns the latest live
    version.
+
+   **Vault/OpenBao migration shortcut:** if your scripts already use the stock
+   `vault` CLI, point it at the same server and use your trstctl API token as
+   `VAULT_TOKEN`. The shim is intentionally limited to token lookup, KV v2 under
+   `secret/`, and PKI issue under `pki/issue/*`; native trstctl routes remain the
+   complete API.
+
+   ```sh
+   export VAULT_ADDR=https://localhost:8443
+   export VAULT_TOKEN="$TRSTCTL_TOKEN"
+
+   vault login -no-store "$VAULT_TOKEN"
+   vault kv put secret/db username=payments password=s3cr3t
+   vault kv get -format=json secret/db
+   vault write -format=json pki/issue/default common_name=payments.internal ttl=1h
+   ```
+
+   -> `vault kv` writes the same sealed, versioned store as `/api/v1/secrets/store`,
+   and `vault write pki/issue/...` returns a short-lived certificate plus private key
+   from the signer-backed dynamic PKI secret. The shim accepts `Idempotency-Key`; when
+   the stock CLI omits it, trstctl derives a replay key from method, path, and body so
+   retries do not mint duplicates.
 
 3. Import a small tree and resolve references deliberately. Imports are all-or-nothing:
    every value is sealed as version 1, and if one path already exists the import is
