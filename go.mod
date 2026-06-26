@@ -11,6 +11,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/hcl v1.0.0
+	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
@@ -24,6 +25,7 @@ require (
 	github.com/smallstep/pkcs7 v0.2.1
 	github.com/spiffe/spire-plugin-sdk v1.15.1
 	github.com/tetratelabs/wazero v1.8.2
+	go.opentelemetry.io/proto/otlp v1.5.0
 	golang.org/x/crypto v0.52.0
 	golang.org/x/sys v0.45.0
 	golang.org/x/tools v0.44.0
@@ -54,6 +56,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-checkpoint v0.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -65,7 +68,6 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/hashicorp/hc-install v0.9.4 // indirect
-	github.com/hashicorp/hcl/v2 v2.24.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/terraform-exec v0.25.1 // indirect
 	github.com/hashicorp/terraform-json v0.27.2 // indirect
@@ -121,6 +123,7 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )

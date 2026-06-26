@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/leader"
 	"trstctl.com/trstctl/internal/logging"
+	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/ratelimit"
@@ -318,6 +320,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("managed-key custody: %w", err)
 	}
+	otlpExporter, err := otlpExporterFromConfig(cfg.OTLP)
+	if err != nil {
+		return Deps{}, err
+	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		ManagedKeyCustody: managedKeyCustody,
@@ -332,6 +338,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		LifecycleRenewBefore:   renewBefore,
 		LifecycleAlertBefore:   alertBefore,
 		Logger:                 logger, RateLimiter: rateLimiter,
+		OTLPExporter:    otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       cfg.Protocols, Plugins: pluginCfg,
@@ -355,6 +362,44 @@ func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, err
 		return nil, fmt.Errorf("rate limit window: %w", err)
 	}
 	return ratelimit.FromRate(st, cfg.RateLimit.Requests, window), nil
+}
+
+func otlpExporterFromConfig(cfg config.OTLP) (*observ.OTLPExporter, error) {
+	if !cfg.Enabled {
+		return nil, nil
+	}
+	timeout, err := cfg.TimeoutDuration()
+	if err != nil {
+		return nil, fmt.Errorf("otlp timeout: %w", err)
+	}
+	token := append([]byte(nil), cfg.Token...)
+	if cfg.TokenFile != "" {
+		data, err := os.ReadFile(cfg.TokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("read otlp bearer token file: %w", err)
+		}
+		defer zeroBytes(data)
+		token = append(token[:0], bytes.TrimSpace(data)...)
+	}
+	defer zeroBytes(token)
+	exp, err := observ.NewOTLPHTTPExporter(observ.OTLPConfig{
+		Endpoint:    cfg.Endpoint,
+		Token:       token,
+		Insecure:    cfg.Insecure,
+		ServiceName: cfg.ServiceName,
+		Timeout:     timeout,
+		QueueSize:   cfg.QueueSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return exp, nil
+}
+
+func zeroBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
 }
 
 func privacyRetentionFromConfig(cfg config.PrivacyRetention) (bool, time.Duration, privacy.RetentionPolicy, error) {
@@ -440,6 +485,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),
+			startRuntimeWorker(workCtx, srv.RunOTLPAuditStream),
 			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),

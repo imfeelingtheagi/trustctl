@@ -86,3 +86,8 @@ sustained error rate or latency. A rising 503 rate points at a saturated
 subsystem; a rising 429 rate points at a tenant over budget. A rising
 `trstctl_outbox_delivery_timeouts_total` series points at a slow destination and
 includes the affected tenant and destination labels.
+
+For SIEM pipelines, enable OTLP export to your OpenTelemetry Collector. Served HTTP
+spans arrive as OTLP traces, and event-sourced audit records arrive as OTLP logs
+with `trstctl.audit.sequence` and `trstctl.tenant.id` attributes. Use the sequence
+attribute to dedupe restarted streams and to alert on gaps.

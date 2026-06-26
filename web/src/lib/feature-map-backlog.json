@@ -6085,11 +6085,11 @@
       "current_frontend_mapping": "basic: Audit page events and export; coverage ledger: /coverage",
       "target_gui_mapping": "Audit explorer with filters, actor/tenant/resource, hash-chain status, evidence export, event detail, and links back to affected resources.",
       "acceptance_test": "Vitest covers filters, export, empty/error states, event detail, and evidence bundle download status.",
-      "source_docs": ["docs/features/policy-and-governance.md"],
+      "source_docs": ["docs/features/policy-and-governance.md", "docs/observability.md", "docs/configuration.md"],
       "source_backend": ["/api/v1/audit/events", "/api/v1/audit/export"],
       "source_frontend": ["web/src/pages/Audit.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub. COMP-02 adds served OTLP/HTTP protobuf export for HTTP traces plus event-sourced audit records so SIEM/OpenTelemetry Collector pipelines consume the audit stream. Test evidence: go test ./internal/server -run TestServedOTLPExporterStreamsTracesAndAuditEvents -count=1; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": ["searchAudit", "exportAudit"],
       "api_na": "",
       "cli_surface": ["audit events", "audit export"],
@@ -6126,8 +6126,11 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/policy-and-governance.md"],
-          "refs": ["docs/features/policy-and-governance.md"]
+          "evidence": [
+            "documented in docs/features/policy-and-governance.md",
+            "OTLP/SIEM export is documented in docs/observability.md and docs/configuration.md"
+          ],
+          "refs": ["docs/features/policy-and-governance.md", "docs/observability.md", "docs/configuration.md"]
         },
         "rbac": {
           "evidence": [
@@ -6150,8 +6153,11 @@
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.",
+            "COMP-02 wires OTLP/HTTP protobuf export into the served path: HTTP spans go to /v1/traces and event-sourced audit records go to /v1/logs with trstctl.audit.sequence and trstctl.tenant.id attributes."
+          ],
+          "refs": ["internal/observ/middleware.go", "internal/observ/otlp.go", "internal/server/otlp_served_test.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

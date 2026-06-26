@@ -136,6 +136,24 @@ enabled, it sends only coarse, anonymized, non-PII data.
 
 See [Telemetry](telemetry.md) for exactly what is and is not collected.
 
+## OpenTelemetry export
+
+OTLP export is **off by default** and sends data only to the collector endpoint you
+configure. It is separate from product telemetry: use it to feed your own
+OpenTelemetry Collector, Splunk, Datadog, or SIEM pipeline with served HTTP traces
+and audit-event log records.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_OTLP_ENABLED` | `false` | Set `true` to enable OTLP/HTTP protobuf export. |
+| `TRSTCTL_OTLP_ENDPOINT` | — | Absolute collector URL. HTTPS is required unless `TRSTCTL_OTLP_INSECURE=true`; the exporter posts to `/v1/traces` and `/v1/logs` under this base. |
+| `TRSTCTL_OTLP_INSECURE` | `false` | Allows plaintext `http://` collector endpoints for local or private-network deployments. |
+| `TRSTCTL_OTLP_BEARER_TOKEN` | — | Optional collector bearer token. Prefer the file setting for production secret mounts. |
+| `TRSTCTL_OTLP_BEARER_TOKEN_FILE` | — | Optional file containing the collector bearer token. Mutually exclusive with `TRSTCTL_OTLP_BEARER_TOKEN`. |
+| `TRSTCTL_OTLP_TIMEOUT` | `5s` | Per-export HTTP timeout. |
+| `TRSTCTL_OTLP_QUEUE_SIZE` | `1024` | Bounded trace-export queue size. Full queues drop spans rather than slowing served API requests. |
+| `TRSTCTL_OTLP_SERVICE_NAME` | `trstctl` | `service.name` resource attribute sent to the collector. |
+
 ## Audit
 
 The audit trail is a projection of the event log; these settings govern its

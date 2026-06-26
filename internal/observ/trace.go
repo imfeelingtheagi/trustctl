@@ -78,6 +78,33 @@ type Exporter interface {
 	Export(SpanData)
 }
 
+type multiExporter []Exporter
+
+// CombineExporters fans a completed span out to all non-nil exporters. It keeps
+// the tracing seam single-valued for middleware while allowing deployments to add
+// OTLP beside an in-memory/test exporter.
+func CombineExporters(exporters ...Exporter) Exporter {
+	out := multiExporter{}
+	for _, exp := range exporters {
+		if exp != nil {
+			out = append(out, exp)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	if len(out) == 1 {
+		return out[0]
+	}
+	return out
+}
+
+func (m multiExporter) Export(span SpanData) {
+	for _, exp := range m {
+		exp.Export(span)
+	}
+}
+
 // Tracer creates spans and hands completed ones to its exporter.
 type Tracer struct {
 	exporter Exporter

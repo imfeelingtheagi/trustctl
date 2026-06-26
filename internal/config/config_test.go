@@ -380,6 +380,90 @@ func TestTelemetryValidation(t *testing.T) {
 	}
 }
 
+func TestOTLPExportOffByDefault(t *testing.T) {
+	if Default().OTLP.Enabled {
+		t.Fatal("otlp export must be OFF by default")
+	}
+	cfg, err := Load(func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OTLP.Enabled {
+		t.Error("otlp export must stay off with no opt-in")
+	}
+}
+
+func TestOTLPExportOptInViaEnv(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_OTLP_ENABLED":      "true",
+		"TRSTCTL_OTLP_ENDPOINT":     "http://otel-collector:4318",
+		"TRSTCTL_OTLP_INSECURE":     "true",
+		"TRSTCTL_OTLP_BEARER_TOKEN": "collector-token",
+		"TRSTCTL_OTLP_TIMEOUT":      "2s",
+		"TRSTCTL_OTLP_QUEUE_SIZE":   "128",
+		"TRSTCTL_OTLP_SERVICE_NAME": "trstctl-prod",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.OTLP.Enabled || cfg.OTLP.Endpoint != "http://otel-collector:4318" || !cfg.OTLP.Insecure {
+		t.Fatalf("otlp env overlay did not apply: %+v", cfg.OTLP)
+	}
+	if string(cfg.OTLP.Token) != "collector-token" || cfg.OTLP.QueueSize != 128 || cfg.OTLP.ServiceName != "trstctl-prod" {
+		t.Fatalf("otlp secret/queue/service env overlay did not apply: %+v", cfg.OTLP)
+	}
+	if d, err := cfg.OTLP.TimeoutDuration(); err != nil || d != 2*time.Second {
+		t.Fatalf("otlp timeout = %v (%v), want 2s", d, err)
+	}
+}
+
+func TestOTLPExportValidation(t *testing.T) {
+	cases := map[string]func(*Config){
+		"enabled without endpoint": func(c *Config) { c.OTLP.Enabled = true; c.OTLP.Endpoint = "" },
+		"enabled bad endpoint":     func(c *Config) { c.OTLP.Enabled = true; c.OTLP.Endpoint = "collector:4318" },
+		"enabled plain http":       func(c *Config) { c.OTLP.Enabled = true; c.OTLP.Endpoint = "http://collector:4318" },
+		"enabled bad timeout": func(c *Config) {
+			c.OTLP.Enabled = true
+			c.OTLP.Endpoint = "https://collector:4318"
+			c.OTLP.Timeout = "soon"
+		},
+		"enabled zero timeout": func(c *Config) {
+			c.OTLP.Enabled = true
+			c.OTLP.Endpoint = "https://collector:4318"
+			c.OTLP.Timeout = "0s"
+		},
+		"negative queue": func(c *Config) {
+			c.OTLP.Enabled = true
+			c.OTLP.Endpoint = "https://collector:4318"
+			c.OTLP.QueueSize = -1
+		},
+		"token and file": func(c *Config) {
+			c.OTLP.Enabled = true
+			c.OTLP.Endpoint = "https://collector:4318"
+			c.OTLP.Token = []byte("tok")
+			c.OTLP.TokenFile = "/run/secrets/otlp-token"
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			mutate(c)
+			if err := c.Validate(); err == nil {
+				t.Errorf("expected a validation error for %q", name)
+			}
+		})
+	}
+
+	c := Default()
+	c.OTLP.Enabled = true
+	c.OTLP.Endpoint = "http://collector:4318"
+	c.OTLP.Insecure = true
+	if err := c.Validate(); err != nil {
+		t.Errorf("explicit insecure OTLP collector should validate: %v", err)
+	}
+}
+
 // TestEmbeddedEventLogFsyncDefaultIsBounded pins RESIL-001: the default
 // (embedded) event log is configured to fsync on a tight bounded cadence, NOT
 // nats-server's ~2-minute default — so a single-node power loss bounds data loss

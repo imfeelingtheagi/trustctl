@@ -78,6 +78,7 @@ type Config struct {
 	Log         Log         `json:"log"`
 	Lifecycle   Lifecycle   `json:"lifecycle"`
 	Telemetry   Telemetry   `json:"telemetry"`
+	OTLP        OTLP        `json:"otlp"`
 	Audit       Audit       `json:"audit"`
 	Breakglass  Breakglass  `json:"breakglass"`
 	Privacy     Privacy     `json:"privacy"`
@@ -775,6 +776,25 @@ func (t Telemetry) IntervalDuration() (time.Duration, error) {
 	return time.ParseDuration(t.Interval)
 }
 
+// OTLP configures operator-owned OpenTelemetry collector export for traces and
+// audit events. It is off by default and is independent from product telemetry:
+// data goes only to the endpoint the operator configures.
+type OTLP struct {
+	Enabled     bool   `json:"enabled"`
+	Endpoint    string `json:"endpoint,omitempty"`
+	Insecure    bool   `json:"insecure,omitempty"`
+	Token       []byte `json:"token,omitempty"`
+	TokenFile   string `json:"token_file,omitempty"`
+	Timeout     string `json:"timeout,omitempty"`
+	QueueSize   int    `json:"queue_size,omitempty"`
+	ServiceName string `json:"service_name,omitempty"`
+}
+
+// TimeoutDuration parses the per-export OTLP timeout.
+func (o OTLP) TimeoutDuration() (time.Duration, error) {
+	return time.ParseDuration(o.Timeout)
+}
+
 // Audit configures the event-sourced audit trail's evidence export (F9 / B5) and
 // its retention lifecycle (R4.4). By default (empty Retention) the event log is
 // retained indefinitely. When Retention is set AND ArchiveDir is given, a
@@ -1298,6 +1318,9 @@ func Default() *Config {
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
 		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h"},
+		// OTLP export is OFF by default. When enabled, it sends traces and audit
+		// event metadata only to the operator's collector endpoint.
+		OTLP: OTLP{Enabled: false, Timeout: "5s", QueueSize: 1024, ServiceName: "trstctl"},
 		// The audit export key persists under the data directory so signed evidence
 		// bundles verify across restarts; retention is indefinite by default.
 		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
@@ -1436,6 +1459,14 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
 	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
 	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
+	setBool(getenv, "TRSTCTL_OTLP_ENABLED", &c.OTLP.Enabled)
+	setString(getenv, "TRSTCTL_OTLP_ENDPOINT", &c.OTLP.Endpoint)
+	setBool(getenv, "TRSTCTL_OTLP_INSECURE", &c.OTLP.Insecure)
+	setBytes(getenv, "TRSTCTL_OTLP_BEARER_TOKEN", &c.OTLP.Token)
+	setString(getenv, "TRSTCTL_OTLP_BEARER_TOKEN_FILE", &c.OTLP.TokenFile)
+	setString(getenv, "TRSTCTL_OTLP_TIMEOUT", &c.OTLP.Timeout)
+	setInt(getenv, "TRSTCTL_OTLP_QUEUE_SIZE", &c.OTLP.QueueSize)
+	setString(getenv, "TRSTCTL_OTLP_SERVICE_NAME", &c.OTLP.ServiceName)
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
@@ -1909,6 +1940,26 @@ func validateOptionalServices(c *Config) []error {
 			errs = append(errs, fmt.Errorf("telemetry.interval %q is invalid: %w", c.Telemetry.Interval, err))
 		} else if d <= 0 {
 			errs = append(errs, errors.New("telemetry.interval must be positive"))
+		}
+	}
+	if c.OTLP.Enabled {
+		if strings.TrimSpace(c.OTLP.Endpoint) == "" {
+			errs = append(errs, errors.New("otlp.endpoint is required when otlp is enabled"))
+		} else if u, err := url.Parse(c.OTLP.Endpoint); err != nil || u.Scheme == "" || u.Host == "" {
+			errs = append(errs, fmt.Errorf("otlp.endpoint %q must be an absolute URL", c.OTLP.Endpoint))
+		} else if u.Scheme != "https" && (u.Scheme != "http" || !c.OTLP.Insecure) {
+			errs = append(errs, fmt.Errorf("otlp.endpoint %q must be https, or http with otlp.insecure=true", c.OTLP.Endpoint))
+		}
+		if d, err := c.OTLP.TimeoutDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("otlp.timeout %q is invalid: %w", c.OTLP.Timeout, err))
+		} else if d <= 0 {
+			errs = append(errs, errors.New("otlp.timeout must be positive"))
+		}
+		if c.OTLP.QueueSize < 0 {
+			errs = append(errs, errors.New("otlp.queue_size must be zero or positive"))
+		}
+		if len(c.OTLP.Token) > 0 && strings.TrimSpace(c.OTLP.TokenFile) != "" {
+			errs = append(errs, errors.New("otlp.token and otlp.token_file are mutually exclusive"))
 		}
 	}
 	// Audit retention is optional (empty means indefinite); when set it must be a

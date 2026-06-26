@@ -166,6 +166,7 @@ type Deps struct {
 	NotificationChannels []notify.Notifier
 	Logger               *slog.Logger    // structured access log sink (R2.2); nil discards
 	TraceExporter        observ.Exporter // completed-span sink (R2.2); nil is a no-op
+	OTLPExporter         *observ.OTLPExporter
 	Bulkhead             *bulkhead.Set   // per-subsystem bounded pools (R2.3/AN-7); nil uses bulkhead.Default()
 	RateLimiter          api.RateLimiter // per-tenant rate limiter (R2.3); nil disables rate limiting
 	// SecurityHeaders configures the web-hardening response headers + CORS policy
@@ -461,6 +462,8 @@ type Server struct {
 	tracer    *observ.Tracer
 	readiness *observ.Readiness
 	bulk      *bulkhead.Set
+	otlp      *observ.OTLPExporter
+	otlpAudit *observ.OTLPAuditStreamer
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
 	retention    *audit.RetentionWorker
@@ -975,7 +978,11 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	if s.registry == nil {
 		s.registry = observ.NewRegistry()
 	}
-	s.tracer = observ.NewTracer(d.TraceExporter)
+	s.otlp = d.OTLPExporter
+	if s.otlp != nil {
+		s.otlpAudit = observ.NewOTLPAuditStreamer(d.Log, s.otlp)
+	}
+	s.tracer = observ.NewTracer(observ.CombineExporters(d.TraceExporter, s.otlp))
 	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
@@ -1576,6 +1583,32 @@ func (s *Server) RunProjectionTail(ctx context.Context) {
 	}
 }
 
+// RunOTLPAuditStream exports event-sourced audit records to the configured
+// OTLP collector until ctx is cancelled. It is a leader-only worker under Run, so
+// HA deployments do not duplicate the same event stream from every replica. The
+// exporter carries stream sequence attributes, so downstream SIEMs can dedupe on
+// restart and alert on gaps.
+func (s *Server) RunOTLPAuditStream(ctx context.Context) {
+	if s.otlpAudit == nil {
+		return
+	}
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := s.otlpAudit.Run(ctx); err != nil && ctx.Err() == nil {
+			s.logger.Warn("otlp audit streamer stopped; retrying", slog.String("error", err.Error()))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+			continue
+		}
+		return
+	}
+}
+
 func (s *Server) probeEventLog(ctx context.Context) error {
 	err := s.log.Ping(ctx)
 	if sampleErr := s.sampleEventLogReplicas(ctx); sampleErr != nil && err == nil {
@@ -2068,6 +2101,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.complianceSigner != nil {
 		s.complianceSigner.Destroy()
+	}
+	if s.otlp != nil {
+		if err := s.otlp.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close otlp exporter: %w", err))
+		}
 	}
 	if s.log != nil {
 		if err := s.log.Close(); err != nil {

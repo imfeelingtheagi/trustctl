@@ -16,6 +16,12 @@ detection watches your own hosts for unexpected change; risk scoring is the prio
 to-do list; the CBOM is the materials audit that tells you where the weak crypto is before
 an inspector (or an attacker) does.
 
+trstctl also exports the control-plane signal you need to operate those workflows:
+served HTTP traces and event-sourced audit records can stream to your OpenTelemetry
+Collector over OTLP/HTTP protobuf. That lets Splunk, Datadog, or any SIEM pipeline
+consume the same immutable audit stream auditors inspect, with event sequence and
+tenant attributes for dedupe and gap detection.
+
 ## Why it exists
 
 A list of credentials is only useful if you can act on it. Security teams drown in

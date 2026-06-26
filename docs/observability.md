@@ -119,11 +119,40 @@ standard, so it interoperates with OpenTelemetry/Jaeger collectors on the wire:
   the signer run as child spans of the request, so one trace shows where time goes
   across dependencies.
 
-!!! note "OTLP export is a follow-up"
-    The trace model is OpenTelemetry-shaped and W3C-`traceparent`-compatible on
-    the wire today. Exporting spans over **OTLP** to a collector is wired behind a
-    pluggable exporter seam (`observ.Exporter`) and is a tracked follow-up; the
-    control plane does not bundle the OTel SDK yet.
+## OTLP export
+
+trstctl can stream served HTTP traces and event-sourced audit records to an
+operator-owned OpenTelemetry collector over **OTLP/HTTP protobuf**. This is not
+product telemetry and it does not phone home: it is disabled until you set your
+own collector endpoint.
+
+```bash
+export TRSTCTL_OTLP_ENABLED=true
+export TRSTCTL_OTLP_ENDPOINT=https://otel-collector.example.internal:4318
+export TRSTCTL_OTLP_BEARER_TOKEN_FILE=/run/secrets/trstctl-otlp-token
+```
+
+For local collectors that listen on plaintext HTTP, make the downgrade explicit:
+
+```bash
+export TRSTCTL_OTLP_ENABLED=true
+export TRSTCTL_OTLP_ENDPOINT=http://otel-collector:4318
+export TRSTCTL_OTLP_INSECURE=true
+```
+
+The exporter posts spans to `/v1/traces` and audit records to `/v1/logs`, deriving
+those signal paths from the endpoint you set. Trace spans include non-secret
+request attributes such as `http.route` and `http.status_code`. Audit log records
+include event metadata only: `trstctl.audit.type`, `trstctl.audit.id`,
+`trstctl.audit.sequence`, `trstctl.audit.schema_version`, `trstctl.tenant.id`,
+actor subject/roles when present, and payload byte count. The event payload itself
+is not sent to the collector.
+
+Trace export uses a bounded in-process queue. If the collector is slow or down,
+served API requests keep their own backpressure behavior and telemetry is dropped
+instead of blocking credential operations. Audit export runs as a leader-only
+background worker and carries the event-stream sequence so Splunk, Datadog, or an
+OpenTelemetry Collector pipeline can dedupe replayed records and alert on gaps.
 
 ## Structured logs
 
