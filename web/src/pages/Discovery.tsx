@@ -6,6 +6,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
 import { api, ApiError, type DiscoveryFinding, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -136,6 +137,9 @@ export function Discovery() {
           </Button>
         }
       />
+
+      <DiscoveryHero findings={findings} />
+      <CTDriftPanel findings={findings} sources={sources} />
 
       {notice && renderNotice(notice)}
       {loading && <LoadingState>Loading discovery records...</LoadingState>}
