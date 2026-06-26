@@ -20,6 +20,7 @@ import { Platform } from "@/pages/Platform";
 import { Protocols } from "@/pages/Protocols";
 import { Secrets } from "@/pages/Secrets";
 import { Policy } from "@/pages/Policy";
+import { Privacy } from "@/pages/Privacy";
 import { Discovery } from "@/pages/Discovery";
 import { Posture } from "@/pages/Posture";
 import { CAHierarchy } from "@/pages/CAHierarchy";
@@ -82,6 +83,7 @@ export function AppRoutes() {
         <Route path="posture" element={<Posture />} />
         <Route path="graph" element={<Graph />} />
         <Route path="audit" element={<Audit />} />
+        <Route path="privacy" element={<Privacy />} />
         <Route path="assistant" element={<Assistant />} />
         <Route path="wizard" element={<Wizard />} />
         <Route path="platform" element={<Platform />} />

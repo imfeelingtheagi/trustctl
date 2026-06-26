@@ -1050,6 +1050,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.category.292c06f004",
+    defaultMessage: "Category",
+    sources: [
+      "src/pages/Privacy.tsx:189",
+    ],
+  },
+  {
     key: "source.cbom.and.cryptographic.observability.11b90cf944",
     defaultMessage: "CBOM and cryptographic observability",
     sources: [
@@ -1836,6 +1843,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.data.subject.961a11bd55",
+    defaultMessage: "Data subject",
+    sources: [
+      "src/pages/Privacy.tsx:97",
+    ],
+  },
+  {
     key: "source.decrypt.2e4629449b",
     defaultMessage: "Decrypt",
     sources: [
@@ -2233,6 +2247,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.enforced.at.67dfec72e2",
+    defaultMessage: "Enforced at",
+    sources: [
+      "src/pages/Privacy.tsx:165",
+    ],
+  },
+  {
     key: "source.enforcement.path.0e8665bcfe",
     defaultMessage: "Enforcement path",
     sources: [
@@ -2315,6 +2336,13 @@ export const extractedMessages = [
     defaultMessage: "Ephemeral JIT issuance uses external approval flows",
     sources: [
       "src/pages/Workloads.tsx:266",
+    ],
+  },
+  {
+    key: "source.erased.at.bd790fa7ae",
+    defaultMessage: "Erased at",
+    sources: [
+      "src/pages/Privacy.tsx:130",
     ],
   },
   {
@@ -3488,6 +3516,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.loading.privacy.posture.835aca7ce9",
+    defaultMessage: "Loading privacy posture…",
+    sources: [
+      "src/pages/Privacy.tsx:84",
+    ],
+  },
+  {
     key: "source.loading.profile.version.dc6b63b7c9",
     defaultMessage: "Loading profile version...",
     sources: [
@@ -3522,6 +3557,13 @@ export const extractedMessages = [
     sources: [
       "src/pages/Platform.tsx:18",
       "src/pages/Platform.tsx:19",
+    ],
+  },
+  {
+    key: "source.location.15b61974b2",
+    defaultMessage: "Location",
+    sources: [
+      "src/pages/Privacy.tsx:190",
     ],
   },
   {
@@ -3957,6 +3999,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.catalog.entries.returned.e7654be69b",
+    defaultMessage: "No catalog entries returned.",
+    sources: [
+      "src/pages/Privacy.tsx:184",
+    ],
+  },
+  {
     key: "source.no.cbom.assets.returned.yet.6164e1adf5",
     defaultMessage: "No CBOM assets returned yet",
     sources: [
@@ -4259,6 +4308,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.retention.runs.recorded.yet.824265f311",
+    defaultMessage: "No retention runs recorded yet.",
+    sources: [
+      "src/pages/Privacy.tsx:157",
+    ],
+  },
+  {
     key: "source.no.rotation.runs.cf68af2637",
     defaultMessage: "No rotation runs.",
     sources: [
@@ -4284,6 +4340,13 @@ export const extractedMessages = [
     defaultMessage: "No spec differences.",
     sources: [
       "src/pages/Profiles.tsx:452",
+    ],
+  },
+  {
+    key: "source.no.subject.erasures.recorded.yet.2e39df84bc",
+    defaultMessage: "No subject erasures recorded yet.",
+    sources: [
+      "src/pages/Privacy.tsx:122",
     ],
   },
   {
@@ -4557,6 +4620,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.optional.recorded.on.the.erasure.50aed9adb1",
+    defaultMessage: "optional — recorded on the erasure",
+    sources: [
+      "src/pages/Privacy.tsx:113",
+    ],
+  },
+  {
     key: "source.orphaned.credentials.0e9e535cd8",
     defaultMessage: "Orphaned credentials",
     sources: [
@@ -4569,6 +4639,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:470",
       "src/pages/Identities.tsx:961",
+      "src/pages/Privacy.tsx:191",
       "src/pages/Risk.tsx:259",
     ],
   },
@@ -4591,6 +4662,13 @@ export const extractedMessages = [
     defaultMessage: "Owner id",
     sources: [
       "src/pages/RequestCredential.tsx:247",
+    ],
+  },
+  {
+    key: "source.owner.id.email.or.subject.ref.301599af7a",
+    defaultMessage: "owner id, email, or subject ref",
+    sources: [
+      "src/pages/Privacy.tsx:103",
     ],
   },
   {
@@ -4712,6 +4790,14 @@ export const extractedMessages = [
     defaultMessage: "Permissions",
     sources: [
       "src/pages/Platform.tsx:296",
+    ],
+  },
+  {
+    key: "source.personal.data.catalog.25440e4b98",
+    defaultMessage: "Personal-data catalog",
+    sources: [
+      "src/pages/Privacy.tsx:182",
+      "src/pages/Privacy.tsx:186",
     ],
   },
   {
@@ -4884,6 +4970,20 @@ export const extractedMessages = [
     defaultMessage: "Principal",
     sources: [
       "src/pages/Secrets.tsx:1423",
+    ],
+  },
+  {
+    key: "source.privacy.action.failed.aa973042a1",
+    defaultMessage: "Privacy action failed",
+    sources: [
+      "src/pages/Privacy.tsx:93",
+    ],
+  },
+  {
+    key: "source.privacy.data.governance.62e5901931",
+    defaultMessage: "Privacy & data governance",
+    sources: [
+      "src/pages/Privacy.tsx:79",
     ],
   },
   {
@@ -5093,6 +5193,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.purpose.d4e8830a71",
+    defaultMessage: "Purpose",
+    sources: [
+      "src/pages/Privacy.tsx:192",
+    ],
+  },
+  {
     key: "source.query.b80a37564f",
     defaultMessage: "Query",
     sources: [
@@ -5184,6 +5291,8 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:105",
       "src/pages/Identities.tsx:777",
       "src/pages/Platform.tsx:280",
+      "src/pages/Privacy.tsx:107",
+      "src/pages/Privacy.tsx:129",
     ],
   },
   {
@@ -5230,10 +5339,31 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.recent.subject.erasures.eb5f6c6221",
+    defaultMessage: "Recent subject erasures",
+    sources: [
+      "src/pages/Privacy.tsx:124",
+    ],
+  },
+  {
     key: "source.recorded.approvals.and.required.approvals.4d359a312b",
     defaultMessage: "Recorded approvals and required approvals for this request.",
     sources: [
       "src/pages/Approvals.tsx:78",
+    ],
+  },
+  {
+    key: "source.records.affected.14cac9d2a3",
+    defaultMessage: "Records affected",
+    sources: [
+      "src/pages/Privacy.tsx:163",
+    ],
+  },
+  {
+    key: "source.records.erased.d8291fcfb3",
+    defaultMessage: "Records erased",
+    sources: [
+      "src/pages/Privacy.tsx:128",
     ],
   },
   {
@@ -5451,6 +5581,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.requested.by.9199a05497",
+    defaultMessage: "Requested by",
+    sources: [
+      "src/pages/Privacy.tsx:164",
+    ],
+  },
+  {
     key: "source.requested.c6a91ee7f9",
     defaultMessage: "requested",
     sources: [
@@ -5518,6 +5655,27 @@ export const extractedMessages = [
     defaultMessage: "Result",
     sources: [
       "src/pages/RequestCredential.tsx:304",
+    ],
+  },
+  {
+    key: "source.retention.3b1f58d94e",
+    defaultMessage: "Retention",
+    sources: [
+      "src/pages/Privacy.tsx:193",
+    ],
+  },
+  {
+    key: "source.retention.enforcement.7750f8f1c0",
+    defaultMessage: "Retention enforcement",
+    sources: [
+      "src/pages/Privacy.tsx:148",
+    ],
+  },
+  {
+    key: "source.retention.runs.ea3895f90d",
+    defaultMessage: "Retention runs",
+    sources: [
+      "src/pages/Privacy.tsx:159",
     ],
   },
   {
@@ -5792,6 +5950,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Discovery.tsx:285",
       "src/pages/Discovery.tsx:338",
+      "src/pages/Privacy.tsx:162",
     ],
   },
   {
@@ -6495,9 +6654,17 @@ export const extractedMessages = [
       "src/pages/Platform.tsx:276",
       "src/pages/Platform.tsx:333",
       "src/pages/Platform.tsx:356",
+      "src/pages/Privacy.tsx:127",
       "src/pages/Secrets.tsx:951",
       "src/pages/Workloads.tsx:324",
       "src/pages/Workloads.tsx:414",
+    ],
+  },
+  {
+    key: "source.subject.erasure.5571a75f0f",
+    defaultMessage: "Subject erasure",
+    sources: [
+      "src/pages/Privacy.tsx:95",
     ],
   },
   {

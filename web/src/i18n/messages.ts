@@ -294,6 +294,10 @@ export const messages = {
     defaultMessage: "Policy",
     description: "Primary navigation item.",
   },
+  "nav.item.privacy": {
+    defaultMessage: "Privacy",
+    description: "Primary navigation item.",
+  },
   "nav.item.platform": {
     defaultMessage: "Platform",
     description: "Primary navigation item.",

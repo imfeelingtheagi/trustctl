@@ -68,6 +68,7 @@ export const appRoutePaths = [
   "/posture",
   "/graph",
   "/audit",
+  "/privacy",
   "/assistant",
   "/wizard",
   "/platform",
@@ -150,6 +151,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
       { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+      { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
       { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
       { to: "/platform", labelKey: "nav.item.platform", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"] },
     ],
