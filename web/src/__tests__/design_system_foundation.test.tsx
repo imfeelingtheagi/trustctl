@@ -119,6 +119,7 @@ describe("shared DataGrid", () => {
           getRowId={(row) => row.id}
           sort={{ columnId: "name", direction: "asc" }}
           onSort={onSort}
+          showColumnChooser
         />
       </MemoryRouter>,
     );
@@ -241,6 +242,7 @@ function ToolbarGridHarness() {
       rows={filtered}
       columns={columns}
       getRowId={(row) => row.id}
+      showColumnChooser
       toolbar={({ columnChooser }) => (
         <DataGridToolbar
           searchLabel="Search credential rows"
@@ -273,6 +275,7 @@ function PersistentGridHarness() {
       getRowId={(row) => row.id}
       sort={sort}
       onSort={setSort}
+      showColumnChooser
       viewStorageKey="test-grid"
       viewMetadata={{ owner }}
       onViewRestore={(metadata, restoredSort) => {
@@ -319,7 +322,7 @@ function DrawerHarness() {
       <DetailDrawer
         open={open}
         title="payments-api"
-        description="Fetched from the served credential detail API."
+        description="Fetched credential detail."
         actions={<button type="button">Request renewal</button>}
         onClose={() => setOpen(false)}
         returnFocusRef={triggerRef}
@@ -345,7 +348,7 @@ describe("shared DetailDrawer", () => {
 
     await user.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "payments-api" });
-    expect(within(dialog).getByText("Fetched from the served credential detail API.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Fetched credential detail.")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /request renewal/i })).toBeInTheDocument();
     expect(within(dialog).getByText("active")).toHaveAttribute("data-status-badge", "certificate");
     expect(within(dialog).getByRole("button", { name: /close/i })).toHaveFocus();

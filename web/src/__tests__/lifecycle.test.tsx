@@ -185,7 +185,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText("X.509 certificate identity")).toBeInTheDocument();
     expect(screen.getByText("Not after")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Owner owner-x" })).toHaveAttribute("href", "/owners?owner=owner-x");
-    expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute("href", "/coverage?feature=F5&issuer=issuer-x");
+    expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute("href", "/protocols?issuer=issuer-x");
     expect(screen.getByText(/api.example.test/)).toBeInTheDocument();
 
     const sshRow = screen.getByText("deploy-key").closest("tr")!;
@@ -324,7 +324,7 @@ describe("lifecycle actions from the UI", () => {
     expect(within(dialog).getByText("1")).toBeInTheDocument();
   });
 
-  it("does not invent blast-radius impact when no graph node mapping is served (FE-083)", async () => {
+  it("does not invent blast-radius impact when no graph node mapping exists (FE-083)", async () => {
     apiMock.identities.mockResolvedValue([{ id: "api-9", name: "api-key", kind: "api_key", owner_id: "owner-1", status: "deployed" }]);
     const user = userEvent.setup();
     renderIdentities();
@@ -334,10 +334,10 @@ describe("lifecycle actions from the UI", () => {
 
     expect(apiMock.graphBlastRadius).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByText(/no served graph node mapping/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/no graph node mapping/i)).toBeInTheDocument();
   });
 
-  it("degrades blast-radius impact when the served graph request fails (FE-083)", async () => {
+  it("degrades blast-radius impact when the graph request fails (FE-083)", async () => {
     apiMock.identities.mockResolvedValue([{ id: "dep-404", name: "missing-graph-node", kind: "x509_certificate", owner_id: "owner-1", status: "deployed" }]);
     apiMock.graphBlastRadius.mockRejectedValue(new ApiError(404, JSON.stringify({ detail: "graph node not found" })));
     const user = userEvent.setup();
@@ -395,16 +395,16 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText(/accepted 1; failed 1/i)).toBeInTheDocument();
   });
 
-  it("shows served OCSP and CRL publication endpoints without fake health", async () => {
+  it("shows OCSP and CRL publication posture without fake health", async () => {
     apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "revocation-docs", status: "deployed" }]);
 
     renderIdentities();
 
     expect(await screen.findByText("Revocation publication")).toBeInTheDocument();
-    expect(screen.getByText("/ocsp/{tenant}")).toBeInTheDocument();
-    expect(screen.getByText("/crl/{tenant}")).toBeInTheDocument();
+    expect(screen.getByText(/public OCSP and CRL responders/i)).toBeInTheDocument();
+    expect(screen.getByText(/Responder paths are tenant-scoped/i)).toBeInTheDocument();
     expect(screen.getByText(/Freshness, scheduler, and responder health aren't surfaced in the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/live propagation health is not served yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/live propagation health is coming soon/i)).toBeInTheDocument();
   });
 
   it("surfaces a 429 rate-limit with a Retry-After hint (SURFACE-007)", async () => {
@@ -452,10 +452,11 @@ describe("lifecycle actions from the UI", () => {
 
     const row = (await screen.findByText("self-approval-svc")).closest("tr")!;
     expect(within(row).queryByRole("button", { name: /approve issue/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /review in approvals/i })).toHaveAttribute("href", "/approvals");
+    expect(screen.queryByText("JIT approvals moved to the inbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /review in approvals|open approvals inbox/i })).not.toBeInTheDocument();
   });
 
-  it("summarizes pending JIT approvals and links to the dedicated inbox", async () => {
+  it("keeps the dedicated approvals inbox out of the identities page", async () => {
     apiMock.identities.mockResolvedValue([
       {
         id: "jit-1",
@@ -471,12 +472,12 @@ describe("lifecycle actions from the UI", () => {
     ]);
     renderIdentities();
 
-    expect(await screen.findByText("JIT approvals moved to the inbox")).toBeInTheDocument();
-    expect(screen.getAllByText("jit-db").length).toBeGreaterThan(0);
-    expect(screen.getByText("alice")).toBeInTheDocument();
-    expect(screen.getByText("1/2")).toBeInTheDocument();
-    expect(screen.getByText("2026-06-19T18:00:00Z")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open approvals inbox/i })).toHaveAttribute("href", "/approvals");
+    expect(await screen.findByText("jit-db")).toBeInTheDocument();
+    expect(screen.queryByText("JIT approvals moved to the inbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("alice")).not.toBeInTheDocument();
+    expect(screen.queryByText("1/2")).not.toBeInTheDocument();
+    expect(screen.queryByText("2026-06-19T18:00:00Z")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open approvals inbox/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /approve issue for jit-db/i })).not.toBeInTheDocument();
   });
 
@@ -511,7 +512,7 @@ describe("lifecycle actions from the UI", () => {
     expect(row).toHaveTextContent(/Delivery receipt unrouted for nginx\/edge-1/i);
   });
 
-  it("discloses scheduler-backed lifecycle automation and served run evidence boundaries", async () => {
+  it("renders scheduler-backed rotation evidence without the automation preview", async () => {
     apiMock.identities.mockResolvedValue([{ id: "ren-1", name: "manual-renewal-svc", kind: "x509_certificate", status: "deployed" }]);
     apiMock.rotationRuns.mockResolvedValue({
       items: [
@@ -534,18 +535,15 @@ describe("lifecycle actions from the UI", () => {
     });
     renderIdentities();
 
-    expect(await screen.findByText("Lifecycle automation")).toBeInTheDocument();
-    expect(screen.getByText(/Automatic renewal runs in the leader scheduler/i)).toBeInTheDocument();
-    expect(screen.getByText("Delivery and rotation evidence")).toBeInTheDocument();
+    expect(await screen.findByText("Delivery and rotation evidence")).toBeInTheDocument();
     expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
-    expect(screen.getByText("Automation layout preview")).toBeInTheDocument();
-    expect(screen.getByText("Renew before")).toBeInTheDocument();
-    expect(screen.getByText("Alert before")).toBeInTheDocument();
-    expect(screen.getByText("Dry run")).toBeInTheDocument();
-    expect(screen.getAllByText("Rollback").length).toBeGreaterThan(0);
-    expect(screen.getByText(/editing schedules, alert timing, and dry-run execution/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /use manual lifecycle transitions/i })).toHaveAttribute("href", "#manual-lifecycle-transitions");
+    expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
+    expect(screen.queryByText("Lifecycle automation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Automation layout preview")).not.toBeInTheDocument();
+    expect(screen.queryByText("Renew before")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alert before")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dry run")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /save schedule|run automation/i })).not.toBeInTheDocument();
   });
 
@@ -579,7 +577,7 @@ describe("lifecycle actions from the UI", () => {
 
     const row = (await screen.findByText("needs-approval")).closest("tr")!;
     expect(within(row).queryByRole("button", { name: /approve issue/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /review in approvals/i })).toHaveAttribute("href", "/approvals");
+    expect(screen.queryByRole("link", { name: /review in approvals|open approvals inbox/i })).not.toBeInTheDocument();
     expect(apiMock.approveIdentityAction).not.toHaveBeenCalled();
   });
 });

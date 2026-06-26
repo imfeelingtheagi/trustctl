@@ -40,8 +40,8 @@ export function CredentialActivityTimeline({
         Credential activity timeline
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        {credentialLabel ? `${credentialLabel} has` : "This credential has"} served lifecycle state plus projected connector and rotation evidence when an
-        outbox worker has produced it.
+        {credentialLabel ? `${credentialLabel} has` : "This credential has"} lifecycle state plus projected connector and rotation evidence when an outbox
+        worker has produced it.
       </p>
       <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
         {rows.map((row) => (

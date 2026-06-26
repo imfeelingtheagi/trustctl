@@ -1,0 +1,125 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { Identities } from "@/pages/Identities";
+
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    identities: vi.fn(),
+    getIdentity: vi.fn(),
+    transitionIdentity: vi.fn(),
+    graphBlastRadius: vi.fn(),
+    connectorDeliveries: vi.fn(),
+    rotationRuns: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...apiMock } };
+});
+
+function renderIdentities() {
+  return render(
+    <MemoryRouter>
+      <Identities />
+    </MemoryRouter>,
+  );
+}
+
+describe("WIRE-11 identity delivery and rotation evidence", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "id-deployed-1",
+        name: "payments-tls",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "deployed",
+      },
+    ]);
+    apiMock.getIdentity.mockResolvedValue({
+      id: "id-deployed-1",
+      name: "payments-tls",
+      kind: "x509_certificate",
+      owner_id: "owner-1",
+      status: "deployed",
+    });
+    apiMock.transitionIdentity.mockResolvedValue({ id: "id-deployed-1", name: "payments-tls", status: "renewing" });
+    apiMock.graphBlastRadius.mockResolvedValue({ node: { id: "cert:id-deployed-1", kind: "credential", name: "payments-tls" }, affected: [], by_kind: {} });
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          id: "delivery-1",
+          tenant_id: "tenant-1",
+          identity_id: "id-deployed-1",
+          destination: "connector.deploy",
+          connector: "kubernetes",
+          target: "prod/payments-tls",
+          fingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          status: "delivered",
+          attempts: 1,
+          reason: "outbox_delivered",
+          detail: "receipt persisted by delivery worker",
+          rollback_ref: "rollback:delivery-1",
+          idempotency_key: "idem-delivery-1",
+          created_at: "2026-06-26T13:00:00Z",
+          updated_at: "2026-06-26T13:01:00Z",
+        },
+      ],
+    });
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "rotation-1",
+          tenant_id: "tenant-1",
+          identity_id: "id-deployed-1",
+          status: "succeeded",
+          trigger: "scheduler",
+          reason: "renew-before window reached",
+          predecessor_fingerprint: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          successor_fingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          rollback_ref: "restore sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          idempotency_key: "idem-rotation-1",
+          created_at: "2026-06-26T12:58:00Z",
+          updated_at: "2026-06-26T13:02:00Z",
+          completed_at: "2026-06-26T13:02:00Z",
+        },
+      ],
+    });
+  });
+
+  it("renders served delivery and rotation evidence while removing unserved preview panels", async () => {
+    renderIdentities();
+
+    await waitFor(() => expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 50 }));
+    expect(apiMock.rotationRuns).toHaveBeenCalledWith({ limit: 50 });
+    expect(await screen.findByText("Delivery and rotation evidence")).toBeInTheDocument();
+    expect(screen.getAllByText("kubernetes").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("prod/payments-tls").length).toBeGreaterThan(0);
+    expect(screen.getByText("outbox_delivered")).toBeInTheDocument();
+    expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
+    expect(screen.getByText("restore sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")).toBeInTheDocument();
+
+    const identityRow = screen.getByText("payments-tls").closest("tr")!;
+    expect(identityRow).toHaveTextContent(/Delivered to kubernetes\/prod\/payments-tls/i);
+
+    expect(screen.queryByText("Lifecycle automation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Automation layout preview")).not.toBeInTheDocument();
+    expect(screen.queryByText("JIT approvals moved to the inbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pending JIT approval requests")).not.toBeInTheDocument();
+  });
+
+  it("deletes the automation-preview and duplicate JIT-summary components", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/pages/Identities.tsx"), "utf8");
+    expect(source).not.toMatch(/function\s+LifecycleAutomationDisclosure/);
+    expect(source).not.toMatch(/Automation layout preview/);
+    expect(source).not.toMatch(/function\s+PendingApprovalSummary/);
+    expect(source).not.toMatch(/JIT approvals moved to the inbox/);
+  });
+});

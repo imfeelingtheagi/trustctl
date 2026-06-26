@@ -69,7 +69,7 @@ export function Agents() {
       <PageHeader
         titleId="agents-heading"
         title="Agents"
-        description="Tenant-scoped in-network agents from the served `GET /api/v1/agents` API, plus one-time bootstrap-token minting."
+        description="Tenant-scoped in-network agents, plus one-time bootstrap-token minting."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
@@ -85,7 +85,7 @@ export function Agents() {
               Enrollment token
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Mint a one-time bootstrap token with the served mutation. The token stays in component memory only; it is never written to browser storage.
+              Mint a one-time bootstrap token. The token stays in component memory only; it is never written to browser storage.
             </p>
           </div>
           <Button type="button" onClick={() => void mintToken()} disabled={tokenBusy}>
@@ -201,7 +201,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
         <h2 id="agent-detail-heading" className="text-title font-semibold">
           {agent.name}
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Served agent fields from `GET /api/v1/agents`.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Agent profile, heartbeat, and version details.</p>
       </div>
       <dl className="grid gap-2 text-sm">
         <div>
@@ -221,16 +221,16 @@ function AgentDetail({ agent }: { agent: Agent }) {
           <dd>{formatDate(agent.last_seen_at)}</dd>
         </div>
       </dl>
-      <UnavailableState title="Scan, drift, and renewal fields not served yet">
+      <UnavailableState title="More agent telemetry coming soon">
         Discovery scanning and drift detection run in the agent today, and agent-driven certificate renewal runs there too; console views for capabilities, last
-        scan, drift summary, and renewal state are coming soon. This page shows only the fields the served Agent schema carries.
+        scan, drift summary, and renewal state are coming soon. This page shows the current profile and heartbeat fields.
       </UnavailableState>
     </aside>
   );
 }
 
 function heartbeatFreshness(lastSeen?: string): { label: string; stale: boolean } {
-  if (!lastSeen) return { label: "No heartbeat timestamp served", stale: true };
+  if (!lastSeen) return { label: "No heartbeat timestamp", stale: true };
   const ts = Date.parse(lastSeen);
   if (Number.isNaN(ts)) return { label: "Unparseable heartbeat timestamp", stale: true };
   const ageMs = Date.now() - ts;

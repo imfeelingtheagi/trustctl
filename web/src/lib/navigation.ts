@@ -31,14 +31,11 @@ export interface NavItem {
   featureIds: string[];
 }
 
-export type NavTreatment = "operate" | "observe" | "disclose";
-
 export interface TaskNavItem {
   to: string;
   labelKey: MessageKey;
   descriptionKey: MessageKey;
   icon: NavIcon;
-  treatment: NavTreatment;
   featureIds: string[];
 }
 
@@ -51,7 +48,6 @@ export const appRoutePaths = [
   "/login",
   "/",
   "/certificates",
-  "/coverage",
   "/identities",
   "/owners",
   "/agents",
@@ -83,7 +79,6 @@ export const taskNavItems: TaskNavItem[] = [
     labelKey: "nav.task.expiringSoon.label",
     descriptionKey: "nav.task.expiringSoon.description",
     icon: "certificate",
-    treatment: "operate",
     featureIds: ["F1"],
   },
   {
@@ -91,7 +86,6 @@ export const taskNavItems: TaskNavItem[] = [
     labelKey: "nav.task.pendingApprovals.label",
     descriptionKey: "nav.task.pendingApprovals.description",
     icon: "policy",
-    treatment: "operate",
     featureIds: ["F33"],
   },
   {
@@ -99,111 +93,65 @@ export const taskNavItems: TaskNavItem[] = [
     labelKey: "nav.task.highestRisk.label",
     descriptionKey: "nav.task.highestRisk.description",
     icon: "risk",
-    treatment: "observe",
     featureIds: ["F19"],
   },
 ];
 
 export const navGroups: NavGroup[] = [
   {
-    labelKey: "nav.group.overview",
+    labelKey: "nav.group.issuanceCas",
     items: [
-      { to: "/", labelKey: "nav.item.dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
-      { to: "/coverage", labelKey: "nav.item.coverageRoadmap", icon: "graph", mode: "real", featureIds: ["F12"] },
       { to: "/wizard", labelKey: "nav.item.setUp", icon: "rocket", mode: "real", featureIds: ["F3", "F4"] },
       { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
+      { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
+      { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
+      { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
+      { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
+      {
+        to: "/protocols",
+        labelKey: "nav.item.protocols",
+        icon: "protocol",
+        mode: "real",
+        featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
+      },
+      {
+        to: "/secrets",
+        labelKey: "nav.item.secrets",
+        icon: "secret",
+        mode: "real",
+        featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
+      },
     ],
   },
   {
     labelKey: "nav.group.inventoryDiscovery",
     items: [
-      { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
-      { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
-      { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
-      { to: "/agents", labelKey: "nav.item.agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
+      { to: "/agents", labelKey: "nav.item.agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.issuanceCas",
-    items: [
-      { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
-      { to: "/identities", labelKey: "nav.item.issuance", icon: "key", mode: "real", featureIds: ["F4", "F6", "F33"] },
-      { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.protocols",
-    items: [
-      {
-        to: "/protocols",
-        labelKey: "nav.item.acmeAndDns",
-        icon: "protocol",
-        mode: "real",
-        featureIds: ["F5", "F46", "F69", "F70", "F71", "F72", "F73", "F74"],
-      },
-      { to: "/protocols", labelKey: "nav.item.enrollmentProtocols", icon: "protocol", mode: "real", featureIds: ["F22", "F23", "F55", "F56"] },
-      { to: "/protocols", labelKey: "nav.item.spiffe", icon: "spiffe", mode: "real", featureIds: ["F24"] },
-      { to: "/protocols", labelKey: "nav.item.sshCa", icon: "ssh", mode: "real", featureIds: ["F43"] },
-      { to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
-      { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "protocol", mode: "real", featureIds: ["F50"] },
-      { to: "/protocols", labelKey: "nav.item.tsa", icon: "protocol", mode: "real", featureIds: ["F51"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.secrets",
-    items: [
-      {
-        to: "/secrets",
-        labelKey: "nav.item.nativeSecrets",
-        icon: "secret",
-        mode: "real",
-        featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
-      },
-      { to: "/secrets", labelKey: "nav.item.pkiSecrets", icon: "secret", mode: "real", featureIds: ["F67"] },
-      { to: "/secrets", labelKey: "nav.item.machineLogin", icon: "key", mode: "real", featureIds: ["F58"] },
-      { to: "/secrets", labelKey: "nav.item.secretSharing", icon: "secret", mode: "real", featureIds: ["F60"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.connectorsPlugins",
-    items: [
-      { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
-      { to: "/platform", labelKey: "nav.item.plugins", icon: "connector", mode: "real", featureIds: ["F20"] },
-    ],
-  },
-  {
-    labelKey: "nav.group.riskInsight",
-    items: [
-      { to: "/risk", labelKey: "nav.item.risk", icon: "risk", mode: "real", featureIds: ["F19"] },
-      { to: "/posture", labelKey: "nav.item.posture", icon: "risk", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
-      { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
-      { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F77", "F78"] },
     ],
   },
   {
     labelKey: "nav.group.incidentsJit",
     items: [
       { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-      { to: "/approvals", labelKey: "nav.item.approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
     ],
   },
   {
-    labelKey: "nav.group.governance",
+    labelKey: "nav.group.riskInsight",
     items: [
-      { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
-      { to: "/owners", labelKey: "nav.item.ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
-      { to: "/coverage?feature=F8", labelKey: "nav.item.rbac", icon: "policy", mode: "disclosure", featureIds: ["F8"] },
-      { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+      { to: "/", labelKey: "nav.item.dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
+      { to: "/posture", labelKey: "nav.item.posture", icon: "risk", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
+      { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
     ],
   },
   {
     labelKey: "nav.group.platform",
     items: [
+      { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
+      { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+      { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
       { to: "/platform", labelKey: "nav.item.platform", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"] },
-      { to: "/login", labelKey: "nav.item.sso", icon: "key", mode: "real", featureIds: ["F13"] },
-      { to: "/platform", labelKey: "nav.item.apiDistribution", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F14", "F41"] },
     ],
   },
 ];
@@ -223,7 +171,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/discovery", "/certificates", "/agents"],
     component: "Discovery",
     kind: "observe",
-    evidence: "served network source, schedule, run, finding, and certificate-inventory feed",
+    evidence: "network discovery sources, schedules, runs, findings, and certificate inventory",
   },
   { featureId: "F3", routes: ["/agents", "/wizard"], component: "Agents", kind: "operate", evidence: "agent fleet and enrollment token workflow" },
   {
@@ -246,7 +194,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/connectors"],
     component: "Connectors",
     kind: "observe",
-    evidence: "served native/plugin connector registry, capability grant, outbox receipts, reachability, and rollback disclosure",
+    evidence: "native and plugin connector registry, capability grants, delivery receipts, reachability, and rollback posture",
   },
   {
     featureId: "F8",
@@ -262,9 +210,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/platform"],
     component: "Platform",
     kind: "observe",
-    evidence: "token-safe CLI companion commands matching served API command groups",
+    evidence: "token-safe CLI companion commands matching supported command groups",
   },
-  { featureId: "F12", routes: ["/platform", "/coverage"], component: "AppShell", kind: "observe", evidence: "grouped navigation and coverage route" },
   {
     featureId: "F13",
     routes: ["/platform", "/login"],
@@ -292,14 +239,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/posture", "/discovery"],
     component: "Posture",
     kind: "observe",
-    evidence: "served ct_log discovery source/run/finding path with alert dispatch plus dedicated-dashboard gap",
+    evidence: "certificate-transparency discovery, alert dispatch, and dedicated-dashboard gap",
   },
   {
     featureId: "F18",
     routes: ["/posture", "/discovery"],
     component: "Posture",
     kind: "observe",
-    evidence: "served drift discovery source/run/finding path with disabled remediation preview",
+    evidence: "drift discovery findings with disabled remediation preview",
   },
   { featureId: "F19", routes: ["/risk"], component: "Risk", kind: "observe", evidence: "credential risk list" },
   {
@@ -317,14 +264,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "observe",
-    evidence: "SPIFFE Workload API UDS setup with X.509-SVID and JWT-SVID served-path evidence",
+    evidence: "SPIFFE Workload API setup with X.509-SVID and JWT-SVID browser evidence",
   },
   {
     featureId: "F25",
     routes: ["/workloads"],
     component: "Workloads",
     kind: "observe",
-    evidence: "ephemeral credential lease fixture plus served REST/CLI JIT disclosure",
+    evidence: "ephemeral credential lease fixture plus JIT issuance disclosure",
   },
   {
     featureId: "F26",
@@ -345,21 +292,21 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/policy", "/identities", "/audit"],
     component: "Policy",
     kind: "observe",
-    evidence: "served policy gate explanation plus dry-run API unavailable state",
+    evidence: "policy gate explanation plus dry-run status gap",
   },
   {
     featureId: "F29",
     routes: ["/policy"],
     component: "Policy",
     kind: "observe",
-    evidence: "served scheduler/outbox expiry-alert disclosure with masked notification-channel references and no live channel config",
+    evidence: "expiry-alert scheduling with masked notification-channel references and no live channel config",
   },
   {
     featureId: "F31",
     routes: ["/incidents"],
     component: "Incidents",
     kind: "observe",
-    evidence: "compromised credential intake plus served graph blast-radius preview without remediation execute",
+    evidence: "compromised credential intake plus graph blast-radius preview without remediation execute",
   },
   {
     featureId: "F32",
@@ -387,28 +334,28 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/discovery", "/secrets"],
     component: "Discovery",
     kind: "observe",
-    evidence: "served secret_store discovery source, schedule, run, and metadata-only findings plus native secret metadata",
+    evidence: "secret-store discovery schedules, runs, metadata-only findings, and native secret metadata",
   },
   {
     featureId: "F36",
     routes: ["/discovery"],
     component: "Discovery",
     kind: "observe",
-    evidence: "served api_key discovery source, schedule, run, and metadata-only findings",
+    evidence: "API-key discovery schedules, runs, and metadata-only findings",
   },
   {
     featureId: "F37",
     routes: ["/secrets"],
     component: "Secrets",
     kind: "operate",
-    evidence: "manual native-store rotate/delete through served secrets store plus rollback-safe static rotation at /api/v1/secrets/rotations",
+    evidence: "manual native-store rotate/delete plus rollback-safe static rotation",
   },
   {
     featureId: "F38",
     routes: ["/secrets"],
     component: "Secrets",
     kind: "observe",
-    evidence: "ephemeral API-key issuance served through POST /api/v1/ephemeral/api-keys and trstctl-cli ephemeral api-keys issue",
+    evidence: "ephemeral API-key issuance with reveal-once token handling",
   },
   {
     featureId: "F39",
@@ -430,7 +377,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/discovery"],
     component: "Discovery",
     kind: "observe",
-    evidence: "served ssh discovery source, schedule, run, and metadata-only findings",
+    evidence: "SSH discovery schedules, runs, and metadata-only findings",
   },
   {
     featureId: "F43",
@@ -466,14 +413,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/ca-hierarchy", "/certificates"],
     component: "CAHierarchy",
     kind: "observe",
-    evidence: "served issuer table plus m-of-n hierarchy ceremony blocked disclosure",
+    evidence: "issuer table plus m-of-n hierarchy ceremony gap",
   },
   {
     featureId: "F49",
     routes: ["/discovery", "/secrets", "/certificates"],
     component: "Discovery",
     kind: "observe",
-    evidence: "served cloud_certificate discovery source, schedule, run, and metadata-only findings with sealed credential references",
+    evidence: "cloud-certificate discovery schedules, runs, metadata-only findings, and sealed credential references",
   },
   {
     featureId: "F50",
@@ -488,7 +435,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/posture", "/risk"],
     component: "Posture",
     kind: "observe",
-    evidence: "served CBOM scan/inventory API disclosure plus weak-crypto preview linked to risk",
+    evidence: "CBOM scan and inventory disclosure plus weak-crypto preview linked to risk",
   },
   { featureId: "F53", routes: ["/profiles"], component: "Profiles", kind: "operate", evidence: "profile creation" },
   {
@@ -511,7 +458,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/posture"],
     component: "Posture",
     kind: "observe",
-    evidence: "PQC migration wave fixture plus library-only orchestration disclosure",
+    evidence: "PQC migration wave preview plus orchestration gap",
   },
   { featureId: "F59", routes: ["/identities", "/owners"], component: "Identities", kind: "operate", evidence: "NHI lifecycle rows and owner link" },
   {
@@ -521,30 +468,30 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "observe",
     evidence: "workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage",
   },
-  { featureId: "F58", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "machine login exchange through served secrets login" },
+  { featureId: "F58", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "machine login exchange through secrets login" },
   { featureId: "F60", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "one-time share create/redeem" },
   {
     featureId: "F61",
     routes: ["/workloads"],
     component: "Workloads",
     kind: "observe",
-    evidence: "AI-agent broker identity/scope/expiry/audit fixture plus served REST/CLI disclosure",
+    evidence: "AI-agent broker identity, scope, expiry, and audit fixture",
   },
   {
     featureId: "F62",
     routes: ["/policy", "/audit"],
     component: "Policy",
     kind: "observe",
-    evidence: "served signed audit evidence export plus framework-mapped compliance posture disclosure",
+    evidence: "signed audit evidence export plus framework-mapped compliance posture disclosure",
   },
   { featureId: "F63", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "native secret store metadata/create/reveal/rotate/delete" },
-  { featureId: "F64", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "developer snippets plus access test against served store" },
+  { featureId: "F64", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "developer snippets plus store access test" },
   {
     featureId: "F65",
     routes: ["/secrets"],
     component: "Secrets",
     kind: "observe",
-    evidence: "served dynamic lease API/CLI disclosure with provider role, TTL, issue, renew, revoke, and expiry status",
+    evidence: "dynamic lease disclosure with provider role, TTL, issue, renew, revoke, and expiry status",
   },
   {
     featureId: "F66",
@@ -559,7 +506,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "observe",
-    evidence: "served secret sync API/CLI posture, masked target mappings, and outbox delivery disclosure",
+    evidence: "secret sync posture, masked target mappings, and outbox delivery disclosure",
   },
   {
     featureId: "F69",
@@ -591,15 +538,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "observe",
     evidence: "wildcard DNS-01-only acknowledgement and blast-radius disclosure",
   },
-  { featureId: "F75", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded query with citations and served runtime status" },
+  { featureId: "F75", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded query with citations and runtime status" },
   { featureId: "F76", routes: ["/assistant"], component: "Assistant", kind: "observe", evidence: "AI model runtime disclosure and redaction boundary" },
-  { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and served runtime status" },
-  { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and served runtime status" },
+  { featureId: "F77", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded RCA with citations and runtime status" },
+  { featureId: "F78", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "read-only MCP tools and runtime status" },
 ];
-
-const surfaceKindByFeature = new Map(realGuiSurfaces.map((surface) => [surface.featureId, surface.kind]));
-
-export function navTreatmentForItem(item: Pick<NavItem, "mode" | "featureIds">): NavTreatment {
-  if (item.mode === "disclosure") return "disclose";
-  return item.featureIds.some((featureId) => surfaceKindByFeature.get(featureId) === "operate") ? "operate" : "observe";
-}

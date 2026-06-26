@@ -105,11 +105,11 @@ describe("connector deployment disclosure surface", () => {
     });
   });
 
-  it("renders served connector registry, receipts, fixture grants, and outbox state", async () => {
+  it("renders connector registry, receipts, fixture grants, and outbox state", async () => {
     renderConnectors();
 
     expect(screen.getByRole("heading", { name: "Deployment connectors" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Served connector registry" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connector registry" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.connectorCatalog).toHaveBeenCalled());
     expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 20 });
     for (const target of [
@@ -141,7 +141,7 @@ describe("connector deployment disclosure surface", () => {
   it("renders appliance connector reachability and rollback fixtures without target credentials", async () => {
     renderConnectors();
 
-    expect(await screen.findByRole("heading", { name: "Served connector registry" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connector registry" })).toBeInTheDocument();
     for (const target of ["F5 BIG-IP", "NetScaler", "Cisco", "FortiGate", "Palo Alto"]) {
       expect(screen.getByText(target)).toBeInTheDocument();
     }

@@ -16,6 +16,17 @@ const { apiMock } = vi.hoisted(() => ({
     machineLogin: vi.fn(),
     createShare: vi.fn(),
     redeemShare: vi.fn(),
+    issueEphemeralAPIKey: vi.fn(),
+    issueDynamicLease: vi.fn(),
+    renewDynamicLease: vi.fn(),
+    revokeDynamicLease: vi.fn(),
+    encryptTransit: vi.fn(),
+    decryptTransit: vi.fn(),
+    hmacTransit: vi.fn(),
+    rewrapTransit: vi.fn(),
+    signTransit: vi.fn(),
+    scanSecrets: vi.fn(),
+    syncSecret: vi.fn(),
   },
 }));
 
@@ -32,7 +43,7 @@ function renderSecrets() {
   );
 }
 
-describe("served secrets surface", () => {
+describe("secrets surface", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -66,6 +77,60 @@ describe("served secrets surface", () => {
     });
     apiMock.createShare.mockResolvedValue({ token: "SHARE-TOKEN-1", expires_at: "2026-06-19T13:30:00Z" });
     apiMock.redeemShare.mockResolvedValue({ value: "redeemed-secret" });
+    apiMock.issueEphemeralAPIKey.mockResolvedValue({
+      id: "33333333-3333-3333-3333-333333333333",
+      tenant_id: "44444444-4444-4444-4444-444444444444",
+      subject: "ci/deploy-preview",
+      scopes: ["repo:payments:read", "deploy:staging:write"],
+      created_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:15:00Z",
+      token: "epk_live_reveal_once_123",
+    });
+    apiMock.issueDynamicLease.mockResolvedValue({
+      id: "lease-postgres-1",
+      provider: "postgresql",
+      role: "readonly-reporting",
+      state: "active",
+      issued_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:20:00Z",
+      credential: "postgres://lease-secret",
+    });
+    apiMock.renewDynamicLease.mockResolvedValue({
+      id: "lease-postgres-1",
+      provider: "postgresql",
+      role: "readonly-reporting",
+      state: "active",
+      issued_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:25:00Z",
+    });
+    apiMock.revokeDynamicLease.mockResolvedValue({
+      id: "lease-postgres-1",
+      provider: "postgresql",
+      role: "readonly-reporting",
+      state: "revoked",
+      issued_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:25:00Z",
+    });
+    apiMock.encryptTransit.mockResolvedValue({ ciphertext: "trst:v1:ciphertext", version: 4 });
+    apiMock.decryptTransit.mockResolvedValue({ plaintext: "aGVsbG8gdHJhbnNpdA==" });
+    apiMock.hmacTransit.mockResolvedValue({ hmac: "hmac-base64" });
+    apiMock.rewrapTransit.mockResolvedValue({ ciphertext: "trst:v4:rewrapped", version: 4 });
+    apiMock.signTransit.mockResolvedValue({ signature: "signature-base64", public_der: "public-der-base64" });
+    apiMock.scanSecrets.mockResolvedValue({
+      run_id: "55555555-5555-5555-5555-555555555555",
+      scanner: "gitleaks",
+      engine_version: "8.18.2",
+      rules_active: 121,
+      findings_count: 1,
+      findings: [{ rule_id: "generic-api-key", file: "config/ci.yml", line: 42, credential_ref: "sha256:6e5a...91bb" }],
+    });
+    apiMock.syncSecret.mockResolvedValue({
+      name: "app/db/password",
+      target: "kubernetes/prod",
+      remote_key: "Secret/payments-db/password",
+      enqueued: true,
+      delivered: false,
+    });
   });
 
   it("lists metadata, creates, reveals, rotates, and deletes native secrets without storage writes", async () => {
@@ -79,14 +144,12 @@ describe("served secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
-    expect(screen.getByText("Scheduled rotation and downstream sync not served yet")).toBeInTheDocument();
-    expect(
-      screen.getByText(/rollback-safe static rotation engine is served by API for configured backends/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Auth-method administration not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/revoked methods aren't available in the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText("Secret-change approvals not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/Request\/approve state for sensitive secret mutations is not served yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Scheduled rotation and downstream sync coming soon")).toBeInTheDocument();
+    expect(screen.getByText(/Rollback-safe static rotation is available for configured backends/i)).toBeInTheDocument();
+    expect(screen.getByText("Auth-method administration coming soon")).toBeInTheDocument();
+    expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Secret-change approvals coming soon")).toBeInTheDocument();
+    expect(screen.getByText(/Request\/approve state for sensitive secret mutations is not available in the console yet/i)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
@@ -135,7 +198,7 @@ describe("served secrets surface", () => {
     await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
     await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));
     await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenCalledWith("app/db/password"));
-    expect(await screen.findByText(/deleted by the served store endpoint/i)).toBeInTheDocument();
+    expect(await screen.findByText(/deleted from the native store/i)).toBeInTheDocument();
 
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
@@ -159,59 +222,126 @@ describe("served secrets surface", () => {
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
   });
 
-  it("renders ephemeral API keys and dynamic leases as served while keeping scanning triage as disclosure", async () => {
+  it("issues ephemeral API keys, runs secret scans, and drives leases", async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
 
     expect(screen.getByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
-    expect(screen.getByText("ci/deploy preview")).toBeInTheDocument();
-    expect(screen.getByText("repo:payments read, deploy:staging write")).toBeInTheDocument();
-    expect(screen.getByText("15 minutes")).toBeInTheDocument();
-    expect(screen.getByText(/release manager approval required/)).toBeInTheDocument();
-    expect(screen.getByText("Ephemeral API-key issuance is served")).toBeInTheDocument();
-    expect(screen.getByText(/POST \/api\/v1\/ephemeral\/api-keys/)).toBeInTheDocument();
-    expect(screen.getByText(/trstctl-cli ephemeral api-keys issue/)).toBeInTheDocument();
+    expect(screen.getByText("Reveal-once key issuance")).toBeInTheDocument();
+    expect(screen.getByText(/short-lived token/i)).toBeInTheDocument();
+    const issueForm = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
+    await user.type(issueForm.getByLabelText("Subject"), "ci/deploy-preview");
+    await user.type(issueForm.getByLabelText("Scopes"), "repo:payments:read, deploy:staging:write");
+    await user.clear(issueForm.getByLabelText("TTL seconds"));
+    await user.type(issueForm.getByLabelText("TTL seconds"), "900");
+    await user.click(issueForm.getByRole("button", { name: /issue api key/i }));
+
+    await waitFor(() =>
+      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({
+        subject: "ci/deploy-preview",
+        scopes: ["repo:payments:read", "deploy:staging:write"],
+        ttl_seconds: 900,
+      }),
+    );
+    expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
+    expect(screen.getByText("33333333-3333-3333-3333-333333333333")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /dismiss/i }));
+    expect(screen.queryByText("epk_live_reveal_once_123")).not.toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Code and CI secret scanning bridge" })).toBeInTheDocument();
-    expect(screen.getByText("github.com/example/payments")).toBeInTheDocument();
+    const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
+    await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
+    await user.click(scanForm.getByRole("button", { name: /run scan/i }));
+    await waitFor(() => expect(apiMock.scanSecrets).toHaveBeenCalledWith({ path: "github.com/example/payments" }));
+    expect(await screen.findByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
     expect(screen.getByText("generic-api-key")).toBeInTheDocument();
+    expect(screen.getByText("config/ci.yml")).toBeInTheDocument();
     expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
-    expect(screen.getAllByText(/redacted snippet/i).length).toBeGreaterThan(0);
 
     expect(screen.getByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
-    expect(screen.getByText("postgresql")).toBeInTheDocument();
-    expect(screen.getByText("readonly-reporting")).toBeInTheDocument();
-    expect(screen.getByText("aws-iam")).toBeInTheDocument();
-    expect(screen.getByText("kubernetes")).toBeInTheDocument();
-    expect(screen.getByText("redis")).toBeInTheDocument();
-    expect(screen.getByText("Secret-scanning triage is library-only")).toBeInTheDocument();
-    expect(screen.getByText("Dynamic secret leases are served")).toBeInTheDocument();
-    expect(screen.getByText(/POST \/api\/v1\/secrets\/leases/)).toBeInTheDocument();
-    expect(screen.getByText(/IAM access key is deleted on revoke/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /issue api key|mint key|triage leak|rotate leaked|issue lease|revoke lease/i })).not.toBeInTheDocument();
+    expect(screen.getByText("No dynamic lease issued yet.")).toBeInTheDocument();
+    const leaseForm = within(screen.getByRole("form", { name: "Issue dynamic secret lease" }));
+    await user.selectOptions(leaseForm.getByLabelText("Provider"), "postgresql");
+    await user.type(leaseForm.getByLabelText("Role"), "readonly-reporting");
+    await user.clear(leaseForm.getByLabelText("TTL seconds"));
+    await user.type(leaseForm.getByLabelText("TTL seconds"), "1200");
+    await user.click(leaseForm.getByRole("button", { name: /issue lease/i }));
+    await waitFor(() => expect(apiMock.issueDynamicLease).toHaveBeenCalledWith({ provider: "postgresql", role: "readonly-reporting", ttl_seconds: 1200 }));
+    expect(await screen.findByText("lease-postgres-1")).toBeInTheDocument();
+    expect(screen.getByText("postgres://lease-secret")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /dismiss/i }));
+    expect(screen.queryByText("postgres://lease-secret")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /renew lease/i }));
+    await waitFor(() => expect(apiMock.renewDynamicLease).toHaveBeenCalledWith("lease-postgres-1", { extend_seconds: 300 }));
+    await user.click(screen.getByRole("button", { name: /revoke lease/i }));
+    await waitFor(() => expect(apiMock.revokeDynamicLease).toHaveBeenCalledWith("lease-postgres-1"));
+    expect(await screen.findByText("revoked")).toBeInTheDocument();
+    expect(screen.getByText("Lease state")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mint key|triage leak|rotate leaked/i })).not.toBeInTheDocument();
+    expect(storageSpy).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
   });
 
-  it("renders transit/KMIP and secret sync fixtures without live cryptographic or sync actions", async () => {
+  it("runs transit encrypt/decrypt and keeps secret sync disclosure scoped", async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
 
     expect(screen.getByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
-    expect(screen.getByText("payments-pii")).toBeInTheDocument();
-    expect(screen.getByText("encrypt/decrypt test")).toBeInTheDocument();
-    expect(screen.getByText("HMAC, sign, verify")).toBeInTheDocument();
-    expect(screen.getByText(/test plaintext is local-only/)).toBeInTheDocument();
-    expect(screen.getByText("Transit and KMIP operations are library-only")).toBeInTheDocument();
-    expect(screen.getByText(/No served transit or KMIP API\/CLI surface exists yet/i)).toBeInTheDocument();
+    const transitForm = within(screen.getByRole("form", { name: "Transit encrypt and decrypt" }));
+    await user.type(transitForm.getByLabelText("Key name"), "payments-pii");
+    await user.type(transitForm.getByLabelText("Plaintext"), "hello transit");
+    await user.type(transitForm.getByLabelText("AAD"), "tenant-a");
+    await user.click(transitForm.getByRole("button", { name: /encrypt/i }));
+    await waitFor(() =>
+      expect(apiMock.encryptTransit).toHaveBeenCalledWith({
+        key: "payments-pii",
+        plaintext: "aGVsbG8gdHJhbnNpdA==",
+        aad: "dGVuYW50LWE=",
+      }),
+    );
+    expect(transitForm.getByLabelText("Plaintext")).toHaveValue("");
+    expect(screen.getAllByText("trst:v1:ciphertext").length).toBeGreaterThan(0);
+    expect(screen.getByText("v4")).toBeInTheDocument();
+    await user.click(transitForm.getByRole("button", { name: /decrypt/i }));
+    await waitFor(() =>
+      expect(apiMock.decryptTransit).toHaveBeenCalledWith({
+        key: "payments-pii",
+        ciphertext: "trst:v1:ciphertext",
+        aad: "dGVuYW50LWE=",
+      }),
+    );
+    expect(await screen.findByText("hello transit")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /dismiss/i }));
+    expect(screen.queryByText("hello transit")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /compute hmac/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign message/i })).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
-    for (const target of ["Kubernetes", "GitHub Actions", "GitLab CI", "Terraform Cloud", "Vercel", "Netlify", "AWS Parameter Store", "Webhook"]) {
-      expect(screen.getByText(target)).toBeInTheDocument();
-    }
-    expect(screen.getByText("secret://sync/github/prod:****")).toBeInTheDocument();
-    expect(screen.getByText("Secret sync is served by API and CLI")).toBeInTheDocument();
-    expect(screen.getByText(/POST \/api\/v1\/secrets\/syncs/i)).toBeInTheDocument();
+    const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
+    expect(syncForm.getByLabelText("Secret name")).toHaveValue("app/db/password");
+    await user.type(syncForm.getByLabelText("Target"), "kubernetes/prod");
+    await user.type(syncForm.getByLabelText("Remote key"), "Secret/payments-db/password");
+    await user.click(syncForm.getByRole("button", { name: /sync secret/i }));
+    await waitFor(() =>
+      expect(apiMock.syncSecret).toHaveBeenCalledWith({
+        name: "app/db/password",
+        target: "kubernetes/prod",
+        remote_key: "Secret/payments-db/password",
+      }),
+    );
+    expect(await screen.findByText("Queued")).toBeInTheDocument();
+    expect(screen.getByText("Not delivered")).toBeInTheDocument();
+    expect(screen.getByText("Secret/payments-db/password")).toBeInTheDocument();
     expect(screen.queryByText(/raw target token|BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /encrypt|decrypt|sign|verify|rewrap|sync|push|rollback/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /push|rollback/i })).not.toBeInTheDocument();
+    expect(storageSpy).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
   });
 
   it("issues PKI secrets, tests machine login, and creates/redeems one-time shares once", async () => {
@@ -264,7 +394,7 @@ describe("served secrets surface", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
-  it("shows the served fail-closed disabled state when secrets API or KEK is unavailable", async () => {
+  it("shows the fail-closed disabled state when secrets API or KEK is unavailable", async () => {
     apiMock.secretPage.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "secrets.enable_api disabled or KEK missing" })));
     renderSecrets();
 

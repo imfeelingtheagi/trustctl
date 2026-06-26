@@ -46,12 +46,12 @@ describe("CA hierarchy and custody surface", () => {
     ]);
   });
 
-  it("renders served issuers with kind, chain, public key, and certificate links", async () => {
+  it("renders issuers with kind, chain, public key, and certificate links", async () => {
     renderCAHierarchy();
 
     expect(await screen.findByRole("heading", { name: "CA hierarchy" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Served issuer visibility" })).toBeInTheDocument();
-    expect(screen.getAllByText("Root CA").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Issuer visibility" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Root CA")).length).toBeGreaterThan(0);
     expect(screen.getByText("x509_ca")).toBeInTheDocument();
     expect(screen.getByText("ssh_ca")).toBeInTheDocument();
     expect(screen.getByText("Root CA -> SSH CA")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("CA hierarchy and custody surface", () => {
   it("explains m-of-n hierarchy ceremonies without create or rotate controls", async () => {
     renderCAHierarchy();
 
-    expect(await screen.findByText("CA hierarchy create UI not served yet")).toBeInTheDocument();
+    expect(await screen.findByText("CA creation controls coming soon")).toBeInTheDocument();
     expect(screen.getByText(/renders no create-root, rotate-root, or ceremony execution controls/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Key ceremony runbook" })).toHaveAttribute("href", "/docs/runbooks/key-ceremony.md");
     expect(screen.getByText("root:<sha256-of-ca-spec>")).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("PKCS#11 HSM")).toBeInTheDocument();
     expect(screen.getByText("pkcs11://slot/ca-signing-key")).toBeInTheDocument();
     expect(screen.getByText("YubiHSM 2 / cloud KMS")).toBeInTheDocument();
-    expect(screen.getByText("HSM/KMS lifecycle API not served yet")).toBeInTheDocument();
+    expect(screen.getByText("HSM/KMS lifecycle controls coming soon")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /generate key|import key|zeroize|rotate hsm/i })).not.toBeInTheDocument();
@@ -90,6 +90,6 @@ describe("CA hierarchy and custody surface", () => {
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
     expect(screen.getByText("missing issuers:read")).toBeInTheDocument();
-    expect(screen.getByText("Rotation and cross-sign remain library-tier")).toBeInTheDocument();
+    expect(screen.getByText("Rotation and cross-sign controls coming soon")).toBeInTheDocument();
   });
 });

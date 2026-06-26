@@ -58,14 +58,6 @@ export const messages = {
     defaultMessage: "Tenant",
     description: "Tenant label in the global header.",
   },
-  "shell.tenantSwitchUnavailable": {
-    defaultMessage: "Switch unavailable",
-    description: "Disabled tenant switch button text.",
-  },
-  "shell.tenantSwitchUnavailableLabel": {
-    defaultMessage: "Tenant switching isn't available yet",
-    description: "Accessible label and explanatory copy for disabled tenant switching.",
-  },
   "shell.openKeyboardShortcuts": {
     defaultMessage: "Open keyboard shortcuts",
     description: "Keyboard-shortcuts help button label.",
@@ -89,18 +81,6 @@ export const messages = {
   "nav.section.needsActionWorklists": {
     defaultMessage: "Needs action worklists",
     description: "Accessible label for the urgent worklist list.",
-  },
-  "nav.treatment.operate": {
-    defaultMessage: "Operate",
-    description: "Navigation treatment for executable workflows.",
-  },
-  "nav.treatment.observe": {
-    defaultMessage: "Observe",
-    description: "Navigation treatment for read-only observability.",
-  },
-  "nav.treatment.disclose": {
-    defaultMessage: "Disclose",
-    description: "Navigation treatment for honest roadmap or gap disclosures.",
   },
   "nav.task.expiringSoon.label": {
     defaultMessage: "Expiring soon",
@@ -131,11 +111,11 @@ export const messages = {
     description: "Primary navigation group.",
   },
   "nav.group.inventoryDiscovery": {
-    defaultMessage: "Inventory & Discovery",
+    defaultMessage: "Discover & inventory",
     description: "Primary navigation group.",
   },
   "nav.group.issuanceCas": {
-    defaultMessage: "Issuance & CAs",
+    defaultMessage: "Issue & renew",
     description: "Primary navigation group.",
   },
   "nav.group.protocols": {
@@ -151,11 +131,11 @@ export const messages = {
     description: "Primary navigation group.",
   },
   "nav.group.riskInsight": {
-    defaultMessage: "Risk & Insight",
+    defaultMessage: "Monitor posture",
     description: "Primary navigation group.",
   },
   "nav.group.incidentsJit": {
-    defaultMessage: "Incidents & JIT",
+    defaultMessage: "Approve & respond",
     description: "Primary navigation group.",
   },
   "nav.group.governance": {
@@ -163,15 +143,11 @@ export const messages = {
     description: "Primary navigation group.",
   },
   "nav.group.platform": {
-    defaultMessage: "Platform",
+    defaultMessage: "Administer",
     description: "Primary navigation group.",
   },
   "nav.item.dashboard": {
     defaultMessage: "Dashboard",
-    description: "Primary navigation item.",
-  },
-  "nav.item.coverageRoadmap": {
-    defaultMessage: "Coverage roadmap",
     description: "Primary navigation item.",
   },
   "nav.item.setUp": {
@@ -218,6 +194,10 @@ export const messages = {
     defaultMessage: "CA hierarchy",
     description: "Primary navigation item.",
   },
+  "nav.item.protocols": {
+    defaultMessage: "Protocols",
+    description: "Primary navigation item.",
+  },
   "nav.item.acmeAndDns": {
     defaultMessage: "ACME and DNS",
     description: "Primary navigation item.",
@@ -244,6 +224,10 @@ export const messages = {
   },
   "nav.item.tsa": {
     defaultMessage: "TSA",
+    description: "Primary navigation item.",
+  },
+  "nav.item.secrets": {
+    defaultMessage: "Secrets",
     description: "Primary navigation item.",
   },
   "nav.item.nativeSecrets": {
@@ -327,7 +311,7 @@ export const messages = {
     description: "Command palette dialog title.",
   },
   "command.description": {
-    defaultMessage: "Jump to routes or search served certificate, identity, and secret metadata.",
+    defaultMessage: "Jump to routes or search certificate, identity, and secret metadata.",
     description: "Command palette dialog description.",
   },
   "command.close": {
@@ -343,11 +327,11 @@ export const messages = {
     description: "Command palette search field placeholder.",
   },
   "command.sourcesUnavailable": {
-    defaultMessage: "Some search sources are unavailable: {sources}.",
+    defaultMessage: "Some inventory sources are temporarily unavailable.",
     description: "Command palette unavailable source warning.",
   },
   "command.searchingInventory": {
-    defaultMessage: "Searching served inventory...",
+    defaultMessage: "Searching inventory...",
     description: "Command palette loading status.",
   },
   "command.routes": {

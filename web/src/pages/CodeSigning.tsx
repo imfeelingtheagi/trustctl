@@ -40,12 +40,12 @@ export function CodeSigning() {
       <PageHeader
         titleId="codesign-heading"
         title="Code signing"
-        description="Code-signing requests bind an artifact digest to an approval, policy decision, signer mode, signature receipt, and immutable audit trail. This page is read-only until a served signing workflow exists."
+        description="Code-signing requests bind an artifact digest to an approval, policy decision, signer mode, signature receipt, and immutable audit trail. This page is read-only until a signing workflow is available here."
       />
 
-      <UnavailableState title="Code-signing workflow is library-only">
-        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are library-only. There
-        is no served signing API or CLI workflow yet, so this console cannot submit signing work.
+      <UnavailableState title="Code-signing workflow coming soon">
+        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are planned for a later
+        console workflow, so this page cannot submit signing work yet.
       </UnavailableState>
 
       <section aria-labelledby="requests-heading" className="grid gap-3 border-y border-border py-4">

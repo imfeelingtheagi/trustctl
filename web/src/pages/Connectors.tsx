@@ -126,28 +126,28 @@ export function Connectors() {
       <PageHeader
         titleId="connectors-heading"
         title="Deployment connectors"
-        description="Connector deployment is an outbox-backed worker path. This console reads the served connector registry and delivery receipts without performing a live deploy."
+        description="Connector deployment is an outbox-backed worker path. This console reads the connector registry and delivery receipts without performing a live deploy."
       />
 
       {error && <ErrorState title="Connector evidence failed to load">{error}</ErrorState>}
       {!catalog && !error && <LoadingState>Loading connector registry...</LoadingState>}
 
       {catalog && (
-        <section aria-labelledby="served-connectors-heading" className="grid gap-3 border-y border-border py-4">
+        <section aria-labelledby="connectors-registry-heading" className="grid gap-3 border-y border-border py-4">
           <div>
-            <h2 id="served-connectors-heading" className="text-title font-semibold">
-              Served connector registry
+            <h2 id="connectors-registry-heading" className="text-title font-semibold">
+              Connector registry
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               These rows are returned by the authenticated API. Delivery still moves through the outbox, so the registry is read evidence, not a deploy button.
             </p>
           </div>
           {catalog.length === 0 ? (
-            <EmptyState title="No connectors registered">No served connector catalog rows were returned.</EmptyState>
+            <EmptyState title="No connectors registered">No connector catalog rows were returned.</EmptyState>
           ) : (
             <div className="ui-panel overflow-x-auto">
               <table className="ui-table min-w-[54rem]">
-                <caption className="sr-only">Served connector registry</caption>
+                <caption className="sr-only">Connector registry</caption>
                 <thead>
                   <tr>
                     <th scope="col">Connector</th>

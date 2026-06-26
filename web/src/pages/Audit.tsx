@@ -130,7 +130,7 @@ export function Audit() {
       <PageHeader
         titleId="audit-heading"
         title="Audit"
-        description="Tenant-scoped immutable event evidence from the served audit API."
+        description="Tenant-scoped immutable event evidence."
         actions={
           <Button type="button" onClick={() => void exportEvidence()} disabled={busy || loading}>
             Export evidence
@@ -170,9 +170,10 @@ export function Audit() {
             stateMessage={
               error?.message ??
               (events && events.length === 0
-                ? "The served audit API returned an empty window. Widen the time range, remove the type filter, or lower the as-of sequence."
+                ? "No events matched this window. Widen the time range, remove the type filter, or lower the as-of sequence."
                 : undefined)
             }
+            showColumnChooser
             toolbar={({ columnChooser }) => (
               <DataGridToolbar
                 searchLabel="Search"

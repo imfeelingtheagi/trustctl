@@ -172,6 +172,7 @@ export function Risk() {
         stateMessage={error ?? "No certificate risk scores match the current filter."}
         sort={sort}
         onSort={applySort}
+        showColumnChooser
         toolbar={({ columnChooser }) => (
           <DataGridToolbar
             searchLabel="Search credential risk rows"

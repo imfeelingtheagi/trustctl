@@ -234,8 +234,8 @@ describe("app shell accessibility and theme", () => {
 
     const tenant = screen.getByLabelText("Tenant context");
     expect(tenant).toHaveTextContent("t1");
-    expect(tenant).toHaveTextContent(/Tenant switching isn't available yet/i);
-    expect(screen.getByRole("button", { name: /Tenant switching isn't available yet/i })).toBeDisabled();
+    expect(tenant).not.toHaveTextContent(/Tenant switching isn't available yet|Switch unavailable/i);
+    expect(screen.queryByRole("button", { name: /Tenant switching isn't available yet|Switch unavailable/i })).not.toBeInTheDocument();
   });
 
   it("keeps operators in the shell and announces served logout failures", async () => {
@@ -316,45 +316,41 @@ describe("app shell accessibility and theme", () => {
     const nav = screen.getByRole("navigation", { name: /Primary/i });
 
     for (const group of [
-      "Inventory & Discovery",
-      "Issuance & CAs",
-      "Protocols",
-      "Secrets",
-      "Connectors & Plugins",
-      "Risk & Insight",
-      "Incidents & JIT",
-      "Governance",
-      "Platform",
+      "Issue & renew",
+      "Discover & inventory",
+      "Approve & respond",
+      "Monitor posture",
+      "Administer",
     ]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
 
-    for (const link of ["Discovery", "SPIFFE", "Native secrets", "Connectors", "Incidents", "RBAC", "Platform"]) {
+    for (const link of ["Set up", "Request credential", "Protocols", "Secrets", "Discovery", "Incidents", "Connectors", "Platform"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
+    expect(within(nav).queryByRole("link", { name: /Coverage roadmap|RBAC/i })).not.toBeInTheDocument();
   });
 
-  it("exposes task worklists and full operate observe disclose nav treatments", async () => {
+  it("exposes task worklists without internal nav metadata", async () => {
     renderShell();
     await screen.findByText("u@example.test");
     const nav = screen.getByRole("navigation", { name: /Primary/i });
     const taskList = within(nav).getByRole("list", { name: "Needs action worklists" });
 
     expect(within(nav).getByText("Needs action")).toBeInTheDocument();
-    expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist.*Operate/i })).toHaveAttribute(
+    expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist/i })).toHaveAttribute(
       "href",
       "/certificates?expiry=30d",
     );
-    expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox.*Operate/i })).toHaveAttribute(
+    expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox/i })).toHaveAttribute(
       "href",
       "/approvals?status=pending",
     );
-    expect(within(taskList).getByRole("link", { name: /Highest risk.*risk-prioritized rotation list.*Observe/i })).toHaveAttribute("href", "/risk?sort=score");
+    expect(within(taskList).getByRole("link", { name: /Highest risk.*risk-prioritized rotation list/i })).toHaveAttribute("href", "/risk?sort=score");
 
-    expect(within(nav).getAllByText("Operate").length).toBeGreaterThan(0);
-    expect(within(nav).getAllByText("Observe").length).toBeGreaterThan(0);
-    expect(within(nav).getAllByText("Disclose").length).toBeGreaterThan(0);
-    expect(within(nav).getByRole("link", { name: /RBAC.*Disclose/i })).toBeInTheDocument();
+    expect(within(nav).queryByText("Operate")).not.toBeInTheDocument();
+    expect(within(nav).queryByText("Observe")).not.toBeInTheDocument();
+    expect(within(nav).queryByText("Disclose")).not.toBeInTheDocument();
     expect(within(nav).queryByText(/^map$/i)).not.toBeInTheDocument();
   });
 
@@ -363,11 +359,11 @@ describe("app shell accessibility and theme", () => {
     renderShell();
     await screen.findByText("u@example.test");
 
-    await user.click(screen.getByRole("link", { name: /^Platform\s+Observe$/i }));
+    await user.click(screen.getByRole("link", { name: /^Platform$/i }));
 
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
     expect(screen.getByText(/Tenant boundary/i)).toBeInTheDocument();
-    expect(screen.getByText(/Platform status endpoint not served yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
   });
 
   it("renders tenant context from the served session without an editable tenant input", async () => {
@@ -380,7 +376,7 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
 
-  it("shows served access administration and the required-scope map", async () => {
+  it("shows access administration and the required-scope map", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
@@ -400,30 +396,16 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getByText(/without tenant existence details/i)).toBeInTheDocument();
   });
 
-  it("renders the static API spec view and copies tokenless curl examples", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(window.navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
+  it("renders the API capability view without raw endpoint or token examples", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByText(/47 served REST paths/i)).toBeInTheDocument();
-    expect(screen.getByText("/api/v1/secrets/store/{name}")).toBeInTheDocument();
-    expect(screen.getByText("/api/v1/graph/query")).toBeInTheDocument();
-    expect(screen.getByText("Spec view")).toBeInTheDocument();
-    expect(screen.getByText(/static spec view until a live `\/api\/v1\/openapi\.json` is published/i)).toBeInTheDocument();
-    const firstCurl = screen.getAllByText(/^curl -X GET/)[0].textContent || "";
-    expect(firstCurl).not.toMatch(/Authorization|Bearer|token/i);
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Copy curl" })[0]);
-
-    await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/^curl -X GET https:\/\/trstctl\.example\.test\/api\/v1\/access\/roles$/));
-    });
-    expect(writeText.mock.calls[0][0]).not.toMatch(/Authorization|Bearer|token/i);
-    expect(screen.getByText("Copied without token material.")).toBeInTheDocument();
+    expect(screen.getByText(/12 capability groups/i)).toBeInTheDocument();
+    expect(screen.getByText("Capability view")).toBeInTheDocument();
+    expect(screen.getByText(/capability groups from the product API contract/i)).toBeInTheDocument();
+    expect(screen.getByText(/Native store, PKI secrets, shares, leases, rotation, sync, and machine login/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\/api\/v1/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy curl/i })).not.toBeInTheDocument();
   });
 
   it("shows honest auth and transport status without exposing key material", async () => {
@@ -438,7 +420,7 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
   });
 
-  it("renders token-safe CLI companion commands that match served command groups", async () => {
+  it("renders token-safe CLI companion commands that match command groups", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
@@ -447,29 +429,24 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getByText("trstctl-cli audit export --limit 500 --output audit-evidence.jws")).toBeInTheDocument();
     expect(screen.getByText("trstctl-cli graph blast-radius cert:payments-api --format json")).toBeInTheDocument();
     expect(screen.getByText("trstctl-cli agents enroll-token --format json")).toBeInTheDocument();
-    expect(document.body.textContent).toMatch(/TRSTCTL_TOKEN.*already set in the shell/i);
     expect(document.body.textContent).not.toMatch(/Authorization: Bearer|trst_[A-Za-z0-9]/);
   });
 
-  it("renders runtime, plugin, and passive federation disclosures without live platform actions", async () => {
+  it("hides unbacked runtime, plugin, and passive federation disclosures", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByRole("heading", { name: "Single-binary runtime" })).toBeInTheDocument();
-    expect(screen.getByText("Runtime status JSON not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/signer child supervision aren't shown in the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText("Signer supervision")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Runtime status view coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Signer supervision")).not.toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "Plugin SDK and capability sandbox" })).toBeInTheDocument();
-    expect(screen.getByText("connector-f5.wasm")).toBeInTheDocument();
-    expect(screen.getByText("net.dial:f5.example.test")).toBeInTheDocument();
-    expect(screen.getByText(/unsigned plugin would fail closed/i)).toBeInTheDocument();
-    expect(screen.getByText(/The plugin runtime is served, but plugin administration is not/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Plugin SDK and capability sandbox" })).not.toBeInTheDocument();
+    expect(screen.queryByText("connector-f5.wasm")).not.toBeInTheDocument();
+    expect(screen.queryByText("net.dial:f5.example.test")).not.toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "Cross-cluster federation" })).toBeInTheDocument();
-    expect(screen.getByText("Passive-read-state model")).toBeInTheDocument();
-    expect(screen.getByText("served worker")).toBeInTheDocument();
-    expect(screen.getAllByText(/one writable region per tenant/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Cross-cluster federation" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Passive-read-state model")).not.toBeInTheDocument();
+    expect(screen.queryByText("replication worker")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /activate|enable plugin|install plugin|join cluster|federate/i })).not.toBeInTheDocument();
   });
 

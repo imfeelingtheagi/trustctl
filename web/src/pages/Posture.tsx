@@ -1,126 +1,180 @@
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, FileWarning, Radar, ShieldAlert } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import {
+  api,
+  type CBOMAsset,
+  type CBOMInventory,
+  type CBOMMigrationProgress,
+  type CBOMScan,
+  type DiscoveryFinding,
+  type DiscoveryRun,
+  type DiscoverySource,
+  type PQCMigration,
+  type PQCMigrationRollback,
+} from "@/lib/api";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
-const ctRows = [
-  {
-    domain: "example.com",
-    checkpoint: "RFC 6962 log index + STH",
-    signal: "Unexpected SAN outside approved issuer profile",
-    status: "Served discovery worker records a finding and queues an alert",
-  },
-  {
-    domain: "api.example.com",
-    checkpoint: "issuer/name/serial tuple",
-    signal: "Shadow certificate from untracked CA",
-    status: "Dedicated triage dashboard pending",
-  },
-];
-
-const driftRows = [
-  {
-    id: "deleted",
-    type: "Deleted credential",
-    severity: "high",
-    evidence: "Agent expected a deployed certificate file but cannot read it",
-    remediation: "Restore from intended state or revoke the identity",
-  },
-  {
-    id: "replaced",
-    type: "Replaced credential",
-    severity: "critical",
-    evidence: "Fingerprint on host does not match the issued credential",
-    remediation: "Quarantine the host, re-issue, then verify deployment",
-  },
-  {
-    id: "permission",
-    type: "Permission changed",
-    severity: "medium",
-    evidence: "File mode or owner no longer matches the deployment plan",
-    remediation: "Reset permissions through a served connector workflow",
-  },
-];
-
-const cbomRows = [
-  {
-    asset: "public TLS endpoint",
-    algorithms: "RSA-2048, ECDSA P-256, TLS 1.2+",
-    posture: "Meets the current policy floor",
-    next: "Track for PQC migration planning",
-  },
-  {
-    asset: "legacy service mesh edge",
-    algorithms: "TLS 1.0, RC4, MD5 signature",
-    posture: "Weak crypto preview",
-    next: "Link weak-crypto risk to the risk dashboard",
-  },
-  {
-    asset: "future workload profile",
-    algorithms: "ML-DSA, ML-KEM, SLH-DSA",
-    posture: "PQC-recognized by scanner model",
-    next: "Needs served CBOM scan trigger and findings",
-  },
-];
-
-const cryptoAgilityRows = [
-  {
-    asset: "Weak legacy edge",
-    inventory: "RSA-1024, SHA-1 signature, TLS 1.0",
-    readiness: "disallowed by policy floor",
-    blocker: "needs served CBOM evidence before migration planning",
-  },
-  {
-    asset: "Classical compliant API",
-    inventory: "ECDSA P-256, RSA-2048, TLS 1.3",
-    readiness: "classical-ready, not PQC-ready",
-    blocker: "hybrid X25519+ML-KEM policy not validated on clients",
-  },
-  {
-    asset: "PQC-ready workload",
-    inventory: "ML-DSA / ML-KEM / SLH-DSA",
-    readiness: "PQC-recognized fixture",
-    blocker: "needs served algorithm inventory and compatibility result",
-  },
-];
-
-const pqcMigrationRows = [
-  {
-    wave: "Wave 0: inventory",
-    action: "collect CBOM, graph blast radius, owner, and client compatibility",
-    rollback: "no production change",
-    signoff: "policy sign-off required",
-  },
-  {
-    wave: "Wave 1: hybrid canary",
-    action: "issue hybrid certificates to a small workload set",
-    rollback: "rollback to classical profile",
-    signoff: "owner plus policy approval",
-  },
-  {
-    wave: "Wave 2: workload rotation",
-    action: "rotate compatible services by dependency group",
-    rollback: "resume from last successful wave",
-    signoff: "security sign-off required",
-  },
-];
+const emptyCBOMProgress: CBOMMigrationProgress = {
+  total_assets: 0,
+  out_of_policy_assets: 0,
+  quantum_vulnerable_assets: 0,
+  post_quantum_ready_assets: 0,
+  percent_migrated: 0,
+};
 
 export function Posture() {
+  const [discoverySources, setDiscoverySources] = useState<DiscoverySource[]>([]);
+  const [discoveryRuns, setDiscoveryRuns] = useState<DiscoveryRun[]>([]);
+  const [discoveryFindings, setDiscoveryFindings] = useState<DiscoveryFinding[]>([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(true);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [cbomInventory, setCBOMInventory] = useState<CBOMInventory>({ items: [], migration_progress: emptyCBOMProgress });
+  const [lastCBOMScan, setLastCBOMScan] = useState<CBOMScan | null>(null);
+  const [cbomLoading, setCBOMLoading] = useState(true);
+  const [cbomScanning, setCBOMScanning] = useState(false);
+  const [cbomError, setCBOMError] = useState<string | null>(null);
+  const [lastPQCMigration, setLastPQCMigration] = useState<PQCMigration | null>(null);
+  const [lastPQCRollback, setLastPQCRollback] = useState<PQCMigrationRollback | null>(null);
+  const [pqcBusy, setPQCBusy] = useState<"start" | "rollback" | null>(null);
+  const [pqcError, setPQCError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDiscoveryPosture() {
+      setDiscoveryLoading(true);
+      setDiscoveryError(null);
+      const [sourceResult, runResult, findingResult] = await Promise.allSettled([
+        api.discoverySources({ limit: 50 }),
+        api.discoveryRuns({ limit: 50 }),
+        api.discoveryFindings({ limit: 50 }),
+      ]);
+      if (cancelled) return;
+
+      if (sourceResult.status === "fulfilled") setDiscoverySources(sourceResult.value.items ?? []);
+      else setDiscoverySources([]);
+      if (runResult.status === "fulfilled") setDiscoveryRuns(runResult.value.items ?? []);
+      else setDiscoveryRuns([]);
+      if (findingResult.status === "fulfilled") setDiscoveryFindings(findingResult.value.items ?? []);
+      else setDiscoveryFindings([]);
+
+      const rejected = [sourceResult, runResult, findingResult].find((result) => result.status === "rejected");
+      if (rejected?.status === "rejected") setDiscoveryError(rejected.reason instanceof Error ? rejected.reason.message : "Unable to load discovery findings");
+      setDiscoveryLoading(false);
+    }
+
+    void loadDiscoveryPosture();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInventory() {
+      setCBOMLoading(true);
+      setCBOMError(null);
+      try {
+        const inventory = await api.listCBOMAssets();
+        if (!cancelled) setCBOMInventory(inventory);
+      } catch (error) {
+        if (!cancelled) setCBOMError(error instanceof Error ? error.message : "Unable to load CBOM inventory");
+      } finally {
+        if (!cancelled) setCBOMLoading(false);
+      }
+    }
+
+    void loadInventory();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleCBOMScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const tlsEndpoints = linesFromField(formData.get("tls_endpoints"));
+    const hostConfigs = linesFromField(formData.get("host_configs"));
+
+    setCBOMScanning(true);
+    setCBOMError(null);
+    try {
+      const scan = await api.startCBOMScan({
+        ...(tlsEndpoints.length > 0 ? { tls_endpoints: tlsEndpoints } : {}),
+        ...(hostConfigs.length > 0 ? { host_configs: hostConfigs } : {}),
+      });
+      const inventory = await api.listCBOMAssets();
+      setLastCBOMScan(scan);
+      setCBOMInventory(inventory);
+      form.reset();
+    } catch (error) {
+      setCBOMError(error instanceof Error ? error.message : "Unable to run CBOM scan");
+    } finally {
+      setCBOMScanning(false);
+    }
+  }
+
+  const cbomProgress = cbomInventory.migration_progress ?? lastCBOMScan?.migration_progress ?? emptyCBOMProgress;
+  const pqcCandidates = cbomInventory.items.filter(isPQCMigrationCandidate);
+  const pqcCandidateIDs = pqcCandidates.map((asset) => asset.id);
+  const pqcTargetAlgorithm = pqcCandidates[0]?.migration_target ?? "ML-KEM hybrid";
+  const discoverySourceByID = useMemo(() => new Map(discoverySources.map((source) => [source.id, source])), [discoverySources]);
+  const discoveryRunByID = useMemo(() => new Map(discoveryRuns.map((run) => [run.id, run])), [discoveryRuns]);
+  const ctFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "ct_log");
+  const driftFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "drift");
+
+  async function queuePQCMigration() {
+    if (pqcCandidateIDs.length === 0) return;
+    setPQCBusy("start");
+    setPQCError(null);
+    try {
+      const migration = await api.startPQCMigration({
+        asset_ids: pqcCandidateIDs,
+        target_algorithm: pqcTargetAlgorithm,
+        protocol: "x509",
+        rollback_on_failure: true,
+      });
+      setLastPQCMigration(migration);
+      setLastPQCRollback(null);
+    } catch (error) {
+      setPQCError(error instanceof Error ? error.message : "Unable to queue PQC migration");
+    } finally {
+      setPQCBusy(null);
+    }
+  }
+
+  async function rollbackPQCMigration() {
+    if (!lastPQCMigration || pqcCandidateIDs.length === 0) return;
+    setPQCBusy("rollback");
+    setPQCError(null);
+    try {
+      const rollback = await api.rollbackPQCMigration(lastPQCMigration.run_id, {
+        asset_ids: pqcCandidateIDs,
+        reason: "operator requested rollback",
+      });
+      setLastPQCRollback(rollback);
+    } catch (error) {
+      setPQCError(error instanceof Error ? error.message : "Unable to queue PQC rollback");
+    } finally {
+      setPQCBusy(null);
+    }
+  }
+
   return (
     <section aria-labelledby="posture-heading" className="grid gap-6">
       <PageHeader
         titleId="posture-heading"
         title="Posture"
-        description="CT monitoring and drift detection now run through the served discovery source/run/finding path. This page stays as the posture dashboard preview until dedicated triage and remediation controls land."
+        description="Posture summarizes Discovery CT findings, drift findings, and CBOM crypto inventory. Use Discovery for source setup, schedules, and run control."
       />
-
-      <UnavailableState title="Dedicated posture dashboards not served yet">
-        Use Discovery to create `ct_log` and `drift` sources, start runs, and read findings. This page does not yet manage watchlists, drift baselines, triage
-        history, or cited remediation evidence.
-      </UnavailableState>
 
       <section aria-labelledby="ct-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">
@@ -130,25 +184,20 @@ export function Posture() {
               Certificate Transparency monitoring
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              CT monitoring watches public logs for certificates your tenant did not request. The served discovery worker polls configured logs, records
+              CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records
               tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.
             </p>
           </div>
         </div>
-        <UnavailableState title="Dedicated CT dashboard not served yet">
-          CT runs are served through Discovery sources of kind `ct_log`. Domain watchlists, log checkpoints, poll state, and unexpected-certificate findings are
-          not managed on this page, and there is no live Add watchlist or Poll CT control here.
-        </UnavailableState>
-        <PreviewTable title="Non-interactive CT triage preview" headers={["Domain", "Checkpoint", "Suspicious certificate", "Triage status"]}>
-          {ctRows.map((row) => (
-            <tr key={row.domain} className="align-top">
-              <td className="font-medium">{row.domain}</td>
-              <td>{row.checkpoint}</td>
-              <td>{row.signal}</td>
-              <td>{row.status}</td>
-            </tr>
-          ))}
-        </PreviewTable>
+        <DiscoveryFindingTable
+          title="Certificate Transparency findings"
+          findings={ctFindings}
+          sourceByID={discoverySourceByID}
+          runByID={discoveryRunByID}
+          loading={discoveryLoading}
+          error={discoveryError}
+          emptyTitle="No CT findings returned yet"
+        />
       </section>
 
       <section aria-labelledby="drift-heading" className="grid gap-3 border-y border-border py-4">
@@ -159,41 +208,20 @@ export function Posture() {
               Drift detection
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Drift detection compares what trstctl intended to deploy with what the served worker can verify from a configured watched credential path.
+              Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path.
               Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.
             </p>
           </div>
         </div>
-        <UnavailableState title="Drift remediation UI not served yet">
-          Drift runs are served through Discovery sources of kind `drift`. Dedicated per-agent grouping, resolution state, severity tuning, and remediation
-          actions are not surfaced here, so preview remediation buttons remain disabled.
-        </UnavailableState>
-        <PreviewTable title="Non-interactive drift remediation preview" headers={["Finding", "Severity", "Evidence", "Remediation"]}>
-          {driftRows.map((row) => (
-            <tr key={row.id} className="align-top">
-              <td className="font-medium">{row.type}</td>
-              <td>
-                <StatusBadge value={row.severity} vocabulary="risk" />
-              </td>
-              <td>{row.evidence}</td>
-              <td>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled
-                  aria-describedby={`${row.id}-blocked`}
-                  aria-label={`Remediation blocked for ${row.type.toLowerCase()}`}
-                >
-                  Remediation blocked
-                </Button>
-                <p id={`${row.id}-blocked`} className="mt-1 text-xs text-muted-foreground">
-                  {row.remediation}; console remediation is coming soon.
-                </p>
-              </td>
-            </tr>
-          ))}
-        </PreviewTable>
+        <DiscoveryFindingTable
+          title="Drift findings"
+          findings={driftFindings}
+          sourceByID={discoverySourceByID}
+          runByID={discoveryRunByID}
+          loading={discoveryLoading}
+          error={discoveryError}
+          emptyTitle="No drift findings returned yet"
+        />
       </section>
 
       <section aria-labelledby="cbom-heading" className="grid gap-3 border-y border-border py-4">
@@ -209,32 +237,84 @@ export function Posture() {
             </p>
           </div>
         </div>
-        <UnavailableState title="CBOM dashboard controls not served yet">
-          CBOM scanning is served through `/api/v1/cbom/scans` and `/api/v1/cbom/assets`. Scan triggers, asset-level triage controls, graph links, and posture
-          timestamps are not surfaced here, so no Run CBOM scan control is rendered.
-        </UnavailableState>
-        <PreviewTable title="Non-interactive CBOM preview" headers={["Asset", "Algorithms", "Posture", "Next evidence"]}>
-          {cbomRows.map((row) => (
-            <tr key={row.asset} className="align-top">
-              <td className="font-medium">{row.asset}</td>
-              <td>{row.algorithms}</td>
-              <td>{row.posture}</td>
-              <td>
-                {row.posture === "Weak crypto preview" ? (
-                  <a className="text-primary underline" href="/risk">
-                    {row.next}
-                  </a>
-                ) : (
-                  row.next
-                )}
+        <form className="grid gap-3 rounded-panel border border-border p-comfortable" onSubmit={handleCBOMScan}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-tls-endpoints">
+              TLS endpoints
+              <textarea
+                id="cbom-tls-endpoints"
+                className="ui-input min-h-20 font-mono text-xs"
+                name="tls_endpoints"
+                placeholder="https://api.example.com:443"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="cbom-host-configs">
+              Host config paths
+              <textarea id="cbom-host-configs" className="ui-input min-h-20 font-mono text-xs" name="host_configs" placeholder="/etc/ssh/sshd_config" />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={cbomScanning}>
+              {cbomScanning ? "Running scan" : "Run CBOM scan"}
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              The request sends endpoint and host-config locators only. Inventory rows are loaded from the tenant-scoped CBOM asset endpoint after the scan.
+            </p>
+          </div>
+          {cbomError ? <p className="text-sm font-medium text-destructive">{cbomError}</p> : null}
+        </form>
+
+        <dl className="grid gap-3 md:grid-cols-5">
+          <Metric label="Total assets" value={String(cbomProgress.total_assets)} />
+          <Metric label="Out of policy" value={`${cbomProgress.out_of_policy_assets} out of policy`} />
+          <Metric label="Quantum vulnerable" value={String(cbomProgress.quantum_vulnerable_assets)} />
+          <Metric label="PQC ready" value={String(cbomProgress.post_quantum_ready_assets)} />
+          <Metric label="Migration" value={`${cbomProgress.percent_migrated}% migrated`} />
+        </dl>
+
+        {lastCBOMScan ? (
+          <dl className="grid gap-3 rounded-panel border border-border p-comfortable text-sm md:grid-cols-6">
+            <Metric label="Sources scanned" value={String(lastCBOMScan.report.sources)} />
+            <Metric label="Findings" value={String(lastCBOMScan.report.findings)} />
+            <Metric label="Weak" value={String(lastCBOMScan.report.weak)} />
+            <Metric label="Failed" value={String(lastCBOMScan.report.failed)} />
+            <Metric label="Out of policy" value={String(lastCBOMScan.report.out_of_policy)} />
+            <Metric label="Quantum vulnerable" value={String(lastCBOMScan.report.quantum_vulnerable)} />
+          </dl>
+        ) : null}
+
+        <PreviewTable title="CBOM asset inventory" headers={["Asset", "Crypto", "Transport", "Policy", "Migration target", "Evidence"]}>
+          {cbomInventory.items.map((asset) => (
+            <tr key={asset.id} className="align-top">
+              <td className="font-medium">
+                <span className="block">{asset.location}</span>
+                <span className="text-xs text-muted-foreground">{asset.kind}</span>
               </td>
+              <td>{algorithmLabel(asset)}</td>
+              <td>{transportLabel(asset)}</td>
+              <td>
+                <StatusBadge
+                  value={asset.out_of_policy ? "out_of_policy" : asset.quantum_vulnerable ? "quantum_vulnerable" : "allowed"}
+                  label={asset.out_of_policy ? "Out of policy" : asset.quantum_vulnerable ? "Quantum vulnerable" : "Allowed"}
+                  tone={asset.out_of_policy ? "critical" : asset.quantum_vulnerable ? "warning" : "success"}
+                  vocabulary="risk"
+                />
+              </td>
+              <td>
+                <span className="block">{asset.migration_target}</span>
+                <span className="text-xs text-muted-foreground">
+                  {asset.migration_standard} / {asset.migration_generation}
+                </span>
+              </td>
+              <td>{asset.reasons?.length ? asset.reasons.join("; ") : asset.strength}</td>
             </tr>
           ))}
         </PreviewTable>
-        <EmptyState title="No dedicated posture dashboard yet">
-          This page intentionally shows preview rows only. Live CT and drift evidence is observable through Discovery findings; CBOM evidence is observable
-          through the CBOM API.
-        </EmptyState>
+        {!cbomLoading && cbomInventory.items.length === 0 ? (
+          <EmptyState title="No CBOM assets returned yet">
+            Run a scan against TLS endpoints or host config paths. The inventory table stays empty until trstctl returns tenant-scoped assets.
+          </EmptyState>
+        ) : null}
       </section>
 
       <section aria-labelledby="crypto-agility-heading" className="grid gap-3 border-y border-border py-4">
@@ -250,20 +330,7 @@ export function Posture() {
             </p>
           </div>
         </div>
-        <UnavailableState title="Algorithm inventory dashboard not served yet">
-          CBOM algorithm inventory is served by the API today; console management is coming soon. Asset-level inventory, allowed/disallowed state, PQC
-          readiness, hybrid policy, and migration blockers are not surfaced here, so this page cannot operate crypto-agility changes.
-        </UnavailableState>
-        <PreviewTable title="Crypto-agility readiness fixtures" headers={["Asset", "Inventory fixture", "Readiness", "Blocker"]}>
-          {cryptoAgilityRows.map((row) => (
-            <tr key={row.asset} className="align-top">
-              <td className="font-medium">{row.asset}</td>
-              <td>{row.inventory}</td>
-              <td>{row.readiness}</td>
-              <td>{row.blocker}</td>
-            </tr>
-          ))}
-        </PreviewTable>
+        <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
       </section>
 
       <section aria-labelledby="pqc-migration-heading" className="grid gap-3 border-y border-border py-4">
@@ -278,20 +345,49 @@ export function Posture() {
             </p>
           </div>
         </div>
-        <UnavailableState title="PQC migration orchestration is library-only">
-          PQC migration orchestration is available via the library today; console management is coming soon. Candidate assets, dry-run results, migration waves,
-          rollback, resume, and policy sign-off are not surfaced here, so this console cannot trigger migration work.
-        </UnavailableState>
-        <PreviewTable title="PQC migration plan fixture" headers={["Wave", "Action", "Rollback", "Sign-off"]}>
-          {pqcMigrationRows.map((row) => (
-            <tr key={row.wave} className="align-top">
-              <td className="font-medium">{row.wave}</td>
-              <td>{row.action}</td>
-              <td>{row.rollback}</td>
-              <td>{row.signoff}</td>
+        <div className="grid gap-3 rounded-panel border border-border p-comfortable">
+          <dl className="grid gap-3 md:grid-cols-4">
+            <Metric label="Candidate assets" value={String(pqcCandidateIDs.length)} />
+            <Metric label="Target algorithm" value={pqcTargetAlgorithm} />
+            <Metric label="Protocol" value="x509" />
+            <Metric label="Rollback" value="enabled" />
+          </dl>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" onClick={() => void queuePQCMigration()} disabled={pqcBusy === "start" || pqcCandidateIDs.length === 0}>
+              {pqcBusy === "start" ? "Queueing migration" : "Queue PQC migration"}
+            </Button>
+            {lastPQCMigration ? (
+              <Button type="button" variant="outline" onClick={() => void rollbackPQCMigration()} disabled={pqcBusy === "rollback" || pqcCandidateIDs.length === 0}>
+                {pqcBusy === "rollback" ? "Queueing rollback" : `Rollback migration ${lastPQCMigration.run_id}`}
+              </Button>
+            ) : null}
+            <p className="text-sm text-muted-foreground">
+              The queue uses CBOM asset IDs that are out of policy or quantum-vulnerable. Already-ready assets are not included.
+            </p>
+          </div>
+          {pqcError ? <p className="text-sm font-medium text-destructive">{pqcError}</p> : null}
+        </div>
+        {lastPQCMigration ? (
+          <PreviewTable title="PQC migration queue result" headers={["Run", "Queued", "Target", "Effective", "Protocol", "Rollback", "Queued at"]}>
+            <tr className="align-top">
+              <td className="font-medium">{lastPQCMigration.run_id}</td>
+              <td>{lastPQCMigration.queued}</td>
+              <td>{lastPQCMigration.target_algorithm}</td>
+              <td>{lastPQCMigration.effective_algorithm}</td>
+              <td>{lastPQCMigration.protocol}</td>
+              <td>{lastPQCMigration.rollback_configured ? "configured" : "not configured"}</td>
+              <td>{formatDateTimePolicy(lastPQCMigration.queued_at)}</td>
             </tr>
-          ))}
-        </PreviewTable>
+          </PreviewTable>
+        ) : null}
+        {lastPQCRollback ? (
+          <div className="rounded-panel border border-border p-comfortable text-sm">
+            <p className="font-medium">Rollback queued</p>
+            <p className="mt-1 text-muted-foreground">
+              {lastPQCRollback.queued} asset rollback queued for {lastPQCRollback.run_id}: {lastPQCRollback.reason}
+            </p>
+          </div>
+        ) : null}
       </section>
 
       <section aria-labelledby="alert-heading" className="ui-panel flex items-start gap-3 p-comfortable text-sm">
@@ -307,6 +403,161 @@ export function Posture() {
         </div>
       </section>
     </section>
+  );
+}
+
+function linesFromField(value: FormDataEntryValue | null): string[] {
+  if (typeof value !== "string") return [];
+  return value
+    .split(/[\n,]+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function DiscoveryFindingTable({
+  title,
+  findings,
+  sourceByID,
+  runByID,
+  loading,
+  error,
+  emptyTitle,
+}: {
+  title: string;
+  findings: DiscoveryFinding[];
+  sourceByID: ReadonlyMap<string, DiscoverySource>;
+  runByID: ReadonlyMap<string, DiscoveryRun>;
+  loading: boolean;
+  error: string | null;
+  emptyTitle: string;
+}) {
+  if (loading) return <LoadingState>Loading discovery findings...</LoadingState>;
+
+  return (
+    <>
+      {error ? <ErrorState title="Discovery findings unavailable">{error}</ErrorState> : null}
+      {findings.length === 0 ? (
+        <EmptyState title={emptyTitle} />
+      ) : (
+        <PreviewTable title={title} headers={["Reference", "Source", "Kind", "Risk", "Run state", "Alert state", "Discovered"]}>
+          {findings.map((finding) => {
+            const source = sourceByID.get(finding.source_id);
+            const run = runByID.get(finding.run_id);
+            const runStatus = run?.status ?? "not_reported";
+            return (
+              <tr key={finding.id} className="align-top">
+                <td className="font-medium">{finding.ref}</td>
+                <td>{source?.name ?? finding.source_id}</td>
+                <td>{finding.kind}</td>
+                <td>{finding.risk_score ?? 0}</td>
+                <td>
+                  <StatusBadge value={runStatus} label={runStatusLabel(runStatus)} tone={runStatusTone(runStatus)} />
+                </td>
+                <td>{safeFindingSummary(finding)}</td>
+                <td>{formatDateTimePolicy(finding.discovered_at)}</td>
+              </tr>
+            );
+          })}
+        </PreviewTable>
+      )}
+    </>
+  );
+}
+
+function findingSourceKind(finding: DiscoveryFinding, sourceByID: ReadonlyMap<string, DiscoverySource>): DiscoverySource["kind"] | undefined {
+  const kind = sourceByID.get(finding.source_id)?.kind;
+  if (kind) return kind;
+  const provenance = finding.provenance.toLowerCase();
+  if (provenance.includes("ct_log") || provenance.includes("certificate transparency")) return "ct_log";
+  if (provenance.includes("drift")) return "drift";
+  return undefined;
+}
+
+function safeFindingSummary(finding: DiscoveryFinding): string {
+  for (const key of ["alert", "evidence", "signal", "reason", "status", "summary"]) {
+    const value = finding.metadata[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return finding.provenance;
+}
+
+function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading: boolean }) {
+  if (loading) return <LoadingState>Loading CBOM readiness...</LoadingState>;
+  if (assets.length === 0) return <EmptyState title="No CBOM readiness assets returned yet" />;
+
+  return (
+    <PreviewTable title="Crypto-agility readiness" headers={["Asset", "Inventory", "Readiness", "Migration target", "Evidence"]}>
+      {assets.map((asset) => (
+        <tr key={asset.id} className="align-top">
+          <td className="font-medium">
+            <span className="block">{asset.location}</span>
+            <span className="text-xs text-muted-foreground">{asset.kind}</span>
+          </td>
+          <td>
+            {algorithmLabel(asset)}
+            {transportLabel(asset) !== "not reported" ? ` / ${transportLabel(asset)}` : ""}
+          </td>
+          <td>
+            <StatusBadge value={readinessValue(asset)} label={readinessLabel(asset)} tone={readinessTone(asset)} vocabulary="risk" />
+          </td>
+          <td>{asset.migration_target}</td>
+          <td>{asset.reasons?.length ? asset.reasons.join("; ") : asset.strength}</td>
+        </tr>
+      ))}
+    </PreviewTable>
+  );
+}
+
+function isPQCMigrationCandidate(asset: CBOMAsset): boolean {
+  return asset.out_of_policy || asset.quantum_vulnerable;
+}
+
+function readinessValue(asset: CBOMAsset): string {
+  if (asset.out_of_policy) return "out_of_policy";
+  if (asset.quantum_vulnerable) return "quantum_vulnerable";
+  return "pqc_ready";
+}
+
+function readinessLabel(asset: CBOMAsset): string {
+  if (asset.out_of_policy) return "Out of policy";
+  if (asset.quantum_vulnerable) return "Quantum vulnerable";
+  return "PQC ready";
+}
+
+function readinessTone(asset: CBOMAsset) {
+  if (asset.out_of_policy) return "critical";
+  if (asset.quantum_vulnerable) return "warning";
+  return "success";
+}
+
+function runStatusLabel(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function runStatusTone(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized === "succeeded" || normalized === "success") return "success";
+  if (normalized === "failed") return "critical";
+  if (normalized === "queued" || normalized === "running") return "warning";
+  return "neutral";
+}
+
+function algorithmLabel(asset: CBOMAsset): string {
+  if (!asset.algorithm && !asset.key_bits) return asset.library ?? "not reported";
+  return `${asset.algorithm ?? "unknown"}${asset.key_bits ? `-${asset.key_bits}` : ""}`;
+}
+
+function transportLabel(asset: CBOMAsset): string {
+  const parts = [asset.protocol, asset.cipher].filter(Boolean);
+  return parts.length > 0 ? parts.join(" / ") : (asset.library ?? "not reported");
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-panel border border-border bg-muted/20 px-3 py-2">
+      <dt className="text-xs font-medium uppercase text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-title font-semibold">{value}</dd>
+    </div>
   );
 }
 

@@ -16,7 +16,6 @@ import { Assistant } from "@/pages/Assistant";
 import { Profiles } from "@/pages/Profiles";
 import { Audit } from "@/pages/Audit";
 import { Graph } from "@/pages/Graph";
-import { FeatureCoverage } from "@/pages/FeatureCoverage";
 import { Platform } from "@/pages/Platform";
 import { Protocols } from "@/pages/Protocols";
 import { Secrets } from "@/pages/Secrets";
@@ -63,7 +62,6 @@ export function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="certificates" element={<Certificates />} />
-        <Route path="coverage" element={<FeatureCoverage />} />
         <Route path="identities" element={<Identities />} />
         <Route path="owners" element={<Owners />} />
         <Route path="agents" element={<Agents />} />

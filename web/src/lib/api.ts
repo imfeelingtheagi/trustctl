@@ -21,6 +21,11 @@ import type {
   ApprovalRequest,
   AuditBundle,
   AuditEvent as GenAuditEvent,
+  CBOMAsset as GenCBOMAsset,
+  CBOMInventory,
+  CBOMMigrationProgress,
+  CBOMScan,
+  CBOMScanRequest,
   Certificate as GenCertificate,
   CertificateIngest,
   CertificateList,
@@ -59,6 +64,11 @@ import type {
   IdentityRequest,
   TransitionRequest,
   Agent as GenAgent,
+  Attestation as GenAttestation,
+  AttestedSVID as GenAttestedSVID,
+  AttestedSVIDRequest,
+  BrokerAgentIdentity as GenBrokerAgentIdentity,
+  BrokerAgentIdentityRequest,
   EnrollmentToken as GenEnrollmentToken,
   MCPToolCall,
   MCPToolList,
@@ -73,6 +83,10 @@ import type {
   OIDCMappingStatus,
   PKISecret,
   PKISecretRequest,
+  PQCMigration,
+  PQCMigrationRequest,
+  PQCMigrationRollback,
+  PQCMigrationRollbackRequest,
   PrivacyCatalog,
   PrivacyRetentionRun,
   PrivacyRetentionRunList,
@@ -88,14 +102,34 @@ import type {
   DynamicLease,
   DynamicLeaseRequest,
   DynamicLeaseRenewRequest,
+  EphemeralAPIKey,
+  EphemeralAPIKeyRequest,
   SecretImportRequest,
   SecretRecoverRequest,
   SecretRequest,
+  SecretScan,
+  SecretScanRequest,
+  SecretSync,
+  SecretSyncRequest,
   SecretValue,
   ShareRedeemRequest,
   ShareRequest,
   ShareToken,
   ShareValue,
+  TransitCiphertext,
+  TransitDecryptRequest,
+  TransitEncryptRequest,
+  TransitHMAC,
+  TransitHMACRequest,
+  TransitKey,
+  TransitKeyRequest,
+  TransitPlaintext,
+  TransitRewrapRequest,
+  TransitRotateRequest,
+  TransitSignRequest,
+  TransitSignature,
+  TransitVerify,
+  TransitVerifyRequest,
 } from "./api-types.gen";
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
@@ -107,6 +141,10 @@ export type Issuer = GenIssuer;
 export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
+export type Attestation = GenAttestation;
+export type AttestedSVID = GenAttestedSVID;
+export type BrokerAgentIdentity = GenBrokerAgentIdentity;
+export type CBOMAsset = GenCBOMAsset;
 export type AIAnswer = GenAIAnswer;
 export type AIStatus = GenAIStatus;
 export type CredentialRisk = GenCredentialRisk;
@@ -135,6 +173,10 @@ export type {
   ConnectorCatalogItem,
   ConnectorDelivery,
   ConnectorDeliveryList,
+  CBOMInventory,
+  CBOMMigrationProgress,
+  CBOMScan,
+  CBOMScanRequest,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -157,6 +199,10 @@ export type {
   APITokenList,
   PKISecret,
   PKISecretRequest,
+  PQCMigration,
+  PQCMigrationRequest,
+  PQCMigrationRollback,
+  PQCMigrationRollbackRequest,
   PrivacyCatalog,
   PrivacyRetentionRun,
   PrivacyRetentionRunList,
@@ -172,13 +218,33 @@ export type {
   DynamicLease,
   DynamicLeaseRequest,
   DynamicLeaseRenewRequest,
+  EphemeralAPIKey,
+  EphemeralAPIKeyRequest,
   SecretRecoverRequest,
   SecretRequest,
+  SecretScan,
+  SecretScanRequest,
+  SecretSync,
+  SecretSyncRequest,
   SecretValue,
   ShareRedeemRequest,
   ShareRequest,
   ShareToken,
   ShareValue,
+  TransitCiphertext,
+  TransitDecryptRequest,
+  TransitEncryptRequest,
+  TransitHMAC,
+  TransitHMACRequest,
+  TransitKey,
+  TransitKeyRequest,
+  TransitPlaintext,
+  TransitRewrapRequest,
+  TransitRotateRequest,
+  TransitSignRequest,
+  TransitSignature,
+  TransitVerify,
+  TransitVerifyRequest,
 };
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
@@ -269,6 +335,74 @@ export interface RiskQuery {
   owner?: string;
 }
 
+export interface ProtocolRuntimeStatus {
+  protocol: string;
+  endpoint: string;
+  enabled: boolean;
+  served: boolean;
+  status_code?: number;
+  detail?: string;
+}
+
+export interface ProtocolRuntimeStatusList {
+  source: "public_responder_probe";
+  checked_at: string;
+  items: ProtocolRuntimeStatus[];
+}
+
+interface ProtocolProbeSpec {
+  protocol: string;
+  endpoint: string;
+  method?: "GET" | "HEAD";
+  accept?: string;
+  methodMismatchMeansServed?: boolean;
+  successDetail: string;
+  methodMismatchDetail?: string;
+}
+
+const protocolStatusProbes: ProtocolProbeSpec[] = [
+  {
+    protocol: "acme",
+    endpoint: "/directory",
+    accept: "application/json",
+    successDetail: "ACME directory responded.",
+  },
+  {
+    protocol: "est",
+    endpoint: "/.well-known/est/cacerts",
+    accept: "application/pkcs7-mime, application/pkcs7, */*",
+    successDetail: "EST CA-certs responder returned a chain.",
+  },
+  {
+    protocol: "scep",
+    endpoint: "/scep?operation=GetCACaps",
+    accept: "text/plain, */*",
+    successDetail: "SCEP capabilities responder returned caps.",
+  },
+  {
+    protocol: "cmp",
+    endpoint: "/cmp",
+    method: "GET",
+    methodMismatchMeansServed: true,
+    successDetail: "CMP responder accepted the probe.",
+    methodMismatchDetail: "CMP route is mounted and expects a PKIMessage request.",
+  },
+  {
+    protocol: "ssh",
+    endpoint: "/ssh/ca",
+    accept: "text/plain, */*",
+    successDetail: "SSH CA public-key endpoint responded.",
+  },
+  {
+    protocol: "tsa",
+    endpoint: "/tsa",
+    method: "GET",
+    methodMismatchMeansServed: true,
+    successDetail: "TSA responder accepted the probe.",
+    methodMismatchDetail: "TSA route is mounted and expects a timestamp request.",
+  },
+];
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method;
   const res = await fetch(path, {
@@ -285,6 +419,41 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, await res.text());
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeStatus> {
+  try {
+    const res = await fetch(spec.endpoint, {
+      method: spec.method ?? "GET",
+      credentials: "include",
+      headers: { Accept: spec.accept ?? "*/*" },
+    });
+    const methodMismatchServed = spec.methodMismatchMeansServed === true && res.status === 405;
+    const ok = res.ok || methodMismatchServed;
+    return {
+      protocol: spec.protocol,
+      endpoint: spec.endpoint,
+      enabled: ok,
+      served: ok,
+      status_code: res.status,
+      detail: ok ? (methodMismatchServed ? spec.methodMismatchDetail ?? "Responder is mounted and expects a protocol request." : spec.successDetail) : protocolProbeFailureDetail(res),
+    };
+  } catch {
+    return {
+      protocol: spec.protocol,
+      endpoint: spec.endpoint,
+      enabled: false,
+      served: false,
+      detail: "Responder probe failed before an HTTP status was returned.",
+    };
+  }
+}
+
+function protocolProbeFailureDetail(res: Response): string {
+  if (res.status === 404) return "Responder path was not mounted by this control plane.";
+  if (res.status === 503) return "Responder is mounted but currently unavailable.";
+  if (res.status === 401 || res.status === 403) return "Responder rejected the browser session.";
+  return res.statusText || `Responder returned HTTP ${res.status}.`;
 }
 
 /** newIdempotencyKey returns a fresh key so a retried mutation cannot execute
@@ -390,6 +559,11 @@ export interface Api {
   aiRCA(input: RCARequest): Promise<AIAnswer>;
   mcpTools(): Promise<MCPToolList>;
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
+  listCBOMAssets(): Promise<CBOMInventory>;
+  startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
+  issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest): Promise<BrokerAgentIdentity>;
+  issueAttestedSVID(input: AttestedSVIDRequest): Promise<AttestedSVID>;
+  protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
   createSecret(input: SecretRequest): Promise<SecretMeta>;
   importSecrets(input: SecretImportRequest): Promise<SecretMetaList>;
@@ -398,14 +572,27 @@ export interface Api {
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
   deleteSecret(name: string): Promise<void>;
+  scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
+  syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
   issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
+  issueEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKey>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
+  startPQCMigration(input: PQCMigrationRequest): Promise<PQCMigration>;
+  rollbackPQCMigration(runId: string, input: PQCMigrationRollbackRequest): Promise<PQCMigrationRollback>;
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
   createShare(input: ShareRequest): Promise<ShareToken>;
   redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
+  createTransitKey(input: TransitKeyRequest): Promise<TransitKey>;
+  rotateTransitKey(input: TransitRotateRequest): Promise<TransitKey>;
+  encryptTransit(input: TransitEncryptRequest): Promise<TransitCiphertext>;
+  decryptTransit(input: TransitDecryptRequest): Promise<TransitPlaintext>;
+  hmacTransit(input: TransitHMACRequest): Promise<TransitHMAC>;
+  rewrapTransit(input: TransitRewrapRequest): Promise<TransitCiphertext>;
+  signTransit(input: TransitSignRequest): Promise<TransitSignature>;
+  verifyTransit(input: TransitVerifyRequest): Promise<TransitVerify>;
 }
 
 export const api: Api = {
@@ -491,6 +678,15 @@ export const api: Api = {
   aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
   callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
+  listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
+  startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
+  issueBrokerAgentIdentity: (input) => mutate<BrokerAgentIdentity>("POST", "/api/v1/broker/agent-identities", input),
+  issueAttestedSVID: (input) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input),
+  protocolStatuses: async () => ({
+    source: "public_responder_probe",
+    checked_at: new Date().toISOString(),
+    items: await Promise.all(protocolStatusProbes.map((spec) => protocolProbe(spec))),
+  }),
   secretPage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));
@@ -511,14 +707,27 @@ export const api: Api = {
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
   rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
   deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
+  syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
+  issueEphemeralAPIKey: (input) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
+  startPQCMigration: (input) => mutate<PQCMigration>("POST", "/api/v1/pqc/migrations", input),
+  rollbackPQCMigration: (runId, input) => mutate<PQCMigrationRollback>("POST", `/api/v1/pqc/migrations/${encodeURIComponent(runId)}/rollback`, input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
   createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),
   redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
+  createTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys", input),
+  rotateTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys/rotate", input),
+  encryptTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/encrypt", input),
+  decryptTransit: (input) => mutate<TransitPlaintext>("POST", "/api/v1/transit/decrypt", input),
+  hmacTransit: (input) => mutate<TransitHMAC>("POST", "/api/v1/transit/hmac", input),
+  rewrapTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/rewrap", input),
+  signTransit: (input) => mutate<TransitSignature>("POST", "/api/v1/transit/sign", input),
+  verifyTransit: (input) => mutate<TransitVerify>("POST", "/api/v1/transit/verify", input),
 };
 
 /** loginURL is where the browser is sent to begin the OIDC flow. */

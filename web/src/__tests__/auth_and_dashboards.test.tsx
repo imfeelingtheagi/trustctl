@@ -82,8 +82,8 @@ describe("auth + dashboards", () => {
 
     await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
 
-    expect(await screen.findByRole("heading", { name: "Backend-to-GUI coverage" })).toBeInTheDocument();
-    expect(screen.getAllByTestId("feature-row")).toHaveLength(78);
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Backend-to-GUI coverage" })).not.toBeInTheDocument();
     expect(localStorage.getItem("token")).toBeNull();
     expect(sessionStorage.length).toBe(0);
   });

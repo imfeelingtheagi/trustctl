@@ -13,6 +13,17 @@ type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
 
 const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "ct_log", "drift", "secret_store", "api_key", "agent", "manual"];
+const sourceKindLabels: Record<SourceKind, string> = {
+  network: "Network",
+  ssh: "SSH",
+  cloud_certificate: "Cloud certificates",
+  ct_log: "Certificate Transparency",
+  drift: "Drift",
+  secret_store: "Secret stores",
+  api_key: "API keys",
+  agent: "Agent",
+  manual: "Manual",
+};
 
 export function Discovery() {
   const [sources, setSources] = useState<DiscoverySource[]>([]);
@@ -147,7 +158,7 @@ export function Discovery() {
               <select className="ui-input" value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)}>
                 {sourceKinds.map((kind) => (
                   <option key={kind} value={kind}>
-                    {kind}
+                    {sourceKindLabels[kind]}
                   </option>
                 ))}
               </select>
@@ -261,7 +272,7 @@ function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; b
           {sources.map((source) => (
             <tr key={source.id} className="align-top">
               <td className="font-medium">{source.name}</td>
-              <td>{source.kind}</td>
+              <td>{sourceKindLabels[source.kind] ?? source.kind}</td>
               <td className="font-mono text-xs">{targetCount(source)}</td>
               <td>{formatDateTime(source.updated_at)}</td>
               <td>

@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { api, ApiError, identityState, type ConnectorDelivery, type GraphImpact, type Identity, type RotationRun, type TransitionTo } from "@/lib/api";
-import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
@@ -14,7 +12,7 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
- * a target the served contract does not accept — drift here fails the build. */
+ * a target the backend contract does not accept — drift here fails the build. */
 interface Action {
   label: string;
   to: TransitionTo;
@@ -194,7 +192,7 @@ function deliveryEvidence(identity: Identity, delivery?: ConnectorDelivery, rota
     case "retired":
       return "Terminal retired state; no next lifecycle action.";
     default:
-      return "Lifecycle state is served; no downstream delivery receipt yet.";
+      return "Lifecycle state is known; no downstream delivery receipt yet.";
   }
 }
 
@@ -371,7 +369,7 @@ export function Identities() {
         nodeId: null,
         impact: null,
         loading: false,
-        error: "Blast-radius impact unavailable: no served graph node mapping for this identity.",
+        error: "Blast-radius impact unavailable: no graph node mapping for this identity.",
       });
       return;
     }
@@ -456,7 +454,7 @@ export function Identities() {
       {
         id: "owner",
         header: "Owner",
-        cell: (identity) => identity.owner_id || "not served",
+        cell: (identity) => identity.owner_id || "—",
       },
       {
         id: "state",
@@ -544,8 +542,6 @@ export function Identities() {
       </section>
 
       <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
-
-      <LifecycleAutomationDisclosure />
 
       <RevocationPublicationPanel />
 
@@ -687,8 +683,6 @@ export function Identities() {
         </EmptyState>
       )}
 
-      {items && items.length > 0 && <PendingApprovalSummary rows={approvalRows(items)} />}
-
       {items && items.length > 0 && (
         <div id="manual-lifecycle-transitions" className="space-y-3">
           <label className="grid max-w-xs gap-1 text-sm font-medium" htmlFor="identity-kind-filter">
@@ -729,7 +723,7 @@ export function Identities() {
       <DetailDrawer
         open={!!selectedId}
         title="Identity detail"
-        description={detail ? `${detail.name} from the served identity detail API.` : "Served identity detail."}
+        description={detail ? `${detail.name} detail fields.` : "Identity detail."}
         onClose={() => setSelectedId(null)}
       >
         <IdentityDetailPanel
@@ -862,7 +856,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   if (state.loading) {
     return (
       <div className="mt-3 rounded-control border border-destructive/30 bg-background/80 p-3 text-sm text-destructive">
-        Loading blast-radius impact from served graph...
+        Loading blast-radius impact from graph...
       </div>
     );
   }
@@ -884,7 +878,7 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
         Blast-radius impact
       </h3>
       <p className="mt-1">
-        Served graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream affected node{affected === 1 ? "" : "s"}{" "}
+        Graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream affected node{affected === 1 ? "" : "s"}{" "}
         before this destructive action.
       </p>
       {byKind.length > 0 && (
@@ -901,98 +895,6 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
   );
 }
 
-function LifecycleAutomationDisclosure() {
-  const previewRows = [
-    ["Renew before", "Served from runtime configuration"],
-    ["Alert before", "Preview only: notification timing is not served"],
-    ["Dry run", "Preview only: no served dry-run endpoint"],
-    ["Rollback", "Served on successful rotation-run receipts"],
-  ];
-  return (
-    <section aria-labelledby="lifecycle-automation-heading" className="mb-4 border-y border-border py-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <div>
-          <h2 id="lifecycle-automation-heading" className="text-title font-semibold">
-            Lifecycle automation
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Automatic renewal runs in the leader scheduler when a deployed X.509 identity reaches the configured renew-before window. This console reads
-            rotation-run and delivery evidence; editing schedules, alert timing, and dry-run execution still live outside this view.
-          </p>
-          <a className="mt-3 inline-flex text-sm font-medium text-primary underline" href="#manual-lifecycle-transitions">
-            Use manual lifecycle transitions
-          </a>
-        </div>
-        <div className="rounded-md border border-border p-3 text-sm">
-          <p className="font-medium">Automation layout preview</p>
-          <dl className="mt-2 grid gap-2">
-            {previewRows.map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PendingApprovalSummary({ rows }: { rows: ApprovalQueueRow[] }) {
-  return (
-    <section aria-labelledby="jit-queue-heading" className="mb-4 border-y border-border py-4">
-      <div className="mb-3">
-        <h2 id="jit-queue-heading" className="text-title font-semibold">
-          JIT approvals moved to the inbox
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Requested identities are summarized here, but approval decisions now happen in the dedicated inbox so request and approve controls are not co-located
-          for one operator.
-        </p>
-        <Link className="mt-2 inline-flex text-sm font-medium text-primary underline" to="/approvals">
-          Open approvals inbox
-        </Link>
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No pending served approval actions.</p>
-      ) : (
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[48rem]">
-            <caption className="sr-only">Pending JIT approval requests</caption>
-            <thead>
-              <tr>
-                <th scope="col">Credential</th>
-                <th scope="col">Requester</th>
-                <th scope="col">Action</th>
-                <th scope="col">Approvals count</th>
-                <th scope="col">Time-bound grant</th>
-                <th scope="col">Decision surface</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.identity.id}:${row.action}`} className="align-top">
-                  <td>{`JIT ${row.identity.name}`}</td>
-                  <td>{row.requester}</td>
-                  <td>{row.action}</td>
-                  <td>{row.approvals}</td>
-                  <td>{row.grantExpiresAt}</td>
-                  <td>
-                    <Link className="text-primary underline" to="/approvals">
-                      Review in approvals
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
 function RevocationPublicationPanel() {
   return (
     <section aria-labelledby="revocation-publication-heading" className="mb-4 border-y border-border py-4">
@@ -1000,13 +902,9 @@ function RevocationPublicationPanel() {
         Revocation publication
       </h2>
       <div className="mt-2 grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
-        <p>Revoked X.509 certificates are published to the served public OCSP and CRL surfaces after the backend records the lifecycle transition.</p>
-        <p>
-          OCSP: <code className="rounded bg-muted px-1 font-mono text-xs">/ocsp/{"{tenant}"}</code>
-          <br />
-          CRL: <code className="rounded bg-muted px-1 font-mono text-xs">/crl/{"{tenant}"}</code>
-        </p>
-        <p>Live propagation health is not served yet. Freshness, scheduler, and responder health aren't surfaced in the console yet.</p>
+        <p>Revoked X.509 certificates are published to public OCSP and CRL responders after the backend records the lifecycle transition.</p>
+        <p>Responder paths are tenant-scoped and managed by the protocol layer.</p>
+        <p>Live propagation health is coming soon. Freshness, scheduler, and responder health aren't surfaced in the console yet.</p>
       </div>
     </section>
   );
@@ -1044,7 +942,7 @@ function IdentityDetailPanel({
     <section aria-labelledby="identity-detail-content-heading" className="text-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase text-muted-foreground">Served identity detail</p>
+          <p className="text-xs font-medium uppercase text-muted-foreground">Identity detail</p>
           <h2 id="identity-detail-content-heading" className="text-title font-semibold">
             Detail fields
           </h2>
@@ -1064,7 +962,7 @@ function IdentityDetailPanel({
             <h3 id="identity-kind-heading" className="font-semibold">
               {kind?.title ?? "Identity"}
             </h3>
-            <p className="mt-1 text-muted-foreground">{kind?.description ?? "A served non-human identity bound to this tenant."}</p>
+            <p className="mt-1 text-muted-foreground">{kind?.description ?? "A non-human identity bound to this tenant."}</p>
             {terminal && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs font-medium text-foreground">{terminal}</p>}
           </section>
 
@@ -1101,7 +999,7 @@ function IdentityDetailPanel({
               <dt className="font-medium text-muted-foreground">Issuer</dt>
               <dd>
                 {identity.issuer_id ? (
-                  <a className="text-primary underline" href={`/coverage?feature=F5&issuer=${encodeURIComponent(identity.issuer_id)}`}>
+                  <a className="text-primary underline" href={`/protocols?issuer=${encodeURIComponent(identity.issuer_id)}`}>
                     Issuer {identity.issuer_id}
                   </a>
                 ) : (
@@ -1129,7 +1027,7 @@ function IdentityDetailPanel({
                 ))}
               </dl>
             ) : (
-              <p className="mt-1 text-muted-foreground">No extra kind attributes were returned by the served detail endpoint.</p>
+              <p className="mt-1 text-muted-foreground">No extra kind attributes were returned.</p>
             )}
           </section>
 

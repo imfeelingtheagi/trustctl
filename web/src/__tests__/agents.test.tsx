@@ -55,7 +55,7 @@ describe("agent fleet surface", () => {
     ]);
   });
 
-  it("renders served agents with status chips and stale-heartbeat warnings", async () => {
+  it("renders agents with status chips and stale-heartbeat warnings", async () => {
     renderAgents();
 
     expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe("agent fleet surface", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
-  it("opens an agent detail panel with served fields and honest unavailable telemetry", async () => {
+  it("opens an agent detail panel with fields and honest unavailable telemetry", async () => {
     renderAgents();
     await screen.findByText("branch-02");
 
@@ -104,7 +104,7 @@ describe("agent fleet surface", () => {
     expect(screen.getByRole("heading", { name: "edge-01" })).toBeInTheDocument();
     expect(screen.getByText("ag-1")).toBeInTheDocument();
     expect(screen.getAllByText("0.4.0").length).toBeGreaterThan(0);
-    expect(screen.getByText("Scan, drift, and renewal fields not served yet")).toBeInTheDocument();
+    expect(screen.getByText("More agent telemetry coming soon")).toBeInTheDocument();
     expect(screen.getByText(/Discovery scanning and drift detection run in the agent today/i)).toBeInTheDocument();
     expect(screen.getByText(/agent-driven certificate renewal runs there too/i)).toBeInTheDocument();
     expect(screen.getByText(/console views for capabilities, last scan, drift summary, and renewal state are coming soon/i)).toBeInTheDocument();

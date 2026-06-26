@@ -93,8 +93,7 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
           AI runtime boundary
         </h2>
         <p className="mt-1 max-w-3xl text-body text-muted-foreground">
-          Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API
-          token, never from a browser field.
+          Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
         </p>
       </div>
       <dl className="grid gap-3 md:grid-cols-4">
@@ -148,7 +147,7 @@ function QueryPreview({ surfaces, subject }: { surfaces: string[]; subject: stri
         </div>
       </dl>
       <p className="mt-2 text-muted-foreground">
-        Tenant/RBAC filtering is applied by the served query layer below this request; a prompt cannot ask for another tenant.
+        Tenant/RBAC filtering is applied below this request; a prompt cannot ask for another tenant.
       </p>
     </section>
   );
@@ -162,7 +161,7 @@ function RCAWorkspaceDisclosure() {
       </h3>
       <p className="mt-2 text-muted-foreground">
         RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text
-        until a served remediation workflow exists.
+        until a remediation workflow exists.
       </p>
     </section>
   );
@@ -175,8 +174,8 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
         MCP permission boundary
       </h3>
       <p className="mt-2 text-muted-foreground">
-        Tools are {readOnly ? "read-only" : "treated as unavailable until policy is served"} and cannot remediate or mutate credentials. Model egress and
-        redaction posture are read from the served runtime status above.
+        Tools are {readOnly ? "read-only" : "treated as unavailable until policy allows them"} and cannot remediate or mutate credentials. Model egress and
+        redaction posture are read from the runtime status above.
       </p>
     </section>
   );

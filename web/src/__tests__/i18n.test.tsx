@@ -15,7 +15,7 @@ function DemoFormats() {
   const { formatDate: localizedDate, formatNumber: localizedNumber, formatPlural: localizedPlural, t } = useTranslation();
   return (
     <dl>
-      <dt>{t("nav.treatment.observe")}</dt>
+      <dt>{t("nav.section.needsAction")}</dt>
       <dd>{localizedDate("2026-06-20T12:00:00Z")}</dd>
       <dt>number</dt>
       <dd>{localizedNumber(123456)}</dd>
@@ -96,7 +96,7 @@ describe("i18n boundary", () => {
     expect(document.documentElement.lang).toBe("ar-XB");
     expect(document.documentElement.dir).toBe("rtl");
     expect(document.documentElement.dataset.timeZone).toBe("Asia/Tokyo");
-    expect(screen.getByText(pseudoLocalize("Observe"))).toBeInTheDocument();
+    expect(screen.getByText(pseudoLocalize("Needs action"))).toBeInTheDocument();
     expect(screen.getByText("nodes")).toBeInTheDocument();
   });
 

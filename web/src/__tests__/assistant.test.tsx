@@ -66,7 +66,7 @@ describe("assistant console workflow", () => {
     renderAssistant();
 
     expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Assistant/i })).toHaveAttribute("href", "/assistant");
+    expect(screen.queryByRole("link", { name: /Assistant/i })).not.toBeInTheDocument();
     expect(screen.getByText("AI runtime boundary")).toBeInTheDocument();
     expect(await screen.findByText("not configured")).toBeInTheDocument();
     expect(screen.getByText(/Redaction boundary: default-redactor/)).toBeInTheDocument();

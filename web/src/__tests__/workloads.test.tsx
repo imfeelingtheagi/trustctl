@@ -12,52 +12,60 @@ function renderWorkloads() {
 }
 
 describe("workload identity disclosure surface", () => {
-  it("renders ephemeral leases with expiry visualization and no live issue control", () => {
+  it("renders dynamic lease controls with expiry visualization and no fixture lease rows", () => {
     renderWorkloads();
 
     expect(screen.getByRole("heading", { name: "Workload identity" })).toBeInTheDocument();
-    expect(screen.getByText("Ephemeral credential leases")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ephemeral credential leases" })).toBeInTheDocument();
     expect(screen.getByText("00:00 issued")).toBeInTheDocument();
     expect(screen.getByText("00:45 renew window")).toBeInTheDocument();
     expect(screen.getByText("01:00 expires")).toBeInTheDocument();
-    expect(screen.getByText("Browser lease controls are not served yet")).toBeInTheDocument();
-    expect(screen.getByText("Ephemeral JIT issuance is REST and CLI only")).toBeInTheDocument();
-    expect(screen.getByText(/POST \/api\/v1\/ephemeral/i)).toBeInTheDocument();
-    expect(screen.getByText("X.509-SVID")).toBeInTheDocument();
-    expect(screen.getByText("JWT-SVID")).toBeInTheDocument();
-    expect(screen.getByText("PKI secret bundle")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /issue lease|revoke now|renew now/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Provider")).toHaveValue("postgresql");
+    expect(screen.getByLabelText("Role")).toHaveValue("readonly-reporting");
+    expect(screen.getByLabelText("TTL seconds")).toHaveValue(1200);
+    expect(screen.getByRole("button", { name: "Issue lease" })).toBeInTheDocument();
+    expect(screen.getByText("No lease has been issued in this browser session.")).toBeInTheDocument();
+    expect(screen.getByText("Historical lease list coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Ephemeral JIT issuance uses external approval flows")).toBeInTheDocument();
+    expect(screen.getByText(/does not collect live proof payloads or approval actions/i)).toBeInTheDocument();
+    expect(screen.queryByText("15 minute default TTL, 5 minute renew window")).not.toBeInTheDocument();
+    expect(screen.queryByText("JWT-SVID")).not.toBeInTheDocument();
+    expect(screen.queryByText("PKI secret bundle")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
   });
 
-  it("renders attestation fixtures without token leakage", () => {
+  it("renders attested SVID controls without token leakage or fixture rows", () => {
     renderWorkloads();
 
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
-    expect(screen.getByText("TPM quote")).toBeInTheDocument();
-    expect(screen.getByText("AWS IID")).toBeInTheDocument();
-    expect(screen.getByText("GCP instance identity")).toBeInTheDocument();
-    expect(screen.getByText("Azure IMDS")).toBeInTheDocument();
-    expect(screen.getByText("Kubernetes SAT")).toBeInTheDocument();
-    expect(screen.getByText("GitHub OIDC")).toBeInTheDocument();
-    expect(screen.getAllByText("accepted").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("rejected").length).toBeGreaterThan(0);
-    expect(screen.getByText("expired")).toBeInTheDocument();
-    expect(screen.getByText("wrong-tenant")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Attestation method")).toHaveValue("k8s_sat");
+    expect(screen.getByLabelText("Attestation proof payload (base64)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Workload public key")).toBeInTheDocument();
+    expect(screen.getByText("No attested SVID has been issued in this browser session.")).toBeInTheDocument();
     expect(screen.getByText("Raw attestation evidence stays out of the browser")).toBeInTheDocument();
-    expect(screen.getByText(/Use the attested-issuance or ephemeral REST\/CLI paths for live proofs/i)).toBeInTheDocument();
+    expect(screen.getByText(/Returned certificate PEM and claim maps are discarded/i)).toBeInTheDocument();
+    expect(screen.queryByText("Workload attestation fixtures")).not.toBeInTheDocument();
+    expect(screen.queryByText("accepted")).not.toBeInTheDocument();
+    expect(screen.queryByText("wrong-tenant")).not.toBeInTheDocument();
     expect(screen.queryByText(/eyJ[a-z0-9_-]+/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
   });
 
-  it("renders scoped AI-agent broker lifecycle as REST/CLI-only", () => {
+  it("renders scoped AI-agent broker controls as metadata-only", () => {
     renderWorkloads();
 
     expect(screen.getByText("AI-agent / NHI broker")).toBeInTheDocument();
-    expect(screen.getByText("spiffe://tenant/ai/build-agent")).toBeInTheDocument();
-    expect(screen.getByText("mcp:read-only, secrets:read:ci, certs:issue:short")).toBeInTheDocument();
-    expect(screen.getByText("credential lease audit event")).toBeInTheDocument();
-    expect(screen.getByText(/POST \/api\/v1\/broker\/agent-identities/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/broker issuance is served through REST and CLI/i).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /issue broker credential|approve agent|mint token/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Issue broker identity" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Agent ID")).toHaveValue("agent-build-1");
+    expect(screen.getByLabelText("Broker method")).toHaveValue("github_oidc");
+    expect(screen.getByLabelText("Broker scopes")).toHaveValue("mcp:read-only, secrets:read:ci");
+    expect(screen.getByLabelText("Broker proof payload (base64)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Broker public key")).toBeInTheDocument();
+    expect(screen.getByText("No broker identity has been issued in this browser session.")).toBeInTheDocument();
+    expect(screen.getByText("Broker history list coming soon")).toBeInTheDocument();
+    expect(screen.queryByText("AI agent broker lifecycle fixture")).not.toBeInTheDocument();
+    expect(screen.queryByText("credential lease audit event")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve agent|mint token/i })).not.toBeInTheDocument();
   });
 });

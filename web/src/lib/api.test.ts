@@ -345,6 +345,42 @@ describe("agent contract", () => {
   });
 });
 
+describe("protocol responder status contract", () => {
+  it("checks served protocol responder paths without mutation headers", async () => {
+    mockFetchSequence([
+      { status: 200, body: "{}" },
+      { status: 404, body: "not mounted" },
+      { status: 200, body: "GetCACaps\nPOSTPKIOperation" },
+      { status: 405, body: "method not allowed" },
+      { status: 200, body: "ssh-ed25519 AAAA..." },
+      { status: 405, body: "method not allowed" },
+    ]);
+
+    const page = await api.protocolStatuses();
+
+    expect(page.source).toBe("public_responder_probe");
+    expect(page.items.map((item) => [item.protocol, item.enabled, item.served, item.status_code])).toEqual([
+      ["acme", true, true, 200],
+      ["est", false, false, 404],
+      ["scep", true, true, 200],
+      ["cmp", true, true, 405],
+      ["ssh", true, true, 200],
+      ["tsa", true, true, 405],
+    ]);
+    expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+      "/directory",
+      "/.well-known/est/cacerts",
+      "/scep?operation=GetCACaps",
+      "/cmp",
+      "/ssh/ca",
+      "/tsa",
+    ]);
+    for (const call of vi.mocked(fetch).mock.calls) {
+      expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();
+    }
+  });
+});
+
 describe("secrets contract", () => {
   function sentHeaders(): Record<string, string> {
     const calls = vi.mocked(fetch).mock.calls;

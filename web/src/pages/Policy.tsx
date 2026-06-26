@@ -24,7 +24,7 @@ const policyOutcomes = [
   {
     state: "Overload 503",
     meaning: "The policy bulkhead sheds work when saturated. Operators see a 503 and retry later; issuance is not allowed through.",
-    evidence: "503 problem+json, Retry-After when served",
+    evidence: "503 problem+json, retry guidance when available",
   },
 ];
 
@@ -41,14 +41,14 @@ const notificationChannels = [
     reference: "secret://notify/teams/prod:****",
     events: "incident.declared, connector.failed",
     delivery: "webhook response body is redacted",
-    status: "library-only channel fixture",
+    status: "channel fixture",
   },
   {
     channel: "Email",
     reference: "secret://notify/smtp/prod:****",
     events: "audit.export.ready, policy.denied",
     delivery: "retry and bounce state are not shown in the console yet",
-    status: "recipient list is not served",
+    status: "recipient list coming soon",
   },
   {
     channel: "PagerDuty",
@@ -61,14 +61,14 @@ const notificationChannels = [
     channel: "OpsGenie",
     reference: "secret://notify/opsgenie/prod:****",
     events: "jit.expiring, rotation.failed",
-    delivery: "retry receipt not served",
+    delivery: "retry receipt coming soon",
     status: "API key never leaves secret reference form",
   },
   {
     channel: "Webhook",
     reference: "secret://notify/webhook/prod:****",
     events: "credential.rotated, compliance.evidence.ready",
-    delivery: "signed body and idempotency key are not served",
+    delivery: "signed body and idempotency key coming soon",
     status: "raw endpoint token is masked",
   },
 ];
@@ -94,14 +94,14 @@ const complianceRows = [
   {
     framework: "HIPAA",
     controls: "access-control audit, encryption boundary, incident evidence",
-    state: "control mapping not served",
+    state: "control mapping coming soon",
     caveat: "evidence, not certification",
   },
   {
     framework: "SOC 2",
     controls: "change approval, revocation, logging, availability",
-    state: "signed audit export is served",
-    caveat: "framework report generation is library-only",
+    state: "signed audit export",
+    caveat: "framework report generation coming soon",
   },
   {
     framework: "FedRAMP",
@@ -113,7 +113,7 @@ const complianceRows = [
     framework: "CNSA 2.0",
     controls: "algorithm posture, key sizes, PQC migration waves",
     state: "CBOM/PQC data shown elsewhere as disclosure",
-    caveat: "certification mapping is not served",
+    caveat: "certification mapping coming soon",
   },
 ];
 
@@ -141,17 +141,17 @@ export function Policy() {
       <PageHeader
         titleId="policy-heading"
         title="Policy"
-        description="Served issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted."
+        description="Issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted."
       />
 
       <section aria-labelledby="policy-gate-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-gate-heading" className="text-title font-semibold">
-            Served enforcement path
+            Enforcement path
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The browser does not send a tenant id or bypass policy. It asks the served lifecycle endpoint to mutate state; the backend evaluates policy and
-            either emits the event or returns a fail-closed problem.
+            The browser does not send a tenant id or bypass policy. It asks the lifecycle workflow to mutate state; the backend evaluates policy and either
+            emits the event or returns a fail-closed problem.
           </p>
         </div>
         <div className="overflow-x-auto rounded-md border border-border">
@@ -198,13 +198,13 @@ export function Policy() {
             Notification integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into
-            the served process. The served API does not configure or test channels yet.
+            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into the
+            process. This console does not configure or test channels yet.
           </p>
         </div>
-        <UnavailableState title="Notification channel controls not served yet">
-          Expiry-alert dispatch is served through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not
-          served by API or CLI yet, so this page cannot operate notification integrations.
+        <UnavailableState title="Notification channel controls coming soon">
+          Expiry-alert dispatch runs through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not yet
+          available here, so this page cannot operate notification integrations.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[70rem]">
@@ -249,8 +249,8 @@ export function Policy() {
             Compliance posture and reports
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Framework dashboards need mapped controls, control state, caveats, and report packaging. Today the served path is the signed audit evidence export;
-            it is evidence, not certification.
+            Framework dashboards need mapped controls, control state, caveats, and report packaging. Today the signed audit evidence export is evidence, not
+            certification.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -271,9 +271,9 @@ export function Policy() {
             {evidenceError}
           </p>
         )}
-        <UnavailableState title="Framework-mapped compliance posture is not served yet">
-          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not served by API or CLI yet. The signed audit export above
-          is real evidence, not a compliance certificate.
+        <UnavailableState title="Framework-mapped compliance posture coming soon">
+          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not available in this console yet. The signed audit export
+          above is real evidence, not a compliance certificate.
         </UnavailableState>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="ui-table min-w-[62rem]">
@@ -306,13 +306,13 @@ export function Policy() {
             Policy authoring and dry run
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A real editor needs a tenant-scoped API that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That
-            endpoint is not served yet.
+            A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace.
+            That workflow is coming soon.
           </p>
         </div>
-        <UnavailableState title="Policy authoring and dry-run API not served yet">
-          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not served by API or CLI yet. Until then, lifecycle
-          mutations remain the real enforcement path.
+        <UnavailableState title="Policy authoring and dry-run coming soon">
+          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then,
+          lifecycle mutations remain the real enforcement path.
         </UnavailableState>
       </section>
     </section>

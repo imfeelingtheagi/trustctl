@@ -126,7 +126,7 @@ export function Approvals() {
       <PageHeader
         title="Approvals"
         titleId="approvals-heading"
-        description="Dual-control issue and revoke decisions for a distinct approver. The queue is built from served identities; quorum and requester details appear when identity attributes carry them."
+        description="Dual-control issue and revoke decisions for a distinct approver. The queue is built from pending identities; quorum and requester details appear when identity attributes carry them."
       />
 
       {notice && (
@@ -138,7 +138,7 @@ export function Approvals() {
       {error?.kind === "error" && <ErrorState title="Approvals unavailable">{error.message}</ErrorState>}
       {!identities && !error && <LoadingState>Loading approvals...</LoadingState>}
       {identities && rows.length === 0 && (
-        <EmptyState title="No pending approvals">No served identities currently require an issue or revoke approval.</EmptyState>
+        <EmptyState title="No pending approvals">No identities currently require an issue or revoke approval.</EmptyState>
       )}
       {identities && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
     </section>

@@ -64,7 +64,7 @@ export function SSHTrust() {
             any host changes trust.
           </p>
         </div>
-        <UnavailableState title="SSH trust mutation is not served">
+        <UnavailableState title="SSH trust rollout controls coming soon">
           SSH trust rollout and drift detection run in the agent today; console management is coming soon. Target-host state, rollout status, health failures,
           and rollback evidence are not surfaced here. This page must never weaken `authorized_keys` or rewrite trust without agent confirmation.
         </UnavailableState>
@@ -101,7 +101,7 @@ export function SSHTrust() {
             Self-approval blocked is a hard rule, not a UI hint.
           </p>
         </div>
-        <UnavailableState title="Attested SSH issue flow is library-only">
+        <UnavailableState title="Attested SSH issue flow coming soon">
           Attestation-gated SSH issuance is available via the library today; console management is coming soon. Attestation decisions are not surfaced here, so
           this console cannot request short-lived SSH user certs yet. The SSH CA private key stays in the signer and is never shown here.
         </UnavailableState>

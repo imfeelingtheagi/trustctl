@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Copy, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
-import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { api, type APIToken, type Member, type OIDCMappingStatus, type RoleList } from "@/lib/api";
-import { realGuiSurfaces } from "@/lib/navigation";
 
 interface ScopeRequirement {
   feature: string;
@@ -14,11 +12,11 @@ interface ScopeRequirement {
   denial: string;
 }
 
-interface StaticAPIRoute {
+interface APICapability {
   group: string;
-  path: string;
-  methods: string[];
-  auth: string;
+  capability: string;
+  operations: string;
+  access: string;
 }
 
 const requiredScopes: ScopeRequirement[] = [
@@ -55,76 +53,41 @@ const requiredScopes: ScopeRequirement[] = [
   {
     feature: "Secrets",
     scope: "secrets:write",
-    route: "/coverage?domain=Secrets",
+    route: "/secrets",
     denial: "Secret workflows must never reveal or persist secret material when authorization fails.",
   },
 ];
 
-const staticAPIRoutes: StaticAPIRoute[] = [
-  { group: "Access", path: "/api/v1/access/roles", methods: ["GET"], auth: "session or API token" },
-  { group: "Access", path: "/api/v1/access/oidc-mapping", methods: ["GET"], auth: "session or API token" },
-  { group: "Access", path: "/api/v1/access/members", methods: ["GET"], auth: "session or API token" },
-  { group: "Access", path: "/api/v1/access/members/{subject}", methods: ["PUT"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Access", path: "/api/v1/access/members/{subject}/offboard", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Access", path: "/api/v1/access/api-tokens", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Access", path: "/api/v1/access/api-tokens/{id}", methods: ["DELETE"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Agents", path: "/api/v1/agents", methods: ["GET"], auth: "session or API token" },
-  { group: "Agents", path: "/api/v1/agents/enrollment-tokens", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "AI", path: "/api/v1/ai/query", methods: ["POST"], auth: "session or API token" },
-  { group: "AI", path: "/api/v1/ai/rca", methods: ["POST"], auth: "session or API token" },
-  { group: "Audit", path: "/api/v1/audit/events", methods: ["GET"], auth: "session or API token" },
-  { group: "Audit", path: "/api/v1/audit/export", methods: ["GET"], auth: "session or API token" },
-  { group: "Certificates", path: "/api/v1/certificates", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Certificates", path: "/api/v1/certificates/{id}", methods: ["GET"], auth: "session or API token" },
-  { group: "Graph", path: "/api/v1/graph", methods: ["GET"], auth: "session or API token" },
-  { group: "Graph", path: "/api/v1/graph/blast-radius/{id}", methods: ["GET"], auth: "session or API token" },
-  { group: "Graph", path: "/api/v1/graph/query", methods: ["POST"], auth: "session, CSRF; read-only POST" },
-  { group: "Graph", path: "/api/v1/graph/reachable/{id}", methods: ["GET"], auth: "session or API token" },
-  { group: "Identities", path: "/api/v1/identities", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Identities", path: "/api/v1/identities/{id}", methods: ["GET"], auth: "session or API token" },
-  { group: "Identities", path: "/api/v1/identities/{id}/approvals", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Identities", path: "/api/v1/identities/{id}/transitions", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Issuers", path: "/api/v1/issuers", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Issuers", path: "/api/v1/issuers/{id}", methods: ["GET"], auth: "session or API token" },
-  { group: "MCP", path: "/api/v1/mcp/tools", methods: ["GET"], auth: "session or API token" },
-  { group: "MCP", path: "/api/v1/mcp/tools/{tool}", methods: ["POST"], auth: "session, CSRF; read-only tool call" },
-  { group: "Owners", path: "/api/v1/owners", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Owners", path: "/api/v1/owners/{id}", methods: ["GET", "PUT", "DELETE"], auth: "session; mutations add CSRF + Idempotency-Key" },
-  { group: "Profiles", path: "/api/v1/profiles", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Profiles", path: "/api/v1/profiles/{name}/versions/{version}", methods: ["GET"], auth: "session or API token" },
-  { group: "Risk", path: "/api/v1/risk/credentials", methods: ["GET"], auth: "session or API token" },
-  { group: "Secrets", path: "/api/v1/secrets/login", methods: ["POST"], auth: "session, CSRF; scoped machine login" },
-  { group: "Secrets", path: "/api/v1/secrets/pki", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/shares", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/shares/redeem", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/leases", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/leases/{lease_id}", methods: ["GET"], auth: "session or API token" },
-  { group: "Secrets", path: "/api/v1/secrets/leases/{lease_id}/renew", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/leases/{lease_id}/revoke", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/rotations", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/syncs", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/store", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/store/import", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/store/history/{name}", methods: ["GET"], auth: "session or API token" },
-  { group: "Secrets", path: "/api/v1/secrets/store/recover/{name}", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
-  { group: "Secrets", path: "/api/v1/secrets/store/{name}", methods: ["GET", "PUT", "DELETE"], auth: "session; mutations add CSRF + Idempotency-Key" },
+const apiCapabilities: APICapability[] = [
+  { group: "Access", capability: "Roles, OIDC mappings, members, offboarding, and API tokens", operations: "read, create, update, revoke", access: "session or API token; browser mutations use CSRF and idempotency" },
+  { group: "Agents", capability: "Agent fleet and one-time enrollment tokens", operations: "read, mint", access: "session or API token; token minting uses browser session protection" },
+  { group: "AI", capability: "Grounded query, RCA, and read-only MCP tool calls", operations: "query, analyze, inspect tools", access: "session or API token with tenant/RBAC filtering" },
+  { group: "Audit", capability: "Event search and signed evidence export", operations: "read, export", access: "session or API token" },
+  { group: "Certificates", capability: "Inventory, detail, and explicit public-certificate ingest", operations: "read, ingest", access: "session or API token; ingest is idempotent" },
+  { group: "Graph", capability: "Credential graph, blast radius, reachability, and read-only graph query", operations: "read, analyze", access: "session or API token; graph query is read-only" },
+  { group: "Identities", capability: "Identity request, approval, lifecycle transition, and detail read", operations: "read, request, approve, transition", access: "session or API token; mutations require idempotency" },
+  { group: "Issuers", capability: "Issuer list, issuer detail, and CA authority workflows", operations: "read, create", access: "session or API token; CA mutations require browser session protection" },
+  { group: "Owners", capability: "Owner directory and ownership updates", operations: "read, create, update, delete", access: "session-protected mutations" },
+  { group: "Profiles", capability: "Issuance profile list, create, and version detail", operations: "read, create", access: "session or API token; profile creation is idempotent" },
+  { group: "Risk", capability: "Risk-prioritized credential list", operations: "read, sort, filter", access: "session or API token" },
+  { group: "Secrets", capability: "Native store, PKI secrets, shares, leases, rotation, sync, and machine login", operations: "read metadata, reveal once, create, rotate, delete, issue, redeem, renew, revoke", access: "session or API token; values are never stored in browser storage" },
 ];
 
 const cliCommands = [
   {
     context: "Certificate inventory",
     command: "trstctl-cli certificates list --limit 50 --format json",
-    parity: "same list contract as GET /api/v1/certificates",
+    parity: "same list contract as the certificate inventory",
   },
   {
     context: "Audit evidence",
     command: "trstctl-cli audit export --limit 500 --output audit-evidence.jws",
-    parity: "same signed bundle as GET /api/v1/audit/export",
+    parity: "same signed bundle as audit export",
   },
   {
     context: "Graph blast radius",
     command: "trstctl-cli graph blast-radius cert:payments-api --format json",
-    parity: "same graph result as /api/v1/graph/blast-radius/{id}",
+    parity: "same graph result as blast-radius analysis",
   },
   {
     context: "Agent enrollment",
@@ -134,82 +97,12 @@ const cliCommands = [
   {
     context: "Access administration",
     command: "trstctl-cli access members list --include_offboarded true --format json",
-    parity: "same member/offboarding contract as GET /api/v1/access/members",
+    parity: "same member/offboarding contract as access administration",
   },
   {
     context: "Approver token mint",
     command: "trstctl-cli access tokens create -f approver-token.json --format json",
-    parity: "same reveal-once token contract as POST /api/v1/access/api-tokens",
-  },
-];
-
-const runtimeRows = [
-  {
-    field: "Binary version",
-    visible: "not shown in the console yet",
-    meaning: "Build info exists in the binary, but no console status JSON is served.",
-  },
-  {
-    field: "Embedded UI asset",
-    visible: "current bundle is served statically",
-    meaning: "The browser receives a hashed Vite bundle, but the backend does not expose an asset-version field.",
-  },
-  {
-    field: "Run mode",
-    visible: "child signer mode documented, not observed",
-    meaning: "Single-binary mode still supervises a separate signer child process; UI status needs a served read.",
-  },
-  {
-    field: "Datastore mode",
-    visible: "PostgreSQL required",
-    meaning: "Bundled eval versus external production mode is not readable from the console yet.",
-  },
-  {
-    field: "Signer supervision",
-    visible: "not served",
-    meaning: "The page must not guess whether the signer child is alive; /readyz is not enough detail for operators.",
-  },
-];
-
-const federationRows = [
-  {
-    topic: "Cluster topology",
-    state: "config-enabled",
-    caveat: "peer ids, regions, and NATS URLs are configured at startup",
-  },
-  {
-    topic: "Event-log replication",
-    state: "served worker",
-    caveat: "leader imports peer events into the local log with a durable source cursor",
-  },
-  {
-    topic: "Tenant placement",
-    state: "passive failover",
-    caveat: "one writable region per tenant; passive regions serve replicated read state",
-  },
-];
-
-const pluginAdminRows = [
-  {
-    plugin: "connector-f5.wasm",
-    provenance: "Ed25519 signature required; digest pin sha256:4cf2...ab91",
-    grants: "net.dial:f5.example.test",
-    conformance: "fixture: OK before admission",
-    runtime: "served introspection read missing",
-  },
-  {
-    plugin: "dns-route53.wasm",
-    provenance: "unsigned plugin would fail closed before instantiation",
-    grants: "net.dial:route53.amazonaws.com",
-    conformance: "fixture: denied CapFSWrite request",
-    runtime: "activation blocked in console",
-  },
-  {
-    plugin: "connector-nginx.wasm",
-    provenance: "trusted-key set required",
-    grants: "fs.write:/etc/nginx/certs, process.exec:nginx",
-    conformance: "fixture: grant-limited",
-    runtime: "console management is coming soon",
+    parity: "same reveal-once token contract as approver-token minting",
   },
 ];
 
@@ -233,8 +126,6 @@ function browserTransport(): { label: string; detail: string; warning?: string }
 export function Platform() {
   const { user, preview } = useAuth();
   const transport = browserTransport();
-  const nonLedgerSurfaces = realGuiSurfaces.filter((s) => s.routes.some((route) => route !== "/coverage"));
-  const [copiedRoute, setCopiedRoute] = useState<string | null>(null);
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
   const [roles, setRoles] = useState<RoleList | null>(null);
   const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
@@ -342,22 +233,12 @@ export function Platform() {
     }
   }
 
-  async function copyCurl(route: StaticAPIRoute) {
-    const command = curlFor(route);
-    try {
-      await navigator.clipboard?.writeText(command);
-      setCopiedRoute(route.path);
-    } catch {
-      setCopiedRoute(route.path);
-    }
-  }
-
   return (
     <section aria-labelledby="platform-heading" className="grid gap-6">
       <PageHeader
         titleId="platform-heading"
         title="Platform"
-        description="Tenant context, access-control evidence, browser transport posture, auth status, and a static API-spec view."
+        description="Tenant context, access-control evidence, browser transport posture, auth status, and API capability view."
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -397,7 +278,7 @@ export function Platform() {
           <dl className="mt-3 grid gap-2 text-sm">
             <div>
               <dt className="font-medium text-muted-foreground">Mode visible to UI</dt>
-              <dd>{preview ? "local preview session" : "served /auth/me session"}</dd>
+              <dd>{preview ? "local preview session" : "authenticated session"}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">CSRF cookie</dt>
@@ -509,7 +390,7 @@ export function Platform() {
         <div className="mb-4 grid gap-4 xl:grid-cols-2">
           <div className="overflow-x-auto rounded-panel border border-border">
             <table className="ui-table min-w-[34rem]">
-              <caption className="sr-only">Served role catalog</caption>
+              <caption className="sr-only">Role catalog</caption>
               <thead>
                 <tr>
                   <th scope="col">Role</th>
@@ -539,7 +420,7 @@ export function Platform() {
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">Mappings</dt>
-                <dd>{oidc?.tenant_mappings?.length ? oidc.tenant_mappings.map((m) => m.group || m.subject || m.claim).join(", ") : "none served"}</dd>
+                <dd>{oidc?.tenant_mappings?.length ? oidc.tenant_mappings.map((m) => m.group || m.subject || m.claim).join(", ") : "none"}</dd>
               </div>
             </dl>
           </div>
@@ -619,44 +500,30 @@ export function Platform() {
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 id="api-spec-heading" className="text-title font-semibold">
-              Static API spec view
+              API capability view
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {staticAPIRoutes.length} served REST paths copied from the pinned OpenAPI golden. This is a static spec view until a live `/api/v1/openapi.json`
-              is published.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{apiCapabilities.length} capability groups from the product API contract.</p>
           </div>
-          <span className="rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">Spec view</span>
+          <span className="rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">Capability view</span>
         </div>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[60rem]">
-            <caption className="sr-only">Static served REST API paths</caption>
+            <caption className="sr-only">API capability groups</caption>
             <thead>
               <tr>
                 <th scope="col">Group</th>
-                <th scope="col">Methods</th>
-                <th scope="col">Path</th>
-                <th scope="col">Auth mode</th>
-                <th scope="col">Curl</th>
+                <th scope="col">Capability</th>
+                <th scope="col">Operations</th>
+                <th scope="col">Access posture</th>
               </tr>
             </thead>
             <tbody>
-              {staticAPIRoutes.map((route) => (
-                <tr key={route.path} className="align-top">
-                  <td>{route.group}</td>
-                  <td className="font-mono text-xs">{route.methods.join(", ")}</td>
-                  <td className="font-mono text-xs">{route.path}</td>
-                  <td>{route.auth}</td>
-                  <td>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <code className="max-w-md break-all rounded bg-muted px-2 py-1 text-xs">{curlFor(route)}</code>
-                      <Button type="button" size="sm" variant="outline" onClick={() => void copyCurl(route)}>
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                        Copy curl
-                      </Button>
-                    </div>
-                    {copiedRoute === route.path && <p className="mt-1 text-xs text-muted-foreground">Copied without token material.</p>}
-                  </td>
+              {apiCapabilities.map((capability) => (
+                <tr key={capability.group} className="align-top">
+                  <td>{capability.group}</td>
+                  <td>{capability.capability}</td>
+                  <td>{capability.operations}</td>
+                  <td>{capability.access}</td>
                 </tr>
               ))}
             </tbody>
@@ -670,8 +537,8 @@ export function Platform() {
             CLI companion
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and
-            the examples avoid inline Authorization headers.
+            These commands mirror the same customer workflows. The browser never renders bearer token values, and the examples avoid inline Authorization
+            headers.
           </p>
         </div>
         <div className="overflow-x-auto rounded-panel border border-border">
@@ -697,168 +564,8 @@ export function Platform() {
         </div>
       </section>
 
-      <section aria-labelledby="runtime-heading" className="grid gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="runtime-heading" className="text-title font-semibold">
-            Single-binary runtime
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Single-binary evaluation mode still keeps private-key operations in a separate signer child process. A real system page needs version, build info,
-            embedded-UI asset, run mode, datastore mode, and signer supervision from a served status read.
-          </p>
-        </div>
-        <UnavailableState title="Runtime status JSON not served yet">
-          Binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision aren't shown in the console yet, so
-          this page can't show live runtime state.
-        </UnavailableState>
-        <div className="overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">Single-binary runtime status fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Field</th>
-                <th scope="col">Console visibility</th>
-                <th scope="col">Meaning</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runtimeRows.map((row) => (
-                <tr key={row.field} className="align-top">
-                  <td className="font-medium">{row.field}</td>
-                  <td>{row.visible}</td>
-                  <td>{row.meaning}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="surfaces-heading">
-        <h2 id="surfaces-heading" className="mb-3 text-title font-semibold">
-          Registered real surfaces
-        </h2>
-        <table className="ui-table">
-          <caption className="sr-only">Real GUI route registry</caption>
-          <thead>
-            <tr>
-              <th scope="col">Feature</th>
-              <th scope="col">Routes</th>
-              <th scope="col">Kind</th>
-              <th scope="col">Evidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {nonLedgerSurfaces.map((surface) => (
-              <tr key={surface.featureId} className="align-top">
-                <td className="font-mono text-xs">{surface.featureId}</td>
-                <td>{surface.routes.join(", ")}</td>
-                <td>{surface.kind}</td>
-                <td>{surface.evidence}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section aria-labelledby="plugin-admin-heading" className="grid gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="plugin-admin-heading" className="text-title font-semibold">
-            Plugin SDK and capability sandbox
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Plugin administration needs loaded-plugin inventory, Ed25519 provenance, digest pins, capability grants, conformance results, runtime status, and
-            denial reasons. The plugin host exists, but the console has no served read API for those records yet.
-          </p>
-        </div>
-        <UnavailableState title="Plugin admin read API not served yet">
-          The plugin runtime is served, but plugin administration is not. Tenant-scoped plugin inventory, verification receipts, grants, conformance results,
-          runtime state, and denial reasons have no served API or CLI management surface yet.
-        </UnavailableState>
-        <div className="overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[72rem]">
-            <caption className="sr-only">Plugin SDK capability sandbox fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Plugin</th>
-                <th scope="col">Provenance</th>
-                <th scope="col">Capability grants</th>
-                <th scope="col">Conformance</th>
-                <th scope="col">Runtime status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pluginAdminRows.map((row) => (
-                <tr key={row.plugin} className="align-top">
-                  <td className="font-mono text-xs">{row.plugin}</td>
-                  <td>{row.provenance}</td>
-                  <td className="font-mono text-xs">{row.grants}</td>
-                  <td>{row.conformance}</td>
-                  <td>{row.runtime}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="federation-heading" className="grid gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="federation-heading" className="text-title font-semibold">
-            Cross-cluster federation
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Passive-region federation imports peer event logs into the local log and projects that read state locally. The console shows the shipped operating
-            model; live peer lag and cursor status remain metrics/runbook checks.
-          </p>
-        </div>
-        <UnavailableState title="Passive-read-state model">
-          Federation is configured at startup and runs as a leader-only worker. Keep one writable region per tenant, verify the passive peer cursor and projection
-          lag before promotion, and use the configured RPO/RTO in the failover runbook.
-        </UnavailableState>
-        <div className="overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[52rem]">
-            <caption className="sr-only">Federation operating model</caption>
-            <thead>
-              <tr>
-                <th scope="col">Topic</th>
-                <th scope="col">State</th>
-                <th scope="col">Caveat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {federationRows.map((row) => (
-                <tr key={row.topic} className="align-top">
-                  <td className="font-medium">{row.topic}</td>
-                  <td>{row.state}</td>
-                  <td>{row.caveat}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <UnavailableState title="Tenant switching not served yet">
-          Member, role, OIDC mapping, and API-token administration are served above. Tenant list, tenant switching, and per-tenant limits are still fixed by the
-          backend session tenant.
-        </UnavailableState>
-        <UnavailableState title="Platform status endpoint not served yet">
-          Build info, datastore mode, signer-child state, OIDC config, and feature flags aren't shown in the console yet.
-        </UnavailableState>
-        <UnavailableState title="Live OpenAPI endpoint not served yet">
-          Runtime OpenAPI publication isn't available yet; the table above is a static spec view from the pinned golden.
-        </UnavailableState>
-      </div>
     </section>
   );
-}
-
-function curlFor(route: StaticAPIRoute): string {
-  const method = route.methods[0];
-  const header = method === "GET" ? "" : " -H 'Content-Type: application/json'";
-  return `curl -X ${method}${header} https://trstctl.example.test${route.path}`;
 }
 
 function csvList(value: string): string[] {

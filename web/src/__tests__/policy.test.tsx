@@ -28,7 +28,7 @@ describe("policy governance surface", () => {
     apiMock.exportAudit.mockReset();
   });
 
-  it("explains served policy outcomes and keeps authoring/dry-run honestly blocked", () => {
+  it("explains policy outcomes and keeps authoring/dry-run honestly blocked", () => {
     renderPolicy();
 
     expect(screen.getByRole("heading", { name: "Policy" })).toBeInTheDocument();
@@ -40,7 +40,7 @@ describe("policy governance surface", () => {
     expect(screen.getByText(/policy.decision deny/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Audit policy decisions/i })).toHaveAttribute("href", "/audit?type=policy.decision");
     expect(screen.getByRole("link", { name: /profile evaluation evidence/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
-    expect(screen.getByText("Policy authoring and dry-run API not served yet")).toBeInTheDocument();
+    expect(screen.getByText("Policy authoring and dry-run coming soon")).toBeInTheDocument();
     expect(screen.getByText(/lifecycle mutations remain the real enforcement path/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /dry run/i })).not.toBeInTheDocument();
   });
@@ -55,14 +55,14 @@ describe("policy governance surface", () => {
     expect(screen.getByText("secret://notify/slack/prod:****")).toBeInTheDocument();
     expect(screen.getByText("secret://notify/webhook/prod:****")).toBeInTheDocument();
     expect(screen.getByText(/response body redacted/i)).toBeInTheDocument();
-    expect(screen.getByText("Notification channel controls not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/Expiry-alert dispatch is served through the scheduler and outbox/i)).toBeInTheDocument();
+    expect(screen.getByText("Notification channel controls coming soon")).toBeInTheDocument();
+    expect(screen.getByText(/Expiry-alert dispatch runs through the scheduler and outbox/i)).toBeInTheDocument();
     expect(screen.getByText(/cannot operate notification integrations/i)).toBeInTheDocument();
     expect(screen.queryByText(/xoxb-|pagerduty_api_key|webhook-token-/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /test delivery|configure channel|send notification/i })).not.toBeInTheDocument();
   });
 
-  it("exports served audit evidence while keeping compliance reports library-only", async () => {
+  it("exports audit evidence while keeping compliance reports blocked", async () => {
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "signed.audit.bundle" });
     const user = userEvent.setup();
     renderPolicy();
@@ -74,7 +74,7 @@ describe("policy governance surface", () => {
     expect(screen.getByText("FedRAMP")).toBeInTheDocument();
     expect(screen.getByText("CNSA 2.0")).toBeInTheDocument();
     expect(screen.getAllByText(/evidence, not certification/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Framework-mapped compliance posture is not served yet")).toBeInTheDocument();
+    expect(screen.getByText("Framework-mapped compliance posture coming soon")).toBeInTheDocument();
     expect(screen.getByText(/not a compliance certificate/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Export audit evidence" }));

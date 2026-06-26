@@ -1,14 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Protocols } from "@/pages/Protocols";
 
-function renderProtocols() {
-  return render(
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    protocolStatuses: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...apiMock } };
+});
+
+async function renderProtocols() {
+  const result = render(
     <MemoryRouter>
       <Protocols />
     </MemoryRouter>,
   );
+  await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
+  await screen.findByText("ACME directory responded.");
+  return result;
 }
 
 function installClipboardSpy() {
@@ -25,21 +39,81 @@ function installClipboardSpy() {
   return writeText;
 }
 
-describe("served-gated protocol surface", () => {
-  it("renders ACME setup without claiming live enabled state", async () => {
+describe("protocol surface", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    apiMock.protocolStatuses.mockReset();
+    apiMock.protocolStatuses.mockResolvedValue({
+      source: "public_responder_probe",
+      checked_at: "2026-06-26T14:00:00Z",
+      items: [
+        {
+          protocol: "acme",
+          endpoint: "/directory",
+          enabled: true,
+          served: true,
+          status_code: 200,
+          detail: "ACME directory responded.",
+        },
+        {
+          protocol: "est",
+          endpoint: "/.well-known/est/cacerts",
+          enabled: true,
+          served: true,
+          status_code: 200,
+          detail: "EST CA-certs responder returned a chain.",
+        },
+        {
+          protocol: "scep",
+          endpoint: "/scep?operation=GetCACaps",
+          enabled: false,
+          served: false,
+          status_code: 404,
+          detail: "SCEP responder is not mounted.",
+        },
+        {
+          protocol: "cmp",
+          endpoint: "/cmp",
+          enabled: true,
+          served: true,
+          status_code: 405,
+          detail: "CMP route is mounted and expects a PKIMessage request.",
+        },
+        {
+          protocol: "ssh",
+          endpoint: "/ssh/ca",
+          enabled: true,
+          served: true,
+          status_code: 200,
+          detail: "SSH CA public-key endpoint responded.",
+        },
+        {
+          protocol: "tsa",
+          endpoint: "/tsa",
+          enabled: true,
+          served: true,
+          status_code: 405,
+          detail: "TSA route is mounted and expects a timestamp request.",
+        },
+      ],
+    });
+  });
+
+  it("renders ACME setup with live responder status", async () => {
     const writeText = installClipboardSpy();
-    renderProtocols();
+    await renderProtocols();
 
     expect(screen.getByRole("heading", { name: "Protocols" })).toBeInTheDocument();
-    expect(screen.getAllByText("GET /directory + POST /acme/...").length).toBeGreaterThan(0);
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_ACME_ENABLED")).toBeInTheDocument();
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_ACME_TENANT_ID")).toBeInTheDocument();
-    expect(screen.getByText("Live enabled-state is not served yet")).toBeInTheDocument();
-    expect(screen.getAllByText(/isn't surfaced in the console yet/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/protocol servers themselves are served-gated and default off/i)).toBeInTheDocument();
+    expect(screen.getAllByText("ACME directory, account, order, challenge, and certificate issuance flow").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Protocol enabled").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Tenant binding").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Protocol responder status" })).toBeInTheDocument();
+    expect(screen.getByText("Read-only responder probe")).toBeInTheDocument();
+    expect(screen.getAllByText("Enabled").length).toBeGreaterThan(0);
+    expect(screen.getByText("/directory")).toBeInTheDocument();
+    expect(screen.getAllByText("HTTP 200").length).toBeGreaterThan(0);
     expect(screen.getByText(/issuance refuses requests when no issuing CA\/profile/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Status unknown to console").length).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByText(/^enabled$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Status unknown to console")).not.toBeInTheDocument();
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Copy ACME certbot command" }));
@@ -49,39 +123,45 @@ describe("served-gated protocol surface", () => {
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
   });
 
-  it("renders EST, SCEP, and CMP endpoints with transcript reads honestly unavailable", () => {
-    renderProtocols();
+  it("renders EST, SCEP, and CMP surfaces with transcript reads honestly unavailable", async () => {
+    await renderProtocols();
 
-    expect(screen.getAllByText("GET /.well-known/est/cacerts + POST /.well-known/est/simpleenroll").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("GET/POST /scep").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("POST /cmp").length).toBeGreaterThan(0);
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_EST_TENANT_ID")).toBeInTheDocument();
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_SCEP_TENANT_ID")).toBeInTheDocument();
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_CMP_TENANT_ID")).toBeInTheDocument();
-    expect(screen.getAllByText("TRSTCTL_PROTOCOLS_RA_KEY_FILE").length).toBe(2);
-    expect(screen.getByText("EST enrollment transcript not served yet")).toBeInTheDocument();
-    expect(screen.getByText("SCEP enrollment transcript not served yet")).toBeInTheDocument();
-    expect(screen.getByText("CMP enrollment transcript not served yet")).toBeInTheDocument();
+    expect(screen.getAllByText("CA certificate download and simple enrollment flow").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("SCEP CA discovery and PKI operation flow").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CMP enrollment request flow").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("RA key file").length).toBe(2);
+    expect(screen.getByText("/scep?operation=GetCACaps")).toBeInTheDocument();
+    expect(screen.getByText("SCEP responder is not mounted.")).toBeInTheDocument();
+    expect(screen.getAllByText("Off").length).toBeGreaterThan(0);
+    expect(screen.getByText("/cmp")).toBeInTheDocument();
+    expect(screen.getByText("CMP route is mounted and expects a PKIMessage request.")).toBeInTheDocument();
+    expect(screen.getAllByText("Served").length).toBeGreaterThan(0);
+    expect(screen.getByText("EST enrollment transcript coming soon")).toBeInTheDocument();
+    expect(screen.getByText("SCEP enrollment transcript coming soon")).toBeInTheDocument();
+    expect(screen.getByText("CMP enrollment transcript coming soon")).toBeInTheDocument();
     expect(screen.getAllByText(/does not invent order, challenge, or transcript data/i).length).toBeGreaterThan(0);
   });
 
   it("renders SPIFFE, SSH CA, and TSA setup without exposing private key material", async () => {
     const writeText = installClipboardSpy();
-    renderProtocols();
+    await renderProtocols();
 
-    expect(screen.getAllByText("gRPC UDS /tmp/trstctl-spiffe-workload.sock").length).toBeGreaterThan(0);
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN")).toBeInTheDocument();
-    expect(screen.getByText("SPIFFE live workload status not served yet")).toBeInTheDocument();
+    expect(screen.getAllByText("Workload API socket issuing X.509-SVID and JWT-SVID credentials").length).toBeGreaterThan(0);
+    expect(screen.getByText("Trust domain")).toBeInTheDocument();
+    expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
+    expect(screen.getByText("Not browser-readable")).toBeInTheDocument();
+    expect(screen.getByText("SPIFFE live workload status coming soon")).toBeInTheDocument();
     expect(screen.getByText(/X.509-SVID and JWT-SVID support/i)).toBeInTheDocument();
 
-    expect(screen.getAllByText("GET /ssh/ca + POST /ssh/issue/user|host + GET /ssh/krl").length).toBeGreaterThan(0);
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_SSH_TENANT_ID")).toBeInTheDocument();
-    expect(screen.getByText("SSH issue/revoke log not served yet")).toBeInTheDocument();
+    expect(screen.getAllByText("SSH CA public key, user/host certificate issuance, and revocation list flow").length).toBeGreaterThan(0);
+    expect(screen.getByText("SSH issue/revoke log coming soon")).toBeInTheDocument();
     expect(screen.getByText(/OpenSSH binary KRL/i)).toBeInTheDocument();
 
-    expect(screen.getAllByText("POST /tsa").length).toBeGreaterThan(0);
-    expect(screen.getByText("TRSTCTL_PROTOCOLS_TSA_CERT_FILE")).toBeInTheDocument();
-    expect(screen.getByText("TSA issuance health not served yet")).toBeInTheDocument();
+    expect(screen.getAllByText("RFC 3161 timestamp request flow").length).toBeGreaterThan(0);
+    expect(screen.getByText("TSA certificate file")).toBeInTheDocument();
+    expect(screen.getByText("/tsa")).toBeInTheDocument();
+    expect(screen.getByText("TSA route is mounted and expects a timestamp request.")).toBeInTheDocument();
+    expect(screen.getByText("TSA issuance health coming soon")).toBeInTheDocument();
     expect(screen.getByText(/openssl ts -query/i)).toBeInTheDocument();
     expect(screen.getByText(/openssl ts -verify/i)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
@@ -94,34 +174,32 @@ describe("served-gated protocol surface", () => {
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/PRIVATE KEY|password/i));
   });
 
-  it("renders ARI as protocol-status gated with the durable-state caveat", () => {
-    renderProtocols();
+  it("renders ARI as protocol-status gated with the durable-state caveat", async () => {
+    await renderProtocols();
 
     expect(screen.getByRole("heading", { name: "ACME Renewal Information (ARI)" })).toBeInTheDocument();
-    expect(screen.getByText("ACME enabled state unknown to console")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText("ACME responder")).toBeInTheDocument();
+    expect(screen.getByText(/Renewal-window publishing stays read-only/i)).toBeInTheDocument();
     expect(screen.getByText(/ARI recommendations must survive process restart/i)).toBeInTheDocument();
     expect(screen.getByText(/client renewal windows and Retry-After guidance/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();
   });
 
-  it("renders DNS-01 provider and plugin disclosures without raw provider-token controls", () => {
-    renderProtocols();
+  it("renders DNS-01 provider and plugin disclosures without raw provider-token controls", async () => {
+    await renderProtocols();
 
     expect(screen.getByRole("heading", { name: "ACME DNS validation" })).toBeInTheDocument();
     expect(screen.getByText("secret://dns/cloudflare/prod")).toBeInTheDocument();
     expect(screen.getByText(/Raw DNS provider tokens are never typed into this console/i)).toBeInTheDocument();
     expect(screen.getByText("Built-in provider")).toBeInTheDocument();
     expect(screen.getByText("Plugin provider")).toBeInTheDocument();
-    expect(screen.getByText(/activation is blocked until verified conformance, provenance, and capability grants are served/i)).toBeInTheDocument();
+    expect(screen.getByText(/activation is blocked until verified conformance, provenance, and capability grants are available/i)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /activate|preflight|save provider/i })).not.toBeInTheDocument();
   });
 
-  it("renders CNAME, CAA, validation-method, and wildcard previews as non-interactive fixtures", () => {
-    renderProtocols();
+  it("renders CNAME, CAA, validation-method, and wildcard previews as non-interactive fixtures", async () => {
+    await renderProtocols();
 
     expect(screen.getByText("_acme-challenge.example.test CNAME _acme-challenge.acme-validation.example.net")).toBeInTheDocument();
     expect(screen.getByText(/fails validation isolation policy/i)).toBeInTheDocument();
@@ -138,19 +216,19 @@ describe("served-gated protocol surface", () => {
     expect(screen.queryByRole("button", { name: /issue wildcard|acknowledge wildcard|run challenge/i })).not.toBeInTheDocument();
   });
 
-  it("renders Intune and MDM enrollment as a SCEP-conditional library-only disclosure", () => {
-    renderProtocols();
+  it("renders Intune and MDM enrollment as a SCEP-conditional disclosure", async () => {
+    await renderProtocols();
 
     expect(screen.getByRole("heading", { name: "Intune / MDM enrollment" })).toBeInTheDocument();
-    expect(screen.getByText(/conditional on SCEP being served and enabled/i)).toBeInTheDocument();
-    expect(screen.getByText("MDM gate is library-only")).toBeInTheDocument();
-    expect(screen.getByText(/run in the library\/API today — console management is coming soon/i)).toBeInTheDocument();
-    expect(screen.getByText(/Live SCEP enabled-state also isn't surfaced here yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/follows the SCEP responder status/i)).toBeInTheDocument();
+    expect(screen.getByText("MDM gate controls coming soon")).toBeInTheDocument();
+    expect(screen.getByText(/run outside this console today/i)).toBeInTheDocument();
+    expect(screen.getByText(/verify whether the enrollment endpoint is available/i)).toBeInTheDocument();
     expect(screen.getByText("challenge-required")).toBeInTheDocument();
     expect(screen.getByText("challenge-missing")).toBeInTheDocument();
     expect(screen.getByText("scep-disabled")).toBeInTheDocument();
     expect(screen.getAllByText(/Intune profile guidance/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/challenge rotation remains library-only/i)).toBeInTheDocument();
+    expect(screen.getByText(/Challenge rotation and enrollment failures stay in fixture form/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /rotate challenge|sync intune|retry enrollment/i })).not.toBeInTheDocument();
   });
 });

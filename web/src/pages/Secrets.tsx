@@ -6,149 +6,24 @@ import { DetailDrawer } from "@/components/DetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type MachineLoginResponse, type PKISecret, type SecretMeta, type SecretValue, type ShareToken, type ShareValue } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type DynamicLease,
+  type EphemeralAPIKey,
+  type MachineLoginResponse,
+  type PKISecret,
+  type SecretMeta,
+  type SecretScan,
+  type SecretSync,
+  type SecretValue,
+  type ShareToken,
+  type ShareValue,
+  type TransitCiphertext,
+  type TransitHMAC,
+  type TransitSignature,
+} from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
-
-const ephemeralKeyRows = [
-  {
-    request: "ci/deploy preview",
-    scope: "repo:payments read, deploy:staging write",
-    ttl: "15 minutes",
-    approval: "release manager approval required",
-    status: "served route returns the API key once",
-  },
-  {
-    request: "partner import",
-    scope: "api:ingest write, owner:partner-a",
-    ttl: "30 minutes",
-    approval: "owner and security approval required",
-    status: "leaseworker records api_token.revoked at expiry",
-  },
-];
-
-const scanningRows = [
-  {
-    source: "github.com/example/payments",
-    detector: "generic-api-key",
-    fingerprint: "sha256:6e5a...91bb",
-    owner: "payments-platform",
-    action: "rotate via native store, then mark false-positive if detector context is wrong",
-  },
-  {
-    source: "buildkite://pipeline/release-42",
-    detector: "private-key-block",
-    fingerprint: "sha256:8c0d...1ad3",
-    owner: "release-engineering",
-    action: "block promotion, page owner, and attach redacted snippet only",
-  },
-];
-
-const dynamicSecretRows = [
-  {
-    backend: "postgresql",
-    role: "readonly-reporting",
-    lease: "TTL 20 minutes",
-    health: "provider configured by operator",
-    status: "real PostgreSQL login role is dropped on revoke",
-  },
-  {
-    backend: "aws-iam",
-    role: "s3-audit-writer",
-    lease: "TTL 10 minutes",
-    health: "provider configured by operator",
-    status: "IAM access key is deleted on revoke",
-  },
-  {
-    backend: "kubernetes",
-    role: "namespace-reader",
-    lease: "TTL 15 minutes",
-    health: "provider configured by operator",
-    status: "ServiceAccount token lease deletes its account",
-  },
-  {
-    backend: "redis",
-    role: "cache-reader",
-    lease: "TTL 10 minutes",
-    health: "provider configured by operator",
-    status: "ACL user is deleted on revoke",
-  },
-];
-
-const transitRows = [
-  {
-    key: "payments-pii",
-    operation: "encrypt/decrypt test",
-    version: "v4 active, v3 decrypt-only",
-    posture: "test plaintext is local-only and never sent from this disclosure",
-    audit: "rewrap and audit receipts are library-only",
-  },
-  {
-    key: "artifact-integrity",
-    operation: "HMAC, sign, verify",
-    version: "v2 active",
-    posture: "appliance profile: KMIP cluster prod-east",
-    audit: "no live transit operation is available from the browser",
-  },
-];
-
-const syncRows = [
-  {
-    target: "Kubernetes",
-    mapping: "app/db/password -> Secret/payments-db",
-    credential: "secret://sync/kubernetes/prod:****",
-    status: "push queued through outbox when served",
-    rollback: "restore previous resourceVersion",
-  },
-  {
-    target: "GitHub Actions",
-    mapping: "ci/npm-token -> org secret NPM_TOKEN",
-    credential: "secret://sync/github/prod:****",
-    status: "drift detection not served",
-    rollback: "reapply previous encrypted value receipt",
-  },
-  {
-    target: "GitLab CI",
-    mapping: "deploy/key -> masked protected variable",
-    credential: "secret://sync/gitlab/prod:****",
-    status: "push status not served",
-    rollback: "restore previous variable version",
-  },
-  {
-    target: "Terraform Cloud",
-    mapping: "cloud/api -> workspace variable",
-    credential: "secret://sync/terraform/prod:****",
-    status: "outbox delivery receipt not served",
-    rollback: "restore prior variable ID",
-  },
-  {
-    target: "Vercel",
-    mapping: "webhook/signing -> project env var",
-    credential: "secret://sync/vercel/prod:****",
-    status: "platform write is library-only",
-    rollback: "reactivate previous env version",
-  },
-  {
-    target: "Netlify",
-    mapping: "edge/token -> site env var",
-    credential: "secret://sync/netlify/prod:****",
-    status: "delivery receipt isn't shown in the console yet",
-    rollback: "restore previous deploy context",
-  },
-  {
-    target: "AWS Parameter Store",
-    mapping: "service/api-key -> /payments/api-key",
-    credential: "secret://sync/aws-ps/prod:****",
-    status: "target credential reference is masked",
-    rollback: "restore previous parameter version",
-  },
-  {
-    target: "Webhook",
-    mapping: "rotation event -> signed webhook payload",
-    credential: "secret://sync/webhook/prod:****",
-    status: "duplicate-safe delivery needs outbox status",
-    rollback: "replay previous delivery receipt",
-  },
-];
 
 export function Secrets() {
   const [items, setItems] = useState<SecretMeta[]>([]);
@@ -205,6 +80,46 @@ export function Secrets() {
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<ShareValue | null>(null);
 
+  const [ephemeralSubject, setEphemeralSubject] = useState("");
+  const [ephemeralScopes, setEphemeralScopes] = useState("");
+  const [ephemeralTTL, setEphemeralTTL] = useState("900");
+  const [ephemeralBusy, setEphemeralBusy] = useState(false);
+  const [ephemeralError, setEphemeralError] = useState<string | null>(null);
+  const [ephemeralKey, setEphemeralKey] = useState<EphemeralAPIKey | null>(null);
+
+  const [leaseProvider, setLeaseProvider] = useState("postgresql");
+  const [leaseRole, setLeaseRole] = useState("");
+  const [leaseTTL, setLeaseTTL] = useState("1200");
+  const [leaseExtendSeconds, setLeaseExtendSeconds] = useState("300");
+  const [leaseBusy, setLeaseBusy] = useState<"issue" | "renew" | "revoke" | null>(null);
+  const [leaseError, setLeaseError] = useState<string | null>(null);
+  const [lease, setLease] = useState<DynamicLease | null>(null);
+  const [leaseCredential, setLeaseCredential] = useState<{ id: string; credential: string } | null>(null);
+
+  const [transitKey, setTransitKey] = useState("");
+  const [transitPlaintext, setTransitPlaintext] = useState("");
+  const [transitAAD, setTransitAAD] = useState("");
+  const [transitCiphertextInput, setTransitCiphertextInput] = useState("");
+  const [transitMessage, setTransitMessage] = useState("");
+  const [transitBusy, setTransitBusy] = useState<"encrypt" | "decrypt" | "hmac" | "rewrap" | "sign" | null>(null);
+  const [transitError, setTransitError] = useState<string | null>(null);
+  const [transitCiphertext, setTransitCiphertext] = useState<TransitCiphertext | null>(null);
+  const [transitPlaintextResult, setTransitPlaintextResult] = useState<string | null>(null);
+  const [transitHMACResult, setTransitHMACResult] = useState<TransitHMAC | null>(null);
+  const [transitSignature, setTransitSignature] = useState<TransitSignature | null>(null);
+
+  const [scanPath, setScanPath] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<SecretScan | null>(null);
+
+  const [syncName, setSyncName] = useState("");
+  const [syncTarget, setSyncTarget] = useState("");
+  const [syncRemoteKey, setSyncRemoteKey] = useState("");
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<SecretSync | null>(null);
+
   async function load(cursor?: string) {
     setLoadError(null);
     setLoading(true);
@@ -213,6 +128,7 @@ export function Secrets() {
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
       setAccessName((current) => current || page.items[0]?.name || "");
+      setSyncName((current) => current || page.items[0]?.name || "");
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
     } finally {
@@ -322,7 +238,7 @@ export function Secrets() {
     try {
       await api.deleteSecret(deleteName);
       setItems((current) => current.filter((item) => item.name !== deleteName));
-      setNotice(`Secret ${deleteName} deleted by the served store endpoint.`);
+      setNotice(`Secret ${deleteName} deleted from the native store.`);
       setDeleteName("");
       setDeleteConfirm("");
     } catch (err) {
@@ -408,12 +324,200 @@ export function Secrets() {
     }
   }
 
+  async function submitEphemeralAPIKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEphemeralError(null);
+    setEphemeralKey(null);
+    setEphemeralBusy(true);
+    try {
+      const subject = ephemeralSubject.trim();
+      const scopes = parseScopeList(ephemeralScopes);
+      const ttl = Number(ephemeralTTL);
+      if (!subject) throw new Error("Subject is required");
+      if (scopes.length === 0) throw new Error("At least one scope is required");
+      if (!Number.isFinite(ttl) || ttl <= 0) throw new Error("TTL seconds must be a positive number");
+      setEphemeralKey(await api.issueEphemeralAPIKey({ subject, scopes, ttl_seconds: Math.round(ttl) }));
+      setEphemeralSubject("");
+      setEphemeralScopes("");
+    } catch (err) {
+      setEphemeralError(apiProblemMessage(err, "Could not issue ephemeral API key"));
+    } finally {
+      setEphemeralBusy(false);
+    }
+  }
+
+  async function submitDynamicLease(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLeaseError(null);
+    setLeaseCredential(null);
+    setLeaseBusy("issue");
+    try {
+      const role = leaseRole.trim();
+      const ttl = Number(leaseTTL);
+      if (!role) throw new Error("Role is required");
+      if (!Number.isFinite(ttl) || ttl <= 0) throw new Error("TTL seconds must be a positive number");
+      const issued = await api.issueDynamicLease({ provider: leaseProvider, role, ttl_seconds: Math.round(ttl) });
+      setLease(leaseMetadataOnly(issued));
+      if (issued.credential) setLeaseCredential({ id: issued.id, credential: issued.credential });
+      setLeaseRole("");
+    } catch (err) {
+      setLeaseError(apiProblemMessage(err, "Could not issue dynamic lease"));
+    } finally {
+      setLeaseBusy(null);
+    }
+  }
+
+  async function renewDynamicLease() {
+    if (!lease) return;
+    setLeaseError(null);
+    setLeaseBusy("renew");
+    try {
+      const extendSeconds = Number(leaseExtendSeconds);
+      if (!Number.isFinite(extendSeconds) || extendSeconds <= 0) throw new Error("Extend seconds must be a positive number");
+      setLease(leaseMetadataOnly(await api.renewDynamicLease(lease.id, { extend_seconds: Math.round(extendSeconds) })));
+    } catch (err) {
+      setLeaseError(apiProblemMessage(err, "Could not renew dynamic lease"));
+    } finally {
+      setLeaseBusy(null);
+    }
+  }
+
+  async function revokeDynamicLease() {
+    if (!lease) return;
+    setLeaseError(null);
+    setLeaseCredential(null);
+    setLeaseBusy("revoke");
+    try {
+      setLease(leaseMetadataOnly(await api.revokeDynamicLease(lease.id)));
+    } catch (err) {
+      setLeaseError(apiProblemMessage(err, "Could not revoke dynamic lease"));
+    } finally {
+      setLeaseBusy(null);
+    }
+  }
+
+  async function encryptTransit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTransitError(null);
+    setTransitPlaintextResult(null);
+    setTransitBusy("encrypt");
+    try {
+      const ciphertext = await api.encryptTransit({
+        key: transitKey.trim(),
+        plaintext: encodeTransitBytes(transitPlaintext),
+        ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
+      });
+      setTransitCiphertext(ciphertext);
+      setTransitCiphertextInput(ciphertext.ciphertext);
+      setTransitPlaintext("");
+    } catch (err) {
+      setTransitError(apiProblemMessage(err, "Could not encrypt plaintext"));
+    } finally {
+      setTransitBusy(null);
+    }
+  }
+
+  async function decryptTransit() {
+    setTransitError(null);
+    setTransitPlaintextResult(null);
+    setTransitBusy("decrypt");
+    try {
+      const result = await api.decryptTransit({
+        key: transitKey.trim(),
+        ciphertext: transitCiphertextInput.trim(),
+        ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
+      });
+      setTransitPlaintextResult(decodeTransitBytes(result.plaintext));
+    } catch (err) {
+      setTransitError(apiProblemMessage(err, "Could not decrypt ciphertext"));
+    } finally {
+      setTransitBusy(null);
+    }
+  }
+
+  async function hmacTransit() {
+    setTransitError(null);
+    setTransitHMACResult(null);
+    setTransitBusy("hmac");
+    try {
+      setTransitHMACResult(await api.hmacTransit({ key: transitKey.trim(), data: encodeTransitBytes(transitMessage) }));
+    } catch (err) {
+      setTransitError(apiProblemMessage(err, "Could not compute HMAC"));
+    } finally {
+      setTransitBusy(null);
+    }
+  }
+
+  async function rewrapTransit() {
+    setTransitError(null);
+    setTransitBusy("rewrap");
+    try {
+      const result = await api.rewrapTransit({
+        key: transitKey.trim(),
+        ciphertext: transitCiphertextInput.trim(),
+        ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
+      });
+      setTransitCiphertext(result);
+      setTransitCiphertextInput(result.ciphertext);
+    } catch (err) {
+      setTransitError(apiProblemMessage(err, "Could not rewrap ciphertext"));
+    } finally {
+      setTransitBusy(null);
+    }
+  }
+
+  async function signTransit() {
+    setTransitError(null);
+    setTransitSignature(null);
+    setTransitBusy("sign");
+    try {
+      setTransitSignature(await api.signTransit({ key: transitKey.trim(), message: encodeTransitBytes(transitMessage) }));
+    } catch (err) {
+      setTransitError(apiProblemMessage(err, "Could not sign message"));
+    } finally {
+      setTransitBusy(null);
+    }
+  }
+
+  async function submitSecretScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScanError(null);
+    setScanBusy(true);
+    try {
+      const path = scanPath.trim();
+      if (!path) throw new Error("Path is required");
+      setScanResult(await api.scanSecrets({ path }));
+    } catch (err) {
+      setScanError(apiProblemMessage(err, "Could not run secret scan"));
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  async function submitSecretSync(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSyncError(null);
+    setSyncBusy(true);
+    try {
+      const name = syncName.trim();
+      const target = syncTarget.trim();
+      const remoteKey = syncRemoteKey.trim();
+      if (!name) throw new Error("Secret name is required");
+      if (!target) throw new Error("Target is required");
+      setSyncResult(await api.syncSecret({ name, target, ...(remoteKey ? { remote_key: remoteKey } : {}) }));
+    } catch (err) {
+      setSyncError(apiProblemMessage(err, "Could not sync secret"));
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="secrets-heading" className="grid gap-6">
       <PageHeader
         titleId="secrets-heading"
         title="Secrets"
-        description="Served secret-store, machine-login, PKI-secret, and one-time-share workflows. Metadata is durable; returned values, keys, and tokens are explicit reveal-once material."
+        description="Secret-store, machine-login, PKI-secret, and one-time-share workflows. Metadata is durable; returned values, keys, and tokens are explicit reveal-once material."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
@@ -430,7 +534,7 @@ export function Secrets() {
 
       {loadError && (
         <UnavailableState title="Secrets API unavailable or disabled">
-          {loadError}. The served `/api/v1/secrets/*` surface is fail-closed until `secrets.enable_api` is enabled and a KEK is configured.
+          {loadError}. Secret operations are fail-closed until the feature is enabled and a key-encryption key is configured.
         </UnavailableState>
       )}
 
@@ -441,8 +545,7 @@ export function Secrets() {
               Native secret store
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              `GET /api/v1/secrets/store` returns names and versions only. Create and rotate send a value to the backend, then this page drops the input and
-              shows metadata.
+              The native store returns names and versions only. Create and rotate send a value once, then this page drops the input and shows metadata.
             </p>
           </div>
         </div>
@@ -488,6 +591,7 @@ export function Secrets() {
                 ? "Create a tenant-scoped native-store secret. Only the name and version return to the metadata table."
                 : "No secret metadata matches the current search."
             }
+            showColumnChooser
             toolbar={({ columnChooser }) => (
               <DataGridToolbar
                 searchLabel="Search native secret metadata"
@@ -510,13 +614,13 @@ export function Secrets() {
         {revealError && <ErrorState title="Reveal failed">{revealError}</ErrorState>}
         {revealed && (
           <RevealPanel title={`Reveal-once value for ${revealed.name}`} onDismiss={() => setRevealed(null)} value={revealed.value}>
-            Version {revealed.version ?? "latest"} returned by <code>GET /api/v1/secrets/store/{"{name}"}</code>. Dismiss clears it from the page.
+            Version {revealed.version ?? "latest"} was returned for this secret. Dismiss clears it from the page.
           </RevealPanel>
         )}
         <DetailDrawer
           open={!!detailSecret}
           title="Secret metadata"
-          description="Served native-store metadata only; secret values are never shown here."
+          description="Native-store metadata only; secret values are never shown here."
           onClose={() => setDetailSecretName(null)}
         >
           {detailSecret && (
@@ -556,13 +660,12 @@ export function Secrets() {
             Manual rotation and delete
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manual native-store rotation is served with <code>PUT /api/v1/secrets/store/{"{name}"}</code>. Rollback-safe static credential rotation is served with{" "}
-            <code>POST /api/v1/secrets/rotations</code>. Scheduled rotation and downstream sync remain backend gaps.
+            Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls are still coming soon.
           </p>
         </div>
-        <UnavailableState title="Scheduled rotation and downstream sync not served yet">
-          The rollback-safe static rotation engine is served by API for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not
-          served by API or CLI yet, so this page exposes only the served per-secret rotate/delete controls.
+        <UnavailableState title="Scheduled rotation and downstream sync coming soon">
+          Rollback-safe static rotation is available for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not yet exposed in
+          this console, so this page offers only per-secret rotate/delete controls.
         </UnavailableState>
         <form aria-label="Rotate secret" onSubmit={(event) => void submitRotate(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -626,8 +729,7 @@ export function Secrets() {
             Developer access
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            SDK and CLI examples target the served store contract and contain only names, tenants, and versions. The access test performs a read without
-            rendering the value.
+            SDK and CLI examples contain only names, tenants, and versions. The access test performs a read without rendering the value.
           </p>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
@@ -670,7 +772,7 @@ export function Secrets() {
             PKI as a secret
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            `POST /api/v1/secrets/pki` returns a short-lived certificate bundle. The private key is shown only in the explicit result panel.
+            Issue a short-lived certificate bundle and reveal the private key only in the explicit result panel.
           </p>
         </div>
         <form aria-label="Issue PKI secret" onSubmit={(event) => void submitPKI(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto]">
@@ -706,7 +808,7 @@ export function Secrets() {
             onDismiss={() => setPkiBundle(null)}
             value={`${pkiBundle.certificate}\n${pkiBundle.private_key}`}
           >
-            Copy or download now. The serial, certificate, and private key came from the served PKI-secret endpoint and are cleared when dismissed.
+            Copy or download now. The serial, certificate, and private key are cleared when dismissed.
           </RevealPanel>
         )}
       </section>
@@ -717,8 +819,7 @@ export function Secrets() {
             Machine login
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            `POST /api/v1/secrets/login` exchanges a machine credential for a scoped workload session. The submitted credential is cleared after submit and
-            never echoed.
+            Exchange a machine credential for a scoped workload session. The submitted credential is cleared after submit and never echoed.
           </p>
         </div>
         <form aria-label="Machine login test" onSubmit={(event) => void submitLogin(event)} className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_auto]">
@@ -748,9 +849,9 @@ export function Secrets() {
         </form>
         {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
         {session && <MachineSession session={session} />}
-        <UnavailableState title="Auth-method administration not served yet">
-          Configured token methods, audience rules, issued-session ledger, and revoked methods aren't available in the console yet. This page exposes only the
-          served login exchange.
+        <UnavailableState title="Auth-method administration coming soon">
+          Configured token methods, audience rules, issued-session ledger, and revoked methods are not available in the console yet. This page exposes only the
+          login exchange.
         </UnavailableState>
       </section>
 
@@ -763,8 +864,9 @@ export function Secrets() {
             Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
           </p>
         </div>
-        <UnavailableState title="Secret-change approvals not served yet">
-          Request/approve state for sensitive secret mutations is not served yet. This page exposes the served one-time share path and no fake approval queue.
+        <UnavailableState title="Secret-change approvals coming soon">
+          Request/approve state for sensitive secret mutations is not available in the console yet. This page exposes the one-time share path and no fake
+          approval queue.
         </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-2">
           <form aria-label="Create one-time share" onSubmit={(event) => void submitShare(event)} className="grid content-start gap-3">
@@ -818,7 +920,7 @@ export function Secrets() {
         )}
         {redeemed && (
           <RevealPanel title="Redeemed share value" onDismiss={() => setRedeemed(null)} value={redeemed.value}>
-            This value is the exact-once redeem result. A second redeem should return the served failure.
+            This value is the exact-once redeem result. A second redeem should fail.
           </RevealPanel>
         )}
       </section>
@@ -829,42 +931,62 @@ export function Secrets() {
             Ephemeral API keys
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Scoped, time-bound API-key requests need expiry, revocation evidence, and copy-once presentation. The served ephemeral API key route mints them for
-            short machine workflows.
+            Issue a scoped, short-lived key for a machine task. The server returns the raw token once; after dismissal this page keeps no copy.
           </p>
         </div>
-        <div className="ui-panel grid gap-2 p-comfortable text-body">
-          <h3 className="text-title font-semibold">Ephemeral API-key issuance is served</h3>
-          <p className="text-sm text-muted-foreground">
-            `POST /api/v1/ephemeral/api-keys` and `trstctl-cli ephemeral api-keys issue` return the raw token once, store only its hash, and rely on the
-            leaseworker to mark expired keys with `api_token.revoked`.
-          </p>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+          <form aria-label="Issue ephemeral API key" onSubmit={(event) => void submitEphemeralAPIKey(event)} className="grid content-start gap-3">
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">Subject</span>
+              <input
+                className="rounded-md border border-input bg-background px-3 py-2"
+                value={ephemeralSubject}
+                onChange={(event) => setEphemeralSubject(event.target.value)}
+                placeholder="ci/deploy-preview"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">Scopes</span>
+              <textarea
+                className="min-h-24 rounded-md border border-input bg-background px-3 py-2"
+                value={ephemeralScopes}
+                onChange={(event) => setEphemeralScopes(event.target.value)}
+                placeholder="repo:payments:read, deploy:staging:write"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">TTL seconds</span>
+              <input
+                className="rounded-md border border-input bg-background px-3 py-2"
+                type="number"
+                min="60"
+                value={ephemeralTTL}
+                onChange={(event) => setEphemeralTTL(event.target.value)}
+                required
+              />
+            </label>
+            <Button type="submit" disabled={ephemeralBusy || Boolean(loadError)}>
+              {ephemeralBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+              Issue API key
+            </Button>
+            {ephemeralError && <ErrorState title="Ephemeral API-key issue failed">{ephemeralError}</ErrorState>}
+          </form>
+          <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
+            <h3 className="text-title font-semibold">Reveal-once key issuance</h3>
+            <p className="text-muted-foreground">
+              Send the subject, scopes, and TTL to issue a short-lived token. Copy the returned token from the reveal panel, then dismiss it so browser memory
+              drops the raw key.
+            </p>
+          </div>
         </div>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[56rem]">
-            <caption className="sr-only">Ephemeral API key request fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Request</th>
-                <th scope="col">Scope</th>
-                <th scope="col">Expiry</th>
-                <th scope="col">Approval</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ephemeralKeyRows.map((row) => (
-                <tr key={row.request} className="align-top">
-                  <td className="font-medium">{row.request}</td>
-                  <td>{row.scope}</td>
-                  <td>{row.ttl}</td>
-                  <td>{row.approval}</td>
-                  <td>{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {ephemeralKey && (
+          <RevealPanel title="Ephemeral API key" onDismiss={() => setEphemeralKey(null)} value={ephemeralKey.token}>
+            Key <span className="font-mono text-xs">{ephemeralKey.id}</span> for {ephemeralKey.subject} expires {formatDate(ephemeralKey.expires_at)}. Scopes:{" "}
+            {ephemeralKey.scopes.join(", ")}.
+          </RevealPanel>
+        )}
       </section>
 
       <section aria-labelledby="secret-scanning-heading" className="grid gap-4 border-y border-border py-4">
@@ -873,39 +995,71 @@ export function Secrets() {
             Code and CI secret scanning bridge
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Gitleaks scan ingestion is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run. Browser triage still needs source repo
-            or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling.
+            Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.
           </p>
         </div>
-        <UnavailableState title="Secret-scanning triage is library-only">
-          Findings, redacted snippets, rotation links, owner mapping, and false-positive decisions are library-only. Run ingestion through the served API or
-          CLI; this console does not yet submit scans, suppress false positives, or launch rotation actions from findings.
-        </UnavailableState>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">Secret scanning finding fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Source</th>
-                <th scope="col">Detector</th>
-                <th scope="col">Masked fingerprint</th>
-                <th scope="col">Owner</th>
-                <th scope="col">Rotation / false-positive handling</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scanningRows.map((row) => (
-                <tr key={`${row.source}-${row.detector}`} className="align-top">
-                  <td className="font-medium">{row.source}</td>
-                  <td>{row.detector}</td>
-                  <td className="font-mono text-xs">{row.fingerprint}</td>
-                  <td>{row.owner}</td>
-                  <td>{row.action}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <form aria-label="Run secret scan" onSubmit={(event) => void submitSecretScan(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Path</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={scanPath}
+              onChange={(event) => setScanPath(event.target.value)}
+              placeholder="github.com/example/payments"
+              required
+            />
+          </label>
+          <Button type="submit" className="self-end" disabled={scanBusy || Boolean(loadError)}>
+            {scanBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            Run scan
+          </Button>
+        </form>
+        {scanError && <ErrorState title="Secret scan failed">{scanError}</ErrorState>}
+        {scanResult && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <dl className="grid gap-2 md:grid-cols-4">
+              <div>
+                <dt className="font-medium text-muted-foreground">Run ID</dt>
+                <dd className="break-all font-mono text-xs">{scanResult.run_id}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Scanner</dt>
+                <dd>{scanResult.scanner}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Rules</dt>
+                <dd>{scanResult.rules_active}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Findings</dt>
+                <dd>{scanResult.findings_count}</dd>
+              </div>
+            </dl>
+            <div className="overflow-x-auto">
+              <table className="ui-table min-w-[48rem]">
+                <caption className="sr-only">Secret scan findings</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Rule</th>
+                    <th scope="col">File</th>
+                    <th scope="col">Line</th>
+                    <th scope="col">Redacted reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scanResult.findings.map((finding) => (
+                    <tr key={`${finding.rule_id}-${finding.file}-${finding.line}`} className="align-top">
+                      <td>{finding.rule_id}</td>
+                      <td>{finding.file}</td>
+                      <td className="font-mono text-xs">{finding.line}</td>
+                      <td className="font-mono text-xs">{finding.credential_ref}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
@@ -914,42 +1068,96 @@ export function Secrets() {
             Dynamic secrets
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Dynamic backends produce lease-scoped credentials with issue, renew, revoke, expiry, and copy-once generated credential handling. The served API and
-            CLI are live; a full lease-request UI remains a later workflow.
+            Issue a lease-scoped credential from a configured provider, renew its expiry when needed, or revoke it immediately. Generated credentials are shown
+            once and then cleared from the page.
           </p>
         </div>
-        <div className="ui-panel grid gap-2 p-comfortable text-body">
-          <h3 className="text-title font-semibold">Dynamic secret leases are served</h3>
-          <p className="text-sm text-muted-foreground">
-            `POST /api/v1/secrets/leases` returns the generated credential once. `GET`, `renew`, and `revoke` return metadata only and stay guarded by
-            `secrets:read` / `secrets:write` plus idempotency on mutations.
-          </p>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <form aria-label="Issue dynamic secret lease" onSubmit={(event) => void submitDynamicLease(event)} className="grid content-start gap-3">
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">Provider</span>
+              <select
+                className="rounded-md border border-input bg-background px-3 py-2"
+                value={leaseProvider}
+                onChange={(event) => setLeaseProvider(event.target.value)}
+              >
+                <option value="postgresql">PostgreSQL</option>
+                <option value="aws-iam">AWS IAM</option>
+                <option value="kubernetes">Kubernetes</option>
+                <option value="redis">Redis</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">Role</span>
+              <input
+                className="rounded-md border border-input bg-background px-3 py-2"
+                value={leaseRole}
+                onChange={(event) => setLeaseRole(event.target.value)}
+                placeholder="readonly-reporting"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">TTL seconds</span>
+              <input
+                className="rounded-md border border-input bg-background px-3 py-2"
+                type="number"
+                min="60"
+                value={leaseTTL}
+                onChange={(event) => setLeaseTTL(event.target.value)}
+                required
+              />
+            </label>
+            <Button type="submit" disabled={leaseBusy === "issue" || Boolean(loadError)}>
+              {leaseBusy === "issue" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+              Issue lease
+            </Button>
+          </form>
+          <div className="ui-panel grid content-start gap-3 p-comfortable text-sm">
+            <h3 className="text-title font-semibold">Lease state</h3>
+            {lease ? (
+              <>
+                <DynamicLeaseMetadata lease={lease} />
+                <label className="grid gap-1">
+                  <span className="font-medium">Extend seconds</span>
+                  <input
+                    className="rounded-md border border-input bg-background px-3 py-2"
+                    type="number"
+                    min="60"
+                    value={leaseExtendSeconds}
+                    onChange={(event) => setLeaseExtendSeconds(event.target.value)}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => void renewDynamicLease()} disabled={leaseBusy === "renew" || lease.state === "revoked"}>
+                    {leaseBusy === "renew" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Renew lease
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => void revokeDynamicLease()} disabled={leaseBusy === "revoke" || lease.state === "revoked"}>
+                    {leaseBusy === "revoke" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Revoke lease
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground">No dynamic lease issued yet.</p>
+            )}
+          </div>
         </div>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[52rem]">
-            <caption className="sr-only">Dynamic secret backend fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Backend</th>
-                <th scope="col">Role</th>
-                <th scope="col">Lease TTL</th>
-                <th scope="col">Health</th>
-                <th scope="col">Lease status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dynamicSecretRows.map((row) => (
-                <tr key={`${row.backend}-${row.role}`} className="align-top">
-                  <td className="font-medium">{row.backend}</td>
-                  <td>{row.role}</td>
-                  <td>{row.lease}</td>
-                  <td>{row.health}</td>
-                  <td>{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {leaseError && <ErrorState title="Dynamic lease operation failed">{leaseError}</ErrorState>}
+        {leaseCredential && (
+          <RevealPanel title={`Generated credential for lease ${leaseCredential.id}`} onDismiss={() => setLeaseCredential(null)} value={leaseCredential.credential}>
+            Copy this generated credential now. Renew and revoke actions keep only lease metadata.
+          </RevealPanel>
+        )}
       </section>
 
       <section aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
@@ -958,39 +1166,122 @@ export function Secrets() {
             Transit and KMIP
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Encryption-as-a-service and KMIP need keys, encrypt/decrypt tests, HMAC, sign, verify, versions, rewrap, audit, and appliance profiles. Any test
-            plaintext here is local-only copy, not a live transit operation.
+            Transit operations keep key material server-side. This page base64-encodes local plaintext for the API, clears plaintext inputs after encrypt, and
+            shows decrypted values only in a reveal panel.
           </p>
         </div>
-        <UnavailableState title="Transit and KMIP operations are library-only">
-          Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are library-only. No served transit or KMIP API/CLI
-          surface exists yet.
-        </UnavailableState>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">Transit and KMIP fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Key</th>
-                <th scope="col">Operation</th>
-                <th scope="col">Key versions</th>
-                <th scope="col">Plaintext posture</th>
-                <th scope="col">Audit / rewrap</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transitRows.map((row) => (
-                <tr key={`${row.key}-${row.operation}`} className="align-top">
-                  <td className="font-medium">{row.key}</td>
-                  <td>{row.operation}</td>
-                  <td>{row.version}</td>
-                  <td>{row.posture}</td>
-                  <td>{row.audit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <form aria-label="Transit encrypt and decrypt" onSubmit={(event) => void encryptTransit(event)} className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]">
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Key name</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={transitKey}
+              onChange={(event) => setTransitKey(event.target.value)}
+              placeholder="payments-pii"
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">AAD</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={transitAAD}
+              onChange={(event) => setTransitAAD(event.target.value)}
+              placeholder="optional associated data"
+            />
+          </label>
+          <label className="grid gap-1 text-sm xl:col-span-2">
+            <span className="font-medium">Plaintext</span>
+            <textarea
+              className="min-h-24 rounded-md border border-input bg-background px-3 py-2"
+              value={transitPlaintext}
+              onChange={(event) => setTransitPlaintext(event.target.value)}
+              placeholder="local plaintext to encrypt"
+            />
+          </label>
+          <label className="grid gap-1 text-sm xl:col-span-2">
+            <span className="font-medium">Ciphertext</span>
+            <textarea
+              className="min-h-24 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+              value={transitCiphertextInput}
+              onChange={(event) => setTransitCiphertextInput(event.target.value)}
+              placeholder="encrypted result or ciphertext to decrypt"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2 xl:col-span-2">
+            <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim() || Boolean(loadError)}>
+              {transitBusy === "encrypt" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+              Encrypt
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void decryptTransit()}
+              disabled={transitBusy === "decrypt" || !transitCiphertextInput.trim() || Boolean(loadError)}
+            >
+              {transitBusy === "decrypt" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+              Decrypt
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void rewrapTransit()}
+              disabled={transitBusy === "rewrap" || !transitCiphertextInput.trim() || Boolean(loadError)}
+            >
+              {transitBusy === "rewrap" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RotateCw className="h-4 w-4" aria-hidden="true" />}
+              Rewrap
+            </Button>
+          </div>
+        </form>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <h3 className="text-title font-semibold">Transit result</h3>
+            {transitCiphertext ? (
+              <dl className="grid gap-2">
+                <div>
+                  <dt className="font-medium text-muted-foreground">Ciphertext</dt>
+                  <dd className="break-all font-mono text-xs">{transitCiphertext.ciphertext}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">Key version</dt>
+                  <dd className="font-mono text-xs">v{transitCiphertext.version}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="text-muted-foreground">No transit ciphertext yet.</p>
+            )}
+          </div>
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <h3 className="text-title font-semibold">HMAC and signing</h3>
+            <label className="grid gap-1">
+              <span className="font-medium">Message</span>
+              <textarea
+                className="min-h-20 rounded-md border border-input bg-background px-3 py-2"
+                value={transitMessage}
+                onChange={(event) => setTransitMessage(event.target.value)}
+                placeholder="message bytes to MAC or sign"
+              />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => void hmacTransit()} disabled={transitBusy === "hmac" || !transitMessage.trim() || Boolean(loadError)}>
+                {transitBusy === "hmac" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                Compute HMAC
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void signTransit()} disabled={transitBusy === "sign" || !transitMessage.trim() || Boolean(loadError)}>
+                {transitBusy === "sign" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                Sign message
+              </Button>
+            </div>
+            {transitHMACResult && <Snippet title="HMAC" text={transitHMACResult.hmac} />}
+            {transitSignature && <Snippet title="Signature" text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`} />}
+          </div>
         </div>
+        {transitError && <ErrorState title="Transit operation failed">{transitError}</ErrorState>}
+        {transitPlaintextResult && (
+          <RevealPanel title="Decrypted plaintext" onDismiss={() => setTransitPlaintextResult(null)} value={transitPlaintextResult}>
+            This plaintext was decoded locally from the transit response. Dismiss clears it from the page.
+          </RevealPanel>
+        )}
       </section>
 
       <section aria-labelledby="secret-sync-heading" className="grid gap-4 border-y border-border py-4">
@@ -999,39 +1290,69 @@ export function Secrets() {
             Secret sync and platform integrations
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Secret sync pushes stored values to configured external targets through a sealed outbox before delivery. GitHub Actions, AWS Secrets Manager, and
-            Kubernetes are served today; deeper target authoring and drift workflows stay guarded behind operator configuration.
+            Push a stored secret to a configured target. The browser sends the secret name and remote key only; the stored value is never rendered here.
           </p>
         </div>
-        <UnavailableState title="Secret sync is served by API and CLI">
-          Use POST /api/v1/secrets/syncs or trstctl-cli secrets syncs run with a configured target. This console shows masked mappings and delivery posture
-          only; it does not expose target credentials or push raw secret values from the browser.
-        </UnavailableState>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[72rem]">
-            <caption className="sr-only">Secret sync platform fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Target platform</th>
-                <th scope="col">Mapping</th>
-                <th scope="col">Masked credential reference</th>
-                <th scope="col">Push / drift status</th>
-                <th scope="col">Rollback</th>
-              </tr>
-            </thead>
-            <tbody>
-              {syncRows.map((row) => (
-                <tr key={`${row.target}-${row.mapping}`} className="align-top">
-                  <td className="font-medium">{row.target}</td>
-                  <td>{row.mapping}</td>
-                  <td className="font-mono text-xs">{row.credential}</td>
-                  <td>{row.status}</td>
-                  <td>{row.rollback}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <form aria-label="Sync stored secret" onSubmit={(event) => void submitSecretSync(event)} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]">
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Secret name</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={syncName}
+              onChange={(event) => setSyncName(event.target.value)}
+              placeholder={selectedMeta?.name ?? "app/db/password"}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Target</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={syncTarget}
+              onChange={(event) => setSyncTarget(event.target.value)}
+              placeholder="kubernetes/prod"
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Remote key</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={syncRemoteKey}
+              onChange={(event) => setSyncRemoteKey(event.target.value)}
+              placeholder="Secret/payments-db/password"
+            />
+          </label>
+          <Button type="submit" className="self-end" disabled={syncBusy || Boolean(loadError)}>
+            {syncBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
+            Sync secret
+          </Button>
+        </form>
+        {syncError && <ErrorState title="Secret sync failed">{syncError}</ErrorState>}
+        {syncResult && (
+          <dl className="ui-panel grid gap-3 p-comfortable text-sm md:grid-cols-2 xl:grid-cols-5">
+            <div>
+              <dt className="font-medium text-muted-foreground">Secret</dt>
+              <dd>{syncResult.name}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Target</dt>
+              <dd>{syncResult.target}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Remote key</dt>
+              <dd className="break-all font-mono text-xs">{syncResult.remote_key}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Queue</dt>
+              <dd>{syncResult.enqueued ? "Queued" : "Not queued"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Delivery</dt>
+              <dd>{syncResult.delivered ? "Delivered" : "Not delivered"}</dd>
+            </div>
+          </dl>
+        )}
       </section>
     </section>
   );
@@ -1101,7 +1422,38 @@ function MachineSession({ session }: { session: MachineLoginResponse }) {
       </div>
       <div className="md:col-span-2">
         <dt className="font-medium text-muted-foreground">Scopes</dt>
-        <dd>{session.scopes.join(", ") || "No scopes served"}</dd>
+        <dd>{session.scopes.join(", ") || "No scopes"}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
+  return (
+    <dl className="grid gap-2 md:grid-cols-2">
+      <div>
+        <dt className="font-medium text-muted-foreground">Lease ID</dt>
+        <dd className="break-all font-mono text-xs">{lease.id}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">State</dt>
+        <dd>{lease.state}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">Provider</dt>
+        <dd>{lease.provider}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">Role</dt>
+        <dd>{lease.role}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">Issued</dt>
+        <dd>{formatDate(lease.issued_at)}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">Expires</dt>
+        <dd>{formatDate(lease.expires_at)}</dd>
       </div>
     </dl>
   );
@@ -1113,9 +1465,35 @@ function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): SecretMeta[] 
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
+  const metadata = { ...lease };
+  delete metadata.credential;
+  return metadata;
+}
+
 function formatDate(value?: string): string {
-  if (!value) return "not served";
+  if (!value) return "-";
   return formatDateTimePolicy(value);
+}
+
+function parseScopeList(value: string): string[] {
+  return value
+    .split(/[\n,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+function encodeTransitBytes(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function decodeTransitBytes(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 function apiProblemMessage(err: unknown, fallback: string): string {

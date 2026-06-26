@@ -36,7 +36,7 @@ const custodyRows = [
     backend: "Local sealed key file",
     handle: "sealed://tenant-ca/root",
     purpose: "evaluation and single-node deployments",
-    status: "served hierarchy API binds root/intermediate CAs to signer handles",
+    status: "root and intermediate CAs are bound to signer handles",
   },
   {
     backend: "PKCS#11 HSM",
@@ -47,8 +47,8 @@ const custodyRows = [
   {
     backend: "YubiHSM 2 / cloud KMS",
     handle: "kms://tenant-ca/intermediate",
-    purpose: "generate/import, sign, rotate, revoke, zeroize behind AN-3",
-    status: "needs served custody health and ceremony wiring",
+    purpose: "generate/import, sign, rotate, revoke, and zeroize through the custody boundary",
+    status: "needs custody health and ceremony wiring",
   },
 ];
 
@@ -81,7 +81,7 @@ export function CAHierarchy() {
       <PageHeader
         titleId="ca-heading"
         title="CA hierarchy"
-        description="Root and intermediate CA ceremonies are served through the API with signer-backed custody. Rotation, cross-sign, and HSM/KMS lifecycle workflows remain library-tier until their own served controls ship."
+        description="Root and intermediate CA ceremonies use signer-backed custody. Rotation, cross-sign, and HSM/KMS lifecycle workflows are read-only here until their controls ship."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
@@ -90,9 +90,9 @@ export function CAHierarchy() {
         }
       />
 
-      <UnavailableState title="CA hierarchy create UI not served yet">
-        The REST API now serves ceremonies, quorum approvals, root/intermediate creation, and signer-backed leaf issuance. This page is still read-only, so it
-        renders no create-root, rotate-root, or ceremony execution controls.
+      <UnavailableState title="CA creation controls coming soon">
+        Ceremony approvals, root/intermediate creation, and signer-backed leaf issuance are available outside this page. This page is read-only, so it renders no
+        create-root, rotate-root, or ceremony execution controls.
       </UnavailableState>
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
@@ -100,18 +100,18 @@ export function CAHierarchy() {
           <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="issuer-heading" className="text-title font-semibold">
-              Served issuer visibility
+              Issuer visibility
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              `GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated
-              `/api/v1/ca/ceremonies` and `/api/v1/ca/authorities` API.
+              This view shows issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated ceremony and authority
+              workflows.
             </p>
           </div>
         </div>
         {loading && <LoadingState>Loading issuers...</LoadingState>}
         {renderNotice(notice)}
         {!loading && !notice && sortedIssuers.length === 0 && (
-          <EmptyState title="No issuers served yet">Create issuers through the served issuer API or CLI before they appear in this hierarchy view.</EmptyState>
+          <EmptyState title="No issuers yet">Create issuers before they appear in this hierarchy view.</EmptyState>
         )}
         {!loading && !notice && sortedIssuers.length > 0 && <IssuerTable issuers={sortedIssuers} />}
       </section>
@@ -124,7 +124,7 @@ export function CAHierarchy() {
               m-of-n key ceremony model
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The served API consumes root/intermediate quorums once, emits
+              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The workflow consumes root/intermediate quorums once, emits
               tenant-scoped events, and rejects purpose mismatch or replay.
             </p>
           </div>
@@ -153,9 +153,9 @@ export function CAHierarchy() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Rotation and cross-sign remain library-tier">
-          `CreateRoot` and `CreateIntermediate` are served through authenticated REST routes. `Rotate` and `CrossSign` remain implemented in
-          `internal/ca/hierarchy` without served REST/UI controls yet.
+        <UnavailableState title="Rotation and cross-sign controls coming soon">
+          Root and intermediate creation are available through authenticated workflows. Rotation and cross-signing still need operator controls before this page
+          can run them.
         </UnavailableState>
       </section>
 
@@ -194,9 +194,9 @@ export function CAHierarchy() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="HSM/KMS lifecycle API not served yet">
-          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary as library-tier workflows. There
-          is no served API or CLI lifecycle surface for this custody workflow yet.
+        <UnavailableState title="HSM/KMS lifecycle controls coming soon">
+          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize stay behind the custody boundary. This page does not yet expose lifecycle
+          controls for that workflow.
         </UnavailableState>
       </section>
     </section>
@@ -207,7 +207,7 @@ function IssuerTable({ issuers }: { issuers: Issuer[] }) {
   return (
     <div className="ui-panel overflow-x-auto">
       <table className="ui-table min-w-[52rem]">
-        <caption className="sr-only">Served issuer list</caption>
+        <caption className="sr-only">Issuer list</caption>
         <thead>
           <tr>
             <th scope="col">Name</th>

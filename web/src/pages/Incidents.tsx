@@ -108,7 +108,7 @@ export function Incidents() {
       const result = await api.executeIncident({
         ...form,
         identity_id: form.identity_id.trim(),
-        reason: form.reason?.trim() || "served incident execution",
+        reason: form.reason?.trim() || "incident execution",
       });
       setExecutions((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
       setImpact(result.blast_radius);
@@ -133,7 +133,7 @@ export function Incidents() {
             Credential compromise execution
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The served incident path issues and deploys a replacement identity before revoking the compromised identity.
+            Incident execution issues and deploys a replacement identity before revoking the compromised identity.
           </p>
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={executeIncident}>

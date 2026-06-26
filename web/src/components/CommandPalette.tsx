@@ -186,9 +186,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
               className="h-10 w-full rounded-md border border-border bg-background ps-9 pe-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
-          {search.unavailableSources.length > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">{t("command.sourcesUnavailable", { sources: search.unavailableSources.join(", ") })}</p>
-          )}
+          {search.unavailableSources.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{t("command.sourcesUnavailable")}</p>}
         </div>
         <div className="max-h-[24rem] overflow-y-auto p-2">
           {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}

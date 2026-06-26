@@ -263,7 +263,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
             Spec preview
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            This JSON is sent to the served `POST /api/v1/profiles` endpoint. The backend remains the source of truth.
+            This JSON is sent to the profile workflow. The backend remains the source of truth.
           </p>
           <pre data-testid="profile-spec-preview" className="mt-3 max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
             {mode === "guided" ? formatSpec(builderSpec) : specText}

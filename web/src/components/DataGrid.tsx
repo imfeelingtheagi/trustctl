@@ -25,7 +25,7 @@ export type DataGridSort = {
 };
 
 export type DataGridToolbarControls = {
-  columnChooser: ReactNode;
+  columnChooser?: ReactNode;
   savedViews?: ReactNode;
 };
 
@@ -49,6 +49,7 @@ export type DataGridProps<Row> = {
     getRowLabel?: (row: Row) => string;
   };
   pagination?: ReactNode;
+  showColumnChooser?: boolean;
   viewStorageKey?: string;
   viewMetadata?: Record<string, GridViewPrimitive | undefined>;
   onViewRestore?: (metadata: Record<string, GridViewPrimitive>, sort?: DataGridSort) => void;
@@ -71,6 +72,7 @@ export function DataGrid<Row>({
   bulkSlot,
   selection,
   pagination,
+  showColumnChooser = false,
   viewStorageKey,
   viewMetadata,
   onViewRestore,
@@ -267,7 +269,8 @@ export function DataGrid<Row>({
       ))}
     </div>
   ) : undefined;
-  const toolbarNode = typeof toolbar === "function" ? toolbar({ columnChooser, savedViews: savedViewControls }) : toolbar;
+  const columnChooserControl = showColumnChooser ? columnChooser : undefined;
+  const toolbarNode = typeof toolbar === "function" ? toolbar({ columnChooser: columnChooserControl, savedViews: savedViewControls }) : toolbar;
 
   return (
     <section className={cn("grid gap-3", className)} aria-label={ariaLabel}>
@@ -279,7 +282,7 @@ export function DataGrid<Row>({
         {typeof toolbar === "function" ? null : (
           <div className="flex flex-wrap items-center gap-2">
             {savedViewControls}
-            {columnChooser}
+            {columnChooserControl}
           </div>
         )}
       </div>

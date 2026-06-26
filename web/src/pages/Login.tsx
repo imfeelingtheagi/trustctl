@@ -9,7 +9,7 @@ export function Login() {
 
   function enterPreview() {
     startPreview();
-    navigate("/coverage");
+    navigate("/");
   }
 
   return (

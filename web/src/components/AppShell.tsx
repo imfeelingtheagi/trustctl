@@ -30,7 +30,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { navGroups, navTreatmentForItem, taskNavItems, type NavIcon, type NavTreatment } from "@/lib/navigation";
+import { navGroups, taskNavItems, type NavIcon } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -57,37 +57,6 @@ const iconMap: Record<NavIcon, typeof Activity> = {
   spiffe: Network,
   ssh: Braces,
 };
-
-function NavCount({ n }: { n: number }) {
-  if (!n) return null;
-  return (
-    <span aria-hidden="true" className="ms-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 text-[10px] font-medium leading-5 text-muted-foreground">
-      {n}
-    </span>
-  );
-}
-
-const treatmentLabelKeys: Record<NavTreatment, MessageKey> = {
-  disclose: "nav.treatment.disclose",
-  observe: "nav.treatment.observe",
-  operate: "nav.treatment.operate",
-};
-
-function TreatmentBadge({ treatment }: { treatment: NavTreatment }) {
-  const { t } = useTranslation();
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded-control px-1.5 py-0.5 text-[10px] font-semibold leading-4",
-        treatment === "operate" && "bg-operate/10 text-operate",
-        treatment === "observe" && "bg-observe/10 text-observe",
-        treatment === "disclose" && "bg-disclose/10 text-disclose",
-      )}
-    >
-      {t(treatmentLabelKeys[treatment])}
-    </span>
-  );
-}
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 768));
@@ -116,7 +85,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
         <li>
           <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("nav.section.needsAction")}</p>
           <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
-            {taskNavItems.map(({ to, labelKey, descriptionKey, icon, treatment }) => {
+            {taskNavItems.map(({ to, labelKey, descriptionKey, icon }) => {
               const Icon = iconMap[icon];
               const label = t(labelKey);
               const description = t(descriptionKey);
@@ -137,7 +106,6 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                       <span className="block truncate">{label}</span>
                       <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
                     </span>
-                    <TreatmentBadge treatment={treatment} />
                   </NavLink>
                 </li>
               );
@@ -152,7 +120,6 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                 const { to, labelKey, icon, end } = item;
                 const label = t(labelKey);
                 const Icon = iconMap[icon];
-                const treatment = navTreatmentForItem(item);
                 return (
                   <li key={`${group.labelKey}-${to}-${labelKey}`}>
                     <NavLink
@@ -168,8 +135,6 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                     >
                       <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
-                      <TreatmentBadge treatment={treatment} />
-                      <NavCount n={item.featureIds.length} />
                     </NavLink>
                   </li>
                 );
@@ -352,10 +317,6 @@ export function AppShell() {
             <div aria-label={t("shell.tenantContext")} className="hidden min-w-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs lg:flex">
               <span className="text-muted-foreground">{t("shell.tenant")}</span>
               <strong className="max-w-32 truncate font-semibold">{user.tenant_id}</strong>
-              <Button type="button" variant="ghost" size="sm" disabled aria-label={t("shell.tenantSwitchUnavailableLabel")} className="h-6 px-2 text-[11px]">
-                {t("shell.tenantSwitchUnavailable")}
-              </Button>
-              <span className="hidden text-[10px] uppercase text-muted-foreground xl:inline">{t("shell.tenantSwitchUnavailableLabel")}</span>
             </div>
           )}
           <Button

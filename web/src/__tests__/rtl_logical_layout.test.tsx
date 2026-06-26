@@ -96,6 +96,7 @@ describe("RTL logical layout (PRODUCT-003)", () => {
         getRowId={(r) => r.id}
         onSort={() => {}}
         sort={{ columnId: "name", direction: "asc" }}
+        showColumnChooser
       />,
     );
     const table = container.querySelector("table");

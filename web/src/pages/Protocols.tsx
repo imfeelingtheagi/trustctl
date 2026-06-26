@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { api, ApiError, type ProtocolRuntimeStatus } from "@/lib/api";
 
 interface ProtocolSnippet {
   label: string;
@@ -12,10 +14,9 @@ interface ProtocolSnippet {
 interface ProtocolSurface {
   id: string;
   name: string;
-  feature: string;
-  route: string;
+  capability: string;
   auth: string;
-  env: string[];
+  requirements: string[];
   profile: string;
   snippets: ProtocolSnippet[];
   deferredRead: string;
@@ -46,10 +47,9 @@ const protocolSurfaces: ProtocolSurface[] = [
   {
     id: "acme",
     name: "ACME",
-    feature: "F5",
-    route: "GET /directory + POST /acme/...",
+    capability: "ACME directory, account, order, challenge, and certificate issuance flow",
     auth: "ACME account key, challenge validation, profile gate",
-    env: ["TRSTCTL_PROTOCOLS_ACME_ENABLED", "TRSTCTL_PROTOCOLS_ACME_TENANT_ID"],
+    requirements: ["Protocol enabled", "Tenant binding"],
     profile: "Use a profile that allows the acme protocol and serverAuth EKU.",
     snippets: [
       {
@@ -62,15 +62,14 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "ACME accounts, orders, challenges, ARI state, and revocations",
-    diagnostics: "No served ACME admin read lists orders or challenge outcomes yet.",
+    diagnostics: "No ACME admin read lists orders or challenge outcomes yet.",
   },
   {
     id: "est",
     name: "EST",
-    feature: "F22",
-    route: "GET /.well-known/est/cacerts + POST /.well-known/est/simpleenroll",
+    capability: "CA certificate download and simple enrollment flow",
     auth: "Bearer-token or TLS client auth, profile gate",
-    env: ["TRSTCTL_PROTOCOLS_EST_ENABLED", "TRSTCTL_PROTOCOLS_EST_TENANT_ID"],
+    requirements: ["Protocol enabled", "Tenant binding"],
     profile: "Use a profile that allows the est protocol and the requested certificate shape.",
     snippets: [
       {
@@ -83,15 +82,14 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "EST enrollment transcript",
-    diagnostics: "No served EST admin read exposes recent enrollments or protocol diagnostics yet.",
+    diagnostics: "No EST admin read exposes recent enrollments or protocol diagnostics yet.",
   },
   {
     id: "scep",
     name: "SCEP",
-    feature: "F23",
-    route: "GET/POST /scep",
+    capability: "SCEP CA discovery and PKI operation flow",
     auth: "CMS transport, challenge-password gate, profile gate",
-    env: ["TRSTCTL_PROTOCOLS_SCEP_ENABLED", "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", "TRSTCTL_PROTOCOLS_RA_KEY_FILE"],
+    requirements: ["Protocol enabled", "Tenant binding", "RA key file"],
     profile: "Use a profile that allows the scep protocol; keep the RA transport key on shared storage in HA.",
     snippets: [
       {
@@ -104,15 +102,14 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "SCEP enrollment transcript",
-    diagnostics: "No served SCEP admin read exposes recent PKIOperation outcomes or challenge failures yet.",
+    diagnostics: "No SCEP admin read exposes recent PKI operation outcomes or challenge failures yet.",
   },
   {
     id: "cmp",
     name: "CMP",
-    feature: "F55",
-    route: "POST /cmp",
+    capability: "CMP enrollment request flow",
     auth: "CMP protection key, profile gate",
-    env: ["TRSTCTL_PROTOCOLS_CMP_ENABLED", "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", "TRSTCTL_PROTOCOLS_RA_KEY_FILE"],
+    requirements: ["Protocol enabled", "Tenant binding", "RA key file"],
     profile: "Use a profile that allows the cmp protocol; keep the RA transport key on shared storage in HA.",
     snippets: [
       {
@@ -121,20 +118,14 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "CMP enrollment transcript",
-    diagnostics: "No served CMP admin read exposes recent enrollment outcomes or response diagnostics yet.",
+    diagnostics: "No CMP admin read exposes recent enrollment outcomes or response diagnostics yet.",
   },
   {
     id: "spiffe",
     name: "SPIFFE",
-    feature: "F24",
-    route: "gRPC UDS /tmp/trstctl-spiffe-workload.sock",
+    capability: "Workload API socket issuing X.509-SVID and JWT-SVID credentials",
     auth: "Workload API metadata, selector match, X.509-SVID and JWT-SVID support",
-    env: [
-      "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED",
-      "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID",
-      "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH",
-      "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN",
-    ],
+    requirements: ["Protocol enabled", "Tenant binding", "Socket path", "Trust domain"],
     profile: "Selectors map a workload to an allowed SPIFFE ID; no SVID private key is exposed through the console.",
     snippets: [
       {
@@ -148,15 +139,14 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "SPIFFE live workload status",
-    diagnostics: "No served console read exposes trust domain, socket path, enabled state, or SVID issuance health yet.",
+    diagnostics: "No console read exposes trust domain, socket path, enabled state, or SVID issuance health yet.",
   },
   {
     id: "ssh",
     name: "SSH CA",
-    feature: "F43",
-    route: "GET /ssh/ca + POST /ssh/issue/user|host + GET /ssh/krl",
+    capability: "SSH CA public key, user/host certificate issuance, and revocation list flow",
     auth: "Tenant-scoped JSON issuance, signer-held SSH CA key, OpenSSH binary KRL",
-    env: ["TRSTCTL_PROTOCOLS_SSH_ENABLED", "TRSTCTL_PROTOCOLS_SSH_TENANT_ID"],
+    requirements: ["Protocol enabled", "Tenant binding"],
     profile: "Principals, extensions, and TTL policy are enforced by the SSH CA path; the CA private key stays in the signer.",
     snippets: [
       {
@@ -169,15 +159,14 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "SSH issue/revoke log",
-    diagnostics: "No served SSH-CA admin read exposes issued user/host certificates or KRL revocation rows yet.",
+    diagnostics: "No SSH-CA admin read exposes issued user/host certificates or KRL revocation rows yet.",
   },
   {
     id: "tsa",
     name: "TSA",
-    feature: "F51",
-    route: "POST /tsa",
+    capability: "RFC 3161 timestamp request flow",
     auth: "RFC 3161 TimeStampReq, stable TSA certificate, signer-held TSA key",
-    env: ["TRSTCTL_PROTOCOLS_TSA_ENABLED", "TRSTCTL_PROTOCOLS_TSA_TENANT_ID", "TRSTCTL_PROTOCOLS_TSA_CERT_FILE"],
+    requirements: ["Protocol enabled", "Tenant binding", "TSA certificate file"],
     profile: "The TSA certificate is persisted for stable verification; the timestamp signing key stays in the signer.",
     snippets: [
       {
@@ -194,7 +183,7 @@ const protocolSurfaces: ProtocolSurface[] = [
       },
     ],
     deferredRead: "TSA issuance health",
-    diagnostics: "No served TSA admin read exposes the active TSA certificate, tenant binding, enabled state, or timestamp issuance health yet.",
+    diagnostics: "No TSA admin read exposes the active TSA certificate, tenant binding, enabled state, or timestamp issuance health yet.",
   },
 ];
 
@@ -207,7 +196,7 @@ const ariSignals: AriSignal[] = [
   {
     signal: "Client recommendation",
     current: "Clients should jitter inside the suggested window and keep using their existing certificate until replacement succeeds.",
-    gate: "Served ARI recommendation read",
+    gate: "Durable ARI recommendation read",
   },
   {
     signal: "Durable-state caveat",
@@ -219,24 +208,24 @@ const ariSignals: AriSignal[] = [
 const dnsProviderDisclosures: DnsProviderDisclosure[] = [
   {
     label: "DNS-01 provider config",
-    feature: "F69",
+    feature: "DNS automation",
     reference: "secret://dns/cloudflare/prod",
     posture: "Scoped secret reference for _acme-challenge writes only. Raw DNS provider tokens are never typed into this console.",
     status: "Disabled in console until live ACME status and a DNS preflight read are surfaced here.",
   },
   {
     label: "Built-in provider",
-    feature: "F70",
+    feature: "Provider",
     reference: "route53",
     posture: "Bundled provider capability summary: create TXT, wait authoritative, clean up challenge TXT.",
-    status: "Activation is blocked until served provider health and tenant binding are observable.",
+    status: "Activation is blocked until provider health and tenant binding are observable.",
   },
   {
     label: "Plugin provider",
-    feature: "F70",
+    feature: "Plugin",
     reference: "wasm:dns/externaldns",
     posture: "Plugin providers need conformance results, provenance, and explicit DNS capability grants before activation.",
-    status: "Plugin activation is blocked until verified conformance, provenance, and capability grants are served.",
+    status: "Plugin activation is blocked until verified conformance, provenance, and capability grants are available.",
   },
 ];
 
@@ -317,13 +306,43 @@ const mdmFixtures: ValidationFixture[] = [
   },
   {
     scenario: "scep-disabled",
-    record: "TRSTCTL_PROTOCOLS_SCEP_ENABLED is false or unknown",
-    result: "MDM enrollment stays disabled until SCEP status is served and enabled.",
+    record: "SCEP status is disabled or unknown",
+    result: "MDM enrollment stays disabled until SCEP status is available and enabled.",
   },
 ];
 
 export function Protocols() {
   const [copied, setCopied] = useState<string | null>(null);
+  const [protocolStatuses, setProtocolStatuses] = useState<ProtocolRuntimeStatus[]>([]);
+  const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setStatusLoading(true);
+    setStatusError(null);
+    api
+      .protocolStatuses()
+      .then((page) => {
+        if (!active) return;
+        setProtocolStatuses(page.items);
+        setStatusCheckedAt(page.checked_at);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setStatusError(protocolStatusError(err));
+      })
+      .finally(() => {
+        if (active) setStatusLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const statusByProtocol = new Map(protocolStatuses.map((status) => [status.protocol, status]));
+  const acmeStatus = statusByProtocol.get("acme");
 
   async function copySnippet(protocol: ProtocolSurface, snippet: ProtocolSnippet) {
     try {
@@ -338,18 +357,22 @@ export function Protocols() {
       <PageHeader
         titleId="protocols-heading"
         title="Protocols"
-        description="Served-gated enrollment endpoints with exact paths, tenant-binding configuration, client setup commands, and honest gaps for live status reads."
+        description="Enrollment protocol surfaces with tenant-binding requirements, responder status, and client setup commands."
       />
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">
         <h2 id="protocol-status-heading" className="text-title font-semibold">
-          Protocol status source
+          Protocol responder status
         </h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <UnavailableState title="Live enabled-state is not served yet">
-            Live protocol status — enabled/disabled state, tenant binding, public endpoint, and responder health — isn't surfaced in the console yet, so this
-            console can't claim a protocol is active. The protocol servers themselves are served-gated and default off.
-          </UnavailableState>
+          <div className="ui-panel p-3 text-sm">
+            <p className="font-medium">Read-only responder probe</p>
+            <p className="mt-1 text-muted-foreground">
+              The register checks the same-origin protocol responder paths the control plane mounts. A protocol is shown as off only when its responder path is
+              missing or unavailable.
+            </p>
+            {statusCheckedAt && <p className="mt-2 text-caption text-muted-foreground">Checked {formatDate(statusCheckedAt)}</p>}
+          </div>
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">Fail-closed startup and issuance posture</p>
             <p className="mt-1 text-muted-foreground">
@@ -366,25 +389,25 @@ export function Protocols() {
             Intune / MDM enrollment
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            MDM enrollment is conditional on SCEP being served and enabled. The console can explain the SCEP challenge gate, Intune profile guidance, challenge
-            rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.
+            MDM enrollment follows the SCEP responder status shown in the protocol register. The console can explain the SCEP challenge gate, Intune profile
+            guidance, challenge rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.
           </p>
         </div>
-        <UnavailableState title="MDM gate is library-only">
-          Intune/MDM profile state, challenge rotation, and enrollment failures run in the library/API today — console management is coming soon. Live SCEP
-          enabled-state also isn't surfaced here yet, so this page can't claim an MDM flow is active.
+        <UnavailableState title="MDM gate controls coming soon">
+          Intune/MDM profile state, challenge rotation, and enrollment failures run outside this console today. Use the SCEP responder status in the register to
+          verify whether the enrollment endpoint is available.
         </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
           <FixtureTable title="SCEP challenge fixtures" caption="MDM SCEP challenge fixtures" rows={mdmFixtures} />
           <div className="ui-panel p-3 text-sm">
             <p className="font-medium">Intune profile guidance</p>
             <p className="mt-1 text-muted-foreground">
-              Intune should point its SCEP profile at `/scep`, include the tenant binding in the deployment profile, and require challenge validation before
-              device certificates are issued.
+              Intune should use the tenant-bound SCEP enrollment URL from the deployment profile and require challenge validation before device certificates are
+              issued.
             </p>
             <p className="mt-3 font-medium">Challenge lifecycle</p>
             <p className="mt-1 text-muted-foreground">
-              Challenge rotation remains library-only; enrollment failures stay in fixture form until a served MDM read exists.
+              Challenge rotation and enrollment failures stay in fixture form until an MDM read exists.
             </p>
           </div>
         </div>
@@ -397,16 +420,17 @@ export function Protocols() {
               ACME Renewal Information (ARI)
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              ARI tells ACME clients when to renew and how to pace retries. This console only renders the safe model until ACME enabled-state and durable ARI
-              state are served.
+              ARI tells ACME clients when to renew and how to pace retries. The console shows ACME responder status here while keeping durable renewal-window
+              controls read-only until account and order state is available.
             </p>
           </div>
-          <span className="inline-flex rounded-control border border-status-warning/30 bg-status-warning/10 px-2 py-1 text-caption font-medium text-status-warning">
-            ACME enabled state unknown to console
-          </span>
+          <div className="grid justify-items-start gap-1 text-sm">
+            <span className="text-caption text-muted-foreground">ACME responder</span>
+            <ProtocolStatusBadge status={acmeStatus} />
+          </div>
         </div>
-        <UnavailableState title="ARI live renewal windows are not served yet">
-          Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance.
+        <UnavailableState title="ARI live renewal windows coming soon">
+          Renewal-window publishing stays read-only until durable account, order, and renewal guidance are visible here.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[48rem]">
@@ -438,7 +462,7 @@ export function Protocols() {
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             DNS-01 automation, provider plugins, CNAME isolation, CAA enforcement, validation-method policy, and wildcard issuance are shown as non-interactive
-            previews until protocol status and DNS preflight reads are served.
+            previews until protocol status and DNS preflight reads are available.
           </p>
         </div>
 
@@ -483,50 +507,55 @@ export function Protocols() {
 
       <section aria-labelledby="protocol-table-heading">
         <h2 id="protocol-table-heading" className="mb-3 text-title font-semibold">
-          Endpoint register
+          Protocol register
         </h2>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
-            <caption className="sr-only">Served-gated enrollment protocol endpoints</caption>
+            <caption className="sr-only">Enrollment protocol surfaces</caption>
             <thead>
               <tr>
                 <th scope="col">Protocol</th>
-                <th scope="col">Public route</th>
+                <th scope="col">Capability</th>
                 <th scope="col">Tenant binding</th>
                 <th scope="col">Auth and profile gate</th>
-                <th scope="col">Console status</th>
+                <th scope="col">Responder status</th>
               </tr>
             </thead>
             <tbody>
-              {protocolSurfaces.map((protocol) => (
-                <tr key={protocol.id} className="align-top">
-                  <td>
-                    <p className="font-medium">{protocol.name}</p>
-                    <p className="text-caption text-muted-foreground">{protocol.feature}</p>
-                  </td>
-                  <td className="font-mono text-xs">{protocol.route}</td>
-                  <td>
-                    <ul className="grid gap-1">
-                      {protocol.env.map((env) => (
-                        <li key={env} className="font-mono text-xs">
-                          {env}
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td>
-                    <p>{protocol.auth}</p>
-                    <p className="mt-1 text-muted-foreground">{protocol.profile}</p>
-                  </td>
-                  <td>
-                    <span className="inline-flex rounded-control border border-status-warning/30 bg-status-warning/10 px-2 py-1 text-caption font-medium text-status-warning">
-                      Status unknown to console
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {protocolSurfaces.map((protocol) => {
+                const status = statusByProtocol.get(protocol.id);
+                return (
+                  <tr key={protocol.id} className="align-top">
+                    <td>
+                      <p className="font-medium">{protocol.name}</p>
+                    </td>
+                    <td>{protocol.capability}</td>
+                    <td>
+                      <ul className="grid gap-1">
+                        {protocol.requirements.map((requirement) => (
+                          <li key={requirement}>{requirement}</li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td>
+                      <p>{protocol.auth}</p>
+                      <p className="mt-1 text-muted-foreground">{protocol.profile}</p>
+                    </td>
+                    <td>
+                      <ProtocolStatusBadge status={status} />
+                      <p className="mt-2 font-mono text-xs text-muted-foreground">{status?.endpoint ?? protocolEndpointFallback(protocol.id)}</p>
+                      {status?.status_code != null && <p className="mt-1 text-caption text-muted-foreground">HTTP {status.status_code}</p>}
+                      {status?.detail && <p className="mt-1 text-caption text-muted-foreground">{status.detail}</p>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+        <div className="mt-3">
+          {statusLoading && <LoadingState>Checking protocol responders.</LoadingState>}
+          {statusError && <ErrorState title="Protocol status check failed">{statusError}</ErrorState>}
         </div>
       </section>
 
@@ -541,7 +570,7 @@ export function Protocols() {
                 <h3 id={`${protocol.id}-heading`} className="text-base font-semibold">
                   {protocol.name}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{protocol.route}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{protocol.capability}</p>
               </div>
               <div className="grid gap-3">
                 {protocol.snippets.map((snippet) => {
@@ -568,8 +597,8 @@ export function Protocols() {
                 })}
               </div>
               <div className="grid content-start gap-3">
-                <UnavailableState title={`${protocol.deferredRead} not served yet`}>
-                  {protocol.diagnostics} This remains blocked until a served admin/status read exists; the page does not invent order, challenge, or transcript
+                <UnavailableState title={`${protocol.deferredRead} coming soon`}>
+                  {protocol.diagnostics} This remains blocked until an admin/status read exists; the page does not invent order, challenge, or transcript
                   data.
                 </UnavailableState>
                 <p className="ui-panel p-3 text-sm text-muted-foreground">Live tenant binding and endpoint health also aren't surfaced in the console yet.</p>
@@ -580,6 +609,38 @@ export function Protocols() {
       </section>
     </section>
   );
+}
+
+function ProtocolStatusBadge({ status }: { status: ProtocolRuntimeStatus | undefined }) {
+  if (!status) {
+    return (
+      <span className="inline-flex rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">
+        Not browser-readable
+      </span>
+    );
+  }
+  const routeServedOnly = status.served && status.status_code === 405;
+  const label = status.enabled ? (routeServedOnly ? "Served" : "Enabled") : "Off";
+  const cls = status.enabled
+    ? "border-status-success/30 bg-status-success/10 text-status-success"
+    : "border-status-warning/30 bg-status-warning/10 text-status-warning";
+  return <span className={`inline-flex rounded-control border px-2 py-1 text-caption font-medium ${cls}`}>{label}</span>;
+}
+
+function protocolEndpointFallback(protocol: string): string {
+  if (protocol === "spiffe") return "unix:///tmp/trstctl-spiffe-workload.sock";
+  return "No responder probe configured";
+}
+
+function protocolStatusError(err: unknown): string {
+  if (err instanceof ApiError) return err.body || err.message;
+  if (err instanceof Error) return err.message;
+  return "The responder status check failed.";
+}
+
+function formatDate(value?: string): string {
+  if (!value) return "Not recorded";
+  return formatDateTimePolicy(value);
 }
 
 function FixtureTable({ title, caption, rows }: { title: string; caption: string; rows: ValidationFixture[] }) {

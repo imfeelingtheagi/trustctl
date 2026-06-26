@@ -38,7 +38,7 @@ function isRequesterIdentity(identity: Identity, requester: string, subject?: st
 function profileLabel(identity: Identity): string {
   const name = identity.attributes?.profile_name;
   const version = identity.attributes?.profile_version;
-  if (typeof name !== "string" || !name) return "not served";
+  if (typeof name !== "string" || !name) return "No profile";
   return typeof version === "number" || typeof version === "string" ? `${name} v${version}` : name;
 }
 
@@ -294,11 +294,11 @@ export function RequestCredential() {
             <dl className="grid gap-2">
               <div>
                 <dt className="text-caption text-muted-foreground">Requester</dt>
-                <dd>{requester || "session principal not served"}</dd>
+                <dd>{requester || "No session principal"}</dd>
               </div>
               <div>
                 <dt className="text-caption text-muted-foreground">Mutation</dt>
-                <dd className="font-mono text-caption">POST /api/v1/identities with Idempotency-Key</dd>
+                <dd>Idempotent credential request</dd>
               </div>
               <div>
                 <dt className="text-caption text-muted-foreground">Result</dt>

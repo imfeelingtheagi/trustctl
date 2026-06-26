@@ -10,21 +10,21 @@ export const extractedMessages = [
     key: "source.00.00.issued.aad88c19ce",
     defaultMessage: "00:00 issued",
     sources: [
-      "src/pages/Workloads.tsx:121",
+      "src/pages/Workloads.tsx:147",
     ],
   },
   {
     key: "source.00.45.renew.window.8d7c81197f",
     defaultMessage: "00:45 renew window",
     sources: [
-      "src/pages/Workloads.tsx:125",
+      "src/pages/Workloads.tsx:151",
     ],
   },
   {
     key: "source.01.00.expires.92ecaaf8bd",
     defaultMessage: "01:00 expires",
     sources: [
-      "src/pages/Workloads.tsx:129",
+      "src/pages/Workloads.tsx:155",
     ],
   },
   {
@@ -38,14 +38,14 @@ export const extractedMessages = [
     key: "source.2026.06.17t00.00.00z.f4debbb70c",
     defaultMessage: "2026-06-17T00:00:00Z",
     sources: [
-      "src/pages/Audit.tsx:196",
+      "src/pages/Audit.tsx:197",
     ],
   },
   {
     key: "source.2026.06.18t00.00.00z.b4c7e74181",
     defaultMessage: "2026-06-18T00:00:00Z",
     sources: [
-      "src/pages/Audit.tsx:203",
+      "src/pages/Audit.tsx:204",
     ],
   },
   {
@@ -59,7 +59,7 @@ export const extractedMessages = [
     key: "source.25.cited.records.8fedaba2c8",
     defaultMessage: "25 cited records",
     sources: [
-      "src/pages/Assistant.tsx:147",
+      "src/pages/Assistant.tsx:146",
     ],
   },
   {
@@ -134,8 +134,15 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.a.ceremony.purpose.is.a.tamper.evident.lab.44272c4043",
-    defaultMessage: "A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The served API consumes root/intermediate quorums once, emits tenant-scoped events, and rejects purpose mismatch or replay.",
+    key: "source.a.broker.turns.an.agent.identity.plus.poli.5efe1642ad",
+    defaultMessage: "A broker turns an agent identity plus policy into a short credential lease. Submit proof once, then render only returned identity metadata.",
+    sources: [
+      "src/pages/Workloads.tsx:363",
+    ],
+  },
+  {
+    key: "source.a.ceremony.purpose.is.a.tamper.evident.lab.9681fd6379",
+    defaultMessage: "A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The workflow consumes root/intermediate quorums once, emits tenant-scoped events, and rejects purpose mismatch or replay.",
     sources: [
       "src/pages/CAHierarchy.tsx:126",
     ],
@@ -144,19 +151,19 @@ export const extractedMessages = [
     key: "source.a.lease.is.a.short.promise.a.workload.prov.6a4823524a",
     defaultMessage: "A lease is a short promise: a workload proves who it is, receives one credential class, and loses it at expiry unless it re-attests.",
     sources: [
-      "src/pages/Workloads.tsx:115",
+      "src/pages/Workloads.tsx:141",
     ],
   },
   {
     key: "source.a.password.shared.secret.or.opaque.credent.b98b0c5e45",
     defaultMessage: "A password, shared secret, or opaque credential identity tracked separately from certificate inventory.",
     sources: [
-      "src/pages/Identities.tsx:56",
+      "src/pages/Identities.tsx:54",
     ],
   },
   {
-    key: "source.a.real.editor.needs.a.tenant.scoped.api.th.be7ef6a5fa",
-    defaultMessage: "A real editor needs a tenant-scoped API that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That endpoint is not served yet.",
+    key: "source.a.real.editor.needs.a.tenant.scoped.workfl.24cd3a7a57",
+    defaultMessage: "A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That workflow is coming soon.",
     sources: [
       "src/pages/Policy.tsx:308",
     ],
@@ -165,7 +172,7 @@ export const extractedMessages = [
     key: "source.a.request.only.principal.cannot.self.issue.efc0bda9d3",
     defaultMessage: "A request-only principal cannot self-issue, and self-approval is denied. Use the approval action with a distinct approver, then retry the transition.",
     sources: [
-      "src/pages/Identities.tsx:538",
+      "src/pages/Identities.tsx:536",
     ],
   },
   {
@@ -179,28 +186,28 @@ export const extractedMessages = [
     key: "source.a.service.job.agent.or.workload.identity.t.dcc4188b56",
     defaultMessage: "A service, job, agent, or workload identity that can be issued short-lived credentials instead of storing static secrets.",
     sources: [
-      "src/pages/Identities.tsx:64",
+      "src/pages/Identities.tsx:62",
     ],
   },
   {
     key: "source.a.short.lived.ssh.host.or.user.certificate.17848c47a5",
     defaultMessage: "A short-lived SSH host or user certificate identity controlled by the SSH CA and lifecycle state machine.",
     sources: [
-      "src/pages/Identities.tsx:48",
+      "src/pages/Identities.tsx:46",
     ],
   },
   {
     key: "source.a.standing.ssh.key.identity.that.should.be.6e4dc64176",
     defaultMessage: "A standing SSH key identity that should be owned, rotated, and retired like any other non-human credential.",
     sources: [
-      "src/pages/Identities.tsx:52",
+      "src/pages/Identities.tsx:50",
     ],
   },
   {
     key: "source.a.tls.or.mtls.identity.whose.lifecycle.is.d720dfba65",
     defaultMessage: "A TLS or mTLS identity whose lifecycle is backed by certificate issuance, revocation, and expiry evidence.",
     sources: [
-      "src/pages/Identities.tsx:44",
+      "src/pages/Identities.tsx:42",
     ],
   },
   {
@@ -211,76 +218,83 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.accepted.070c160a62",
-    defaultMessage: "accepted",
+    key: "source.aad.9adbaf62d8",
+    defaultMessage: "AAD",
     sources: [
-      "src/pages/Identities.tsx:430",
+      "src/pages/Secrets.tsx:1185",
     ],
   },
   {
-    key: "source.accepted.rejected.expired.and.wrong.tenant.a95304e0d2",
-    defaultMessage: "Accepted, rejected, expired, and wrong-tenant fixtures show the served decision shape. Use the attested-issuance or ephemeral REST/CLI paths for live proofs so raw tokens and signed evidence never enter this console.",
+    key: "source.accepted.070c160a62",
+    defaultMessage: "accepted",
     sources: [
-      "src/pages/Workloads.tsx:197",
+      "src/pages/Identities.tsx:428",
     ],
   },
   {
     key: "source.access.administration.c301e7d84e",
     defaultMessage: "Access administration",
     sources: [
-      "src/pages/Platform.tsx:416",
+      "src/pages/Platform.tsx:297",
+    ],
+  },
+  {
+    key: "source.access.posture.b4ad598469",
+    defaultMessage: "Access posture",
+    sources: [
+      "src/pages/Platform.tsx:517",
     ],
   },
   {
     key: "source.access.test.failed.e280577658",
     defaultMessage: "Access test failed",
     sources: [
-      "src/pages/Secrets.tsx:659",
+      "src/pages/Secrets.tsx:761",
     ],
   },
   {
     key: "source.acme.ari.disclosure.model.4702046e5d",
     defaultMessage: "ACME ARI disclosure model",
     sources: [
-      "src/pages/Protocols.tsx:413",
+      "src/pages/Protocols.tsx:437",
     ],
   },
   {
     key: "source.acme.dns.validation.987f9cd42a",
     defaultMessage: "ACME DNS validation",
     sources: [
-      "src/pages/Protocols.tsx:436",
-    ],
-  },
-  {
-    key: "source.acme.enabled.state.unknown.to.console.9116b6a73b",
-    defaultMessage: "ACME enabled state unknown to console",
-    sources: [
-      "src/pages/Protocols.tsx:404",
+      "src/pages/Protocols.tsx:460",
     ],
   },
   {
     key: "source.acme.renewal.information.ari.3a9488c022",
     defaultMessage: "ACME Renewal Information (ARI)",
     sources: [
-      "src/pages/Protocols.tsx:396",
+      "src/pages/Protocols.tsx:419",
+    ],
+  },
+  {
+    key: "source.acme.responder.6255432190",
+    defaultMessage: "ACME responder",
+    sources: [
+      "src/pages/Protocols.tsx:428",
     ],
   },
   {
     key: "source.action.64cff1319d",
     defaultMessage: "Action",
     sources: [
-      "src/components/DataGrid.tsx:327",
+      "src/components/DataGrid.tsx:330",
       "src/pages/Agents.tsx:161",
       "src/pages/Graph.tsx:277",
-      "src/pages/Identities.tsx:967",
     ],
   },
   {
     key: "source.actions.ff8059dc67",
     defaultMessage: "Actions",
     sources: [
-      "src/pages/Discovery.tsx:257",
+      "src/pages/Discovery.tsx:268",
+      "src/pages/Workloads.tsx:210",
     ],
   },
   {
@@ -291,8 +305,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.active.policy.read.candidate.validation.dr.4c1d6d168a",
-    defaultMessage: "Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not served by API or CLI yet. Until then, lifecycle mutations remain the real enforcement path.",
+    key: "source.active.policy.read.candidate.validation.dr.63be8df857",
+    defaultMessage: "Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then, lifecycle mutations remain the real enforcement path.",
     sources: [
       "src/pages/Policy.tsx:313",
     ],
@@ -308,7 +322,7 @@ export const extractedMessages = [
     key: "source.actor.449995c4fe",
     defaultMessage: "Actor",
     sources: [
-      "src/pages/Audit.tsx:382",
+      "src/pages/Audit.tsx:383",
     ],
   },
   {
@@ -326,6 +340,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.agent.11b39c9377",
+    defaultMessage: "Agent",
+    sources: [
+      "src/pages/Workloads.tsx:413",
+    ],
+  },
+  {
     key: "source.agent.fleet.ac46d1b700",
     defaultMessage: "Agent fleet",
     sources: [
@@ -337,13 +358,14 @@ export const extractedMessages = [
     defaultMessage: "Agent ID",
     sources: [
       "src/pages/Agents.tsx:208",
+      "src/pages/Workloads.tsx:375",
     ],
   },
   {
-    key: "source.agent.scoped.broker.issuance.is.served.at.b9149d8160",
-    defaultMessage: "Agent-scoped broker issuance is served at POST /api/v1/broker/agent-identities and by the broker agent-identities issue CLI command. This console does not mint live broker credentials because the request carries raw proof material.",
+    key: "source.agent.profile.heartbeat.and.version.detail.fbb4a88e48",
+    defaultMessage: "Agent profile, heartbeat, and version details.",
     sources: [
-      "src/pages/Workloads.tsx:228",
+      "src/pages/Agents.tsx:204",
     ],
   },
   {
@@ -354,17 +376,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ai.agent.broker.lifecycle.fixture.f0856e845b",
-    defaultMessage: "AI agent broker lifecycle fixture",
+    key: "source.ai.agent.broker.identities.6ec86399a3",
+    defaultMessage: "AI agent broker identities",
     sources: [
-      "src/pages/Workloads.tsx:215",
+      "src/pages/Workloads.tsx:410",
     ],
   },
   {
     key: "source.ai.agent.nhi.broker.3c610aca90",
     defaultMessage: "AI-agent / NHI broker",
     sources: [
-      "src/pages/Workloads.tsx:205",
+      "src/pages/Workloads.tsx:360",
     ],
   },
   {
@@ -378,21 +400,14 @@ export const extractedMessages = [
     key: "source.ai.runtime.status.unavailable.b36957005d",
     defaultMessage: "AI runtime status unavailable",
     sources: [
-      "src/pages/Assistant.tsx:122",
+      "src/pages/Assistant.tsx:121",
     ],
   },
   {
     key: "source.alert.routing.is.not.configured.here.ea2801cf3b",
     defaultMessage: "Alert routing is not configured here",
     sources: [
-      "src/pages/Posture.tsx:300",
-    ],
-  },
-  {
-    key: "source.algorithm.inventory.dashboard.not.served.y.7560ec9591",
-    defaultMessage: "Algorithm inventory dashboard not served yet",
-    sources: [
-      "src/pages/Posture.tsx:253",
+      "src/pages/Posture.tsx:396",
     ],
   },
   {
@@ -417,18 +432,11 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.all.domains.0f97da22f8",
-    defaultMessage: "All domains",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:306",
-    ],
-  },
-  {
     key: "source.all.kinds.ddd0c2108e",
     defaultMessage: "All kinds",
     sources: [
       "src/pages/Graph.tsx:231",
-      "src/pages/Identities.tsx:702",
+      "src/pages/Identities.tsx:696",
     ],
   },
   {
@@ -442,7 +450,7 @@ export const extractedMessages = [
     key: "source.an.api.token.or.service.key.identity.where.8f7b48a2e6",
     defaultMessage: "An API token or service key identity where ownership, age, and retirement matter more than a certificate chain.",
     sources: [
-      "src/pages/Identities.tsx:60",
+      "src/pages/Identities.tsx:58",
     ],
   },
   {
@@ -456,37 +464,43 @@ export const extractedMessages = [
     key: "source.any.privilege.9e7167aefa",
     defaultMessage: "Any privilege",
     sources: [
-      "src/pages/Risk.tsx:246",
+      "src/pages/Risk.tsx:247",
     ],
   },
   {
-    key: "source.api.c8e5998f6a",
-    defaultMessage: "API",
+    key: "source.api.capability.groups.1476b063ae",
+    defaultMessage: "API capability groups",
     sources: [
-      "src/pages/FeatureCoverage.tsx:69",
-      "src/pages/FeatureCoverage.tsx:77",
+      "src/pages/Platform.tsx:511",
+    ],
+  },
+  {
+    key: "source.api.capability.view.82999567ab",
+    defaultMessage: "API capability view",
+    sources: [
+      "src/pages/Platform.tsx:502",
     ],
   },
   {
     key: "source.api.key.identity.bc78809131",
     defaultMessage: "API key identity",
     sources: [
-      "src/pages/Identities.tsx:59",
+      "src/pages/Identities.tsx:57",
     ],
   },
   {
     key: "source.api.token.metadata.d3e4dba811",
     defaultMessage: "API token metadata",
     sources: [
-      "src/pages/Platform.tsx:573",
+      "src/pages/Platform.tsx:454",
     ],
   },
   {
     key: "source.app.db.password.917cb98f9d",
     defaultMessage: "app/db/password",
     sources: [
-      "src/pages/Secrets.tsx:457",
-      "src/pages/Secrets.tsx:650",
+      "src/pages/Secrets.tsx:560",
+      "src/pages/Secrets.tsx:752",
     ],
   },
   {
@@ -514,14 +528,14 @@ export const extractedMessages = [
     key: "source.apply.filters.d80ab19b7e",
     defaultMessage: "Apply filters",
     sources: [
-      "src/pages/Audit.tsx:226",
+      "src/pages/Audit.tsx:227",
     ],
   },
   {
     key: "source.apply.risk.filters.8d00abcce9",
     defaultMessage: "Apply risk filters",
     sources: [
-      "src/pages/Risk.tsx:263",
+      "src/pages/Risk.tsx:264",
     ],
   },
   {
@@ -529,7 +543,13 @@ export const extractedMessages = [
     defaultMessage: "Approval",
     sources: [
       "src/pages/CodeSigning.tsx:69",
-      "src/pages/Secrets.tsx:851",
+    ],
+  },
+  {
+    key: "source.approval.gated.ephemeral.issuance.is.avail.352e76c5ed",
+    defaultMessage: "Approval-gated ephemeral issuance is available outside this console. This console does not collect live proof payloads or approval actions.",
+    sources: [
+      "src/pages/Workloads.tsx:266",
     ],
   },
   {
@@ -537,13 +557,6 @@ export const extractedMessages = [
     defaultMessage: "Approvals",
     sources: [
       "src/pages/Approvals.tsx:127",
-    ],
-  },
-  {
-    key: "source.approvals.count.376f90e781",
-    defaultMessage: "Approvals count",
-    sources: [
-      "src/pages/Identities.tsx:968",
     ],
   },
   {
@@ -575,17 +588,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ari.live.renewal.windows.are.not.served.ye.0471185550",
-    defaultMessage: "ARI live renewal windows are not served yet",
+    key: "source.ari.live.renewal.windows.coming.soon.fe2a475127",
+    defaultMessage: "ARI live renewal windows coming soon",
     sources: [
-      "src/pages/Protocols.tsx:408",
+      "src/pages/Protocols.tsx:432",
     ],
   },
   {
-    key: "source.ari.tells.acme.clients.when.to.renew.and.h.48b71a2c22",
-    defaultMessage: "ARI tells ACME clients when to renew and how to pace retries. This console only renders the safe model until ACME enabled-state and durable ARI state are served.",
+    key: "source.ari.tells.acme.clients.when.to.renew.and.h.5a27dbb9c0",
+    defaultMessage: "ARI tells ACME clients when to renew and how to pace retries. The console shows ACME responder status here while keeping durable renewal-window controls read-only until account and order state is available.",
     sources: [
-      "src/pages/Protocols.tsx:399",
+      "src/pages/Protocols.tsx:422",
     ],
   },
   {
@@ -606,7 +619,7 @@ export const extractedMessages = [
     key: "source.assistant.391e405152",
     defaultMessage: "Assistant",
     sources: [
-      "src/pages/Assistant.tsx:273",
+      "src/pages/Assistant.tsx:272",
     ],
   },
   {
@@ -620,7 +633,7 @@ export const extractedMessages = [
     key: "source.assistant.workflow.8962351a8a",
     defaultMessage: "Assistant workflow",
     sources: [
-      "src/pages/Assistant.tsx:286",
+      "src/pages/Assistant.tsx:285",
     ],
   },
   {
@@ -638,13 +651,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.attestation.evidence.9ea11d60fd",
-    defaultMessage: "Attestation evidence",
-    sources: [
-      "src/pages/Workloads.tsx:140",
-    ],
-  },
-  {
     key: "source.attestation.gated.ssh.cert.fixtures.ca4fe6c573",
     defaultMessage: "Attestation gated SSH cert fixtures",
     sources: [
@@ -659,17 +665,45 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.attestation.proves.the.workload.and.its.pl.62dd35ed72",
-    defaultMessage: "Attestation proves the workload and its platform. This preview keeps raw tokens and signed evidence out of the browser and shows only decision fixtures.",
+    key: "source.attestation.method.1f0610be7c",
+    defaultMessage: "Attestation method",
     sources: [
-      "src/pages/Workloads.tsx:169",
+      "src/pages/Workloads.tsx:288",
     ],
   },
   {
-    key: "source.attested.ssh.issue.flow.is.library.only.4d3e2a7baf",
-    defaultMessage: "Attested SSH issue flow is library-only",
+    key: "source.attestation.proof.payload.base64.2533ef605f",
+    defaultMessage: "Attestation proof payload (base64)",
+    sources: [
+      "src/pages/Workloads.tsx:299",
+    ],
+  },
+  {
+    key: "source.attestation.proves.the.workload.and.its.pl.8b61348b99",
+    defaultMessage: "Attestation proves the workload and its platform. Submit a proof payload to issue an X.509-SVID, then keep only attestation metadata in the table.",
+    sources: [
+      "src/pages/Workloads.tsx:276",
+    ],
+  },
+  {
+    key: "source.attested.ssh.issue.flow.coming.soon.de50fe6c7f",
+    defaultMessage: "Attested SSH issue flow coming soon",
     sources: [
       "src/pages/SSHTrust.tsx:104",
+    ],
+  },
+  {
+    key: "source.attested.svid.failed.de434cde0c",
+    defaultMessage: "Attested SVID failed",
+    sources: [
+      "src/pages/Workloads.tsx:317",
+    ],
+  },
+  {
+    key: "source.attested.svid.outcomes.66bdd4458d",
+    defaultMessage: "Attested SVID outcomes",
+    sources: [
+      "src/pages/Workloads.tsx:320",
     ],
   },
   {
@@ -700,7 +734,14 @@ export const extractedMessages = [
     sources: [
       "src/pages/Graph.tsx:449",
       "src/pages/Policy.tsx:164",
-      "src/pages/Risk.tsx:316",
+      "src/pages/Risk.tsx:317",
+    ],
+  },
+  {
+    key: "source.audit.ids.e1133f2a79",
+    defaultMessage: "Audit IDs",
+    sources: [
+      "src/pages/Workloads.tsx:419",
     ],
   },
   {
@@ -715,13 +756,6 @@ export const extractedMessages = [
     defaultMessage: "Audit policy decisions",
     sources: [
       "src/pages/Policy.tsx:184",
-    ],
-  },
-  {
-    key: "source.audit.rewrap.521bd1994e",
-    defaultMessage: "Audit / rewrap",
-    sources: [
-      "src/pages/Secrets.tsx:978",
     ],
   },
   {
@@ -742,28 +776,21 @@ export const extractedMessages = [
     key: "source.auth.and.profile.gate.220561196c",
     defaultMessage: "Auth and profile gate",
     sources: [
-      "src/pages/Protocols.tsx:496",
+      "src/pages/Protocols.tsx:520",
     ],
   },
   {
-    key: "source.auth.method.administration.not.served.yet.a4defd6b75",
-    defaultMessage: "Auth-method administration not served yet",
+    key: "source.auth.method.administration.coming.soon.63d395b5a5",
+    defaultMessage: "Auth-method administration coming soon",
     sources: [
-      "src/pages/Secrets.tsx:751",
-    ],
-  },
-  {
-    key: "source.auth.mode.0fdea2ab74",
-    defaultMessage: "Auth mode",
-    sources: [
-      "src/pages/Platform.tsx:639",
+      "src/pages/Secrets.tsx:852",
     ],
   },
   {
     key: "source.auth.session.0e46f553a4",
     defaultMessage: "Auth session",
     sources: [
-      "src/pages/Platform.tsx:394",
+      "src/pages/Platform.tsx:275",
     ],
   },
   {
@@ -777,14 +804,28 @@ export const extractedMessages = [
     key: "source.authority.key.cfdd3eeb4b",
     defaultMessage: "authority key",
     sources: [
-      "src/pages/Protocols.tsx:163",
+      "src/pages/Protocols.tsx:153",
     ],
   },
   {
-    key: "source.automation.layout.preview.717dfe6cec",
-    defaultMessage: "Automation layout preview",
+    key: "source.aws.iam.c37b8156ed",
+    defaultMessage: "AWS IAM",
     sources: [
-      "src/pages/Identities.tsx:927",
+      "src/pages/Secrets.tsx:1085",
+    ],
+  },
+  {
+    key: "source.aws.instance.identity.9c5e7992b8",
+    defaultMessage: "AWS instance identity",
+    sources: [
+      "src/pages/Workloads.tsx:293",
+    ],
+  },
+  {
+    key: "source.azure.imds.b51ff41a62",
+    defaultMessage: "Azure IMDS",
+    sources: [
+      "src/pages/Workloads.tsx:294",
     ],
   },
   {
@@ -792,28 +833,13 @@ export const extractedMessages = [
     defaultMessage: "Backend",
     sources: [
       "src/pages/CAHierarchy.tsx:179",
-      "src/pages/Secrets.tsx:933",
-    ],
-  },
-  {
-    key: "source.backend.b5722dc9de",
-    defaultMessage: "Backend:",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:103",
     ],
   },
   {
     key: "source.backend.gate.694d29cab3",
     defaultMessage: "Backend gate",
     sources: [
-      "src/pages/Protocols.tsx:418",
-    ],
-  },
-  {
-    key: "source.backend.to.gui.coverage.c4f813acca",
-    defaultMessage: "Backend-to-GUI coverage",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:163",
+      "src/pages/Protocols.tsx:442",
     ],
   },
   {
@@ -831,13 +857,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.binary.version.build.metadata.embedded.ui.58c62ade64",
-    defaultMessage: "Binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision aren't shown in the console yet, so this page can't show live runtime state.",
-    sources: [
-      "src/pages/Platform.tsx:710",
-    ],
-  },
-  {
     key: "source.blast.radius.8638fdf109",
     defaultMessage: "Blast radius",
     sources: [
@@ -848,7 +867,7 @@ export const extractedMessages = [
     key: "source.blast.radius.impact.42dfddadef",
     defaultMessage: "Blast-radius impact",
     sources: [
-      "src/pages/Identities.tsx:883",
+      "src/pages/Identities.tsx:877",
     ],
   },
   {
@@ -895,52 +914,80 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.broker.issuance.is.rest.and.cli.only.6218cb53d0",
-    defaultMessage: "Broker issuance is REST and CLI only",
+    key: "source.broker.history.list.coming.soon.b9f4331382",
+    defaultMessage: "Broker history list coming soon",
     sources: [
-      "src/pages/Workloads.tsx:228",
+      "src/pages/Workloads.tsx:447",
     ],
   },
   {
-    key: "source.browser.lease.controls.are.not.served.yet.0f9d3533e4",
-    defaultMessage: "Browser lease controls are not served yet",
+    key: "source.broker.identity.failed.90cf96d503",
+    defaultMessage: "Broker identity failed",
     sources: [
-      "src/pages/Workloads.tsx:105",
+      "src/pages/Workloads.tsx:407",
+    ],
+  },
+  {
+    key: "source.broker.method.86e0708911",
+    defaultMessage: "Broker method",
+    sources: [
+      "src/pages/Workloads.tsx:379",
+    ],
+  },
+  {
+    key: "source.broker.proof.payload.base64.caf8633720",
+    defaultMessage: "Broker proof payload (base64)",
+    sources: [
+      "src/pages/Workloads.tsx:393",
+    ],
+  },
+  {
+    key: "source.broker.public.key.a2341b0f4e",
+    defaultMessage: "Broker public key",
+    sources: [
+      "src/pages/Workloads.tsx:397",
+    ],
+  },
+  {
+    key: "source.broker.scopes.60ad7540e2",
+    defaultMessage: "Broker scopes",
+    sources: [
+      "src/pages/Workloads.tsx:383",
+    ],
+  },
+  {
+    key: "source.broker.ttl.seconds.7112a719ce",
+    defaultMessage: "Broker TTL seconds",
+    sources: [
+      "src/pages/Workloads.tsx:387",
     ],
   },
   {
     key: "source.browser.transport.is.evaluated.at.runtime.94214a825a",
     defaultMessage: "Browser transport is evaluated at runtime.",
     sources: [
-      "src/pages/Platform.tsx:218",
-    ],
-  },
-  {
-    key: "source.build.info.datastore.mode.signer.child.sta.8408389ec9",
-    defaultMessage: "Build info, datastore mode, signer-child state, OIDC config, and feature flags aren't shown in the console yet.",
-    sources: [
-      "src/pages/Platform.tsx:847",
+      "src/pages/Platform.tsx:111",
     ],
   },
   {
     key: "source.built.in.provider.300ea3f487",
     defaultMessage: "Built-in provider",
     sources: [
-      "src/pages/Protocols.tsx:228",
+      "src/pages/Protocols.tsx:217",
     ],
   },
   {
     key: "source.bulk.revoke.selected.53f4891ce3",
     defaultMessage: "Bulk revoke selected",
     sources: [
-      "src/pages/Identities.tsx:622",
+      "src/pages/Identities.tsx:618",
     ],
   },
   {
     key: "source.bundle.bytes.842399751d",
     defaultMessage: "Bundle bytes",
     sources: [
-      "src/pages/Audit.tsx:302",
+      "src/pages/Audit.tsx:303",
     ],
   },
   {
@@ -972,6 +1019,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.ca.creation.controls.coming.soon.120b6f9431",
+    defaultMessage: "CA creation controls coming soon",
+    sources: [
+      "src/pages/CAHierarchy.tsx:93",
+    ],
+  },
+  {
     key: "source.ca.hierarchy.73e4cbcaf4",
     defaultMessage: "CA hierarchy",
     sources: [
@@ -979,32 +1033,33 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ca.hierarchy.create.ui.not.served.yet.84c36b8481",
-    defaultMessage: "CA hierarchy create UI not served yet",
-    sources: [
-      "src/pages/CAHierarchy.tsx:93",
-    ],
-  },
-  {
     key: "source.caa.policy.preview.5cba9d6656",
     defaultMessage: "CAA policy preview",
     sources: [
-      "src/pages/Protocols.tsx:474",
+      "src/pages/Protocols.tsx:498",
     ],
   },
   {
     key: "source.cacerts.d757429cef",
     defaultMessage: "cacerts",
     sources: [
-      "src/pages/Protocols.tsx:77",
+      "src/pages/Protocols.tsx:76",
     ],
   },
   {
     key: "source.cancel.19766ed6cc",
     defaultMessage: "Cancel",
     sources: [
-      "src/pages/Identities.tsx:612",
-      "src/pages/Identities.tsx:657",
+      "src/pages/Identities.tsx:608",
+      "src/pages/Identities.tsx:653",
+    ],
+  },
+  {
+    key: "source.capability.5faf58a69d",
+    defaultMessage: "Capability",
+    sources: [
+      "src/pages/Platform.tsx:515",
+      "src/pages/Protocols.tsx:518",
     ],
   },
   {
@@ -1015,17 +1070,16 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.capability.grants.a2dc839167",
-    defaultMessage: "Capability grants",
+    key: "source.capability.view.a98b7c23a4",
+    defaultMessage: "Capability view",
     sources: [
-      "src/pages/Platform.tsx:785",
+      "src/pages/Platform.tsx:507",
     ],
   },
   {
     key: "source.caveat.863b9343fa",
     defaultMessage: "Caveat",
     sources: [
-      "src/pages/Platform.tsx:826",
       "src/pages/Policy.tsx:286",
     ],
   },
@@ -1033,7 +1087,14 @@ export const extractedMessages = [
     key: "source.cbom.and.cryptographic.observability.11b90cf944",
     defaultMessage: "CBOM and cryptographic observability",
     sources: [
-      "src/pages/Posture.tsx:203",
+      "src/pages/Posture.tsx:231",
+    ],
+  },
+  {
+    key: "source.cbom.asset.inventory.2ba70c3036",
+    defaultMessage: "CBOM asset inventory",
+    sources: [
+      "src/pages/Posture.tsx:286",
     ],
   },
   {
@@ -1044,17 +1105,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.cbom.dashboard.controls.not.served.yet.77f4d5d841",
-    defaultMessage: "CBOM dashboard controls not served yet",
+    key: "source.ceremony.approvals.root.intermediate.creat.97479aedb0",
+    defaultMessage: "Ceremony approvals, root/intermediate creation, and signer-backed leaf issuance are available outside this page. This page is read-only, so it renders no create-root, rotate-root, or ceremony execution controls.",
     sources: [
-      "src/pages/Posture.tsx:212",
-    ],
-  },
-  {
-    key: "source.cbom.scanning.is.served.through.api.v1.cbo.985a28b221",
-    defaultMessage: "CBOM scanning is served through `/api/v1/cbom/scans` and `/api/v1/cbom/assets`. Scan triggers, asset-level triage controls, graph links, and posture timestamps are not surfaced here, so no Run CBOM scan control is rendered.",
-    sources: [
-      "src/pages/Posture.tsx:212",
+      "src/pages/CAHierarchy.tsx:93",
     ],
   },
   {
@@ -1079,8 +1133,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.certificate.chain.not.served.yet.5dd1baef09",
-    defaultMessage: "Certificate chain not served yet",
+    key: "source.certificate.chain.coming.soon.45a58d19bc",
+    defaultMessage: "Certificate chain coming soon",
     sources: [
       "src/pages/Certificates.tsx:442",
     ],
@@ -1115,10 +1169,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.certificate.transparency.findings.55891f79b6",
+    defaultMessage: "Certificate Transparency findings",
+    sources: [
+      "src/pages/Posture.tsx:193",
+    ],
+  },
+  {
     key: "source.certificate.transparency.monitoring.a0ad3241c4",
     defaultMessage: "Certificate Transparency monitoring",
     sources: [
-      "src/pages/Posture.tsx:129",
+      "src/pages/Posture.tsx:183",
     ],
   },
   {
@@ -1148,7 +1209,14 @@ export const extractedMessages = [
     key: "source.challenge.lifecycle.bb299253ea",
     defaultMessage: "Challenge lifecycle",
     sources: [
-      "src/pages/Protocols.tsx:385",
+      "src/pages/Protocols.tsx:408",
+    ],
+  },
+  {
+    key: "source.challenge.rotation.and.enrollment.failures.cf0f1bea30",
+    defaultMessage: "Challenge rotation and enrollment failures stay in fixture form until an MDM read exists.",
+    sources: [
+      "src/pages/Protocols.tsx:409",
     ],
   },
   {
@@ -1173,6 +1241,28 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.checking.protocol.responders.b300fe1dfa",
+    defaultMessage: "Checking protocol responders.",
+    sources: [
+      "src/pages/Protocols.tsx:557",
+    ],
+  },
+  {
+    key: "source.ci.deploy.preview.d2c6100222",
+    defaultMessage: "ci/deploy-preview",
+    sources: [
+      "src/pages/Secrets.tsx:945",
+    ],
+  },
+  {
+    key: "source.ciphertext.47955e6673",
+    defaultMessage: "Ciphertext",
+    sources: [
+      "src/pages/Secrets.tsx:1203",
+      "src/pages/Secrets.tsx:1242",
+    ],
+  },
+  {
     key: "source.cited.evidence.ca23c85308",
     defaultMessage: "Cited evidence",
     sources: [
@@ -1183,7 +1273,7 @@ export const extractedMessages = [
     key: "source.claims.1c85c12229",
     defaultMessage: "Claims",
     sources: [
-      "src/pages/Platform.tsx:537",
+      "src/pages/Platform.tsx:418",
     ],
   },
   {
@@ -1197,35 +1287,35 @@ export const extractedMessages = [
     key: "source.clear.selection.cea4d2e010",
     defaultMessage: "Clear selection",
     sources: [
-      "src/pages/Identities.tsx:625",
+      "src/pages/Identities.tsx:621",
     ],
   },
   {
     key: "source.cli.companion.c20bbb95cb",
     defaultMessage: "CLI companion",
     sources: [
-      "src/pages/Platform.tsx:669",
+      "src/pages/Platform.tsx:536",
     ],
   },
   {
     key: "source.cli.companion.commands.025de8efdf",
     defaultMessage: "CLI companion commands",
     sources: [
-      "src/pages/Platform.tsx:679",
+      "src/pages/Platform.tsx:546",
     ],
   },
   {
     key: "source.cli.injector.1f36b02aea",
     defaultMessage: "CLI injector",
     sources: [
-      "src/pages/Secrets.tsx:635",
+      "src/pages/Secrets.tsx:737",
     ],
   },
   {
     key: "source.client.setup.4ba2b51d20",
     defaultMessage: "Client setup",
     sources: [
-      "src/pages/Protocols.tsx:534",
+      "src/pages/Protocols.tsx:563",
     ],
   },
   {
@@ -1261,21 +1351,21 @@ export const extractedMessages = [
     key: "source.cmd.k.abdd8e293f",
     defaultMessage: "Cmd K",
     sources: [
-      "src/components/AppShell.tsx:349",
+      "src/components/AppShell.tsx:314",
     ],
   },
   {
     key: "source.cname.validation.isolation.9c7aa5ce72",
     defaultMessage: "CNAME validation isolation",
     sources: [
-      "src/pages/Protocols.tsx:473",
+      "src/pages/Protocols.tsx:497",
     ],
   },
   {
     key: "source.code.and.ci.secret.scanning.bridge.27c18d763b",
     defaultMessage: "Code and CI secret scanning bridge",
     sources: [
-      "src/pages/Secrets.tsx:872",
+      "src/pages/Secrets.tsx:994",
     ],
   },
   {
@@ -1293,8 +1383,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.code.signing.workflow.is.library.only.9b842b6e6c",
-    defaultMessage: "Code-signing workflow is library-only",
+    key: "source.code.signing.workflow.coming.soon.fb6771ab54",
+    defaultMessage: "Code-signing workflow coming soon",
     sources: [
       "src/pages/CodeSigning.tsx:46",
     ],
@@ -1303,36 +1393,36 @@ export const extractedMessages = [
     key: "source.column.datagridcolumn.ee69fa6c44",
     defaultMessage: "(column: DataGridColumn",
     sources: [
-      "src/components/DataGrid.tsx:392",
+      "src/components/DataGrid.tsx:395",
     ],
   },
   {
     key: "source.columnbyid.get.columnid.filter.column.colu.401794f02d",
     defaultMessage: "columnById.get(columnId)) .filter((column): column is DataGridColumn",
     sources: [
-      "src/components/DataGrid.tsx:91",
+      "src/components/DataGrid.tsx:93",
     ],
   },
   {
     key: "source.columns.53aade77cd",
     defaultMessage: "Columns",
     sources: [
-      "src/components/DataGrid.tsx:206",
+      "src/components/DataGrid.tsx:208",
     ],
   },
   {
     key: "source.columns.array.628cb6e821",
     defaultMessage: "(columns: Array",
     sources: [
-      "src/components/DataGrid.tsx:369",
-      "src/components/DataGrid.tsx:376",
+      "src/components/DataGrid.tsx:372",
+      "src/components/DataGrid.tsx:379",
     ],
   },
   {
     key: "source.common.name.2d129020eb",
     defaultMessage: "Common name",
     sources: [
-      "src/pages/Secrets.tsx:678",
+      "src/pages/Secrets.tsx:780",
     ],
   },
   {
@@ -1353,8 +1443,8 @@ export const extractedMessages = [
     key: "source.completed.22a970d2e5",
     defaultMessage: "Completed",
     sources: [
-      "src/pages/Discovery.tsx:329",
-      "src/pages/Identities.tsx:831",
+      "src/pages/Discovery.tsx:340",
+      "src/pages/Identities.tsx:825",
     ],
   },
   {
@@ -1386,24 +1476,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.configured.token.methods.audience.rules.is.9d3d1a0637",
-    defaultMessage: "Configured token methods, audience rules, issued-session ledger, and revoked methods aren't available in the console yet. This page exposes only the served login exchange.",
+    key: "source.configured.token.methods.audience.rules.is.588840b128",
+    defaultMessage: "Configured token methods, audience rules, issued-session ledger, and revoked methods are not available in the console yet. This page exposes only the login exchange.",
     sources: [
-      "src/pages/Secrets.tsx:751",
+      "src/pages/Secrets.tsx:852",
     ],
   },
   {
     key: "source.confirm.bulk.revoke.d613327838",
     defaultMessage: "Confirm bulk revoke",
     sources: [
-      "src/pages/Identities.tsx:654",
-    ],
-  },
-  {
-    key: "source.conformance.5557f96ca7",
-    defaultMessage: "Conformance",
-    sources: [
-      "src/pages/Platform.tsx:786",
+      "src/pages/Identities.tsx:650",
     ],
   },
   {
@@ -1412,7 +1495,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Connectors.tsx:153",
       "src/pages/Connectors.tsx:195",
-      "src/pages/Identities.tsx:795",
+      "src/pages/Identities.tsx:789",
       "src/pages/Incidents.tsx:162",
     ],
   },
@@ -1431,25 +1514,25 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.connector.registry.714802c316",
+    defaultMessage: "Connector registry",
+    sources: [
+      "src/pages/Connectors.tsx:138",
+      "src/pages/Connectors.tsx:150",
+    ],
+  },
+  {
     key: "source.console.posture.35edee0bb3",
     defaultMessage: "Console posture",
     sources: [
-      "src/pages/Protocols.tsx:417",
+      "src/pages/Protocols.tsx:441",
     ],
   },
   {
     key: "source.console.status.01755bde46",
     defaultMessage: "Console status",
     sources: [
-      "src/pages/Protocols.tsx:453",
-      "src/pages/Protocols.tsx:497",
-    ],
-  },
-  {
-    key: "source.console.visibility.509dae5607",
-    defaultMessage: "Console visibility",
-    sources: [
-      "src/pages/Platform.tsx:720",
+      "src/pages/Protocols.tsx:477",
     ],
   },
   {
@@ -1463,7 +1546,7 @@ export const extractedMessages = [
     key: "source.context.a6e600a10f",
     defaultMessage: "Context",
     sources: [
-      "src/pages/Platform.tsx:682",
+      "src/pages/Platform.tsx:549",
     ],
   },
   {
@@ -1498,14 +1581,14 @@ export const extractedMessages = [
     key: "source.copied.command.without.token.material.6c656e4f88",
     defaultMessage: "Copied command without token material.",
     sources: [
-      "src/pages/Protocols.tsx:565",
+      "src/pages/Protocols.tsx:594",
     ],
   },
   {
     key: "source.copied.from.this.reveal.panel.0707425cf6",
     defaultMessage: "Copied from this reveal panel.",
     sources: [
-      "src/pages/Secrets.tsx:1068",
+      "src/pages/Secrets.tsx:1389",
     ],
   },
   {
@@ -1516,13 +1599,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.copied.without.token.material.d5bf0583b2",
-    defaultMessage: "Copied without token material.",
-    sources: [
-      "src/pages/Platform.tsx:658",
-    ],
-  },
-  {
     key: "source.copy.command.9a01feecae",
     defaultMessage: "Copy command",
     sources: [
@@ -1530,31 +1606,31 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.copy.curl.c8df35c250",
-    defaultMessage: "Copy curl",
-    sources: [
-      "src/pages/Platform.tsx:654",
-    ],
-  },
-  {
     key: "source.copy.e21f935f11",
     defaultMessage: "Copy",
     sources: [
-      "src/pages/Protocols.tsx:560",
+      "src/pages/Protocols.tsx:589",
     ],
   },
   {
     key: "source.copy.once.acfaa3d4d6",
     defaultMessage: "Copy once",
     sources: [
-      "src/pages/Secrets.tsx:1065",
+      "src/pages/Secrets.tsx:1386",
     ],
   },
   {
-    key: "source.copy.or.download.now.the.serial.certificat.45cd4dbc9d",
-    defaultMessage: "Copy or download now. The serial, certificate, and private key came from the served PKI-secret endpoint and are cleared when dismissed.",
+    key: "source.copy.or.download.now.the.serial.certificat.3760ad67db",
+    defaultMessage: "Copy or download now. The serial, certificate, and private key are cleared when dismissed.",
     sources: [
-      "src/pages/Secrets.tsx:708",
+      "src/pages/Secrets.tsx:810",
+    ],
+  },
+  {
+    key: "source.copy.this.generated.credential.now.renew.a.811264cbb9",
+    defaultMessage: "Copy this generated credential now. Renew and revoke actions keep only lease metadata.",
+    sources: [
+      "src/pages/Secrets.tsx:1157",
     ],
   },
   {
@@ -1614,13 +1690,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.coverage.outcome.filter.ef75bbeebd",
-    defaultMessage: "Coverage outcome filter",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:269",
-    ],
-  },
-  {
     key: "source.create.a.certificate.profile.before.issuin.cdb32f2c2e",
     defaultMessage: "Create a certificate profile before issuing from a constrained template.",
     sources: [
@@ -1628,8 +1697,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.create.issuers.through.the.served.issuer.a.ac13218768",
-    defaultMessage: "Create issuers through the served issuer API or CLI before they appear in this hierarchy view.",
+    key: "source.create.issuers.before.they.appear.in.this.4ac97249fb",
+    defaultMessage: "Create issuers before they appear in this hierarchy view.",
     sources: [
       "src/pages/CAHierarchy.tsx:114",
     ],
@@ -1638,7 +1707,7 @@ export const extractedMessages = [
     key: "source.create.one.time.share.fd95a197d6",
     defaultMessage: "Create one-time share",
     sources: [
-      "src/pages/Secrets.tsx:770",
+      "src/pages/Secrets.tsx:872",
     ],
   },
   {
@@ -1659,21 +1728,21 @@ export const extractedMessages = [
     key: "source.create.schedule.5b08f3c719",
     defaultMessage: "Create schedule",
     sources: [
-      "src/pages/Discovery.tsx:209",
+      "src/pages/Discovery.tsx:220",
     ],
   },
   {
     key: "source.create.secret.b72a982613",
     defaultMessage: "Create secret",
     sources: [
-      "src/pages/Secrets.tsx:450",
+      "src/pages/Secrets.tsx:553",
     ],
   },
   {
     key: "source.create.source.020457fb23",
     defaultMessage: "Create source",
     sources: [
-      "src/pages/Discovery.tsx:169",
+      "src/pages/Discovery.tsx:180",
     ],
   },
   {
@@ -1687,15 +1756,8 @@ export const extractedMessages = [
     key: "source.created.d70b9e24bc",
     defaultMessage: "Created",
     sources: [
-      "src/pages/Platform.tsx:579",
-      "src/pages/Secrets.tsx:541",
-    ],
-  },
-  {
-    key: "source.createroot.and.createintermediate.are.serv.8142ecbf01",
-    defaultMessage: "`CreateRoot` and `CreateIntermediate` are served through authenticated REST routes. `Rotate` and `CrossSign` remain implemented in `internal/ca/hierarchy` without served REST/UI controls yet.",
-    sources: [
-      "src/pages/CAHierarchy.tsx:156",
+      "src/pages/Platform.tsx:460",
+      "src/pages/Secrets.tsx:645",
     ],
   },
   {
@@ -1710,15 +1772,8 @@ export const extractedMessages = [
     defaultMessage: "Credential",
     sources: [
       "src/components/GraphView.tsx:22",
-      "src/pages/Identities.tsx:965",
-      "src/pages/Secrets.tsx:735",
-    ],
-  },
-  {
-    key: "source.credential.class.faf7cd23ae",
-    defaultMessage: "Credential class",
-    sources: [
-      "src/pages/Workloads.tsx:138",
+      "src/pages/Secrets.tsx:836",
+      "src/pages/Workloads.tsx:323",
     ],
   },
   {
@@ -1732,7 +1787,7 @@ export const extractedMessages = [
     key: "source.credential.detail.7c1b378919",
     defaultMessage: "Credential detail",
     sources: [
-      "src/pages/Risk.tsx:301",
+      "src/pages/Risk.tsx:302",
     ],
   },
   {
@@ -1753,7 +1808,7 @@ export const extractedMessages = [
     key: "source.credential.is.no.longer.trusted.by.policy.769f8213d2",
     defaultMessage: "credential is no longer trusted by policy",
     sources: [
-      "src/pages/Workloads.tsx:130",
+      "src/pages/Workloads.tsx:156",
     ],
   },
   {
@@ -1792,20 +1847,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.crl.f9d197e345",
-    defaultMessage: "CRL:",
-    sources: [
-      "src/pages/Identities.tsx:1006",
-    ],
-  },
-  {
-    key: "source.cross.cluster.federation.57c66c8926",
-    defaultMessage: "Cross-cluster federation",
-    sources: [
-      "src/pages/Platform.tsx:807",
-    ],
-  },
-  {
     key: "source.crt.8f21.nginx.ip.10.2.3.11.b8a67fbae7",
     defaultMessage: "crt_8f21 → nginx ip-10-2-3-11",
     sources: [
@@ -1823,21 +1864,21 @@ export const extractedMessages = [
     key: "source.crypto.agility.and.pqc.readiness.2e66bc5a55",
     defaultMessage: "Crypto-agility and PQC readiness",
     sources: [
-      "src/pages/Posture.tsx:244",
+      "src/pages/Posture.tsx:324",
     ],
   },
   {
     key: "source.crypto.agility.means.the.system.can.see.we.e8d0c85c8e",
     defaultMessage: "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan a move to PQC or hybrid algorithms without guessing from browser-only state.",
     sources: [
-      "src/pages/Posture.tsx:247",
+      "src/pages/Posture.tsx:327",
     ],
   },
   {
-    key: "source.crypto.agility.readiness.fixtures.158b09cf65",
-    defaultMessage: "Crypto-agility readiness fixtures",
+    key: "source.crypto.agility.readiness.7bc9bc7019",
+    defaultMessage: "Crypto-agility readiness",
     sources: [
-      "src/pages/Posture.tsx:257",
+      "src/pages/Posture.tsx:489",
     ],
   },
   {
@@ -1851,49 +1892,28 @@ export const extractedMessages = [
     key: "source.csrf.cookie.04ee351267",
     defaultMessage: "CSRF cookie",
     sources: [
-      "src/pages/Platform.tsx:403",
+      "src/pages/Platform.tsx:284",
     ],
   },
   {
     key: "source.ct.anomalies.and.drift.findings.can.be.rou.9b66032844",
     defaultMessage: "CT anomalies and drift findings can be routed through operator-wired notification channels. Tenant self-service channel setup remains a backend gap, not a browser-only setting.",
     sources: [
-      "src/pages/Posture.tsx:303",
+      "src/pages/Posture.tsx:399",
     ],
   },
   {
-    key: "source.ct.monitoring.watches.public.logs.for.cert.b856c5380a",
-    defaultMessage: "CT monitoring watches public logs for certificates your tenant did not request. The served discovery worker polls configured logs, records tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.",
+    key: "source.ct.monitoring.watches.public.logs.for.cert.3163770746",
+    defaultMessage: "CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.",
     sources: [
-      "src/pages/Posture.tsx:132",
-    ],
-  },
-  {
-    key: "source.ct.runs.are.served.through.discovery.sourc.f45960008a",
-    defaultMessage: "CT runs are served through Discovery sources of kind `ct_log`. Domain watchlists, log checkpoints, poll state, and unexpected-certificate findings are not managed on this page, and there is no live Add watchlist or Poll CT control here.",
-    sources: [
-      "src/pages/Posture.tsx:138",
-    ],
-  },
-  {
-    key: "source.curl.684a8061e4",
-    defaultMessage: "Curl",
-    sources: [
-      "src/pages/Platform.tsx:640",
+      "src/pages/Posture.tsx:186",
     ],
   },
   {
     key: "source.current.filters.4e3b0ba1cb",
     defaultMessage: "Current filters",
     sources: [
-      "src/pages/Audit.tsx:307",
-    ],
-  },
-  {
-    key: "source.current.gui.04edd268ce",
-    defaultMessage: "Current GUI:",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:111",
+      "src/pages/Audit.tsx:308",
     ],
   },
   {
@@ -1914,35 +1934,14 @@ export const extractedMessages = [
     key: "source.data.cec3a9b89b",
     defaultMessage: "Data",
     sources: [
-      "src/pages/Audit.tsx:384",
+      "src/pages/Audit.tsx:385",
     ],
   },
   {
-    key: "source.decision.640ae4baf9",
-    defaultMessage: "Decision",
+    key: "source.decrypted.plaintext.675dd9b983",
+    defaultMessage: "Decrypted plaintext",
     sources: [
-      "src/pages/Workloads.tsx:181",
-    ],
-  },
-  {
-    key: "source.decision.surface.264e870141",
-    defaultMessage: "Decision surface",
-    sources: [
-      "src/pages/Identities.tsx:970",
-    ],
-  },
-  {
-    key: "source.dedicated.ct.dashboard.not.served.yet.5f83c5f19c",
-    defaultMessage: "Dedicated CT dashboard not served yet",
-    sources: [
-      "src/pages/Posture.tsx:138",
-    ],
-  },
-  {
-    key: "source.dedicated.posture.dashboards.not.served.ye.6e265724ca",
-    defaultMessage: "Dedicated posture dashboards not served yet",
-    sources: [
-      "src/pages/Posture.tsx:120",
+      "src/pages/Secrets.tsx:1281",
     ],
   },
   {
@@ -1956,14 +1955,14 @@ export const extractedMessages = [
     key: "source.delete.failed.8727e2ba36",
     defaultMessage: "Delete failed",
     sources: [
-      "src/pages/Secrets.tsx:620",
+      "src/pages/Secrets.tsx:723",
     ],
   },
   {
     key: "source.delete.secret.1a48c8c830",
     defaultMessage: "Delete secret",
     sources: [
-      "src/pages/Secrets.tsx:595",
+      "src/pages/Secrets.tsx:698",
     ],
   },
   {
@@ -1978,20 +1977,21 @@ export const extractedMessages = [
     defaultMessage: "Delivery",
     sources: [
       "src/pages/Incidents.tsx:284",
+      "src/pages/Secrets.tsx:1351",
     ],
   },
   {
     key: "source.delivery.and.rotation.evidence.1fc4ef65bb",
     defaultMessage: "Delivery and rotation evidence",
     sources: [
-      "src/pages/Identities.tsx:774",
+      "src/pages/Identities.tsx:768",
     ],
   },
   {
     key: "source.delivery.evidence.failed.to.load.2625e33346",
     defaultMessage: "Delivery evidence failed to load",
     sources: [
-      "src/pages/Identities.tsx:783",
+      "src/pages/Identities.tsx:777",
     ],
   },
   {
@@ -2012,14 +2012,14 @@ export const extractedMessages = [
     key: "source.denied.action.copy.239a312ecb",
     defaultMessage: "Denied-action copy",
     sources: [
-      "src/pages/Platform.tsx:602",
+      "src/pages/Platform.tsx:483",
     ],
   },
   {
     key: "source.deploy.4c236daafb",
     defaultMessage: "Deploy",
     sources: [
-      "src/pages/Identities.tsx:105",
+      "src/pages/Identities.tsx:103",
     ],
   },
   {
@@ -2048,21 +2048,14 @@ export const extractedMessages = [
     key: "source.detail.fields.6c69673d46",
     defaultMessage: "Detail fields",
     sources: [
-      "src/pages/Identities.tsx:1048",
-    ],
-  },
-  {
-    key: "source.detector.541ffce2fa",
-    defaultMessage: "Detector",
-    sources: [
-      "src/pages/Secrets.tsx:890",
+      "src/pages/Identities.tsx:946",
     ],
   },
   {
     key: "source.developer.access.e62e23a3a2",
     defaultMessage: "Developer access",
     sources: [
-      "src/pages/Secrets.tsx:625",
+      "src/pages/Secrets.tsx:728",
     ],
   },
   {
@@ -2073,19 +2066,11 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.disabled.in.console.until.live.acme.status.e7c139e4d8",
-    defaultMessage: "Disabled in console until live ACME status is surfaced here and a served ARI read exposes durable renewal guidance.",
-    sources: [
-      "src/pages/Protocols.tsx:408",
-    ],
-  },
-  {
     key: "source.disclose.5e663b5c89",
     defaultMessage: "Disclose",
     sources: [
       "src/lib/statusVocab.ts:47",
       "src/lib/statusVocab.ts:49",
-      "src/pages/FeatureCoverage.tsx:32",
     ],
   },
   {
@@ -2099,50 +2084,57 @@ export const extractedMessages = [
     key: "source.discovered.96a5ba634b",
     defaultMessage: "Discovered",
     sources: [
-      "src/pages/Discovery.tsx:327",
-      "src/pages/Discovery.tsx:364",
+      "src/pages/Discovery.tsx:338",
+      "src/pages/Discovery.tsx:375",
     ],
   },
   {
     key: "source.discovery.80fc402133",
     defaultMessage: "Discovery",
     sources: [
-      "src/pages/Discovery.tsx:119",
+      "src/pages/Discovery.tsx:130",
     ],
   },
   {
     key: "source.discovery.findings.ea4109ed6d",
     defaultMessage: "Discovery findings",
     sources: [
-      "src/pages/Discovery.tsx:356",
+      "src/pages/Discovery.tsx:367",
+    ],
+  },
+  {
+    key: "source.discovery.findings.unavailable.8112281292",
+    defaultMessage: "Discovery findings unavailable",
+    sources: [
+      "src/pages/Posture.tsx:438",
     ],
   },
   {
     key: "source.discovery.runs.6c691cc9f4",
     defaultMessage: "Discovery runs",
     sources: [
-      "src/pages/Discovery.tsx:320",
+      "src/pages/Discovery.tsx:331",
     ],
   },
   {
     key: "source.discovery.schedules.45e677eded",
     defaultMessage: "Discovery schedules",
     sources: [
-      "src/pages/Discovery.tsx:290",
+      "src/pages/Discovery.tsx:301",
     ],
   },
   {
     key: "source.discovery.sources.88fcff1677",
     defaultMessage: "Discovery sources",
     sources: [
-      "src/pages/Discovery.tsx:250",
+      "src/pages/Discovery.tsx:261",
     ],
   },
   {
     key: "source.discovery.unavailable.839198b6dc",
     defaultMessage: "Discovery unavailable",
     sources: [
-      "src/pages/Discovery.tsx:401",
+      "src/pages/Discovery.tsx:412",
     ],
   },
   {
@@ -2150,92 +2142,71 @@ export const extractedMessages = [
     defaultMessage: "Dismiss",
     sources: [
       "src/pages/Agents.tsx:110",
-      "src/pages/Platform.tsx:438",
-      "src/pages/Secrets.tsx:1058",
-    ],
-  },
-  {
-    key: "source.dismiss.clears.it.from.the.page.3c31f9cccf",
-    defaultMessage: ". Dismiss clears it from the page.",
-    sources: [
-      "src/pages/Secrets.tsx:513",
+      "src/pages/Platform.tsx:319",
+      "src/pages/Secrets.tsx:1379",
     ],
   },
   {
     key: "source.display.name.2b7f6a84de",
     defaultMessage: "Display name",
     sources: [
-      "src/pages/Platform.tsx:456",
+      "src/pages/Platform.tsx:337",
     ],
   },
   {
-    key: "source.dns.01.automation.provider.plugins.cname.i.dcf511afbc",
-    defaultMessage: "DNS-01 automation, provider plugins, CNAME isolation, CAA enforcement, validation-method policy, and wildcard issuance are shown as non-interactive previews until protocol status and DNS preflight reads are served.",
+    key: "source.dns.01.automation.provider.plugins.cname.i.1f82f0ac17",
+    defaultMessage: "DNS-01 automation, provider plugins, CNAME isolation, CAA enforcement, validation-method policy, and wildcard issuance are shown as non-interactive previews until protocol status and DNS preflight reads are available.",
     sources: [
-      "src/pages/Protocols.tsx:439",
+      "src/pages/Protocols.tsx:463",
     ],
   },
   {
     key: "source.dns.01.provider.config.0d6377e02c",
     defaultMessage: "DNS-01 provider config",
     sources: [
-      "src/pages/Protocols.tsx:221",
+      "src/pages/Protocols.tsx:210",
     ],
   },
   {
     key: "source.dns.provider.and.plugin.disclosure.4160988e1b",
     defaultMessage: "DNS provider and plugin disclosure",
     sources: [
-      "src/pages/Protocols.tsx:447",
+      "src/pages/Protocols.tsx:471",
     ],
   },
   {
     key: "source.dns.validation.controls.are.protocol.statu.2570be6f86",
     defaultMessage: "DNS validation controls are protocol-status gated",
     sources: [
-      "src/pages/Protocols.tsx:478",
-    ],
-  },
-  {
-    key: "source.domains.ced67718ea",
-    defaultMessage: "Domains",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:233",
+      "src/pages/Protocols.tsx:502",
     ],
   },
   {
     key: "source.download.signed.bundle.c6373a92cb",
     defaultMessage: "Download signed bundle",
     sources: [
-      "src/pages/Audit.tsx:315",
+      "src/pages/Audit.tsx:316",
     ],
   },
   {
     key: "source.drift.detection.93e554780a",
     defaultMessage: "Drift detection",
     sources: [
-      "src/pages/Posture.tsx:158",
+      "src/pages/Posture.tsx:207",
     ],
   },
   {
-    key: "source.drift.detection.compares.what.trstctl.inte.0b0d1314c2",
-    defaultMessage: "Drift detection compares what trstctl intended to deploy with what the served worker can verify from a configured watched credential path. Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.",
+    key: "source.drift.detection.compares.what.trstctl.inte.95457304d6",
+    defaultMessage: "Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path. Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.",
     sources: [
-      "src/pages/Posture.tsx:161",
+      "src/pages/Posture.tsx:210",
     ],
   },
   {
-    key: "source.drift.remediation.ui.not.served.yet.87deb93fc6",
-    defaultMessage: "Drift remediation UI not served yet",
+    key: "source.drift.findings.cd56c69007",
+    defaultMessage: "Drift findings",
     sources: [
-      "src/pages/Posture.tsx:167",
-    ],
-  },
-  {
-    key: "source.drift.runs.are.served.through.discovery.so.da0b47f66e",
-    defaultMessage: "Drift runs are served through Discovery sources of kind `drift`. Dedicated per-agent grouping, resolution state, severity tuning, and remediation actions are not surfaced here, so preview remediation buttons remain disabled.",
-    sources: [
-      "src/pages/Posture.tsx:167",
+      "src/pages/Posture.tsx:217",
     ],
   },
   {
@@ -2243,14 +2214,14 @@ export const extractedMessages = [
     defaultMessage: "Drilldown links",
     sources: [
       "src/pages/Graph.tsx:429",
-      "src/pages/Risk.tsx:298",
+      "src/pages/Risk.tsx:299",
     ],
   },
   {
     key: "source.dry.run.d5da154d9f",
     defaultMessage: "Dry run",
     sources: [
-      "src/pages/Discovery.tsx:273",
+      "src/pages/Discovery.tsx:284",
     ],
   },
   {
@@ -2261,38 +2232,31 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.dynamic.secret.backend.fixtures.c32f10390c",
-    defaultMessage: "Dynamic secret backend fixtures",
+    key: "source.dynamic.lease.operation.failed.115f5893e7",
+    defaultMessage: "Dynamic lease operation failed",
     sources: [
-      "src/pages/Secrets.tsx:930",
-    ],
-  },
-  {
-    key: "source.dynamic.secret.leases.are.served.2d6961ea8b",
-    defaultMessage: "Dynamic secret leases are served",
-    sources: [
-      "src/pages/Secrets.tsx:922",
+      "src/pages/Secrets.tsx:1155",
     ],
   },
   {
     key: "source.dynamic.secrets.70f2c5b95c",
     defaultMessage: "Dynamic secrets",
     sources: [
-      "src/pages/Secrets.tsx:913",
+      "src/pages/Secrets.tsx:1067",
     ],
   },
   {
     key: "source.e.g.change.approved.in.cab.1234.6a0cc1f9e3",
     defaultMessage: "e.g. change approved in CAB-1234",
     sources: [
-      "src/pages/Identities.tsx:1151",
+      "src/pages/Identities.tsx:1049",
     ],
   },
   {
     key: "source.e.g.payments.api.b39781a2b3",
     defaultMessage: "e.g. payments-api",
     sources: [
-      "src/pages/Identities.tsx:1215",
+      "src/pages/Identities.tsx:1113",
       "src/pages/Wizard.tsx:225",
     ],
   },
@@ -2307,7 +2271,7 @@ export const extractedMessages = [
     key: "source.each.protocol.requires.an.enabled.flag.plu.a66867a87e",
     defaultMessage: "Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.",
     sources: [
-      "src/pages/Protocols.tsx:355",
+      "src/pages/Protocols.tsx:378",
     ],
   },
   {
@@ -2343,7 +2307,7 @@ export const extractedMessages = [
     key: "source.egress.66a3afae15",
     defaultMessage: "Egress",
     sources: [
-      "src/pages/Assistant.tsx:110",
+      "src/pages/Assistant.tsx:109",
     ],
   },
   {
@@ -2358,7 +2322,7 @@ export const extractedMessages = [
     defaultMessage: "Email",
     sources: [
       "src/pages/Owners.tsx:20",
-      "src/pages/Platform.tsx:460",
+      "src/pages/Platform.tsx:341",
     ],
   },
   {
@@ -2372,43 +2336,50 @@ export const extractedMessages = [
     key: "source.enabled.92c1cdfdf4",
     defaultMessage: "Enabled",
     sources: [
-      "src/pages/Discovery.tsx:296",
-      "src/pages/Platform.tsx:533",
+      "src/pages/Discovery.tsx:307",
+      "src/pages/Platform.tsx:414",
     ],
   },
   {
-    key: "source.encryption.as.a.service.and.kmip.need.keys.1fe8ac5f65",
-    defaultMessage: "Encryption-as-a-service and KMIP need keys, encrypt/decrypt tests, HMAC, sign, verify, versions, rewrap, audit, and appliance profiles. Any test plaintext here is local-only copy, not a live transit operation.",
+    key: "source.encrypted.result.or.ciphertext.to.decrypt.88441adfe9",
+    defaultMessage: "encrypted result or ciphertext to decrypt",
     sources: [
-      "src/pages/Secrets.tsx:960",
+      "src/pages/Secrets.tsx:1208",
     ],
   },
   {
     key: "source.endpoint.host.4f0d916bb9",
     defaultMessage: "Endpoint host",
     sources: [
-      "src/pages/Assistant.tsx:114",
+      "src/pages/Assistant.tsx:113",
     ],
   },
   {
-    key: "source.endpoint.register.e77dd56413",
-    defaultMessage: "Endpoint register",
+    key: "source.enforcement.path.0e8665bcfe",
+    defaultMessage: "Enforcement path",
     sources: [
-      "src/pages/Protocols.tsx:485",
+      "src/pages/Policy.tsx:149",
     ],
   },
   {
     key: "source.engine.8e75ebbdb2",
     defaultMessage: "Engine",
     sources: [
-      "src/pages/Secrets.tsx:529",
+      "src/pages/Secrets.tsx:633",
     ],
   },
   {
     key: "source.engine.native.store.d6b23ebfdb",
     defaultMessage: "Engine: native store",
     sources: [
-      "src/pages/Secrets.tsx:497",
+      "src/pages/Secrets.tsx:601",
+    ],
+  },
+  {
+    key: "source.enrollment.protocol.surfaces.de695f7aa5",
+    defaultMessage: "Enrollment protocol surfaces",
+    sources: [
+      "src/pages/Protocols.tsx:514",
     ],
   },
   {
@@ -2419,52 +2390,53 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ephemeral.api.key.issuance.is.served.5333b6939d",
-    defaultMessage: "Ephemeral API-key issuance is served",
+    key: "source.ephemeral.api.key.59757a0857",
+    defaultMessage: "Ephemeral API key",
     sources: [
-      "src/pages/Secrets.tsx:837",
+      "src/pages/Secrets.tsx:985",
     ],
   },
   {
-    key: "source.ephemeral.api.key.request.fixtures.fc754d7a8d",
-    defaultMessage: "Ephemeral API key request fixtures",
+    key: "source.ephemeral.api.key.issue.failed.b91df9889a",
+    defaultMessage: "Ephemeral API-key issue failed",
     sources: [
-      "src/pages/Secrets.tsx:845",
+      "src/pages/Secrets.tsx:974",
     ],
   },
   {
     key: "source.ephemeral.api.keys.6c8f7c6a2c",
     defaultMessage: "Ephemeral API keys",
     sources: [
-      "src/pages/Secrets.tsx:828",
-    ],
-  },
-  {
-    key: "source.ephemeral.credential.lease.fixture.7108b60e3b",
-    defaultMessage: "Ephemeral credential lease fixture",
-    sources: [
-      "src/pages/Workloads.tsx:135",
+      "src/pages/Secrets.tsx:930",
     ],
   },
   {
     key: "source.ephemeral.credential.leases.8a9a0ee8cb",
     defaultMessage: "Ephemeral credential leases",
     sources: [
-      "src/pages/Workloads.tsx:112",
+      "src/pages/Workloads.tsx:138",
+      "src/pages/Workloads.tsx:201",
     ],
   },
   {
-    key: "source.ephemeral.jit.issuance.is.rest.and.cli.onl.b30647b4e0",
-    defaultMessage: "Ephemeral JIT issuance is REST and CLI only",
+    key: "source.ephemeral.jit.issuance.uses.external.appro.e57a7b858e",
+    defaultMessage: "Ephemeral JIT issuance uses external approval flows",
     sources: [
-      "src/pages/Workloads.tsx:158",
+      "src/pages/Workloads.tsx:266",
+    ],
+  },
+  {
+    key: "source.etc.ssh.sshd.config.83ca950c7a",
+    defaultMessage: "/etc/ssh/sshd_config",
+    sources: [
+      "src/pages/Posture.tsx:253",
     ],
   },
   {
     key: "source.event.detail.097e77abc2",
     defaultMessage: "Event detail",
     sources: [
-      "src/pages/Audit.tsx:361",
+      "src/pages/Audit.tsx:362",
     ],
   },
   {
@@ -2478,7 +2450,7 @@ export const extractedMessages = [
     key: "source.every.lifecycle.mutation.carries.an.idempo.8725e2117e",
     defaultMessage: "Every lifecycle mutation carries an Idempotency-Key. If the same request is retried by the network, the backend returns the original result.",
     sources: [
-      "src/pages/Identities.tsx:542",
+      "src/pages/Identities.tsx:540",
     ],
   },
   {
@@ -2486,10 +2458,8 @@ export const extractedMessages = [
     defaultMessage: "Evidence",
     sources: [
       "src/pages/Incidents.tsx:286",
-      "src/pages/Platform.tsx:748",
       "src/pages/Profiles.tsx:126",
       "src/pages/SSHTrust.tsx:114",
-      "src/pages/Workloads.tsx:179",
     ],
   },
   {
@@ -2503,7 +2473,7 @@ export const extractedMessages = [
     key: "source.evidence.surfaces.6acbb05a44",
     defaultMessage: "Evidence surfaces",
     sources: [
-      "src/pages/Assistant.tsx:334",
+      "src/pages/Assistant.tsx:333",
     ],
   },
   {
@@ -2511,6 +2481,13 @@ export const extractedMessages = [
     defaultMessage: "example.com, internal.example",
     sources: [
       "src/pages/Profiles.tsx:333",
+    ],
+  },
+  {
+    key: "source.exchange.a.machine.credential.for.a.scoped.db8919fe53",
+    defaultMessage: "Exchange a machine credential for a scoped workload session. The submitted credential is cleared after submit and never echoed.",
+    sources: [
+      "src/pages/Secrets.tsx:821",
     ],
   },
   {
@@ -2552,19 +2529,16 @@ export const extractedMessages = [
     key: "source.expires.f6725f3af0",
     defaultMessage: "Expires",
     sources: [
-      "src/pages/Secrets.tsx:1099",
+      "src/pages/Secrets.tsx:1420",
+      "src/pages/Secrets.tsx:1455",
+      "src/pages/Workloads.tsx:209",
+      "src/pages/Workloads.tsx:328",
+      "src/pages/Workloads.tsx:418",
     ],
   },
   {
-    key: "source.expiry.6956d81401",
-    defaultMessage: "Expiry",
-    sources: [
-      "src/pages/Secrets.tsx:850",
-    ],
-  },
-  {
-    key: "source.expiry.alert.dispatch.is.served.through.th.21d8f99e37",
-    defaultMessage: "Expiry-alert dispatch is served through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not served by API or CLI yet, so this page cannot operate notification integrations.",
+    key: "source.expiry.alert.dispatch.runs.through.the.sch.53087b9c38",
+    defaultMessage: "Expiry-alert dispatch runs through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not yet available here, so this page cannot operate notification integrations.",
     sources: [
       "src/pages/Policy.tsx:205",
     ],
@@ -2612,17 +2586,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.extend.seconds.ff4a8186f0",
+    defaultMessage: "Extend seconds",
+    sources: [
+      "src/pages/Secrets.tsx:1122",
+    ],
+  },
+  {
     key: "source.fail.closed.startup.and.issuance.posture.661fcb680a",
     defaultMessage: "Fail-closed startup and issuance posture",
     sources: [
-      "src/pages/Protocols.tsx:354",
+      "src/pages/Protocols.tsx:377",
     ],
   },
   {
     key: "source.failed.031a8f0f65",
     defaultMessage: "Failed",
     sources: [
-      "src/pages/Discovery.tsx:328",
+      "src/pages/Discovery.tsx:339",
     ],
   },
   {
@@ -2650,72 +2631,22 @@ export const extractedMessages = [
     key: "source.feature.3d377ae910",
     defaultMessage: "Feature",
     sources: [
-      "src/pages/FeatureCoverage.tsx:323",
-      "src/pages/Platform.tsx:599",
-      "src/pages/Platform.tsx:745",
+      "src/pages/Platform.tsx:480",
     ],
   },
   {
-    key: "source.feature.coverage.map.with.backend.status.g.37e1bb3b57",
-    defaultMessage: "Feature coverage map with backend status, GUI mapping, and acceptance criteria",
+    key: "source.file.50009ce1da",
+    defaultMessage: "File",
     sources: [
-      "src/pages/FeatureCoverage.tsx:319",
-    ],
-  },
-  {
-    key: "source.feature.coverage.table.69ff2d3ddd",
-    defaultMessage: "Feature coverage table",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:317",
-    ],
-  },
-  {
-    key: "source.feature.map.43646713f8",
-    defaultMessage: "Feature map",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:264",
-    ],
-  },
-  {
-    key: "source.feature.map.backlog.json.12b1ce20e3",
-    defaultMessage: "feature-map-backlog.json",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:167",
-    ],
-  },
-  {
-    key: "source.federation.is.configured.at.startup.and.ru.cd1f0aee5c",
-    defaultMessage: "Federation is configured at startup and runs as a leader-only worker. Keep one writable region per tenant, verify the passive peer cursor and projection lag before promotion, and use the configured RPO/RTO in the failover runbook.",
-    sources: [
-      "src/pages/Platform.tsx:815",
-    ],
-  },
-  {
-    key: "source.federation.operating.model.010eba0ede",
-    defaultMessage: "Federation operating model",
-    sources: [
-      "src/pages/Platform.tsx:821",
-    ],
-  },
-  {
-    key: "source.field.f45fc1dfdc",
-    defaultMessage: "Field",
-    sources: [
-      "src/pages/Platform.tsx:719",
-    ],
-  },
-  {
-    key: "source.filter.by.domain.01babac716",
-    defaultMessage: "Filter by domain",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:300",
+      "src/pages/Secrets.tsx:1044",
     ],
   },
   {
     key: "source.findings.e171c2ff25",
     defaultMessage: "Findings",
     sources: [
-      "src/pages/Discovery.tsx:237",
+      "src/pages/Discovery.tsx:248",
+      "src/pages/Secrets.tsx:1034",
     ],
   },
   {
@@ -2724,8 +2655,8 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:394",
       "src/pages/Connectors.tsx:198",
-      "src/pages/Discovery.tsx:362",
-      "src/pages/Identities.tsx:797",
+      "src/pages/Discovery.tsx:373",
+      "src/pages/Identities.tsx:791",
     ],
   },
   {
@@ -2733,7 +2664,6 @@ export const extractedMessages = [
     defaultMessage: "Fixture",
     sources: [
       "src/pages/SSHTrust.tsx:113",
-      "src/pages/Workloads.tsx:180",
     ],
   },
   {
@@ -2754,7 +2684,7 @@ export const extractedMessages = [
     key: "source.format.2f343666aa",
     defaultMessage: "Format",
     sources: [
-      "src/pages/Audit.tsx:298",
+      "src/pages/Audit.tsx:299",
     ],
   },
   {
@@ -2765,8 +2695,15 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.framework.mapped.compliance.posture.is.not.f6138a2611",
-    defaultMessage: "Framework-mapped compliance posture is not served yet",
+    key: "source.framework.dashboards.need.mapped.controls.2ac606ebae",
+    defaultMessage: "Framework dashboards need mapped controls, control state, caveats, and report packaging. Today the signed audit evidence export is evidence, not certification.",
+    sources: [
+      "src/pages/Policy.tsx:251",
+    ],
+  },
+  {
+    key: "source.framework.mapped.compliance.posture.coming.baf42d423b",
+    defaultMessage: "Framework-mapped compliance posture coming soon",
     sources: [
       "src/pages/Policy.tsx:274",
     ],
@@ -2786,38 +2723,38 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.get.api.v1.issuers.exposes.issuer.name.kin.e55c2e2b10",
-    defaultMessage: "`GET /api/v1/issuers` exposes issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated `/api/v1/ca/ceremonies` and `/api/v1/ca/authorities` API.",
+    key: "source.gcp.instance.identity.0cc7cbd709",
+    defaultMessage: "GCP instance identity",
     sources: [
-      "src/pages/CAHierarchy.tsx:105",
-    ],
-  },
-  {
-    key: "source.get.api.v1.secrets.store.returns.names.and.e923a10831",
-    defaultMessage: "`GET /api/v1/secrets/store` returns names and versions only. Create and rotate send a value to the backend, then this page drops the input and shows metadata.",
-    sources: [
-      "src/pages/Secrets.tsx:443",
+      "src/pages/Workloads.tsx:295",
     ],
   },
   {
     key: "source.getcacert.26e72db504",
     defaultMessage: "GetCACert",
     sources: [
-      "src/pages/Protocols.tsx:98",
+      "src/pages/Protocols.tsx:96",
     ],
   },
   {
-    key: "source.gitleaks.scan.ingestion.is.served.through.3fd83a3540",
-    defaultMessage: "Gitleaks scan ingestion is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run. Browser triage still needs source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling.",
+    key: "source.github.com.example.payments.8d7be8211f",
+    defaultMessage: "github.com/example/payments",
     sources: [
-      "src/pages/Secrets.tsx:875",
+      "src/pages/Secrets.tsx:1008",
+    ],
+  },
+  {
+    key: "source.github.oidc.1145d56de2",
+    defaultMessage: "GitHub OIDC",
+    sources: [
+      "src/pages/Workloads.tsx:292",
     ],
   },
   {
     key: "source.go.spiffe.7ccff8bcaf",
     defaultMessage: "go-spiffe",
     sources: [
-      "src/pages/Protocols.tsx:145",
+      "src/pages/Protocols.tsx:136",
     ],
   },
   {
@@ -2832,7 +2769,7 @@ export const extractedMessages = [
     key: "source.graph.blast.radius.c70f3638eb",
     defaultMessage: "Graph blast radius",
     sources: [
-      "src/pages/Risk.tsx:311",
+      "src/pages/Risk.tsx:312",
     ],
   },
   {
@@ -2840,6 +2777,13 @@ export const extractedMessages = [
     defaultMessage: "Graph legend",
     sources: [
       "src/pages/Graph.tsx:542",
+    ],
+  },
+  {
+    key: "source.graph.node.8779202b33",
+    defaultMessage: "Graph node",
+    sources: [
+      "src/pages/Identities.tsx:880",
     ],
   },
   {
@@ -2874,14 +2818,14 @@ export const extractedMessages = [
     key: "source.grounded.query.2a3d813fd7",
     defaultMessage: "Grounded query",
     sources: [
-      "src/pages/Assistant.tsx:307",
+      "src/pages/Assistant.tsx:306",
     ],
   },
   {
     key: "source.group.34ca0e7660",
     defaultMessage: "Group",
     sources: [
-      "src/pages/Platform.tsx:636",
+      "src/pages/Platform.tsx:514",
     ],
   },
   {
@@ -2889,14 +2833,7 @@ export const extractedMessages = [
     defaultMessage: "Guardrail",
     sources: [
       "src/pages/CAHierarchy.tsx:142",
-      "src/pages/Protocols.tsx:452",
-    ],
-  },
-  {
-    key: "source.gui.feature.map.harness.ac1158a924",
-    defaultMessage: "GUI feature-map harness",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:159",
+      "src/pages/Protocols.tsx:476",
     ],
   },
   {
@@ -2910,14 +2847,14 @@ export const extractedMessages = [
     key: "source.hash.a91069147f",
     defaultMessage: "Hash",
     sources: [
-      "src/pages/Audit.tsx:370",
+      "src/pages/Audit.tsx:371",
     ],
   },
   {
     key: "source.hash.chain.status.f5491b14e9",
     defaultMessage: "Hash-chain status",
     sources: [
-      "src/pages/Audit.tsx:343",
+      "src/pages/Audit.tsx:344",
     ],
   },
   {
@@ -2925,13 +2862,6 @@ export const extractedMessages = [
     defaultMessage: "` headers so every screen shares one hierarchy. Pass * `titleId` to keep `aria-labelledby` wiring on the surrounding",
     sources: [
       "src/components/PageHeader.tsx:7",
-    ],
-  },
-  {
-    key: "source.health.55898449eb",
-    defaultMessage: "Health",
-    sources: [
-      "src/pages/Secrets.tsx:936",
     ],
   },
   {
@@ -2963,15 +2893,43 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.hsm.kms.lifecycle.api.not.served.yet.652daf32c2",
-    defaultMessage: "HSM/KMS lifecycle API not served yet",
+    key: "source.historical.lease.list.coming.soon.1383a9e277",
+    defaultMessage: "Historical lease list coming soon",
+    sources: [
+      "src/pages/Workloads.tsx:262",
+    ],
+  },
+  {
+    key: "source.hmac.32fd6f051c",
+    defaultMessage: "HMAC",
+    sources: [
+      "src/pages/Secrets.tsx:1275",
+    ],
+  },
+  {
+    key: "source.hmac.and.signing.a21f893b5b",
+    defaultMessage: "HMAC and signing",
+    sources: [
+      "src/pages/Secrets.tsx:1255",
+    ],
+  },
+  {
+    key: "source.host.config.paths.8b2c6c7bdd",
+    defaultMessage: "Host config paths",
+    sources: [
+      "src/pages/Posture.tsx:251",
+    ],
+  },
+  {
+    key: "source.hsm.kms.lifecycle.controls.coming.soon.96bfd13fc1",
+    defaultMessage: "HSM/KMS lifecycle controls coming soon",
     sources: [
       "src/pages/CAHierarchy.tsx:197",
     ],
   },
   {
-    key: "source.hsm.slot.health.generate.import.resident.k.369e166831",
-    defaultMessage: "HSM slot health, generate/import, resident-key rotation, revoke, and zeroize remain behind the AN-3 crypto boundary as library-tier workflows. There is no served API or CLI lifecycle surface for this custody workflow yet.",
+    key: "source.hsm.slot.health.generate.import.resident.k.68ca57228c",
+    defaultMessage: "HSM slot health, generate/import, resident-key rotation, revoke, and zeroize stay behind the custody boundary. This page does not yet expose lifecycle controls for that workflow.",
     sources: [
       "src/pages/CAHierarchy.tsx:197",
     ],
@@ -2980,30 +2938,43 @@ export const extractedMessages = [
     key: "source.http.post.482b52eb11",
     defaultMessage: "HTTP POST",
     sources: [
-      "src/pages/Protocols.tsx:188",
+      "src/pages/Protocols.tsx:177",
+    ],
+  },
+  {
+    key: "source.https.api.example.com.443.74d0333a40",
+    defaultMessage: "https://api.example.com:443",
+    sources: [
+      "src/pages/Posture.tsx:248",
     ],
   },
   {
     key: "source.https.observed.50a13e2b41",
     defaultMessage: "HTTPS observed",
     sources: [
-      "src/pages/Platform.tsx:221",
-      "src/pages/Platform.tsx:222",
+      "src/pages/Platform.tsx:114",
+      "src/pages/Platform.tsx:115",
     ],
   },
   {
     key: "source.id.3843971dcf",
     defaultMessage: "ID",
     sources: [
-      "src/pages/FeatureCoverage.tsx:322",
       "src/pages/Graph.tsx:276",
+    ],
+  },
+  {
+    key: "source.idempotent.credential.request.94e8630aea",
+    defaultMessage: "Idempotent credential request",
+    sources: [
+      "src/pages/RequestCredential.tsx:301",
     ],
   },
   {
     key: "source.identities.8d4d8fef65",
     defaultMessage: "Identities",
     sources: [
-      "src/pages/Identities.tsx:513",
+      "src/pages/Identities.tsx:511",
       "src/pages/Policy.tsx:180",
     ],
   },
@@ -3011,28 +2982,29 @@ export const extractedMessages = [
     key: "source.identity.action.failed.5e3283fa66",
     defaultMessage: "Identity action failed",
     sources: [
-      "src/pages/Identities.tsx:682",
+      "src/pages/Identities.tsx:678",
     ],
   },
   {
     key: "source.identity.detail.f34a3c7053",
     defaultMessage: "Identity detail",
     sources: [
-      "src/pages/Identities.tsx:731",
+      "src/pages/Identities.tsx:725",
+      "src/pages/Identities.tsx:945",
     ],
   },
   {
     key: "source.identity.id.2f8124d39c",
     defaultMessage: "Identity ID",
     sources: [
-      "src/pages/Identities.tsx:1113",
+      "src/pages/Identities.tsx:1011",
     ],
   },
   {
     key: "source.identity.issued.08c478fa05",
     defaultMessage: "identity.issued",
     sources: [
-      "src/pages/Audit.tsx:189",
+      "src/pages/Audit.tsx:190",
     ],
   },
   {
@@ -3054,6 +3026,13 @@ export const extractedMessages = [
     defaultMessage: "Incident execution failed",
     sources: [
       "src/pages/Incidents.tsx:194",
+    ],
+  },
+  {
+    key: "source.incident.execution.issues.and.deploys.a.re.c00d70d3f5",
+    defaultMessage: "Incident execution issues and deploys a replacement identity before revoking the compromised identity.",
+    sources: [
+      "src/pages/Incidents.tsx:135",
     ],
   },
   {
@@ -3089,49 +3068,49 @@ export const extractedMessages = [
     key: "source.interval.6f45b0005e",
     defaultMessage: "Interval",
     sources: [
-      "src/pages/Discovery.tsx:295",
+      "src/pages/Discovery.tsx:306",
     ],
   },
   {
     key: "source.interval.seconds.5f0f5b832a",
     defaultMessage: "Interval seconds",
     sources: [
-      "src/pages/Discovery.tsx:196",
+      "src/pages/Discovery.tsx:207",
     ],
   },
   {
     key: "source.intune.mdm.enrollment.62bcd0c1f9",
     defaultMessage: "Intune / MDM enrollment",
     sources: [
-      "src/pages/Protocols.tsx:365",
+      "src/pages/Protocols.tsx:388",
     ],
   },
   {
-    key: "source.intune.mdm.profile.state.challenge.rotatio.7859483a28",
-    defaultMessage: "Intune/MDM profile state, challenge rotation, and enrollment failures run in the library/API today — console management is coming soon. Live SCEP enabled-state also isn't surfaced here yet, so this page can't claim an MDM flow is active.",
+    key: "source.intune.mdm.profile.state.challenge.rotatio.31bf6af202",
+    defaultMessage: "Intune/MDM profile state, challenge rotation, and enrollment failures run outside this console today. Use the SCEP responder status in the register to verify whether the enrollment endpoint is available.",
     sources: [
-      "src/pages/Protocols.tsx:373",
+      "src/pages/Protocols.tsx:396",
     ],
   },
   {
     key: "source.intune.profile.guidance.da3d165cf0",
     defaultMessage: "Intune profile guidance",
     sources: [
-      "src/pages/Protocols.tsx:380",
+      "src/pages/Protocols.tsx:403",
     ],
   },
   {
-    key: "source.intune.should.point.its.scep.profile.at.sc.8888b4b0b9",
-    defaultMessage: "Intune should point its SCEP profile at `/scep`, include the tenant binding in the deployment profile, and require challenge validation before device certificates are issued.",
+    key: "source.intune.should.use.the.tenant.bound.scep.en.41868176d3",
+    defaultMessage: "Intune should use the tenant-bound SCEP enrollment URL from the deployment profile and require challenge validation before device certificates are issued.",
     sources: [
-      "src/pages/Protocols.tsx:381",
+      "src/pages/Protocols.tsx:404",
     ],
   },
   {
     key: "source.issuance.guardrails.62653b44c0",
     defaultMessage: "Issuance guardrails",
     sources: [
-      "src/pages/Identities.tsx:531",
+      "src/pages/Identities.tsx:529",
     ],
   },
   {
@@ -3152,15 +3131,43 @@ export const extractedMessages = [
     key: "source.issue.48dc76dfa2",
     defaultMessage: "Issue",
     sources: [
-      "src/pages/Identities.tsx:102",
-      "src/pages/Identities.tsx:1218",
+      "src/pages/Identities.tsx:100",
+      "src/pages/Identities.tsx:1116",
+    ],
+  },
+  {
+    key: "source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef",
+    defaultMessage: "Issue a lease-scoped credential from a configured provider, renew its expiry when needed, or revoke it immediately. Generated credentials are shown once and then cleared from the page.",
+    sources: [
+      "src/pages/Secrets.tsx:1070",
+    ],
+  },
+  {
+    key: "source.issue.a.short.lived.certificate.bundle.and.68b22cee4d",
+    defaultMessage: "Issue a short-lived certificate bundle and reveal the private key only in the explicit result panel.",
+    sources: [
+      "src/pages/Secrets.tsx:774",
     ],
   },
   {
     key: "source.issue.and.revoke.are.privileged.signing.ac.0509139898",
     defaultMessage: "Issue and revoke are privileged signing actions. The backend enforces RA separation, dual control, and policy before the signer is asked to act.",
     sources: [
-      "src/pages/Identities.tsx:535",
+      "src/pages/Identities.tsx:533",
+    ],
+  },
+  {
+    key: "source.issue.attested.svid.ce058c18f8",
+    defaultMessage: "Issue attested SVID",
+    sources: [
+      "src/pages/Workloads.tsx:282",
+    ],
+  },
+  {
+    key: "source.issue.broker.identity.a95ac0066b",
+    defaultMessage: "Issue broker identity",
+    sources: [
+      "src/pages/Workloads.tsx:369",
     ],
   },
   {
@@ -3174,14 +3181,35 @@ export const extractedMessages = [
     key: "source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c",
     defaultMessage: "Issue, deploy, or renew an identity to produce outbox-backed evidence.",
     sources: [
-      "src/pages/Identities.tsx:785",
+      "src/pages/Identities.tsx:779",
+    ],
+  },
+  {
+    key: "source.issue.dynamic.lease.7f0d0fe084",
+    defaultMessage: "Issue dynamic lease",
+    sources: [
+      "src/pages/Workloads.tsx:162",
+    ],
+  },
+  {
+    key: "source.issue.dynamic.secret.lease.e14a6cc2e8",
+    defaultMessage: "Issue dynamic secret lease",
+    sources: [
+      "src/pages/Secrets.tsx:1076",
+    ],
+  },
+  {
+    key: "source.issue.ephemeral.api.key.d864784cc7",
+    defaultMessage: "Issue ephemeral API key",
+    sources: [
+      "src/pages/Secrets.tsx:938",
     ],
   },
   {
     key: "source.issue.pki.secret.692ee4b6e2",
     defaultMessage: "Issue PKI secret",
     sources: [
-      "src/pages/Secrets.tsx:676",
+      "src/pages/Secrets.tsx:778",
     ],
   },
   {
@@ -3196,7 +3224,15 @@ export const extractedMessages = [
     key: "source.issue.your.first.certificate.to.start.trac.355cebb739",
     defaultMessage: "Issue your first certificate to start tracking and rotating credentials.",
     sources: [
-      "src/pages/Identities.tsx:685",
+      "src/pages/Identities.tsx:681",
+    ],
+  },
+  {
+    key: "source.issued.0221e48751",
+    defaultMessage: "Issued",
+    sources: [
+      "src/pages/Secrets.tsx:1451",
+      "src/pages/Workloads.tsx:208",
     ],
   },
   {
@@ -3212,7 +3248,14 @@ export const extractedMessages = [
     sources: [
       "src/components/GraphView.tsx:24",
       "src/pages/Certificates.tsx:378",
-      "src/pages/Identities.tsx:1101",
+      "src/pages/Identities.tsx:999",
+    ],
+  },
+  {
+    key: "source.issuer.list.477db22fd7",
+    defaultMessage: "Issuer list",
+    sources: [
+      "src/pages/CAHierarchy.tsx:210",
     ],
   },
   {
@@ -3223,10 +3266,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.jit.approvals.moved.to.the.inbox.2fe7967f20",
-    defaultMessage: "JIT approvals moved to the inbox",
+    key: "source.issuer.visibility.859e72db07",
+    defaultMessage: "Issuer visibility",
     sources: [
-      "src/pages/Identities.tsx:946",
+      "src/pages/CAHierarchy.tsx:102",
     ],
   },
   {
@@ -3247,7 +3290,7 @@ export const extractedMessages = [
     key: "source.key.99a52df3ff",
     defaultMessage: "Key",
     sources: [
-      "src/pages/Secrets.tsx:974",
+      "src/pages/Secrets.tsx:985",
     ],
   },
   {
@@ -3279,10 +3322,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.key.versions.510438e97c",
-    defaultMessage: "Key versions",
+    key: "source.key.name.6f245e973f",
+    defaultMessage: "Key name",
     sources: [
-      "src/pages/Secrets.tsx:976",
+      "src/pages/Secrets.tsx:1175",
+    ],
+  },
+  {
+    key: "source.key.version.aa5d87c789",
+    defaultMessage: "Key version",
+    sources: [
+      "src/pages/Secrets.tsx:1246",
     ],
   },
   {
@@ -3296,7 +3346,7 @@ export const extractedMessages = [
     key: "source.kind.attributes.9505322c06",
     defaultMessage: "Kind attributes",
     sources: [
-      "src/pages/Identities.tsx:1119",
+      "src/pages/Identities.tsx:1017",
     ],
   },
   {
@@ -3305,23 +3355,43 @@ export const extractedMessages = [
     sources: [
       "src/pages/CAHierarchy.tsx:214",
       "src/pages/Connectors.tsx:154",
-      "src/pages/Discovery.tsx:145",
-      "src/pages/Discovery.tsx:254",
-      "src/pages/Discovery.tsx:359",
+      "src/pages/Discovery.tsx:156",
+      "src/pages/Discovery.tsx:265",
+      "src/pages/Discovery.tsx:370",
       "src/pages/Graph.tsx:223",
       "src/pages/Graph.tsx:275",
       "src/pages/Graph.tsx:408",
-      "src/pages/Identities.tsx:1081",
-      "src/pages/Identities.tsx:694",
+      "src/pages/Identities.tsx:688",
+      "src/pages/Identities.tsx:979",
       "src/pages/Owners.tsx:19",
-      "src/pages/Platform.tsx:747",
     ],
   },
   {
     key: "source.krl.1192cd9855",
     defaultMessage: "KRL",
     sources: [
-      "src/pages/Protocols.tsx:167",
+      "src/pages/Protocols.tsx:157",
+    ],
+  },
+  {
+    key: "source.kubernetes.a37d07fe30",
+    defaultMessage: "Kubernetes",
+    sources: [
+      "src/pages/Secrets.tsx:1086",
+    ],
+  },
+  {
+    key: "source.kubernetes.prod.16a7f7e17a",
+    defaultMessage: "kubernetes/prod",
+    sources: [
+      "src/pages/Secrets.tsx:1313",
+    ],
+  },
+  {
+    key: "source.kubernetes.service.account.e927065c0f",
+    defaultMessage: "Kubernetes service account",
+    sources: [
+      "src/pages/Workloads.tsx:291",
     ],
   },
   {
@@ -3333,31 +3403,31 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.lease.expiry.b29c547b92",
-    defaultMessage: "Lease expiry",
+    key: "source.lease.a789e9e05e",
+    defaultMessage: "Lease",
     sources: [
-      "src/pages/Workloads.tsx:141",
+      "src/pages/Workloads.tsx:204",
     ],
   },
   {
-    key: "source.lease.state.and.browser.side.approval.cont.1a14d4ffd3",
-    defaultMessage: "Lease state and browser-side approval controls are not served yet. Attested issuance, approval-gated ephemeral JIT issuance, and broker minting are available through REST and CLI, so no live issue, revoke, approve, or mint controls are rendered here.",
+    key: "source.lease.id.9730377afc",
+    defaultMessage: "Lease ID",
     sources: [
-      "src/pages/Workloads.tsx:105",
+      "src/pages/Secrets.tsx:1435",
     ],
   },
   {
-    key: "source.lease.status.41faf49ef2",
-    defaultMessage: "Lease status",
+    key: "source.lease.operation.failed.2b788f93c6",
+    defaultMessage: "Lease operation failed",
     sources: [
-      "src/pages/Secrets.tsx:937",
+      "src/pages/Workloads.tsx:197",
     ],
   },
   {
-    key: "source.lease.ttl.0b99e5bec6",
-    defaultMessage: "Lease TTL",
+    key: "source.lease.state.70d08ad3df",
+    defaultMessage: "Lease state",
     sources: [
-      "src/pages/Secrets.tsx:935",
+      "src/pages/Secrets.tsx:1117",
     ],
   },
   {
@@ -3365,13 +3435,6 @@ export const extractedMessages = [
     defaultMessage: "Lifecycle accepted",
     sources: [
       "src/components/CredentialActivityTimeline.tsx:18",
-    ],
-  },
-  {
-    key: "source.lifecycle.automation.367d3e1754",
-    defaultMessage: "Lifecycle automation",
-    sources: [
-      "src/pages/Identities.tsx:915",
     ],
   },
   {
@@ -3385,63 +3448,49 @@ export const extractedMessages = [
     key: "source.lifecycle.state.machine.4fd45925e4",
     defaultMessage: "Lifecycle state machine",
     sources: [
-      "src/pages/Identities.tsx:1139",
+      "src/pages/Identities.tsx:1037",
     ],
   },
   {
     key: "source.limit.674b0ed54b",
     defaultMessage: "Limit",
     sources: [
-      "src/pages/Assistant.tsx:146",
+      "src/pages/Assistant.tsx:145",
+    ],
+  },
+  {
+    key: "source.line.d7852cd0d2",
+    defaultMessage: "Line",
+    sources: [
+      "src/pages/Secrets.tsx:1045",
     ],
   },
   {
     key: "source.live.acme.status.dns.provider.health.chall.ba1aade6c5",
     defaultMessage: "Live ACME status, DNS provider health, challenge history, and preflight results aren't surfaced in the console yet, so it can't run DNS checks. Wildcard issuance requires explicit operator acknowledgement, DNS-01 only, profile opt-in, and blast-radius review.",
     sources: [
-      "src/pages/Protocols.tsx:478",
+      "src/pages/Protocols.tsx:502",
     ],
   },
   {
-    key: "source.live.enabled.state.is.not.served.yet.7a4c41b75f",
-    defaultMessage: "Live enabled-state is not served yet",
+    key: "source.live.propagation.health.is.coming.soon.fre.0638ac896f",
+    defaultMessage: "Live propagation health is coming soon. Freshness, scheduler, and responder health aren't surfaced in the console yet.",
     sources: [
-      "src/pages/Protocols.tsx:349",
-    ],
-  },
-  {
-    key: "source.live.openapi.endpoint.not.served.yet.b19e16f740",
-    defaultMessage: "Live OpenAPI endpoint not served yet",
-    sources: [
-      "src/pages/Platform.tsx:850",
-    ],
-  },
-  {
-    key: "source.live.propagation.health.is.not.served.yet.d2c96d012d",
-    defaultMessage: "Live propagation health is not served yet. Freshness, scheduler, and responder health aren't surfaced in the console yet.",
-    sources: [
-      "src/pages/Identities.tsx:1009",
-    ],
-  },
-  {
-    key: "source.live.protocol.status.enabled.disabled.stat.ad040ebc27",
-    defaultMessage: "Live protocol status — enabled/disabled state, tenant binding, public endpoint, and responder health — isn't surfaced in the console yet, so this console can't claim a protocol is active. The protocol servers themselves are served-gated and default off.",
-    sources: [
-      "src/pages/Protocols.tsx:349",
+      "src/pages/Identities.tsx:907",
     ],
   },
   {
     key: "source.live.tenant.binding.and.endpoint.health.al.394f27caef",
     defaultMessage: "Live tenant binding and endpoint health also aren't surfaced in the console yet.",
     sources: [
-      "src/pages/Protocols.tsx:575",
+      "src/pages/Protocols.tsx:604",
     ],
   },
   {
     key: "source.load.next.metadata.page.8cd7685eed",
     defaultMessage: "Load next metadata page",
     sources: [
-      "src/pages/Secrets.tsx:506",
+      "src/pages/Secrets.tsx:610",
     ],
   },
   {
@@ -3459,10 +3508,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.loading.blast.radius.impact.from.served.gr.38c575fa2b",
-    defaultMessage: "Loading blast-radius impact from served graph...",
+    key: "source.loading.blast.radius.impact.from.graph.771409e0df",
+    defaultMessage: "Loading blast-radius impact from graph...",
     sources: [
-      "src/pages/Identities.tsx:864",
+      "src/pages/Identities.tsx:858",
+    ],
+  },
+  {
+    key: "source.loading.cbom.readiness.0b111b06ca",
+    defaultMessage: "Loading CBOM readiness...",
+    sources: [
+      "src/pages/Posture.tsx:485",
     ],
   },
   {
@@ -3497,14 +3553,21 @@ export const extractedMessages = [
     key: "source.loading.delivery.evidence.7f2cdadedd",
     defaultMessage: "Loading delivery evidence...",
     sources: [
-      "src/pages/Identities.tsx:782",
+      "src/pages/Identities.tsx:776",
+    ],
+  },
+  {
+    key: "source.loading.discovery.findings.6d4fa8ee4b",
+    defaultMessage: "Loading discovery findings...",
+    sources: [
+      "src/pages/Posture.tsx:434",
     ],
   },
   {
     key: "source.loading.discovery.records.da1c8fab87",
     defaultMessage: "Loading discovery records...",
     sources: [
-      "src/pages/Discovery.tsx:130",
+      "src/pages/Discovery.tsx:141",
     ],
   },
   {
@@ -3518,14 +3581,14 @@ export const extractedMessages = [
     key: "source.loading.identities.45d7e0b5b9",
     defaultMessage: "Loading identities...",
     sources: [
-      "src/pages/Identities.tsx:681",
+      "src/pages/Identities.tsx:677",
     ],
   },
   {
     key: "source.loading.identity.detail.0d1feafcee",
     defaultMessage: "Loading identity detail...",
     sources: [
-      "src/pages/Identities.tsx:1052",
+      "src/pages/Identities.tsx:950",
     ],
   },
   {
@@ -3568,7 +3631,7 @@ export const extractedMessages = [
     key: "source.loading.tools.efc190cd4c",
     defaultMessage: "Loading tools...",
     sources: [
-      "src/pages/Assistant.tsx:401",
+      "src/pages/Assistant.tsx:400",
     ],
   },
   {
@@ -3579,11 +3642,18 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.local.plaintext.to.encrypt.a67b9e7b54",
+    defaultMessage: "local plaintext to encrypt",
+    sources: [
+      "src/pages/Secrets.tsx:1199",
+    ],
+  },
+  {
     key: "source.local.preview.http.957e66ac19",
     defaultMessage: "Local preview HTTP",
     sources: [
-      "src/pages/Platform.tsx:226",
-      "src/pages/Platform.tsx:227",
+      "src/pages/Platform.tsx:119",
+      "src/pages/Platform.tsx:120",
     ],
   },
   {
@@ -3604,35 +3674,35 @@ export const extractedMessages = [
     key: "source.machine.login.e25f8c4843",
     defaultMessage: "Machine login",
     sources: [
-      "src/pages/Secrets.tsx:716",
+      "src/pages/Secrets.tsx:818",
     ],
   },
   {
     key: "source.machine.login.failed.01826fdfc8",
     defaultMessage: "Machine login failed",
     sources: [
-      "src/pages/Secrets.tsx:749",
+      "src/pages/Secrets.tsx:850",
     ],
   },
   {
     key: "source.machine.login.test.7f62ed2b92",
     defaultMessage: "Machine login test",
     sources: [
-      "src/pages/Secrets.tsx:724",
+      "src/pages/Secrets.tsx:825",
     ],
   },
   {
-    key: "source.manual.native.store.rotation.is.served.wit.4881bc8730",
-    defaultMessage: "Manual native-store rotation is served with",
+    key: "source.manual.native.store.rotation.replaces.one.8f5a5b462a",
+    defaultMessage: "Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls are still coming soon.",
     sources: [
-      "src/pages/Secrets.tsx:558",
+      "src/pages/Secrets.tsx:662",
     ],
   },
   {
     key: "source.manual.rotation.and.delete.1aee4da261",
     defaultMessage: "Manual rotation and delete",
     sources: [
-      "src/pages/Secrets.tsx:555",
+      "src/pages/Secrets.tsx:659",
     ],
   },
   {
@@ -3643,31 +3713,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.mapping.1ff9a5f8b4",
-    defaultMessage: "Mapping",
-    sources: [
-      "src/pages/Secrets.tsx:1016",
-    ],
-  },
-  {
     key: "source.mappings.f64ec16b0d",
     defaultMessage: "Mappings",
     sources: [
-      "src/pages/Platform.tsx:541",
-    ],
-  },
-  {
-    key: "source.masked.credential.reference.6945ac3a57",
-    defaultMessage: "Masked credential reference",
-    sources: [
-      "src/pages/Secrets.tsx:1017",
-    ],
-  },
-  {
-    key: "source.masked.fingerprint.598e9164c0",
-    defaultMessage: "Masked fingerprint",
-    sources: [
-      "src/pages/Secrets.tsx:891",
+      "src/pages/Platform.tsx:422",
     ],
   },
   {
@@ -3688,57 +3737,29 @@ export const extractedMessages = [
     key: "source.mcp.permission.boundary.e111399a5a",
     defaultMessage: "MCP permission boundary",
     sources: [
-      "src/pages/Assistant.tsx:174",
+      "src/pages/Assistant.tsx:173",
     ],
   },
   {
     key: "source.mcp.tools.1a32c98e7f",
     defaultMessage: "MCP tools",
     sources: [
-      "src/pages/Assistant.tsx:293",
-      "src/pages/Assistant.tsx:396",
+      "src/pages/Assistant.tsx:292",
+      "src/pages/Assistant.tsx:395",
     ],
   },
   {
-    key: "source.mdm.enrollment.is.conditional.on.scep.bein.f6f016a19a",
-    defaultMessage: "MDM enrollment is conditional on SCEP being served and enabled. The console can explain the SCEP challenge gate, Intune profile guidance, challenge rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.",
+    key: "source.mdm.enrollment.follows.the.scep.responder.ef99c5e194",
+    defaultMessage: "MDM enrollment follows the SCEP responder status shown in the protocol register. The console can explain the SCEP challenge gate, Intune profile guidance, challenge rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.",
     sources: [
-      "src/pages/Protocols.tsx:368",
+      "src/pages/Protocols.tsx:391",
     ],
   },
   {
-    key: "source.mdm.gate.is.library.only.77243daef5",
-    defaultMessage: "MDM gate is library-only",
+    key: "source.mdm.gate.controls.coming.soon.137ef3ad92",
+    defaultMessage: "MDM gate controls coming soon",
     sources: [
-      "src/pages/Protocols.tsx:373",
-    ],
-  },
-  {
-    key: "source.meaning.1f5d64b928",
-    defaultMessage: "Meaning",
-    sources: [
-      "src/pages/Platform.tsx:721",
-    ],
-  },
-  {
-    key: "source.means.a.real.ui.action.or.workflow.already.6cd39b3f1c",
-    defaultMessage: "means a real UI action or workflow already exists.",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:219",
-    ],
-  },
-  {
-    key: "source.means.the.gui.can.show.status.evidence.aud.1a08c309b6",
-    defaultMessage: "means the GUI can show status, evidence, audit, or partial parity.",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:222",
-    ],
-  },
-  {
-    key: "source.means.the.gui.now.names.the.gap.and.explai.4fffa72ef2",
-    defaultMessage: "means the GUI now names the gap and explains the required target mapping.",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:225",
+      "src/pages/Protocols.tsx:396",
     ],
   },
   {
@@ -3749,32 +3770,34 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.member.role.oidc.mapping.and.api.token.adm.8b46e18192",
-    defaultMessage: "Member, role, OIDC mapping, and API-token administration are served above. Tenant list, tenant switching, and per-tenant limits are still fixed by the backend session tenant.",
+    key: "source.message.2f77668a9d",
+    defaultMessage: "Message",
     sources: [
-      "src/pages/Platform.tsx:843",
+      "src/pages/Secrets.tsx:1257",
+    ],
+  },
+  {
+    key: "source.message.bytes.to.mac.or.sign.1400a97072",
+    defaultMessage: "message bytes to MAC or sign",
+    sources: [
+      "src/pages/Secrets.tsx:1262",
     ],
   },
   {
     key: "source.method.52a0f9b65b",
     defaultMessage: "Method",
     sources: [
-      "src/pages/Secrets.tsx:1095",
-      "src/pages/Secrets.tsx:726",
+      "src/pages/Secrets.tsx:1416",
+      "src/pages/Secrets.tsx:827",
+      "src/pages/Workloads.tsx:325",
+      "src/pages/Workloads.tsx:416",
     ],
   },
   {
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:299",
-    ],
-  },
-  {
-    key: "source.methods.8696622f34",
-    defaultMessage: "Methods",
-    sources: [
-      "src/pages/Platform.tsx:637",
+      "src/lib/api.ts:468",
     ],
   },
   {
@@ -3795,7 +3818,7 @@ export const extractedMessages = [
     key: "source.minimum.score.e7461df96a",
     defaultMessage: "Minimum score",
     sources: [
-      "src/pages/Risk.tsx:228",
+      "src/pages/Risk.tsx:229",
     ],
   },
   {
@@ -3809,14 +3832,14 @@ export const extractedMessages = [
     key: "source.mint.api.token.f6cf0efff0",
     defaultMessage: "Mint API token",
     sources: [
-      "src/pages/Platform.tsx:475",
+      "src/pages/Platform.tsx:356",
     ],
   },
   {
     key: "source.mint.ced97cc4a3",
     defaultMessage: "Mint",
     sources: [
-      "src/pages/Platform.tsx:486",
+      "src/pages/Platform.tsx:367",
     ],
   },
   {
@@ -3830,14 +3853,21 @@ export const extractedMessages = [
     key: "source.mode.visible.to.ui.8520f90032",
     defaultMessage: "Mode visible to UI",
     sources: [
-      "src/pages/Platform.tsx:399",
+      "src/pages/Platform.tsx:280",
     ],
   },
   {
     key: "source.model.5e2c614c23",
     defaultMessage: "Model",
     sources: [
-      "src/pages/Assistant.tsx:106",
+      "src/pages/Assistant.tsx:105",
+    ],
+  },
+  {
+    key: "source.more.agent.telemetry.coming.soon.f2683e32fe",
+    defaultMessage: "More agent telemetry coming soon",
+    sources: [
+      "src/pages/Agents.tsx:224",
     ],
   },
   {
@@ -3851,36 +3881,52 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:424",
-      "src/lib/api.ts:426",
-      "src/lib/api.ts:428",
-      "src/lib/api.ts:431",
-      "src/lib/api.ts:432",
-      "src/lib/api.ts:433",
-      "src/lib/api.ts:444",
-      "src/lib/api.ts:446",
-      "src/lib/api.ts:448",
-      "src/lib/api.ts:451",
-      "src/lib/api.ts:463",
-      "src/lib/api.ts:469",
-      "src/lib/api.ts:473",
-      "src/lib/api.ts:474",
-      "src/lib/api.ts:476",
-      "src/lib/api.ts:477",
-      "src/lib/api.ts:478",
-      "src/lib/api.ts:480",
-      "src/lib/api.ts:501",
-      "src/lib/api.ts:502",
-      "src/lib/api.ts:511",
-      "src/lib/api.ts:512",
-      "src/lib/api.ts:513",
-      "src/lib/api.ts:514",
-      "src/lib/api.ts:516",
-      "src/lib/api.ts:517",
-      "src/lib/api.ts:518",
-      "src/lib/api.ts:519",
-      "src/lib/api.ts:520",
-      "src/lib/api.ts:521",
+      "src/lib/api.ts:611",
+      "src/lib/api.ts:613",
+      "src/lib/api.ts:615",
+      "src/lib/api.ts:618",
+      "src/lib/api.ts:619",
+      "src/lib/api.ts:620",
+      "src/lib/api.ts:631",
+      "src/lib/api.ts:633",
+      "src/lib/api.ts:635",
+      "src/lib/api.ts:638",
+      "src/lib/api.ts:650",
+      "src/lib/api.ts:656",
+      "src/lib/api.ts:660",
+      "src/lib/api.ts:661",
+      "src/lib/api.ts:663",
+      "src/lib/api.ts:664",
+      "src/lib/api.ts:665",
+      "src/lib/api.ts:667",
+      "src/lib/api.ts:682",
+      "src/lib/api.ts:683",
+      "src/lib/api.ts:684",
+      "src/lib/api.ts:697",
+      "src/lib/api.ts:698",
+      "src/lib/api.ts:707",
+      "src/lib/api.ts:708",
+      "src/lib/api.ts:709",
+      "src/lib/api.ts:710",
+      "src/lib/api.ts:711",
+      "src/lib/api.ts:712",
+      "src/lib/api.ts:714",
+      "src/lib/api.ts:715",
+      "src/lib/api.ts:716",
+      "src/lib/api.ts:717",
+      "src/lib/api.ts:718",
+      "src/lib/api.ts:719",
+      "src/lib/api.ts:720",
+      "src/lib/api.ts:721",
+      "src/lib/api.ts:722",
+      "src/lib/api.ts:723",
+      "src/lib/api.ts:724",
+      "src/lib/api.ts:725",
+      "src/lib/api.ts:726",
+      "src/lib/api.ts:727",
+      "src/lib/api.ts:728",
+      "src/lib/api.ts:729",
+      "src/lib/api.ts:730",
     ],
   },
   {
@@ -3904,16 +3950,16 @@ export const extractedMessages = [
     sources: [
       "src/pages/Agents.tsx:157",
       "src/pages/CAHierarchy.tsx:213",
-      "src/pages/Discovery.tsx:141",
-      "src/pages/Discovery.tsx:192",
-      "src/pages/Discovery.tsx:253",
-      "src/pages/Discovery.tsx:293",
+      "src/pages/Discovery.tsx:152",
+      "src/pages/Discovery.tsx:203",
+      "src/pages/Discovery.tsx:264",
+      "src/pages/Discovery.tsx:304",
       "src/pages/Graph.tsx:274",
       "src/pages/Graph.tsx:404",
-      "src/pages/Identities.tsx:1073",
+      "src/pages/Identities.tsx:971",
       "src/pages/Owners.tsx:18",
       "src/pages/Profiles.tsx:122",
-      "src/pages/Secrets.tsx:525",
+      "src/pages/Secrets.tsx:629",
     ],
   },
   {
@@ -3934,21 +3980,21 @@ export const extractedMessages = [
     key: "source.native.secret.store.174d71834e",
     defaultMessage: "Native secret store",
     sources: [
-      "src/pages/Secrets.tsx:440",
+      "src/pages/Secrets.tsx:544",
     ],
   },
   {
     key: "source.native.store.f4e7459e0a",
     defaultMessage: "native store",
     sources: [
-      "src/pages/Secrets.tsx:530",
+      "src/pages/Secrets.tsx:634",
     ],
   },
   {
     key: "source.new.identity.51c2e7c139",
     defaultMessage: "New identity",
     sources: [
-      "src/pages/Identities.tsx:515",
+      "src/pages/Identities.tsx:513",
     ],
   },
   {
@@ -3987,10 +4033,38 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.attested.svid.has.been.issued.in.this.b.8fee10fc2a",
+    defaultMessage: "No attested SVID has been issued in this browser session.",
+    sources: [
+      "src/pages/Workloads.tsx:334",
+    ],
+  },
+  {
     key: "source.no.attributes.returned.for.this.node.5b22b96afd",
     defaultMessage: "No attributes returned for this node.",
     sources: [
       "src/pages/Graph.tsx:427",
+    ],
+  },
+  {
+    key: "source.no.broker.identity.has.been.issued.in.this.7bb702b9db",
+    defaultMessage: "No broker identity has been issued in this browser session.",
+    sources: [
+      "src/pages/Workloads.tsx:425",
+    ],
+  },
+  {
+    key: "source.no.cbom.assets.returned.yet.6164e1adf5",
+    defaultMessage: "No CBOM assets returned yet",
+    sources: [
+      "src/pages/Posture.tsx:314",
+    ],
+  },
+  {
+    key: "source.no.cbom.readiness.assets.returned.yet.e6abce03d0",
+    defaultMessage: "No CBOM readiness assets returned yet",
+    sources: [
+      "src/pages/Posture.tsx:486",
     ],
   },
   {
@@ -4015,6 +4089,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.connector.catalog.rows.were.returned.3a8d5bf05f",
+    defaultMessage: "No connector catalog rows were returned.",
+    sources: [
+      "src/pages/Connectors.tsx:146",
+    ],
+  },
+  {
     key: "source.no.connector.delivery.receipts.b8aaf68b4d",
     defaultMessage: "No connector delivery receipts",
     sources: [
@@ -4025,7 +4106,7 @@ export const extractedMessages = [
     key: "source.no.connector.receipts.86d1a1527d",
     defaultMessage: "No connector receipts.",
     sources: [
-      "src/pages/Identities.tsx:804",
+      "src/pages/Identities.tsx:798",
     ],
   },
   {
@@ -4036,17 +4117,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.dedicated.posture.dashboard.yet.b75d17cb8b",
-    defaultMessage: "No dedicated posture dashboard yet",
-    sources: [
-      "src/pages/Posture.tsx:234",
-    ],
-  },
-  {
     key: "source.no.delivery.or.rotation.receipts.yet.21fb574bf8",
     defaultMessage: "No delivery or rotation receipts yet",
     sources: [
-      "src/pages/Identities.tsx:785",
+      "src/pages/Identities.tsx:779",
     ],
   },
   {
@@ -4060,28 +4134,28 @@ export const extractedMessages = [
     key: "source.no.discovery.findings.7c8b4f0e23",
     defaultMessage: "No discovery findings",
     sources: [
-      "src/pages/Discovery.tsx:240",
+      "src/pages/Discovery.tsx:251",
     ],
   },
   {
     key: "source.no.discovery.runs.e3ba4972a6",
     defaultMessage: "No discovery runs",
     sources: [
-      "src/pages/Discovery.tsx:233",
+      "src/pages/Discovery.tsx:244",
     ],
   },
   {
     key: "source.no.discovery.schedules.17183fb10e",
     defaultMessage: "No discovery schedules",
     sources: [
-      "src/pages/Discovery.tsx:226",
+      "src/pages/Discovery.tsx:237",
     ],
   },
   {
     key: "source.no.discovery.sources.b70fd7af27",
     defaultMessage: "No discovery sources",
     sources: [
-      "src/pages/Discovery.tsx:219",
+      "src/pages/Discovery.tsx:230",
     ],
   },
   {
@@ -4092,6 +4166,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.dynamic.lease.issued.yet.da6fd9c373",
+    defaultMessage: "No dynamic lease issued yet.",
+    sources: [
+      "src/pages/Secrets.tsx:1151",
+    ],
+  },
+  {
     key: "source.no.expiry.fe06351db8",
     defaultMessage: "No expiry",
     sources: [
@@ -4099,10 +4180,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.extra.kind.attributes.were.returned.by.8be003618b",
-    defaultMessage: "No extra kind attributes were returned by the served detail endpoint.",
+    key: "source.no.extra.kind.attributes.were.returned.9f899e73ae",
+    defaultMessage: "No extra kind attributes were returned.",
     sources: [
-      "src/pages/Identities.tsx:1132",
+      "src/pages/Identities.tsx:1030",
     ],
   },
   {
@@ -4135,17 +4216,24 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.heartbeat.timestamp.served.c099bbf125",
-    defaultMessage: "No heartbeat timestamp served",
+    key: "source.no.heartbeat.timestamp.7c01a4e0ea",
+    defaultMessage: "No heartbeat timestamp",
     sources: [
       "src/pages/Agents.tsx:233",
+    ],
+  },
+  {
+    key: "source.no.identities.currently.require.an.issue.o.ad2e24a485",
+    defaultMessage: "No identities currently require an issue or revoke approval.",
+    sources: [
+      "src/pages/Approvals.tsx:141",
     ],
   },
   {
     key: "source.no.identities.yet.c8697bd1bc",
     defaultMessage: "No identities yet",
     sources: [
-      "src/pages/Identities.tsx:685",
+      "src/pages/Identities.tsx:681",
     ],
   },
   {
@@ -4156,17 +4244,24 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.issuers.served.yet.97dc747bb4",
-    defaultMessage: "No issuers served yet",
+    key: "source.no.issuers.yet.fc838bfd4a",
+    defaultMessage: "No issuers yet",
     sources: [
       "src/pages/CAHierarchy.tsx:114",
+    ],
+  },
+  {
+    key: "source.no.lease.has.been.issued.in.this.browser.s.1e3c1b4c07",
+    defaultMessage: "No lease has been issued in this browser session.",
+    sources: [
+      "src/pages/Workloads.tsx:216",
     ],
   },
   {
     key: "source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e",
     defaultMessage: "No MCP tools are available for this tenant.",
     sources: [
-      "src/pages/Assistant.tsx:410",
+      "src/pages/Assistant.tsx:409",
     ],
   },
   {
@@ -4174,6 +4269,13 @@ export const extractedMessages = [
     defaultMessage: "No more certificate pages.",
     sources: [
       "src/pages/Certificates.tsx:356",
+    ],
+  },
+  {
+    key: "source.no.nodes.or.edges.exist.for.this.tenant.ye.1643ac2e72",
+    defaultMessage: "No nodes or edges exist for this tenant yet. Ingest certificates or issue identities first.",
+    sources: [
+      "src/pages/Graph.tsx:188",
     ],
   },
   {
@@ -4198,13 +4300,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.pending.served.approval.actions.8c62c5b192",
-    defaultMessage: "No pending served approval actions.",
-    sources: [
-      "src/pages/Identities.tsx:958",
-    ],
-  },
-  {
     key: "source.no.profiles.yet.bd4729eb8f",
     defaultMessage: "No profiles yet",
     sources: [
@@ -4215,28 +4310,14 @@ export const extractedMessages = [
     key: "source.no.rotation.runs.cf68af2637",
     defaultMessage: "No rotation runs.",
     sources: [
-      "src/pages/Identities.tsx:837",
-    ],
-  },
-  {
-    key: "source.no.served.connector.catalog.rows.were.retu.fa9eaba9f3",
-    defaultMessage: "No served connector catalog rows were returned.",
-    sources: [
-      "src/pages/Connectors.tsx:146",
-    ],
-  },
-  {
-    key: "source.no.served.identities.currently.require.an.4bf2c0ed49",
-    defaultMessage: "No served identities currently require an issue or revoke approval.",
-    sources: [
-      "src/pages/Approvals.tsx:141",
+      "src/pages/Identities.tsx:831",
     ],
   },
   {
     key: "source.no.source.2eca7a588d",
     defaultMessage: "No source",
     sources: [
-      "src/pages/Discovery.tsx:184",
+      "src/pages/Discovery.tsx:195",
     ],
   },
   {
@@ -4244,6 +4325,13 @@ export const extractedMessages = [
     defaultMessage: "No spec differences.",
     sources: [
       "src/pages/Profiles.tsx:452",
+    ],
+  },
+  {
+    key: "source.no.transit.ciphertext.yet.f9d6c9870b",
+    defaultMessage: "No transit ciphertext yet.",
+    sources: [
+      "src/pages/Secrets.tsx:1251",
     ],
   },
   {
@@ -4282,27 +4370,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.non.interactive.cbom.preview.64a0e75da3",
-    defaultMessage: "Non-interactive CBOM preview",
-    sources: [
-      "src/pages/Posture.tsx:216",
-    ],
-  },
-  {
-    key: "source.non.interactive.ct.triage.preview.b8f1d8ddc3",
-    defaultMessage: "Non-interactive CT triage preview",
-    sources: [
-      "src/pages/Posture.tsx:142",
-    ],
-  },
-  {
-    key: "source.non.interactive.drift.remediation.preview.d93f30349e",
-    defaultMessage: "Non-interactive drift remediation preview",
-    sources: [
-      "src/pages/Posture.tsx:171",
-    ],
-  },
-  {
     key: "source.none.dc937b5989",
     defaultMessage: "None",
     sources: [
@@ -4313,26 +4380,33 @@ export const extractedMessages = [
     key: "source.not.after.577c1c7930",
     defaultMessage: "Not after",
     sources: [
-      "src/pages/Identities.tsx:1085",
+      "src/pages/Identities.tsx:983",
+    ],
+  },
+  {
+    key: "source.not.available.67a926f700",
+    defaultMessage: "Not available",
+    sources: [
+      "src/pages/Certificates.tsx:472",
     ],
   },
   {
     key: "source.not.before.69bf0cd3a1",
     defaultMessage: "Not before",
     sources: [
-      "src/pages/Identities.tsx:1089",
+      "src/pages/Identities.tsx:987",
     ],
   },
   {
-    key: "source.not.served.8b1fed9e3d",
-    defaultMessage: "Not served",
+    key: "source.not.browser.readable.cc2ff0b76e",
+    defaultMessage: "Not browser-readable",
     sources: [
-      "src/pages/Certificates.tsx:472",
+      "src/pages/Protocols.tsx:617",
     ],
   },
   {
-    key: "source.notification.channel.controls.not.served.y.670400406d",
-    defaultMessage: "Notification channel controls not served yet",
+    key: "source.notification.channel.controls.coming.soon.dc8ffa0985",
+    defaultMessage: "Notification channel controls coming soon",
     sources: [
       "src/pages/Policy.tsx:205",
     ],
@@ -4356,28 +4430,20 @@ export const extractedMessages = [
     defaultMessage: "Observe",
     sources: [
       "src/lib/statusVocab.ts:46",
-      "src/pages/FeatureCoverage.tsx:27",
-    ],
-  },
-  {
-    key: "source.ocsp.a716fb8701",
-    defaultMessage: "OCSP:",
-    sources: [
-      "src/pages/Identities.tsx:1004",
     ],
   },
   {
     key: "source.offboard.9053e68ef6",
     defaultMessage: "Offboard",
     sources: [
-      "src/pages/Platform.tsx:504",
+      "src/pages/Platform.tsx:385",
     ],
   },
   {
     key: "source.offboard.member.8a27787595",
     defaultMessage: "Offboard member",
     sources: [
-      "src/pages/Platform.tsx:493",
+      "src/pages/Platform.tsx:374",
     ],
   },
   {
@@ -4391,35 +4457,35 @@ export const extractedMessages = [
     key: "source.oidc.mapping.status.358515bade",
     defaultMessage: "OIDC mapping status",
     sources: [
-      "src/pages/Platform.tsx:530",
+      "src/pages/Platform.tsx:411",
     ],
   },
   {
     key: "source.oidc.mapping.status.and.api.token.administ.565d8d27fd",
     defaultMessage: "OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF posture.",
     sources: [
-      "src/pages/Platform.tsx:407",
+      "src/pages/Platform.tsx:288",
     ],
   },
   {
     key: "source.onboard.member.a6dfe12142",
     defaultMessage: "Onboard member",
     sources: [
-      "src/pages/Platform.tsx:449",
+      "src/pages/Platform.tsx:330",
     ],
   },
   {
     key: "source.one.time.share.token.20234cd9a0",
     defaultMessage: "One-time share token",
     sources: [
-      "src/pages/Secrets.tsx:815",
+      "src/pages/Secrets.tsx:917",
     ],
   },
   {
     key: "source.one.time.sharing.9db928cd78",
     defaultMessage: "One-time sharing",
     sources: [
-      "src/pages/Secrets.tsx:759",
+      "src/pages/Secrets.tsx:860",
     ],
   },
   {
@@ -4433,7 +4499,7 @@ export const extractedMessages = [
     key: "source.only.valid.next.states.are.enabled.disable.643c38f3f4",
     defaultMessage: "Only valid next states are enabled. Disabled targets are not sent to the backend.",
     sources: [
-      "src/pages/Identities.tsx:1142",
+      "src/pages/Identities.tsx:1040",
     ],
   },
   {
@@ -4441,13 +4507,6 @@ export const extractedMessages = [
     defaultMessage: "Opaque node ID",
     sources: [
       "src/pages/Graph.tsx:412",
-    ],
-  },
-  {
-    key: "source.open.approvals.inbox.adf6837f8c",
-    defaultMessage: "Open approvals inbox",
-    sources: [
-      "src/pages/Identities.tsx:953",
     ],
   },
   {
@@ -4468,21 +4527,21 @@ export const extractedMessages = [
     key: "source.openssl.p10cr.ac3c5c9967",
     defaultMessage: "OpenSSL p10cr",
     sources: [
-      "src/pages/Protocols.tsx:119",
+      "src/pages/Protocols.tsx:116",
     ],
   },
   {
     key: "source.openssl.query.5ae6b22e8f",
     defaultMessage: "OpenSSL query",
     sources: [
-      "src/pages/Protocols.tsx:184",
+      "src/pages/Protocols.tsx:173",
     ],
   },
   {
     key: "source.openssl.verify.64d6554ef1",
     defaultMessage: "OpenSSL verify",
     sources: [
-      "src/pages/Protocols.tsx:192",
+      "src/pages/Protocols.tsx:181",
     ],
   },
   {
@@ -4491,7 +4550,6 @@ export const extractedMessages = [
     sources: [
       "src/lib/statusVocab.ts:45",
       "src/lib/statusVocab.ts:48",
-      "src/pages/FeatureCoverage.tsx:22",
     ],
   },
   {
@@ -4499,16 +4557,29 @@ export const extractedMessages = [
     defaultMessage: "Operation",
     sources: [
       "src/pages/CAHierarchy.tsx:140",
-      "src/pages/Secrets.tsx:975",
+    ],
+  },
+  {
+    key: "source.operations.358cc201f8",
+    defaultMessage: "Operations",
+    sources: [
+      "src/pages/Platform.tsx:516",
     ],
   },
   {
     key: "source.optional.59be71333c",
     defaultMessage: "Optional",
     sources: [
-      "src/pages/Assistant.tsx:329",
-      "src/pages/Assistant.tsx:379",
-      "src/pages/Assistant.tsx:434",
+      "src/pages/Assistant.tsx:328",
+      "src/pages/Assistant.tsx:378",
+      "src/pages/Assistant.tsx:433",
+    ],
+  },
+  {
+    key: "source.optional.associated.data.52eba643ce",
+    defaultMessage: "optional associated data",
+    sources: [
+      "src/pages/Secrets.tsx:1190",
     ],
   },
   {
@@ -4530,15 +4601,7 @@ export const extractedMessages = [
     key: "source.outcome.4e80abb5b1",
     defaultMessage: "Outcome",
     sources: [
-      "src/pages/FeatureCoverage.tsx:324",
       "src/pages/Policy.tsx:162",
-    ],
-  },
-  {
-    key: "source.outcome.legend.e8384fca04",
-    defaultMessage: "Outcome legend",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:215",
     ],
   },
   {
@@ -4546,9 +4609,8 @@ export const extractedMessages = [
     defaultMessage: "Owner",
     sources: [
       "src/pages/Certificates.tsx:428",
-      "src/pages/Identities.tsx:1093",
-      "src/pages/Risk.tsx:254",
-      "src/pages/Secrets.tsx:892",
+      "src/pages/Identities.tsx:991",
+      "src/pages/Risk.tsx:255",
     ],
   },
   {
@@ -4562,7 +4624,7 @@ export const extractedMessages = [
     key: "source.owner.id.768c061c71",
     defaultMessage: "owner id",
     sources: [
-      "src/pages/Risk.tsx:260",
+      "src/pages/Risk.tsx:261",
     ],
   },
   {
@@ -4591,14 +4653,7 @@ export const extractedMessages = [
     key: "source.parity.note.473848cc25",
     defaultMessage: "Parity note",
     sources: [
-      "src/pages/Platform.tsx:684",
-    ],
-  },
-  {
-    key: "source.passive.read.state.model.0d069b18a1",
-    defaultMessage: "Passive-read-state model",
-    sources: [
-      "src/pages/Platform.tsx:815",
+      "src/pages/Platform.tsx:551",
     ],
   },
   {
@@ -4612,22 +4667,22 @@ export const extractedMessages = [
     key: "source.path.62fa5a5b0d",
     defaultMessage: "Path",
     sources: [
-      "src/pages/Platform.tsx:638",
       "src/pages/Profiles.tsx:459",
+      "src/pages/Secrets.tsx:1003",
     ],
   },
   {
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:309",
+      "src/lib/api.ts:478",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:272",
+      "src/lib/api.ts:406",
     ],
   },
   {
@@ -4638,8 +4693,15 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.pci.hipaa.soc.2.fedramp.and.cnsa.2.0.contr.abf426b553",
-    defaultMessage: "PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not served by API or CLI yet. The signed audit export above is real evidence, not a compliance certificate.",
+    key: "source.payments.pii.643f35ba95",
+    defaultMessage: "payments-pii",
+    sources: [
+      "src/pages/Secrets.tsx:1180",
+    ],
+  },
+  {
+    key: "source.pci.hipaa.soc.2.fedramp.and.cnsa.2.0.contr.3874c34b06",
+    defaultMessage: "PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not available in this console yet. The signed audit export above is real evidence, not a compliance certificate.",
     sources: [
       "src/pages/Policy.tsx:274",
     ],
@@ -4656,13 +4718,6 @@ export const extractedMessages = [
     defaultMessage: "pending",
     sources: [
       "src/lib/statusVocab.ts:59",
-    ],
-  },
-  {
-    key: "source.pending.jit.approval.requests.814c52ece7",
-    defaultMessage: "Pending JIT approval requests",
-    sources: [
-      "src/pages/Identities.tsx:962",
     ],
   },
   {
@@ -4683,98 +4738,56 @@ export const extractedMessages = [
     key: "source.permissions.abccc78cc9",
     defaultMessage: "Permissions",
     sources: [
-      "src/pages/Platform.tsx:516",
+      "src/pages/Platform.tsx:397",
     ],
   },
   {
     key: "source.pki.as.a.secret.e349ae9d0f",
     defaultMessage: "PKI as a secret",
     sources: [
-      "src/pages/Secrets.tsx:669",
+      "src/pages/Secrets.tsx:771",
     ],
   },
   {
     key: "source.pki.issue.failed.cb50a25278",
     defaultMessage: "PKI issue failed",
     sources: [
-      "src/pages/Secrets.tsx:702",
+      "src/pages/Secrets.tsx:804",
     ],
   },
   {
     key: "source.pkioperation.f57e1d9c16",
     defaultMessage: "PKIOperation",
     sources: [
-      "src/pages/Protocols.tsx:102",
+      "src/pages/Protocols.tsx:100",
     ],
   },
   {
-    key: "source.plaintext.posture.dcd6a94852",
-    defaultMessage: "Plaintext posture",
+    key: "source.plaintext.0707c5d972",
+    defaultMessage: "Plaintext",
     sources: [
-      "src/pages/Secrets.tsx:977",
+      "src/pages/Secrets.tsx:1194",
     ],
   },
   {
     key: "source.platform.c78ffe1957",
     defaultMessage: "Platform",
     sources: [
-      "src/pages/Platform.tsx:359",
-    ],
-  },
-  {
-    key: "source.platform.status.endpoint.not.served.yet.c790ca68d9",
-    defaultMessage: "Platform status endpoint not served yet",
-    sources: [
-      "src/pages/Platform.tsx:847",
-    ],
-  },
-  {
-    key: "source.plugin.ab1173eed1",
-    defaultMessage: "Plugin",
-    sources: [
-      "src/pages/Platform.tsx:783",
-    ],
-  },
-  {
-    key: "source.plugin.admin.read.api.not.served.yet.e9f81af2b9",
-    defaultMessage: "Plugin admin read API not served yet",
-    sources: [
-      "src/pages/Platform.tsx:774",
-    ],
-  },
-  {
-    key: "source.plugin.administration.needs.loaded.plugin.6a4a2af953",
-    defaultMessage: "Plugin administration needs loaded-plugin inventory, Ed25519 provenance, digest pins, capability grants, conformance results, runtime status, and denial reasons. The plugin host exists, but the console has no served read API for those records yet.",
-    sources: [
-      "src/pages/Platform.tsx:769",
+      "src/pages/Platform.tsx:240",
     ],
   },
   {
     key: "source.plugin.provider.467c395b7a",
     defaultMessage: "Plugin provider",
     sources: [
-      "src/pages/Protocols.tsx:235",
-    ],
-  },
-  {
-    key: "source.plugin.sdk.and.capability.sandbox.64ab146596",
-    defaultMessage: "Plugin SDK and capability sandbox",
-    sources: [
-      "src/pages/Platform.tsx:766",
-    ],
-  },
-  {
-    key: "source.plugin.sdk.capability.sandbox.fixtures.fde02a571d",
-    defaultMessage: "Plugin SDK capability sandbox fixtures",
-    sources: [
-      "src/pages/Platform.tsx:780",
+      "src/pages/Protocols.tsx:224",
     ],
   },
   {
     key: "source.policy.and.attestation.digest.bind.the.lea.d2cb9fd8e8",
     defaultMessage: "policy and attestation digest bind the lease",
     sources: [
-      "src/pages/Workloads.tsx:122",
+      "src/pages/Workloads.tsx:148",
     ],
   },
   {
@@ -4785,8 +4798,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.policy.authoring.and.dry.run.api.not.serve.28f16a9301",
-    defaultMessage: "Policy authoring and dry-run API not served yet",
+    key: "source.policy.authoring.and.dry.run.coming.soon.68fef5248a",
+    defaultMessage: "Policy authoring and dry-run coming soon",
     sources: [
       "src/pages/Policy.tsx:313",
     ],
@@ -4813,97 +4826,69 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.post.api.v1.identities.with.idempotency.ke.c4e9bf819b",
-    defaultMessage: "POST /api/v1/identities with Idempotency-Key",
+    key: "source.postgresql.cc52d03280",
+    defaultMessage: "PostgreSQL",
     sources: [
-      "src/pages/RequestCredential.tsx:301",
-    ],
-  },
-  {
-    key: "source.post.api.v1.secrets.login.exchanges.a.mach.0b425c58f2",
-    defaultMessage: "`POST /api/v1/secrets/login` exchanges a machine credential for a scoped workload session. The submitted credential is cleared after submit and never echoed.",
-    sources: [
-      "src/pages/Secrets.tsx:719",
-    ],
-  },
-  {
-    key: "source.post.api.v1.secrets.pki.returns.a.short.li.e62f38b94f",
-    defaultMessage: "`POST /api/v1/secrets/pki` returns a short-lived certificate bundle. The private key is shown only in the explicit result panel.",
-    sources: [
-      "src/pages/Secrets.tsx:672",
-    ],
-  },
-  {
-    key: "source.post.api.v1.secrets.rotations.f0296b5e5d",
-    defaultMessage: "POST /api/v1/secrets/rotations",
-    sources: [
-      "src/pages/Secrets.tsx:560",
+      "src/pages/Secrets.tsx:1084",
     ],
   },
   {
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:488",
-      "src/lib/api.ts:490",
-      "src/lib/api.ts:491",
-      "src/lib/api.ts:493",
+      "src/lib/api.ts:675",
+      "src/lib/api.ts:677",
+      "src/lib/api.ts:678",
+      "src/lib/api.ts:680",
     ],
   },
   {
     key: "source.posture.bdba27f66e",
     defaultMessage: "Posture",
     sources: [
-      "src/pages/Posture.tsx:116",
+      "src/pages/Posture.tsx:175",
     ],
   },
   {
     key: "source.pqc.migration.is.a.staged.rollout.inventor.75f4cc20d4",
     defaultMessage: "PQC migration is a staged rollout: inventory first, hybrid canary second, workload rotation third, with rollback and resume points at every wave.",
     sources: [
-      "src/pages/Posture.tsx:276",
+      "src/pages/Posture.tsx:343",
     ],
   },
   {
     key: "source.pqc.migration.orchestration.2253b6b839",
     defaultMessage: "PQC migration orchestration",
     sources: [
-      "src/pages/Posture.tsx:273",
+      "src/pages/Posture.tsx:340",
     ],
   },
   {
-    key: "source.pqc.migration.orchestration.is.library.onl.6f3c3062c5",
-    defaultMessage: "PQC migration orchestration is library-only",
+    key: "source.pqc.migration.queue.result.3b834682cc",
+    defaultMessage: "PQC migration queue result",
     sources: [
-      "src/pages/Posture.tsx:281",
-    ],
-  },
-  {
-    key: "source.pqc.migration.plan.fixture.34e53979be",
-    defaultMessage: "PQC migration plan fixture",
-    sources: [
-      "src/pages/Posture.tsx:285",
+      "src/pages/Posture.tsx:371",
     ],
   },
   {
     key: "source.prepare.delete.6d0f9a0ea2",
     defaultMessage: "Prepare delete",
     sources: [
-      "src/pages/Secrets.tsx:258",
+      "src/pages/Secrets.tsx:174",
     ],
   },
   {
     key: "source.prepare.rotate.9534e0ec7e",
     defaultMessage: "Prepare rotate",
     sources: [
-      "src/pages/Secrets.tsx:254",
+      "src/pages/Secrets.tsx:170",
     ],
   },
   {
     key: "source.preview.result.b22de024e1",
     defaultMessage: "Preview result",
     sources: [
-      "src/pages/Protocols.tsx:598",
+      "src/pages/Protocols.tsx:659",
     ],
   },
   {
@@ -4917,7 +4902,7 @@ export const extractedMessages = [
     key: "source.principal.afc19f1734",
     defaultMessage: "Principal",
     sources: [
-      "src/pages/Secrets.tsx:1091",
+      "src/pages/Secrets.tsx:1412",
     ],
   },
   {
@@ -4931,14 +4916,14 @@ export const extractedMessages = [
     key: "source.privilege.d4d7c3497b",
     defaultMessage: "Privilege",
     sources: [
-      "src/pages/Risk.tsx:239",
+      "src/pages/Risk.tsx:240",
     ],
   },
   {
     key: "source.privilege.label.128cc84317",
     defaultMessage: "Privilege label",
     sources: [
-      "src/pages/Risk.tsx:284",
+      "src/pages/Risk.tsx:285",
     ],
   },
   {
@@ -5029,31 +5014,62 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.protocol.cf0883343f",
-    defaultMessage: "Protocol",
+    key: "source.proof.payloads.and.returned.certificates.a.aceb55d010",
+    defaultMessage: "Proof payloads and returned certificates are cleared instead of being stored in UI state.",
     sources: [
-      "src/pages/Protocols.tsx:493",
+      "src/pages/Workloads.tsx:285",
     ],
   },
   {
-    key: "source.protocol.status.source.690e5a4bc2",
-    defaultMessage: "Protocol status source",
+    key: "source.proof.payloads.are.submitted.directly.and.893894a52b",
+    defaultMessage: "Proof payloads are submitted directly and cleared after the broker returns identity metadata.",
     sources: [
-      "src/pages/Protocols.tsx:345",
+      "src/pages/Workloads.tsx:372",
+    ],
+  },
+  {
+    key: "source.protocol.cf0883343f",
+    defaultMessage: "Protocol",
+    sources: [
+      "src/pages/Protocols.tsx:517",
+    ],
+  },
+  {
+    key: "source.protocol.register.6109f4cf46",
+    defaultMessage: "Protocol register",
+    sources: [
+      "src/pages/Protocols.tsx:509",
+    ],
+  },
+  {
+    key: "source.protocol.responder.status.e57eff8ebc",
+    defaultMessage: "Protocol responder status",
+    sources: [
+      "src/pages/Protocols.tsx:364",
+    ],
+  },
+  {
+    key: "source.protocol.status.check.failed.d6b8e1268d",
+    defaultMessage: "Protocol status check failed",
+    sources: [
+      "src/pages/Protocols.tsx:558",
     ],
   },
   {
     key: "source.protocols.1019490835",
     defaultMessage: "Protocols",
     sources: [
-      "src/pages/Protocols.tsx:340",
+      "src/pages/Protocols.tsx:359",
     ],
   },
   {
-    key: "source.provenance.1c4b8ff605",
-    defaultMessage: "Provenance",
+    key: "source.provider.472590ae97",
+    defaultMessage: "Provider",
     sources: [
-      "src/pages/Platform.tsx:784",
+      "src/pages/Secrets.tsx:1078",
+      "src/pages/Secrets.tsx:1443",
+      "src/pages/Workloads.tsx:170",
+      "src/pages/Workloads.tsx:205",
     ],
   },
   {
@@ -5071,13 +5087,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.public.route.e3b120b275",
-    defaultMessage: "Public route",
-    sources: [
-      "src/pages/Protocols.tsx:494",
-    ],
-  },
-  {
     key: "source.purpose.d4e8830a71",
     defaultMessage: "Purpose",
     sources: [
@@ -5092,22 +5101,15 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.push.drift.status.1e29296d30",
-    defaultMessage: "Push / drift status",
-    sources: [
-      "src/pages/Secrets.tsx:1018",
-    ],
-  },
-  {
     key: "source.query.b80a37564f",
     defaultMessage: "Query",
     sources: [
-      "src/pages/Assistant.tsx:287",
+      "src/pages/Assistant.tsx:286",
     ],
   },
   {
-    key: "source.query.rca.and.mcp.are.served.behind.ai.ena.74bb83b5f8",
-    defaultMessage: "Query, RCA, and MCP are served behind `ai.enable_api` and fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.",
+    key: "source.query.rca.and.mcp.fail.closed.when.disable.255478de84",
+    defaultMessage: "Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.",
     sources: [
       "src/pages/Assistant.tsx:95",
     ],
@@ -5116,36 +5118,43 @@ export const extractedMessages = [
     key: "source.question.289aff12b0",
     defaultMessage: "Question",
     sources: [
-      "src/pages/Assistant.tsx:313",
-      "src/pages/Assistant.tsx:363",
+      "src/pages/Assistant.tsx:312",
+      "src/pages/Assistant.tsx:362",
+    ],
+  },
+  {
+    key: "source.queue.3b2fe03e36",
+    defaultMessage: "Queue",
+    sources: [
+      "src/pages/Secrets.tsx:1347",
     ],
   },
   {
     key: "source.raw.attestation.evidence.stays.out.of.the.6ffaf184fc",
     defaultMessage: "Raw attestation evidence stays out of the browser",
     sources: [
-      "src/pages/Workloads.tsx:197",
+      "src/pages/Workloads.tsx:353",
     ],
   },
   {
-    key: "source.rca.answers.are.sufficient.or.insufficient.17af357508",
-    defaultMessage: "RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a served remediation workflow exists.",
+    key: "source.rca.answers.are.sufficient.or.insufficient.5a9397d141",
+    defaultMessage: "RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a remediation workflow exists.",
     sources: [
-      "src/pages/Assistant.tsx:163",
+      "src/pages/Assistant.tsx:162",
     ],
   },
   {
     key: "source.rca.d93580ed3a",
     defaultMessage: "RCA",
     sources: [
-      "src/pages/Assistant.tsx:290",
+      "src/pages/Assistant.tsx:289",
     ],
   },
   {
     key: "source.rca.evidence.workspace.418f458f5f",
     defaultMessage: "RCA evidence workspace",
     sources: [
-      "src/pages/Assistant.tsx:160",
+      "src/pages/Assistant.tsx:159",
     ],
   },
   {
@@ -5170,17 +5179,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.real.gui.route.registry.ab34d75d6d",
-    defaultMessage: "Real GUI route registry",
+    key: "source.read.only.responder.probe.23655af063",
+    defaultMessage: "Read-only responder probe",
     sources: [
-      "src/pages/Platform.tsx:742",
+      "src/pages/Protocols.tsx:369",
     ],
   },
   {
-    key: "source.reality.today.fdaa03fdce",
-    defaultMessage: "Reality today",
+    key: "source.readonly.reporting.ddf5aecb22",
+    defaultMessage: "readonly-reporting",
     sources: [
-      "src/pages/FeatureCoverage.tsx:325",
+      "src/pages/Secrets.tsx:1096",
     ],
   },
   {
@@ -5188,10 +5197,9 @@ export const extractedMessages = [
     defaultMessage: "Reason",
     sources: [
       "src/pages/Connectors.tsx:199",
-      "src/pages/Identities.tsx:798",
+      "src/pages/Identities.tsx:792",
       "src/pages/Incidents.tsx:149",
-      "src/pages/Platform.tsx:500",
-      "src/pages/Workloads.tsx:182",
+      "src/pages/Platform.tsx:381",
     ],
   },
   {
@@ -5213,7 +5221,7 @@ export const extractedMessages = [
     defaultMessage: "Recent connector delivery receipts",
     sources: [
       "src/pages/Connectors.tsx:191",
-      "src/pages/Identities.tsx:791",
+      "src/pages/Identities.tsx:785",
     ],
   },
   {
@@ -5227,7 +5235,7 @@ export const extractedMessages = [
     key: "source.recent.lifecycle.rotation.runs.4de11752b6",
     defaultMessage: "Recent lifecycle rotation runs",
     sources: [
-      "src/pages/Identities.tsx:824",
+      "src/pages/Identities.tsx:818",
     ],
   },
   {
@@ -5238,25 +5246,39 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.redacted.reference.f904f7809b",
+    defaultMessage: "Redacted reference",
+    sources: [
+      "src/pages/Secrets.tsx:1046",
+    ],
+  },
+  {
     key: "source.redeem.one.time.share.2294329e1f",
     defaultMessage: "Redeem one-time share",
     sources: [
-      "src/pages/Secrets.tsx:797",
+      "src/pages/Secrets.tsx:899",
     ],
   },
   {
     key: "source.redeemed.share.value.1455d94a16",
     defaultMessage: "Redeemed share value",
     sources: [
-      "src/pages/Secrets.tsx:820",
+      "src/pages/Secrets.tsx:922",
+    ],
+  },
+  {
+    key: "source.redis.a7f6415749",
+    defaultMessage: "Redis",
+    sources: [
+      "src/pages/Secrets.tsx:1087",
     ],
   },
   {
     key: "source.reference.71bf90935f",
     defaultMessage: "Reference",
     sources: [
-      "src/pages/Discovery.tsx:360",
-      "src/pages/Protocols.tsx:451",
+      "src/pages/Discovery.tsx:371",
+      "src/pages/Protocols.tsx:475",
     ],
   },
   {
@@ -5264,7 +5286,7 @@ export const extractedMessages = [
     defaultMessage: "Refresh",
     sources: [
       "src/pages/CAHierarchy.tsx:87",
-      "src/pages/Discovery.tsx:123",
+      "src/pages/Discovery.tsx:134",
     ],
   },
   {
@@ -5275,24 +5297,32 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.registered.real.surfaces.5fb0bca632",
-    defaultMessage: "Registered real surfaces",
+    key: "source.remote.key.b698762058",
+    defaultMessage: "Remote key",
     sources: [
-      "src/pages/Platform.tsx:738",
+      "src/pages/Secrets.tsx:1318",
+      "src/pages/Secrets.tsx:1343",
     ],
   },
   {
-    key: "source.remediation.blocked.831922d6fa",
-    defaultMessage: "Remediation blocked",
+    key: "source.renew.5m.d4d313bd8a",
+    defaultMessage: "Renew 5m",
     sources: [
-      "src/pages/Posture.tsx:187",
+      "src/pages/Workloads.tsx:240",
     ],
   },
   {
     key: "source.renew.90c1689b0b",
     defaultMessage: "Renew",
     sources: [
-      "src/pages/Identities.tsx:110",
+      "src/pages/Identities.tsx:108",
+    ],
+  },
+  {
+    key: "source.renewal.window.publishing.stays.read.only.d96982056b",
+    defaultMessage: "Renewal-window publishing stays read-only until durable account, order, and renewal guidance are visible here.",
+    sources: [
+      "src/pages/Protocols.tsx:432",
     ],
   },
   {
@@ -5320,7 +5350,14 @@ export const extractedMessages = [
     key: "source.replacement.value.81858184c6",
     defaultMessage: "Replacement value",
     sources: [
-      "src/pages/Secrets.tsx:579",
+      "src/pages/Secrets.tsx:682",
+    ],
+  },
+  {
+    key: "source.repo.payments.read.deploy.staging.write.169aa8250e",
+    defaultMessage: "repo:payments:read, deploy:staging:write",
+    sources: [
+      "src/pages/Secrets.tsx:955",
     ],
   },
   {
@@ -5334,49 +5371,43 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:412",
-      "src/lib/api.ts:413",
-      "src/lib/api.ts:423",
-      "src/lib/api.ts:425",
-      "src/lib/api.ts:427",
-      "src/lib/api.ts:429",
-      "src/lib/api.ts:430",
-      "src/lib/api.ts:443",
-      "src/lib/api.ts:445",
-      "src/lib/api.ts:447",
-      "src/lib/api.ts:449",
-      "src/lib/api.ts:450",
-      "src/lib/api.ts:460",
-      "src/lib/api.ts:461",
-      "src/lib/api.ts:462",
-      "src/lib/api.ts:464",
-      "src/lib/api.ts:465",
-      "src/lib/api.ts:466",
-      "src/lib/api.ts:467",
-      "src/lib/api.ts:468",
-      "src/lib/api.ts:470",
-      "src/lib/api.ts:471",
-      "src/lib/api.ts:472",
-      "src/lib/api.ts:475",
-      "src/lib/api.ts:479",
-      "src/lib/api.ts:481",
-      "src/lib/api.ts:482",
-      "src/lib/api.ts:483",
-      "src/lib/api.ts:484",
-      "src/lib/api.ts:485",
-      "src/lib/api.ts:486",
-      "src/lib/api.ts:487",
-      "src/lib/api.ts:489",
-      "src/lib/api.ts:492",
-      "src/lib/api.ts:509",
-      "src/lib/api.ts:515",
-    ],
-  },
-  {
-    key: "source.request.59f03d642b",
-    defaultMessage: "Request",
-    sources: [
-      "src/pages/Secrets.tsx:848",
+      "src/lib/api.ts:599",
+      "src/lib/api.ts:600",
+      "src/lib/api.ts:610",
+      "src/lib/api.ts:612",
+      "src/lib/api.ts:614",
+      "src/lib/api.ts:616",
+      "src/lib/api.ts:617",
+      "src/lib/api.ts:630",
+      "src/lib/api.ts:632",
+      "src/lib/api.ts:634",
+      "src/lib/api.ts:636",
+      "src/lib/api.ts:637",
+      "src/lib/api.ts:647",
+      "src/lib/api.ts:648",
+      "src/lib/api.ts:649",
+      "src/lib/api.ts:651",
+      "src/lib/api.ts:652",
+      "src/lib/api.ts:653",
+      "src/lib/api.ts:654",
+      "src/lib/api.ts:655",
+      "src/lib/api.ts:657",
+      "src/lib/api.ts:658",
+      "src/lib/api.ts:659",
+      "src/lib/api.ts:662",
+      "src/lib/api.ts:666",
+      "src/lib/api.ts:668",
+      "src/lib/api.ts:669",
+      "src/lib/api.ts:670",
+      "src/lib/api.ts:671",
+      "src/lib/api.ts:672",
+      "src/lib/api.ts:673",
+      "src/lib/api.ts:674",
+      "src/lib/api.ts:676",
+      "src/lib/api.ts:679",
+      "src/lib/api.ts:681",
+      "src/lib/api.ts:705",
+      "src/lib/api.ts:713",
     ],
   },
   {
@@ -5387,10 +5418,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.request.approve.state.for.sensitive.secret.a0f3111f3b",
-    defaultMessage: "Request/approve state for sensitive secret mutations is not served yet. This page exposes the served one-time share path and no fake approval queue.",
+    key: "source.request.approve.state.for.sensitive.secret.f234461ca8",
+    defaultMessage: "Request/approve state for sensitive secret mutations is not available in the console yet. This page exposes the one-time share path and no fake approval queue.",
     sources: [
-      "src/pages/Secrets.tsx:766",
+      "src/pages/Secrets.tsx:867",
     ],
   },
   {
@@ -5415,17 +5446,9 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.requested.identities.are.summarized.here.b.4b33303324",
-    defaultMessage: "Requested identities are summarized here, but approval decisions now happen in the dedicated inbox so request and approve controls are not co-located for one operator.",
-    sources: [
-      "src/pages/Identities.tsx:949",
-    ],
-  },
-  {
     key: "source.requester.b5687cf04a",
     defaultMessage: "Requester",
     sources: [
-      "src/pages/Identities.tsx:966",
       "src/pages/RequestCredential.tsx:296",
     ],
   },
@@ -5433,21 +5456,21 @@ export const extractedMessages = [
     key: "source.required.permission.scopes.by.feature.627394d6da",
     defaultMessage: "Required permission scopes by feature",
     sources: [
-      "src/pages/Platform.tsx:596",
+      "src/pages/Platform.tsx:477",
     ],
   },
   {
     key: "source.required.scope.a11e880418",
     defaultMessage: "Required scope",
     sources: [
-      "src/pages/Platform.tsx:600",
+      "src/pages/Platform.tsx:481",
     ],
   },
   {
     key: "source.reset.daee7606b3",
     defaultMessage: "Reset",
     sources: [
-      "src/pages/Audit.tsx:236",
+      "src/pages/Audit.tsx:237",
     ],
   },
   {
@@ -5462,6 +5485,27 @@ export const extractedMessages = [
     defaultMessage: "Resource",
     sources: [
       "src/components/GraphView.tsx:23",
+    ],
+  },
+  {
+    key: "source.responder.paths.are.tenant.scoped.and.mana.297ad4efec",
+    defaultMessage: "Responder paths are tenant-scoped and managed by the protocol layer.",
+    sources: [
+      "src/pages/Identities.tsx:906",
+    ],
+  },
+  {
+    key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
+    defaultMessage: "Responder probe failed before an HTTP status was returned.",
+    sources: [
+      "src/lib/api.ts:447",
+    ],
+  },
+  {
+    key: "source.responder.status.85b7b015dc",
+    defaultMessage: "Responder status",
+    sources: [
+      "src/pages/Protocols.tsx:521",
     ],
   },
   {
@@ -5482,7 +5526,7 @@ export const extractedMessages = [
     key: "source.retire.da8597f3f2",
     defaultMessage: "Retire",
     sources: [
-      "src/pages/Identities.tsx:116",
+      "src/pages/Identities.tsx:114",
     ],
   },
   {
@@ -5496,28 +5540,28 @@ export const extractedMessages = [
     key: "source.reveal.failed.f00b1b5ba6",
     defaultMessage: "Reveal failed",
     sources: [
-      "src/pages/Secrets.tsx:510",
+      "src/pages/Secrets.tsx:614",
     ],
   },
   {
     key: "source.reveal.once.api.token.8cfd65d574",
     defaultMessage: "Reveal-once API token",
     sources: [
-      "src/pages/Platform.tsx:437",
+      "src/pages/Platform.tsx:318",
     ],
   },
   {
-    key: "source.review.in.approvals.19c14e5f58",
-    defaultMessage: "Review in approvals",
+    key: "source.reveal.once.key.issuance.61c20133fa",
+    defaultMessage: "Reveal-once key issuance",
     sources: [
-      "src/pages/Identities.tsx:982",
+      "src/pages/Secrets.tsx:977",
     ],
   },
   {
     key: "source.revocation.publication.4056c8636f",
     defaultMessage: "Revocation publication",
     sources: [
-      "src/pages/Identities.tsx:999",
+      "src/pages/Identities.tsx:901",
     ],
   },
   {
@@ -5531,23 +5575,17 @@ export const extractedMessages = [
     key: "source.revoke.87e6d00bbf",
     defaultMessage: "Revoke",
     sources: [
-      "src/pages/Identities.tsx:106",
-      "src/pages/Identities.tsx:111",
-      "src/pages/Identities.tsx:114",
+      "src/pages/Identities.tsx:104",
+      "src/pages/Identities.tsx:109",
+      "src/pages/Identities.tsx:112",
+      "src/pages/Workloads.tsx:251",
     ],
   },
   {
     key: "source.revoke.is.not.valid.from.this.lifecycle.st.1447e2d0ca",
     defaultMessage: "revoke is not valid from this lifecycle state",
     sources: [
-      "src/pages/Identities.tsx:424",
-    ],
-  },
-  {
-    key: "source.revoke.now.posture.1a2f052186",
-    defaultMessage: "Revoke-now posture",
-    sources: [
-      "src/pages/Workloads.tsx:142",
+      "src/pages/Identities.tsx:422",
     ],
   },
   {
@@ -5573,17 +5611,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.revoked.x.509.certificates.are.published.t.63c51179b3",
-    defaultMessage: "Revoked X.509 certificates are published to the served public OCSP and CRL surfaces after the backend records the lifecycle transition.",
+    key: "source.revoked.x.509.certificates.are.published.t.d969f5a1d6",
+    defaultMessage: "Revoked X.509 certificates are published to public OCSP and CRL responders after the backend records the lifecycle transition.",
     sources: [
-      "src/pages/Identities.tsx:1003",
+      "src/pages/Identities.tsx:905",
     ],
   },
   {
     key: "source.risk.0711a8d636",
     defaultMessage: "Risk",
     sources: [
-      "src/pages/Discovery.tsx:363",
+      "src/pages/Discovery.tsx:374",
       "src/pages/Graph.tsx:504",
     ],
   },
@@ -5591,7 +5629,7 @@ export const extractedMessages = [
     key: "source.risk.band.legend.6b51f860b1",
     defaultMessage: "Risk band legend",
     sources: [
-      "src/pages/Risk.tsx:329",
+      "src/pages/Risk.tsx:330",
     ],
   },
   {
@@ -5602,26 +5640,29 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.roadmap.phases.d65702de81",
-    defaultMessage: "Roadmap phases",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:187",
-    ],
-  },
-  {
     key: "source.role.14736a2eb9",
     defaultMessage: "Role",
     sources: [
-      "src/pages/Platform.tsx:515",
-      "src/pages/Secrets.tsx:934",
+      "src/pages/Platform.tsx:396",
+      "src/pages/Secrets.tsx:1091",
+      "src/pages/Secrets.tsx:1447",
+      "src/pages/Workloads.tsx:174",
+      "src/pages/Workloads.tsx:206",
+    ],
+  },
+  {
+    key: "source.role.catalog.d2bfa0ab0e",
+    defaultMessage: "Role catalog",
+    sources: [
+      "src/pages/Platform.tsx:393",
     ],
   },
   {
     key: "source.roles.c253370554",
     defaultMessage: "Roles",
     sources: [
-      "src/pages/Platform.tsx:464",
-      "src/pages/Platform.tsx:554",
+      "src/pages/Platform.tsx:345",
+      "src/pages/Platform.tsx:435",
     ],
   },
   {
@@ -5629,8 +5670,7 @@ export const extractedMessages = [
     defaultMessage: "Rollback",
     sources: [
       "src/pages/Connectors.tsx:200",
-      "src/pages/Identities.tsx:830",
-      "src/pages/Secrets.tsx:1019",
+      "src/pages/Identities.tsx:824",
     ],
   },
   {
@@ -5651,10 +5691,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.rollback.queued.e7b51b9ed9",
+    defaultMessage: "Rollback queued",
+    sources: [
+      "src/pages/Posture.tsx:385",
+    ],
+  },
+  {
     key: "source.rollback.reference.cbec9363fe",
     defaultMessage: "Rollback reference",
     sources: [
       "src/pages/Incidents.tsx:175",
+    ],
+  },
+  {
+    key: "source.rollback.safe.static.rotation.is.available.ceae04c435",
+    defaultMessage: "Rollback-safe static rotation is available for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not yet exposed in this console, so this page offers only per-secret rotate/delete controls.",
+    sources: [
+      "src/pages/Secrets.tsx:666",
     ],
   },
   {
@@ -5665,10 +5719,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.root.and.intermediate.creation.are.availab.b79da7018c",
+    defaultMessage: "Root and intermediate creation are available through authenticated workflows. Rotation and cross-signing still need operator controls before this page can run them.",
+    sources: [
+      "src/pages/CAHierarchy.tsx:156",
+    ],
+  },
+  {
     key: "source.root.cause.analysis.fde4017d48",
     defaultMessage: "Root-cause analysis",
     sources: [
-      "src/pages/Assistant.tsx:357",
+      "src/pages/Assistant.tsx:356",
     ],
   },
   {
@@ -5689,7 +5750,7 @@ export const extractedMessages = [
     key: "source.rotate.secret.4405518d27",
     defaultMessage: "Rotate secret",
     sources: [
-      "src/pages/Secrets.tsx:567",
+      "src/pages/Secrets.tsx:670",
     ],
   },
   {
@@ -5700,8 +5761,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.rotation.and.cross.sign.remain.library.tie.6a67849eef",
-    defaultMessage: "Rotation and cross-sign remain library-tier",
+    key: "source.rotation.and.cross.sign.controls.coming.so.64b9ed064a",
+    defaultMessage: "Rotation and cross-sign controls coming soon",
     sources: [
       "src/pages/CAHierarchy.tsx:156",
     ],
@@ -5710,14 +5771,7 @@ export const extractedMessages = [
     key: "source.rotation.failed.2d3e7bd0f1",
     defaultMessage: "Rotation failed",
     sources: [
-      "src/pages/Secrets.tsx:593",
-    ],
-  },
-  {
-    key: "source.rotation.false.positive.handling.3888d7516b",
-    defaultMessage: "Rotation / false-positive handling",
-    sources: [
-      "src/pages/Secrets.tsx:893",
+      "src/pages/Secrets.tsx:696",
     ],
   },
   {
@@ -5731,22 +5785,43 @@ export const extractedMessages = [
     key: "source.route.adc74704d6",
     defaultMessage: "Route",
     sources: [
-      "src/pages/Platform.tsx:601",
+      "src/pages/Platform.tsx:482",
     ],
   },
   {
-    key: "source.routes.2c5b669bcd",
-    defaultMessage: "Routes",
+    key: "source.rule.62845f31a2",
+    defaultMessage: "Rule",
     sources: [
-      "src/pages/Platform.tsx:746",
+      "src/pages/Secrets.tsx:1043",
+    ],
+  },
+  {
+    key: "source.rules.4228aeb07c",
+    defaultMessage: "Rules",
+    sources: [
+      "src/pages/Secrets.tsx:1030",
     ],
   },
   {
     key: "source.run.00d60e31a4",
     defaultMessage: "Run",
     sources: [
-      "src/pages/Discovery.tsx:270",
-      "src/pages/Discovery.tsx:323",
+      "src/pages/Discovery.tsx:281",
+      "src/pages/Discovery.tsx:334",
+    ],
+  },
+  {
+    key: "source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce",
+    defaultMessage: "Run a scan against TLS endpoints or host config paths. The inventory table stays empty until trstctl returns tenant-scoped assets.",
+    sources: [
+      "src/pages/Posture.tsx:314",
+    ],
+  },
+  {
+    key: "source.run.a.scan.for.a.repository.or.build.works.80371db571",
+    defaultMessage: "Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.",
+    sources: [
+      "src/pages/Secrets.tsx:997",
     ],
   },
   {
@@ -5754,6 +5829,20 @@ export const extractedMessages = [
     defaultMessage: "Run graph query",
     sources: [
       "src/pages/Graph.tsx:365",
+    ],
+  },
+  {
+    key: "source.run.id.26d3e7aaac",
+    defaultMessage: "Run ID",
+    sources: [
+      "src/pages/Secrets.tsx:1022",
+    ],
+  },
+  {
+    key: "source.run.secret.scan.89f2ed7a1b",
+    defaultMessage: "Run secret scan",
+    sources: [
+      "src/pages/Secrets.tsx:1001",
     ],
   },
   {
@@ -5767,21 +5856,7 @@ export const extractedMessages = [
     key: "source.runs.848f54e896",
     defaultMessage: "Runs",
     sources: [
-      "src/pages/Discovery.tsx:230",
-    ],
-  },
-  {
-    key: "source.runtime.status.3571e0aaeb",
-    defaultMessage: "Runtime status",
-    sources: [
-      "src/pages/Platform.tsx:787",
-    ],
-  },
-  {
-    key: "source.runtime.status.json.not.served.yet.83eb1c78dd",
-    defaultMessage: "Runtime status JSON not served yet",
-    sources: [
-      "src/pages/Platform.tsx:710",
+      "src/pages/Discovery.tsx:241",
     ],
   },
   {
@@ -5795,7 +5870,7 @@ export const extractedMessages = [
     key: "source.save.1509f561f2",
     defaultMessage: "Save",
     sources: [
-      "src/pages/Platform.tsx:468",
+      "src/pages/Platform.tsx:349",
     ],
   },
   {
@@ -5809,95 +5884,82 @@ export const extractedMessages = [
     key: "source.save.view.2115387503",
     defaultMessage: "Save view",
     sources: [
-      "src/components/DataGrid.tsx:260",
+      "src/components/DataGrid.tsx:262",
     ],
   },
   {
     key: "source.saved.view.name.9aa4b3b580",
     defaultMessage: "Saved view name",
     sources: [
-      "src/components/DataGrid.tsx:251",
       "src/components/DataGrid.tsx:253",
+      "src/components/DataGrid.tsx:255",
     ],
   },
   {
-    key: "source.scan.drift.and.renewal.fields.not.served.y.ac560a89ab",
-    defaultMessage: "Scan, drift, and renewal fields not served yet",
+    key: "source.scanner.71d4cf953e",
+    defaultMessage: "Scanner",
     sources: [
-      "src/pages/Agents.tsx:224",
+      "src/pages/Secrets.tsx:1026",
     ],
   },
   {
     key: "source.scenario.2fcb5d3746",
     defaultMessage: "Scenario",
     sources: [
-      "src/pages/Protocols.tsx:596",
+      "src/pages/Protocols.tsx:657",
     ],
   },
   {
     key: "source.scep.challenge.fixtures.34e5af28b4",
     defaultMessage: "SCEP challenge fixtures",
     sources: [
-      "src/pages/Protocols.tsx:378",
+      "src/pages/Protocols.tsx:401",
     ],
   },
   {
     key: "source.schedule.f4830a1dae",
     defaultMessage: "Schedule",
     sources: [
-      "src/pages/Discovery.tsx:177",
+      "src/pages/Discovery.tsx:188",
     ],
   },
   {
-    key: "source.scheduled.rotation.and.downstream.sync.not.4e6914c952",
-    defaultMessage: "Scheduled rotation and downstream sync not served yet",
+    key: "source.scheduled.rotation.and.downstream.sync.com.dd5c267e83",
+    defaultMessage: "Scheduled rotation and downstream sync coming soon",
     sources: [
-      "src/pages/Secrets.tsx:563",
-    ],
-  },
-  {
-    key: "source.scheduled.rotation.and.downstream.sync.rem.3a2d719a72",
-    defaultMessage: ". Scheduled rotation and downstream sync remain backend gaps.",
-    sources: [
-      "src/pages/Secrets.tsx:560",
+      "src/pages/Secrets.tsx:666",
     ],
   },
   {
     key: "source.schedules.221ff19c90",
     defaultMessage: "Schedules",
     sources: [
-      "src/pages/Discovery.tsx:223",
+      "src/pages/Discovery.tsx:234",
     ],
   },
   {
     key: "source.scope.b073f6c68e",
     defaultMessage: "Scope",
     sources: [
-      "src/pages/Audit.tsx:306",
-      "src/pages/Secrets.tsx:849",
-    ],
-  },
-  {
-    key: "source.scoped.time.bound.api.key.requests.need.ex.c39f649a2a",
-    defaultMessage: "Scoped, time-bound API-key requests need expiry, revocation evidence, and copy-once presentation. The served ephemeral API key route mints them for short machine workflows.",
-    sources: [
-      "src/pages/Secrets.tsx:831",
+      "src/pages/Audit.tsx:307",
     ],
   },
   {
     key: "source.scopes.0d5644ff52",
     defaultMessage: "Scopes",
     sources: [
-      "src/pages/Platform.tsx:482",
-      "src/pages/Platform.tsx:577",
-      "src/pages/Secrets.tsx:1103",
+      "src/pages/Platform.tsx:363",
+      "src/pages/Platform.tsx:458",
+      "src/pages/Secrets.tsx:1424",
+      "src/pages/Secrets.tsx:950",
+      "src/pages/Workloads.tsx:415",
     ],
   },
   {
-    key: "source.sdk.and.cli.examples.target.the.served.sto.1058b17b97",
-    defaultMessage: "SDK and CLI examples target the served store contract and contain only names, tenants, and versions. The access test performs a read without rendering the value.",
+    key: "source.sdk.and.cli.examples.contain.only.names.te.f056ba97a8",
+    defaultMessage: "SDK and CLI examples contain only names, tenants, and versions. The access test performs a read without rendering the value.",
     sources: [
-      "src/pages/Secrets.tsx:628",
+      "src/pages/Secrets.tsx:731",
     ],
   },
   {
@@ -5908,27 +5970,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.search.by.id.feature.domain.backend.or.map.bef1820f5a",
-    defaultMessage: "Search by ID, feature, domain, backend, or mapping",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:296",
-    ],
-  },
-  {
-    key: "source.search.feature.coverage.09595824f8",
-    defaultMessage: "Search feature coverage",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:295",
-    ],
-  },
-  {
-    key: "source.search.feature.map.e455ed3f5a",
-    defaultMessage: "Search feature map",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:288",
-    ],
-  },
-  {
     key: "source.search.loaded.rows.40443863a0",
     defaultMessage: "Search loaded rows",
     sources: [
@@ -5936,46 +5977,61 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.secret.access.test.e467205dc5",
-    defaultMessage: "Secret access test",
+    key: "source.secret.7e32a729b1",
+    defaultMessage: "Secret",
     sources: [
-      "src/pages/Secrets.tsx:643",
+      "src/pages/Secrets.tsx:1335",
     ],
   },
   {
-    key: "source.secret.change.approvals.not.served.yet.7073cb1e4d",
-    defaultMessage: "Secret-change approvals not served yet",
+    key: "source.secret.access.test.e467205dc5",
+    defaultMessage: "Secret access test",
     sources: [
-      "src/pages/Secrets.tsx:766",
+      "src/pages/Secrets.tsx:745",
+    ],
+  },
+  {
+    key: "source.secret.change.approvals.coming.soon.21b5ddeab9",
+    defaultMessage: "Secret-change approvals coming soon",
+    sources: [
+      "src/pages/Secrets.tsx:867",
     ],
   },
   {
     key: "source.secret.create.failed.885c3ecf7c",
     defaultMessage: "Secret create failed",
     sources: [
-      "src/pages/Secrets.tsx:476",
+      "src/pages/Secrets.tsx:579",
     ],
   },
   {
     key: "source.secret.identity.62453fba82",
     defaultMessage: "Secret identity",
     sources: [
-      "src/pages/Identities.tsx:55",
+      "src/pages/Identities.tsx:53",
     ],
   },
   {
     key: "source.secret.metadata.ad1b1e1608",
     defaultMessage: "Secret metadata",
     sources: [
-      "src/pages/Secrets.tsx:518",
+      "src/pages/Secrets.tsx:622",
     ],
   },
   {
     key: "source.secret.name.5cdf573b89",
     defaultMessage: "Secret name",
     sources: [
-      "src/pages/Secrets.tsx:452",
-      "src/pages/Secrets.tsx:645",
+      "src/pages/Secrets.tsx:1298",
+      "src/pages/Secrets.tsx:555",
+      "src/pages/Secrets.tsx:747",
+    ],
+  },
+  {
+    key: "source.secret.payments.db.password.cf46ca15a9",
+    defaultMessage: "Secret/payments-db/password",
+    sources: [
+      "src/pages/Secrets.tsx:1323",
     ],
   },
   {
@@ -5986,73 +6042,66 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.secret.scanning.finding.fixtures.db7980a08f",
-    defaultMessage: "Secret scanning finding fixtures",
+    key: "source.secret.scan.failed.61f13676c4",
+    defaultMessage: "Secret scan failed",
     sources: [
-      "src/pages/Secrets.tsx:886",
+      "src/pages/Secrets.tsx:1017",
     ],
   },
   {
-    key: "source.secret.scanning.triage.is.library.only.42d3fe214d",
-    defaultMessage: "Secret-scanning triage is library-only",
+    key: "source.secret.scan.findings.3462f78805",
+    defaultMessage: "Secret scan findings",
     sources: [
-      "src/pages/Secrets.tsx:880",
+      "src/pages/Secrets.tsx:1040",
     ],
   },
   {
     key: "source.secret.sync.and.platform.integrations.90c8c57a01",
     defaultMessage: "Secret sync and platform integrations",
     sources: [
-      "src/pages/Secrets.tsx:998",
+      "src/pages/Secrets.tsx:1289",
     ],
   },
   {
-    key: "source.secret.sync.is.served.by.api.and.cli.c79b1d8ccd",
-    defaultMessage: "Secret sync is served by API and CLI",
+    key: "source.secret.sync.failed.b901ae57d8",
+    defaultMessage: "Secret sync failed",
     sources: [
-      "src/pages/Secrets.tsx:1006",
-    ],
-  },
-  {
-    key: "source.secret.sync.platform.fixtures.dafbcc5b4b",
-    defaultMessage: "Secret sync platform fixtures",
-    sources: [
-      "src/pages/Secrets.tsx:1012",
+      "src/pages/Secrets.tsx:1331",
     ],
   },
   {
     key: "source.secret.to.delete.6abd642165",
     defaultMessage: "Secret to delete",
     sources: [
-      "src/pages/Secrets.tsx:597",
+      "src/pages/Secrets.tsx:700",
     ],
   },
   {
     key: "source.secret.to.rotate.4e6aab975e",
     defaultMessage: "Secret to rotate",
     sources: [
-      "src/pages/Secrets.tsx:569",
+      "src/pages/Secrets.tsx:672",
     ],
   },
   {
     key: "source.secret.value.6ef47d9880",
     defaultMessage: "Secret value",
     sources: [
-      "src/pages/Secrets.tsx:462",
+      "src/pages/Secrets.tsx:565",
     ],
   },
   {
     key: "source.secrets.api.unavailable.or.disabled.90f9a5c4b4",
     defaultMessage: "Secrets API unavailable or disabled",
     sources: [
-      "src/pages/Secrets.tsx:432",
+      "src/pages/Secrets.tsx:536",
     ],
   },
   {
     key: "source.secrets.d8707d411d",
     defaultMessage: "Secrets",
     sources: [
-      "src/pages/Secrets.tsx:415",
+      "src/pages/Secrets.tsx:519",
     ],
   },
   {
@@ -6066,14 +6115,14 @@ export const extractedMessages = [
     key: "source.select.all.visible.rows.b83e9323d3",
     defaultMessage: "Select all visible rows",
     sources: [
-      "src/components/DataGrid.tsx:301",
+      "src/components/DataGrid.tsx:304",
     ],
   },
   {
     key: "source.select.an.audit.event.to.inspect.its.immut.b522affee1",
     defaultMessage: "Select an audit event to inspect its immutable sequence, hash, actor, and data payload.",
     sources: [
-      "src/pages/Audit.tsx:354",
+      "src/pages/Audit.tsx:355",
     ],
   },
   {
@@ -6098,17 +6147,31 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.selectors.d27e6f722c",
+    defaultMessage: "Selectors",
+    sources: [
+      "src/pages/Workloads.tsx:326",
+    ],
+  },
+  {
+    key: "source.send.the.subject.scopes.and.ttl.to.issue.a.9854a77221",
+    defaultMessage: "Send the subject, scopes, and TTL to issue a short-lived token. Copy the returned token from the reveal panel, then dismiss it so browser memory drops the raw key.",
+    sources: [
+      "src/pages/Secrets.tsx:978",
+    ],
+  },
+  {
     key: "source.sensitivity.label.8a52af2e9c",
     defaultMessage: "Sensitivity label",
     sources: [
-      "src/pages/Risk.tsx:290",
+      "src/pages/Risk.tsx:291",
     ],
   },
   {
     key: "source.sequence.0740f4bade",
     defaultMessage: "Sequence",
     sources: [
-      "src/pages/Audit.tsx:366",
+      "src/pages/Audit.tsx:367",
     ],
   },
   {
@@ -6116,77 +6179,6 @@ export const extractedMessages = [
     defaultMessage: "Serial",
     sources: [
       "src/pages/Certificates.tsx:390",
-    ],
-  },
-  {
-    key: "source.served.agent.fields.from.get.api.v1.agents.1ba583e004",
-    defaultMessage: "Served agent fields from `GET /api/v1/agents`.",
-    sources: [
-      "src/pages/Agents.tsx:204",
-    ],
-  },
-  {
-    key: "source.served.connector.registry.517fc81e82",
-    defaultMessage: "Served connector registry",
-    sources: [
-      "src/pages/Connectors.tsx:138",
-      "src/pages/Connectors.tsx:150",
-    ],
-  },
-  {
-    key: "source.served.enforcement.path.ed15df9b3f",
-    defaultMessage: "Served enforcement path",
-    sources: [
-      "src/pages/Policy.tsx:149",
-    ],
-  },
-  {
-    key: "source.served.gated.enrollment.protocol.endpoints.e329ede048",
-    defaultMessage: "Served-gated enrollment protocol endpoints",
-    sources: [
-      "src/pages/Protocols.tsx:490",
-    ],
-  },
-  {
-    key: "source.served.graph.node.eff441e6e1",
-    defaultMessage: "Served graph node",
-    sources: [
-      "src/pages/Identities.tsx:886",
-    ],
-  },
-  {
-    key: "source.served.identity.detail.fcf24cb851",
-    defaultMessage: "Served identity detail",
-    sources: [
-      "src/pages/Identities.tsx:1047",
-    ],
-  },
-  {
-    key: "source.served.issuer.list.8a1bb2aa25",
-    defaultMessage: "Served issuer list",
-    sources: [
-      "src/pages/CAHierarchy.tsx:210",
-    ],
-  },
-  {
-    key: "source.served.issuer.visibility.01b70750df",
-    defaultMessage: "Served issuer visibility",
-    sources: [
-      "src/pages/CAHierarchy.tsx:102",
-    ],
-  },
-  {
-    key: "source.served.role.catalog.71d8b43b5e",
-    defaultMessage: "Served role catalog",
-    sources: [
-      "src/pages/Platform.tsx:512",
-    ],
-  },
-  {
-    key: "source.served.state.206c8be480",
-    defaultMessage: "Served state:",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:106",
     ],
   },
   {
@@ -6200,7 +6192,7 @@ export const extractedMessages = [
     key: "source.service.name.1bb8870cc0",
     defaultMessage: "Service name",
     sources: [
-      "src/pages/Identities.tsx:1207",
+      "src/pages/Identities.tsx:1105",
       "src/pages/Wizard.tsx:217",
     ],
   },
@@ -6222,7 +6214,7 @@ export const extractedMessages = [
     key: "source.session.id.cb9ac5c561",
     defaultMessage: "Session ID",
     sources: [
-      "src/pages/Secrets.tsx:1087",
+      "src/pages/Secrets.tsx:1408",
     ],
   },
   {
@@ -6243,21 +6235,21 @@ export const extractedMessages = [
     key: "source.share.create.failed.9078694d49",
     defaultMessage: "Share create failed",
     sources: [
-      "src/pages/Secrets.tsx:795",
+      "src/pages/Secrets.tsx:897",
     ],
   },
   {
     key: "source.share.redeem.failed.674fa95c57",
     defaultMessage: "Share redeem failed",
     sources: [
-      "src/pages/Secrets.tsx:811",
+      "src/pages/Secrets.tsx:913",
     ],
   },
   {
     key: "source.share.token.f3310a3b89",
     defaultMessage: "Share token",
     sources: [
-      "src/pages/Secrets.tsx:799",
+      "src/pages/Secrets.tsx:901",
     ],
   },
   {
@@ -6306,7 +6298,14 @@ export const extractedMessages = [
     key: "source.signal.1e9806e422",
     defaultMessage: "Signal",
     sources: [
-      "src/pages/Protocols.tsx:416",
+      "src/pages/Protocols.tsx:440",
+    ],
+  },
+  {
+    key: "source.signature.f1a73e2204",
+    defaultMessage: "Signature",
+    sources: [
+      "src/pages/Secrets.tsx:1276",
     ],
   },
   {
@@ -6320,7 +6319,7 @@ export const extractedMessages = [
     key: "source.signed.evidence.bundle.ready.9ce177ede7",
     defaultMessage: "Signed evidence bundle ready",
     sources: [
-      "src/pages/Audit.tsx:293",
+      "src/pages/Audit.tsx:294",
     ],
   },
   {
@@ -6331,8 +6330,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.signing.requests.key.backed.and.keyless.mo.8835b8738f",
-    defaultMessage: "Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are library-only. There is no served signing API or CLI workflow yet, so this console cannot submit signing work.",
+    key: "source.signing.requests.key.backed.and.keyless.mo.9294e6e6de",
+    defaultMessage: "Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are planned for a later console workflow, so this page cannot submit signing work yet.",
     sources: [
       "src/pages/CodeSigning.tsx:46",
     ],
@@ -6341,40 +6340,19 @@ export const extractedMessages = [
     key: "source.simpleenroll.4ea6ad8043",
     defaultMessage: "simpleenroll",
     sources: [
-      "src/pages/Protocols.tsx:81",
-    ],
-  },
-  {
-    key: "source.single.binary.evaluation.mode.still.keeps.e46d9baa0e",
-    defaultMessage: "Single-binary evaluation mode still keeps private-key operations in a separate signer child process. A real system page needs version, build info, embedded-UI asset, run mode, datastore mode, and signer supervision from a served status read.",
-    sources: [
-      "src/pages/Platform.tsx:705",
-    ],
-  },
-  {
-    key: "source.single.binary.runtime.e9f93cd346",
-    defaultMessage: "Single-binary runtime",
-    sources: [
-      "src/pages/Platform.tsx:702",
-    ],
-  },
-  {
-    key: "source.single.binary.runtime.status.fixtures.5cdab89962",
-    defaultMessage: "Single-binary runtime status fixtures",
-    sources: [
-      "src/pages/Platform.tsx:716",
+      "src/pages/Protocols.tsx:80",
     ],
   },
   {
     key: "source.six.factor.breakdown.a9a77981b1",
     defaultMessage: "Six-factor breakdown",
     sources: [
-      "src/pages/Risk.tsx:276",
+      "src/pages/Risk.tsx:277",
     ],
   },
   {
-    key: "source.slack.teams.email.pagerduty.opsgenie.and.w.f2e5d2ab97",
-    defaultMessage: "Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into the served process. The served API does not configure or test channels yet.",
+    key: "source.slack.teams.email.pagerduty.opsgenie.and.w.fb6ea3343b",
+    defaultMessage: "Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into the process. This console does not configure or test channels yet.",
     sources: [
       "src/pages/Policy.tsx:200",
     ],
@@ -6385,26 +6363,18 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:234",
       "src/pages/Certificates.tsx:420",
-      "src/pages/Discovery.tsx:136",
-      "src/pages/Discovery.tsx:181",
-      "src/pages/Discovery.tsx:294",
-      "src/pages/Discovery.tsx:324",
-      "src/pages/Discovery.tsx:361",
-      "src/pages/Secrets.tsx:889",
-    ],
-  },
-  {
-    key: "source.source.c707ee4ecc",
-    defaultMessage: "Source:",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:166",
+      "src/pages/Discovery.tsx:147",
+      "src/pages/Discovery.tsx:192",
+      "src/pages/Discovery.tsx:305",
+      "src/pages/Discovery.tsx:335",
+      "src/pages/Discovery.tsx:372",
     ],
   },
   {
     key: "source.sources.caf85b0888",
     defaultMessage: "Sources",
     sources: [
-      "src/pages/Discovery.tsx:216",
+      "src/pages/Discovery.tsx:227",
     ],
   },
   {
@@ -6415,24 +6385,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.spec.view.eb9d6434f1",
-    defaultMessage: "Spec view",
-    sources: [
-      "src/pages/Platform.tsx:629",
-    ],
-  },
-  {
     key: "source.spiffe.helper.7ba7061b6b",
     defaultMessage: "spiffe-helper",
     sources: [
-      "src/pages/Protocols.tsx:141",
+      "src/pages/Protocols.tsx:132",
     ],
   },
   {
     key: "source.ssh.certificate.identity.d5833485f8",
     defaultMessage: "SSH certificate identity",
     sources: [
-      "src/pages/Identities.tsx:47",
+      "src/pages/Identities.tsx:45",
     ],
   },
   {
@@ -6446,7 +6409,7 @@ export const extractedMessages = [
     key: "source.ssh.key.identity.b8252e7aa8",
     defaultMessage: "SSH key identity",
     sources: [
-      "src/pages/Identities.tsx:51",
+      "src/pages/Identities.tsx:49",
     ],
   },
   {
@@ -6457,8 +6420,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.ssh.trust.mutation.is.not.served.d87fee3f88",
-    defaultMessage: "SSH trust mutation is not served",
+    key: "source.ssh.trust.rollout.controls.coming.soon.2dbadf2382",
+    defaultMessage: "SSH trust rollout controls coming soon",
     sources: [
       "src/pages/SSHTrust.tsx:67",
     ],
@@ -6481,21 +6444,8 @@ export const extractedMessages = [
     key: "source.state.a3b50c4767",
     defaultMessage: "State",
     sources: [
-      "src/pages/Platform.tsx:825",
-    ],
-  },
-  {
-    key: "source.static.api.spec.view.ed87c50a99",
-    defaultMessage: "Static API spec view",
-    sources: [
-      "src/pages/Platform.tsx:621",
-    ],
-  },
-  {
-    key: "source.static.served.rest.api.paths.245b356570",
-    defaultMessage: "Static served REST API paths",
-    sources: [
-      "src/pages/Platform.tsx:633",
+      "src/pages/Secrets.tsx:1439",
+      "src/pages/Workloads.tsx:207",
     ],
   },
   {
@@ -6506,46 +6456,41 @@ export const extractedMessages = [
       "src/pages/Agents.tsx:212",
       "src/pages/Certificates.tsx:404",
       "src/pages/Connectors.tsx:194",
-      "src/pages/Discovery.tsx:325",
-      "src/pages/Identities.tsx:1077",
-      "src/pages/Identities.tsx:794",
-      "src/pages/Identities.tsx:827",
+      "src/pages/Discovery.tsx:336",
+      "src/pages/Identities.tsx:788",
+      "src/pages/Identities.tsx:821",
+      "src/pages/Identities.tsx:975",
       "src/pages/Incidents.tsx:283",
-      "src/pages/Platform.tsx:555",
-      "src/pages/Platform.tsx:578",
+      "src/pages/Platform.tsx:436",
+      "src/pages/Platform.tsx:459",
       "src/pages/Policy.tsx:218",
-      "src/pages/Secrets.tsx:852",
-    ],
-  },
-  {
-    key: "source.status.unknown.to.console.bfa891efeb",
-    defaultMessage: "Status unknown to console",
-    sources: [
-      "src/pages/Protocols.tsx:522",
     ],
   },
   {
     key: "source.structured.query.preview.706d53d9be",
     defaultMessage: "Structured query preview",
     sources: [
-      "src/pages/Assistant.tsx:133",
+      "src/pages/Assistant.tsx:132",
     ],
   },
   {
     key: "source.subject.6897128384",
     defaultMessage: "Subject",
     sources: [
-      "src/pages/Assistant.tsx:142",
-      "src/pages/Assistant.tsx:323",
-      "src/pages/Assistant.tsx:373",
-      "src/pages/Assistant.tsx:428",
+      "src/pages/Assistant.tsx:141",
+      "src/pages/Assistant.tsx:322",
+      "src/pages/Assistant.tsx:372",
+      "src/pages/Assistant.tsx:427",
       "src/pages/Certificates.tsx:374",
-      "src/pages/Platform.tsx:370",
-      "src/pages/Platform.tsx:452",
-      "src/pages/Platform.tsx:478",
-      "src/pages/Platform.tsx:496",
-      "src/pages/Platform.tsx:553",
-      "src/pages/Platform.tsx:576",
+      "src/pages/Platform.tsx:251",
+      "src/pages/Platform.tsx:333",
+      "src/pages/Platform.tsx:359",
+      "src/pages/Platform.tsx:377",
+      "src/pages/Platform.tsx:434",
+      "src/pages/Platform.tsx:457",
+      "src/pages/Secrets.tsx:940",
+      "src/pages/Workloads.tsx:324",
+      "src/pages/Workloads.tsx:414",
     ],
   },
   {
@@ -6563,10 +6508,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.submitted.proof.fields.are.cleared.after.i.b9215d2471",
+    defaultMessage: "Submitted proof fields are cleared after issue. Returned certificate PEM and claim maps are discarded before the row is stored.",
+    sources: [
+      "src/pages/Workloads.tsx:353",
+    ],
+  },
+  {
     key: "source.successor.d29e68e27e",
     defaultMessage: "Successor",
     sources: [
-      "src/pages/Identities.tsx:829",
+      "src/pages/Identities.tsx:823",
     ],
   },
   {
@@ -6580,22 +6532,36 @@ export const extractedMessages = [
     key: "source.surface.0905f7f590",
     defaultMessage: "Surface",
     sources: [
-      "src/pages/Assistant.tsx:102",
-      "src/pages/Protocols.tsx:450",
+      "src/pages/Assistant.tsx:101",
+      "src/pages/Protocols.tsx:474",
     ],
   },
   {
     key: "source.surfaces.fbb4dbb2d8",
     defaultMessage: "Surfaces",
     sources: [
-      "src/pages/Assistant.tsx:138",
+      "src/pages/Assistant.tsx:137",
     ],
   },
   {
     key: "source.svc.internal.e50a91019d",
     defaultMessage: "svc.internal",
     sources: [
-      "src/pages/Secrets.tsx:683",
+      "src/pages/Secrets.tsx:785",
+    ],
+  },
+  {
+    key: "source.svid.ttl.seconds.87f1b473ae",
+    defaultMessage: "SVID TTL seconds",
+    sources: [
+      "src/pages/Workloads.tsx:307",
+    ],
+  },
+  {
+    key: "source.sync.stored.secret.b83b2d0767",
+    defaultMessage: "Sync stored secret",
+    sources: [
+      "src/pages/Secrets.tsx:1296",
     ],
   },
   {
@@ -6605,80 +6571,68 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:196",
       "src/pages/Connectors.tsx:237",
       "src/pages/Connectors.tsx:274",
-      "src/pages/Identities.tsx:796",
+      "src/pages/Identities.tsx:790",
       "src/pages/Incidents.tsx:166",
-    ],
-  },
-  {
-    key: "source.target.gui.mapping.and.acceptance.1165b3df2c",
-    defaultMessage: "Target GUI mapping and acceptance",
-    sources: [
-      "src/pages/FeatureCoverage.tsx:326",
-    ],
-  },
-  {
-    key: "source.target.platform.c3fc92b4e7",
-    defaultMessage: "Target platform",
-    sources: [
-      "src/pages/Secrets.tsx:1015",
+      "src/pages/Secrets.tsx:1308",
+      "src/pages/Secrets.tsx:1339",
     ],
   },
   {
     key: "source.targets.27445f6ab6",
     defaultMessage: "Targets",
     sources: [
-      "src/pages/Discovery.tsx:157",
-      "src/pages/Discovery.tsx:255",
-      "src/pages/Discovery.tsx:326",
+      "src/pages/Discovery.tsx:168",
+      "src/pages/Discovery.tsx:266",
+      "src/pages/Discovery.tsx:337",
     ],
   },
   {
     key: "source.tenant.binding.73a4b393b8",
     defaultMessage: "Tenant binding",
     sources: [
-      "src/pages/Protocols.tsx:495",
+      "src/pages/Protocols.tsx:519",
     ],
   },
   {
     key: "source.tenant.boundary.4b458df962",
     defaultMessage: "Tenant boundary",
     sources: [
-      "src/pages/Platform.tsx:365",
+      "src/pages/Platform.tsx:246",
     ],
   },
   {
     key: "source.tenant.e23969d284",
     defaultMessage: "Tenant",
     sources: [
-      "src/pages/Audit.tsx:378",
+      "src/pages/Audit.tsx:379",
     ],
   },
   {
     key: "source.tenant.id.from.session.fb2bbbb246",
     defaultMessage: "Tenant ID from session",
     sources: [
-      "src/pages/Platform.tsx:374",
+      "src/pages/Platform.tsx:255",
     ],
   },
   {
     key: "source.tenant.members.7c3b607c20",
     defaultMessage: "Tenant members",
     sources: [
-      "src/pages/Platform.tsx:550",
+      "src/pages/Platform.tsx:431",
     ],
   },
   {
-    key: "source.tenant.scoped.encrypt.decrypt.hmac.sign.ve.65b4229477",
-    defaultMessage: "Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are library-only. No served transit or KMIP API/CLI surface exists yet.",
+    key: "source.the.api.returns.lease.metadata.only.if.a.p.9af6c37a3a",
+    defaultMessage: "The API returns lease metadata only. If a provider returns credential material, this panel keeps it out of the browser table.",
     sources: [
-      "src/pages/Secrets.tsx:965",
+      "src/pages/Workloads.tsx:165",
     ],
   },
   {
-    key: "source.tenant.switching.not.served.yet.ea146a8ffb",
-    defaultMessage: "Tenant switching not served yet",
+    key: "source.the.broker.api.issues.a.single.identity.pe.7e53bfbe2b",
+    defaultMessage: "The broker API issues a single identity per request. A tenant-wide broker history list is not available in the browser contract yet, so this table shows identities returned during this session.",
     sources: [
-      "src/pages/Platform.tsx:843",
+      "src/pages/Workloads.tsx:447",
     ],
   },
   {
@@ -6692,91 +6646,91 @@ export const extractedMessages = [
     key: "source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3",
     defaultMessage: "The browser never chooses a tenant id through a route, query string, or form field. The backend session or API token supplies it, and PostgreSQL RLS enforces it below the API.",
     sources: [
-      "src/pages/Platform.tsx:378",
+      "src/pages/Platform.tsx:259",
     ],
   },
   {
     key: "source.the.cbom.scanner.inventories.algorithms.ke.66bbaf42d7",
     defaultMessage: "The CBOM scanner inventories algorithms, key sizes, TLS versions, weak crypto, and PQC posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.",
     sources: [
-      "src/pages/Posture.tsx:206",
+      "src/pages/Posture.tsx:234",
     ],
   },
   {
     key: "source.the.console.could.not.read.runtime.status.a01258a71d",
     defaultMessage: "The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.",
     sources: [
-      "src/pages/Assistant.tsx:122",
+      "src/pages/Assistant.tsx:121",
     ],
   },
   {
     key: "source.the.console.is.currently.loaded.over.an.en.4e9bab4e91",
     defaultMessage: "The console is currently loaded over an encrypted browser connection.",
     sources: [
-      "src/pages/Platform.tsx:223",
+      "src/pages/Platform.tsx:116",
     ],
   },
   {
     key: "source.the.console.reads.projected.connector.deli.091ecd8115",
     defaultMessage: "The console reads projected connector delivery receipts and lifecycle rotation runs. These are audit-safe routing records: no certificate private key or secret value is returned.",
     sources: [
-      "src/pages/Identities.tsx:777",
+      "src/pages/Identities.tsx:771",
     ],
   },
   {
-    key: "source.the.current.detail.contract.returns.certif.77add0a9cb",
-    defaultMessage: "The current detail contract returns certificate metadata, not chain bytes. Use issuer evidence until a chain field is served.",
+    key: "source.the.current.detail.view.returns.certificat.9f983e51c0",
+    defaultMessage: "The current detail view returns certificate metadata, not chain bytes. Use issuer evidence until chain data appears here.",
     sources: [
       "src/pages/Certificates.tsx:442",
+    ],
+  },
+  {
+    key: "source.the.lease.api.can.issue.read.by.id.renew.a.b0057e599a",
+    defaultMessage: "The lease API can issue, read by ID, renew, and revoke. A tenant-wide lease list is not available in the browser contract yet, so this table shows leases returned during this session.",
+    sources: [
+      "src/pages/Workloads.tsx:262",
     ],
   },
   {
     key: "source.the.local.vite.preview.is.http.production.7f2e105c44",
     defaultMessage: "The local Vite preview is HTTP. Production should be HTTPS or mTLS-terminated before operators use it.",
     sources: [
-      "src/pages/Platform.tsx:228",
+      "src/pages/Platform.tsx:121",
     ],
   },
   {
-    key: "source.the.plugin.runtime.is.served.but.plugin.ad.5d747156ed",
-    defaultMessage: "The plugin runtime is served, but plugin administration is not. Tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons have no served API or CLI management surface yet.",
+    key: "source.the.native.store.returns.names.and.version.6f88143feb",
+    defaultMessage: "The native store returns names and versions only. Create and rotate send a value once, then this page drops the input and shows metadata.",
     sources: [
-      "src/pages/Platform.tsx:774",
+      "src/pages/Secrets.tsx:547",
     ],
   },
   {
-    key: "source.the.rest.api.now.serves.ceremonies.quorum.630de457d0",
-    defaultMessage: "The REST API now serves ceremonies, quorum approvals, root/intermediate creation, and signer-backed leaf issuance. This page is still read-only, so it renders no create-root, rotate-root, or ceremony execution controls.",
+    key: "source.the.queue.uses.cbom.asset.ids.that.are.out.0e762b7a49",
+    defaultMessage: "The queue uses CBOM asset IDs that are out of policy or quantum-vulnerable. Already-ready assets are not included.",
     sources: [
-      "src/pages/CAHierarchy.tsx:93",
+      "src/pages/Posture.tsx:364",
     ],
   },
   {
-    key: "source.the.rollback.safe.static.rotation.engine.i.c507cd0d81",
-    defaultMessage: "The rollback-safe static rotation engine is served by API for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not served by API or CLI yet, so this page exposes only the served per-secret rotate/delete controls.",
+    key: "source.the.register.checks.the.same.origin.protoc.851c152de8",
+    defaultMessage: "The register checks the same-origin protocol responder paths the control plane mounts. A protocol is shown as off only when its responder path is missing or unavailable.",
     sources: [
-      "src/pages/Secrets.tsx:563",
+      "src/pages/Protocols.tsx:370",
     ],
   },
   {
-    key: "source.the.served.graph.api.returned.no.nodes.or.e72a1f95ea",
-    defaultMessage: "The served graph API returned no nodes or edges for this tenant. Ingest certificates or issue identities first.",
+    key: "source.the.request.sends.endpoint.and.host.config.057e53f9e9",
+    defaultMessage: "The request sends endpoint and host-config locators only. Inventory rows are loaded from the tenant-scoped CBOM asset endpoint after the scan.",
     sources: [
-      "src/pages/Graph.tsx:188",
+      "src/pages/Posture.tsx:260",
     ],
   },
   {
-    key: "source.the.served.incident.path.issues.and.deploy.1aa8fd89cb",
-    defaultMessage: "The served incident path issues and deploys a replacement identity before revoking the compromised identity.",
+    key: "source.these.commands.mirror.the.same.customer.wo.06e695d1b5",
+    defaultMessage: "These commands mirror the same customer workflows. The browser never renders bearer token values, and the examples avoid inline Authorization headers.",
     sources: [
-      "src/pages/Incidents.tsx:135",
-    ],
-  },
-  {
-    key: "source.these.commands.mirror.served.api.paths.and.ce37dc55fe",
-    defaultMessage: "These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and the examples avoid inline Authorization headers.",
-    sources: [
-      "src/pages/Platform.tsx:672",
+      "src/pages/Platform.tsx:539",
     ],
   },
   {
@@ -6787,24 +6741,38 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.this.json.is.sent.to.the.served.post.api.v.77ac8ae58f",
-    defaultMessage: "This JSON is sent to the served `POST /api/v1/profiles` endpoint. The backend remains the source of truth.",
+    key: "source.this.json.is.sent.to.the.profile.workflow.37a80f1c5b",
+    defaultMessage: "This JSON is sent to the profile workflow. The backend remains the source of truth.",
     sources: [
       "src/pages/Profiles.tsx:265",
+    ],
+  },
+  {
+    key: "source.this.plaintext.was.decoded.locally.from.th.fbd3275222",
+    defaultMessage: "This plaintext was decoded locally from the transit response. Dismiss clears it from the page.",
+    sources: [
+      "src/pages/Secrets.tsx:1281",
     ],
   },
   {
     key: "source.this.sends.one.idempotent.revoke.request.p.c08732b49b",
     defaultMessage: "This sends one idempotent revoke request per selected identity and reports accepted or failed for each item. Connector and downstream delivery still complete asynchronously through the outbox.",
     sources: [
-      "src/pages/Identities.tsx:642",
+      "src/pages/Identities.tsx:638",
     ],
   },
   {
-    key: "source.time.bound.grant.7fbd20041f",
-    defaultMessage: "Time-bound grant",
+    key: "source.this.value.is.the.exact.once.redeem.result.ed19b63953",
+    defaultMessage: "This value is the exact-once redeem result. A second redeem should fail.",
     sources: [
-      "src/pages/Identities.tsx:969",
+      "src/pages/Secrets.tsx:922",
+    ],
+  },
+  {
+    key: "source.this.view.shows.issuer.name.kind.public.ke.8b9f5805e5",
+    defaultMessage: "This view shows issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated ceremony and authority workflows.",
+    sources: [
+      "src/pages/CAHierarchy.tsx:105",
     ],
   },
   {
@@ -6812,6 +6780,13 @@ export const extractedMessages = [
     defaultMessage: "time to expiry",
     sources: [
       "src/pages/Dashboard.tsx:159",
+    ],
+  },
+  {
+    key: "source.tls.endpoints.c928457ec8",
+    defaultMessage: "TLS endpoints",
+    sources: [
+      "src/pages/Posture.tsx:242",
     ],
   },
   {
@@ -6825,21 +6800,21 @@ export const extractedMessages = [
     key: "source.token.safe.command.a6328d921b",
     defaultMessage: "Token-safe command",
     sources: [
-      "src/pages/Platform.tsx:683",
+      "src/pages/Platform.tsx:550",
     ],
   },
   {
     key: "source.tool.2e53bdcd07",
     defaultMessage: "Tool",
     sources: [
-      "src/pages/Assistant.tsx:414",
+      "src/pages/Assistant.tsx:413",
     ],
   },
   {
-    key: "source.topic.7e61847d61",
-    defaultMessage: "Topic",
+    key: "source.tpm.quote.c42d6cda40",
+    defaultMessage: "TPM quote",
     sources: [
-      "src/pages/Platform.tsx:824",
+      "src/pages/Workloads.tsx:296",
     ],
   },
   {
@@ -6853,42 +6828,56 @@ export const extractedMessages = [
     key: "source.transit.and.kmip.bbf61786e0",
     defaultMessage: "Transit and KMIP",
     sources: [
-      "src/pages/Secrets.tsx:957",
+      "src/pages/Secrets.tsx:1165",
     ],
   },
   {
-    key: "source.transit.and.kmip.fixtures.d991f8e65c",
-    defaultMessage: "Transit and KMIP fixtures",
+    key: "source.transit.encrypt.and.decrypt.f3ae0fd83f",
+    defaultMessage: "Transit encrypt and decrypt",
     sources: [
-      "src/pages/Secrets.tsx:971",
+      "src/pages/Secrets.tsx:1173",
     ],
   },
   {
-    key: "source.transit.and.kmip.operations.are.library.on.3010af5b51",
-    defaultMessage: "Transit and KMIP operations are library-only",
+    key: "source.transit.operation.failed.22502fa40b",
+    defaultMessage: "Transit operation failed",
     sources: [
-      "src/pages/Secrets.tsx:965",
+      "src/pages/Secrets.tsx:1279",
+    ],
+  },
+  {
+    key: "source.transit.operations.keep.key.material.serve.be62c8b11a",
+    defaultMessage: "Transit operations keep key material server-side. This page base64-encodes local plaintext for the API, clears plaintext inputs after encrypt, and shows decrypted values only in a reveal panel.",
+    sources: [
+      "src/pages/Secrets.tsx:1168",
+    ],
+  },
+  {
+    key: "source.transit.result.7a54cd2a67",
+    defaultMessage: "Transit result",
+    sources: [
+      "src/pages/Secrets.tsx:1238",
     ],
   },
   {
     key: "source.transition.reason.2b9e603491",
     defaultMessage: "Transition reason",
     sources: [
-      "src/pages/Identities.tsx:1143",
+      "src/pages/Identities.tsx:1041",
     ],
   },
   {
     key: "source.transport.aaead4abf5",
     defaultMessage: "Transport",
     sources: [
-      "src/pages/Platform.tsx:385",
+      "src/pages/Platform.tsx:266",
     ],
   },
   {
     key: "source.trigger.8b9c643731",
     defaultMessage: "Trigger",
     sources: [
-      "src/pages/Identities.tsx:828",
+      "src/pages/Identities.tsx:822",
     ],
   },
   {
@@ -6896,13 +6885,6 @@ export const extractedMessages = [
     defaultMessage: "trstctl",
     sources: [
       "src/pages/Login.tsx:27",
-    ],
-  },
-  {
-    key: "source.ttl.policy.409fe5c65d",
-    defaultMessage: "TTL policy",
-    sources: [
-      "src/pages/Workloads.tsx:139",
     ],
   },
   {
@@ -6916,15 +6898,18 @@ export const extractedMessages = [
     key: "source.ttl.seconds.862d08de5a",
     defaultMessage: "TTL seconds",
     sources: [
-      "src/pages/Secrets.tsx:688",
-      "src/pages/Secrets.tsx:782",
+      "src/pages/Secrets.tsx:1101",
+      "src/pages/Secrets.tsx:790",
+      "src/pages/Secrets.tsx:884",
+      "src/pages/Secrets.tsx:960",
+      "src/pages/Workloads.tsx:178",
     ],
   },
   {
     key: "source.type.baaddf70fb",
     defaultMessage: "Type",
     sources: [
-      "src/pages/Audit.tsx:374",
+      "src/pages/Audit.tsx:375",
       "src/pages/Graph.tsx:312",
     ],
   },
@@ -6932,28 +6917,63 @@ export const extractedMessages = [
     key: "source.type.credential.name.to.confirm.cc8d26a179",
     defaultMessage: "Type credential name to confirm",
     sources: [
-      "src/pages/Identities.tsx:576",
+      "src/pages/Identities.tsx:572",
     ],
   },
   {
     key: "source.type.the.exact.secret.name.8106c6efde",
     defaultMessage: "Type the exact secret name",
     sources: [
-      "src/pages/Secrets.tsx:607",
+      "src/pages/Secrets.tsx:710",
     ],
   },
   {
     key: "source.typescript.sdk.40e0532135",
     defaultMessage: "TypeScript SDK",
     sources: [
-      "src/pages/Secrets.tsx:639",
+      "src/pages/Secrets.tsx:741",
+    ],
+  },
+  {
+    key: "source.unable.to.load.cbom.inventory.d90d1c8e17",
+    defaultMessage: "Unable to load CBOM inventory",
+    sources: [
+      "src/pages/Posture.tsx:88",
+    ],
+  },
+  {
+    key: "source.unable.to.load.discovery.findings.cc56f1ab18",
+    defaultMessage: "Unable to load discovery findings",
+    sources: [
+      "src/pages/Posture.tsx:68",
+    ],
+  },
+  {
+    key: "source.unable.to.queue.pqc.migration.fc38db9f6d",
+    defaultMessage: "Unable to queue PQC migration",
+    sources: [
+      "src/pages/Posture.tsx:148",
+    ],
+  },
+  {
+    key: "source.unable.to.queue.pqc.rollback.e5fbf54436",
+    defaultMessage: "Unable to queue PQC rollback",
+    sources: [
+      "src/pages/Posture.tsx:165",
+    ],
+  },
+  {
+    key: "source.unable.to.run.cbom.scan.cc84d9d27f",
+    defaultMessage: "Unable to run CBOM scan",
+    sources: [
+      "src/pages/Posture.tsx:119",
     ],
   },
   {
     key: "source.unknown.b764cdc0ea",
     defaultMessage: "Unknown",
     sources: [
-      "src/pages/Platform.tsx:218",
+      "src/pages/Platform.tsx:111",
     ],
   },
   {
@@ -6967,17 +6987,10 @@ export const extractedMessages = [
     key: "source.updated.3a5ecca188",
     defaultMessage: "Updated",
     sources: [
-      "src/pages/Discovery.tsx:256",
-      "src/pages/Discovery.tsx:297",
-      "src/pages/Platform.tsx:556",
-      "src/pages/Secrets.tsx:537",
-    ],
-  },
-  {
-    key: "source.use.discovery.to.create.ct.log.and.drift.s.0b4562fd99",
-    defaultMessage: "Use Discovery to create `ct_log` and `drift` sources, start runs, and read findings. This page does not yet manage watchlists, drift baselines, triage history, or cited remediation evidence.",
-    sources: [
-      "src/pages/Posture.tsx:120",
+      "src/pages/Discovery.tsx:267",
+      "src/pages/Discovery.tsx:308",
+      "src/pages/Platform.tsx:437",
+      "src/pages/Secrets.tsx:641",
     ],
   },
   {
@@ -6986,13 +6999,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/Wizard.tsx:12",
       "src/pages/Wizard.tsx:78",
-    ],
-  },
-  {
-    key: "source.use.manual.lifecycle.transitions.6174f6d433",
-    defaultMessage: "Use manual lifecycle transitions",
-    sources: [
-      "src/pages/Identities.tsx:922",
     ],
   },
   {
@@ -7013,7 +7019,7 @@ export const extractedMessages = [
     key: "source.validation.method.policy.0444a8a269",
     defaultMessage: "Validation method policy",
     sources: [
-      "src/pages/Protocols.tsx:475",
+      "src/pages/Protocols.tsx:499",
     ],
   },
   {
@@ -7027,14 +7033,14 @@ export const extractedMessages = [
     key: "source.value.handling.f20f0a6806",
     defaultMessage: "Value handling",
     sources: [
-      "src/pages/Secrets.tsx:545",
+      "src/pages/Secrets.tsx:649",
     ],
   },
   {
     key: "source.value.to.share.fa56b0a913",
     defaultMessage: "Value to share",
     sources: [
-      "src/pages/Secrets.tsx:772",
+      "src/pages/Secrets.tsx:874",
     ],
   },
   {
@@ -7045,12 +7051,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.verified.4f7838402f",
+    defaultMessage: "Verified",
+    sources: [
+      "src/pages/Workloads.tsx:327",
+      "src/pages/Workloads.tsx:417",
+    ],
+  },
+  {
     key: "source.version.dd167905de",
     defaultMessage: "Version",
     sources: [
       "src/pages/Agents.tsx:159",
       "src/pages/Agents.tsx:216",
-      "src/pages/Secrets.tsx:533",
+      "src/pages/Secrets.tsx:637",
     ],
   },
   {
@@ -7078,14 +7092,14 @@ export const extractedMessages = [
     key: "source.view.name.572ffd1862",
     defaultMessage: "View name",
     sources: [
-      "src/components/DataGrid.tsx:256",
+      "src/components/DataGrid.tsx:258",
     ],
   },
   {
     key: "source.visible.columns.1da58ee7c6",
     defaultMessage: "Visible columns",
     sources: [
-      "src/components/DataGrid.tsx:212",
+      "src/components/DataGrid.tsx:214",
     ],
   },
   {
@@ -7113,28 +7127,21 @@ export const extractedMessages = [
     key: "source.which.certificates.should.rotate.first.218489c622",
     defaultMessage: "Which certificates should rotate first?",
     sources: [
-      "src/pages/Assistant.tsx:319",
+      "src/pages/Assistant.tsx:318",
     ],
   },
   {
     key: "source.why.did.this.identity.become.high.risk.d0f95f73e1",
     defaultMessage: "Why did this identity become high risk?",
     sources: [
-      "src/pages/Assistant.tsx:369",
+      "src/pages/Assistant.tsx:368",
     ],
   },
   {
     key: "source.workload.attestation.chain.a47a1a4310",
     defaultMessage: "Workload attestation chain",
     sources: [
-      "src/pages/Workloads.tsx:166",
-    ],
-  },
-  {
-    key: "source.workload.attestation.fixtures.3e82a2b523",
-    defaultMessage: "Workload attestation fixtures",
-    sources: [
-      "src/pages/Workloads.tsx:176",
+      "src/pages/Workloads.tsx:273",
     ],
   },
   {
@@ -7148,22 +7155,29 @@ export const extractedMessages = [
     key: "source.workload.identity.ebfedeba5e",
     defaultMessage: "Workload identity",
     sources: [
-      "src/pages/Identities.tsx:63",
-      "src/pages/Workloads.tsx:101",
+      "src/pages/Identities.tsx:61",
+      "src/pages/Workloads.tsx:132",
     ],
   },
   {
     key: "source.workload.must.re.attest.before.renewal.c05cf9ffa5",
     defaultMessage: "workload must re-attest before renewal",
     sources: [
-      "src/pages/Workloads.tsx:126",
+      "src/pages/Workloads.tsx:152",
+    ],
+  },
+  {
+    key: "source.workload.public.key.66cfe41c54",
+    defaultMessage: "Workload public key",
+    sources: [
+      "src/pages/Workloads.tsx:303",
     ],
   },
   {
     key: "source.x.509.certificate.identity.ac455e032b",
     defaultMessage: "X.509 certificate identity",
     sources: [
-      "src/pages/Identities.tsx:43",
+      "src/pages/Identities.tsx:41",
     ],
   },
   {
@@ -7198,7 +7212,7 @@ export const extractedMessages = [
     key: "source.your.session.cannot.read.tenant.audit.evid.6c0890fb54",
     defaultMessage: "Your session cannot read tenant audit evidence.",
     sources: [
-      "src/pages/Audit.tsx:450",
+      "src/pages/Audit.tsx:451",
     ],
   },
   {

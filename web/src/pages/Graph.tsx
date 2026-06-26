@@ -146,7 +146,7 @@ export function Graph() {
       <PageHeader
         titleId="graph-heading"
         title="Graph"
-        description="Tenant-scoped credential graph from the served API: explore nodes and edges, compute blast radius and reachability, and run read-only graph queries."
+        description="Tenant-scoped credential graph: explore nodes and edges, compute blast radius and reachability, and run read-only graph queries."
       />
 
       {loading && <LoadingState>Loading graph...</LoadingState>}
@@ -186,7 +186,7 @@ export function Graph() {
 
           {emptyGraph && (
             <EmptyState title="No graph nodes yet" ctaTo="/certificates" ctaLabel="Open certificate inventory">
-              The served graph API returned no nodes or edges for this tenant. Ingest certificates or issue identities first.
+              No nodes or edges exist for this tenant yet. Ingest certificates or issue identities first.
             </EmptyState>
           )}
 

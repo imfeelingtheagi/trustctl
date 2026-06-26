@@ -189,7 +189,7 @@ export function Certificates() {
       <PageHeader
         titleId="certs-heading"
         title="Certificates"
-        description="Inventory is loaded from the served certificate API with tenant-scoped pagination, expiry filtering, detail fetches, and explicit ingest."
+        description="Inventory includes tenant-scoped pagination, expiry filtering, detail fetches, and explicit ingest."
         actions={
           <button
             type="button"
@@ -362,7 +362,7 @@ export function Certificates() {
       <DetailDrawer
         open={!!detailID}
         title="Certificate details"
-        description={detailID ? `Fetched from GET /api/v1/certificates/${detailID}.` : undefined}
+        description={detailID ? `Fetched certificate ${detailID}.` : undefined}
         onClose={() => setDetailID(null)}
       >
         {detailLoading && <LoadingState>Loading certificate details...</LoadingState>}
@@ -439,8 +439,8 @@ export function Certificates() {
             <div className="md:col-span-2">
               <dt className="font-medium text-muted-foreground">Certificate chain</dt>
               <dd>
-                <UnavailableState title="Certificate chain not served yet">
-                  The current detail contract returns certificate metadata, not chain bytes. Use issuer evidence until a chain field is served.
+                <UnavailableState title="Certificate chain coming soon">
+                  The current detail view returns certificate metadata, not chain bytes. Use issuer evidence until chain data appears here.
                 </UnavailableState>
               </dd>
             </div>
@@ -469,7 +469,7 @@ const certificateColumns: Array<DataGridColumn<Certificate>> = [
   {
     id: "profile",
     header: "Profile",
-    cell: () => <span className="text-muted-foreground">Not served</span>,
+    cell: () => <span className="text-muted-foreground">Not available</span>,
   },
   {
     id: "algorithm",
