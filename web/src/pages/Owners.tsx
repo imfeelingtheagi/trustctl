@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, type Owner } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { PageHeader } from "@/components/PageHeader";
+import { OrphanGovernance } from "@/components/nhi";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
 export function Owners() {
@@ -17,6 +18,8 @@ export function Owners() {
   return (
     <section aria-labelledby="owners-heading" className="space-y-4">
       <PageHeader titleId="owners-heading" title="Owners" description="Search served owner records by name, ID, kind, or email." />
+
+      <OrphanGovernance owners={owners} />
       {loading && <LoadingState>Loading owners…</LoadingState>}
       {error && <ErrorState title="Could not load owners">{error}</ErrorState>}
       {data && (

@@ -227,7 +227,8 @@ describe("certificate inventory gap closure", () => {
     expect(dialog).toHaveTextContent("sha256:detail");
     expect(dialog).toHaveTextContent("CN=Issuing CA");
     expect(screen.getByRole("link", { name: "owner-1" })).toHaveAttribute("href", "/owners?owner=owner-1");
-    expect(dialog).toHaveTextContent(/certificate chain coming soon/i);
+    // U1 replaced the "certificate chain coming soon" placeholder with a real renewal-history section.
+    expect(dialog).toHaveTextContent("Renewal history");
     expect(dialog).toHaveTextContent("Credential activity timeline");
     expect(dialog).toHaveTextContent(/projected connector and rotation evidence/i);
     expect(dialog).toHaveTextContent("Connector delivery");

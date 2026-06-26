@@ -18,6 +18,8 @@ const { apiMock } = vi.hoisted(() => ({
     identities: vi.fn(),
     auditEvents: vi.fn(),
     risk: vi.fn(),
+    rotationRuns: vi.fn(),
+    connectorDeliveries: vi.fn(),
   },
 }));
 
@@ -62,6 +64,8 @@ describe("auth + dashboards", () => {
     apiMock.identities.mockResolvedValue([]);
     apiMock.auditEvents.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);
+    apiMock.rotationRuns.mockResolvedValue({ items: [] });
+    apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
   });
 
   it("redirects an unauthenticated visitor to the login page", async () => {

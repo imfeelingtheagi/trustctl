@@ -12,6 +12,7 @@ import {
   graphNodeKindStyle,
 } from "@/components/GraphView";
 import { PageHeader } from "@/components/PageHeader";
+import { BlastRadiusExplorer } from "@/components/graph";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -143,6 +144,8 @@ export function Graph() {
         title="Graph"
         description="Tenant-scoped credential graph: explore nodes and edges, compute blast radius and reachability, and run read-only graph queries."
       />
+
+      <BlastRadiusExplorer nodes={graph.data?.nodes ?? []} />
 
       {loading && <LoadingState>Loading graph...</LoadingState>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}

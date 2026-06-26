@@ -25,8 +25,10 @@ export function useRisk(options?: RiskQuery): { loading: boolean; data: RiskItem
   useEffect(() => {
     let active = true;
     setState((current) => ({ ...current, loading: true }));
-    api
-      .risk({ sort, minScore, privilege, owner })
+    // Wrap the call so even a synchronous throw (e.g. a missing method) becomes a
+    // caught rejection instead of crashing the host page — risk is a secondary lens.
+    Promise.resolve()
+      .then(() => api.risk({ sort, minScore, privilege, owner }))
       .then((data) => {
         if (active) setState({ loading: false, data, error: null });
       })

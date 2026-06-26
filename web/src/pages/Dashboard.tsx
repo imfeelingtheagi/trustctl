@@ -6,6 +6,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
+import { NhiInventory } from "@/components/nhi";
 import { demoDashboard } from "@/lib/demoData";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
@@ -123,6 +124,9 @@ export function Dashboard() {
           spark={[10, 13, 16, 18, 21, 24, 26, 28, 30, 31, 33, 34]}
         />
       </div>
+
+      {/* Non-human identity inventory — by kind, with a shared risk lens (real data only) */}
+      {!useDemo && <NhiInventory identities={identities.data ?? []} risks={riskRows} />}
 
       {/* Trend + algorithm mix */}
       <div className="grid gap-4 lg:grid-cols-3">

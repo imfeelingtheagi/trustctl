@@ -54,6 +54,18 @@ function formatDate(value?: string): string {
   return formatDatePolicy(value);
 }
 
+/** Run a secondary data fetch so it can never crash the primary inventory:
+ * a missing method (undefined in a test mock) or a rejected promise both
+ * resolve to undefined instead of throwing. The certificate grid is the
+ * bulkhead that must survive an auxiliary panel's outage (AN-7). */
+function settleOptional<T>(make: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return Promise.resolve(make()).catch(() => undefined);
+  } catch {
+    return Promise.resolve(undefined);
+  }
+}
+
 export function Certificates() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -82,14 +94,16 @@ export function Certificates() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([api.risk({ sort: "score" }), api.rotationRuns({ limit: 100 }), api.connectorDeliveries({ limit: 50 })]).then(
-      ([riskResult, rotationResult, deliveryResult]) => {
-        if (cancelled) return;
-        if (riskResult.status === "fulfilled") setRisks(riskResult.value);
-        if (rotationResult.status === "fulfilled") setRotationRuns(rotationResult.value.items ?? []);
-        if (deliveryResult.status === "fulfilled") setDeliveries(deliveryResult.value.items ?? []);
-      },
-    );
+    Promise.all([
+      settleOptional(() => api.risk({ sort: "score" })),
+      settleOptional(() => api.rotationRuns({ limit: 100 })),
+      settleOptional(() => api.connectorDeliveries({ limit: 50 })),
+    ]).then(([riskResult, rotationResult, deliveryResult]) => {
+      if (cancelled) return;
+      if (riskResult) setRisks(riskResult);
+      if (rotationResult) setRotationRuns(rotationResult.items ?? []);
+      if (deliveryResult) setDeliveries(deliveryResult.items ?? []);
+    });
     return () => {
       cancelled = true;
     };

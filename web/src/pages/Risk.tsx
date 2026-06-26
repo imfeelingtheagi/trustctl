@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
+import { RiskPosture } from "@/components/risk/posture";
 import { riskBand } from "@/lib/statusVocab";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
 
@@ -149,6 +150,8 @@ export function Risk() {
   return (
     <section aria-labelledby="risk-heading">
       <PageHeader titleId="risk-heading" title="Credential risk" description="Ranked by composite score — what to rotate first." />
+
+      <RiskPosture risks={data ?? []} />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
           Risk scoring covers certificates today; scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities is coming soon.
