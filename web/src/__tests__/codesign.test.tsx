@@ -1,32 +1,38 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { CodeSigning } from "@/pages/CodeSigning";
 
-function renderCodeSigning() {
-  return render(
-    <MemoryRouter>
-      <CodeSigning />
-    </MemoryRouter>,
-  );
-}
+const { apiMock } = vi.hoisted(() => ({ apiMock: { signCode: vi.fn(), signCodeKeyless: vi.fn() } }));
 
-describe("code signing disclosure surface", () => {
-  it("renders signing requests with key modes, approvals, policy decisions, signature receipts, and audit", () => {
-    renderCodeSigning();
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...apiMock } };
+});
 
+beforeEach(() => {
+  apiMock.signCode.mockReset().mockResolvedValue({ algorithm: "ECDSA-P256", artifact_type: "container", key_id: "key-1", public_key_der: "BASE64DER" });
+  apiMock.signCodeKeyless.mockReset().mockResolvedValue({ algorithm: "ECDSA-P256", artifact_type: "container", fulcio_issuer: "https://oauth2.example", public_key_der: "BASE64DER" });
+});
+
+describe("code signing console", () => {
+  it("submits a key-backed signing request and renders the served signature receipt", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CodeSigning />
+      </MemoryRouter>,
+    );
     expect(screen.getByRole("heading", { name: "Code signing" })).toBeInTheDocument();
-    expect(screen.getByText("key-backed signing")).toBeInTheDocument();
-    expect(screen.getByText("keyless signing")).toBeInTheDocument();
-    expect(screen.getByText("2 of 2 release approvers")).toBeInTheDocument();
-    expect(screen.getAllByText(/artifact digest/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/policy allowed: release tag/)).toBeInTheDocument();
-    expect(screen.getByText(/policy denied: missing build attestation/)).toBeInTheDocument();
-    expect(screen.getByText(/signature download: pending backend artifact store/)).toBeInTheDocument();
-    expect(screen.getAllByText(/audit/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Code-signing workflow coming soon")).toBeInTheDocument();
-    expect(screen.getByText(/cannot submit signing work/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Artifact digest"), "sha256:abc");
+    await user.type(screen.getByLabelText("Managed key id"), "key-1");
+    await user.click(screen.getByRole("button", { name: "Sign artifact" }));
+
+    await waitFor(() => expect(apiMock.signCode).toHaveBeenCalledWith({ artifact_type: "container", digest: "sha256:abc", key_id: "key-1" }));
+    expect(await screen.findByText("Signature receipt")).toBeInTheDocument();
+    expect(screen.getByText("ECDSA-P256")).toBeInTheDocument();
+    // The signer boundary holds: no private key material ever reaches the browser.
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /sign|approve|download signature|submit/i })).not.toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@ import { api, ApiError, type GraphImpact, type GraphNode, type IncidentExecution
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { BreakGlassReconcile } from "@/components/breakglass";
 
 const defaultExecution: IncidentExecutionRequest = {
   identity_id: "",
@@ -233,6 +234,8 @@ export function Incidents() {
         {loadError && <ErrorState title="Incident evidence unavailable">{loadError}</ErrorState>}
         {!loading && !loadError && <IncidentExecutionTable executions={executions} />}
       </section>
+
+      <BreakGlassReconcile />
 
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
         <div>

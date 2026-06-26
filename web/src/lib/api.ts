@@ -21,6 +21,12 @@ import type {
   ApprovalRequest,
   AuditBundle,
   AuditEvent as GenAuditEvent,
+  BreakglassBundle,
+  BreakglassReconcileRequest,
+  BreakglassReconcileResponse,
+  CodeSigningKeylessRequest,
+  CodeSigningRequest,
+  CodeSigningSignature,
   CBOMAsset as GenCBOMAsset,
   CBOMInventory,
   CBOMMigrationProgress,
@@ -163,6 +169,12 @@ export type IssueCertificateInput = {
 };
 export type {
   AuditBundle,
+  BreakglassBundle,
+  BreakglassReconcileRequest,
+  BreakglassReconcileResponse,
+  CodeSigningKeylessRequest,
+  CodeSigningRequest,
+  CodeSigningSignature,
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryRun,
@@ -541,6 +553,9 @@ export interface Api {
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
   incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
   getIncidentExecution(id: string): Promise<IncidentExecution>;
+  breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
+  signCode(input: CodeSigningRequest): Promise<CodeSigningSignature>;
+  signCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningSignature>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
@@ -667,6 +682,9 @@ export const api: Api = {
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
   incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
+  breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
+  signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
+  signCodeKeyless: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input),
   risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
   getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),

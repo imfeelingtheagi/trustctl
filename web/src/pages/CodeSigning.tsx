@@ -1,109 +1,155 @@
+import { FormEvent, useState } from "react";
+import { api, type CodeSigningSignature } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
-import { UnavailableState } from "@/components/StatePrimitives";
+import { SectionCard } from "@/components/dashboard";
+import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/StatePrimitives";
 
-const signingRequests = [
-  {
-    artifact: "release/linux/amd64/trstctl-agent",
-    digest: "sha256:7d7c0d0f6e5a4b3c2a190817161514131211100ffeeddccbbaa9988776655443",
-    mode: "key-backed signing",
-    approval: "2 of 2 release approvers",
-    decision: "policy allowed: release tag, provenance, and artifact digest match",
-    output: "signature download: pending backend artifact store",
-  },
-  {
-    artifact: "container:registry.example.test/trstctl/api@sha256:9f9e",
-    digest: "sha256:9f9e8d8c7b7a696857565554535251504f4e4d4c4b4a494847464544434241",
-    mode: "keyless signing",
-    approval: "workload identity plus release manager",
-    decision: "policy denied: missing build attestation",
-    output: "no signature material produced",
-  },
-  {
-    artifact: "sbom/trstctl-web.spdx.json",
-    digest: "sha256:4142434445464748495051525354555657585960616263646566676869707172",
-    mode: "timestamp-only",
-    approval: "automated release lane",
-    decision: "policy allowed with TSA receipt",
-    output: "audit receipt references immutable event sequence",
-  },
-];
+type Mode = "key" | "keyless";
 
 const auditReceipts = [
-  "artifact digest is the signed subject; artifact bytes never enter the browser",
+  "the artifact digest is the signed subject; artifact bytes never enter the browser",
   "approval, policy decision, signer identity, and timestamp become audit evidence",
-  "signing key material remains inside the dedicated signer or keyless provider",
+  "signing key material stays inside the dedicated signer or the keyless provider",
 ];
 
+/** CodeSigning submits a real signing request to the served code-signing
+ * endpoints — key-backed (POST /code-signing/sign) or keyless/Fulcio
+ * (POST /code-signing/keyless) — and renders the returned signature receipt.
+ * Only the digest is sent; artifact bytes and private keys never touch the SPA. */
 export function CodeSigning() {
+  const [mode, setMode] = useState<Mode>("key");
+  const [artifactType, setArtifactType] = useState("container");
+  const [digest, setDigest] = useState("");
+  const [keyId, setKeyId] = useState("");
+  const [identityMethod, setIdentityMethod] = useState("oidc");
+  const [identityPayload, setIdentityPayload] = useState("");
+  const [signature, setSignature] = useState<CodeSigningSignature | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!digest.trim()) return;
+    setBusy(true);
+    setError(null);
+    setSignature(null);
+    try {
+      const result =
+        mode === "key"
+          ? await api.signCode({ artifact_type: artifactType, digest: digest.trim(), key_id: keyId.trim() })
+          : await api.signCodeKeyless({ artifact_type: artifactType, digest: digest.trim(), identity_method: identityMethod, identity_payload: identityPayload.trim() });
+      setSignature(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="codesign-heading" className="grid gap-6">
       <PageHeader
         titleId="codesign-heading"
         title="Code signing"
-        description="Code-signing requests bind an artifact digest to an approval, policy decision, signer mode, signature receipt, and immutable audit trail. This page is read-only until a signing workflow is available here."
+        description="Bind an artifact digest to a signature through the dedicated signer (key-backed) or a keyless provider (Fulcio). Only the digest is submitted — artifact bytes and private keys never enter the browser."
       />
 
-      <UnavailableState title="Code-signing workflow coming soon">
-        Signing requests, key-backed and keyless modes, approval state, policy decisions, signature download receipts, and audit links are planned for a later
-        console workflow, so this page cannot submit signing work yet.
-      </UnavailableState>
+      <SectionCard title="Sign an artifact" description="Submit a digest for key-backed or keyless signing against the served endpoints.">
+        <form onSubmit={submit} className="grid gap-4">
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium">Signing mode</legend>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant={mode === "key" ? "default" : "outline"} aria-pressed={mode === "key"} onClick={() => setMode("key")}>
+                Key-backed
+              </Button>
+              <Button type="button" variant={mode === "keyless" ? "default" : "outline"} aria-pressed={mode === "keyless"} onClick={() => setMode("keyless")}>
+                Keyless (Fulcio)
+              </Button>
+            </div>
+          </fieldset>
 
-      <section aria-labelledby="requests-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="requests-heading" className="text-title font-semibold">
-            Signing request ledger
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A valid request names the artifact, digest, signing mode, approval posture, policy result, and downloadable signature receipt. No private key or
-            artifact bytes are exposed.
-          </p>
-        </div>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[72rem]">
-            <caption className="sr-only">Code signing request fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Artifact</th>
-                <th scope="col">Artifact digest</th>
-                <th scope="col">Mode</th>
-                <th scope="col">Approval</th>
-                <th scope="col">Policy decision</th>
-                <th scope="col">Signature receipt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {signingRequests.map((request) => (
-                <tr key={request.digest} className="align-top">
-                  <td className="font-medium">{request.artifact}</td>
-                  <td className="font-mono text-xs">{request.digest}</td>
-                  <td>{request.mode}</td>
-                  <td>{request.approval}</td>
-                  <td>{request.decision}</td>
-                  <td>{request.output}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-type">
+              Artifact type
+              <input id="codesign-type" value={artifactType} onChange={(e) => setArtifactType(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-digest">
+              Artifact digest
+              <input id="codesign-digest" value={digest} onChange={(e) => setDigest(e.target.value)} placeholder="sha256:…" className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs" />
+            </label>
+            {mode === "key" ? (
+              <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-keyid">
+                Managed key id
+                <input id="codesign-keyid" value={keyId} onChange={(e) => setKeyId(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+              </label>
+            ) : (
+              <>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-method">
+                  Identity method
+                  <input id="codesign-id-method" value={identityMethod} onChange={(e) => setIdentityMethod(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                </label>
+                <label className="grid gap-1 text-sm font-medium" htmlFor="codesign-id-payload">
+                  Identity payload
+                  <input id="codesign-id-payload" value={identityPayload} onChange={(e) => setIdentityPayload(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                </label>
+              </>
+            )}
+          </div>
 
-      <section aria-labelledby="audit-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="audit-heading" className="text-title font-semibold">
-            Audit and key boundary
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The browser can review request evidence, but the signer boundary remains the place where signing keys live and signature bytes are produced.
-          </p>
-        </div>
+          <div>
+            <Button type="submit" disabled={busy || !digest.trim()}>
+              {busy ? "Signing…" : "Sign artifact"}
+            </Button>
+          </div>
+        </form>
+
+        {error ? <ErrorState title="Could not sign artifact">{error}</ErrorState> : null}
+
+        {signature ? (
+          <section aria-labelledby="signature-heading" className="mt-4 rounded-panel border border-border p-comfortable text-sm">
+            <h3 id="signature-heading" className="text-title font-semibold">
+              Signature receipt
+            </h3>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>
+                <dt className="font-medium text-muted-foreground">Algorithm</dt>
+                <dd>{signature.algorithm}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Artifact type</dt>
+                <dd>{signature.artifact_type}</dd>
+              </div>
+              {signature.key_id ? (
+                <div>
+                  <dt className="font-medium text-muted-foreground">Signing key</dt>
+                  <dd className="font-mono text-xs">{signature.key_id}</dd>
+                </div>
+              ) : null}
+              {signature.fulcio_issuer ? (
+                <div>
+                  <dt className="font-medium text-muted-foreground">Fulcio issuer</dt>
+                  <dd className="font-mono text-xs">{signature.fulcio_issuer}</dd>
+                </div>
+              ) : null}
+              <div className="sm:col-span-2">
+                <dt className="font-medium text-muted-foreground">Public key (DER)</dt>
+                <dd className="break-all font-mono text-xs">{signature.public_key_der}</dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+      </SectionCard>
+
+      <SectionCard title="Audit and key boundary" description="What the browser can and cannot see during signing.">
         <ul className="grid gap-2 md:grid-cols-3">
           {auditReceipts.map((receipt) => (
-            <li key={receipt} className="ui-panel p-3 text-sm text-muted-foreground">
+            <li key={receipt} className="rounded-panel border border-border p-3 text-sm text-muted-foreground">
               {receipt}
             </li>
           ))}
         </ul>
-      </section>
+      </SectionCard>
     </section>
   );
 }
