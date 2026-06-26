@@ -66,6 +66,8 @@ const (
 	EventTenantMemberOffboarded        = "tenant.member.offboarded"
 	EventAPITokenCreated               = "api_token.created"
 	EventAPITokenRevoked               = "api_token.revoked"
+	EventPAMSessionStarted             = "pam.session.started"
+	EventPAMSessionExpired             = "pam.session.expired"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -534,6 +536,35 @@ type APITokenRevoked struct {
 	RevokedBy string `json:"revoked_by,omitempty"`
 }
 
+// PAMSessionStarted is the payload of pam.session.started. It carries only
+// session metadata and backend revoke handles; the one-time credential bytes/DSN
+// returned to the caller are intentionally omitted.
+type PAMSessionStarted struct {
+	ID             string          `json:"id"`
+	TargetType     string          `json:"target_type"`
+	TargetID       string          `json:"target_id"`
+	Role           string          `json:"role"`
+	Status         string          `json:"status"`
+	Subject        string          `json:"subject"`
+	RequestedBy    string          `json:"requested_by"`
+	Reason         string          `json:"reason,omitempty"`
+	AttestationID  string          `json:"attestation_id,omitempty"`
+	BackendRef     string          `json:"backend_ref,omitempty"`
+	SSHKeyID       string          `json:"ssh_key_id,omitempty"`
+	SSHSerial      uint64          `json:"ssh_serial,omitempty"`
+	IdempotencyKey string          `json:"idempotency_key,omitempty"`
+	Audit          json.RawMessage `json:"audit,omitempty"`
+	StartedAt      time.Time       `json:"started_at"`
+	ExpiresAt      time.Time       `json:"expires_at"`
+}
+
+// PAMSessionExpired is the payload of pam.session.expired.
+type PAMSessionExpired struct {
+	ID      string    `json:"id"`
+	EndedAt time.Time `json:"ended_at"`
+	Reason  string    `json:"reason,omitempty"`
+}
+
 // Apply applies a single event to the read model in its own tenant-scoped
 // transaction. It is exported so the command side can project an event live,
 // right after appending it, using the same logic a rebuild uses.
@@ -621,6 +652,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantMemberOffboarded:    {1: true},
 	EventAPITokenCreated:           {1: true},
 	EventAPITokenRevoked:           {1: true},
+	EventPAMSessionStarted:         {1: true},
+	EventPAMSessionExpired:         {1: true},
 }
 
 func init() {
@@ -1093,6 +1126,38 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires id", e.Type)
 		}
 		return p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time)
+	case EventPAMSessionStarted:
+		var pl PAMSessionStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.TargetType == "" || pl.TargetID == "" || pl.Status == "" || pl.Subject == "" || pl.ExpiresAt.IsZero() {
+			return fmt.Errorf("projections: %s requires id, target, status, subject, and expires_at", e.Type)
+		}
+		startedAt := pl.StartedAt
+		if startedAt.IsZero() {
+			startedAt = e.Time
+		}
+		return p.store.ApplyPAMSessionStartedTx(ctx, tx, store.PAMSession{
+			TenantID: e.TenantID, ID: pl.ID, TargetType: pl.TargetType, TargetID: pl.TargetID,
+			Role: pl.Role, Status: pl.Status, Subject: pl.Subject, RequestedBy: pl.RequestedBy,
+			Reason: pl.Reason, AttestationID: pl.AttestationID, BackendRef: pl.BackendRef,
+			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
+			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt,
+		})
+	case EventPAMSessionExpired:
+		var pl PAMSessionExpired
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		endedAt := pl.EndedAt
+		if endedAt.IsZero() {
+			endedAt = e.Time
+		}
+		return p.store.ApplyPAMSessionExpiredTx(ctx, tx, e.TenantID, pl.ID, endedAt)
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model

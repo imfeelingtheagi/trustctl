@@ -7,8 +7,8 @@ emergency access right now. This page covers the four workflows trstctl provides
 those moments: a **credential-compromise workflow** that re-issues and revokes a leaked
 credential and everything downstream of it; **fleet re-issuance** to replace every
 certificate from a compromised CA; **just-in-time (JIT) issuance** that grants access
-only after approval; and **break-glass** emergency signing for when the control plane
-itself is down.
+only after approval; **JIT privileged access sessions** for Postgres and SSH; and
+**break-glass** emergency signing for when the control plane itself is down.
 
 The mental model: this is the fire department and the keymaster combined. The compromise
 workflow and fleet re-issuance are the fire response (contain and rebuild without leaving
@@ -65,14 +65,26 @@ time). One denial is terminal. When the quorum is met, trstctl issues and transi
 terminal, so a retry never double-acts, and every step is recorded as an immutable event
 (`approval.requested/approved/denied/issued/expired/refused`).
 
+For privileged-access management, the same JIT model opens short-lived sessions instead
+of standing database or shell access. `POST /api/v1/access/sessions` verifies an
+attestation, grants a scoped Postgres login role or signs an OpenSSH user certificate
+for a configured SSH target, returns the one-time credential to the caller, and records a
+tenant-scoped session row. The session expires automatically: Postgres roles are revoked
+by the background expiry worker, and SSH access ends at the certificate `valid_before`
+time. The event trail is filterable by `pam.session.started` and
+`pam.session.expired`; credential material is not written into those events.
+
 **Status:** the core identity approval gate is served through
-`POST /api/v1/identities/{id}/approvals`, and ephemeral/JIT credential issuance is
-served when configured through `POST /api/v1/ephemeral` plus
-`POST /api/v1/ephemeral/{request_id}/approvals`. The ephemeral path verifies the
-attestation first, writes the approval request and outbox notification intent in the
-same tenant transaction, blocks requester self-approval, then mints a short-TTL
-credential only after a distinct approver records approval. CLI parity is
-`trstctl-cli ephemeral issue` and `trstctl-cli ephemeral approve`.
+`POST /api/v1/identities/{id}/approvals`, ephemeral/JIT credential issuance is served
+when configured through `POST /api/v1/ephemeral` plus
+`POST /api/v1/ephemeral/{request_id}/approvals`, and PAM-lite sessions are served
+through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
+`GET /api/v1/access/sessions/{id}`. The ephemeral path verifies the attestation first,
+writes the approval request and outbox notification intent in the same tenant
+transaction, blocks requester self-approval, then mints a short-TTL credential only
+after a distinct approver records approval. CLI parity is `trstctl-cli ephemeral issue`
+and `trstctl-cli ephemeral approve`; PAM sessions use `trstctl-cli access sessions open`,
+`trstctl-cli access sessions list`, and `trstctl-cli access sessions get`.
 
 ### Break-glass procedures (F34)
 
@@ -124,6 +136,35 @@ curl -X POST "https://trstctl.example.com/api/v1/breakglass/reconcile" \
 The caller needs `certs:issue`; audit readers can then confirm the result with
 `GET /api/v1/audit/events?type=breakglass.issued`.
 
+Open a short-lived Postgres session:
+
+```bash
+curl -fksS -X POST "https://trstctl.example.com/api/v1/access/sessions" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: incident-2026-06-25-pg-readonly" \
+  -H "Content-Type: application/json" \
+  -d '{"target_type":"postgres","target_id":"pg-main","role":"readonly","reason":"production incident 42","method":"k8s_sat","payload_base64":"...","ttl_seconds":900}'
+```
+
+The response includes the session id, expiry, and a one-time Postgres DSN. Store it
+only in the process that will use it. After `expires_at`, the background worker revokes
+the generated database role and records `pam.session.expired`.
+
+Open a short-lived SSH session:
+
+```bash
+ssh-keygen -t ed25519 -N "" -f /tmp/pam_id
+curl -fksS -X POST "https://trstctl.example.com/api/v1/access/sessions" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: incident-2026-06-25-ssh" \
+  -H "Content-Type: application/json" \
+  -d '{"target_type":"ssh","target_id":"ssh-edge","role":"user","reason":"production incident 42","method":"k8s_sat","payload_base64":"...","ssh_public_key":"'"$(cat /tmp/pam_id.pub)"'","ssh_principal":"alice","ttl_seconds":900}'
+```
+
+Write the returned `ssh.certificate` value to `/tmp/pam_id-cert.pub` and connect with
+the matching private key. The target host must trust the trstctl SSH CA through its
+`TrustedUserCAKeys` configuration.
+
 The lower-level library shapes remain useful for tests and future batch workflows:
 
 ```go
@@ -154,6 +195,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   don't shortcut it, or you risk an outage mid-incident.
 - **JIT needs real approvers configured** and a notifier wired, or requests will sit in
   `awaiting-approval` until they expire.
+- **PAM sessions need configured targets and attestors.** Postgres targets need an
+  administrative DSN that can create and drop scoped roles. SSH targets need hosts that
+  trust the trstctl SSH CA; trstctl does not weaken host `sshd` trust on your behalf.
 - **Break-glass is a last resort.** It trades the control plane's guarantees for offline
   availability; reconcile the bundles promptly so the audit log is complete.
 
@@ -164,9 +208,12 @@ notifications use the [notification integrations](policy-and-governance.md).
 - **Fleet:** `Fleet.ReissueFleet(issuerID, runID)` — staged, health-checked, resumable.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.
+- **PAM-lite:** `/api/v1/access/sessions`; Postgres scoped login roles; OpenSSH user
+  certificates; `pam.session.started`, `pam.session.expired`.
 - **Break-glass:** `IssueOffline` (offline quorum ceremony), `Verify`,
   `POST /api/v1/breakglass/reconcile`.
-- **Events:** `incident.*`, `fleet.*`, `approval.*`, `breakglass.issued`.
+- **Events:** `incident.*`, `fleet.*`, `approval.*`, `pam.session.*`,
+  `breakglass.issued`.
 
 ## See also
 

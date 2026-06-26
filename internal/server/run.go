@@ -587,6 +587,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunOTLPAuditStream),
 			startRuntimeWorker(workCtx, srv.RunTelemetry),
 			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
+			startRuntimeWorker(workCtx, srv.RunPAMSessionExpiry),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),

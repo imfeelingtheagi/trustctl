@@ -90,6 +90,9 @@ var commandTable = []Command{
 	{Name: []string{"access", "tokens", "list"}, Method: "GET", Path: "/api/v1/access/api-tokens", Query: []string{"limit", "cursor", "subject", "include_revoked"}, Summary: "List API token metadata"},
 	{Name: []string{"access", "tokens", "create"}, Method: "POST", Path: "/api/v1/access/api-tokens", Body: bodyFile, Summary: "Mint a member API token"},
 	{Name: []string{"access", "tokens", "revoke"}, Method: "DELETE", Path: "/api/v1/access/api-tokens/{id}", Summary: "Revoke an API token"},
+	{Name: []string{"access", "sessions", "list"}, Method: "GET", Path: "/api/v1/access/sessions", Query: []string{"limit", "cursor"}, Summary: "List just-in-time privileged access sessions"},
+	{Name: []string{"access", "sessions", "open"}, Method: "POST", Path: "/api/v1/access/sessions", Body: bodyFile, Summary: "Open a just-in-time privileged access session"},
+	{Name: []string{"access", "sessions", "get"}, Method: "GET", Path: "/api/v1/access/sessions/{id}", Summary: "Get a privileged access session"},
 
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
 	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},

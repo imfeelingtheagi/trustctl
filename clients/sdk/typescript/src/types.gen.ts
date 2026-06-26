@@ -124,6 +124,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List just-in-time privileged access sessions */
+        get: operations["listPAMSessions"];
+        put?: never;
+        /** Open a just-in-time privileged access session */
+        post: operations["openPAMSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a privileged access session */
+        get: operations["getPAMSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -2676,6 +2711,55 @@ export interface components {
             kind: "user" | "team" | "workload" | "service";
             name: string;
         };
+        PAMPostgresCredential: {
+            dsn: string;
+            username: string;
+        };
+        PAMSSHCredential: {
+            certificate: string;
+            key_id: string;
+            principal: string;
+            serial: number;
+            /** Format: date-time */
+            valid_before: string;
+        };
+        PAMSession: {
+            attestation: components["schemas"]["Attestation"];
+            audit?: Record<string, never>;
+            /** Format: date-time */
+            ended_at?: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            id: string;
+            postgres?: components["schemas"]["PAMPostgresCredential"];
+            reason?: string;
+            requested_by: string;
+            role: string;
+            ssh?: components["schemas"]["PAMSSHCredential"];
+            /** Format: date-time */
+            started_at: string;
+            status: string;
+            subject: string;
+            target_id: string;
+            target_type: string;
+        };
+        PAMSessionList: {
+            items: components["schemas"]["PAMSession"][];
+            next_cursor?: string;
+        };
+        PAMSessionRequest: {
+            method: string;
+            payload_base64: string;
+            reason?: string;
+            role: string;
+            ssh_principal?: string;
+            ssh_public_key?: string;
+            target_id: string;
+            /** @enum {string} */
+            target_type: "postgres" | "ssh";
+            ttl_seconds?: number;
+        };
         PKISecret: {
             certificate: string;
             common_name?: string;
@@ -3368,6 +3452,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPAMSessions: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSessionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    openPAMSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PAMSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPAMSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PAMSession"];
                 };
             };
             /** @description client error */

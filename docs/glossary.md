@@ -408,3 +408,16 @@ Minting a short-lived credential only at the moment it is needed — often only 
 approval — instead of handing out long-lived credentials in advance. Less standing
 access means a smaller window for a leaked credential to be abused. See the
 incident-and-JIT page.
+
+### PAM (Privileged Access Management)
+
+Controls that grant powerful access only when it is needed, record who requested it,
+and remove it automatically. In trstctl, PAM-lite opens short-lived sessions for
+Postgres and SSH targets by issuing scoped database logins or OpenSSH user
+certificates.
+
+### Privileged-access session
+
+A time-boxed grant to a sensitive target such as a database or host. The session has a
+requester, reason, target, expiry, and audit trail; when it expires, the database role
+is revoked or the SSH certificate is no longer valid.

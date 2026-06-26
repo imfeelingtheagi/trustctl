@@ -4428,42 +4428,83 @@
       "phase": "P1",
       "priority": 31,
       "served_state": "partial",
-      "backend_status": "core approval gate and approval-gated JIT issuance served",
-      "current_frontend_mapping": "partial: identity approval buttons plus REST/CLI ephemeral JIT disclosure; coverage ledger: /coverage",
+      "backend_status": "core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions served",
+      "current_frontend_mapping": "partial: identity approval buttons plus REST/CLI ephemeral JIT and PAM session disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant.",
       "acceptance_test": "UI covers requester cannot approve own request and approver can approve/deny with audit link.",
       "source_docs": ["docs/features/incident-and-jit.md"],
-      "source_backend": ["/api/v1/identities/{id}/approvals", "/api/v1/ephemeral", "/api/v1/ephemeral/{id}/approvals", "internal/approval", "internal/server/ephemeral.go"],
+      "source_backend": [
+        "/api/v1/identities/{id}/approvals",
+        "/api/v1/ephemeral",
+        "/api/v1/ephemeral/{id}/approvals",
+        "/api/v1/access/sessions",
+        "internal/approval",
+        "internal/server/ephemeral.go",
+        "internal/server/pam.go"
+      ],
       "source_frontend": ["web/src/pages/Identities.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["approveIdentityAction", "transitionIdentity", "issueEphemeralCredential", "approveEphemeralCredential"],
+      "api_surface": [
+        "approveIdentityAction",
+        "transitionIdentity",
+        "issueEphemeralCredential",
+        "approveEphemeralCredential",
+        "openPAMSession",
+        "listPAMSessions",
+        "getPAMSession"
+      ],
       "api_na": "",
-      "cli_surface": ["identities approve", "identities transition", "ephemeral issue", "ephemeral approve"],
+      "cli_surface": [
+        "identities approve",
+        "identities transition",
+        "ephemeral issue",
+        "ephemeral approve",
+        "access sessions open",
+        "access sessions list",
+        "access sessions get"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=core approval gate and approval-gated JIT issuance served"]
+          "evidence": ["served_state=partial", "backend_status=core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions served"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: identity approval buttons plus REST/CLI ephemeral JIT disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: partial: identity approval buttons plus REST/CLI ephemeral JIT and PAM session disclosure; coverage ledger: /coverage",
             "target_gui_mapping: JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx", "web/src/pages/Identities.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: identities approve", "CLI command: identities transition", "CLI command: ephemeral issue", "CLI command: ephemeral approve"],
+          "evidence": [
+            "CLI command: identities approve",
+            "CLI command: identities transition",
+            "CLI command: ephemeral issue",
+            "CLI command: ephemeral approve",
+            "CLI command: access sessions open",
+            "CLI command: access sessions list",
+            "CLI command: access sessions get"
+          ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: approveIdentityAction", "OpenAPI operationId: transitionIdentity", "OpenAPI operationId: issueEphemeralCredential", "OpenAPI operationId: approveEphemeralCredential"],
+          "evidence": [
+            "OpenAPI operationId: approveIdentityAction",
+            "OpenAPI operationId: transitionIdentity",
+            "OpenAPI operationId: issueEphemeralCredential",
+            "OpenAPI operationId: approveEphemeralCredential",
+            "OpenAPI operationId: openPAMSession",
+            "OpenAPI operationId: listPAMSessions",
+            "OpenAPI operationId: getPAMSession"
+          ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI covers requester cannot approve own request and approver can approve/deny with audit link.",
             "internal/server/ephemeral_served_test.go proves an attested JIT request opens approval, enqueues outbox notification intent, blocks self-issue until approval, and then mints a short-TTL credential.",
+            "internal/server/pam_served_test.go proves an attested PAM request opens real Postgres and sshd-backed sessions, audits them, and expires them.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -4479,7 +4520,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession, listPAMSessions, getPAMSession",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4492,15 +4533,16 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential",
+            "mutating served surface requires audit/event evidence: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession",
             "ephemeral JIT emits ephemeral.approval.requested/granted plus ephemeral.issued and certificate.recorded after distinct approval.",
+            "PAM-lite emits pam.session.started and pam.session.expired without recording one-time credential material.",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go", "internal/server/ephemeral.go"]
+          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go", "internal/server/ephemeral.go", "internal/server/pam.go"]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels; issueEphemeralCredential emits feature=ephemeral action=issue_jit."],
-          "refs": ["internal/observ/middleware.go", "internal/api/ephemeral.go", "docs/observability.md"]
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels; issueEphemeralCredential emits feature=ephemeral action=issue_jit and openPAMSession emits feature=pam action=open_session."],
+          "refs": ["internal/observ/middleware.go", "internal/api/ephemeral.go", "internal/api/pam.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

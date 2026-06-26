@@ -112,6 +112,23 @@ action behind an approval.
    approver has signed off. The four-eyes and just-in-time model is described in
    [Incident response & just-in-time access](../features/incident-and-jit.md).
 
+7. **Use brokered access instead of standing credentials.** If the responder needs to
+   inspect a database or host, open a short-lived privileged-access session instead of
+   sharing a long-lived password or SSH key:
+
+   ```sh
+   curl -fksS -X POST \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: incident-2026-06-25-db-readonly" \
+     -H "Content-Type: application/json" \
+     -d '{"target_type":"postgres","target_id":"pg-main","role":"readonly","reason":"production incident 42","method":"k8s_sat","payload_base64":"...","ttl_seconds":900}' \
+     https://localhost:8443/api/v1/access/sessions
+   ```
+
+   You should receive a session id, an expiry, and a one-time credential. Audit readers
+   can later filter `pam.session.started` and `pam.session.expired`; after expiry the
+   database role is revoked or the SSH certificate is past its validity window.
+
 ## Where next
 
 - [Run trstctl in production](run-in-production.md)

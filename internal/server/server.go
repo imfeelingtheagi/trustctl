@@ -43,6 +43,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/ari"
+	sshca "trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/signing"
@@ -211,6 +212,11 @@ type Deps struct {
 	// approval, and then mint through the signer-backed CA. The zero value leaves
 	// the route fail-closed with 503.
 	EphemeralIssuance EphemeralIssuanceConfig
+	// PAM enables the served JIT privileged-access broker (PAM-01/F33): attested
+	// requests receive short-lived Postgres roles or SSH user certificates, and a
+	// leader worker records automatic expiry. The zero value leaves the route
+	// fail-closed with 503.
+	PAM PAMConfig
 
 	// ExternalCAs configures the served upstream-CA registry (CLM-03/F4): each entry
 	// is a built-in CA plugin instance (Let's Encrypt/ACME, DigiCert, Sectigo, AD CS,
@@ -436,6 +442,9 @@ type Server struct {
 	// ephemeralIssuer is the served approval-gated ephemeral/JIT credential issuer
 	// (NHI-04/F25/F33). Nil makes the API delegate fail closed with 503.
 	ephemeralIssuer *ephemeralIssuerService
+	// pam is the served just-in-time privileged-access broker (PAM-01/F33). Nil
+	// makes the API delegate fail closed with 503.
+	pam *pamService
 	// protoRACertDER / protoRAKeyPKCS8 are the RSA transport key+cert SCEP/CMP use
 	// for CMS transport (AN-4: NOT the CA key, which stays in the signer). They are
 	// loaded from a sealed, shared RA identity and memoized so SCEP and CMP share one
@@ -722,6 +731,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithAttestedIssuer(s),
 		api.WithBroker(s),
 		api.WithEphemeralIssuer(s),
+		api.WithPAM(s),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithPQCMigration(s.buildPQCMigrationService(d)),
@@ -866,6 +876,9 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 	if err := s.configureEphemeralIssuanceSurface(d, idem); err != nil {
 		return err
 	}
+	if err := s.configurePAMSurface(d); err != nil {
+		return err
+	}
 	return s.configureAgentChannelSurface(d, idem)
 }
 
@@ -961,6 +974,22 @@ func (s *Server) configureEphemeralIssuanceSurface(d Deps, idem *orchestrator.Id
 		return err
 	}
 	s.ephemeralIssuer = svc
+	return nil
+}
+
+func (s *Server) configurePAMSurface(d Deps) error {
+	var sshCA *sshca.CA
+	if s.protocols != nil && s.protocols.ssh != nil {
+		sshCA = s.protocols.ssh.CA()
+	}
+	svc, err := newPAMService(pamDeps{
+		Config: d.PAM, Store: d.Store, Log: d.Log, SSHCA: sshCA,
+		Audit: attestedIssuanceAuditor(d.Log),
+	})
+	if err != nil {
+		return err
+	}
+	s.pam = svc
 	return nil
 }
 

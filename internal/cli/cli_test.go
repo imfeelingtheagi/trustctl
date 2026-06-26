@@ -218,6 +218,48 @@ func TestEphemeralCommandsSendBodiesAndIdempotencyKeys(t *testing.T) {
 	}
 }
 
+func TestAccessSessionCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) {
+	var openCap capture
+	openSrv := mockServer(t, 201, `{"id":"pam:session-1","target_type":"postgres","target_id":"prod-db","status":"active"}`, &openCap)
+	openBody := `{"target_type":"postgres","target_id":"prod-db","role":"read_only","reason":"incident cleanup","attestation":{"method":"stub","subject":"ops@example.com","payload_base64":"Z2VudWluZQ=="}}`
+	code, _, _ := run(t, []string{"access", "sessions", "open", "-f", "-"}, cli.Env{Server: openSrv.URL, HTTPClient: openSrv.Client()}, openBody)
+	if code != 0 {
+		t.Fatalf("open exit = %d", code)
+	}
+	if openCap.Method != "POST" || openCap.Path != "/api/v1/access/sessions" {
+		t.Errorf("open request = %s %s", openCap.Method, openCap.Path)
+	}
+	if strings.TrimSpace(string(openCap.Body)) != openBody {
+		t.Errorf("open body = %q, want %q", openCap.Body, openBody)
+	}
+	if openCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("access session open should send an Idempotency-Key")
+	}
+
+	var listCap capture
+	listSrv := mockServer(t, 200, `{"sessions":[]}`, &listCap)
+	code, _, _ = run(t, []string{"access", "sessions", "list", "--limit", "3", "--cursor", "next"}, cli.Env{Server: listSrv.URL, HTTPClient: listSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("list exit = %d", code)
+	}
+	if listCap.Method != "GET" || listCap.Path != "/api/v1/access/sessions" || listCap.Query != "cursor=next&limit=3" {
+		t.Errorf("list request = %s %s?%s", listCap.Method, listCap.Path, listCap.Query)
+	}
+	if listCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("access session list must not send an Idempotency-Key")
+	}
+
+	var getCap capture
+	getSrv := mockServer(t, 200, `{"id":"pam:session-1"}`, &getCap)
+	code, _, _ = run(t, []string{"access", "sessions", "get", "pam:session-1"}, cli.Env{Server: getSrv.URL, HTTPClient: getSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("get exit = %d", code)
+	}
+	if getCap.Method != "GET" || getCap.Path != "/api/v1/access/sessions/pam:session-1" {
+		t.Errorf("get request = %s %s", getCap.Method, getCap.Path)
+	}
+}
+
 func TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"reconciled":1}`, &cap)

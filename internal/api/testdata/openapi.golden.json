@@ -3201,6 +3201,175 @@
         ],
         "type": "object"
       },
+      "PAMPostgresCredential": {
+        "properties": {
+          "dsn": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "dsn"
+        ],
+        "type": "object"
+      },
+      "PAMSSHCredential": {
+        "properties": {
+          "certificate": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "integer"
+          },
+          "valid_before": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate",
+          "principal",
+          "key_id",
+          "serial",
+          "valid_before"
+        ],
+        "type": "object"
+      },
+      "PAMSession": {
+        "properties": {
+          "attestation": {
+            "$ref": "#/components/schemas/Attestation"
+          },
+          "audit": {
+            "type": "object"
+          },
+          "ended_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "postgres": {
+            "$ref": "#/components/schemas/PAMPostgresCredential"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "ssh": {
+            "$ref": "#/components/schemas/PAMSSHCredential"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_id",
+          "target_type",
+          "role",
+          "status",
+          "subject",
+          "requested_by",
+          "started_at",
+          "expires_at",
+          "attestation"
+        ],
+        "type": "object"
+      },
+      "PAMSessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PAMSession"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PAMSessionRequest": {
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "payload_base64": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "ssh_principal": {
+            "type": "string"
+          },
+          "ssh_public_key": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "postgres",
+              "ssh"
+            ],
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "role",
+          "method",
+          "payload_base64"
+        ],
+        "type": "object"
+      },
       "PKISecret": {
         "properties": {
           "certificate": {
@@ -5013,6 +5182,184 @@
           }
         ],
         "summary": "List built-in and configured access roles",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/sessions": {
+      "get": {
+        "operationId": "listPAMSessions",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSessionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List just-in-time privileged access sessions",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "openPAMSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PAMSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Open a just-in-time privileged access session",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/sessions/{id}": {
+      "get": {
+        "operationId": "getPAMSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PAMSession"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read"
       }
     },

@@ -68,6 +68,8 @@ const (
 	EventTenantMemberOffboarded        = "tenant.member.offboarded"
 	EventAPITokenCreated               = "api_token.created"
 	EventAPITokenRevoked               = "api_token.revoked"
+	EventPAMSessionStarted             = "pam.session.started"
+	EventPAMSessionExpired             = "pam.session.expired"
 	EventProfileCreated                = "profile.created"
 	EventProfileUpdated                = "profile.updated"
 	EventPrivacySubjectErased          = "privacy.subject.erased"
@@ -139,6 +141,10 @@ var ledger = []FeatureEvent{
 	{"F8", "RBAC", "offboard_member", "offboardMember", []string{EventTenantMemberOffboarded}},
 	{"F8", "RBAC", "create_api_token", "createAPIToken", []string{EventAPITokenCreated}},
 	{"F8", "RBAC", "revoke_api_token", "revokeAPIToken", []string{EventAPITokenRevoked}},
+
+	// F33 — Just-in-time privileged access sessions.
+	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
+	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
 
 	// F4 — Certificate profiles (a version emits created on v1, updated after).
 	{"F4", "Certificate profiles", "create_profile", "createProfile", []string{EventProfileCreated, EventProfileUpdated}},

@@ -71,6 +71,7 @@ type API struct {
 	attestedIssuer          AttestedIssuerService
 	broker                  BrokerService
 	ephemeral               EphemeralIssuerService
+	pam                     PAMService
 	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	transit                 TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
 	codeSigning             CodeSigningService
@@ -119,6 +120,7 @@ type config struct {
 	attestedIssuer          AttestedIssuerService
 	broker                  BrokerService
 	ephemeral               EphemeralIssuerService
+	pam                     PAMService
 	managedKeys             ManagedKeyService
 	transit                 TransitService
 	codeSigning             CodeSigningService
@@ -307,6 +309,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		attestedIssuer:          cfg.attestedIssuer,
 		broker:                  cfg.broker,
 		ephemeral:               cfg.ephemeral,
+		pam:                     cfg.pam,
 		managedKeys:             cfg.managedKeys,
 		transit:                 cfg.transit,
 		codeSigning:             cfg.codeSigning,
@@ -608,6 +611,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/access/api-tokens", opID: "listAPITokens", summary: "List API token metadata", handler: a.listAPITokens, query: apiTokenQuery, resSchema: "APITokenList", successCode: "200", perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/api-tokens", opID: "createAPIToken", summary: "Mint a tenant-scoped API token for a member", handler: a.createAPIToken, reqSchema: "APITokenCreateRequest", resSchema: "APITokenCreateResponse", successCode: "201", mutation: true, perm: authz.AccessWrite},
 		{method: "DELETE", path: "/api/v1/access/api-tokens/{id}", opID: "revokeAPIToken", summary: "Revoke an API token", handler: a.revokeAPIToken, pathParams: idPath, successCode: "204", mutation: true, perm: authz.AccessWrite},
+		{method: "GET", path: "/api/v1/access/sessions", opID: "listPAMSessions", summary: "List just-in-time privileged access sessions", handler: a.listPAMSessions, query: page, resSchema: "PAMSessionList", successCode: "200", perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/sessions", opID: "openPAMSession", summary: "Open a just-in-time privileged access session", handler: a.openPAMSession, reqSchema: "PAMSessionRequest", resSchema: "PAMSession", successCode: "201", mutation: true, perm: authz.AccessWrite},
+		{method: "GET", path: "/api/v1/access/sessions/{id}", opID: "getPAMSession", summary: "Get a privileged access session", handler: a.getPAMSession, pathParams: idPath, resSchema: "PAMSession", successCode: "200", perm: authz.AccessRead},
 
 		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},
@@ -1048,6 +1054,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case a.writeAttestedIssuanceError(w, err):
 	case a.writeBrokerError(w, err):
 	case a.writeEphemeralError(w, err):
+	case a.writePAMError(w, err):
 	case store.IsNotFound(err):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrInvalidTransition):

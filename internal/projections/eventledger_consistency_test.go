@@ -47,6 +47,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventTenantMemberOffboarded:        "EventTenantMemberOffboarded",
 	projections.EventAPITokenCreated:               "EventAPITokenCreated",
 	projections.EventAPITokenRevoked:               "EventAPITokenRevoked",
+	projections.EventPAMSessionStarted:             "EventPAMSessionStarted",
+	projections.EventPAMSessionExpired:             "EventPAMSessionExpired",
 	projections.EventProfileCreated:                "EventProfileCreated",
 	projections.EventProfileUpdated:                "EventProfileUpdated",
 	projections.EventPrivacySubjectErased:          "EventPrivacySubjectErased",

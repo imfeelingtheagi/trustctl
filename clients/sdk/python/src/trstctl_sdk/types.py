@@ -1339,6 +1339,74 @@ OwnerRequest = TypedDict(
     total=False,
 )
 
+PAMPostgresCredential = TypedDict(
+    'PAMPostgresCredential',
+    {
+        'dsn': str,
+        'username': str,
+    },
+    total=False,
+)
+
+PAMSSHCredential = TypedDict(
+    'PAMSSHCredential',
+    {
+        'certificate': str,
+        'key_id': str,
+        'principal': str,
+        'serial': int,
+        'valid_before': str,
+    },
+    total=False,
+)
+
+PAMSession = TypedDict(
+    'PAMSession',
+    {
+        'attestation': dict[str, Any],
+        'audit': dict[str, Any],
+        'ended_at': str,
+        'expires_at': str,
+        'id': str,
+        'postgres': dict[str, Any],
+        'reason': str,
+        'requested_by': str,
+        'role': str,
+        'ssh': dict[str, Any],
+        'started_at': str,
+        'status': str,
+        'subject': str,
+        'target_id': str,
+        'target_type': str,
+    },
+    total=False,
+)
+
+PAMSessionList = TypedDict(
+    'PAMSessionList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PAMSessionRequest = TypedDict(
+    'PAMSessionRequest',
+    {
+        'method': str,
+        'payload_base64': str,
+        'reason': str,
+        'role': str,
+        'ssh_principal': str,
+        'ssh_public_key': str,
+        'target_id': str,
+        'target_type': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
 PKISecret = TypedDict(
     'PKISecret',
     {

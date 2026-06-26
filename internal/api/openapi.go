@@ -577,6 +577,31 @@ func componentSchemas() map[string]*Schema {
 	ephemeralApproval := object(map[string]*Schema{
 		"resource": str(), "action": str(), "approver": str(), "approvals": {Type: "integer"},
 	}, "resource", "action", "approver", "approvals")
+	pamSessionReq := object(map[string]*Schema{
+		"target_type":    {Type: "string", Enum: []string{"postgres", "ssh"}},
+		"target_id":      str(),
+		"role":           str(),
+		"reason":         str(),
+		"method":         str(),
+		"payload_base64": str(),
+		"ttl_seconds":    {Type: "integer"},
+		"ssh_public_key": str(),
+		"ssh_principal":  str(),
+	}, "target_type", "target_id", "role", "method", "payload_base64")
+	pamPostgresCredential := object(map[string]*Schema{
+		"username": str(), "dsn": str(),
+	}, "username", "dsn")
+	pamSSHCredential := object(map[string]*Schema{
+		"certificate": str(), "principal": str(), "key_id": str(),
+		"serial": {Type: "integer"}, "valid_before": timestamp(),
+	}, "certificate", "principal", "key_id", "serial", "valid_before")
+	pamSession := object(map[string]*Schema{
+		"id": uuid(), "target_id": str(), "target_type": str(), "role": str(),
+		"status": str(), "subject": str(), "requested_by": str(), "reason": str(),
+		"started_at": timestamp(), "expires_at": timestamp(), "ended_at": timestamp(),
+		"attestation": ref("Attestation"), "postgres": ref("PAMPostgresCredential"),
+		"ssh": ref("PAMSSHCredential"), "audit": {Type: "object"},
+	}, "id", "target_id", "target_type", "role", "status", "subject", "requested_by", "started_at", "expires_at", "attestation")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
 	}, "id", "kind", "name")
@@ -996,6 +1021,11 @@ func componentSchemas() map[string]*Schema {
 		"EphemeralAPIKey":              ephemeralAPIKey,
 		"EphemeralApprovalRequest":     ephemeralApprovalReq,
 		"EphemeralApproval":            ephemeralApproval,
+		"PAMSessionRequest":            pamSessionReq,
+		"PAMSession":                   pamSession,
+		"PAMSessionList":               list("PAMSession"),
+		"PAMPostgresCredential":        pamPostgresCredential,
+		"PAMSSHCredential":             pamSSHCredential,
 		"GraphNode":                    graphNode,
 		"GraphEdge":                    graphEdge,
 		"GraphResponse":                graphResponse,

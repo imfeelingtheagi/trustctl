@@ -893,6 +893,54 @@ export interface OwnerRequest {
   name: string;
 }
 
+export interface PAMPostgresCredential {
+  dsn: string;
+  username: string;
+}
+
+export interface PAMSSHCredential {
+  certificate: string;
+  key_id: string;
+  principal: string;
+  serial: number;
+  valid_before: string;
+}
+
+export interface PAMSession {
+  attestation: Attestation;
+  audit?: Record<string, unknown>;
+  ended_at?: string;
+  expires_at: string;
+  id: string;
+  postgres?: PAMPostgresCredential;
+  reason?: string;
+  requested_by: string;
+  role: string;
+  ssh?: PAMSSHCredential;
+  started_at: string;
+  status: string;
+  subject: string;
+  target_id: string;
+  target_type: string;
+}
+
+export interface PAMSessionList {
+  items: PAMSession[];
+  next_cursor?: string;
+}
+
+export interface PAMSessionRequest {
+  method: string;
+  payload_base64: string;
+  reason?: string;
+  role: string;
+  ssh_principal?: string;
+  ssh_public_key?: string;
+  target_id: string;
+  target_type: "postgres" | "ssh";
+  ttl_seconds?: number;
+}
+
 export interface PKISecret {
   certificate: string;
   common_name?: string;
