@@ -119,6 +119,74 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	}
 }
 
+func TestServedCAHierarchySignsExternalIntermediateCSR(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approver := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-approver", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+
+	rootSpec := map[string]any{
+		"common_name":           "trstctl SPIRE upstream root",
+		"max_path_len":          1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"example.org"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	ceremony := createCACeremony(t, h, token, "create_root", "", rootSpec, 1, "spire-root-ceremony")
+	approveCACeremony(t, h, approver, ceremony.ID, 1, "spire-root-approval")
+	root := createRootCA(t, h, token, ceremony.ID, rootSpec, "spire-root-create")
+
+	spireCAKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(spireCAKey.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "SPIRE Server CA",
+	}, spireCAKey)
+	if err != nil {
+		t.Fatalf("create SPIRE intermediate CSR: %v", err)
+	}
+	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
+
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr", map[string]any{
+		"csr_pem": csrPEM,
+		"spec": map[string]any{
+			"common_name":           "SPIRE Server CA",
+			"max_path_len":          0,
+			"ttl_seconds":           int64((24 * time.Hour).Seconds()),
+			"permitted_dns_domains": []string{"example.org"},
+		},
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("sign external intermediate CSR = %d body=%s; want 201", code, body)
+	}
+	var issued struct {
+		CertificatePEM string `json:"certificate_pem"`
+		Serial         string `json:"serial"`
+	}
+	if err := json.Unmarshal(body, &issued); err != nil || issued.CertificatePEM == "" || issued.Serial == "" {
+		t.Fatalf("decode issued intermediate: %v body=%s", err, body)
+	}
+	childDER := caCertDER(t, []byte(issued.CertificatePEM))
+	if err := crypto.VerifyLeafSignedByCA(childDER, caCertDER(t, []byte(root.CertificatePEM))); err != nil {
+		t.Fatalf("SPIRE intermediate did not verify against trstctl root: %v", err)
+	}
+	info, err := certinfo.Inspect(childDER)
+	if err != nil {
+		t.Fatalf("inspect issued SPIRE intermediate: %v", err)
+	}
+	if !info.IsCA {
+		t.Fatal("issued SPIRE authority is not a CA certificate")
+	}
+	if !h.hasEvent(t, "ca.intermediate_csr.issued") {
+		t.Fatal("no ca.intermediate_csr.issued event was recorded for the served SPIRE path")
+	}
+}
+
 type servedCACeremony struct {
 	ID        string `json:"id"`
 	Purpose   string `json:"purpose"`

@@ -403,6 +403,54 @@ readable by the pod's `fsGroup`, and all parent directories reject group/world
 writes. Unsafe restored files fail startup instead of silently weakening key
 custody.
 
+## Managed-key custody (AWS KMS)
+
+The managed-key lifecycle is off by default. When enabled, the control plane exposes
+`/api/v1/managed-keys` for keys whose private material is born in and stays inside an
+external custodian. The current served cloud backend is AWS KMS; LocalStack is used for
+offline acceptance tests, and the same config can point at real AWS KMS in production.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables the served managed-key lifecycle. When false, the routes fail closed with `501`. |
+| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
+| `TRSTCTL_MANAGED_KEYS_AWS_REGION` | unset | AWS region for KMS, for example `us-east-1`. Required when enabled. |
+| `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override, used for LocalStack, VPC endpoints, or partitions. Leave unset for regional AWS KMS. |
+| `TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID` | unset | AWS access key id. Required for the current served AWS KMS backend. |
+| `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY` | unset | AWS secret access key supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE` | unset | File containing the AWS secret access key. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
+| `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN` | unset | Optional temporary session token. |
+| `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE` | unset | Optional file containing the temporary session token. |
+
+Example LocalStack configuration:
+
+```bash
+export TRSTCTL_MANAGED_KEYS_ENABLED=true
+export TRSTCTL_MANAGED_KEYS_PROVIDER=aws
+export TRSTCTL_MANAGED_KEYS_AWS_REGION=us-east-1
+export TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT=http://127.0.0.1:4566
+export TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID=test
+export TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY=test
+```
+
+Example production shape:
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: aws
+  aws:
+    region: us-east-1
+    access_key_id: AKIA...
+    secret_access_key_file: /etc/trstctl/aws-kms-secret-access-key
+```
+
+After startup, operators with `keys:write` can call `POST /api/v1/managed-keys` to
+generate a KMS-resident signing key, then rotate, revoke, or zeroize it through the
+matching served routes and `trstctl managed-keys` CLI commands. Requests are
+tenant-scoped, require `Idempotency-Key`, and emit immutable lifecycle events that
+contain key id, version, algorithm, state, and public key only.
+
 ## Signer topology & CA custody
 
 The private-key operations run in a separate, sacred process, so the CA keys never
@@ -466,16 +514,19 @@ single-node deployments are unaffected.
 
 ## Served AI surface and model adapter
 
-The AI/RCA/MCP surface is off by default and read-only when enabled. The model
-adapter is separately off by default: with `TRSTCTL_AI_MODEL_MODE=off` (or unset),
-query/RCA still return grounded citations, but no prompt leaves the process.
+The AI/RCA/MCP surface is off by default. MCP investigation tools are read-only when
+enabled; MCP write tools require the separate `TRSTCTL_AI_MCP_WRITE_TOOLS=true`
+operator opt-in. The model adapter is separately off by default: with
+`TRSTCTL_AI_MODEL_MODE=off` (or unset), query/RCA still return grounded citations, but
+no prompt leaves the process.
 `GET /api/v1/ai/status` reports the live enabled state, model mode, endpoint host,
 egress class, and redaction/refusal posture without echoing the full endpoint URL.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_AI_ENABLE_API` | `false` | Serve `/api/v1/ai/status`, `/api/v1/ai/query`, `/api/v1/ai/rca`, and `/api/v1/mcp/tools*` behind auth/RBAC. |
-| `TRSTCTL_AI_MCP_IDENTITY` | — | Workload identity label the read-only MCP server presents. |
+| `TRSTCTL_AI_MCP_IDENTITY` | — | Workload identity label the MCP server presents. |
+| `TRSTCTL_AI_MCP_WRITE_TOOLS` | `false` | Expose guarded MCP write tools (`issue_certificate`, `rotate_certificate`). Calls still require `certs:issue`, an `Idempotency-Key`, and are audited as `mcp.tool.write`. |
 | `TRSTCTL_AI_RATE_MAX` | `60` | Per-caller MCP tool-call budget per window. |
 | `TRSTCTL_AI_RATE_WINDOW_SECONDS` | `60` | MCP tool-call rate window in seconds. |
 | `TRSTCTL_AI_MODEL_MODE` | `off` | `off`, `local`, or `cloud`. `off` means no model adapter and no prompt egress. |
@@ -491,11 +542,13 @@ through the boundary redactor and residual-secret refusal gate before the HTTP
 request is made; if no model is configured, the answer remains citation-grounded
 and air-gapped.
 
-## Served enrollment protocols
+## Served protocol listeners
 
-ACME, EST, SCEP, CMP, SPIFFE, and SSH protocol surfaces are opt-in until they are
-explicitly bound to a tenant. That startup check is intentional: a public enrollment
-endpoint must know the tenant it mints into before it is exposed.
+ACME, EST, SCEP, CMP, SPIFFE, SSH, and KMIP protocol surfaces are opt-in until they are
+explicitly bound to a tenant. That startup check is intentional: a public protocol
+endpoint must know the tenant it acts for before it is exposed. KMIP is a raw mTLS TCP
+listener, not an HTTP route, so it additionally requires server certificate/key files
+and a client CA trust anchor.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -516,10 +569,51 @@ endpoint must know the tenant it mints into before it is exposed.
 | `TRSTCTL_PROTOCOLS_SCEP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve SCEP at `/scep` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_CMP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve CMP at `/cmp` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_RA_KEY_FILE` | `data/protocols/ra-transport.key` | Sealed SCEP/CMP RSA transport identity. Put this on shared persistent storage in HA so replicas use the same cached-client RA material. |
+| `TRSTCTL_PROTOCOLS_KMIP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the KMIP mTLS listener for the named tenant. The current served profile supports AES-256 SymmetricKey Create/Get. |
+| `TRSTCTL_PROTOCOLS_KMIP_ADDR` | `:5696` | TCP listen address for KMIP. |
+| `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE` | — | PEM server certificate chain for the KMIP listener. Required when KMIP is enabled. |
+| `TRSTCTL_PROTOCOLS_KMIP_KEY_FILE` | — | PEM private key for the KMIP listener certificate. Required when KMIP is enabled. |
+| `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE` | — | PEM CA bundle used to verify KMIP client certificates. Required when KMIP is enabled. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SPIFFE Workload API UDS for the named tenant. Requires `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN`. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH` | `/tmp/trstctl-spiffe-workload.sock` | UDS path for the SPIFFE Workload API when enabled. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN` | — | SPIFFE trust domain, for example `example.org`. Required when SPIFFE is enabled. |
 | `TRSTCTL_PROTOCOLS_SSH_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SSH CA JSON endpoints and KRL for the named tenant. |
+
+## SPIRE upstream authority plugin
+
+When SPIRE should keep serving workload SVIDs but trstctl should own the upstream CA,
+configure SPIRE's `UpstreamAuthority "trstctl"` plugin. SPIRE passes this as HCL
+`plugin_data` to the `trstctl-spire-upstream-authority` process; these are not trstctl
+environment variables.
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `endpoint` | yes | Base URL of the trstctl control plane, for example `https://trstctl.example.com:8443`. The plugin calls `/api/v1/ca/authorities/{id}/intermediates/csr`. |
+| `ca_authority_id` | yes | The trstctl CA authority that signs SPIRE's intermediate CA CSR. |
+| `token_file` | yes | File containing a trstctl API token with `certs:issue`. Mount it as a secret file readable only by the SPIRE server process. |
+| `common_name` | no | Subject common name for the SPIRE intermediate; defaults to `SPIRE Server CA`. |
+| `ttl_seconds` | no | Intermediate CA TTL. If SPIRE sends a preferred TTL, the plugin honors SPIRE's value for that mint. |
+| `max_path_len` | no | Path length for the SPIRE intermediate; use `0` so it can sign workload leaves but not another CA below it. |
+| `permitted_dns_domains` | no | Optional DNS name constraints copied into the intermediate CA profile. |
+| `extended_key_usages` | no | Optional extended key usages to request for the intermediate profile. |
+| `idempotency_prefix` | no | Prefix for the stable `Idempotency-Key`; defaults to `spire-upstream`. |
+
+Example:
+
+```hcl
+UpstreamAuthority "trstctl" {
+  plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
+  plugin_data {
+    endpoint = "https://trstctl.example.com:8443"
+    ca_authority_id = "11111111-1111-1111-1111-111111111111"
+    token_file = "/run/secrets/trstctl-spire-token"
+    common_name = "SPIRE Server CA"
+    ttl_seconds = 3600
+    max_path_len = 0
+    permitted_dns_domains = ["example.org"]
+  }
+}
+```
 
 ## Rate limiting
 

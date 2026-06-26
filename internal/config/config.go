@@ -72,30 +72,63 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server     Server     `json:"server"`
-	Postgres   Postgres   `json:"postgres"`
-	NATS       NATS       `json:"nats"`
-	Log        Log        `json:"log"`
-	Lifecycle  Lifecycle  `json:"lifecycle"`
-	Telemetry  Telemetry  `json:"telemetry"`
-	Audit      Audit      `json:"audit"`
-	Breakglass Breakglass `json:"breakglass"`
-	Privacy    Privacy    `json:"privacy"`
-	Backup     Backup     `json:"backup"`
-	RateLimit  RateLimit  `json:"rate_limit"`
-	Bulkheads  Bulkheads  `json:"bulkheads"`
-	Migrate    Migrate    `json:"migrate"`
-	Secrets    Secrets    `json:"secrets"`
-	Signer     Signer     `json:"signer"`
-	CA         CA         `json:"ca"`
-	Protocols  Protocols  `json:"protocols"`
-	Auth       Auth       `json:"auth"`
-	Plugins    Plugins    `json:"plugins"`
-	HA         HA         `json:"ha"`
-	AI         AI         `json:"ai"`
+	Server      Server      `json:"server"`
+	Postgres    Postgres    `json:"postgres"`
+	NATS        NATS        `json:"nats"`
+	Log         Log         `json:"log"`
+	Lifecycle   Lifecycle   `json:"lifecycle"`
+	Telemetry   Telemetry   `json:"telemetry"`
+	Audit       Audit       `json:"audit"`
+	Breakglass  Breakglass  `json:"breakglass"`
+	Privacy     Privacy     `json:"privacy"`
+	Backup      Backup      `json:"backup"`
+	RateLimit   RateLimit   `json:"rate_limit"`
+	Bulkheads   Bulkheads   `json:"bulkheads"`
+	Migrate     Migrate     `json:"migrate"`
+	Secrets     Secrets     `json:"secrets"`
+	ManagedKeys ManagedKeys `json:"managed_keys"`
+	Signer      Signer      `json:"signer"`
+	CA          CA          `json:"ca"`
+	Protocols   Protocols   `json:"protocols"`
+	Auth        Auth        `json:"auth"`
+	Plugins     Plugins     `json:"plugins"`
+	HA          HA          `json:"ha"`
+	AI          AI          `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
+}
+
+const (
+	// ManagedKeyProviderAWS selects the AWS KMS custody backend for the served
+	// managed-key lifecycle. The provider is chosen at startup through ordinary Go
+	// interface injection (crypto.RemoteKeyLifecycle), not through a runtime crypto
+	// engine/plugin registry; this is the same compile-time interface pattern as
+	// crypto.Signer, Java JCA, OpenSSL ENGINE, and PKCS#11.
+	ManagedKeyProviderAWS = "aws"
+)
+
+// ManagedKeys configures the served BYOK/HSM managed-key lifecycle. Off by default:
+// when disabled, /api/v1/managed-keys/* remains registered but fails closed with
+// 501 until an operator supplies a custody backend.
+type ManagedKeys struct {
+	Enabled  bool              `json:"enabled,omitempty"`
+	Provider string            `json:"provider,omitempty"`
+	AWS      ManagedKeysAWSKMS `json:"aws,omitempty"`
+}
+
+// ManagedKeysAWSKMS configures AWS KMS custody for managed keys. Secret credential
+// material is represented as []byte when supplied by the environment and may also
+// be read from files, so startup can wipe temporary file buffers after constructing
+// the backend. The private managed-key material itself never enters the process.
+type ManagedKeysAWSKMS struct {
+	Region              string `json:"region,omitempty"`
+	Endpoint            string `json:"endpoint,omitempty"`
+	AccessKeyID         string `json:"access_key_id,omitempty"`
+	SecretAccessKey     []byte `json:"secret_access_key,omitempty"`
+	SecretAccessKeyFile string `json:"secret_access_key_file,omitempty"`
+	SessionToken        []byte `json:"session_token,omitempty"`
+	SessionTokenFile    string `json:"session_token_file,omitempty"`
 }
 
 // HA configures the multi-replica high-availability behavior of the control plane
@@ -501,6 +534,7 @@ type Protocols struct {
 	SCEP ProtocolToggle `json:"scep"`
 	CMP  ProtocolToggle `json:"cmp"`
 	TSA  ProtocolToggle `json:"tsa"`
+	KMIP KMIPProtocol   `json:"kmip"`
 	// ACMEQuota caps public ACME state retained by the in-process protocol view.
 	// It complements the protocol bulkhead: the bulkhead limits concurrent work,
 	// while these caps bound total nonce/account/order/authz/challenge state.
@@ -524,6 +558,20 @@ type Protocols struct {
 type ProtocolToggle struct {
 	Enabled  bool   `json:"enabled,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// KMIPProtocol configures the served KMIP 1.x key-management listener (KMS-02).
+// KMIP is a raw mTLS TCP protocol, not an HTTP route: when enabled it binds Addr,
+// presents CertFile/KeyFile, and accepts only client certificates chaining to
+// ClientCAFile. TenantID is mandatory because every managed object and audit event
+// the listener creates is tenant-attributed (AN-1/AN-2).
+type KMIPProtocol struct {
+	Enabled      bool   `json:"enabled,omitempty"`
+	TenantID     string `json:"tenant_id,omitempty"`
+	Addr         string `json:"addr,omitempty"`
+	CertFile     string `json:"cert_file,omitempty"`
+	KeyFile      string `json:"key_file,omitempty"`
+	ClientCAFile string `json:"client_ca_file,omitempty"`
 }
 
 // ACMEQuota bounds the public ACME protocol surface. Durability is handled by the
@@ -574,12 +622,24 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 	requireTenant("scep", p.SCEP.Enabled, p.SCEP.TenantID)
 	requireTenant("cmp", p.CMP.Enabled, p.CMP.TenantID)
 	requireTenant("tsa", p.TSA.Enabled, p.TSA.TenantID)
+	requireTenant("kmip", p.KMIP.Enabled, p.KMIP.TenantID)
 	requireTenant("ssh", p.SSH.Enabled, p.SSH.TenantID)
 	if (p.SCEP.Enabled || p.CMP.Enabled) && strings.TrimSpace(p.RAKeyFile) == "" {
 		errs = append(errs, errors.New("protocols.ra_key_file is required when SCEP or CMP is enabled so the RA transport identity survives restart/replicas"))
 	}
 	if p.TSA.Enabled && strings.TrimSpace(p.TSACertFile) == "" {
 		errs = append(errs, errors.New("protocols.tsa_cert_file is required when TSA is enabled so the timestamping certificate stays stable across restart/replicas"))
+	}
+	if p.KMIP.Enabled {
+		if strings.TrimSpace(p.KMIP.CertFile) == "" {
+			errs = append(errs, errors.New("protocols.kmip.cert_file is required when protocols.kmip.enabled is true"))
+		}
+		if strings.TrimSpace(p.KMIP.KeyFile) == "" {
+			errs = append(errs, errors.New("protocols.kmip.key_file is required when protocols.kmip.enabled is true"))
+		}
+		if strings.TrimSpace(p.KMIP.ClientCAFile) == "" {
+			errs = append(errs, errors.New("protocols.kmip.client_ca_file is required when protocols.kmip.enabled is true"))
+		}
 	}
 	if p.SPIFFE.Enabled {
 		requireTenant("spiffe", true, p.SPIFFE.TenantID)
@@ -962,9 +1022,10 @@ type MachineAuthMethod struct {
 
 // AI configures the served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/
 // F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. It is OFF by default (fail closed): an
-// upgrade does not silently expose an AI surface. When on, the surface is READ-ONLY (no
-// write/remediation tools), tenant-scoped under RLS (the tenant is the authenticated
-// principal's, never a request field — AN-1), auth-gated, and rate-limited. The AI
+// upgrade does not silently expose an AI surface. When on, the MCP surface remains
+// read-only unless MCPWriteTools is explicitly enabled. All calls are tenant-scoped
+// under RLS (the tenant is the authenticated principal's, never a request field —
+// AN-1), auth-gated, and rate-limited. The AI
 // MODEL is AIR-GAPPED / OPT-IN by product posture: with no model configured (the
 // default) grounding + citations still work and nothing phones home; when a model is
 // configured the boundary redactor + residual-entropy refuse-gate sit between any
@@ -975,6 +1036,9 @@ type AI struct {
 	// MCPIdentity is the workload identity the served MCP server presents (dogfooding
 	// the F61 broker). Informational; empty is fine.
 	MCPIdentity string `json:"mcp_identity,omitempty"`
+	// MCPWriteTools exposes policy-gated write tools such as issue_certificate and
+	// rotate_certificate. Default false keeps MCP investigation read-only/fail-closed.
+	MCPWriteTools bool `json:"mcp_write_tools,omitempty"`
 	// RateMax bounds the per-(caller,tool) MCP call count per RateWindow
 	// (enumeration-abuse protection). Zero selects a conservative default.
 	RateMax int `json:"rate_max,omitempty"`
@@ -1263,6 +1327,9 @@ func Default() *Config {
 		// The credential KEK persists under the data directory so sealed
 		// credentials stay openable across restarts; created on first boot if absent.
 		Secrets: Secrets{KEKFile: "data/secrets/kek.bin"},
+		// Cloud/HSM managed-key custody is opt-in. Leaving it disabled keeps the
+		// served managed-key routes fail-closed until an operator binds a backend.
+		ManagedKeys: ManagedKeys{Enabled: false, Provider: ManagedKeyProviderAWS},
 		// The signer runs as a supervised child by default (single binary); its
 		// keys are sealed under the data directory so a restart preserves the CA.
 		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys", AuthSecretFile: "data/signer/sign-auth.bin", AllowCoResidentAuthorizer: true},
@@ -1285,6 +1352,7 @@ func Default() *Config {
 			SCEP: ProtocolToggle{Enabled: false},
 			CMP:  ProtocolToggle{Enabled: false},
 			TSA:  ProtocolToggle{Enabled: false},
+			KMIP: KMIPProtocol{Enabled: false, Addr: ":5696"},
 			ACMEQuota: ACMEQuota{
 				MaxNonces:                  4096,
 				MaxAccounts:                2048,
@@ -1386,10 +1454,20 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
+	setBool(getenv, "TRSTCTL_MANAGED_KEYS_ENABLED", &c.ManagedKeys.Enabled)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_PROVIDER", &c.ManagedKeys.Provider)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_REGION", &c.ManagedKeys.AWS.Region)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT", &c.ManagedKeys.AWS.Endpoint)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID", &c.ManagedKeys.AWS.AccessKeyID)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY", &c.ManagedKeys.AWS.SecretAccessKey)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE", &c.ManagedKeys.AWS.SecretAccessKeyFile)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN", &c.ManagedKeys.AWS.SessionToken)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE", &c.ManagedKeys.AWS.SessionTokenFile)
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). OFF by default (fail
 	// closed). The AI model stays air-gapped/opt-in regardless of these flags.
 	setBool(getenv, "TRSTCTL_AI_ENABLE_API", &c.AI.EnableAPI)
 	setString(getenv, "TRSTCTL_AI_MCP_IDENTITY", &c.AI.MCPIdentity)
+	setBool(getenv, "TRSTCTL_AI_MCP_WRITE_TOOLS", &c.AI.MCPWriteTools)
 	setInt(getenv, "TRSTCTL_AI_RATE_MAX", &c.AI.RateMax)
 	setInt(getenv, "TRSTCTL_AI_RATE_WINDOW_SECONDS", &c.AI.RateWindowSeconds)
 	setString(getenv, "TRSTCTL_AI_MODEL_MODE", &c.AI.Model.Mode)
@@ -1544,6 +1622,12 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", &p.CMP.TenantID)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_TSA_ENABLED", &p.TSA.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_TENANT_ID", &p.TSA.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_KMIP_ENABLED", &p.KMIP.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_TENANT_ID", &p.KMIP.TenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_ADDR", &p.KMIP.Addr)
+	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_CERT_FILE", &p.KMIP.CertFile)
+	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_KEY_FILE", &p.KMIP.KeyFile)
+	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE", &p.KMIP.ClientCAFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &p.RAKeyFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_CERT_FILE", &p.TSACertFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &p.SPIFFE.Enabled)
@@ -1592,6 +1676,12 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 func setString(getenv func(string) string, key string, dst *string) {
 	if v := getenv(key); v != "" {
 		*dst = v
+	}
+}
+
+func setBytes(getenv func(string) string, key string, dst *[]byte) {
+	if v := getenv(key); v != "" {
+		*dst = []byte(v)
 	}
 }
 
@@ -1950,6 +2040,7 @@ func validateServedSurfaces(c *Config) []error {
 		errs = append(errs, c.Breakglass.validate()...)
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
+	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
 	// Served enrollment protocols are public protocol endpoints. When one is
 	// enabled, startup must know the tenant it mints into before any route is
 	// exposed; a blank tenant would violate AN-1 and only fail at enrollment time.
@@ -1973,6 +2064,38 @@ func validateServedSurfaces(c *Config) []error {
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
+	}
+	return errs
+}
+
+func validateManagedKeys(m ManagedKeys) []error {
+	if !m.Enabled {
+		return nil
+	}
+	var errs []error
+	provider := strings.ToLower(strings.TrimSpace(m.Provider))
+	if provider == "" {
+		provider = ManagedKeyProviderAWS
+	}
+	switch provider {
+	case ManagedKeyProviderAWS:
+		if strings.TrimSpace(m.AWS.Region) == "" {
+			errs = append(errs, errors.New("managed_keys.aws.region is required when managed-key custody uses AWS KMS"))
+		}
+		if strings.TrimSpace(m.AWS.AccessKeyID) == "" {
+			errs = append(errs, errors.New("managed_keys.aws.access_key_id is required when managed-key custody uses AWS KMS"))
+		}
+		if len(m.AWS.SecretAccessKey) == 0 && strings.TrimSpace(m.AWS.SecretAccessKeyFile) == "" {
+			errs = append(errs, errors.New("managed_keys.aws.secret_access_key or managed_keys.aws.secret_access_key_file is required when managed-key custody uses AWS KMS"))
+		}
+		if m.AWS.Endpoint != "" {
+			u, err := url.Parse(m.AWS.Endpoint)
+			if err != nil || u.Scheme == "" || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+				errs = append(errs, fmt.Errorf("managed_keys.aws.endpoint %q must be an absolute http(s) URL", m.AWS.Endpoint))
+			}
+		}
+	default:
+		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q)", m.Provider, ManagedKeyProviderAWS))
 	}
 	return errs
 }

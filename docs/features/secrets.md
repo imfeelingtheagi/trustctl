@@ -21,10 +21,13 @@ master key (encryption-as-a-service). And every action needs ID and is logged
 > scanning**, and **ephemeral API keys** are mounted on the running control plane.
 > The `/api/v1/secrets/*` surface is off by default (`secrets.enable_api`) and
 > fail-closed when off; ephemeral API keys live under `/api/v1/ephemeral/api-keys`
-> because they mint tenant API credentials, not stored secret values. **Transit/KMIP**
-> remains built-and-tested library code with no served encrypt/decrypt listener yet.
-> See [Current limitations](../limitations.md). This page is honest about that
-> throughout.
+> because they mint tenant API credentials, not stored secret values. **Transit**
+> encryption-as-a-service is now served separately at `/api/v1/transit/*` with the
+> `transit` CLI group and `keys:*` RBAC scopes. **KMIP** is served as an opt-in
+> mTLS listener (`protocols.kmip.*`) for AES-256 SymmetricKey Create/Get interop.
+> Broader KMIP operation coverage is still called out in
+> [Current limitations](../limitations.md).
+> This page is honest about that throughout.
 
 ## Why it exists
 
@@ -199,13 +202,59 @@ long-lived API key.
 
 ### Encryption-as-a-service & KMIP (F66)
 
-The **transit** library encrypts, decrypts, HMACs, and signs data using named keys the
-application *never sees* — ciphertexts are versioned (`trv:<version>:...`) so a key
-rotation can re-wrap old data, and intermediate plaintext is held in wipeable memory and
-zeroed after use. For legacy enterprise gear (databases, storage arrays), the **KMIP**
-library has a bounded TTLV RequestMessage parser plus TLS client-cert-authenticated
-operation model with key material zeroed on destroy. No served transit or KMIP API/CLI
-surface exists yet; the console marks it library-only until a listener is mounted.
+The **Transit** service encrypts, decrypts, HMACs, signs, verifies, and rewraps data
+using tenant-scoped named keys the application *never sees*. The running control plane
+mounts it at `/api/v1/transit/*`, and the CLI exposes the same operations:
+
+- `POST /api/v1/transit/keys` / `trstctl-cli transit keys create`
+- `POST /api/v1/transit/keys/rotate` / `trstctl-cli transit keys rotate`
+- `POST /api/v1/transit/encrypt` / `trstctl-cli transit encrypt`
+- `POST /api/v1/transit/decrypt` / `trstctl-cli transit decrypt`
+- `POST /api/v1/transit/rewrap` / `trstctl-cli transit rewrap`
+- `POST /api/v1/transit/hmac` / `trstctl-cli transit hmac`
+- `POST /api/v1/transit/sign` / `trstctl-cli transit sign`
+- `POST /api/v1/transit/verify` / `trstctl-cli transit verify`
+
+Ciphertexts are versioned (`trv:<version>:...`) so a key rotation can rewrap old data
+to the newest key version. Requests are tenant-bound, auth-gated by `keys:write` for key
+creation, rotation, encrypt/decrypt/rewrap/HMAC/sign and `keys:read` for verify, and
+mutating calls are idempotent. Plaintext and associated data are decoded into wipeable
+`[]byte` buffers, responses are written before those buffers are zeroized, and in-memory
+keyrings are destroyed on server shutdown. Transit events such as `transit.key.created`,
+`transit.key.rotated`, `transit.encrypt`, `transit.rewrap`, `transit.hmac`, and
+`transit.sign` give operators audit evidence without logging key bytes or plaintext.
+
+Example:
+
+```bash
+cat > transit-key.json <<'JSON'
+{"name":"payments","kind":"aead"}
+JSON
+trstctl-cli --idempotency-key transit-payments-create transit keys create -f transit-key.json
+
+cat > transit-encrypt.json <<'JSON'
+{"key":"payments","plaintext":"Y2FyZC10b2tlbi0xMjM=","aad":"dGVuYW50PXBheW1lbnRz"}
+JSON
+trstctl-cli --idempotency-key transit-payments-encrypt transit encrypt -f transit-encrypt.json
+```
+
+For legacy enterprise gear (databases, storage arrays), the running binary can also mount
+an opt-in **KMIP** listener. Configure:
+
+- `TRSTCTL_PROTOCOLS_KMIP_ENABLED=true`
+- `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID=<tenant-uuid>`
+- `TRSTCTL_PROTOCOLS_KMIP_ADDR=:5696` (or another TCP address)
+- `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE=/path/server.crt`
+- `TRSTCTL_PROTOCOLS_KMIP_KEY_FILE=/path/server.key`
+- `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE=/path/client-ca.crt`
+
+The listener is raw KMIP over TLS 1.3 mutual TLS. The TLS layer verifies the client
+certificate chain before the KMIP handler sees a frame; the KMIP service stores objects
+under the configured tenant, emits immutable `kmip.object.created` audit events, and
+zeroizes in-memory key material on destroy, rekey, and server shutdown. The first served
+profile is intentionally narrow and stock-client-tested: PyKMIP can `Create` an AES-256
+`SymmetricKey` and `Get` the 32-byte key material back. Unsupported operations receive a
+KMIP failure response instead of an unframed TCP close.
 
 ### Secret sync (F68)
 
@@ -344,10 +393,11 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   in production back it with an [HSM/KMS](issuance-and-cas.md).
 - **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if you
   must store a long-lived secret, put it on a rotation schedule.
-- **Transit/KMIP serving status:** the KMIP TTLV parser is fuzzed and covered by an
-  operation-level interop fixture, but no KMIP listener/API/CLI is mounted yet. Treat
-  appliance profile validation as future served-endpoint work, not as a currently
-  available network surface.
+- **Transit/KMIP serving status:** Transit is served through `/api/v1/transit/*` and the
+  `trstctl-cli transit` command group. KMIP is served through the separate
+  `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey Create/Get. Treat broader
+  appliance profiles, wrapping, Locate/Revoke/Destroy wire operations, and tenant
+  self-service listener management as future served-endpoint work.
 - **Sync is push + drift-detect**, not a two-way merge — trstctl is the source of truth.
 
 ## Reference
@@ -360,7 +410,11 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   fetches via `/api/v1/secrets/store/{name}` and injects only into the child env.
 - **Dynamic backends:** `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
   `azure-entra`, `kubernetes`, `redis`, plus `pki`.
-- **Transit:** `Encrypt/Decrypt/Rewrap/HMAC/Sign/Verify`, versioned `trv:<n>:` ciphertext.
+- **Transit:** `/api/v1/transit/{keys,encrypt,decrypt,rewrap,hmac,sign,verify}`,
+  `trstctl-cli transit ...`, versioned `trv:<n>:` ciphertext.
+- **KMIP:** opt-in mTLS listener (`TRSTCTL_PROTOCOLS_KMIP_ENABLED=true`) for AES-256
+  SymmetricKey Create/Get, default address `:5696`, tenant bound by
+  `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
 - **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
   Parameter Store, webhook.
 - **Scanning:** `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans run`,

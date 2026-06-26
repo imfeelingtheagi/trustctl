@@ -6,7 +6,7 @@
 #
 #   live ServeMux  ==(internal/api.TestOpenAPIGolden)==>  internal/api/testdata/openapi.golden.json
 #       ==(internal/api.TestSDKSpecPinnedToGolden)==>      clients/sdk/openapi.json
-#       --(this script)-->                                 Go + TypeScript + Python SDKs
+#       --(this script)-->                                 Go + TypeScript + Python + Java SDKs
 #
 # Step 0 re-pins clients/sdk/openapi.json to the golden, then the generators run
 # against that pinned copy. A backend field add/rename/remove changes the golden,
@@ -14,13 +14,13 @@
 # types force `go build` / `tsc` to flag any code that used a now-missing field.
 #
 # Usage:
-#   scripts/gen-sdk.sh           # re-pin spec + regenerate Go, TS, and Python SDKs
+#   scripts/gen-sdk.sh           # re-pin spec + regenerate Go, TS, Python, and Java SDKs
 #   scripts/gen-sdk.sh --check   # verify the SDKs are up to date (CI); exit 1 on drift
 #
 # Requirements: a Go toolchain (for the Go generator, run via `go run`) and
-# Node/npx (for openapi-typescript) plus Python 3 (for the Python TypedDict
-# generator). The Go/TS generators are invoked with `go run` / `npx` so there is
-# nothing to install ahead of time.
+# Node/npx (for openapi-typescript) plus Python 3 (for the Python/Java generators).
+# The Go/TS generators are invoked with `go run` / `npx` so there is nothing to
+# install ahead of time.
 
 set -euo pipefail
 
@@ -102,7 +102,32 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3 (OPT-IN only): regenerate the full Go model set via oapi-codegen.
+# Step 3: Java OpenAPI schema index from the pinned OpenAPI schemas.
+# ---------------------------------------------------------------------------
+JAVA_DIR="${SDK_DIR}/java"
+JAVA_GEN="${JAVA_DIR}/scripts/gen_schemas.py"
+JAVA_OUT="${JAVA_DIR}/src/main/java/com/trstctl/sdk/OpenApiSchemas.java"
+if command -v python3 >/dev/null 2>&1; then
+  log "generate Java OpenAPI schema index -> ${JAVA_OUT#"${REPO_ROOT}/"}"
+  if [[ "${CHECK}" == "1" ]]; then
+    TMP="$(mktemp)"
+    python3 "${JAVA_GEN}" "${PINNED}" "${TMP}"
+    if ! cmp -s "${TMP}" "${JAVA_OUT}"; then
+      rm -f "${TMP}"
+      echo "error: ${JAVA_OUT#"${REPO_ROOT}/"} is stale; run 'make sdk' and commit the diff" >&2
+      exit 1
+    fi
+    rm -f "${TMP}"
+  else
+    python3 "${JAVA_GEN}" "${PINNED}" "${JAVA_OUT}"
+  fi
+else
+  echo "error: python3 not found; Java SDK generation is required" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4 (OPT-IN only): regenerate the full Go model set via oapi-codegen.
 #
 # The supported Go surface is the hand-written, dependency-free transport
 # (client.go / resources.go / iterator.go) plus curated structs — it imports

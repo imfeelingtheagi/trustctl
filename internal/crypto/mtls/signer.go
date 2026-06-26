@@ -244,6 +244,14 @@ func GenerateSignerPeerMaterial(dir, serverName string, certTTL time.Duration) (
 	}, nil
 }
 
+// WriteCertKeyFiles writes a leaf certificate chain (PEM, 0644) and its private
+// key (PKCS#8 PEM, 0600) to the given paths. It lets tests and runtime material
+// provisioners persist certificates without importing crypto/x509 outside this
+// boundary (AN-3).
+func WriteCertKeyFiles(certPath, keyPath string, cert tls.Certificate) error {
+	return writeCertKey(certPath, keyPath, cert)
+}
+
 // writeCertKey writes a leaf certificate chain (PEM, 0644) and its private key
 // (PKCS#8 PEM, 0600) to the given paths.
 func writeCertKey(certPath, keyPath string, cert tls.Certificate) error {

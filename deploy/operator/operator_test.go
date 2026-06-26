@@ -163,6 +163,9 @@ func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "trstctl.com") {
 				t.Error("operator.yaml ClusterRole does not grant rules on the trstctl.com API group (its CRD)")
 			}
+			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "coordination.k8s.io") {
+				t.Error("operator.yaml ClusterRole does not grant rules on coordination.k8s.io Leases for leader election")
+			}
 		}
 	}
 
@@ -171,6 +174,9 @@ func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 	if len(byKind["Deployment"]) > 0 {
 		dep := byKind["Deployment"][0]
 		spec, _ := dep["spec"].(map[string]any)
+		if replicas := intField(spec, "replicas"); replicas < 2 {
+			t.Errorf("operator.yaml Deployment replicas = %d, want at least 2 with leader election", replicas)
+		}
 		tmpl, _ := spec["template"].(map[string]any)
 		pod, _ := tmpl["spec"].(map[string]any)
 		cs := asAnyMaps(pod["containers"])
@@ -190,6 +196,12 @@ func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 			if !nonRoot {
 				t.Error("operator.yaml Deployment does not set runAsNonRoot: true (pod or container scope)")
 			}
+		}
+		if !containsString(asStrings(cs[0]["args"]), "--leader-elect") {
+			t.Error("operator.yaml Deployment must pass --leader-elect")
+		}
+		if !envHasFieldRef(asAnyMaps(cs[0]["env"]), "POD_NAME", "metadata.name") {
+			t.Error("operator.yaml Deployment must set POD_NAME from metadata.name for leader identity")
 		}
 	}
 }
@@ -227,6 +239,52 @@ func boolField(m map[string]any, key string) bool {
 	}
 	b, _ := m[key].(bool)
 	return b
+}
+
+func intField(m map[string]any, key string) int {
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func asStrings(v any) []string {
+	raw, _ := v.([]any)
+	out := make([]string, 0, len(raw))
+	for _, e := range raw {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func containsString(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+func envHasFieldRef(env []map[string]any, name, fieldPath string) bool {
+	for _, e := range env {
+		if got, _ := e["name"].(string); got != name {
+			continue
+		}
+		valueFrom, _ := e["valueFrom"].(map[string]any)
+		fieldRef, _ := valueFrom["fieldRef"].(map[string]any)
+		got, _ := fieldRef["fieldPath"].(string)
+		return got == fieldPath
+	}
+	return false
 }
 
 // clusterRoleCoversGroup reports whether any rule in a ClusterRole grants the given

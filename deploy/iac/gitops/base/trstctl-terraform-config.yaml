@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trstctl-terraform-config
+  namespace: trstctl-system
+data:
+  main.tf: |
+    terraform {
+      required_version = ">= 1.6.0"
+      required_providers {
+        trstctl = {
+          source  = "trstctl/trstctl"
+          version = ">= 0.1.0"
+        }
+      }
+    }
+
+    variable "trstctl_endpoint" {
+      type = string
+    }
+
+    variable "trstctl_token" {
+      type      = string
+      sensitive = true
+    }
+
+    provider "trstctl" {
+      endpoint = var.trstctl_endpoint
+      token    = var.trstctl_token
+    }
+
+    resource "trstctl_profile" "web_server" {
+      name = "web-server"
+      spec_json = jsonencode({
+        allowed_key_algorithms = ["ECDSA-P256"]
+        max_validity           = "1h"
+      })
+    }
+
+    resource "trstctl_pki_certificate" "deploy_hook" {
+      common_name = "deploy-hook.service"
+      ttl_seconds = 900
+    }
+
+    resource "trstctl_secret" "database_password" {
+      name      = "apps/deploy-hook/database-password"
+      plaintext = "replace-me-from-ci-secret"
+    }

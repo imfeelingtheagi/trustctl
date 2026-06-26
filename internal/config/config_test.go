@@ -14,7 +14,7 @@ func TestDefaultIsValid(t *testing.T) {
 		t.Fatalf("Default() must be valid, got: %v", err)
 	}
 	p := Default().Protocols
-	if p.ACME.Enabled || p.EST.Enabled || p.SCEP.Enabled || p.CMP.Enabled || p.TSA.Enabled || p.SPIFFE.Enabled || p.SSH.Enabled {
+	if p.ACME.Enabled || p.EST.Enabled || p.SCEP.Enabled || p.CMP.Enabled || p.TSA.Enabled || p.KMIP.Enabled || p.SPIFFE.Enabled || p.SSH.Enabled {
 		t.Fatal("served protocol surfaces must default off until an operator binds a tenant")
 	}
 	if p.RAKeyFile == "" {
@@ -25,6 +25,12 @@ func TestDefaultIsValid(t *testing.T) {
 	}
 	if p.ACMEQuota.MaxNonces <= 0 || p.ACMEQuota.MaxPendingOrders <= 0 || p.ACMEQuota.SourceWindowSeconds <= 0 {
 		t.Fatalf("protocols.acme_quota must expose positive safe defaults, got %+v", p.ACMEQuota)
+	}
+	if Default().ManagedKeys.Enabled {
+		t.Fatal("managed-key custody must default off so /api/v1/managed-keys fails closed until configured")
+	}
+	if Default().ManagedKeys.Provider != ManagedKeyProviderAWS {
+		t.Fatalf("managed-key custody default provider = %q, want %q", Default().ManagedKeys.Provider, ManagedKeyProviderAWS)
 	}
 }
 
@@ -57,6 +63,12 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_CONFIG_FILE":                                   path,
 		"TRSTCTL_POSTGRES_DSN":                                  "env-dsn",
 		"TRSTCTL_LOG_LEVEL":                                     "debug",
+		"TRSTCTL_MANAGED_KEYS_ENABLED":                          "true",
+		"TRSTCTL_MANAGED_KEYS_PROVIDER":                         "aws",
+		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                       "us-east-1",
+		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                     "http://127.0.0.1:4566",
+		"TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID":                "test",
+		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY":            "test-secret",
 		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":                         "/var/lib/trstctl/protocol-ra.key",
 		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":                       "/var/lib/trstctl/tsa.crt",
 		"TRSTCTL_PROTOCOLS_ACME_MAX_NONCES":                     "17",
@@ -66,6 +78,12 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
 		"TRSTCTL_PROTOCOLS_TSA_ENABLED":                         "true",
 		"TRSTCTL_PROTOCOLS_TSA_TENANT_ID":                       "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_KMIP_ENABLED":                        "true",
+		"TRSTCTL_PROTOCOLS_KMIP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_KMIP_ADDR":                           ":5697",
+		"TRSTCTL_PROTOCOLS_KMIP_CERT_FILE":                      "/var/lib/trstctl/kmip.crt",
+		"TRSTCTL_PROTOCOLS_KMIP_KEY_FILE":                       "/var/lib/trstctl/kmip.key",
+		"TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE":                 "/var/lib/trstctl/kmip-clients.crt",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -101,6 +119,12 @@ func TestEnvOverridesFile(t *testing.T) {
 	if !cfg.Protocols.TSA.Enabled || cfg.Protocols.TSA.TenantID == "" {
 		t.Errorf("TSA env enable+tenant should apply, got %+v", cfg.Protocols.TSA)
 	}
+	if !cfg.Protocols.KMIP.Enabled || cfg.Protocols.KMIP.TenantID == "" || cfg.Protocols.KMIP.Addr != ":5697" || cfg.Protocols.KMIP.CertFile == "" || cfg.Protocols.KMIP.KeyFile == "" || cfg.Protocols.KMIP.ClientCAFile == "" {
+		t.Errorf("KMIP env enable+tenant+mTLS should apply, got %+v", cfg.Protocols.KMIP)
+	}
+	if !cfg.ManagedKeys.Enabled || cfg.ManagedKeys.Provider != ManagedKeyProviderAWS || cfg.ManagedKeys.AWS.Region != "us-east-1" || cfg.ManagedKeys.AWS.Endpoint != "http://127.0.0.1:4566" || cfg.ManagedKeys.AWS.AccessKeyID != "test" || string(cfg.ManagedKeys.AWS.SecretAccessKey) != "test-secret" {
+		t.Errorf("managed-key AWS env enable+custody config should apply, got %+v", cfg.ManagedKeys)
+	}
 	if cfg.NATS.Mode != Default().NATS.Mode {
 		t.Errorf("untouched NATS.Mode should be default: got %q", cfg.NATS.Mode)
 	}
@@ -125,6 +149,30 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		"bad nats sync interval": func(c *Config) { c.NATS.SyncInterval = "soon" },
 		"zero acme quota":        func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
 		"negative acme quota":    func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
+		"managed keys missing region": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.AWS.AccessKeyID = "test"
+			c.ManagedKeys.AWS.SecretAccessKey = []byte("test")
+		},
+		"managed keys missing secret": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.AWS.Region = "us-east-1"
+			c.ManagedKeys.AWS.AccessKeyID = "test"
+		},
+		"managed keys bad endpoint": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.AWS.Region = "us-east-1"
+			c.ManagedKeys.AWS.AccessKeyID = "test"
+			c.ManagedKeys.AWS.SecretAccessKey = []byte("test")
+			c.ManagedKeys.AWS.Endpoint = "127.0.0.1:4566"
+		},
+		"managed keys unknown provider": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = "runtime-plugin-engine"
+			c.ManagedKeys.AWS.Region = "us-east-1"
+			c.ManagedKeys.AWS.AccessKeyID = "test"
+			c.ManagedKeys.AWS.SecretAccessKey = []byte("test")
+		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -156,6 +204,7 @@ func TestEnabledProtocolsRequireTenantBinding(t *testing.T) {
 	c.Protocols.SCEP.Enabled = true
 	c.Protocols.CMP.Enabled = true
 	c.Protocols.TSA.Enabled = true
+	c.Protocols.KMIP.Enabled = true
 	err := c.Validate()
 	if err == nil {
 		t.Fatal("tenantless enabled enrollment protocols must fail config validation")
@@ -167,6 +216,7 @@ func TestEnabledProtocolsRequireTenantBinding(t *testing.T) {
 		"protocols.scep.tenant_id is required",
 		"protocols.cmp.tenant_id is required",
 		"protocols.tsa.tenant_id is required",
+		"protocols.kmip.tenant_id is required",
 		"AN-1",
 	} {
 		if !strings.Contains(msg, want) {
@@ -181,8 +231,32 @@ func TestEnabledProtocolsValidateWithExplicitTenant(t *testing.T) {
 		toggle.Enabled = true
 		toggle.TenantID = "11111111-1111-1111-1111-111111111111"
 	}
+	c.Protocols.KMIP.Enabled = true
+	c.Protocols.KMIP.TenantID = "11111111-1111-1111-1111-111111111111"
+	c.Protocols.KMIP.CertFile = "/var/lib/trstctl/kmip.crt"
+	c.Protocols.KMIP.KeyFile = "/var/lib/trstctl/kmip.key"
+	c.Protocols.KMIP.ClientCAFile = "/var/lib/trstctl/kmip-clients.crt"
 	if err := c.Validate(); err != nil {
 		t.Fatalf("enabled protocols with explicit tenants should validate: %v", err)
+	}
+}
+
+func TestKMIPRequiresMTLSMaterial(t *testing.T) {
+	c := Default()
+	c.Protocols.KMIP.Enabled = true
+	c.Protocols.KMIP.TenantID = "11111111-1111-1111-1111-111111111111"
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("KMIP without mTLS material must fail validation")
+	}
+	for _, want := range []string{
+		"protocols.kmip.cert_file is required",
+		"protocols.kmip.key_file is required",
+		"protocols.kmip.client_ca_file is required",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("validation error missing %q: %v", want, err)
+		}
 	}
 }
 
@@ -225,8 +299,14 @@ func TestProtocolTenantFallbackIsOnlyForServerComposition(t *testing.T) {
 		TSA:         ProtocolToggle{Enabled: true},
 		RAKeyFile:   "data/protocols/ra-transport.key",
 		TSACertFile: "data/protocols/tsa.crt",
-		SSH:         ProtocolToggle{Enabled: true},
-		SPIFFE:      SPIFFEProtocol{Enabled: true, TrustDomain: "example.org"},
+		KMIP: KMIPProtocol{
+			Enabled:      true,
+			CertFile:     "/var/lib/trstctl/kmip.crt",
+			KeyFile:      "/var/lib/trstctl/kmip.key",
+			ClientCAFile: "/var/lib/trstctl/kmip-clients.crt",
+		},
+		SSH:    ProtocolToggle{Enabled: true},
+		SPIFFE: SPIFFEProtocol{Enabled: true, TrustDomain: "example.org"},
 	}
 	if errs := p.ValidateTenantBindings(""); len(errs) == 0 {
 		t.Fatal("tenantless enabled protocols should fail without an explicit fallback")

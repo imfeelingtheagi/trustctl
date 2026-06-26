@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/auditsink"
@@ -69,6 +72,7 @@ type aiStatusResponse struct {
 	// (default-private), "block" (refuse on PII), or "allow" (operator consented).
 	PIIEgress         string `json:"pii_egress"`
 	MCPIdentity       string `json:"mcp_identity,omitempty"`
+	MCPWriteTools     bool   `json:"mcp_write_tools"`
 	RateMax           int    `json:"rate_max,omitempty"`
 	RateWindowSeconds int    `json:"rate_window_seconds,omitempty"`
 }
@@ -79,23 +83,33 @@ type rcaRequest struct {
 	Question string `json:"question"`
 }
 
-// mcpToolsResponse lists the read-only MCP tools (F78).
+// mcpToolsResponse lists the exposed MCP tools (F78). read_only is true unless the
+// explicit guarded write-tool opt-in is active.
 type mcpToolsResponse struct {
 	Identity string   `json:"identity,omitempty"`
 	ReadOnly bool     `json:"read_only"`
 	Tools    []string `json:"tools"`
 }
 
-// mcpCallRequest invokes one read-only MCP tool (F78).
+// mcpCallRequest invokes one MCP tool (F78). Read tools use Subject. Guarded write
+// tools use the certificate fields and are accepted only when explicitly enabled.
 type mcpCallRequest struct {
-	Subject string `json:"subject"`
+	Subject        string `json:"subject"`
+	AuthorityID    string `json:"authority_id,omitempty"`
+	CSRPem         string `json:"csr_pem,omitempty"`
+	TTLSeconds     int64  `json:"ttl_seconds,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	PreviousSerial string `json:"previous_serial,omitempty"`
 }
 
 // mcpCallResponse is the grounded, cited tool result (F78).
 type mcpCallResponse struct {
-	Tool      string   `json:"tool"`
-	Citations []string `json:"citations"`
-	Text      string   `json:"text"`
+	Tool           string    `json:"tool"`
+	Citations      []string  `json:"citations,omitempty"`
+	Text           string    `json:"text"`
+	CertificatePEM string    `json:"certificate_pem,omitempty"`
+	Serial         string    `json:"serial,omitempty"`
+	NotAfter       time.Time `json:"not_after,omitempty"`
 }
 
 // --- surface name validation ---
@@ -167,6 +181,7 @@ func (a *API) aiStatus(w http.ResponseWriter, _ *http.Request) {
 		status.ModelName = model.ModelName()
 	}
 	status.MCPIdentity = a.ai.be.MCPIdentity
+	status.MCPWriteTools = a.ai.be.MCPWriteTools
 	status.RateMax = a.ai.be.RateMax
 	status.RateWindowSeconds = int(a.ai.be.RateWindow.Seconds())
 	a.writeJSON(w, http.StatusOK, status)
@@ -281,9 +296,10 @@ func (a *API) aiRCA(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// mcpTools lists the read-only MCP tools an external AI agent may call (F78). The list
-// is built from an MCP server bound to the caller's tenant; HasWriteTool() is false by
-// construction, so the response always reports read_only=true.
+// mcpTools lists the MCP tools an external AI agent may call (F78). The list is built
+// from an MCP server bound to the caller's tenant. By default it exposes only
+// investigation tools and reports read_only=true; when guarded write tools are
+// explicitly enabled it reports read_only=false.
 func (a *API) mcpTools(w http.ResponseWriter, r *http.Request) {
 	if a.ai == nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "AI surface is not enabled"))
@@ -302,10 +318,11 @@ func (a *API) mcpTools(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// mcpCall invokes one read-only MCP tool, scoped to the caller's tenant via SF.7,
-// rate-limited and audited (F78). The retrieved data is grounded, cited, and inert (a
-// hostile string in a record causes no action). An unknown/non-read-only tool is a
-// 404; a cross-tenant request can never occur because the tenant is the principal's.
+// mcpCall invokes one MCP tool, scoped to the caller's tenant via SF.7. Read tools are
+// rate-limited and audited; retrieved data is grounded, cited, and inert (a hostile
+// string in a record causes no action). Write tools are explicit opt-in and route
+// through mcpCallWrite. Unknown tools are a 404; a cross-tenant request can never occur
+// because the tenant is the principal's.
 func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 	if a.ai == nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "AI surface is not enabled"))
@@ -326,6 +343,10 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	srv := a.mcpServerFor(principal)
+	if srv.IsWriteTool(tool) {
+		a.mcpCallWrite(w, r, principal, tool, req)
+		return
+	}
 	// The caller key for rate limiting is the authenticated subject, so one principal's
 	// enumeration cannot exhaust another's budget.
 	res, err := srv.Call(r.Context(), principal.Subject, principal.TenantID, tool, req.Subject)
@@ -334,6 +355,57 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, mcpCallResponse{Tool: res.Tool, Citations: res.Citations, Text: res.Text})
+}
+
+// mcpCallWrite executes an explicitly enabled MCP write tool. It is intentionally a
+// tiny dispatcher over existing served mutation services: the MCP surface does not get
+// a private bypass. The route guard authenticated the principal; this branch adds the
+// write permission check, AN-5 idempotency via mutate(), and a dedicated audit event.
+func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, req mcpCallRequest) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if tenantID != principal.TenantID {
+			return 0, nil, errStatus(http.StatusForbidden, "forbidden: MCP write tenant mismatch")
+		}
+		if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
+			return 0, nil, errStatus(http.StatusForbidden, "forbidden: MCP write tool requires "+string(authz.CertsIssue))
+		}
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		authorityID := strings.TrimSpace(req.AuthorityID)
+		if authorityID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "authority_id is required")
+		}
+		block, _ := pem.Decode([]byte(req.CSRPem))
+		if block == nil || block.Type != "CERTIFICATE REQUEST" {
+			return 0, nil, errStatus(http.StatusBadRequest, "csr_pem must contain one CERTIFICATE REQUEST PEM block")
+		}
+		if tool == "rotate_certificate" && strings.TrimSpace(req.PreviousSerial) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "previous_serial is required for rotate_certificate")
+		}
+		issued, err := a.caHierarchy.IssueLeaf(ctx, tenantID, authorityID, CAIssueLeafRequest{
+			CSRDER:     block.Bytes,
+			TTLSeconds: req.TTLSeconds,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		_ = auditsink.Emit(ctx, a.ai.be.Audit, nil, "mcp.tool.write", tenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"authority_id":%q,"serial":%q,"reason":%q}`, principal.Subject, tool, authorityID, issued.Serial, req.Reason)))
+		text := "issued certificate serial " + issued.Serial
+		if tool == "rotate_certificate" {
+			text = "rotated certificate " + strings.TrimSpace(req.PreviousSerial) + " to serial " + issued.Serial
+		}
+		return http.StatusCreated, mcpCallResponse{
+			Tool:           tool,
+			Text:           text,
+			Citations:      []string{"ca_authority:" + authorityID, "ca_issued_cert:" + issued.Serial},
+			CertificatePEM: issued.CertificatePEM,
+			Serial:         issued.Serial,
+			NotAfter:       issued.NotAfter,
+		}, nil
+	})
 }
 
 // mcpServerFor builds an MCP server bound to the caller's principal, over the
@@ -347,7 +419,11 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 func (a *API) mcpServerFor(principal authz.Principal) *mcpserver.Server {
 	pipeline := rca.NewPipeline(engineQuery{engine: a.ai.be.Query, principal: principal}, a.ai.be.Audit)
 	synth := rca.NewSynthesizer(a.ai.be.Model)
-	return mcpserver.New(principal.TenantID, pipeline, synth, a.ai.rate, a.ai.be.Audit, a.ai.be.MCPIdentity)
+	var opts []mcpserver.Option
+	if a.ai.be.MCPWriteTools {
+		opts = append(opts, mcpserver.WithWriteTools())
+	}
+	return mcpserver.New(principal.TenantID, pipeline, synth, a.ai.rate, a.ai.be.Audit, a.ai.be.MCPIdentity, opts...)
 }
 
 // synthesize renders a grounded answer from gathered evidence: with no evidence it is

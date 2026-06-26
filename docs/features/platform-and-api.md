@@ -29,8 +29,10 @@ trusts a platform with its credentials.
 
 The API is **data-driven**: every route is declared once in a single registry that
 simultaneously generates the served `http.ServeMux`, the **OpenAPI 3.1** document (served
-at `/api/v1/openapi.json`), and the CLI command table — so the spec, the server, and the
-CLI can't drift apart. Errors are RFC 7807 `application/problem+json`. Every mutation
+at `/api/v1/openapi.json`), the CLI command table, and the Terraform provider route
+constants for its managed resources — so the spec, the server, the CLI, and the
+infrastructure-as-code surface can't drift apart. Errors are RFC 7807
+`application/problem+json`. Every mutation
 requires an [`Idempotency-Key`](../glossary.md), recorded in PostgreSQL so a retry returns
 the original result instead of applying the change twice. Tenant comes from the
 authenticated principal (so one tenant can never act on another's data), pagination uses
@@ -45,8 +47,20 @@ overlay can then block the request using route, actor, environment, and time att
 `trstctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
 with the API and carries no bespoke logic. It auto-supplies idempotency keys on mutations.
 Command groups: `owners`, `issuers`, `identities`, `certificates`, `workloads`,
-`broker`, `ephemeral`, `profiles`, `audit`, `graph`, `risk`, `agents`. **Served
+`broker`, `ephemeral`, `profiles`, `audit`, `privacy`, `graph`, `risk`, `cbom`,
+`pqc`, `agents`, `secrets`, `managed-keys`, `transit`, `ai`, and `mcp`. **Served
 (binary).**
+
+### Terraform provider
+
+`terraform-provider-trstctl` is built with the standard HashiCorp Terraform plugin
+framework and ships as a normal trstctl binary. It manages certificate profiles through
+`POST /api/v1/profiles`, issues short-lived certificates through
+`POST /api/v1/secrets/pki`, and manages application secrets through
+`/api/v1/secrets/store`. Each mutation sends an `Idempotency-Key`, uses the same bearer
+token and tenant headers as the CLI, and is backed by provider tests plus a real
+Terraform apply acceptance test. See [Terraform provider](../terraform-provider.md).
+**Served (binary).**
 
 ### The web UI (F12)
 
@@ -118,8 +132,10 @@ service has no HTTP server and no SQL driver — it stays a separate, isolated p
 at startup it disables core dumps and ptrace so secret material can't be read out of its
 memory. The REST API/UI is served over **TLS** (self-signed by default for instant start,
 operator cert in production, TLS 1.3, AEAD-only). Agents connect over
-**[mTLS](../glossary.md)** with short-lived, auto-rotated client certificates. All
-TLS/x509 code lives behind the single isolated cryptography path. **Served.**
+**[mTLS](../glossary.md)** with short-lived, auto-rotated client certificates. The
+KMIP listener, when enabled, is also TLS 1.3 mutual TLS and verifies client
+certificates against `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE`. All TLS/x509 code lives
+behind the single isolated cryptography path. **Served.**
 
 > Note: the default signer channel is a peer-authenticated UDS (co-located/sidecar);
 > the cross-node channel is mutually-authenticated, mutually-pinned mTLS.
@@ -183,7 +199,8 @@ configured. See
   on mutations; cursor pagination; `429` + `Retry-After`; authenticated REST JSON
   request bodies are capped at 1 MiB and reject trailing JSON tokens.
 - **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `workloads`,
-  `broker`, `ephemeral`, `profiles`, `audit`, `graph`, `risk`, `agents`.
+  `broker`, `ephemeral`, `profiles`, `audit`, `privacy`, `graph`, `risk`, `cbom`,
+  `pqc`, `agents`, `secrets`, `managed-keys`, `transit`, `ai`, and `mcp`.
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when
   `auth.oidc.enabled` is on); `/auth/saml/login`, `/auth/saml/acs`, and
   `/auth/saml/metadata` (SAML when `auth.saml.enabled` is on); `POST

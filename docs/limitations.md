@@ -296,7 +296,7 @@ Directory writeback is not implemented. Token rotation is operator-managed by
 writing a new token file and restarting the control plane so the new hash is loaded.
 
 - **The AI surface — model adapter (F76), grounded RCA / NL query (F75/F77), and the
-  read-only MCP tool server (F78) — now SERVED.** The AI surface is **mounted on the
+  guarded MCP tool server (F78) — now SERVED.** The AI surface is **mounted on the
   running binary** under `/api/v1/ai/*` and `/api/v1/mcp/*` (off by default —
   `ai.enable_api` — and **fail-closed** when off, so an upgrade does not silently
   expose it):
@@ -306,15 +306,18 @@ writing a new token file and restarting the control plane so the new hash is loa
   - `POST /api/v1/ai/rca` answers a **grounded root-cause / NL question** from cited
     real records gathered through the tenant-then-RBAC scoping seam, preferring
     "insufficient evidence" to a guess (F77);
-  - `GET /api/v1/mcp/tools` + `POST /api/v1/mcp/tools/{tool}` expose the **read-only,
-    tenant-scoped MCP tools** an external AI agent can list and invoke (F78); there are
-    **no write/remediation tools**.
+  - `GET /api/v1/mcp/tools` + `POST /api/v1/mcp/tools/{tool}` expose the
+    tenant-scoped MCP tools an external AI agent can list and invoke (F78).
+    Investigation tools are **read-only by default**. Guarded write tools
+    (`issue_certificate`, `rotate_certificate`) appear only when
+    `TRSTCTL_AI_MCP_WRITE_TOOLS=true`; each write still requires `certs:issue`, an
+    `Idempotency-Key`, and emits `mcp.tool.write`.
 
   Every route is **auth-gated** (API token or session, `graph:read`), **tenant-scoped**
   (the tenant is the authenticated principal's, **never** a request field, enforced by
-  per-tenant database isolation), **read-only**, **rate-limited**, and
-  **injection-inert** (a hostile string in a record is inert, cited data — there is no
-  action path). The **AI model is air-gapped / opt-in** by default (`ai.enable_api`
+  per-tenant database isolation), **rate-limited**, and **injection-inert** (a hostile
+  string in a record is inert, cited data and cannot by itself trigger a write). The
+  **AI model is air-gapped / opt-in** by default (`ai.enable_api`
   mounts the surface; no model is configured, so grounding + citations work and
   **nothing phones home**); when an operator opts into a cloud/local model, **every
   prompt crosses a redactor plus a residual-entropy refuse-gate** before any egress, so
@@ -664,6 +667,13 @@ This is a deliberate, documented trust boundary (not an accident):
   signer and the JWT-SVID signing key has its own signer handle. The Workload-API
   gRPC/protobuf contract is vendored verbatim from go-spiffe so the wire format is
   byte-identical without a build-time go-spiffe dependency.
+- **SPIRE upstream authority:** the `trstctl-spire-upstream-authority` plugin is
+  served for SPIRE X.509 upstream CA custody: SPIRE sends its local CA CSR to
+  `/api/v1/ca/authorities/{id}/intermediates/csr`, trstctl signs it through the
+  served CA hierarchy, and a real SPIRE server container mints an SVID chained to the
+  trstctl root in CI. The plugin intentionally returns `Unimplemented` for SPIRE's
+  optional JWT upstream publication RPC; it anchors X.509-SVID trust, while SPIRE's
+  local JWT key remains SPIRE-managed for same-domain JWT-SVID use.
 - **Attested issuance transport (REST):** `POST /api/v1/workloads/attested-issuance`
   is the served proof-before-trust mint for workloads that already have their own key
   pair. The request carries the attestation method, base64 proof payload, public key
@@ -961,20 +971,25 @@ the API/UI with the **signing service isolated** (its own locked-down, network-
 unreachable sidecar), external PostgreSQL and NATS as the default, a default-deny
 `NetworkPolicy`, and TLS.
 
-- **Kubernetes Operator scope.** A **minimal** CRD-driven operator ships today:
+- **Kubernetes Operator scope.** A **focused** CRD-driven operator ships today:
   the `trstctl-operator` binary (it rides inside the same multi-binary
   control-plane image and is run by `deploy/operator/operator.yaml` via an
   entrypoint override) reconciles `TrstctlControlPlane` custom resources into a
-  managed control-plane Deployment — keeping that Deployment's **replica count and
-  image** matching each resource's `spec`, and writing the observed phase back to
-  the resource status. It is a real, level-based reconcile loop (poll, diff,
-  converge), not a stub; it speaks the Kubernetes API directly (no
-  client-go/controller-runtime). It is **deliberately minimal**: it owns the
-  Deployment's replicas+image only, and does **not** yet manage Services, secrets,
-  `NetworkPolicy`, or the isolated-signer topology. For a complete,
-  production-shaped control-plane install (isolated signer, external
-  PostgreSQL/NATS, default-deny `NetworkPolicy`, multi-replica HA) the **Helm
-  chart** (`deploy/helm/trstctl`) remains the richer, recommended path.
+  managed control-plane Deployment. The **Helm chart** remains the richer path
+  for the full production install. The operator keeps the managed Deployment's
+  replica count, image, PostgreSQL DSN Secret reference, NATS URL/replica knobs, sidecar-signer
+  socket/volumes, and managed-key provider enablement matching each resource's
+  `spec`, and writing the observed phase back to the resource status. It is a
+  real, level-based reconcile loop (poll, diff, converge), not a stub; it speaks
+  the Kubernetes API directly (no client-go/controller-runtime). The shipped
+  operator manifest runs **two replicas** and `--leader-elect`; the replicas
+  coordinate with a real `coordination.k8s.io` Lease so exactly one reconciles
+  while the other remains a hot follower. It is still focused: it does **not** yet
+  manage Services, ingress, `NetworkPolicy`, Secret creation, or the cross-pod
+  isolated-signer Service topology. For a complete, production-shaped
+  control-plane install (ingress/service wiring, generated secrets,
+  default-deny `NetworkPolicy`, cross-pod signer mTLS) the **Helm chart**
+  (`deploy/helm/trstctl`) remains the richer, recommended path.
 - **cert-manager external issuer.** The Kubernetes agent ships a real trstctl
   `Issuer`/`ClusterIssuer` controller for cert-manager. It marks the trstctl
   issuer resources Ready, signs matching `CertificateRequest`s through a served

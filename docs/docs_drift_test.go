@@ -223,7 +223,7 @@ func TestServedSurfaceDocsMatchCodeReality(t *testing.T) {
 	requireAnchor("internal/signing/serve.go", read(t, "../internal/signing/serve.go"), "ServeServerMTLS")
 	requireAnchor("internal/signing/client.go", read(t, "../internal/signing/client.go"), "DialMTLS")
 	if _, err := os.Stat(filepath.FromSlash("../cmd/trstctl-operator")); err != nil {
-		t.Fatalf("cmd/trstctl-operator should exist while install docs describe a shipped minimal operator: %v", err)
+		t.Fatalf("cmd/trstctl-operator should exist while install docs describe a shipped operator: %v", err)
 	}
 
 	platform := strings.ToLower(read(t, "features/platform-and-api.md"))
@@ -257,6 +257,8 @@ func TestServedSurfaceDocsMatchCodeReality(t *testing.T) {
 		"/api/v1/mcp/tools",
 		"ai.enable_api",
 		"read-only",
+		"trstctl_ai_mcp_write_tools=true",
+		"idempotency-key",
 	} {
 		if !strings.Contains(graphAI, want) {
 			t.Errorf("features/graph-query-ai.md should document the served graph/AI/MCP surface (missing %q)", want)
@@ -280,6 +282,8 @@ func TestServedSurfaceDocsMatchCodeReality(t *testing.T) {
 		"/api/v1/ai/rca",
 		"/api/v1/mcp/tools",
 		"ai.enable_api",
+		"trstctl_ai_mcp_write_tools=true",
+		"mcp.tool.write",
 	} {
 		if !strings.Contains(lim, want) {
 			t.Errorf("limitations.md should name the served graph/risk/AI/MCP routes (missing %q)", want)
@@ -323,8 +327,8 @@ func TestServedSurfaceDocsMatchCodeReality(t *testing.T) {
 	}
 
 	install := strings.ToLower(read(t, "install.md"))
-	if !strings.Contains(install, "cmd/trstctl-operator") || !strings.Contains(install, "helm remains") {
-		t.Error("install.md should explain the shipped minimal operator and that Helm remains the full install path")
+	if !strings.Contains(install, "cmd/trstctl-operator") || !strings.Contains(install, "helm remains") || !strings.Contains(install, "leader election") {
+		t.Error("install.md should explain the shipped operator, real leader election, and that Helm remains the full install path")
 	}
 }
 

@@ -129,6 +129,31 @@ The secret value is sealed at rest inside trstctl, but Terraform state still hol
 the configured value. Treat the Terraform state backend as a secret store: encrypt
 it, restrict readers, and avoid logging plans that show sensitive values.
 
+## GitOps, Pulumi, and GitLab CI
+
+The distribution includes ready-to-copy IaC examples under `deploy/iac/`:
+
+- `deploy/iac/gitops/base/` is a Kustomize base containing a Terraform
+  ConfigMap and apply Job. The Terraform config provisions a `trstctl_profile`,
+  a `trstctl_pki_certificate`, and a `trstctl_secret`.
+- `deploy/iac/gitops/argocd/application.yaml` points ArgoCD at that base.
+- `deploy/iac/gitops/flux/kustomization.yaml` points Flux at the same base.
+- `deploy/iac/pulumi/trstctl-resources/` is a Pulumi TypeScript dynamic-provider
+  example that provisions the same profile, PKI certificate, and secret through
+  the served REST API.
+- `deploy/iac/gitlab/trstctl-iac.gitlab-ci.yml` provides GitLab CI plan/apply
+  jobs for the Terraform base.
+
+All examples read `TRSTCTL_ENDPOINT` and `TRSTCTL_TOKEN` from the cluster or CI
+environment. The IaC acceptance test parses those assets and replays both the
+GitOps Terraform declaration and the Pulumi resource plan against a fake trstctl
+API, proving they hit `/api/v1/profiles`, `/api/v1/secrets/pki`, and
+`/api/v1/secrets/store` with auth and idempotency headers:
+
+```bash
+go test ./deploy/iac -run TestGitOpsAndPulumiExamplesProvisionTrstctlResources -count=1 -v
+```
+
 ## Acceptance test
 
 The provider has a real Terraform apply acceptance test. It runs against a local

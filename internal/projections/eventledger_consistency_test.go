@@ -20,6 +20,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventCACeremonyApproved:            "EventCACeremonyApproved",
 	projections.EventCARootCreated:                 "EventCARootCreated",
 	projections.EventCAIntermediateCreated:         "EventCAIntermediateCreated",
+	projections.EventCAIntermediateCSRIssued:       "EventCAIntermediateCSRIssued",
 	projections.EventCAEndEntityIssued:             "EventCAEndEntityIssued",
 	projections.EventDiscoverySourceUpserted:       "EventDiscoverySourceUpserted",
 	projections.EventDiscoveryScheduleUpserted:     "EventDiscoveryScheduleUpserted",

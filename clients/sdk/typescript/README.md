@@ -35,6 +35,26 @@ dependency. Then:
 import { TrstctlClient, isProblem } from "@trstctl/sdk";
 ```
 
+The package metadata is publish-ready for the public registry namespace:
+
+```bash
+npm pack --dry-run
+npm publish --access public
+```
+
+## Test
+
+```bash
+npm run typecheck
+npm test
+```
+
+`npm test` compiles `src/index.ts` and runs the client against a deterministic
+`fetch` implementation. The suite covers bearer auth, optional tenant headers,
+the owner/identity/certificate helpers, cursor pagination, stable
+`Idempotency-Key` reuse across mutation retries, `Retry-After`, and typed
+`problem+json` errors.
+
 ## Quickstart — getting-started flow
 
 ```ts

@@ -23,14 +23,35 @@ const (
 )
 
 const (
-	TagBatchCount           uint32 = 0x42000d
-	TagBatchItem            uint32 = 0x42000f
-	TagOperation            uint32 = 0x42005c
-	TagProtocolVersion      uint32 = 0x420069
-	TagProtocolVersionMajor uint32 = 0x42006a
-	TagProtocolVersionMinor uint32 = 0x42006b
-	TagRequestHeader        uint32 = 0x420077
-	TagRequestMessage       uint32 = 0x420078
+	TagAttribute              uint32 = 0x420008
+	TagAttributeName          uint32 = 0x42000a
+	TagAttributeValue         uint32 = 0x42000b
+	TagBatchCount             uint32 = 0x42000d
+	TagBatchItem              uint32 = 0x42000f
+	TagCryptographicAlgorithm uint32 = 0x420028
+	TagCryptographicLength    uint32 = 0x42002a
+	TagKeyBlock               uint32 = 0x420040
+	TagKeyFormatType          uint32 = 0x420042
+	TagKeyMaterial            uint32 = 0x420043
+	TagKeyValue               uint32 = 0x420045
+	TagOperation              uint32 = 0x42005c
+	TagObjectType             uint32 = 0x420057
+	TagProtocolVersion        uint32 = 0x420069
+	TagProtocolVersionMajor   uint32 = 0x42006a
+	TagProtocolVersionMinor   uint32 = 0x42006b
+	TagRequestHeader          uint32 = 0x420077
+	TagRequestMessage         uint32 = 0x420078
+	TagRequestPayload         uint32 = 0x420079
+	TagResponseHeader         uint32 = 0x42007a
+	TagResponseMessage        uint32 = 0x42007b
+	TagResponsePayload        uint32 = 0x42007c
+	TagResultMessage          uint32 = 0x42007d
+	TagResultReason           uint32 = 0x42007e
+	TagResultStatus           uint32 = 0x42007f
+	TagSymmetricKey           uint32 = 0x42008f
+	TagTemplateAttribute      uint32 = 0x420091
+	TagTimeStamp              uint32 = 0x420092
+	TagUniqueIdentifier       uint32 = 0x420094
 )
 
 // Operation is the KMIP operation enumeration.
@@ -42,6 +63,20 @@ const (
 	OperationGet     Operation = 0x0000000a
 	OperationRevoke  Operation = 0x00000013
 	OperationDestroy Operation = 0x00000014
+)
+
+const (
+	objectTypeSymmetricKey      int32 = 0x00000002
+	cryptographicAlgorithmAES   int32 = 0x00000003
+	keyFormatTypeRaw            int32 = 0x00000001
+	resultStatusSuccess         int32 = 0x00000000
+	resultStatusOperationFailed int32 = 0x00000001
+	resultReasonItemNotFound    int32 = 0x00000001
+	resultReasonAuthFailed      int32 = 0x00000003
+	resultReasonInvalidMessage  int32 = 0x00000004
+	resultReasonUnsupported     int32 = 0x00000005
+	resultReasonInvalidField    int32 = 0x00000007
+	resultReasonGeneralFailure  int32 = 0x00000100
 )
 
 // TTLV is one parsed KMIP tag/type/length/value node. Primitive Value bytes are
@@ -75,6 +110,13 @@ type RequestMessage struct {
 	ProtocolMinor int
 	BatchCount    int
 	Operations    []Operation
+	BatchItems    []RequestBatchItem
+}
+
+// RequestBatchItem is the parsed operation and payload for one KMIP batch item.
+type RequestBatchItem struct {
+	Operation Operation
+	Payload   TTLV
 }
 
 // ParseTTLV parses one complete KMIP TTLV frame with production defaults.
@@ -137,6 +179,7 @@ func DecodeRequestMessage(frame []byte) (RequestMessage, error) {
 	}
 
 	var ops []Operation
+	var batchItems []RequestBatchItem
 	for _, item := range root.ChildrenByTag(TagBatchItem) {
 		if item.Type != TTLVStructure {
 			return RequestMessage{}, errors.New("kmip ttlv: batch item is not a structure")
@@ -145,7 +188,10 @@ func DecodeRequestMessage(frame []byte) (RequestMessage, error) {
 		if err != nil {
 			return RequestMessage{}, err
 		}
-		ops = append(ops, Operation(op))
+		operation := Operation(op)
+		ops = append(ops, operation)
+		payload, _ := item.FirstChild(TagRequestPayload)
+		batchItems = append(batchItems, RequestBatchItem{Operation: operation, Payload: payload})
 	}
 	if batchCount != len(ops) {
 		return RequestMessage{}, fmt.Errorf("kmip ttlv: batch count %d does not match %d batch items", batchCount, len(ops))
@@ -156,6 +202,7 @@ func DecodeRequestMessage(frame []byte) (RequestMessage, error) {
 		ProtocolMinor: minor,
 		BatchCount:    batchCount,
 		Operations:    ops,
+		BatchItems:    batchItems,
 	}, nil
 }
 

@@ -72,9 +72,11 @@ type API struct {
 	broker                  BrokerService
 	ephemeral               EphemeralIssuerService
 	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
-	secrets                 *secretsService   // served secrets/identity surface (GAP-006); nil = not enabled
-	ai                      *aiSurface        // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
-	cbom                    CBOMService       // served CBOM scanner + PQC migration inventory (PQC-05)
+	transit                 TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
+	codeSigning             CodeSigningService
+	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
+	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	cbom                    CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
 	pqcMigration            PQCMigrationService
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
@@ -117,6 +119,8 @@ type config struct {
 	broker                  BrokerService
 	ephemeral               EphemeralIssuerService
 	managedKeys             ManagedKeyService
+	transit                 TransitService
+	codeSigning             CodeSigningService
 	secrets                 *secretsService
 	ai                      *aiSurface
 	cbom                    CBOMService
@@ -276,7 +280,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, scim: cfg.scim, scimTokens: normalizeSCIM(cfg.scim), agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, abac: cfg.abac, abacEnvironment: copyStringMap(cfg.abacEnvironment), abacNow: cfg.abacNow, approvals: cfg.approvals, breakglass: cfg.breakglass, caHierarchy: cfg.caHierarchy, externalCAs: cfg.externalCAs, attestedIssuer: cfg.attestedIssuer, broker: cfg.broker, ephemeral: cfg.ephemeral, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, cbom: cfg.cbom, pqcMigration: cfg.pqcMigration, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, scim: cfg.scim, scimTokens: normalizeSCIM(cfg.scim), agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, abac: cfg.abac, abacEnvironment: copyStringMap(cfg.abacEnvironment), abacNow: cfg.abacNow, approvals: cfg.approvals, breakglass: cfg.breakglass, caHierarchy: cfg.caHierarchy, externalCAs: cfg.externalCAs, attestedIssuer: cfg.attestedIssuer, broker: cfg.broker, ephemeral: cfg.ephemeral, managedKeys: cfg.managedKeys, transit: cfg.transit, codeSigning: cfg.codeSigning, secrets: cfg.secrets, ai: cfg.ai, cbom: cfg.cbom, pqcMigration: cfg.pqcMigration, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -515,6 +519,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/ca/authorities", opID: "listCAAuthorities", summary: "List served CA authorities", handler: a.listCAAuthorities, resSchema: "CAAuthorityList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/ca/authorities/roots", opID: "createRootCA", summary: "Create a signer-backed root CA after ceremony quorum", handler: a.createRootCA, reqSchema: "CACreateRootRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/authorities/intermediates", opID: "createIntermediateCA", summary: "Create a signer-backed intermediate CA after ceremony quorum", handler: a.createIntermediateCA, reqSchema: "CACreateIntermediateRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/ca/authorities/{id}/intermediates/csr", opID: "issueIntermediateCAFromCSR", summary: "Sign an external intermediate CA CSR from a served CA authority", handler: a.issueHierarchyIntermediateCSR, pathParams: caAuthorityPath, reqSchema: "CAIssueIntermediateRequest", resSchema: "CAIssuedIntermediate", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/issue", opID: "issueHierarchyLeaf", summary: "Issue a leaf certificate from a served CA authority", handler: a.issueHierarchyLeaf, pathParams: caAuthorityPath, reqSchema: "CAIssueLeafRequest", resSchema: "CAIssuedLeaf", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/external-cas", opID: "listExternalCAs", summary: "List configured upstream CA integrations", handler: a.listExternalCAs, resSchema: "ExternalCAList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue},
@@ -602,7 +607,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/ai/query", opID: "aiQuery", summary: "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)", handler: a.aiQuery, reqSchema: "AIQueryRequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/ai/rca", opID: "aiRCA", summary: "Answer a grounded root-cause / NL question from cited tenant records (read-only)", handler: a.aiRCA, reqSchema: "RCARequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/mcp/tools", opID: "listMCPTools", summary: "List the read-only, tenant-scoped MCP tools an AI agent may call", handler: a.mcpTools, resSchema: "MCPToolList", successCode: "200", perm: authz.GraphRead},
-		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one read-only MCP tool (grounded, cited, rate-limited)", handler: a.mcpCall, pathParams: mcpToolPath, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
+		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one MCP tool (read by default; guarded writes when enabled)", handler: a.mcpCall, pathParams: mcpToolPath, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, query: page, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},
@@ -636,6 +641,29 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200"},
+
+		// Transit/EaaS (KMS-01/F66): a served envelope-free cryptographic operation
+		// surface backed by compile-time Go interfaces behind internal/crypto. This
+		// deliberately keeps the prior-art shape of crypto.Signer / JCA / OpenSSL
+		// ENGINE adapter boundaries, and does not introduce runtime crypto suite
+		// registration, DLL/plugin engines, or a policy controller that feeds provider
+		// behavior at runtime.
+		{method: "POST", path: "/api/v1/transit/keys", opID: "createTransitKey", summary: "Create a tenant-scoped transit key", handler: a.createTransitKey, reqSchema: "TransitKeyRequest", resSchema: "TransitKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/keys/rotate", opID: "rotateTransitKey", summary: "Rotate a tenant-scoped transit key", handler: a.rotateTransitKey, reqSchema: "TransitRotateRequest", resSchema: "TransitKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/encrypt", opID: "encryptTransit", summary: "Encrypt plaintext with a transit key", handler: a.encryptTransit, reqSchema: "TransitEncryptRequest", resSchema: "TransitCiphertext", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/decrypt", opID: "decryptTransit", summary: "Decrypt transit ciphertext", handler: a.decryptTransit, reqSchema: "TransitDecryptRequest", resSchema: "TransitPlaintext", successCode: "200", perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/rewrap", opID: "rewrapTransit", summary: "Re-encrypt transit ciphertext under the current key version", handler: a.rewrapTransit, reqSchema: "TransitRewrapRequest", resSchema: "TransitCiphertext", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/hmac", opID: "hmacTransit", summary: "Compute an HMAC with a transit key", handler: a.hmacTransit, reqSchema: "TransitHMACRequest", resSchema: "TransitHMAC", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/sign", opID: "signTransit", summary: "Sign a message with a transit signing key", handler: a.signTransit, reqSchema: "TransitSignRequest", resSchema: "TransitSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/verify", opID: "verifyTransit", summary: "Verify a transit signature", handler: a.verifyTransit, reqSchema: "TransitVerifyRequest", resSchema: "TransitVerify", successCode: "200", perm: authz.KeysRead},
+
+		// Code-signing (CLM-06/F50): key-backed and keyless/Sigstore artifact signing
+		// over the served path. Requests carry only a digest and key/identity
+		// references; the authenticated principal is the signer identity. The service
+		// queues transparency-log publication through outbox (AN-6), rather than
+		// calling Rekor/Fulcio inline.
+		{method: "POST", path: "/api/v1/code-signing/sign", opID: "signCodeArtifact", summary: "Sign an artifact digest with a managed code-signing key", handler: a.signCodeArtifact, reqSchema: "CodeSigningRequest", resSchema: "CodeSigningSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/code-signing/keyless", opID: "signCodeArtifactKeyless", summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity", handler: a.signCodeArtifactKeyless, reqSchema: "CodeSigningKeylessRequest", resSchema: "CodeSigningSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},
 
 		// Managed-key (BYOK/HSM) lifecycle (CRYPTO-005 / EXC-CRYPTO-01). The private
 		// material lives in the KMS/HSM and never enters this process. Generate mints

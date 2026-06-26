@@ -45,6 +45,8 @@ Reference docs:
   **[capacity planning](performance-capacity.md)** — the hot-path latency,
   throughput, queue, projection-lag, and right-sizing contract.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
+- **[Terraform provider](terraform-provider.md)** — manage profiles, short-lived
+  PKI credentials, and application secrets from infrastructure-as-code.
 - **[Troubleshooting](troubleshooting.md)** — fixes for the issues people hit
   first.
 

@@ -8,7 +8,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 )
 
-func TestAISurfaceRoutesStayReadOnlyGraphScoped(t *testing.T) {
+func TestAISurfaceRoutesStayGraphScopedWithGuardedMCPWrites(t *testing.T) {
 	a := New(nil, nil, nil)
 	want := map[string]string{
 		"GET /api/v1/ai/status":         "aiStatus",
@@ -25,14 +25,14 @@ func TestAISurfaceRoutesStayReadOnlyGraphScoped(t *testing.T) {
 		}
 		opID, ok := want[key]
 		if !ok {
-			t.Fatalf("unexpected served AI/MCP route %s (opID %s); add an explicit read-only review before exposing it", key, r.opID)
+			t.Fatalf("unexpected served AI/MCP route %s (opID %s); add an explicit route-scope review before exposing it", key, r.opID)
 		}
 		seen[key] = true
 		if r.opID != opID {
 			t.Errorf("%s opID = %q, want %q", key, r.opID, opID)
 		}
 		if r.mutation {
-			t.Errorf("%s is marked as a mutation; AI/MCP must stay read-only", key)
+			t.Errorf("%s is marked as a route-level mutation; MCP write tools must stay behind the guarded tool branch", key)
 		}
 		if r.perm != authz.GraphRead {
 			t.Errorf("%s permission = %q, want %q", key, r.perm, authz.GraphRead)

@@ -354,7 +354,7 @@ web-contract: ## Regenerate the FE API types from the served OpenAPI contract (S
 	cd web && npm run gen:api
 
 .PHONY: sdk
-sdk: ## Regenerate the published client SDKs (Go + TypeScript + Python) from the served OpenAPI contract (PRODUCT-007); commit the diff
+sdk: ## Regenerate the published client SDKs (Go + TypeScript + Python + Java) from the served OpenAPI contract (PRODUCT-007); commit the diff
 	./scripts/gen-sdk.sh
 
 .PHONY: sdk-check
@@ -362,10 +362,13 @@ sdk-check: ## Verify the published client SDKs are in sync with the served OpenA
 	./scripts/gen-sdk.sh --check
 
 .PHONY: sdk-test
-sdk-test: ## Build and test the Go and Python client SDKs
+sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs
 	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	npm --prefix clients/sdk/typescript run typecheck
+	npm --prefix clients/sdk/typescript test
 	PYTHONPYCACHEPREFIX=$${TMPDIR:-/tmp}/trstctl-sdk-pycache PYTHONPATH=clients/sdk/python/src python3 -m compileall -q clients/sdk/python/src clients/sdk/python/tests
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=clients/sdk/python/src python3 -m unittest discover -s clients/sdk/python/tests -v
+	clients/sdk/java/scripts/run_tests.sh
 
 .PHONY: image
 image: ## Build the control-plane container image (deploy/docker/Dockerfile)

@@ -92,6 +92,8 @@ jobs:
     name: build / sign / publish
     runs-on: ubuntu-latest
     timeout-minutes: 40 # TEST-004 (multi-arch build + sign + SBOM)
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
     permissions:
       contents: read
       packages: write # push to GHCR
@@ -223,6 +225,17 @@ jobs:
           scripts/release/render-kubernetes-agent-daemonset.sh "${GHCR_IMAGE}@${{ steps.build.outputs.digest }}" \
             > dist/kubernetes/trstctl-agent-daemonset.yaml
 
+      - name: Compute SLSA subjects (image + agent manifest)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/trstctl-container.subjects"
+          scripts/release/slsa-subjects.sh image "$subject_file" \
+            "${GHCR_IMAGE}@${{ steps.build.outputs.digest }}" \
+            "${{ steps.build.outputs.digest }}" \
+            dist/kubernetes/trstctl-agent-daemonset.yaml
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
       - name: Upload Kubernetes agent manifest
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -258,6 +271,22 @@ jobs:
           fi
           cosign attest --yes --predicate sbom.cyclonedx.json --type cyclonedx "${GHCR_IMAGE}@${digest}"
 
+  image-provenance:
+    name: slsa / container and manifest provenance
+    needs: [image]
+    permissions:
+      actions: read # slsa-github-generator detects the GitHub Actions environment.
+      id-token: write # SLSA provenance is signed through GitHub OIDC.
+      contents: write # Upload the in-toto provenance to the tag's GitHub Release.
+    # slsa-github-generator requires an exact vX.Y.Z tag for this reusable workflow;
+    # the local SUPPLY-002 pin guard has a narrow self-tested exception for this
+    # official generator because upstream rejects SHA refs.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.image.outputs.slsa_subjects }}
+      provenance-name: trstctl-container-and-manifest.intoto.jsonl
+      upload-assets: true
+
   # The privileged agent runs as a LocalSystem Windows service / root systemd unit
   # on customer infrastructure and holds an mTLS identity to the control plane, so
   # its release artifacts must be authenticated, not just shipped (SUPPLY-001). This
@@ -270,6 +299,8 @@ jobs:
     name: agent / windows sign + publish
     runs-on: ubuntu-latest
     timeout-minutes: 30 # TEST-004
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
     permissions:
       contents: write # create/update the tag's GitHub Release assets
       id-token: write # remote Authenticode signer authenticates this job by OIDC
@@ -328,6 +359,17 @@ jobs:
           done
           ( cd dist && sha256sum -c SHA256SUMS )
 
+      - name: Compute SLSA subjects (Windows agent assets)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/trstctl-agent-windows.subjects"
+          scripts/release/slsa-subjects.sh files "$subject_file" \
+            dist/trstctl-agent.exe \
+            dist/trstctl-agent.msi \
+            dist/SHA256SUMS
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
       - name: Publish Windows agent GitHub Release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -358,6 +400,19 @@ jobs:
             fi
           done
 
+  windows-agent-provenance:
+    name: slsa / windows agent provenance
+    needs: [agent-windows]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.agent-windows.outputs.slsa_subjects }}
+      provenance-name: trstctl-agent-windows.intoto.jsonl
+      upload-assets: true
+
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
   # We push the packaged chart as an OCI artifact to GHCR and cosign-sign it keyless
@@ -369,6 +424,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20 # TEST-004
     needs: [test, required-checks]
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
     permissions:
       contents: read
       packages: write # push chart OCI artifact to GHCR
@@ -407,6 +464,16 @@ jobs:
           # still verify the artifact bytes against this digest).
           ( cd dist && sha256sum "$(basename "$tgz")" > "$(basename "$tgz").sha256" )
 
+      - name: Compute SLSA subjects (Helm chart assets)
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          subject_file="${RUNNER_TEMP}/trstctl-helm-chart.subjects"
+          scripts/release/slsa-subjects.sh files "$subject_file" \
+            "${{ steps.pkg.outputs.tgz }}" \
+            "${{ steps.pkg.outputs.tgz }}.sha256"
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "$subject_file")" >> "$GITHUB_OUTPUT"
+
       - name: Push the chart to GHCR (OCI) and cosign-sign it (keyless)
         env:
           COSIGN_YES: "true"
@@ -428,3 +495,16 @@ jobs:
           path: |
             dist/trstctl-*.tgz
             dist/trstctl-*.tgz.sha256
+
+  helm-chart-provenance:
+    name: slsa / helm chart provenance
+    needs: [helm-chart]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.helm-chart.outputs.slsa_subjects }}
+      provenance-name: trstctl-helm-chart.intoto.jsonl
+      upload-assets: true

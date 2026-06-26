@@ -96,6 +96,40 @@ func ServerCertFromFiles(certFile, keyFile string) (*ServerCert, error) {
 	return &ServerCert{cert: cert, TrustPEM: chainPEM}, nil
 }
 
+// MutualTLSServerListenerFromFiles wraps ln in a TLS 1.3 mutual-auth listener
+// using operator-provided server material and a client CA. It keeps raw
+// crypto/tls and crypto/x509 handling inside the AN-3 boundary while raw TCP
+// protocols such as KMIP consume an ordinary net.Listener.
+func MutualTLSServerListenerFromFiles(ln net.Listener, certFile, keyFile, clientCAFile string) (net.Listener, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: load server certificate: %w", err)
+	}
+	clientCAs, err := loadCAPool(clientCAFile)
+	if err != nil {
+		return nil, err
+	}
+	return tls.NewListener(ln, serverTLSConfig(cert, clientCAs)), nil
+}
+
+// PeerCertificateDER returns the verified peer leaf certificate from a mutual-TLS
+// connection. The TLS listener already performs chain validation; callers get only
+// an opaque DER blob they can pass to their protocol authenticator.
+func PeerCertificateDER(conn net.Conn) ([]byte, error) {
+	tlsConn, ok := conn.(*tls.Conn)
+	if !ok {
+		return nil, fmt.Errorf("mtls: connection is %T, not TLS", conn)
+	}
+	if err := tlsConn.Handshake(); err != nil {
+		return nil, fmt.Errorf("mtls: handshake: %w", err)
+	}
+	state := tlsConn.ConnectionState()
+	if len(state.PeerCertificates) == 0 || state.PeerCertificates[0] == nil {
+		return nil, fmt.Errorf("mtls: no verified peer certificate")
+	}
+	return append([]byte(nil), state.PeerCertificates[0].Raw...), nil
+}
+
 // HybridCurvePreferences returns the key-agreement groups offered by served TLS
 // paths. Hybrid ML-KEM groups come first so a PQ-capable peer negotiates hybrid
 // key exchange; classical groups remain for stock TLS 1.3 clients.

@@ -14,6 +14,11 @@ TypeScript** (with auth, `Idempotency-Key`, cursor iterators, problem+json
 errors, and retries) pinned to that same served contract. See
 [Client SDKs](features/client-sdks.md).
 
+Prefer infrastructure-as-code? trstctl also ships
+[`terraform-provider-trstctl`](terraform-provider.md) for certificate profiles,
+short-lived PKI credentials, and application secrets, backed by the same served
+OpenAPI routes.
+
 ## Global flags
 
 Every command accepts these, each with a `TRSTCTL_*` environment fallback:
@@ -45,7 +50,7 @@ secret injection:
 | `owners` | `create` · `list` · `get` · `update` · `delete` |
 | `issuers` | `create` · `list` · `get` |
 | `ca ceremonies` | `start` · `get` · `approve` |
-| `ca authorities` | `list` · `create-root` · `create-intermediate` · `issue` |
+| `ca authorities` | `list` · `create-root` · `create-intermediate` · `issue-intermediate-csr` · `issue` |
 | `external-cas` | `list` · `issue` |
 | `identities` | `create` · `list` · `get` · `transition` · `approve` |
 | `certificates` | `ingest` · `list` · `get` |
@@ -68,6 +73,10 @@ secret injection:
 | `secrets shares` | `create` · `redeem` |
 | `secrets approvals` | `approve` |
 | `secrets` | `login` · `pki` |
+| `transit keys` | `create` · `rotate` |
+| `transit` | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify` |
+| `managed-keys` | `generate` · `rotate` · `revoke` · `zeroize` |
+| `code-signing` | `sign` · `keyless` |
 | `run` | child process with fetched secrets injected into its environment |
 
 Plus `version`.
@@ -162,6 +171,12 @@ cat > root-create.json <<'JSON'
 JSON
 trstctl-cli ca authorities create-root -f root-create.json
 
+# Sign an external intermediate CA CSR, for example SPIRE's local server CA.
+cat > spire-intermediate.json <<'JSON'
+{"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0,"permitted_dns_domains":["example.org"]}}
+JSON
+trstctl-cli --idempotency-key spire-upstream-root-1 ca authorities issue-intermediate-csr <ca-authority-id> -f spire-intermediate.json
+
 # List configured upstream CAs and issue through one of them.
 trstctl-cli external-cas list
 cat > upstream-issue.json <<'JSON'
@@ -217,6 +232,14 @@ trstctl-cli secrets leases get <lease-id>
 printf '{"extend_seconds":900}' | trstctl-cli --idempotency-key lease-renew-1 secrets leases renew <lease-id> -f -
 trstctl-cli --idempotency-key lease-revoke-1 secrets leases revoke <lease-id>
 
+# Generate and retire an AWS KMS-backed managed key after managed_keys is enabled.
+cat > managed-key.json <<'JSON'
+{"algorithm":"RSA-2048"}
+JSON
+trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.json
+printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f -
+printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f -
+
 # Run rollback-safe static credential rotation through a configured backend rotator.
 cat > static-rotation.json <<'JSON'
 {"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}
@@ -235,6 +258,37 @@ cat > secret-scan.json <<'JSON'
 {"path":"."}
 JSON
 trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f secret-scan.json
+
+# Create a transit AEAD key, encrypt data, rotate, and rewrap to the newest version.
+cat > transit-key.json <<'JSON'
+{"name":"payments","kind":"aead"}
+JSON
+trstctl-cli --idempotency-key transit-payments-create transit keys create -f transit-key.json
+
+cat > transit-encrypt.json <<'JSON'
+{"key":"payments","plaintext":"Y2FyZC10b2tlbi0xMjM=","aad":"dGVuYW50PXBheW1lbnRz"}
+JSON
+trstctl-cli --idempotency-key transit-payments-encrypt transit encrypt -f transit-encrypt.json
+trstctl-cli --idempotency-key transit-payments-rotate transit keys rotate -f transit-key.json
+
+cat > transit-rewrap.json <<'JSON'
+{"key":"payments","ciphertext":"trv:1:<ciphertext-from-encrypt>","aad":"dGVuYW50PXBheW1lbnRz"}
+JSON
+trstctl-cli --idempotency-key transit-payments-rewrap transit rewrap -f transit-rewrap.json
+
+# Sign an artifact digest with a configured code-signing key. The response contains
+# the signature, public key, algorithm, and transparency outbox destination.
+cat > code-sign.json <<'JSON'
+{"key_id":"release-key","artifact_type":"oci-image","digest":"4EW4IfBBkDngEwN3v+ChO06PV2er4tF7nEVmFev3x1g="}
+JSON
+trstctl-cli --idempotency-key release-sign-1 code-signing sign -f code-sign.json
+
+# Sign keylessly with a verified Fulcio/Sigstore identity proof. identity_payload is
+# base64 JSON bytes; the served attestor verifies it before the signature is issued.
+cat > code-sign-keyless.json <<'JSON'
+{"artifact_type":"oci-image","digest":"4EW4IfBBkDngEwN3v+ChO06PV2er4tF7nEVmFev3x1g=","identity_method":"github_oidc","identity_payload":"eyJqd3QiOiJleGFtcGxlIn0=","fulcio_san":"repo:acme/payments:ref:refs/heads/main","fulcio_issuer":"https://token.actions.githubusercontent.com"}
+JSON
+trstctl-cli --idempotency-key release-keyless-1 code-signing keyless -f code-sign-keyless.json
 
 # On an enrolled host, report local public certificate files over the agent channel.
 trstctl-agent --enroll-url https://localhost:8443 \

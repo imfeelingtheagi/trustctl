@@ -226,6 +226,50 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 	return authorityResponse(created), nil
 }
 
+func (h *caHierarchyService) IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req api.CAIssueIntermediateRequest) (api.CAIssuedIntermediate, error) {
+	if len(req.CSRDER) == 0 {
+		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: CSR is required", api.ErrCAHierarchyInvalid)
+	}
+	if req.Spec.TTLSeconds <= 0 {
+		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: spec.ttl_seconds must be positive", api.ErrCAHierarchyInvalid)
+	}
+	if err := validateCASpec(req.Spec); err != nil {
+		return api.CAIssuedIntermediate{}, err
+	}
+	ca, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return api.CAIssuedIntermediate{}, err
+	}
+	signer, err := h.signerForAuthority(ctx, ca)
+	if err != nil {
+		return api.CAIssuedIntermediate{}, err
+	}
+	caDER, err := firstCertDER(ca.CertificatePEM)
+	if err != nil {
+		return api.CAIssuedIntermediate{}, err
+	}
+	profile := cryptoProfile(req.Spec)
+	if len(profile.PermittedDNSDomains) == 0 {
+		profile.PermittedDNSDomains = append([]string(nil), ca.PermittedDNSNames...)
+	}
+	issued, err := crypto.SignIntermediateHierarchyCAFromCSR(caDER, signer, req.CSRDER, profile)
+	if err != nil {
+		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	info, err := certinfo.Inspect(issued.CertificateDER)
+	if err != nil {
+		return api.CAIssuedIntermediate{}, err
+	}
+	out := append([]byte{}, issued.CertificatePEM...)
+	out = append(out, []byte(ca.CertificatePEM)...)
+	if err := h.emit(ctx, tenantID, "ca.intermediate_csr.issued", map[string]any{
+		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject,
+	}); err != nil {
+		return api.CAIssuedIntermediate{}, err
+	}
+	return api.CAIssuedIntermediate{CertificatePEM: string(out), Serial: info.SerialNumber, NotAfter: info.NotAfter}, nil
+}
+
 func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID string, req api.CAIssueLeafRequest) (api.CAIssuedLeaf, error) {
 	if len(req.CSRDER) == 0 {
 		return api.CAIssuedLeaf{}, fmt.Errorf("%w: CSR is required", api.ErrCAHierarchyInvalid)

@@ -59,6 +59,23 @@ func TestMCPNoWriteTools(t *testing.T) {
 	}
 }
 
+func TestMCPWriteToolsAreExplicitOptInMetadata(t *testing.T) {
+	rec := &auditsink.Recorder{}
+	base := newServer(t, rec, NewRateLimiter(100, time.Minute))
+	enabled := New(base.tenantID, base.pipeline, base.synth, base.rate, rec, base.identity, WithWriteTools())
+	if !enabled.HasWriteTool() {
+		t.Fatal("WithWriteTools should expose guarded write-tool metadata")
+	}
+	for _, want := range []string{"issue_certificate", "rotate_certificate"} {
+		if !enabled.IsWriteTool(want) || !containsString(enabled.Tools(), want) {
+			t.Fatalf("enabled MCP write tools missing %q: %v", want, enabled.Tools())
+		}
+	}
+	if _, err := enabled.Call(context.Background(), "a", "t1", "issue_certificate", "x"); err == nil {
+		t.Fatal("write tools must not execute through the read-only Call path")
+	}
+}
+
 func TestMCPRateLimitTripsUnderEnumeration(t *testing.T) {
 	s := newServer(t, &auditsink.Recorder{}, NewRateLimiter(3, time.Minute))
 	ctx := context.Background()
@@ -98,4 +115,13 @@ func TestMCPHoldsBrokerIdentity(t *testing.T) {
 	if s.Identity() == "" {
 		t.Error("MCP server has no broker-issued identity")
 	}
+}
+
+func containsString(vals []string, want string) bool {
+	for _, v := range vals {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }

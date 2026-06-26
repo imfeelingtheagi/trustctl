@@ -41,6 +41,7 @@ const (
 	EventCACeremonyApproved            = "ca.ceremony.approved"
 	EventCARootCreated                 = "ca.root.created"
 	EventCAIntermediateCreated         = "ca.intermediate.created"
+	EventCAIntermediateCSRIssued       = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued             = "ca.endentity.issued"
 	EventDiscoverySourceUpserted       = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted     = "discovery.schedule.upserted"
@@ -121,6 +122,7 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "approve_ceremony", "approveCACeremony", []string{EventCACeremonyApproved}},
 	{"F48", "Private/enterprise CA hierarchy management", "create_root", "createRootCA", []string{EventCARootCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "create_intermediate", "createIntermediateCA", []string{EventCAIntermediateCreated}},
+	{"F48", "Private/enterprise CA hierarchy management", "issue_external_intermediate", "issueIntermediateCAFromCSR", []string{EventCAIntermediateCSRIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 
 	// F7 — Deployment connectors (delivery receipts are event-sourced evidence).

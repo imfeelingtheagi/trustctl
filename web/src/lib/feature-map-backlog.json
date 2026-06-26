@@ -1539,10 +1539,20 @@
         "listCAAuthorities",
         "createRootCA",
         "createIntermediateCA",
+        "issueIntermediateCAFromCSR",
         "issueHierarchyLeaf"
       ],
       "api_na": "",
-      "cli_surface": ["workloads attested-issuance"],
+      "cli_surface": [
+        "ca ceremonies start",
+        "ca ceremonies get",
+        "ca ceremonies approve",
+        "ca authorities list",
+        "ca authorities create-root",
+        "ca authorities create-intermediate",
+        "ca authorities issue-intermediate-csr",
+        "ca authorities issue"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -1561,14 +1571,14 @@
         },
         "cli": {
           "evidence": [
-            "cli_surface: workloads attested-issuance posts the attestation proof and public key body to the served attested issuance route with an Idempotency-Key."
+            "CLI parity exposes the CA ceremony and CA authority commands, including ca authorities issue-intermediate-csr for SPIRE/upstream-authority CSRs."
           ],
-          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
           "evidence": [
-            "api_surface: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, createIntermediateCA, issueHierarchyLeaf are in the served OpenAPI route registry.",
-            "OpenAPI schemas define CACeremonyStartRequest, CAKeyCeremony, CAAuthority, and CAIssuedLeaf."
+            "api_surface: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, createIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf are in the served OpenAPI route registry.",
+            "OpenAPI schemas define CACeremonyStartRequest, CAKeyCeremony, CAAuthority, CAIssueIntermediateRequest, CAIssuedIntermediate, and CAIssuedLeaf."
           ],
           "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/ca_hierarchy.go"]
         },
@@ -1592,14 +1602,14 @@
         },
         "rbac": {
           "evidence": [
-            "CA hierarchy route registry maps ceremony/authority reads to issuers:read, ceremony/root/intermediate mutations to issuers:write, and leaf issuance to certs:issue.",
-            "feature authz manifest maps api_surface operations to route permissions: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, createIntermediateCA, issueHierarchyLeaf."
+            "CA hierarchy route registry maps ceremony/authority reads to issuers:read, ceremony/root/intermediate mutations to issuers:write, and leaf/external-intermediate CSR issuance to certs:issue.",
+            "feature authz manifest maps api_surface operations to route permissions: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, createIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf."
           ],
           "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
           "evidence": [
-            "F48 mutating API operations append ca.ceremony.started, ca.ceremony.approved, ca.root.created, ca.intermediate.created, and ca.endentity.issued events.",
+            "F48 mutating API operations append ca.ceremony.started, ca.ceremony.approved, ca.root.created, ca.intermediate.created, ca.intermediate_csr.issued, and ca.endentity.issued events.",
             "eventledger maps the F48 ceremony/create/issue operations to those event types for audit feature filtering."
           ],
           "refs": ["internal/server/ca_hierarchy.go", "internal/eventledger/ledger.go"]
@@ -1887,23 +1897,49 @@
       "domain": "Issuance and CAs",
       "phase": "P2",
       "priority": 54,
-      "served_state": "library",
-      "backend_status": "backend interfaces and doubles; native maturity varies",
+      "served_state": "served",
+      "backend_status": "served AWS KMS managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers generate/rotate/revoke/zeroize; PKCS#11 has a real SoftHSM-proven native binding",
       "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus library-tier disclosure without key bytes; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
-      "acceptance_test": "UI never exposes key material and displays only public metadata/health for configured backends.",
-      "source_docs": ["docs/features/issuance-and-cas.md"],
-      "source_backend": ["internal/kms", "internal/crypto/backend.go"],
+      "acceptance_test": "Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
+      "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"],
+      "source_backend": [
+        "internal/api/managedkeys.go",
+        "internal/server/managedkeys.go",
+        "internal/server/managedkeys_config.go",
+        "internal/server/managedkeys_localstack_served_test.go",
+        "internal/kms",
+        "internal/crypto/backend.go",
+        "internal/kms/pkcs11/session_cgo.go",
+        "internal/kms/pkcs11/softhsm_real_test.go"
+      ],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": [
+        "generateManagedKey",
+        "rotateManagedKey",
+        "revokeManagedKey",
+        "zeroizeManagedKey"
+      ],
+      "cli_surface": [
+        "managed-keys generate",
+        "managed-keys rotate",
+        "managed-keys revoke",
+        "managed-keys zeroize"
+      ],
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; backend interfaces and doubles; native maturity varies; no GA-served runtime path is claimed."
+          "evidence": [
+            "Managed-key custody is wired into the served production composition when managed_keys.enabled=true.",
+            "The routes fail closed when no KMS/HSM backend is configured and serve generate/rotate/revoke/zeroize when one is configured."
+          ],
+          "refs": [
+            "internal/api/managedkeys.go",
+            "internal/server/managedkeys.go",
+            "internal/server/managedkeys_config.go",
+            "internal/server/server.go"
+          ]
         },
         "ui": {
           "evidence": [
@@ -1913,35 +1949,54 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI parity exposes managed-keys generate, rotate, revoke, and zeroize against the same served API routes."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI includes the managed-key lifecycle routes and key-material-free response schemas."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/managedkeys.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI never exposes key material and displays only public metadata/health for configured backends.",
+            "acceptance_test: Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present.",
+            "KMS-03 acceptance: TestPKCS11SoftHSMContainerGenerateSign initializes a SoftHSM token in Docker and runs the cgo-tagged real binding conformance test.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/managedkeys_localstack_served_test.go",
+            "internal/kms/pkcs11/softhsm_container_test.go",
+            "internal/kms/pkcs11/session_cgo.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/issuance-and-cas.md"],
-          "refs": ["docs/features/issuance-and-cas.md"]
+          "evidence": ["documented in docs/features/issuance-and-cas.md, docs/configuration.md, and docs/limitations.md"],
+          "refs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "managed-key lifecycle routes require keys:write and authenticated tenant context; the feature authz manifest/test covers generateManagedKey, rotateManagedKey, revokeManagedKey, and zeroizeManagedKey."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/managedkeys.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F26; current mapping is disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus library-tier disclosure without key bytes; coverage ledger: /coverage."
+          "evidence": [
+            "managed-key generate/rotate/revoke/zeroize emit byok.key.* lifecycle events without private material."
+          ],
+          "refs": ["internal/server/managedkeys.go", "internal/managedkeys/managedkeys.go", "internal/server/managedkeys_localstack_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F26 has a served API/protocol entrypoint."
+          "evidence": [
+            "No dedicated HSM health metric is claimed yet; runtime signal is the served lifecycle event/audit trail and fail-closed route behavior."
+          ],
+          "refs": ["internal/server/managedkeys_localstack_served_test.go", "internal/managedkeys/managedkeys.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -4041,44 +4096,56 @@
       "domain": "Code signing and timestamping",
       "phase": "P2",
       "priority": 71,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, and audit disclosure without live signing; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served API + CLI",
+      "current_frontend_mapping": "disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, Rekor outbox destination, and audit disclosure backed by served API/CLI; coverage ledger: /coverage",
       "target_gui_mapping": "Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence.",
-      "acceptance_test": "UI must show library-only status until served API exists and tests approval-required signing request fixtures.",
+      "acceptance_test": "Served test signs an artifact digest with a managed key and signs keylessly against Fulcio/Rekor fixtures through the real API, auth, idempotency, event log, and outbox dispatcher.",
       "source_docs": ["docs/features/code-signing-and-timestamping.md"],
-      "source_backend": ["internal/codesign"],
+      "source_backend": ["internal/codesign", "internal/api/codesign.go", "internal/server/codesign.go", "internal/server/codesign_served_test.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "CLM-06 wires F50 into the served path: /api/v1/code-signing/sign and /api/v1/code-signing/keyless require keys:write + Idempotency-Key, derive signer principal from auth, emit codesign.* events, and queue transparency.rekor outbox rows delivered through a Rekor fixture. Test evidence: go test ./internal/server -run TestServedCodeSigningKeyBasedAndKeylessSigstore -count=1 -v.",
+      "api_surface": ["signCodeArtifact", "signCodeArtifactKeyless"],
+      "api_na": "",
+      "cli_surface": ["code-signing sign", "code-signing keyless"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "server.Build wires CodeSigningConfig into api.WithCodeSigning and serves POST /api/v1/code-signing/sign plus POST /api/v1/code-signing/keyless when a key resolver/attestor config is supplied.",
+            "Served requests are tenant-scoped, idempotent mutations and queue transparency.rekor outbox rows instead of calling Rekor inline."
+          ],
+          "refs": ["internal/server/codesign.go", "internal/server/server.go", "internal/api/codesign.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, and audit disclosure without live signing; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, Rekor outbox destination, and audit disclosure backed by served API/CLI; coverage ledger: /coverage",
             "target_gui_mapping: Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "trstctl-cli exposes code-signing sign and code-signing keyless commands over the served API."
+          ],
+          "refs": ["internal/cli/command.go", "docs/cli.md"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationIds signCodeArtifact and signCodeArtifactKeyless publish the code-signing request and signature schemas."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/codesign.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI must show library-only status until served API exists and tests approval-required signing request fixtures.",
+            "acceptance_test: Served test signs an artifact digest with a managed key and signs keylessly against Fulcio/Rekor fixtures through the real API, auth, idempotency, event log, and outbox dispatcher.",
+            "TestServedCodeSigningKeyBasedAndKeylessSigstore verifies both signatures and dispatches two transparency.rekor outbox rows to a Rekor fixture.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/codesign_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -4089,13 +4156,22 @@
           "refs": ["docs/features/code-signing-and-timestamping.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "Both code-signing routes require keys:write through the shared API guard; the signer principal is read from the authenticated authz.Principal. The feature authz manifest/test covers served API operation permissions."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/codesign.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F50; current mapping is disclosure: CodeSigning at /codesign - signing request ledger, key/keyless modes, approvals, policy decision, signature receipt, and audit disclosure without live signing; coverage ledger: /coverage."
+          "evidence": [
+            "Served signing emits codesign.signed and codesign.keyless.signed events through the event log auditor; keyless verification emits attestation.verified."
+          ],
+          "refs": ["internal/codesign/codesign.go", "internal/server/codesign.go", "internal/attest/attest.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F50 has a served API/protocol entrypoint."
+          "evidence": [
+            "Transparency publication uses the shared outbox retry/circuit machinery and is visible through /api/v1/connectors/outbox-circuits by destination."
+          ],
+          "refs": ["internal/orchestrator/outbox.go", "internal/server/issuance.go", "internal/api/connectors_lifecycle.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -5096,23 +5172,46 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 78,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - served transit API/CLI for key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; KMIP mTLS listener served for AES-256 SymmetricKey Create/Get; coverage ledger: /coverage",
       "target_gui_mapping": "Transit/KMIP UI for keys, encrypt/decrypt test, HMAC/sign/verify, key versions, rewrap, audit, and appliance profile status.",
       "acceptance_test": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/transit", "internal/kmip"],
+      "source_backend": ["internal/transit", "internal/kmip", "internal/api/transit.go", "internal/server/server.go", "internal/server/kmip.go", "internal/cli/command.go"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": [
+        "createTransitKey",
+        "rotateTransitKey",
+        "encryptTransit",
+        "decryptTransit",
+        "rewrapTransit",
+        "hmacTransit",
+        "signTransit",
+        "verifyTransit"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "transit keys create",
+        "transit keys rotate",
+        "transit encrypt",
+        "transit decrypt",
+        "transit rewrap",
+        "transit hmac",
+        "transit sign",
+        "transit verify"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served transit API mounted at /api/v1/transit for key create/rotate, encrypt/decrypt, rewrap, HMAC, sign, and verify",
+            "served KMIP mTLS listener handles PyKMIP AES-256 SymmetricKey Create/Get",
+            "backend_status=served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get"
+          ],
+          "refs": ["internal/api/transit.go", "internal/api/api.go", "internal/server/server.go", "internal/server/kmip.go", "internal/transit/transit.go", "internal/kmip/wire.go"]
         },
         "ui": {
           "evidence": [
@@ -5122,35 +5221,67 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: transit keys create",
+            "CLI command: transit keys rotate",
+            "CLI command: transit encrypt",
+            "CLI command: transit decrypt",
+            "CLI command: transit rewrap",
+            "CLI command: transit hmac",
+            "CLI command: transit sign",
+            "CLI command: transit verify"
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go", "docs/cli.md"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createTransitKey",
+            "OpenAPI operationId: rotateTransitKey",
+            "OpenAPI operationId: encryptTransit",
+            "OpenAPI operationId: decryptTransit",
+            "OpenAPI operationId: rewrapTransit",
+            "OpenAPI operationId: hmacTransit",
+            "OpenAPI operationId: signTransit",
+            "OpenAPI operationId: verifyTransit"
+          ],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
+            "acceptance_test: served Transit API creates a key, encrypts, rotates, rewraps, decrypts, and records audit events.",
+            "acceptance_test: real PyKMIP client container creates and retrieves an AES-256 SymmetricKey over the served KMIP mTLS listener.",
+            "memory-hygiene acceptance confirms Destroy zeroizes held AEAD key bytes.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/transit_served_test.go",
+            "internal/server/kmip_served_test.go",
+            "internal/transit/transit_more_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/secrets.md"],
-          "refs": ["docs/features/secrets.md"]
+          "evidence": ["documented in docs/features/secrets.md", "KMIP listener configuration documented in docs/configuration.md"],
+          "refs": ["docs/features/secrets.md", "docs/configuration.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest maps transit operations to keys:write for create/rotate/encrypt/decrypt/rewrap/hmac/sign and keys:read for verify"
+          ],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/featureparity/authz_manifest.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F66; current mapping is disclosure: Secrets at /secrets - transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "mutating served transit operations emit immutable events such as transit.key.created, transit.key.rotated, transit.encrypt, transit.rewrap, transit.hmac, and transit.sign",
+            "served KMIP Create emits immutable kmip.object.created events"
+          ],
+          "refs": ["internal/transit/transit.go", "internal/server/transit_served_test.go", "internal/kmip/kmip.go", "internal/server/kmip_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F66 has a served API/protocol entrypoint."
+          "na": "N/A: KMS-01/KMS-02 serve Transit and KMIP immutable audit paths, but no dedicated Transit/KMIP feature metric is claimed yet."
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

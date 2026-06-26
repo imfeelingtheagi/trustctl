@@ -29,10 +29,10 @@ import (
 //     when a model IS configured every prompt crosses the boundary redactor + the
 //     residual-entropy refuse-gate before any egress (AN-8 / SURFACE-004).
 //
-// The surface is OFF unless Deps.EnableAISurface is set (fail closed). When on it is
-// READ-ONLY (no write/remediation tools), tenant-scoped under RLS (the tenant is the
-// authenticated principal's, never a request field — AN-1), auth-gated, and
-// rate-limited.
+// The surface is OFF unless Deps.EnableAISurface is set (fail closed). When on, MCP
+// investigation stays read-only unless Deps.EnableMCPWriteTools is also set. All calls
+// are tenant-scoped under RLS (the tenant is the authenticated principal's, never a
+// request field — AN-1), auth-gated, and rate-limited.
 
 // buildAISurfaceBackend assembles the api.AISurfaceBackend from the assembled server's
 // dependencies. The query engine reads under RLS for the caller's tenant only and is
@@ -48,13 +48,14 @@ func (s *Server) buildAISurfaceBackend(d Deps) api.AISurfaceBackend {
 	}
 	engine := query.New(d.Store, d.Log, pool, query.DefaultConfig())
 	return api.AISurfaceBackend{
-		Query:       engine,
-		Audit:       audit.NewAuditor(s.log),
-		Model:       d.AIModel, // nil → air-gapped (no model); opt-in only (AN-8 posture)
-		ModelStatus: d.AIModelStatus,
-		MCPIdentity: d.AIMCPIdentity,
-		RateMax:     d.AIRateMax,
-		RateWindow:  d.AIRateWindow,
+		Query:         engine,
+		Audit:         audit.NewAuditor(s.log),
+		Model:         d.AIModel, // nil → air-gapped (no model); opt-in only (AN-8 posture)
+		ModelStatus:   d.AIModelStatus,
+		MCPIdentity:   d.AIMCPIdentity,
+		MCPWriteTools: d.EnableMCPWriteTools,
+		RateMax:       d.AIRateMax,
+		RateWindow:    d.AIRateWindow,
 	}
 }
 

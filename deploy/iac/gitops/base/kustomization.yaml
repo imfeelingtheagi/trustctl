@@ -1,0 +1,5 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - trstctl-terraform-config.yaml
+  - trstctl-terraform-apply-job.yaml

@@ -3,13 +3,11 @@
 // create a key pair and returns a crypto.Signer that signs via the token's C_Sign — the
 // private key never leaves the HSM, satisfying AN-8 for sealed key material.
 //
-// PKCS#11 (e.g. SoftHSM in tests) behind the AN-3 boundary; the cgo module binding
-// (miekg/pkcs11) is a deferred follow-up — the backend operates over the Session seam,
-// validated against a software-backed double. A real binding would, in New, dlopen the
-// module at a configured path, C_Initialize it, open a session against the chosen slot,
-// and C_Login with the token PIN; that session would then implement the Session seam
-// below. None of crypto/* is imported here: every digest and signature routes through
-// internal/crypto, so adding the cgo binding later is a single, confined change.
+// OpenModuleSession is the cgo adapter over github.com/miekg/pkcs11: it dlopens the
+// configured module, C_Initialize's it, opens the selected token slot, and C_Login's
+// with the token PIN. That real session implements the same seam as the software test
+// double. None of crypto/* is imported here: every digest, public-key marshaling step,
+// and signature verification helper routes through internal/crypto.
 package pkcs11
 
 import (
@@ -19,11 +17,10 @@ import (
 )
 
 // Session is the injectable seam onto a logged-in PKCS#11 token session. It is the only
-// surface the backend depends on, so the cgo module binding (miekg/pkcs11) — which is a
-// deferred follow-up and not vendored — slots in by implementing these three methods,
-// and tests substitute a software-backed double. A handle is the opaque, token-local
-// identifier of a key pair (a CKA_LABEL or CKA_ID in a real module); the backend treats
-// it as an opaque string and never inspects it.
+// surface the backend depends on, so the cgo module binding (miekg/pkcs11) and the
+// software-backed test double both implement these three methods. A handle is the
+// opaque, token-local identifier of a key pair (a CKA_LABEL or CKA_ID in a real
+// module); the backend treats it as an opaque string and never inspects it.
 type Session interface {
 	// GenerateKey creates a key pair on the token for alg and returns its handle and
 	// the PKIX/DER (SubjectPublicKeyInfo) encoding of the public key. The private key
@@ -45,15 +42,13 @@ type Backend struct {
 var _ crypto.Backend = (*Backend)(nil)
 
 // Option configures a Backend. It exists so the constructor can grow token-selection
-// knobs (module path, slot, PIN source) once the cgo binding lands without changing
-// callers; today there are no options.
+// knobs without changing callers; today there are no options.
 type Option func(*Backend)
 
 // New returns a PKCS#11 backend over an already-opened, logged-in token session.
 //
-// The session is the AN-3 seam: a real deployment would build it by opening the module
-// at its configured path and logging in with the token PIN (the cgo binding is a
-// deferred follow-up and is not vendored), while tests pass a software-backed double.
+// The session is the AN-3 seam: a real deployment builds it with OpenModuleSession,
+// while fast unit tests pass a software-backed double.
 func New(session Session, opts ...Option) *Backend {
 	b := &Backend{session: session}
 	for _, o := range opts {

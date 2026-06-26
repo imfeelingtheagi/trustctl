@@ -79,6 +79,45 @@ signing service; JWT-SVIDs use the signer-backed JWT handle and are validated ag
 the served JWT bundle. The Workload-API gRPC/protobuf contract is vendored verbatim
 from go-spiffe so the wire format is byte-identical.
 
+### SPIRE upstream authority — keep SPIRE, anchor it in trstctl
+
+If you already run [SPIRE](../glossary.md), trstctl can sit above it as the upstream
+private CA. The `trstctl-spire-upstream-authority` plugin implements SPIRE's
+UpstreamAuthority interface: SPIRE generates and keeps its local CA private key,
+sends only a CSR to trstctl, and receives a signed intermediate CA chain back. In
+plain terms, SPIRE keeps doing the local workload minting it is good at, while trstctl
+becomes the governed root of trust with tenant-scoped API auth, idempotency, audit,
+and signer-backed CA custody.
+
+The plugin calls the served route
+`POST /api/v1/ca/authorities/{id}/intermediates/csr`. The request contains
+`csr_pem` and a CA profile (`common_name`, `ttl_seconds`, `max_path_len`, and optional
+DNS constraints). The token comes from a file mounted into the SPIRE server container,
+not from command-line arguments, and the plugin sends a stable `Idempotency-Key` for
+the CSR so SPIRE retries do not mint duplicate intermediates. The response is the
+SPIRE intermediate plus the trstctl upstream root.
+
+```hcl
+UpstreamAuthority "trstctl" {
+  plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
+  plugin_data {
+    endpoint = "https://trstctl.example.com:8443"
+    ca_authority_id = "11111111-1111-1111-1111-111111111111"
+    token_file = "/run/secrets/trstctl-spire-token"
+    common_name = "SPIRE Server CA"
+    ttl_seconds = 3600
+    max_path_len = 0
+    permitted_dns_domains = ["example.org"]
+  }
+}
+```
+
+**Status:** **served and container-proven for X.509.** CI starts a real SPIRE server
+container, loads the trstctl upstream-authority plugin, has SPIRE mint an X.509-SVID,
+and verifies the chain as workload leaf -> SPIRE intermediate -> trstctl root.
+SPIRE's optional JWT upstream publication method is not claimed by this plugin; use it
+for X.509-SVID trust anchoring.
+
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
 The ephemeral issuer ties it together: it takes an attestation, verifies it (refusing to
@@ -150,6 +189,14 @@ Those map to `POST /api/v1/identities` and `POST /api/v1/identities/{id}/transit
 UDS (`protocols.spiffe.enabled`): workloads fetch X.509-SVIDs and JWT-SVIDs from the
 same socket, fetch both bundle types, and validate JWT-SVIDs through the served
 `ValidateJWTSVID` RPC.
+
+If SPIRE already runs in the cluster, install the plugin binary into the SPIRE server
+container image or mount it from a read-only volume, then configure the
+`UpstreamAuthority "trstctl"` block shown above. The API token in `token_file` needs
+`certs:issue` on the tenant that owns the CA authority. On startup, SPIRE sends a CSR
+for its local CA key; trstctl signs that CSR through
+`/api/v1/ca/authorities/{id}/intermediates/csr`; and workloads continue using normal
+SPIRE Workload API clients.
 
 Attested X.509-SVID issuance is also served when the operator wires the attester trust
 sources into the binary:
@@ -241,6 +288,7 @@ without minting twice.
 |---|---|
 | NHI lifecycle routes (F59) | **Served** — `/api/v1/identities`, `/transitions` |
 | SPIFFE Workload API (F24) | **Served** — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` are wired to the signer-backed served path |
+| SPIRE upstream authority | **Served and container-proven for X.509** — SPIRE loads `trstctl-spire-upstream-authority`, trstctl signs SPIRE's intermediate CA CSR through `/api/v1/ca/authorities/{id}/intermediates/csr`, and the e2e verifies a minted SVID chain to the trstctl root |
 | Ephemeral issuance (F25) | **Served when configured** — direct attested X.509-SVID mint is `POST /api/v1/workloads/attested-issuance`; approval-gated JIT mint is `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{request_id}/approvals` |
 | Attestation chain (F30) | **Served when configured** — six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; conformance still covers each attester |
 | AI-agent broker (F61) | **Served when configured** — `POST /api/v1/broker/agent-identities` and `trstctl-cli broker agent-identities issue` verify proof, gate policy, mint a short-lived credential, and project the graph grant |
@@ -260,7 +308,8 @@ the point, but plan for it.
   `POST /api/v1/workloads/attested-issuance`,
   `POST /api/v1/ephemeral`,
   `POST /api/v1/ephemeral/{request_id}/approvals`,
-  `POST /api/v1/broker/agent-identities`.
+  `POST /api/v1/broker/agent-identities`,
+  `POST /api/v1/ca/authorities/{id}/intermediates/csr`.
 - **Attestation methods:** `tpm`, `aws_iid`, `gcp_iit`, `azure_imds`, `k8s_sat`,
   `github_oidc`.
 - **SPIFFE:** `FetchX509SVID`, `FetchX509Bundles`, `FetchJWTSVID`,

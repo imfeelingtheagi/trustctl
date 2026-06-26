@@ -13,6 +13,9 @@
       "import": "./src/index.ts"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "src",
     "README.md"
@@ -23,7 +26,8 @@
   "scripts": {
     "gen": "openapi-typescript ../openapi.json -o ./src/types.gen.ts",
     "gen:check": "openapi-typescript ../openapi.json -o ./src/types.gen.ts && git diff --exit-code -- ./src/types.gen.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "npx --yes -p typescript@^5.5.0 tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/sdk.test.mjs"
   },
   "devDependencies": {
     "openapi-typescript": "^7.5.0",

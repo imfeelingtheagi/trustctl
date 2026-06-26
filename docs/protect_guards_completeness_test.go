@@ -168,8 +168,11 @@ func TestSupply104ThirdPartyActionsAreShaPinned(t *testing.T) {
 
 	// Independently re-derive the invariant: scan every workflow file and assert each
 	// external `uses:` (owner/repo[/path]@ref; not ./local, not docker://) is pinned
-	// to a 40-hex SHA. This is the load-bearing behavior, not just the script's text.
+	// to a 40-hex SHA. The only allowed tag is slsa-github-generator's official
+	// generic reusable workflow, because upstream requires an exact vX.Y.Z tag and
+	// rejects SHA refs. This is the load-bearing behavior, not just the script's text.
 	sha := regexp.MustCompile(`^[0-9a-f]{40}$`)
+	slsaGeneric := regexp.MustCompile(`^slsa-framework/slsa-github-generator/\.github/workflows/generator_generic_slsa3\.yml@v[0-9]+\.[0-9]+\.[0-9]+$`)
 	usesLine := regexp.MustCompile(`(?m)^\s*-?\s*uses:\s*(.+)$`)
 	wfDir := filepath.FromSlash("../.github/workflows")
 	entries, err := os.ReadDir(wfDir)
@@ -196,6 +199,9 @@ func TestSupply104ThirdPartyActionsAreShaPinned(t *testing.T) {
 				continue // not an owner/repo@ref third-party action
 			}
 			external++
+			if slsaGeneric.MatchString(val) {
+				continue
+			}
 			if ref := val[at+1:]; !sha.MatchString(ref) {
 				t.Errorf("SUPPLY-104: %s pins third-party action %q by a mutable ref %q, not a 40-hex commit SHA", e.Name(), val[:at], ref)
 			}

@@ -38,6 +38,7 @@ var requiredPages = []string{
 	"security/vulnerability-management.md",
 	"troubleshooting.md",
 	"cli.md",
+	"terraform-provider.md",
 	"telemetry.md",
 	"guides/plugin-authoring.md",
 	"guides/connector-authoring.md",
@@ -111,6 +112,308 @@ func TestWebAvailabilityCopyIsBackedByOpenAPIAndCLI(t *testing.T) {
 		}
 		if !commands[claim.cmd] {
 			t.Errorf("served availability anchor %s missing CLI command %q", claim.name, claim.cmd)
+		}
+	}
+}
+
+func TestTerraformProviderDocsStayWired(t *testing.T) {
+	doc := strings.ToLower(read(t, "terraform-provider.md"))
+	for _, want := range []string{
+		"terraform-provider-trstctl",
+		"generated from the served openapi contract",
+		"trstctl_profile",
+		"trstctl_pki_certificate",
+		"trstctl_secret",
+		"idempotency-key",
+		"trstctl_run_terraform_acc=1",
+		"testterraformapplycreatesprofilecertificateandsecret",
+		"terraform state",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("terraform-provider.md missing %q", want)
+		}
+	}
+	if _, err := os.Stat(filepath.FromSlash("../cmd/terraform-provider-trstctl/main.go")); err != nil {
+		t.Fatalf("terraform provider binary entrypoint missing: %v", err)
+	}
+	for _, path := range []string{
+		"../internal/terraformprovider/provider.go",
+		"../internal/terraformprovider/resource_profile.go",
+		"../internal/terraformprovider/resource_pki_certificate.go",
+		"../internal/terraformprovider/resource_secret.go",
+		"../internal/terraformprovider/openapi_routes.gen.go",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Fatalf("terraform provider implementation file %s missing: %v", path, err)
+		}
+	}
+	openapiRoutes := read(t, "../internal/terraformprovider/openapi_routes.gen.go")
+	for _, want := range []string{
+		"routeCreateProfilePath",
+		"routeIssuePKISecretPath",
+		"routeCreateSecretPath",
+		"routeRotateSecretPath",
+		"routeDeleteSecretPath",
+	} {
+		if !strings.Contains(openapiRoutes, want) {
+			t.Errorf("generated Terraform route constants missing %s", want)
+		}
+	}
+}
+
+func TestIACGitOpsPulumiGitLabDocsStayWired(t *testing.T) {
+	doc := strings.ToLower(read(t, "terraform-provider.md"))
+	for _, want := range []string{
+		"gitops, pulumi, and gitlab ci",
+		"deploy/iac/gitops/base",
+		"deploy/iac/gitops/argocd/application.yaml",
+		"deploy/iac/gitops/flux/kustomization.yaml",
+		"deploy/iac/pulumi/trstctl-resources",
+		"deploy/iac/gitlab/trstctl-iac.gitlab-ci.yml",
+		"testgitopsandpulumiexamplesprovisiontrstctlresources",
+		"/api/v1/profiles",
+		"/api/v1/secrets/pki",
+		"/api/v1/secrets/store",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("terraform-provider.md missing IaC/GitOps marker %q", want)
+		}
+	}
+	for _, path := range []string{
+		"../deploy/iac/gitops/base/kustomization.yaml",
+		"../deploy/iac/gitops/base/trstctl-terraform-config.yaml",
+		"../deploy/iac/gitops/base/trstctl-terraform-apply-job.yaml",
+		"../deploy/iac/gitops/argocd/application.yaml",
+		"../deploy/iac/gitops/flux/kustomization.yaml",
+		"../deploy/iac/pulumi/trstctl-resources/Pulumi.yaml",
+		"../deploy/iac/pulumi/trstctl-resources/index.ts",
+		"../deploy/iac/pulumi/trstctl-resources/trstctl.resources.json",
+		"../deploy/iac/gitlab/trstctl-iac.gitlab-ci.yml",
+		"../deploy/iac/iac_test.go",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Fatalf("IaC/GitOps artifact %s missing: %v", path, err)
+		}
+	}
+	test := strings.ToLower(read(t, "../deploy/iac/iac_test.go"))
+	for _, want := range []string{
+		"testgitopsandpulumiexamplesprovisiontrstctlresources",
+		"testgitopscontrollersandgitlabtemplatearewired",
+		"authorization",
+		"idempotency-key",
+	} {
+		if !strings.Contains(test, want) {
+			t.Errorf("deploy/iac/iac_test.go missing %q", want)
+		}
+	}
+}
+
+func TestPythonSDKDocsStayWired(t *testing.T) {
+	doc := strings.ToLower(read(t, "features/client-sdks.md"))
+	for _, want := range []string{
+		"supported client sdks for go, typescript, python, and java",
+		"trstctl-sdk",
+		"trstctlclient.from_env",
+		"problemerror",
+		"issue_pki_secret",
+		"create_secret",
+		"secret create/read/rotate/delete",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("features/client-sdks.md missing Python SDK marker %q", want)
+		}
+	}
+	readme := strings.ToLower(read(t, "../clients/sdk/README.md"))
+	for _, want := range []string{
+		"python sdk",
+		"trstctl-python-sdk/1",
+		"python typeddict",
+		"auth + pki issue + secret",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("clients/sdk/README.md missing Python SDK marker %q", want)
+		}
+	}
+	for _, path := range []string{
+		"../clients/sdk/python/pyproject.toml",
+		"../clients/sdk/python/src/trstctl_sdk/client.py",
+		"../clients/sdk/python/src/trstctl_sdk/types.py",
+		"../clients/sdk/python/src/trstctl_sdk/py.typed",
+		"../clients/sdk/python/scripts/gen_types.py",
+		"../clients/sdk/python/tests/test_client.py",
+		"../internal/server/python_sdk_served_test.go",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Fatalf("Python SDK artifact %s missing: %v", path, err)
+		}
+	}
+	client := read(t, "../clients/sdk/python/src/trstctl_sdk/client.py")
+	for _, want := range []string{
+		"Authorization",
+		"Idempotency-Key",
+		"Retry-After",
+		"ProblemError",
+		"issue_pki_secret",
+		"rotate_secret",
+	} {
+		if !strings.Contains(client, want) {
+			t.Errorf("Python SDK runtime missing %q", want)
+		}
+	}
+	served := read(t, "../internal/server/python_sdk_served_test.go")
+	for _, want := range []string{
+		"TestPythonSDKAuthIssueAndSecretsRoundTripAgainstServedHandler",
+		"TrstctlClient.from_env",
+		"pkisecret.issued",
+		"secret.deleted",
+	} {
+		if !strings.Contains(served, want) {
+			t.Errorf("served Python SDK acceptance test missing %q", want)
+		}
+	}
+}
+
+func TestTypeScriptSDKDocsStayWired(t *testing.T) {
+	doc := strings.ToLower(read(t, "features/client-sdks.md"))
+	for _, want := range []string{
+		"supported client sdks for go, typescript, python, and java",
+		"@trstctl/sdk",
+		"public registry publish metadata",
+		"npm run typecheck",
+		"npm test",
+		"stable mutation `idempotency-key` retry behavior",
+		"core owner/identity/certificate",
+		"problem+json",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("features/client-sdks.md missing TypeScript SDK marker %q", want)
+		}
+	}
+	readme := strings.ToLower(read(t, "../clients/sdk/README.md"))
+	for _, want := range []string{
+		"typescript sdk",
+		"trstctl-ts-sdk/1",
+		"npm run typecheck",
+		"npm test",
+		"core owner/identity/certificate",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("clients/sdk/README.md missing TypeScript SDK marker %q", want)
+		}
+	}
+	for _, path := range []string{
+		"../clients/sdk/typescript/package.json",
+		"../clients/sdk/typescript/src/index.ts",
+		"../clients/sdk/typescript/src/types.gen.ts",
+		"../clients/sdk/typescript/test/sdk.test.mjs",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Fatalf("TypeScript SDK artifact %s missing: %v", path, err)
+		}
+	}
+	pkg := read(t, "../clients/sdk/typescript/package.json")
+	for _, want := range []string{
+		"\"name\": \"@trstctl/sdk\"",
+		"\"publishConfig\"",
+		"\"test\": \"node --test test/sdk.test.mjs\"",
+		"\"typecheck\"",
+	} {
+		if !strings.Contains(pkg, want) {
+			t.Errorf("TypeScript SDK package metadata missing %q", want)
+		}
+	}
+	client := read(t, "../clients/sdk/typescript/src/index.ts")
+	for _, want := range []string{
+		"Authorization",
+		"Idempotency-Key",
+		"Retry-After",
+		"TrstctlProblem",
+		"issueFirstCertificate",
+		"listCertificates",
+	} {
+		if !strings.Contains(client, want) {
+			t.Errorf("TypeScript SDK runtime missing %q", want)
+		}
+	}
+	tests := read(t, "../clients/sdk/typescript/test/sdk.test.mjs")
+	for _, want := range []string{
+		"auth, tenant, idempotency, and core resources use the served paths",
+		"retry preserves mutation idempotency and parses problem+json",
+		"trstctl-ts-sdk/1",
+		"Idempotency-Key",
+		"/api/v1/owners",
+		"/api/v1/identities",
+		"/api/v1/certificates",
+	} {
+		if !strings.Contains(tests, want) {
+			t.Errorf("TypeScript SDK test suite missing %q", want)
+		}
+	}
+}
+
+func TestJavaSDKDocsStayWired(t *testing.T) {
+	doc := strings.ToLower(read(t, "features/client-sdks.md"))
+	for _, want := range []string{
+		"supported client sdks for go, typescript, python, and java",
+		"com.trstctl:trstctl-sdk",
+		"trstctlclient.fromenv",
+		"problemexception",
+		"issuepkisecret",
+		"secret create/read/rotate/delete",
+		"required mode",
+		"served-path acceptance test",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("features/client-sdks.md missing Java SDK marker %q", want)
+		}
+	}
+	readme := strings.ToLower(read(t, "../clients/sdk/README.md"))
+	for _, want := range []string{
+		"java sdk",
+		"trstctl-java-sdk/1",
+		"openapischemas.java",
+		"auth + pki issue + secret",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("clients/sdk/README.md missing Java SDK marker %q", want)
+		}
+	}
+	for _, path := range []string{
+		"../clients/sdk/java/pom.xml",
+		"../clients/sdk/java/src/main/java/com/trstctl/sdk/TrstctlClient.java",
+		"../clients/sdk/java/src/main/java/com/trstctl/sdk/OpenApiSchemas.java",
+		"../clients/sdk/java/src/main/java/com/trstctl/sdk/ProblemException.java",
+		"../clients/sdk/java/scripts/gen_schemas.py",
+		"../clients/sdk/java/scripts/run_tests.sh",
+		"../clients/sdk/java/src/test/java/com/trstctl/sdk/TrstctlClientTest.java",
+		"../internal/server/java_sdk_served_test.go",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Fatalf("Java SDK artifact %s missing: %v", path, err)
+		}
+	}
+	client := read(t, "../clients/sdk/java/src/main/java/com/trstctl/sdk/TrstctlClient.java")
+	for _, want := range []string{
+		"Authorization",
+		"Idempotency-Key",
+		"Retry-After",
+		"ProblemException",
+		"issuePkiSecret",
+		"rotateSecret",
+	} {
+		if !strings.Contains(client, want) {
+			t.Errorf("Java SDK runtime missing %q", want)
+		}
+	}
+	served := read(t, "../internal/server/java_sdk_served_test.go")
+	for _, want := range []string{
+		"TestJavaSDKAuthIssueAndSecretsRoundTripAgainstServedHandler",
+		"TrstctlClient.fromEnv",
+		"pkisecret.issued",
+		"secret.deleted",
+	} {
+		if !strings.Contains(served, want) {
+			t.Errorf("served Java SDK acceptance test missing %q", want)
 		}
 	}
 }
@@ -797,6 +1100,41 @@ func TestCLIDocCitesRealCommands(t *testing.T) {
 	}
 }
 
+func TestSPIREUpstreamAuthorityDocsStayWired(t *testing.T) {
+	for _, path := range []string{
+		"features/workload-identity.md",
+		"journeys/kubernetes-workload-identity.md",
+		"configuration.md",
+		"limitations.md",
+		"glossary.md",
+	} {
+		body := strings.ToLower(read(t, path))
+		for _, marker := range []string{"spire", "upstream authority", "trstctl-spire-upstream-authority"} {
+			if !strings.Contains(body, marker) {
+				t.Errorf("%s should document the SPIRE upstream authority plugin with marker %q", path, marker)
+			}
+		}
+	}
+	apiRoutes := read(t, "../internal/api/api.go")
+	for _, marker := range []string{"issueIntermediateCAFromCSR", "/api/v1/ca/authorities/{id}/intermediates/csr"} {
+		if !strings.Contains(apiRoutes, marker) {
+			t.Errorf("served API route registry should contain %q", marker)
+		}
+	}
+	plugin := read(t, "../internal/spireupstream/plugin.go")
+	for _, marker := range []string{"MintX509CAAndSubscribe", "PublishJWTKeyAndSubscribe", "Idempotency-Key"} {
+		if !strings.Contains(plugin, marker) {
+			t.Errorf("SPIRE upstream plugin should contain %q", marker)
+		}
+	}
+	e2e := read(t, "../test/e2e/spire/spire_e2e_test.go")
+	for _, marker := range []string{"ghcr.io/spiffe/spire-server", "x509", "mint", "VerifyLeafSignedByCA"} {
+		if !strings.Contains(e2e, marker) {
+			t.Errorf("SPIRE e2e should prove real container minting with marker %q", marker)
+		}
+	}
+}
+
 // --- R2.6: documentation honesty -------------------------------------------
 
 // TestNoFullyFunctionalClaim: the docs must not claim the product is "fully
@@ -1444,9 +1782,9 @@ func TestSecretsFrameworksDisclosedAsLibraryOnly(t *testing.T) {
 }
 
 // binaryServesTransitOrKMIP reports whether the running binary wires the transit
-// or KMIP libraries into cmd/trstctl, internal/api, or internal/server. Until that
-// happens, docs must describe F66 as library-only even though the KMIP parser and
-// operation model are real library code.
+// or KMIP libraries into cmd/trstctl, internal/api, or internal/server. Served
+// docs must then name the runtime surface honestly; otherwise they must disclose
+// library-only status even though the parser and operation model are real code.
 func binaryServesTransitOrKMIP(t *testing.T) bool {
 	t.Helper()
 	imports := []string{
@@ -1483,6 +1821,33 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 				t.Errorf("F66 appears to be served now, but docs still contain stale library-only disclosure %q", stale)
 			}
 		}
+		for _, want := range []string{
+			"served as an opt-in",
+			"mtls listener",
+			"aes-256 symmetrickey create/get",
+		} {
+			if !strings.Contains(feature, want) {
+				t.Errorf("features/secrets.md must describe served KMIP status (missing %q)", want)
+			}
+		}
+		for _, want := range []string{
+			"serves kmip as an opt-in tls 1.3 mutual-tls listener",
+			"aes-256 `symmetrickey` create/get",
+		} {
+			if !strings.Contains(glossary, want) {
+				t.Errorf("glossary.md must describe served KMIP status (missing %q)", want)
+			}
+		}
+		for _, want := range []string{
+			"transit/kmip (f66) — served, with a narrow first kmip profile",
+			"stock pykmip clients",
+			"frame-size, field-count, and nesting-depth caps",
+			"broader kmip operations",
+		} {
+			if !strings.Contains(limitations, want) {
+				t.Errorf("limitations.md must describe served-but-bounded KMIP status (missing %q)", want)
+			}
+		}
 		return
 	}
 
@@ -1503,13 +1868,9 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 			t.Errorf("glossary.md must disclose KMIP served status (missing %q)", want)
 		}
 	}
-	// Rebound off the internal "internal/transit"/"internal/kmip" paths and the
-	// "fuzzparsettlv" symbol to the customer-facing properties limitations.md now
-	// states: Transit/KMIP is still library-only, the bounded KMIP TTLV parser carries
-	// frame-size/field-count/nesting-depth caps, and a fuzz test guards that parser.
-	// These are specific enough that dropping the library-only disclosure (or the
-	// parse-hardening guardrails) fails the test — same FUZZ-004 drift protection, no
-	// internal token.
+	// Fallback for a tree where F66 is not served: rebound off internal package names
+	// and parser symbols to customer-facing properties. The bounded KMIP TTLV parser
+	// must still disclose frame-size/field-count/nesting-depth caps and fuzz coverage.
 	for _, want := range []string{
 		"transit/kmip (f66) — still library-only",
 		"fuzz test on that parser",
@@ -2618,17 +2979,13 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	}
 
 	// The Operator description must be code-bound to the controller binary
-	// (OPS-004): the docs must describe the Kubernetes Operator (as a minimal,
-	// CRD-driven operator) and — because the controller now exists — must NOT call it
-	// planned/not-shipped, while still steering production installs at the (richer)
-	// Helm chart so the minimal operator is not over-sold.
-	// Rebound off the internal "S15.1" sprint id to the customer-facing fact: the page
-	// describes the Kubernetes Operator and is honest that it is a minimal,
-	// CRD-driven operator (so an operator is not over-sold). The served/not-served
-	// framing is further pinned, code-bound, in the operator-paragraph block below.
+	// (OPS-004): the docs must describe the Kubernetes Operator as a focused,
+	// CRD-driven operator and — because the controller now exists — must NOT call it
+	// planned/not-shipped, while still steering full production installs at the
+	// richer Helm chart so the operator is not over-sold.
 	lim := strings.ToLower(read(t, "limitations.md"))
-	if !strings.Contains(lim, "kubernetes operator") || !strings.Contains(lim, "crd-driven operator") {
-		t.Error("limitations.md should describe the Kubernetes Operator (a minimal, CRD-driven operator) (OPS-004)")
+	if !strings.Contains(lim, "kubernetes operator") || !strings.Contains(lim, "focused") || !strings.Contains(lim, "crd-driven operator") {
+		t.Error("limitations.md should describe the Kubernetes Operator as a focused, CRD-driven operator (OPS-004)")
 	}
 	_, statErr := os.Stat(filepath.FromSlash("../cmd/trstctl-operator"))
 	controllerExists := statErr == nil
@@ -2645,8 +3002,10 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 			if strings.Contains(opPara, "planned (s15.1); today the") || strings.Contains(opPara, "not yet shipped") || strings.Contains(opPara, "is planned (s15.1);") {
 				t.Error("cmd/trstctl-operator now exists, but limitations.md still frames the operator as planned/not-shipped — update the disclosure (OPS-004)")
 			}
-			if !strings.Contains(opPara, "minimal") {
-				t.Error("the operator is minimal (replicas+image only); limitations.md should say so rather than over-sell it (OPS-004)")
+			for _, want := range []string{"postgresql dsn secret", "nats url", "sidecar-signer", "leader-elect", "coordination.k8s.io"} {
+				if !strings.Contains(opPara, want) {
+					t.Errorf("limitations.md operator scope should mention %q", want)
+				}
 			}
 			if !strings.Contains(opPara, "helm") {
 				t.Error("limitations.md should still steer production control-plane installs at the richer Helm chart (OPS-004)")

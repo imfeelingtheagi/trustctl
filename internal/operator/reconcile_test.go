@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // TestDecideActionDiff pins the pure desired-vs-actual diff at the heart of the
@@ -27,7 +28,7 @@ func TestDecideActionDiff(t *testing.T) {
 		{"missing deployment -> create", deploymentState{exists: false}, ActionCreate},
 		{"replica drift -> update", deploymentState{exists: true, replicas: 1, image: "ghcr.io/ctlplne/trstctl:v1.2.3"}, ActionUpdate},
 		{"image drift -> update", deploymentState{exists: true, replicas: 3, image: "ghcr.io/ctlplne/trstctl:OLD"}, ActionUpdate},
-		{"in sync -> none", deploymentState{exists: true, replicas: 3, image: "ghcr.io/ctlplne/trstctl:v1.2.3"}, ActionNone},
+		{"in sync -> none", deploymentState{exists: true, replicas: 3, image: "ghcr.io/ctlplne/trstctl:v1.2.3", configHash: spec.desiredConfigHash()}, ActionNone},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -50,16 +51,20 @@ type fakeCluster struct {
 	// deployments maps name -> the live Deployment object (nil => 404, i.e. it
 	// does not exist yet).
 	deployments map[string]map[string]any
+	// leases maps name -> coordination.k8s.io Lease object for leader election.
+	leases map[string]map[string]any
 
 	// Recorded effects:
-	created   []map[string]any          // Deployment POST bodies
-	patched   map[string][]byte         // Deployment name -> strategic-merge-patch body
-	statusSet map[string]map[string]any // CR name -> status patch
+	created      []map[string]any          // Deployment POST bodies
+	patched      map[string][]byte         // Deployment name -> strategic-merge-patch body
+	statusSet    map[string]map[string]any // CR name -> status patch
+	leasePatches int
 }
 
 func newFakeCluster() *fakeCluster {
 	return &fakeCluster{
 		deployments: map[string]map[string]any{},
+		leases:      map[string]map[string]any{},
 		patched:     map[string][]byte{},
 		statusSet:   map[string]map[string]any{},
 	}
@@ -120,10 +125,68 @@ func (f *fakeCluster) handler() http.Handler {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"metadata":{"name":"` + name + `"}}`))
 
+		// Get a Lease (404 when no operator has acquired it yet).
+		case r.Method == http.MethodGet && strings.Contains(path, "/leases/"):
+			name := lastSegment(path)
+			lease, ok := f.leases[name]
+			if !ok {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(lease)
+
+		// Create the leader-election Lease.
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/leases"):
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			meta, _ := obj["metadata"].(map[string]any)
+			name, _ := meta["name"].(string)
+			if name == "" {
+				http.Error(w, "missing lease name", http.StatusBadRequest)
+				return
+			}
+			if _, exists := f.leases[name]; exists {
+				http.Error(w, "already exists", http.StatusConflict)
+				return
+			}
+			meta["resourceVersion"] = "1"
+			f.leases[name] = obj
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(obj)
+
+		// Patch the leader-election Lease.
+		case r.Method == http.MethodPatch && strings.Contains(path, "/leases/"):
+			name := lastSegment(path)
+			lease, ok := f.leases[name]
+			if !ok {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			var patch map[string]any
+			_ = json.Unmarshal(body, &patch)
+			mergeMap(lease, patch)
+			if meta, _ := lease["metadata"].(map[string]any); meta != nil {
+				f.leasePatches++
+				meta["resourceVersion"] = "rv-patched"
+			}
+			_ = json.NewEncoder(w).Encode(lease)
+
 		default:
 			http.Error(w, "unexpected "+r.Method+" "+path, http.StatusNotImplemented)
 		}
 	})
+}
+
+func mergeMap(dst, patch map[string]any) {
+	for k, v := range patch {
+		pm, pok := v.(map[string]any)
+		dm, dok := dst[k].(map[string]any)
+		if pok && dok {
+			mergeMap(dm, pm)
+			continue
+		}
+		dst[k] = v
+	}
 }
 
 func tcpNameFromStatusPath(path string) string {
@@ -149,14 +212,45 @@ func tcpObject(name string, replicas int, image string) map[string]any {
 	}
 }
 
+func tcpObjectFullConfig(name string) map[string]any {
+	obj := tcpObject(name, 2, "ghcr.io/ctlplne/trstctl:v9")
+	obj["spec"] = map[string]any{
+		"replicas":   2,
+		"image":      "ghcr.io/ctlplne/trstctl:v9",
+		"signerMode": "sidecar",
+		"postgres": map[string]any{
+			"dsnSecret":    "trstctl-postgres",
+			"dsnSecretKey": "dsn",
+		},
+		"nats": map[string]any{
+			"url":                 "nats://trstctl-nats:4222",
+			"replicas":            3,
+			"allowSingleReplica":  false,
+			"syncAlways":          true,
+			"syncIntervalSeconds": 5,
+		},
+		"externalKMS": map[string]any{
+			"enabled": false,
+		},
+	}
+	return obj
+}
+
 func liveDeployment(name string, replicas int, image string) map[string]any {
+	configHash := ControlPlaneSpec{Replicas: replicas, Image: image}.desiredConfigHash()
 	return map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system", "resourceVersion": "100"},
+		"metadata": map[string]any{
+			"name":            name,
+			"namespace":       "trstctl-system",
+			"resourceVersion": "100",
+			"annotations":     map[string]any{"trstctl.com/config-hash": configHash},
+		},
 		"spec": map[string]any{
 			"replicas": replicas,
 			"template": map[string]any{
+				"metadata": map[string]any{"annotations": map[string]any{"trstctl.com/config-hash": configHash}},
 				"spec": map[string]any{
 					"containers": []any{map[string]any{"name": "control-plane", "image": image}},
 				},
@@ -206,6 +300,66 @@ func TestReconcileCreatesMissingDeployment(t *testing.T) {
 	// And the operator wrote a phase back to the CR status.
 	if f.statusSet["prod"]["phase"] != "Reconciling" {
 		t.Errorf("CR status.phase = %v, want Reconciling", f.statusSet["prod"]["phase"])
+	}
+}
+
+// TestReconcileCreatesFullControlPlaneConfig is the DIST-07 served-path
+// acceptance test for the broadened operator: the CRD fields for PostgreSQL,
+// NATS, and signer topology must become real pod config in the managed
+// Deployment, not dormant schema decorations.
+func TestReconcileCreatesFullControlPlaneConfig(t *testing.T) {
+	f := newFakeCluster()
+	f.tcps = []map[string]any{tcpObjectFullConfig("prod")}
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+
+	r := reconcilerForCluster(srv)
+	actions, err := r.ReconcileNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if actions["prod"] != ActionCreate {
+		t.Fatalf("action for prod = %q, want %q", actions["prod"], ActionCreate)
+	}
+	if len(f.created) != 1 {
+		t.Fatalf("expected one configured Deployment, got %d", len(f.created))
+	}
+	created := f.created[0]
+	env := controlPlaneEnv(t, created)
+	if got := envLiteral(env, "TRSTCTL_POSTGRES_MODE"); got != "external" {
+		t.Errorf("TRSTCTL_POSTGRES_MODE = %q, want external", got)
+	}
+	if got := envSecretName(env, "TRSTCTL_POSTGRES_DSN"); got != "trstctl-postgres" {
+		t.Errorf("TRSTCTL_POSTGRES_DSN secret = %q, want trstctl-postgres", got)
+	}
+	if got := envSecretKey(env, "TRSTCTL_POSTGRES_DSN"); got != "dsn" {
+		t.Errorf("TRSTCTL_POSTGRES_DSN key = %q, want dsn", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_NATS_MODE"); got != "external" {
+		t.Errorf("TRSTCTL_NATS_MODE = %q, want external", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_NATS_URL"); got != "nats://trstctl-nats:4222" {
+		t.Errorf("TRSTCTL_NATS_URL = %q", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_NATS_REPLICAS"); got != "3" {
+		t.Errorf("TRSTCTL_NATS_REPLICAS = %q, want 3", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_NATS_SYNC_ALWAYS"); got != "true" {
+		t.Errorf("TRSTCTL_NATS_SYNC_ALWAYS = %q, want true", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_SIGNER_MODE"); got != "external" {
+		t.Errorf("TRSTCTL_SIGNER_MODE = %q, want external for sidecar UDS signer", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_SIGNER_SOCKET"); got != "/run/trstctl/signer.sock" {
+		t.Errorf("TRSTCTL_SIGNER_SOCKET = %q, want shared UDS", got)
+	}
+	if !hasContainer(created, "signer") {
+		t.Fatal("full sidecar config should render a signer container")
+	}
+	for _, volume := range []string{"signer-sock", "signer-keys", "signer-auth", "kek"} {
+		if !hasVolume(created, volume) {
+			t.Errorf("full sidecar config should render volume %q", volume)
+		}
 	}
 }
 
@@ -273,6 +427,44 @@ func TestReconcileNoopWhenInSync(t *testing.T) {
 	}
 }
 
+// TestLeaderElectionAllowsExactlyOneActiveReplica is the DIST-07 leader election
+// acceptance test: when two operator replicas contend for one Lease, only one is
+// allowed to reconcile while the lease is fresh; the same leader can renew.
+func TestLeaderElectionAllowsExactlyOneActiveReplica(t *testing.T) {
+	f := newFakeCluster()
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+	client := NewClient(srv.URL, "fake-sa-token", srv.Client())
+	now := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)
+	clock := func() time.Time { return now }
+	a := NewLeaseElector(client, "trstctl-system", "trstctl-operator", "operator-a", 15*time.Second, clock)
+	b := NewLeaseElector(client, "trstctl-system", "trstctl-operator", "operator-b", 15*time.Second, clock)
+
+	leaderA, err := a.TryAcquireOrRenew(context.Background())
+	if err != nil {
+		t.Fatalf("operator-a acquire: %v", err)
+	}
+	leaderB, err := b.TryAcquireOrRenew(context.Background())
+	if err != nil {
+		t.Fatalf("operator-b acquire: %v", err)
+	}
+	if !leaderA || leaderB {
+		t.Fatalf("fresh lease leaders: operator-a=%v operator-b=%v, want exactly operator-a", leaderA, leaderB)
+	}
+
+	now = now.Add(5 * time.Second)
+	leaderA, err = a.TryAcquireOrRenew(context.Background())
+	if err != nil {
+		t.Fatalf("operator-a renew: %v", err)
+	}
+	if !leaderA {
+		t.Fatal("current leader could not renew its own lease")
+	}
+	if f.leasePatches == 0 {
+		t.Fatal("leader renewal did not patch the Kubernetes Lease")
+	}
+}
+
 // --- small typed extractors so the assertions read the real rendered objects ---
 
 func deploymentReplicas(t *testing.T, obj map[string]any) int {
@@ -316,4 +508,90 @@ func deploymentName(t *testing.T, obj map[string]any) string {
 	meta, _ := obj["metadata"].(map[string]any)
 	name, _ := meta["name"].(string)
 	return name
+}
+
+func controlPlaneEnv(t *testing.T, obj map[string]any) []any {
+	t.Helper()
+	spec, _ := obj["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	pod, _ := tmpl["spec"].(map[string]any)
+	conts, _ := pod["containers"].([]any)
+	for _, c := range conts {
+		m, _ := c.(map[string]any)
+		if m["name"] == "control-plane" {
+			env, _ := m["env"].([]any)
+			return env
+		}
+	}
+	t.Fatal("no control-plane container")
+	return nil
+}
+
+func envEntry(env []any, name string) map[string]any {
+	for _, e := range env {
+		m, _ := e.(map[string]any)
+		if m["name"] == name {
+			return m
+		}
+	}
+	return nil
+}
+
+func envLiteral(env []any, name string) string {
+	e := envEntry(env, name)
+	if e == nil {
+		return ""
+	}
+	v, _ := e["value"].(string)
+	return v
+}
+
+func envSecretName(env []any, name string) string {
+	e := envEntry(env, name)
+	if e == nil {
+		return ""
+	}
+	vf, _ := e["valueFrom"].(map[string]any)
+	sr, _ := vf["secretKeyRef"].(map[string]any)
+	v, _ := sr["name"].(string)
+	return v
+}
+
+func envSecretKey(env []any, name string) string {
+	e := envEntry(env, name)
+	if e == nil {
+		return ""
+	}
+	vf, _ := e["valueFrom"].(map[string]any)
+	sr, _ := vf["secretKeyRef"].(map[string]any)
+	v, _ := sr["key"].(string)
+	return v
+}
+
+func hasContainer(obj map[string]any, name string) bool {
+	spec, _ := obj["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	pod, _ := tmpl["spec"].(map[string]any)
+	conts, _ := pod["containers"].([]any)
+	for _, c := range conts {
+		m, _ := c.(map[string]any)
+		if m["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasVolume(obj map[string]any, name string) bool {
+	spec, _ := obj["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	pod, _ := tmpl["spec"].(map[string]any)
+	vols, _ := pod["volumes"].([]any)
+	for _, v := range vols {
+		m, _ := v.(map[string]any)
+		if m["name"] == name {
+			return true
+		}
+	}
+	return false
 }

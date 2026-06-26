@@ -45,6 +45,7 @@ import (
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	transitpkg "trstctl.com/trstctl/internal/transit"
 	"trstctl.com/trstctl/internal/webui"
 )
 
@@ -69,13 +70,18 @@ type Deps struct {
 	// destructive transitions when RequireApproval is on (CRYPTO-005). Nil leaves the
 	// surface off and its routes fail closed.
 	ManagedKeyCustody crypto.RemoteKeyLifecycle
-	OutboxHandler     orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions        []api.Option         // auth/audit/etc.
-	SignTimeout       time.Duration        // per-issuance signer deadline (slow → fail closed)
-	CACommonName      string
-	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
-	LeafProfile       crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
-	DefaultProfile    string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	// CodeSigning enables the served code-signing surface (CLM-06/F50): key-backed
+	// artifact signing through a compile-time key resolver (PKCS#11/HSM when supplied,
+	// software keys otherwise), keyless/Sigstore signing through configured Fulcio-style
+	// attestors, and Rekor transparency-log publication through outbox.
+	CodeSigning    CodeSigningConfig
+	OutboxHandler  orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions     []api.Option         // auth/audit/etc.
+	SignTimeout    time.Duration        // per-issuance signer deadline (slow → fail closed)
+	CACommonName   string
+	CACertFile     string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	LeafProfile    crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
+	DefaultProfile string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
 	// revoke path (EXC-WIRE-03). Empty uses policy.BaseModule (default-deny, permit
 	// revoke, require a bound profile to issue/deploy). The engine is fail-closed,
@@ -294,12 +300,12 @@ type Deps struct {
 
 	// EnableAISurface turns on the served AI / RCA / NL-query / MCP surface (SURFACE-003;
 	// F75/F76/F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. OFF by default (fail closed):
-	// an upgrade does not silently expose an AI surface. When on, the surface is
-	// READ-ONLY (no write/remediation tools), tenant-scoped under RLS (the tenant is the
-	// authenticated principal's, never a request field — AN-1), auth-gated, and
-	// rate-limited. It mounts the tenant-then-RBAC-scoped query.Engine (SF.7) behind a
-	// grounded RCA/NL-query answerer and a read-only MCP tool server. Run fills this from
-	// config.AI.EnableAPI.
+	// an upgrade does not silently expose an AI surface. MCP investigation stays
+	// read-only unless EnableMCPWriteTools is also set. All calls are tenant-scoped
+	// under RLS (the tenant is the authenticated principal's, never a request field —
+	// AN-1), auth-gated, and rate-limited. It mounts the tenant-then-RBAC-scoped
+	// query.Engine (SF.7) behind a grounded RCA/NL-query answerer and MCP tool server.
+	// Run fills this from config.AI.EnableAPI.
 	EnableAISurface bool
 	// AIModel is the OPTIONAL, opt-in AI model adapter (F76) the served AI surface reasons
 	// through. Nil (the default) is AIR-GAPPED: AI reasoning is OFF, grounding + citations
@@ -315,6 +321,9 @@ type Deps struct {
 	// AIMCPIdentity is the workload identity the served MCP server presents (dogfooding
 	// the F61 broker). Informational; empty is fine.
 	AIMCPIdentity string
+	// EnableMCPWriteTools exposes policy-gated MCP write tools. It defaults to false
+	// so enabling the AI/MCP read surface never silently grants agent write power.
+	EnableMCPWriteTools bool
 	// AIRateMax / AIRateWindow bound the per-(caller,tool) MCP call rate
 	// (enumeration-abuse protection). Zero selects a conservative default.
 	AIRateMax    int
@@ -354,6 +363,9 @@ type Server struct {
 	outboxGC  *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
 	obHandler orchestrator.Handler
 	handler   http.Handler
+	transit   *transitpkg.Service
+	codeSign  *servedCodeSigningService
+	kmip      *kmipRuntime
 
 	signer    SignerProvider
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
@@ -584,6 +596,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := s.configureKMIPSurface(d); err != nil {
+		return nil, err
+	}
 	if err := s.configureIssuanceSurfaces(ctx, d, orch, idem); err != nil {
 		return nil, err
 	}
@@ -727,6 +742,15 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		}
 		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
 	}
+	if transitSvc := s.buildTransitService(d); transitSvc != nil {
+		defaults = append(defaults, api.WithTransit(transitSvc))
+	}
+	if cs, err := newServedCodeSigningService(d.CodeSigning, d.Store, d.Log, s.outbox); err != nil {
+		return nil, nil, fmt.Errorf("server: configure code-signing: %w", err)
+	} else if cs != nil {
+		s.codeSign = cs
+		defaults = append(defaults, api.WithCodeSigning(cs))
+	}
 	if hierarchySvc := s.buildCAHierarchyService(d); hierarchySvc != nil {
 		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))
 	}
@@ -746,6 +770,14 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+func (s *Server) buildTransitService(d Deps) *transitpkg.Service {
+	if d.Log == nil {
+		return nil
+	}
+	s.transit = transitpkg.NewService(audit.NewAuditor(d.Log))
+	return s.transit
 }
 
 func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
@@ -840,9 +872,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
 	}
 }
 
@@ -2016,6 +2048,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		if err := s.plugins.Close(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("close plugins: %w", err))
 		}
+	}
+	if s.transit != nil {
+		s.transit.Destroy()
+	}
+	if s.kmip != nil {
+		s.kmip.Close()
 	}
 	if s.log != nil {
 		if err := s.log.Close(); err != nil {

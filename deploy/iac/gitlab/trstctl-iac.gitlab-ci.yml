@@ -1,0 +1,34 @@
+stages:
+  - plan
+  - apply
+
+variables:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TRSTCTL_TERRAFORM_DIR: "deploy/iac/gitops/base"
+
+trstctl:terraform:plan:
+  stage: plan
+  image: hashicorp/terraform:1.9.8
+  script:
+    - cd "$TRSTCTL_TERRAFORM_DIR"
+    - terraform init -input=false
+    - terraform plan -input=false
+      -var="trstctl_endpoint=${TRSTCTL_ENDPOINT}"
+      -var="trstctl_token=${TRSTCTL_TOKEN}"
+  rules:
+    - if: '$TRSTCTL_ENDPOINT && $TRSTCTL_TOKEN'
+
+trstctl:terraform:apply:
+  stage: apply
+  image: hashicorp/terraform:1.9.8
+  needs: ["trstctl:terraform:plan"]
+  script:
+    - cd "$TRSTCTL_TERRAFORM_DIR"
+    - terraform init -input=false
+    - terraform apply -input=false -auto-approve
+      -var="trstctl_endpoint=${TRSTCTL_ENDPOINT}"
+      -var="trstctl_token=${TRSTCTL_TOKEN}"
+  rules:
+    - if: '$TRSTCTL_ENDPOINT && $TRSTCTL_TOKEN && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual

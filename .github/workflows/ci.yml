@@ -41,6 +41,16 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Set up Node for SDK generators
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Verify Java SDK toolchain
+        run: |
+          javac -version
+          java -version
+
       - name: Build
         run: make build
 
@@ -55,6 +65,13 @@ jobs:
         env:
           TRSTCTL_REQUIRE_OPENSSH: "1"
         run: make test
+
+      - name: SDK contract and client tests
+        env:
+          TRSTCTL_REQUIRE_JAVA_SDK: "1"
+        run: |
+          make sdk-check
+          make sdk-test
 
       - name: Perf smoke SLO gate
         run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"

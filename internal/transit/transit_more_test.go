@@ -36,3 +36,31 @@ func TestTransitErrorPaths(t *testing.T) {
 		t.Error("Sign on an AEAD key accepted")
 	}
 }
+
+func TestKeyringDestroyZeroizesKeyBytes(t *testing.T) {
+	ctx := context.Background()
+	k := New("t1", nil)
+	if err := k.CreateKey(ctx, "a", KindAEAD); err != nil {
+		t.Fatal(err)
+	}
+	keyBytes := k.keys["a"].aead[1]
+	if allZero(keyBytes) {
+		t.Fatal("generated key was all zero before destroy")
+	}
+	k.Destroy()
+	if !allZero(keyBytes) {
+		t.Fatalf("key bytes still present after Destroy: %x", keyBytes)
+	}
+	if len(k.keys) != 0 {
+		t.Fatalf("destroyed keyring retained %d key metadata entries", len(k.keys))
+	}
+}
+
+func allZero(b []byte) bool {
+	for _, v := range b {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
+}

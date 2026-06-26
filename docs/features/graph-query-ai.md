@@ -55,7 +55,7 @@ position in the immutable event history for consistency, and returns deliberatel
 errors so a caller can't tell "out of scope" from "not found."
 
 **Served through the read-only AI/RCA routes when `ai.enable_api` is on**
-(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and used by the read-only MCP tools. The
+(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and used by MCP investigation tools. The
 standalone Go API remains available for embedded consumers.
 
 ### The pluggable AI model adapter (F76)
@@ -114,13 +114,20 @@ hostile string in a SAN can't become an instruction), the pipeline is strictly
 
 The [Model Context Protocol](../glossary.md) is how external AI agents call tools.
 trstctl's MCP server exposes four **read-only** tools — `query_credentials`,
-`get_blast_radius`, `explain_incident`, `compliance_status` — and nothing that writes (it
-has no remediation tools). Every call is scoped to one tenant (a cross-tenant call is
-refused *before* any query), per-caller rate-limited to resist enumeration, and audited;
-answers flow through the grounded RCA pipeline so they're cited and redacted. Fittingly,
-the server holds a [workload identity](workload-identity.md) issued by trstctl's own
-broker — it dogfoods the platform. **Served** at `GET /api/v1/mcp/tools` and
+`get_blast_radius`, `explain_incident`, `compliance_status` — by default. Every read
+call is scoped to one tenant (a cross-tenant call is refused *before* any query),
+per-caller rate-limited to resist enumeration, and audited; answers flow through the
+grounded RCA pipeline so they're cited and redacted. Fittingly, the server holds a
+[workload identity](workload-identity.md) issued by trstctl's own broker — it dogfoods
+the platform. **Served** at `GET /api/v1/mcp/tools` and
 `POST /api/v1/mcp/tools/{tool}` when `ai.enable_api` is on.
+
+Write tools are a separate, explicit operator choice. With
+`TRSTCTL_AI_MCP_WRITE_TOOLS=true`, the tool list also includes `issue_certificate` and
+`rotate_certificate`. Those tools are not prompt magic: each call still hits the served
+CA hierarchy, requires `certs:issue`, requires an `Idempotency-Key`, records
+`mcp.tool.write`, and returns the same certificate fields as the REST issuance path.
+If the flag is absent, write tools are not listed and calls to them fail closed.
 
 ## Use it
 
@@ -133,7 +140,7 @@ trstctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHE
 ```
 
 Those map to the served `/api/v1/graph*` routes. When `ai.enable_api` is on, grounded
-query/RCA and read-only MCP are served too:
+query/RCA and the MCP tool surface are served too:
 
 ```sh
 curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
@@ -145,6 +152,20 @@ curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   https://trstctl.example.com/api/v1/mcp/tools
 ```
 
+Enable guarded MCP issuance only for agents that should be allowed to act:
+
+```sh
+export TRSTCTL_AI_ENABLE_API=true
+export TRSTCTL_AI_MCP_WRITE_TOOLS=true
+
+curl -sS -X POST \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: mcp-issue-payments-2026-06-26" \
+  -d '{"authority_id":"ca_123","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","ttl_seconds":7200,"reason":"agent-requested short-lived certificate"}' \
+  https://trstctl.example.com/api/v1/mcp/tools/issue_certificate
+```
+
 ## Pitfalls & limits
 
 | Capability | Status today |
@@ -153,7 +174,7 @@ curl -sS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 | Semantic query layer (F75) | **Served** through `/api/v1/ai/query` and `/api/v1/ai/rca` when `ai.enable_api` is on; Go API also available |
 | AI model adapter (F76) | **Optional served adapter**; no model configured by default, cloud/local model egress only when an operator opts in |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
-| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`, read-only tools only |
+| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools are read-only by default, guarded write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, and `Idempotency-Key` |
 
 Other notes: the graph and query layer are built per request from the store, so very large
 tenants pay a build cost (bounded by caps). The AI features are **grounded and read-only by
@@ -169,7 +190,8 @@ configured, RCA returns the raw evidence listing rather than a prose answer. See
 - **Query surfaces:** log, graph, certificates, owners, CBOM (tenant-then-RBAC,
   allow-listed fields/operators, no raw SQL/Cypher).
 - **AI:** model adapter (cloud or local Ollama/vLLM) with boundary redaction; RCA returns
-  cited answers; MCP tools are read-only and rate-limited.
+  cited answers; MCP investigation tools are read-only and rate-limited; MCP write
+  tools are explicit opt-in and audited.
 
 ## See also
 

@@ -1,0 +1,24 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: trstctl
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/ctlplne/trstctl.git
+  ref:
+    branch: main
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: trstctl-resources
+  namespace: flux-system
+spec:
+  interval: 10m
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: trstctl
+  path: ./deploy/iac/gitops/base
+  targetNamespace: trstctl-system

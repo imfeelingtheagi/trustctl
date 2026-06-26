@@ -21,6 +21,17 @@ type Options struct {
 	// ever logs resource names, namespaces, actions, and counts — never tokens,
 	// keys, or resource bodies.
 	Logger *slog.Logger
+	// LeaderElection makes this process campaign for a Kubernetes Lease before
+	// each reconcile. Followers stay hot but do not mutate cluster state.
+	LeaderElection bool
+	// LeaderIdentity is the holderIdentity written to the Lease. It should be a
+	// pod name or hostname so operators can see which replica is active.
+	LeaderIdentity string
+	// LeaseName is the coordination.k8s.io Lease resource name.
+	LeaseName string
+	// LeaseDuration is how long a holder can be silent before another replica may
+	// acquire leadership.
+	LeaseDuration time.Duration
 }
 
 func (o Options) withDefaults() Options {
@@ -29,6 +40,12 @@ func (o Options) withDefaults() Options {
 	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
+	}
+	if o.LeaseName == "" {
+		o.LeaseName = "trstctl-operator"
+	}
+	if o.LeaseDuration <= 0 {
+		o.LeaseDuration = 15 * time.Second
 	}
 	return o
 }
@@ -45,8 +62,27 @@ func Run(ctx context.Context, r *Reconciler, opts Options) error {
 		slog.String("namespace", opts.Namespace),
 	)
 	log.Info("operator starting", slog.Duration("reconcile_every", opts.ReconcileEvery))
+	var elector *LeaseElector
+	if opts.LeaderElection {
+		elector = NewLeaseElector(r.client, opts.Namespace, opts.LeaseName, opts.LeaderIdentity, opts.LeaseDuration, nil)
+		log = log.With(slog.String("leader_identity", opts.LeaderIdentity), slog.String("lease", opts.LeaseName))
+	}
 
 	tick := func() {
+		if elector != nil {
+			leader, err := elector.TryAcquireOrRenew(ctx)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				log.Error("leader election failed", slog.String("error", err.Error()))
+				return
+			}
+			if !leader {
+				log.Debug("leader election follower; skipping reconcile")
+				return
+			}
+		}
 		actions, err := r.ReconcileNamespace(ctx, opts.Namespace)
 		if err != nil {
 			// ctx cancellation surfaces here too; the select below exits cleanly.

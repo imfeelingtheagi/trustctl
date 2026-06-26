@@ -9,11 +9,10 @@
 #
 # What it does: it reconciles TrstctlControlPlane custom resources (crd.yaml)
 # into a managed control-plane Deployment, keeping that Deployment's replica
-# count and image matching each resource's spec, and writes the observed phase
-# back to the resource status. Scope/maturity is documented in doc.go: the
-# operator owns the Deployment's replicas+image; Services, secrets, NetworkPolicy,
-# and the isolated-signer topology remain the Helm chart's job (the chart is still
-# the richer, fully-featured control-plane install — deploy/helm/trstctl).
+# count, image, PostgreSQL/NATS config, and sidecar-signer wiring matching each
+# resource's spec, and writes the observed phase back to the resource status.
+# Scope/maturity is documented in doc.go: Services, ingress, NetworkPolicy, and
+# cross-pod isolated-signer Services remain the Helm chart's richer path.
 #
 # NOTE: set the `image:` digest/tag to the release you are deploying. The default
 # below names the built image stream; pin a digest in production.
@@ -28,9 +27,11 @@ kind: ClusterRole
 metadata:
   name: trstctl-operator
 # Least privilege: exactly the verbs the reconcile loop exercises today — read
-# TrstctlControlPlane resources and patch their status, and create/patch the
-# control-plane Deployment it manages. It does NOT yet manage Services, secrets,
-# or NetworkPolicies (the Helm chart does), so it is granted no access to them.
+# TrstctlControlPlane resources, patch their status, create/patch the
+# control-plane Deployment it manages, and coordinate active/passive operator
+# replicas through coordination.k8s.io Lease objects. It does not manage
+# Services, secrets, or NetworkPolicies (the Helm chart does), so it is granted
+# no access to those object families.
 rules:
   - apiGroups: ["trstctl.com"]
     resources: ["trstctlcontrolplanes"]
@@ -41,6 +42,9 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -63,7 +67,7 @@ metadata:
   labels:
     app: trstctl-operator
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: trstctl-operator
@@ -86,7 +90,12 @@ spec:
           # release before applying; do not run the operator from a mutable tag.
           image: ghcr.io/ctlplne/trstctl@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: ["/usr/local/bin/trstctl-operator"]
-          args: ["--leader-elect"]
+          args: ["--leader-elect", "--leader-lease=trstctl-operator"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

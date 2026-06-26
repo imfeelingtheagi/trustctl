@@ -1,0 +1,5 @@
+{
+  "profileName": "web-server",
+  "certificateCommonName": "deploy-hook.service",
+  "secretName": "apps/deploy-hook/database-password"
+}

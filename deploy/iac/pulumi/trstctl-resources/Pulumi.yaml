@@ -1,0 +1,3 @@
+name: trstctl-resources
+runtime: nodejs
+description: Provision trstctl profile, PKI certificate, and secret resources through the served REST API.

@@ -15,9 +15,8 @@
 // runs via an entrypoint override (the same packaging the agent uses, OPS-002).
 //
 // Maturity is documented honestly in deploy/operator/doc.go: this is a small,
-// functional reconcile loop that owns the Deployment's replicas+image; it does
-// not yet manage Services, secrets, NetworkPolicy, or the isolated-signer
-// topology — those remain the Helm chart's job.
+// functional reconcile loop that owns the Deployment and its runtime config;
+// Services, ingress, and NetworkPolicy remain the Helm chart's richer path.
 package main
 
 import (
@@ -38,10 +37,10 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version information and exit")
 	namespace := flag.String("namespace", "", "namespace to reconcile TrstctlControlPlane resources in (default: the operator's own namespace)")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the level-based reconcile runs")
-	// Accepted for forward compatibility with the manifest's args; a single
-	// replica is the supported topology today, so this is a no-op that keeps the
-	// Deployment's `--leader-elect` arg from being an undefined flag.
-	leaderElect := flag.Bool("leader-elect", false, "reserved: run a single active operator replica (single-replica is the supported topology today)")
+	leaderElect := flag.Bool("leader-elect", false, "campaign for a Kubernetes Lease so only one operator replica reconciles at a time")
+	leaderLease := flag.String("leader-lease", "trstctl-operator", "coordination.k8s.io Lease name used when --leader-elect is set")
+	leaderLeaseDuration := flag.Duration("leader-lease-duration", 15*time.Second, "how long a silent leader keeps the Lease before another replica may acquire it")
+	leaderIdentity := flag.String("leader-identity", "", "identity written to the leader-election Lease (default: POD_NAME, HOSTNAME, or os.Hostname)")
 	logLevel := flag.String("log-level", "info", "log level: debug | info | warn | error")
 	flag.Parse()
 
@@ -49,7 +48,6 @@ func main() {
 		fmt.Println(buildinfo.String("trstctl-operator"))
 		return
 	}
-	_ = *leaderElect
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: parseLevel(*logLevel)}))
 
@@ -75,10 +73,30 @@ func main() {
 		Namespace:      ns,
 		ReconcileEvery: *reconcileEvery,
 		Logger:         logger,
+		LeaderElection: *leaderElect,
+		LeaderIdentity: operatorIdentity(*leaderIdentity),
+		LeaseName:      *leaderLease,
+		LeaseDuration:  *leaderLeaseDuration,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-operator:", err)
 		os.Exit(1)
 	}
+}
+
+func operatorIdentity(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	if pod := os.Getenv("POD_NAME"); pod != "" {
+		return pod
+	}
+	if host := os.Getenv("HOSTNAME"); host != "" {
+		return host
+	}
+	if host, err := os.Hostname(); err == nil && host != "" {
+		return host
+	}
+	return "trstctl-operator"
 }
 
 func parseLevel(s string) slog.Level {

@@ -97,6 +97,10 @@ type issuanceDispatcher struct {
 	// notifications fans notification.* outbox rows to operator-configured channels
 	// (NOTIF-01/F29). Nil preserves the prior no-channel behavior.
 	notifications *notify.Dispatcher
+	// transparency handles transparency.* outbox rows such as Rekor publication for
+	// served code signing (CLM-06/F50). Nil leaves rows acknowledged-unrouted, matching
+	// the generic external-destination posture.
+	transparency orchestrator.Handler
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -131,6 +135,12 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 				return nil
 			}
 			return d.notifications.Dispatch(ctx, m.Payload)
+		}
+		if strings.HasPrefix(m.Destination, "transparency.") {
+			if d.transparency == nil {
+				return nil
+			}
+			return d.transparency.Deliver(ctx, m)
 		}
 		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") {
 			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)

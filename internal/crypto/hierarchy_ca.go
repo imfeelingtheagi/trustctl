@@ -82,6 +82,30 @@ func SignIntermediateHierarchyCA(parentCertDER []byte, parentSigner DigestSigner
 	return signHierarchyCA(parentSigner, childPublic, parent, profile)
 }
 
+// SignIntermediateHierarchyCAFromCSR creates an intermediate CA certificate over a
+// caller-held CA key. The CSR is verified inside the crypto boundary, the public key
+// from the CSR becomes the subordinate CA public key, and parentSigner signs the
+// resulting CA certificate. This is the SPIRE UpstreamAuthority path: SPIRE keeps its
+// local CA private key, while trstctl signs the intermediate certificate through the
+// isolated signer.
+func SignIntermediateHierarchyCAFromCSR(parentCertDER []byte, parentSigner DigestSigner, csrDER []byte, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse intermediate CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: verify intermediate CSR signature: %w", err)
+	}
+	pubDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: marshal intermediate CSR public key: %w", err)
+	}
+	if profile.CommonName == "" {
+		profile.CommonName = csr.Subject.CommonName
+	}
+	return SignIntermediateHierarchyCA(parentCertDER, parentSigner, PublicKey{DER: pubDER}, profile)
+}
+
 func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.Certificate, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
 	if profile.CommonName == "" {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: CA common name is required")

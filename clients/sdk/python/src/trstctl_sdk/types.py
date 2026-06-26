@@ -32,6 +32,7 @@ AIStatus = TypedDict(
         'enabled': bool,
         'endpoint_host': str,
         'mcp_identity': str,
+        'mcp_write_tools': bool,
         'model_configured': bool,
         'model_mode': str,
         'model_name': str,
@@ -1106,7 +1107,12 @@ IssuerRequest = TypedDict(
 MCPToolCall = TypedDict(
     'MCPToolCall',
     {
+        'authority_id': str,
+        'csr_pem': str,
+        'previous_serial': str,
+        'reason': str,
         'subject': str,
+        'ttl_seconds': int,
     },
     total=False,
 )
@@ -1124,7 +1130,10 @@ MCPToolList = TypedDict(
 MCPToolResult = TypedDict(
     'MCPToolResult',
     {
+        'certificate_pem': str,
         'citations': list[str],
+        'not_after': str,
+        'serial': str,
         'text': str,
         'tool': str,
     },

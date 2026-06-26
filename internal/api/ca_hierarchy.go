@@ -28,6 +28,7 @@ type CAHierarchyService interface {
 	ListAuthorities(ctx context.Context, tenantID string) ([]CAAuthority, error)
 	CreateRoot(ctx context.Context, tenantID string, req CACreateRootRequest) (CAAuthority, error)
 	CreateIntermediate(ctx context.Context, tenantID string, req CACreateIntermediateRequest) (CAAuthority, error)
+	IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req CAIssueIntermediateRequest) (CAIssuedIntermediate, error)
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
 }
 
@@ -69,9 +70,19 @@ type CAIssueLeafRequest struct {
 	TTLSeconds int64
 }
 
+type CAIssueIntermediateRequest struct {
+	CSRDER []byte
+	Spec   CASpec
+}
+
 type caIssueLeafJSON struct {
 	CSRPem     string `json:"csr_pem"`
 	TTLSeconds int64  `json:"ttl_seconds"`
+}
+
+type caIssueIntermediateJSON struct {
+	CSRPem string `json:"csr_pem"`
+	Spec   CASpec `json:"spec"`
 }
 
 type CAKeyCeremony struct {
@@ -103,6 +114,12 @@ type CAAuthority struct {
 }
 
 type CAIssuedLeaf struct {
+	CertificatePEM string    `json:"certificate_pem"`
+	Serial         string    `json:"serial"`
+	NotAfter       time.Time `json:"not_after"`
+}
+
+type CAIssuedIntermediate struct {
 	CertificatePEM string    `json:"certificate_pem"`
 	Serial         string    `json:"serial"`
 	NotAfter       time.Time `json:"not_after"`
@@ -214,6 +231,33 @@ func (a *API) createIntermediateCA(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, ca, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) issueHierarchyIntermediateCSR(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req caIssueIntermediateJSON
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		block, _ := pem.Decode([]byte(req.CSRPem))
+		if block == nil || block.Type != "CERTIFICATE REQUEST" {
+			return 0, nil, errStatus(http.StatusBadRequest, "csr_pem must contain one CERTIFICATE REQUEST PEM block")
+		}
+		issued, err := a.caHierarchy.IssueIntermediateCSR(ctx, tenantID, id, CAIssueIntermediateRequest{
+			CSRDER: block.Bytes,
+			Spec:   req.Spec,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, issued, nil
 	})
 }
 

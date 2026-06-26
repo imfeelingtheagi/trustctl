@@ -24,7 +24,10 @@ import (
 // ManagedKeyService is the served managed-key lifecycle the API drives.
 // *managedkeys.Service satisfies it. The API depends only on this minimal interface
 // so it never links a concrete KMS backend; the composition root wires the backend,
-// event sink, dual-control gate, and idempotency recorder into the service.
+// event sink, dual-control gate, and optional service-level idempotency into the
+// service. The served HTTP path already wraps every handler in a.mutate (AN-5), so
+// these handlers pass an empty service idempotency key and let the API idempotency
+// recorder own request replay exactly once.
 type ManagedKeyService interface {
 	Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey string) (managedkeys.Result, error)
 	Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (managedkeys.Result, error)
@@ -125,7 +128,7 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 		if req.Algorithm == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "algorithm is required")
 		}
-		res, err := a.managedKeys.Generate(ctx, tenantID, crypto.Algorithm(req.Algorithm), idempotencyKey)
+		res, err := a.managedKeys.Generate(ctx, tenantID, crypto.Algorithm(req.Algorithm), "")
 		if err != nil {
 			return 0, nil, mapManagedKeyError(err)
 		}
@@ -145,7 +148,7 @@ func (a *API) rotateManagedKey(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return managedKeyMutation(ctx, r, tenantID, idempotencyKey, a.managedKeys.Rotate)
+		return managedKeyMutation(ctx, r, tenantID, a.managedKeys.Rotate)
 	})
 }
 
@@ -160,7 +163,7 @@ func (a *API) revokeManagedKey(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return managedKeyMutation(ctx, r, tenantID, idempotencyKey, a.managedKeys.Revoke)
+		return managedKeyMutation(ctx, r, tenantID, a.managedKeys.Revoke)
 	})
 }
 
@@ -176,15 +179,16 @@ func (a *API) zeroizeManagedKey(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		return managedKeyMutation(ctx, r, tenantID, idempotencyKey, a.managedKeys.Zeroize)
+		return managedKeyMutation(ctx, r, tenantID, a.managedKeys.Zeroize)
 	})
 }
 
 // managedKeyMutation is the shared closure body of the three destructive handlers:
 // it decodes the key id, resolves the requester, and invokes the service op (which
-// enforces dual control before any provider side effect). The idempotencyKey is the
-// one a.mutate threaded in, passed through so the service dedupes (AN-5).
-func managedKeyMutation(ctx context.Context, r *http.Request, tenantID, idempotencyKey string, op func(ctx context.Context, tenantID, keyID, requester, idem string) (managedkeys.Result, error)) (int, any, error) {
+// enforces dual control before any provider side effect). Request idempotency is
+// already handled by a.mutate at the HTTP boundary, so the service receives an empty
+// idempotency key and does not open a nested recorder transaction.
+func managedKeyMutation(ctx context.Context, r *http.Request, tenantID string, op func(ctx context.Context, tenantID, keyID, requester, idem string) (managedkeys.Result, error)) (int, any, error) {
 	var req managedKeyActionRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return 0, nil, errWithStatus(http.StatusBadRequest, err)
@@ -196,7 +200,7 @@ func managedKeyMutation(ctx context.Context, r *http.Request, tenantID, idempote
 	if err != nil {
 		return 0, nil, err
 	}
-	res, err := op(ctx, tenantID, req.KeyID, requester, idempotencyKey)
+	res, err := op(ctx, tenantID, req.KeyID, requester, "")
 	if err != nil {
 		return 0, nil, mapManagedKeyError(err)
 	}

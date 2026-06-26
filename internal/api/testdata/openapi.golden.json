@@ -62,6 +62,9 @@
           "mcp_identity": {
             "type": "string"
           },
+          "mcp_write_tools": {
+            "type": "boolean"
+          },
           "model_configured": {
             "type": "boolean"
           },
@@ -780,6 +783,21 @@
         ],
         "type": "object"
       },
+      "CAIssueIntermediateRequest": {
+        "properties": {
+          "csr_pem": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CASpec"
+          }
+        },
+        "required": [
+          "csr_pem",
+          "spec"
+        ],
+        "type": "object"
+      },
       "CAIssueLeafRequest": {
         "properties": {
           "csr_pem": {
@@ -791,6 +809,26 @@
         },
         "required": [
           "csr_pem"
+        ],
+        "type": "object"
+      },
+      "CAIssuedIntermediate": {
+        "properties": {
+          "certificate_pem": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_pem",
+          "serial",
+          "not_after"
         ],
         "type": "object"
       },
@@ -1173,6 +1211,94 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "CodeSigningKeylessRequest": {
+        "properties": {
+          "artifact_type": {
+            "type": "string"
+          },
+          "digest": {
+            "format": "byte",
+            "type": "string"
+          },
+          "fulcio_issuer": {
+            "type": "string"
+          },
+          "fulcio_san": {
+            "type": "string"
+          },
+          "identity_method": {
+            "type": "string"
+          },
+          "identity_payload": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_type",
+          "digest",
+          "identity_method",
+          "identity_payload"
+        ],
+        "type": "object"
+      },
+      "CodeSigningRequest": {
+        "properties": {
+          "artifact_type": {
+            "type": "string"
+          },
+          "digest": {
+            "format": "byte",
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "artifact_type",
+          "digest"
+        ],
+        "type": "object"
+      },
+      "CodeSigningSignature": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "artifact_type": {
+            "type": "string"
+          },
+          "fulcio_issuer": {
+            "type": "string"
+          },
+          "fulcio_san": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "public_key_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "signature": {
+            "format": "byte",
+            "type": "string"
+          },
+          "transparency_destination": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm",
+          "artifact_type",
+          "signature",
+          "public_key_der"
         ],
         "type": "object"
       },
@@ -2543,8 +2669,23 @@
       },
       "MCPToolCall": {
         "properties": {
+          "authority_id": {
+            "type": "string"
+          },
+          "csr_pem": {
+            "type": "string"
+          },
+          "previous_serial": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
           "subject": {
             "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
           }
         },
         "type": "object"
@@ -2572,11 +2713,21 @@
       },
       "MCPToolResult": {
         "properties": {
+          "certificate_pem": {
+            "type": "string"
+          },
           "citations": {
             "items": {
               "type": "string"
             },
             "type": "array"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
           },
           "text": {
             "type": "string"
@@ -4076,6 +4227,230 @@
         ],
         "type": "object"
       },
+      "TransitCiphertext": {
+        "properties": {
+          "ciphertext": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ciphertext",
+          "version"
+        ],
+        "type": "object"
+      },
+      "TransitDecryptRequest": {
+        "properties": {
+          "aad": {
+            "format": "byte",
+            "type": "string"
+          },
+          "ciphertext": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ciphertext"
+        ],
+        "type": "object"
+      },
+      "TransitEncryptRequest": {
+        "properties": {
+          "aad": {
+            "format": "byte",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "plaintext": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "plaintext"
+        ],
+        "type": "object"
+      },
+      "TransitHMAC": {
+        "properties": {
+          "hmac": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hmac"
+        ],
+        "type": "object"
+      },
+      "TransitHMACRequest": {
+        "properties": {
+          "data": {
+            "format": "byte",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "data"
+        ],
+        "type": "object"
+      },
+      "TransitKey": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "version"
+        ],
+        "type": "object"
+      },
+      "TransitKeyRequest": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "TransitPlaintext": {
+        "properties": {
+          "plaintext": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plaintext"
+        ],
+        "type": "object"
+      },
+      "TransitRewrapRequest": {
+        "properties": {
+          "aad": {
+            "format": "byte",
+            "type": "string"
+          },
+          "ciphertext": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ciphertext"
+        ],
+        "type": "object"
+      },
+      "TransitRotateRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "TransitSignRequest": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "message": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "message"
+        ],
+        "type": "object"
+      },
+      "TransitSignature": {
+        "properties": {
+          "public_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "signature": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signature",
+          "public_der"
+        ],
+        "type": "object"
+      },
+      "TransitVerify": {
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid"
+        ],
+        "type": "object"
+      },
+      "TransitVerifyRequest": {
+        "properties": {
+          "message": {
+            "format": "byte",
+            "type": "string"
+          },
+          "public_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "signature": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "signature",
+          "public_der"
+        ],
+        "type": "object"
+      },
       "TransitionRequest": {
         "properties": {
           "reason": {
@@ -5384,6 +5759,74 @@
         "x-trstctl-permission": "issuers:write"
       }
     },
+    "/api/v1/ca/authorities/{id}/intermediates/csr": {
+      "post": {
+        "operationId": "issueIntermediateCAFromCSR",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAIssueIntermediateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAIssuedIntermediate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Sign an external intermediate CA CSR from a served CA authority",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
     "/api/v1/ca/authorities/{id}/issue": {
       "post": {
         "operationId": "issueHierarchyLeaf",
@@ -5913,6 +6356,120 @@
         ],
         "summary": "Get an inventoried certificate",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/code-signing/keyless": {
+      "post": {
+        "operationId": "signCodeArtifactKeyless",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeSigningKeylessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningSignature"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Sign an artifact digest with a verified Sigstore/Fulcio identity",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/code-signing/sign": {
+      "post": {
+        "operationId": "signCodeArtifact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeSigningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningSignature"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Sign an artifact digest with a managed code-signing key",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/connectors/catalog": {
@@ -8290,7 +8847,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Invoke one read-only MCP tool (grounded, cited, rate-limited)",
+        "summary": "Invoke one MCP tool (read by default; guarded writes when enabled)",
         "x-trstctl-permission": "graph:read"
       }
     },
@@ -10452,6 +11009,462 @@
         ],
         "summary": "Push a stored secret to a configured external sync target",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/transit/decrypt": {
+      "post": {
+        "operationId": "decryptTransit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitDecryptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitPlaintext"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Decrypt transit ciphertext",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/encrypt": {
+      "post": {
+        "operationId": "encryptTransit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitEncryptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitCiphertext"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Encrypt plaintext with a transit key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/hmac": {
+      "post": {
+        "operationId": "hmacTransit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitHMACRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitHMAC"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Compute an HMAC with a transit key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/keys": {
+      "post": {
+        "operationId": "createTransitKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a tenant-scoped transit key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/keys/rotate": {
+      "post": {
+        "operationId": "rotateTransitKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rotate a tenant-scoped transit key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/rewrap": {
+      "post": {
+        "operationId": "rewrapTransit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitRewrapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitCiphertext"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Re-encrypt transit ciphertext under the current key version",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/sign": {
+      "post": {
+        "operationId": "signTransit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitSignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitSignature"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Sign a message with a transit signing key",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/verify": {
+      "post": {
+        "operationId": "verifyTransit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitVerify"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Verify a transit signature",
+        "x-trstctl-permission": "keys:read"
       }
     },
     "/api/v1/workloads/attested-issuance": {

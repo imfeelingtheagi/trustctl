@@ -23,6 +23,8 @@ needs access, and gets a pass (an SVID) that expires in minutes.
   Envoy SDS integration.
 - If you want cert-manager to write Kubernetes TLS Secrets, cert-manager installed
   in the cluster and a trstctl API token with certificate-issue permission.
+- If you already run SPIRE, access to the SPIRE server configuration and a trstctl API
+  token with certificate-issue permission for the upstream CA.
 
 ## Steps
 
@@ -96,7 +98,32 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    The token used by the agent lives in a mounted Kubernetes Secret file, not in
    command-line arguments.
 
-5. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
+5. **Use SPIRE when it is already your workload identity plane.** Configure trstctl
+   as SPIRE's upstream authority: build or package
+   `trstctl-spire-upstream-authority` into the SPIRE server image, mount the trstctl
+   API token as a file, and point SPIRE at the served CA authority:
+
+   ```hcl
+   UpstreamAuthority "trstctl" {
+     plugin_cmd = "/opt/spire/plugins/trstctl-spire-upstream-authority"
+     plugin_data {
+       endpoint = "https://trstctl:8443"
+       ca_authority_id = "<ca-authority-id>"
+       token_file = "/run/secrets/trstctl-spire-token"
+       common_name = "SPIRE Server CA"
+       ttl_seconds = 3600
+       max_path_len = 0
+       permitted_dns_domains = ["example.org"]
+     }
+   }
+   ```
+
+   On startup, SPIRE creates its local CA key, sends the CA CSR to
+   `POST /api/v1/ca/authorities/{id}/intermediates/csr`, and receives a signed
+   intermediate plus the trstctl root. You should see SPIRE continue minting normal
+   X.509-SVIDs, but their chain now ends at the trstctl CA you govern and audit.
+
+6. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
    presents its selectors (e.g. `k8s:ns:default`, `k8s:sa:web`) over the socket; the
    server matches them against registration entries and returns an SVID plus the
    trust bundle. With a stock client this is a `FetchX509SVID` call for mTLS or a
@@ -106,14 +133,14 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    separate signing service, that expires in minutes, not months. The wire details are in
    [Workload identity](../features/workload-identity.md).
 
-6. **Confirm there is no static secret to steal.** Because the SVID is short-lived
+7. **Confirm there is no static secret to steal.** Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,
    and even a captured credential is useless within minutes. A `NeedsRotation` helper
    flags an SVID for renewal once it is half-expired, so the workload renews itself.
    You should see SVIDs rotating on their own with no secret material at rest in the
    pod spec.
 
-7. **See the workloads land in inventory and the graph.** Each attested identity and
+8. **See the workloads land in inventory and the graph.** Each attested identity and
    its credential are recorded, so you can find them like any other credential:
 
    ```sh
@@ -126,7 +153,9 @@ needs access, and gets a pass (an SVID) that expires in minutes.
 
    > Honest status: the SPIFFE Workload API is served over the socket and proven
    > end-to-end against stock go-spiffe for X.509-SVID and JWT-SVID flows, plus
-   > `spiffe-helper` for X.509 file output, in CI. The
+   > `spiffe-helper` for X.509 file output, in CI. The SPIRE upstream-authority
+   > plugin is also proven with a real SPIRE server container that mints an
+   > X.509-SVID chained to the trstctl root. The
    > attestation and direct ephemeral X.509-SVID issuance are served through
    > `POST /api/v1/workloads/attested-issuance`; approval-gated JIT ephemeral issuance
    > is served through `POST /api/v1/ephemeral` plus

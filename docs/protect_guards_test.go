@@ -3326,6 +3326,7 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/rca", "TestEvidenceRedactsKeyMaterialAndIsInert"},
 		{"../internal/mcpserver", "TestMCPReadOnlyToolsGroundedAndScoped"},
 		{"../internal/mcpserver", "TestMCPNoWriteTools"},
+		{"../internal/mcpserver", "TestMCPWriteToolsAreExplicitOptInMetadata"},
 		{"../internal/mcpserver", "TestMCPRateLimitTripsUnderEnumeration"},
 		{"../internal/mcpserver", "TestMCPPromptInjectionIsInert"},
 		{"../internal/query", "TestInjectionViaFieldFailsClosed"},
@@ -3337,12 +3338,13 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/query", "TestLogOffsetDoesNotRevealForeignTenantEvents"},
 		{"../internal/query", "TestRBACViewerCannotReadLog"},
 		{"../internal/query", "TestDeadlineGuardTrips"},
-		{"../internal/api", "TestAISurfaceRoutesStayReadOnlyGraphScoped"},
+		{"../internal/api", "TestAISurfaceRoutesStayGraphScopedWithGuardedMCPWrites"},
 		{"../internal/api", "TestAISurfaceEngineQueryRejectsTenantMismatch"},
 		{"../internal/server", "TestServedAIQueryGroundedAndScoped"},
 		{"../internal/server", "TestServedRCAGroundedAndCited"},
 		{"../internal/server", "TestServedAIInjectionInertAndRedacted"},
 		{"../internal/server", "TestServedMCPListsAndInvokesReadOnlyTool"},
+		{"../internal/server", "TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled"},
 		{"../internal/server", "TestServedAISurfaceDisabledFailsClosed"},
 		{"../docs", "TestFrontendOpenAPIContractGenerationBoundary"},
 	} {
@@ -3371,7 +3373,8 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 	)
 	mcp := read(t, "../internal/mcpserver/mcpserver.go")
 	check("internal/mcpserver/mcpserver.go", mcp,
-		"func (s *Server) HasWriteTool() bool { return false }",
+		"func WithWriteTools() Option",
+		"func (s *Server) HasWriteTool() bool { return len(s.writes) > 0 }",
 		"if tenantID != s.tenantID",
 		"ErrOutOfScope",
 		"ErrRateLimited",
@@ -3379,6 +3382,8 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 		"get_blast_radius",
 		"explain_incident",
 		"compliance_status",
+		"issue_certificate",
+		"rotate_certificate",
 	)
 	query := read(t, "../internal/query/query.go")
 	check("internal/query/query.go", query,

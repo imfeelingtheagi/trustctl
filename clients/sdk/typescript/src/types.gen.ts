@@ -328,6 +328,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/intermediates/csr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign an external intermediate CA CSR from a served CA authority */
+        post: operations["issueIntermediateCAFromCSR"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/{id}/issue": {
         parameters: {
             query?: never;
@@ -459,6 +476,40 @@ export interface paths {
         get: operations["getCertificate"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code-signing/keyless": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign an artifact digest with a verified Sigstore/Fulcio identity */
+        post: operations["signCodeArtifactKeyless"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code-signing/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign an artifact digest with a managed code-signing key */
+        post: operations["signCodeArtifact"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1041,7 +1092,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Invoke one read-only MCP tool (grounded, cited, rate-limited) */
+        /** Invoke one MCP tool (read by default; guarded writes when enabled) */
         post: operations["callMCPTool"];
         delete?: never;
         options?: never;
@@ -1534,6 +1585,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transit/decrypt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decrypt transit ciphertext */
+        post: operations["decryptTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/encrypt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Encrypt plaintext with a transit key */
+        post: operations["encryptTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/hmac": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compute an HMAC with a transit key */
+        post: operations["hmacTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a tenant-scoped transit key */
+        post: operations["createTransitKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/keys/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate a tenant-scoped transit key */
+        post: operations["rotateTransitKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/rewrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-encrypt transit ciphertext under the current key version */
+        post: operations["rewrapTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign a message with a transit signing key */
+        post: operations["signTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify a transit signature */
+        post: operations["verifyTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workloads/attested-issuance": {
         parameters: {
             query?: never;
@@ -1572,6 +1759,7 @@ export interface components {
             enabled: boolean;
             endpoint_host?: string;
             mcp_identity?: string;
+            mcp_write_tools?: boolean;
             model_configured: boolean;
             model_mode: string;
             model_name?: string;
@@ -1776,9 +1964,19 @@ export interface components {
             ceremony_id: string;
             spec: components["schemas"]["CASpec"];
         };
+        CAIssueIntermediateRequest: {
+            csr_pem: string;
+            spec: components["schemas"]["CASpec"];
+        };
         CAIssueLeafRequest: {
             csr_pem: string;
             ttl_seconds?: number;
+        };
+        CAIssuedIntermediate: {
+            certificate_pem: string;
+            /** Format: date-time */
+            not_after: string;
+            serial: string;
         };
         CAIssuedLeaf: {
             certificate_pem: string;
@@ -1889,6 +2087,34 @@ export interface components {
         CertificateList: {
             items: components["schemas"]["Certificate"][];
             next_cursor?: string;
+        };
+        CodeSigningKeylessRequest: {
+            artifact_type: string;
+            /** Format: byte */
+            digest: string;
+            fulcio_issuer?: string;
+            fulcio_san?: string;
+            identity_method: string;
+            /** Format: byte */
+            identity_payload: string;
+        };
+        CodeSigningRequest: {
+            artifact_type: string;
+            /** Format: byte */
+            digest: string;
+            key_id: string;
+        };
+        CodeSigningSignature: {
+            algorithm: string;
+            artifact_type: string;
+            fulcio_issuer?: string;
+            fulcio_san?: string;
+            key_id?: string;
+            /** Format: byte */
+            public_key_der: string;
+            /** Format: byte */
+            signature: string;
+            transparency_destination?: string;
         };
         ConnectorCatalog: {
             items: components["schemas"]["ConnectorCatalogItem"][];
@@ -2283,7 +2509,12 @@ export interface components {
             public_key?: string;
         };
         MCPToolCall: {
+            authority_id?: string;
+            csr_pem?: string;
+            previous_serial?: string;
+            reason?: string;
             subject?: string;
+            ttl_seconds?: number;
         };
         MCPToolList: {
             identity?: string;
@@ -2291,7 +2522,11 @@ export interface components {
             tools: string[];
         };
         MCPToolResult: {
+            certificate_pem?: string;
             citations?: string[];
+            /** Format: date-time */
+            not_after?: string;
+            serial?: string;
             text: string;
             tool: string;
         };
@@ -2707,6 +2942,76 @@ export interface components {
         };
         ShareValue: {
             value: string;
+        };
+        TransitCiphertext: {
+            ciphertext: string;
+            version: number;
+        };
+        TransitDecryptRequest: {
+            /** Format: byte */
+            aad?: string;
+            ciphertext: string;
+            key: string;
+        };
+        TransitEncryptRequest: {
+            /** Format: byte */
+            aad?: string;
+            key: string;
+            /** Format: byte */
+            plaintext: string;
+        };
+        TransitHMAC: {
+            /** Format: byte */
+            hmac: string;
+        };
+        TransitHMACRequest: {
+            /** Format: byte */
+            data: string;
+            key: string;
+        };
+        TransitKey: {
+            kind: string;
+            name: string;
+            version: number;
+        };
+        TransitKeyRequest: {
+            kind: string;
+            name: string;
+        };
+        TransitPlaintext: {
+            /** Format: byte */
+            plaintext: string;
+        };
+        TransitRewrapRequest: {
+            /** Format: byte */
+            aad?: string;
+            ciphertext: string;
+            key: string;
+        };
+        TransitRotateRequest: {
+            name: string;
+        };
+        TransitSignRequest: {
+            key: string;
+            /** Format: byte */
+            message: string;
+        };
+        TransitSignature: {
+            /** Format: byte */
+            public_der: string;
+            /** Format: byte */
+            signature: string;
+        };
+        TransitVerify: {
+            valid: boolean;
+        };
+        TransitVerifyRequest: {
+            /** Format: byte */
+            message: string;
+            /** Format: byte */
+            public_der: string;
+            /** Format: byte */
+            signature: string;
         };
         TransitionRequest: {
             reason?: string;
@@ -3579,6 +3884,50 @@ export interface operations {
             };
         };
     };
+    issueIntermediateCAFromCSR: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAIssueIntermediateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAIssuedIntermediate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     issueHierarchyLeaf: {
         parameters: {
             query?: never;
@@ -3930,6 +4279,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    signCodeArtifactKeyless: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSigningKeylessRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningSignature"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    signCodeArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSigningRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningSignature"];
                 };
             };
             /** @description client error */
@@ -7155,6 +7588,342 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decryptTransit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitDecryptRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitPlaintext"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    encryptTransit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitEncryptRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitCiphertext"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    hmacTransit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitHMACRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitHMAC"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createTransitKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateTransitKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitRotateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rewrapTransit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitRewrapRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitCiphertext"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    signTransit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitSignRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitSignature"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyTransit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitVerify"];
                 };
             };
             /** @description client error */

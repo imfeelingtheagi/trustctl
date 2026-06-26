@@ -241,6 +241,29 @@ func VerifyDigest(pub PublicKey, digest, signature []byte, opts SignOptions) err
 	}
 }
 
+// RSAPublicKeyDERFromComponents marshals a token-returned RSA public key into
+// PKIX/DER. Hardware backends such as PKCS#11 expose public components rather
+// than Go crypto types; keeping this conversion inside internal/crypto preserves
+// the AN-3 boundary for callers.
+func RSAPublicKeyDERFromComponents(modulus, exponent []byte) ([]byte, error) {
+	if len(modulus) == 0 {
+		return nil, fmt.Errorf("crypto: RSA modulus is empty")
+	}
+	if len(exponent) == 0 {
+		return nil, fmt.Errorf("crypto: RSA public exponent is empty")
+	}
+	n := new(big.Int).SetBytes(modulus)
+	e := new(big.Int).SetBytes(exponent)
+	if !e.IsInt64() || e.Sign() <= 0 {
+		return nil, fmt.Errorf("crypto: RSA public exponent out of range")
+	}
+	der, err := x509.MarshalPKIXPublicKey(&rsa.PublicKey{N: n, E: int(e.Int64())})
+	if err != nil {
+		return nil, fmt.Errorf("crypto: marshal RSA public key: %w", err)
+	}
+	return der, nil
+}
+
 func rsaBits(a Algorithm) int {
 	switch a {
 	case RSA2048:

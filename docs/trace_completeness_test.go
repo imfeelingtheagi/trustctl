@@ -431,7 +431,7 @@ func TestIncidentExecutionServedVsFleetReissuanceLibraryIsHonest(t *testing.T) {
 	}
 }
 
-// ---- TRACE-007: AI-agent identity surface — F78 MCP investigation read-only;
+// ---- TRACE-007: AI-agent identity surface — F78 MCP investigation defaults read-only;
 //      F61 broker issuance served when configured --------------------------------
 
 // mcpInvestigationServed reports whether the read-only MCP investigation surface
@@ -449,17 +449,20 @@ func brokerServed(t *testing.T) bool {
 }
 
 // TestAIAgentBrokerNarrowedToServedReadOnlyMCPVsLibraryBroker pins TRACE-007. The
-// served AI-agent-facing surface is the F78 MCP server, which is strictly READ-ONLY
-// (no write/remediation tools). F61 broker issuance is served only when its attestors,
-// policy module, trust domain, and signer-backed issuing CA are configured. This guard
-// binds both halves so the broker cannot be silently under-claimed as library-only and
-// the read-only MCP claim stays grounded.
+// served AI-agent-facing surface is the F78 MCP server. Its investigation tools are
+// read-only by default, while certificate write tools are a separate, explicit,
+// idempotent opt-in. F61 broker issuance is served only when its attestors, policy
+// module, trust domain, and signer-backed issuing CA are configured. This guard binds
+// both halves so the broker cannot be silently under-claimed as library-only and the
+// default-read-only MCP claim stays grounded.
 func TestAIAgentBrokerNarrowedToServedReadOnlyMCPVsLibraryBroker(t *testing.T) {
-	// Reality anchor: the MCP server is read-only by construction (HasWriteTool is
-	// hard-coded false). This is what makes the "read-only investigation" claim true.
+	// Reality anchor: the MCP server has no write tools unless WithWriteTools is
+	// explicitly supplied. That keeps the investigation surface read-only by default.
 	mcp := read(t, "../internal/mcpserver/mcpserver.go")
-	if !strings.Contains(mcp, "func (s *Server) HasWriteTool() bool { return false }") {
-		t.Fatal("internal/mcpserver no longer hard-codes HasWriteTool() == false; the TRACE-007 read-only-MCP disclosure has no code anchor — revisit this reality test")
+	for _, want := range []string{"func WithWriteTools()", "func (s *Server) HasWriteTool() bool { return len(s.writes) > 0 }", "issue_certificate", "rotate_certificate"} {
+		if !strings.Contains(mcp, want) {
+			t.Fatalf("internal/mcpserver no longer anchors guarded MCP write-tool behavior with %q — revisit TRACE-007", want)
+		}
 	}
 	if !mcpInvestigationServed(t) {
 		t.Fatal("the read-only MCP investigation surface is no longer wired into the served binary; revisit the TRACE-007 disclosure")
@@ -507,11 +510,13 @@ func TestAIAgentBrokerNarrowedToServedReadOnlyMCPVsLibraryBroker(t *testing.T) {
 		}
 	}
 
-	// The MCP feature page must keep the read-only framing (no write/remediation
-	// tools), the anchor for narrowing the AI-agent claim.
+	// The MCP feature page must keep the default-read-only framing and the explicit
+	// guarded write-tool opt-in.
 	gqa := strings.ToLower(read(t, "features/graph-query-ai.md"))
-	if !strings.Contains(gqa, "read-only") || !strings.Contains(gqa, "no remediation tools") {
-		t.Error("features/graph-query-ai.md must keep disclosing the MCP server as read-only with no remediation tools — TRACE-007")
+	for _, want := range []string{"read-only", "trstctl_ai_mcp_write_tools=true", "idempotency-key", "mcp.tool.write"} {
+		if !strings.Contains(gqa, want) {
+			t.Errorf("features/graph-query-ai.md must disclose guarded MCP write-tool posture (missing %q) — TRACE-007", want)
+		}
 	}
 }
 

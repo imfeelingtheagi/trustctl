@@ -28,6 +28,7 @@ func TestAIModelEnvOverrides(t *testing.T) {
 		"TRSTCTL_AI_RATE_MAX":            "7",
 		"TRSTCTL_AI_RATE_WINDOW_SECONDS": "11",
 		"TRSTCTL_AI_MCP_IDENTITY":        "spiffe://example.org/mcp-server",
+		"TRSTCTL_AI_MCP_WRITE_TOOLS":     "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -39,7 +40,7 @@ func TestAIModelEnvOverrides(t *testing.T) {
 	if cfg.AI.Model.Endpoint != "http://127.0.0.1:11434/api/generate" || cfg.AI.Model.Name != "llama3.1" {
 		t.Fatalf("AI model endpoint/name env not applied: %+v", cfg.AI.Model)
 	}
-	if cfg.AI.RateMax != 7 || cfg.AI.RateWindowSeconds != 11 || cfg.AI.MCPIdentity == "" {
+	if cfg.AI.RateMax != 7 || cfg.AI.RateWindowSeconds != 11 || cfg.AI.MCPIdentity == "" || !cfg.AI.MCPWriteTools {
 		t.Fatalf("AI rate/MCP env not applied: %+v", cfg.AI)
 	}
 }

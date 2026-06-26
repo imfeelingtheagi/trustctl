@@ -31,16 +31,41 @@ spec:
                 signerMode:
                   type: string
                   enum: ["sidecar", "isolated"]
+                signer:
+                  type: object
+                  properties:
+                    authSecret:
+                      type: string
+                    authSecretKey:
+                      type: string
+                    kekSecret:
+                      type: string
+                    kekSecretKey:
+                      type: string
+                    keyStorePVC:
+                      type: string
                 postgres:
                   type: object
                   properties:
                     dsnSecret:
+                      type: string
+                    dsnSecretKey:
                       type: string
                 nats:
                   type: object
                   properties:
                     url:
                       type: string
+                    replicas:
+                      type: integer
+                      minimum: 1
+                    allowSingleReplica:
+                      type: boolean
+                    syncAlways:
+                      type: boolean
+                    syncIntervalSeconds:
+                      type: integer
+                      minimum: 1
                 externalKMS:
                   type: object
                   properties:

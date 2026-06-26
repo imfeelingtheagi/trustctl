@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Kind is a transit key type.
@@ -35,6 +36,24 @@ type Keyring struct {
 	keys     map[string]*namedKey
 }
 
+// Service is the served, tenant-scoped transit composition. It is deliberately a
+// compile-time Go interface/adaptor pattern, like crypto.Signer or a JCA provider
+// selected by construction; it is not an OpenSSL ENGINE-style runtime plugin and
+// it never lets policy register or select crypto providers at runtime.
+type Service struct {
+	mu    sync.Mutex
+	audit auditsink.Auditor
+	rings map[string]*Keyring
+}
+
+// KeyInfo is the key metadata returned by lifecycle operations. It never contains
+// key bytes.
+type KeyInfo struct {
+	Name    string
+	Kind    Kind
+	Version int
+}
+
 type namedKey struct {
 	kind   Kind
 	aead   [][]byte               // version (1-based) -> 32-byte key
@@ -51,6 +70,85 @@ func New(tenantID string, audit auditsink.Auditor) *Keyring {
 	return &Keyring{tenantID: tenantID, audit: audit, keys: map[string]*namedKey{}}
 }
 
+// NewService constructs a tenant-scoped transit service.
+func NewService(audit auditsink.Auditor) *Service {
+	if audit == nil {
+		audit = auditsink.Nop{}
+	}
+	return &Service{audit: audit, rings: map[string]*Keyring{}}
+}
+
+func (s *Service) ring(tenantID string) *Keyring {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rings == nil {
+		s.rings = map[string]*Keyring{}
+	}
+	if k := s.rings[tenantID]; k != nil {
+		return k
+	}
+	k := New(tenantID, s.audit)
+	s.rings[tenantID] = k
+	return k
+}
+
+// CreateKey creates a tenant-scoped key.
+func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kind) (KeyInfo, error) {
+	k := s.ring(tenantID)
+	if err := k.CreateKey(ctx, name, kind); err != nil {
+		return KeyInfo{}, err
+	}
+	return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
+}
+
+// Rotate adds a new version to a tenant-scoped key.
+func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, error) {
+	k := s.ring(tenantID)
+	version, err := k.Rotate(ctx, name)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	kind, err := k.Kind(name)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	return KeyInfo{Name: name, Kind: kind, Version: version}, nil
+}
+
+func (s *Service) Encrypt(ctx context.Context, tenantID, name string, plaintext, aad []byte) (string, error) {
+	return s.ring(tenantID).Encrypt(ctx, name, plaintext, aad)
+}
+
+func (s *Service) Decrypt(ctx context.Context, tenantID, name, ciphertext string, aad []byte) ([]byte, error) {
+	return s.ring(tenantID).Decrypt(ctx, name, ciphertext, aad)
+}
+
+func (s *Service) Rewrap(ctx context.Context, tenantID, name, ciphertext string, aad []byte) (string, error) {
+	return s.ring(tenantID).Rewrap(ctx, name, ciphertext, aad)
+}
+
+func (s *Service) HMAC(ctx context.Context, tenantID, name string, data []byte) ([]byte, error) {
+	return s.ring(tenantID).HMAC(ctx, name, data)
+}
+
+func (s *Service) Sign(ctx context.Context, tenantID, name string, message []byte) ([]byte, []byte, error) {
+	return s.ring(tenantID).Sign(ctx, name, message)
+}
+
+func (s *Service) Verify(ctx context.Context, tenantID string, message, sig, pubDER []byte) error {
+	return s.ring(tenantID).Verify(ctx, message, sig, pubDER)
+}
+
+// Destroy zeroizes every tenant keyring.
+func (s *Service) Destroy() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, k := range s.rings {
+		k.Destroy()
+	}
+	s.rings = map[string]*Keyring{}
+}
+
 // CreateKey creates a named key of the given kind with an initial version.
 func (k *Keyring) CreateKey(ctx context.Context, name string, kind Kind) error {
 	k.mu.Lock()
@@ -61,10 +159,16 @@ func (k *Keyring) CreateKey(ctx context.Context, name string, kind Kind) error {
 	nk := &namedKey{kind: kind, latest: 1}
 	switch kind {
 	case KindAEAD:
-		key, _ := crypto.RandomBytes(32)
+		key, err := crypto.RandomBytes(32)
+		if err != nil {
+			return err
+		}
 		nk.aead = [][]byte{nil, key}
 	case KindHMAC:
-		key, _ := crypto.RandomBytes(32)
+		key, err := crypto.RandomBytes(32)
+		if err != nil {
+			return err
+		}
 		nk.hmac = [][]byte{nil, key}
 	case KindSign:
 		s, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -80,6 +184,17 @@ func (k *Keyring) CreateKey(ctx context.Context, name string, kind Kind) error {
 	return nil
 }
 
+// Kind reports a key's kind.
+func (k *Keyring) Kind(name string) (Kind, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	nk, ok := k.keys[name]
+	if !ok {
+		return "", fmt.Errorf("transit: unknown key %q", name)
+	}
+	return nk.kind, nil
+}
+
 // Rotate adds a new version to a key and returns the new version number.
 func (k *Keyring) Rotate(ctx context.Context, name string) (int, error) {
 	k.mu.Lock()
@@ -90,10 +205,16 @@ func (k *Keyring) Rotate(ctx context.Context, name string) (int, error) {
 	}
 	switch nk.kind {
 	case KindAEAD:
-		key, _ := crypto.RandomBytes(32)
+		key, err := crypto.RandomBytes(32)
+		if err != nil {
+			return 0, err
+		}
 		nk.aead = append(nk.aead, key)
 	case KindHMAC:
-		key, _ := crypto.RandomBytes(32)
+		key, err := crypto.RandomBytes(32)
+		if err != nil {
+			return 0, err
+		}
 		nk.hmac = append(nk.hmac, key)
 	case KindSign:
 		s, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -128,7 +249,7 @@ func (k *Keyring) Encrypt(ctx context.Context, name string, plaintext, aad []byt
 }
 
 // Decrypt decrypts a ciphertext (any version of the named key).
-func (k *Keyring) Decrypt(_ context.Context, name, ciphertext string, aad []byte) ([]byte, error) {
+func (k *Keyring) Decrypt(ctx context.Context, name, ciphertext string, aad []byte) ([]byte, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
@@ -142,7 +263,12 @@ func (k *Keyring) Decrypt(_ context.Context, name, ciphertext string, aad []byte
 	if ver < 1 || ver >= len(nk.aead) {
 		return nil, fmt.Errorf("transit: unknown key version %d", ver)
 	}
-	return crypto.AESGCMOpen(nk.aead[ver], ct, k.aad(name, aad))
+	pt, err := crypto.AESGCMOpen(nk.aead[ver], ct, k.aad(name, aad))
+	if err != nil {
+		return nil, err
+	}
+	k.event(ctx, "transit.decrypt", name)
+	return pt, nil
 }
 
 // Rewrap decrypts a ciphertext and re-encrypts it under the latest version.
@@ -152,26 +278,29 @@ func (k *Keyring) Rewrap(ctx context.Context, name, ciphertext string, aad []byt
 		return "", err
 	}
 	out, err := k.Encrypt(ctx, name, pt, aad)
-	for i := range pt {
-		pt[i] = 0
+	secret.Wipe(pt)
+	if err == nil {
+		k.event(ctx, "transit.rewrap", name)
 	}
 	return out, err
 }
 
 // HMAC returns HMAC-SHA256 of data under the latest version of the named HMAC key.
-func (k *Keyring) HMAC(_ context.Context, name string, data []byte) ([]byte, error) {
+func (k *Keyring) HMAC(ctx context.Context, name string, data []byte) ([]byte, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok || nk.kind != KindHMAC {
 		return nil, fmt.Errorf("transit: %q is not an HMAC key", name)
 	}
-	return crypto.HMACSHA256(nk.hmac[nk.latest], data), nil
+	mac := crypto.HMACSHA256(nk.hmac[nk.latest], data)
+	k.event(ctx, "transit.hmac", name)
+	return mac, nil
 }
 
 // Sign signs message under the latest version of the named signing key and returns
 // the signature and the public key (for Verify).
-func (k *Keyring) Sign(_ context.Context, name string, message []byte) (sig, pubDER []byte, err error) {
+func (k *Keyring) Sign(ctx context.Context, name string, message []byte) (sig, pubDER []byte, err error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
@@ -183,12 +312,44 @@ func (k *Keyring) Sign(_ context.Context, name string, message []byte) (sig, pub
 	if err != nil {
 		return nil, nil, err
 	}
+	k.event(ctx, "transit.sign", name)
 	return sig, s.Public().DER, nil
 }
 
 // Verify checks a transit signature.
-func (k *Keyring) Verify(_ context.Context, message, sig, pubDER []byte) error {
-	return crypto.VerifyMessage(pubDER, message, sig)
+func (k *Keyring) Verify(ctx context.Context, message, sig, pubDER []byte) error {
+	err := crypto.VerifyMessage(pubDER, message, sig)
+	if err == nil {
+		k.event(ctx, "transit.verify", "signature")
+	}
+	return err
+}
+
+// Destroy zeroizes every key byte and destroys locked signing keys. The keyring is
+// unusable afterward except to create fresh keys.
+func (k *Keyring) Destroy() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	for _, nk := range k.keys {
+		for _, b := range nk.aead {
+			secret.Wipe(b)
+		}
+		for _, b := range nk.hmac {
+			secret.Wipe(b)
+		}
+		for _, s := range nk.sign {
+			if s != nil {
+				s.Destroy()
+			}
+		}
+	}
+	k.keys = map[string]*namedKey{}
+}
+
+// CiphertextVersion reports the transit version encoded in a ciphertext.
+func CiphertextVersion(ciphertext string) (int, error) {
+	ver, _, err := parseCT(ciphertext)
+	return ver, err
 }
 
 func (k *Keyring) event(ctx context.Context, ev, name string) {

@@ -33,10 +33,12 @@ Be precise here (see [Current limitations](../limitations.md) and
   (`token`, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT),
   outbound **secret-sync** to configured external stores, and Gitleaks-backed
   code/CI secret scanning. Short-lived API keys are served at
-  `/api/v1/ephemeral/api-keys`.
-- **Library-only** (built and tested, no served endpoint yet): the **transit / KMIP**
-  encryption-as-a-service surface. Secret-store and API-key *discovery* records
-  references only and stays covered by the discovery journey.
+  `/api/v1/ephemeral/api-keys`. Transit encryption-as-a-service is served separately
+  at `/api/v1/transit/*` and `trstctl-cli transit`. KMIP is served as an opt-in
+  mTLS listener for AES-256 SymmetricKey Create/Get.
+- **Still outside this journey:** broader KMIP appliance profiles and secret-store /
+  API-key *discovery* of actual values. Discovery records references only and stays
+  covered by the discovery journey.
 
 ## Steps
 
@@ -314,8 +316,10 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the scan response shows the `run_id`, `rules_active`, and redacted findings.
    The secret value itself is not returned and is not written to the event log.
 
-13. Know the edges before you rely on them. The transit/KMIP encryption surface remains
-    **library-only** — there is no served endpoint yet, so you drive it through Go APIs.
+13. Know the edges before you rely on them. Transit encryption-as-a-service is now
+    served through `/api/v1/transit/*` and `trstctl-cli transit`, and KMIP is served
+    through a separate `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
+    Create/Get. Broader appliance profiles and KMIP operations are still future work.
     Finding secrets already scattered across your estate (secret-store and API-key
     discovery) records references only, never values — see
     [Discovery & inventory](../features/discovery-and-inventory.md) and

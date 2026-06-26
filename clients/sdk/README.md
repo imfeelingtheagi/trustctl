@@ -12,6 +12,7 @@ clients/sdk/
   go/                   # Go SDK — its own module, standard library only
   typescript/           # TypeScript SDK — generated types + dependency-free runtime
   python/               # Python SDK — generated TypedDicts + stdlib runtime
+  java/                 # Java SDK — generated schema index + JDK-only runtime
 ```
 
 Each SDK provides, out of the box (so every integrator does not re-implement
@@ -34,7 +35,7 @@ them):
 live ServeMux
   ==(internal/api.TestOpenAPIGolden)==>   internal/api/testdata/openapi.golden.json
   ==(internal/api.TestSDKSpecPinnedToGolden)==> clients/sdk/openapi.json
-  --(scripts/gen-sdk.sh / make sdk)-->    Go SDK + TypeScript SDK + Python SDK
+  --(scripts/gen-sdk.sh / make sdk)-->    Go SDK + TypeScript SDK + Python SDK + Java SDK
 ```
 
 If the backend changes a field, the golden changes, `TestSDKSpecPinnedToGolden`
@@ -46,7 +47,7 @@ goes red until you re-run `make sdk`, and the regenerated types make `go build` 
 ```bash
 make sdk         # re-pin clients/sdk/openapi.json + regenerate every SDK
 make sdk-check   # CI: fail if the SDKs are out of sync with the served contract
-make sdk-test    # build + test the Go and Python SDKs
+make sdk-test    # build + test the Go, TypeScript, Python, and Java SDKs
 ```
 
 ---
@@ -133,7 +134,8 @@ if prob, ok := trstctl.AsProblem(err); ok {
 Package: `@trstctl/sdk`. Resource **types are generated** by `openapi-typescript`
 from the pinned spec; a small dependency-free runtime (`src/index.ts`) adds the
 auth, idempotency, retry, problem+json, and pagination behavior. Requires a
-global `fetch` (Node 18+, Deno, browser).
+global `fetch` (Node 18+, Deno, browser). The package includes publish metadata
+for registry release and defaults to `trstctl-ts-sdk/1` as its User-Agent.
 
 Generate the types (pinned to `clients/sdk/openapi.json`):
 
@@ -160,6 +162,19 @@ try {
   if (isProblem(err)) console.error(err.httpStatus, err.title, err.detail);
 }
 ```
+
+Build and test the TypeScript SDK on its own:
+
+```bash
+cd clients/sdk/typescript
+npm run typecheck
+npm test
+```
+
+The test suite compiles the real SDK source, injects a deterministic `fetch`,
+and covers bearer auth, optional tenant headers, core owner/identity/certificate
+resources, cursor pagination, stable mutation `Idempotency-Key` retry behavior,
+and `problem+json` parsing.
 
 See `typescript/README.md` for the full reference and a copy-paste helper snippet
 you can paste into a project that prefers raw `fetch`.
@@ -209,6 +224,52 @@ python3 clients/sdk/python/scripts/gen_types.py \
 The served-path acceptance test shells out to Python with `PYTHONPATH` pointed at
 `clients/sdk/python/src` and performs a real auth + PKI issue + secret
 create/read/rotate/delete round-trip against the assembled control-plane handler.
+
+---
+
+## Java SDK (`java/`)
+
+Package: `com.trstctl:trstctl-sdk`. The runtime is JDK-only: it uses
+`java.net.http` for transport, parses `problem+json` into `ProblemException`, sends
+`Authorization`, optional `X-Tenant-ID`, and stable `Idempotency-Key` headers, and
+retries `429`/`502`/`503`/`504` while honoring `Retry-After`. `OpenApiSchemas.java`
+is generated from the pinned OpenAPI schema names so Java builds get the same drift
+signal as the other SDKs without pulling in a codegen runtime. The default
+User-Agent is `trstctl-java-sdk/1`.
+
+```java
+import com.trstctl.sdk.PkiSecret;
+import com.trstctl.sdk.Secret;
+import com.trstctl.sdk.TrstctlClient;
+
+TrstctlClient client = TrstctlClient.fromEnv();
+
+PkiSecret issued = client.issuePkiSecret(
+    "payments.service",
+    900,
+    "payments-pki-2026-06-25"
+);
+Secret current = client.createSecret(
+    "apps/payments/api-token",
+    "initial-fixture-value",
+    "payments-secret-create"
+);
+
+System.out.println(issued.serial() + " " + current.version());
+```
+
+Generate the Java schema index:
+
+```bash
+python3 clients/sdk/java/scripts/gen_schemas.py \
+  clients/sdk/openapi.json \
+  clients/sdk/java/src/main/java/com/trstctl/sdk/OpenApiSchemas.java
+```
+
+`make sdk-test` compiles the Java SDK and its JDK-only unit test when `javac` is
+available. CI sets `TRSTCTL_REQUIRE_JAVA_SDK=1`, so the Java gate fails instead of
+skipping if the JDK disappears from the runner. The served acceptance test compiles
+and runs a Java program against the assembled control-plane handler and proves auth + PKI issue + secret create/read/rotate/delete end-to-end.
 
 ---
 

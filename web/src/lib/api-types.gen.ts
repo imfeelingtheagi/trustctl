@@ -28,6 +28,7 @@ export interface AIStatus {
   enabled: boolean;
   endpoint_host?: string;
   mcp_identity?: string;
+  mcp_write_tools?: boolean;
   model_configured: boolean;
   model_mode: string;
   model_name?: string;
@@ -224,9 +225,20 @@ export interface CACreateRootRequest {
   spec: CASpec;
 }
 
+export interface CAIssueIntermediateRequest {
+  csr_pem: string;
+  spec: CASpec;
+}
+
 export interface CAIssueLeafRequest {
   csr_pem: string;
   ttl_seconds?: number;
+}
+
+export interface CAIssuedIntermediate {
+  certificate_pem: string;
+  not_after: string;
+  serial: string;
 }
 
 export interface CAIssuedLeaf {
@@ -335,6 +347,32 @@ export interface CertificateIngest {
 export interface CertificateList {
   items: Certificate[];
   next_cursor?: string;
+}
+
+export interface CodeSigningKeylessRequest {
+  artifact_type: string;
+  digest: string;
+  fulcio_issuer?: string;
+  fulcio_san?: string;
+  identity_method: string;
+  identity_payload: string;
+}
+
+export interface CodeSigningRequest {
+  artifact_type: string;
+  digest: string;
+  key_id: string;
+}
+
+export interface CodeSigningSignature {
+  algorithm: string;
+  artifact_type: string;
+  fulcio_issuer?: string;
+  fulcio_san?: string;
+  key_id?: string;
+  public_key_der: string;
+  signature: string;
+  transparency_destination?: string;
 }
 
 export interface ConnectorCatalog {
@@ -705,7 +743,12 @@ export interface IssuerRequest {
 }
 
 export interface MCPToolCall {
+  authority_id?: string;
+  csr_pem?: string;
+  previous_serial?: string;
+  reason?: string;
   subject?: string;
+  ttl_seconds?: number;
 }
 
 export interface MCPToolList {
@@ -715,7 +758,10 @@ export interface MCPToolList {
 }
 
 export interface MCPToolResult {
+  certificate_pem?: string;
   citations?: string[];
+  not_after?: string;
+  serial?: string;
   text: string;
   tool: string;
 }
@@ -1144,6 +1190,77 @@ export interface ShareToken {
 
 export interface ShareValue {
   value: string;
+}
+
+export interface TransitCiphertext {
+  ciphertext: string;
+  version: number;
+}
+
+export interface TransitDecryptRequest {
+  aad?: string;
+  ciphertext: string;
+  key: string;
+}
+
+export interface TransitEncryptRequest {
+  aad?: string;
+  key: string;
+  plaintext: string;
+}
+
+export interface TransitHMAC {
+  hmac: string;
+}
+
+export interface TransitHMACRequest {
+  data: string;
+  key: string;
+}
+
+export interface TransitKey {
+  kind: string;
+  name: string;
+  version: number;
+}
+
+export interface TransitKeyRequest {
+  kind: string;
+  name: string;
+}
+
+export interface TransitPlaintext {
+  plaintext: string;
+}
+
+export interface TransitRewrapRequest {
+  aad?: string;
+  ciphertext: string;
+  key: string;
+}
+
+export interface TransitRotateRequest {
+  name: string;
+}
+
+export interface TransitSignRequest {
+  key: string;
+  message: string;
+}
+
+export interface TransitSignature {
+  public_der: string;
+  signature: string;
+}
+
+export interface TransitVerify {
+  valid: boolean;
+}
+
+export interface TransitVerifyRequest {
+  message: string;
+  public_der: string;
+  signature: string;
 }
 
 export interface TransitionRequest {

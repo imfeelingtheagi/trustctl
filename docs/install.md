@@ -50,9 +50,12 @@ cosign verify "$TRSTCTL_IMAGE_REF" \
 ```
 
 See [Supply chain](supply-chain.md) for the full signing, SBOM, provenance, and
-dependency-scanning story. For Kubernetes admission-time enforcement, start from
-`deploy/kubernetes/sigstore-policy.yaml`; it admits only digest-pinned trstctl
-images signed by this repository's release workflow identity.
+dependency-scanning story. Each tagged release also includes SLSA provenance named
+`trstctl-container-and-manifest.intoto.jsonl`; verify that file against the published
+container digest and rendered Kubernetes agent manifest when you mirror artifacts
+into your own registry. For Kubernetes admission-time enforcement, start from
+`deploy/kubernetes/sigstore-policy.yaml`; it admits only digest-pinned trstctl images
+signed by this repository's release workflow identity.
 
 ## Kubernetes (control plane via Helm)
 
@@ -87,16 +90,21 @@ cosign verify ghcr.io/ctlplne/trstctl/charts/trstctl:<chart-version> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+For offline or mirrored installs, also download `trstctl-helm-chart.intoto.jsonl`
+from the GitHub Release and verify the packaged chart bytes with `slsa-verifier`.
+
 See [`deploy/helm/trstctl/README.md`](https://github.com/ctlplne/trstctl/tree/main/deploy/helm/trstctl)
 for the full values reference. The chart runs the signer co-located (sidecar, over
 an in-memory UDS) by default; set `signer.mode=isolated` plus the required
 `signer.mtls.*` values to render a **separate signer pod reached over mutually
-pinned mTLS** (TLS 1.3, both-ways certificate pinning). A minimal
+pinned mTLS** (TLS 1.3, both-ways certificate pinning). A focused
 Kubernetes **Operator** binary (`cmd/trstctl-operator`) ships for CRD-driven
-Deployment replica/image reconciliation; Helm remains the supported full
-control-plane install for services,
-secrets, network policy, signer topology, PostgreSQL, and NATS — see
-[limitations](limitations.md).
+Deployment reconciliation: replicas, image, PostgreSQL DSN Secret reference,
+NATS URL/replica knobs, sidecar-signer socket/volumes, and managed-key provider
+enablement. Its manifest runs two replicas with real leader election through a
+Kubernetes Lease, so one replica reconciles and the other stays hot. Helm remains the
+supported full control-plane install for services, ingress, generated secrets,
+network policy, and cross-pod signer mTLS topology — see [limitations](limitations.md).
 
 ## Kubernetes (agent)
 

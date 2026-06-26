@@ -177,8 +177,31 @@ wipeable memory there — only signatures and public keys cross the wire. Every 
 pass a conformance harness (`ConformBackend`) before it's trusted: it signs a probe,
 verifies it, and confirms a wrong message and a tampered signature both fail.
 
-Note: several hardware bindings ship against an injected interface with a software double
-on CI; the native cgo/connector bindings are the documented follow-up.
+The PKCS#11 backend now has a native module adapter as well as the fast injected
+test double: an integration test initializes a real SoftHSM token in a container,
+generates a non-extractable RSA-2048 key on that token, signs through the module,
+and verifies the returned public key through the shared backend conformance harness.
+Default release binaries stay static (`CGO_ENABLED=0`); deployments that need a
+local PKCS#11 module build the signer/control-plane package with cgo enabled and
+provide the module path, token label, and user PIN through operator-managed secret
+configuration. Other hardware families still use the same backend contract, with
+their own provider maturity and device setup requirements.
+
+The managed-key lifecycle is now served for AWS KMS custody. When
+`managed_keys.enabled` is true and the AWS KMS region/credentials are configured, the
+running control plane exposes:
+
+- `POST /api/v1/managed-keys` to create a KMS-resident signing key;
+- `POST /api/v1/managed-keys/rotate` to mint a successor key;
+- `POST /api/v1/managed-keys/revoke` to disable the current key at the provider;
+- `POST /api/v1/managed-keys/zeroize` to schedule provider-side destruction.
+
+The CLI mirrors those verbs under `trstctl managed-keys`. Every request is
+tenant-scoped, idempotent, and recorded as a key-material-free lifecycle event. Rotate,
+revoke, and zeroize require a distinct approval when four-eyes governance is enabled,
+so one operator cannot silently destroy a tenant's signing key. CI proves the served
+path against LocalStack AWS KMS, and the same test runs against real AWS KMS when
+standard `AWS_*` credentials are present.
 
 ## Use it
 
@@ -232,9 +255,10 @@ external CA registry API, each of which calls the one issuance path with an
   reference path; for production, point the CA at an HSM/KMS backend so the key is
   never in the control-plane's memory. See [configuration](../configuration.md) for
   `TRSTCTL_SIGNER_MODE` and CA custody.
-- **Hardware bindings vary in maturity.** The KMS/HSM backends are uniform behind the
-  interface and tested against doubles; confirm the specific native binding you need is
-  wired before relying on it ([limitations](../limitations.md)).
+- **Hardware bindings vary in maturity.** AWS KMS managed keys are served and
+  LocalStack-proven; PKCS#11 has a real SoftHSM-backed native binding. Confirm the
+  specific native binding you need is wired before relying on it
+  ([limitations](../limitations.md)).
 - **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**
   Certificates discovered from another CA can still be inventoried and risk-scored, but
   renewing them requires a configured issuer path that can replace that outside

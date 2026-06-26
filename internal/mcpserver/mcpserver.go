@@ -1,12 +1,11 @@
-// Package mcpserver exposes trstctl as read-only, grounded MCP tools (F78,
-// S19b.4) an external AI agent can call to investigate credentials within strict
-// bounds: query_credentials, get_blast_radius, explain_incident,
-// compliance_status. Every call is tenant+RBAC-scoped via SF.7 (an out-of-scope
-// call returns nothing), rate-limited and enumeration-resistant, and audited.
-// There are NO write/remediation tools — the agent can never act — and retrieved
-// data is inert (a hostile string in a SAN or secret name causes no action and no
-// out-of-scope disclosure). The server holds an identity issued by trstctl's own
-// F61 broker (dogfooding). No key material appears in tool output (AN-8).
+// Package mcpserver exposes trstctl as grounded MCP tools (F78, S19b.4) an external
+// AI agent can call within strict bounds. Read tools are always investigation-only:
+// query_credentials, get_blast_radius, explain_incident, compliance_status. Write
+// tools are fail-closed by default and appear only when the served API explicitly
+// enables them; the API layer then enforces RBAC/policy, idempotency, and audit before
+// any mutation. Every call is tenant-scoped via SF.7, rate-limited and
+// enumeration-resistant, and audited. Retrieved data is inert, and no key material
+// appears in tool output (AN-8).
 package mcpserver
 
 import (
@@ -68,7 +67,8 @@ type ToolResult struct {
 	Text      string
 }
 
-// Server is the read-only MCP tool surface.
+// Server is the MCP tool surface. It is read-only unless guarded write-tool metadata
+// is explicitly enabled with WithWriteTools.
 type Server struct {
 	tenantID string
 	pipeline *rca.Pipeline
@@ -77,18 +77,33 @@ type Server struct {
 	audit    auditsink.Auditor
 	identity string
 	tools    map[string]string // read-only tool -> question template
+	writes   map[string]string // explicit write tool -> description
+}
+
+// Option customizes the MCP tool surface.
+type Option func(*Server)
+
+// WithWriteTools exposes the guarded write-tool names. It only changes the MCP
+// metadata; the served API owns authorization, idempotency, and the actual mutation.
+func WithWriteTools() Option {
+	return func(s *Server) {
+		s.writes = map[string]string{
+			"issue_certificate":  "issue a short-lived X.509 certificate from a CSR",
+			"rotate_certificate": "issue a replacement X.509 certificate from a CSR",
+		}
+	}
 }
 
 // New constructs a Server. identity is the workload identity the F61 broker issued
 // to this MCP server.
-func New(tenantID string, p *rca.Pipeline, s *rca.Synthesizer, rate *RateLimiter, audit auditsink.Auditor, identity string) *Server {
+func New(tenantID string, p *rca.Pipeline, s *rca.Synthesizer, rate *RateLimiter, audit auditsink.Auditor, identity string, opts ...Option) *Server {
 	if audit == nil {
 		audit = auditsink.Nop{}
 	}
 	if rate == nil {
 		rate = NewRateLimiter(100, time.Minute)
 	}
-	return &Server{
+	srv := &Server{
 		tenantID: tenantID, pipeline: p, synth: s, rate: rate, audit: audit, identity: identity,
 		tools: map[string]string{
 			"query_credentials": "summarize the credentials for",
@@ -97,23 +112,39 @@ func New(tenantID string, p *rca.Pipeline, s *rca.Synthesizer, rate *RateLimiter
 			"compliance_status": "what is the compliance gap for",
 		},
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(srv)
+		}
+	}
+	return srv
 }
 
 // Identity returns the broker-issued identity of this MCP server.
 func (s *Server) Identity() string { return s.identity }
 
-// Tools lists the read-only tool names.
+// Tools lists every exposed tool name. By default this is the read-only set; guarded
+// write tools appear only when WithWriteTools is supplied.
 func (s *Server) Tools() []string {
-	out := make([]string, 0, len(s.tools))
+	out := make([]string, 0, len(s.tools)+len(s.writes))
 	for n := range s.tools {
+		out = append(out, n)
+	}
+	for n := range s.writes {
 		out = append(out, n)
 	}
 	sort.Strings(out)
 	return out
 }
 
-// HasWriteTool reports whether any write/remediation tool is exposed. Always false.
-func (s *Server) HasWriteTool() bool { return false }
+// HasWriteTool reports whether any guarded write/remediation tool is exposed.
+func (s *Server) HasWriteTool() bool { return len(s.writes) > 0 }
+
+// IsWriteTool reports whether tool is an explicitly enabled write tool.
+func (s *Server) IsWriteTool(tool string) bool {
+	_, ok := s.writes[tool]
+	return ok
+}
 
 // Call invokes a read-only tool, scoped to the caller's tenant via SF.7,
 // rate-limited and audited. Retrieved data is grounded and inert.

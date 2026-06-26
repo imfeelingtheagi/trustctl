@@ -90,6 +90,9 @@ func (s *Service) Sign(ctx context.Context, req SignRequest) (Signature, error) 
 	if err != nil {
 		return Signature{}, fmt.Errorf("codesign: resolve key %s: %w", req.KeyID, err)
 	}
+	if signer == nil {
+		return Signature{}, fmt.Errorf("codesign: no key %s", req.KeyID)
+	}
 	value, err := crypto.SignMessage(signer, req.Digest)
 	if err != nil {
 		return Signature{}, fmt.Errorf("codesign: sign: %w", err)

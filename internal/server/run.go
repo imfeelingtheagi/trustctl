@@ -78,7 +78,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer runSigner.Close()
 
-	deps, err := buildRunDeps(cfg, st, log, runSigner, runSecrets, logger)
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger)
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 	return sup, sup.Close, nil
 }
 
-func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger) (Deps, error) {
+func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger) (Deps, error) {
 	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
 	if err != nil {
 		return Deps{}, fmt.Errorf("audit signing key: %w", err)
@@ -314,9 +314,14 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 	if err != nil {
 		return Deps{}, fmt.Errorf("break-glass verifier material: %w", err)
 	}
+	managedKeyCustody, err := managedKeyCustodyFromConfig(ctx, cfg.ManagedKeys)
+	if err != nil {
+		return Deps{}, fmt.Errorf("managed-key custody: %w", err)
+	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
-		CACertFile: cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		ManagedKeyCustody: managedKeyCustody,
+		CACertFile:        cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
@@ -334,7 +339,7 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret, MachineAuthMethods: machineAuthMethods,
 		SecretScanGitleaksBin: cfg.Secrets.GitleaksBin,
 		EnableAISurface:       cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
-		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
+		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
 		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr,
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
@@ -467,6 +472,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	fleetW := startRuntimeWorker(ctx, srv.RunAgentFleetMonitor)
 	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
 	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
+	kmipW := startRuntimeWorker(ctx, srv.RunKMIP)
 	logMountedSurfaces(srv, logger)
 	return func() {
 		stopLeader()
@@ -475,6 +481,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		fleetW.Stop()
 		spiffeW.Stop()
 		agentW.Stop()
+		kmipW.Stop()
 	}, nil
 }
 
@@ -485,6 +492,9 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	if addr := srv.AgentChannelAddr(); addr != "" {
 		logger.Info("served agent steady-state mTLS gRPC channel mounted",
 			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
+	}
+	if addr := srv.KMIPAddr(); addr != "" {
+		logger.Info("served KMIP mTLS listener mounted", slog.String("addr", addr))
 	}
 	if srv.apiAISurfaceServed() {
 		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped)")

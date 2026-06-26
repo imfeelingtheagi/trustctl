@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -19,7 +20,7 @@ func TestRunConfigBulkheadsCreateConfiguredPools(t *testing.T) {
 	cfg.Bulkheads.Outbox.Workers = 2
 	cfg.Bulkheads.Outbox.Queue = 19
 
-	deps, err := buildRunDeps(cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	deps, err := buildRunDeps(context.Background(), cfg, nil, nil, runSigner{}, runSecrets{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatalf("buildRunDeps: %v", err)
 	}

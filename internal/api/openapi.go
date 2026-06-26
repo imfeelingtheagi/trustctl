@@ -225,6 +225,9 @@ func componentSchemas() map[string]*Schema {
 	caCreateIntermediateReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "parent_id", "spec")
+	caIssueIntermediateReq := object(map[string]*Schema{
+		"csr_pem": str(), "spec": ref("CASpec"),
+	}, "csr_pem", "spec")
 	caAuthority := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "parent_id": uuid(), "common_name": str(),
 		"kind": str(), "status": str(), "certificate_pem": str(), "signer_handle": str(),
@@ -237,6 +240,9 @@ func componentSchemas() map[string]*Schema {
 		"csr_pem": str(), "ttl_seconds": {Type: "integer"},
 	}, "csr_pem")
 	caIssuedLeaf := object(map[string]*Schema{
+		"certificate_pem": str(), "serial": str(), "not_after": timestamp(),
+	}, "certificate_pem", "serial", "not_after")
+	caIssuedIntermediate := object(map[string]*Schema{
 		"certificate_pem": str(), "serial": str(), "not_after": timestamp(),
 	}, "certificate_pem", "serial", "not_after")
 	externalCA := object(map[string]*Schema{
@@ -740,6 +746,58 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "provider": str(), "role": str(), "state": str(),
 		"credential": str(), "issued_at": timestamp(), "expires_at": timestamp(),
 	}, "id", "provider", "role", "state", "issued_at", "expires_at")
+	transitKeyReq := object(map[string]*Schema{
+		"name": str(), "kind": str(),
+	}, "name", "kind")
+	transitRotateReq := object(map[string]*Schema{
+		"name": str(),
+	}, "name")
+	transitKey := object(map[string]*Schema{
+		"name": str(), "kind": str(), "version": {Type: "integer"},
+	}, "name", "kind", "version")
+	transitEncryptReq := object(map[string]*Schema{
+		"key": str(), "plaintext": {Type: "string", Format: "byte"}, "aad": {Type: "string", Format: "byte"},
+	}, "key", "plaintext")
+	transitCiphertextReq := object(map[string]*Schema{
+		"key": str(), "ciphertext": str(), "aad": {Type: "string", Format: "byte"},
+	}, "key", "ciphertext")
+	transitCiphertext := object(map[string]*Schema{
+		"ciphertext": str(), "version": {Type: "integer"},
+	}, "ciphertext", "version")
+	transitPlaintext := object(map[string]*Schema{
+		"plaintext": {Type: "string", Format: "byte"},
+	}, "plaintext")
+	transitHMACReq := object(map[string]*Schema{
+		"key": str(), "data": {Type: "string", Format: "byte"},
+	}, "key", "data")
+	transitHMAC := object(map[string]*Schema{
+		"hmac": {Type: "string", Format: "byte"},
+	}, "hmac")
+	transitSignReq := object(map[string]*Schema{
+		"key": str(), "message": {Type: "string", Format: "byte"},
+	}, "key", "message")
+	transitSignature := object(map[string]*Schema{
+		"signature": {Type: "string", Format: "byte"}, "public_der": {Type: "string", Format: "byte"},
+	}, "signature", "public_der")
+	transitVerifyReq := object(map[string]*Schema{
+		"message": {Type: "string", Format: "byte"}, "signature": {Type: "string", Format: "byte"}, "public_der": {Type: "string", Format: "byte"},
+	}, "message", "signature", "public_der")
+	transitVerify := object(map[string]*Schema{
+		"valid": {Type: "boolean"},
+	}, "valid")
+	codeSigningReq := object(map[string]*Schema{
+		"key_id": str(), "artifact_type": str(), "digest": {Type: "string", Format: "byte"},
+	}, "key_id", "artifact_type", "digest")
+	codeSigningKeylessReq := object(map[string]*Schema{
+		"artifact_type": str(), "digest": {Type: "string", Format: "byte"},
+		"identity_method": str(), "identity_payload": {Type: "string", Format: "byte"},
+		"fulcio_san": str(), "fulcio_issuer": str(),
+	}, "artifact_type", "digest", "identity_method", "identity_payload")
+	codeSigningSignature := object(map[string]*Schema{
+		"algorithm": str(), "key_id": str(), "artifact_type": str(),
+		"signature": {Type: "string", Format: "byte"}, "public_key_der": {Type: "string", Format: "byte"},
+		"fulcio_san": str(), "fulcio_issuer": str(), "transparency_destination": str(),
+	}, "algorithm", "artifact_type", "signature", "public_key_der")
 	// Managed-key (BYOK/HSM) lifecycle schemas (CRYPTO-005). public_der is the PKIX
 	// public key (base64 in JSON); the private material is never represented here.
 	managedKeyGenerateReq := object(map[string]*Schema{
@@ -823,6 +881,7 @@ func componentSchemas() map[string]*Schema {
 		"redaction":             str(),
 		"residual_refusal_gate": {Type: "boolean"},
 		"mcp_identity":          str(),
+		"mcp_write_tools":       {Type: "boolean"},
 		"rate_max":              {Type: "integer"},
 		"rate_window_seconds":   {Type: "integer"},
 	}, "enabled", "model_configured", "model_mode", "egress", "redaction", "residual_refusal_gate")
@@ -832,12 +891,20 @@ func componentSchemas() map[string]*Schema {
 		"tools":     {Type: "array", Items: str()},
 	}, "read_only", "tools")
 	mcpToolCall := object(map[string]*Schema{
-		"subject": str(),
+		"subject":         str(),
+		"authority_id":    str(),
+		"csr_pem":         str(),
+		"ttl_seconds":     {Type: "integer"},
+		"reason":          str(),
+		"previous_serial": str(),
 	})
 	mcpToolResult := object(map[string]*Schema{
-		"tool":      str(),
-		"citations": {Type: "array", Items: str()},
-		"text":      str(),
+		"tool":            str(),
+		"citations":       {Type: "array", Items: str()},
+		"text":            str(),
+		"certificate_pem": str(),
+		"serial":          str(),
+		"not_after":       timestamp(),
 	}, "tool", "text")
 
 	return map[string]*Schema{
@@ -942,9 +1009,11 @@ func componentSchemas() map[string]*Schema {
 		"CAKeyCeremony":                caCeremony,
 		"CACreateRootRequest":          caCreateRootReq,
 		"CACreateIntermediateRequest":  caCreateIntermediateReq,
+		"CAIssueIntermediateRequest":   caIssueIntermediateReq,
 		"CAAuthority":                  caAuthority,
 		"CAAuthorityList":              list("CAAuthority"),
 		"CAIssueLeafRequest":           caIssueLeafReq,
+		"CAIssuedIntermediate":         caIssuedIntermediate,
 		"CAIssuedLeaf":                 caIssuedLeaf,
 		"ExternalCA":                   externalCA,
 		"ExternalCAList":               list("ExternalCA"),
@@ -975,6 +1044,23 @@ func componentSchemas() map[string]*Schema {
 		"DynamicLeaseRequest":          dynamicLeaseReq,
 		"DynamicLeaseRenewRequest":     dynamicLeaseRenewReq,
 		"DynamicLease":                 dynamicLease,
+		"TransitKeyRequest":            transitKeyReq,
+		"TransitRotateRequest":         transitRotateReq,
+		"TransitKey":                   transitKey,
+		"TransitEncryptRequest":        transitEncryptReq,
+		"TransitDecryptRequest":        transitCiphertextReq,
+		"TransitRewrapRequest":         transitCiphertextReq,
+		"TransitCiphertext":            transitCiphertext,
+		"TransitPlaintext":             transitPlaintext,
+		"TransitHMACRequest":           transitHMACReq,
+		"TransitHMAC":                  transitHMAC,
+		"TransitSignRequest":           transitSignReq,
+		"TransitSignature":             transitSignature,
+		"TransitVerifyRequest":         transitVerifyReq,
+		"TransitVerify":                transitVerify,
+		"CodeSigningRequest":           codeSigningReq,
+		"CodeSigningKeylessRequest":    codeSigningKeylessReq,
+		"CodeSigningSignature":         codeSigningSignature,
 		"ManagedKeyGenerateRequest":    managedKeyGenerateReq,
 		"ManagedKeyActionRequest":      managedKeyActionReq,
 		"ManagedKey":                   managedKey,

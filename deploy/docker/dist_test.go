@@ -461,6 +461,48 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	mustContainAny(t, "release image size gate", wf, "83886080", "MAX_IMAGE")
 }
 
+// TestReleaseWorkflowPublishesSLSAProvenance is the DIST-10 acceptance proof:
+// the release workflow no longer stops at BuildKit provenance. It computes
+// SLSA subjects for every published release artifact class, calls the official
+// slsa-github-generator generic reusable workflow, uploads the signed in-toto
+// provenance to the tag's GitHub Release, and keeps a local dry-run verifier so
+// the subject hashing/provenance contract is testable without GitHub OIDC.
+func TestReleaseWorkflowPublishesSLSAProvenance(t *testing.T) {
+	wf := repoFile(t, ".github", "workflows", "release.yml")
+	mustContainAll(t, "release SLSA generator wiring", wf,
+		"slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0",
+		"base64-subjects:",
+		"upload-assets: true",
+		"provenance-name:",
+		"actions: read",
+		"id-token: write",
+		"contents: write",
+	)
+	for _, job := range []string{"image-provenance", "windows-agent-provenance", "helm-chart-provenance"} {
+		if !strings.Contains(wf, job+":") {
+			t.Errorf("release.yml missing %s SLSA provenance job", job)
+		}
+	}
+	for _, subject := range []string{
+		"trstctl-container-and-manifest.intoto.jsonl",
+		"trstctl-agent-windows.intoto.jsonl",
+		"trstctl-helm-chart.intoto.jsonl",
+		"slsa_subjects",
+		"sha256sum",
+	} {
+		if !strings.Contains(wf, subject) {
+			t.Errorf("release.yml SLSA wiring missing %q", subject)
+		}
+	}
+
+	cmd := exec.Command("bash", filepath.Join("scripts", "release", "slsa-dry-run_selftest.sh"))
+	cmd.Dir = filepath.Join("..", "..")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("SLSA release dry-run self-test failed: %v\n%s", err, out)
+	}
+}
+
 // repoFile reads a path relative to the repository root (this package lives at
 // deploy/docker, two levels down).
 func repoFile(t *testing.T, parts ...string) string {

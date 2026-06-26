@@ -40,6 +40,7 @@ var commandTable = []Command{
 	{Name: []string{"ca", "authorities", "list"}, Method: "GET", Path: "/api/v1/ca/authorities", Summary: "List private CA authorities"},
 	{Name: []string{"ca", "authorities", "create-root"}, Method: "POST", Path: "/api/v1/ca/authorities/roots", Body: bodyFile, Summary: "Create a signer-backed root CA after ceremony quorum"},
 	{Name: []string{"ca", "authorities", "create-intermediate"}, Method: "POST", Path: "/api/v1/ca/authorities/intermediates", Body: bodyFile, Summary: "Create a signer-backed intermediate CA after ceremony quorum"},
+	{Name: []string{"ca", "authorities", "issue-intermediate-csr"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/intermediates/csr", Body: bodyFile, Summary: "Sign an external intermediate CA CSR from a private CA authority"},
 	{Name: []string{"ca", "authorities", "issue"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/issue", Body: bodyFile, Summary: "Issue a leaf certificate from a private CA authority"},
 	{Name: []string{"external-cas", "list"}, Method: "GET", Path: "/api/v1/external-cas", Summary: "List configured upstream CA integrations"},
 	{Name: []string{"external-cas", "issue"}, Method: "POST", Path: "/api/v1/external-cas/{id}/issue", Body: bodyFile, Summary: "Issue a certificate through an upstream CA integration"},
@@ -148,6 +149,25 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "shares", "create"}, Method: "POST", Path: "/api/v1/secrets/shares", Body: bodyFile, Summary: "Create a secret share"},
 	{Name: []string{"secrets", "shares", "redeem"}, Method: "POST", Path: "/api/v1/secrets/shares/redeem", Body: bodyFile, Summary: "Redeem a secret share"},
 	{Name: []string{"secrets", "pki"}, Method: "POST", Path: "/api/v1/secrets/pki", Body: bodyFile, Summary: "Issue a dynamic PKI secret"},
+
+	// Transit/EaaS served key operations (KMS-01/F66). These commands call fixed
+	// compile-time Go handlers behind internal/crypto, matching prior-art adapter
+	// shapes such as crypto.Signer / JCA / OpenSSL ENGINE without runtime provider
+	// registration or policy-fed crypto-provider behavior.
+	{Name: []string{"transit", "keys", "create"}, Method: "POST", Path: "/api/v1/transit/keys", Body: bodyFile, Summary: "Create a tenant-scoped transit key"},
+	{Name: []string{"transit", "keys", "rotate"}, Method: "POST", Path: "/api/v1/transit/keys/rotate", Body: bodyFile, Summary: "Rotate a tenant-scoped transit key"},
+	{Name: []string{"transit", "encrypt"}, Method: "POST", Path: "/api/v1/transit/encrypt", Body: bodyFile, Summary: "Encrypt plaintext with a transit key"},
+	{Name: []string{"transit", "decrypt"}, Method: "POST", Path: "/api/v1/transit/decrypt", Body: bodyFile, Summary: "Decrypt transit ciphertext"},
+	{Name: []string{"transit", "rewrap"}, Method: "POST", Path: "/api/v1/transit/rewrap", Body: bodyFile, Summary: "Re-encrypt transit ciphertext under the current key version"},
+	{Name: []string{"transit", "hmac"}, Method: "POST", Path: "/api/v1/transit/hmac", Body: bodyFile, Summary: "Compute an HMAC with a transit key"},
+	{Name: []string{"transit", "sign"}, Method: "POST", Path: "/api/v1/transit/sign", Body: bodyFile, Summary: "Sign a message with a transit signing key"},
+	{Name: []string{"transit", "verify"}, Method: "POST", Path: "/api/v1/transit/verify", Body: bodyFile, Summary: "Verify a transit signature"},
+
+	// Code-signing (CLM-06/F50). The served API signs artifact digests with a
+	// managed key or a verified keyless identity, then queues Rekor transparency-log
+	// publication through outbox.
+	{Name: []string{"code-signing", "sign"}, Method: "POST", Path: "/api/v1/code-signing/sign", Body: bodyFile, Summary: "Sign an artifact digest with a managed code-signing key"},
+	{Name: []string{"code-signing", "keyless"}, Method: "POST", Path: "/api/v1/code-signing/keyless", Body: bodyFile, Summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity"},
 
 	// BYOK/HSM managed-key lifecycle (CRYPTO-005). Generate mints provider-resident
 	// material; rotate/revoke/zeroize are destructive and require a distinct-approver

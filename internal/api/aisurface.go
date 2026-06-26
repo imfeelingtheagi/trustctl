@@ -29,17 +29,19 @@ import (
 //   - POST /api/v1/ai/rca    — a grounded root-cause / NL question answered ONLY from
 //     cited real records gathered through the same scoping seam; every claim carries a
 //     citation, and "insufficient evidence" is preferred to a guess (F77).
-//   - GET  /api/v1/mcp/tools — list the READ-ONLY MCP tools an external AI agent may
-//     call (F78). There are no write/remediation tools.
-//   - POST /api/v1/mcp/tools/{tool} — invoke one read-only MCP tool, tenant-scoped,
-//     rate-limited, grounded-and-cited, injection-inert (the retrieved data is inert).
+//   - GET  /api/v1/mcp/tools — list the MCP tools an external AI agent may call
+//     (F78). Guarded write tools are absent unless explicitly enabled.
+//   - POST /api/v1/mcp/tools/{tool} — invoke one MCP tool: read tools are
+//     tenant-scoped, rate-limited, grounded-and-cited, and injection-inert; write
+//     tools are idempotent and RBAC-gated.
 //
 // The security model the library proved (SURFACE-I02) is preserved by construction:
 //   - Tenant floor (AN-1): the tenant is the authenticated principal's, NEVER a request
 //     field; the query engine reads under RLS for that tenant only and drops foreign
 //     events from the (non-RLS) log in-process. A caller cannot name another tenant.
-//   - Read-only: there is no action/remediation path. The MCP surface exposes only the
-//     four read tools and HasWriteTool() is false.
+//   - Default read-only: the MCP surface exposes only the four read tools unless
+//     MCPWriteTools is explicitly enabled; write tools still require certs:issue and
+//     Idempotency-Key at execution time.
 //   - Injection-inert: retrieved records (a SAN, a secret name, an evidence summary)
 //     are treated as untrusted DATA, never as instructions; there is nothing the model
 //     could be induced to DO.
@@ -79,6 +81,9 @@ type AISurfaceBackend struct {
 	// MCPIdentity is the workload identity this MCP server presents (dogfooding the
 	// F61 broker). Informational; empty is fine.
 	MCPIdentity string
+	// MCPWriteTools explicitly exposes guarded MCP write tools. Default false keeps
+	// MCP read-only/fail-closed even when the AI/MCP surface itself is enabled.
+	MCPWriteTools bool
 	// RateMax / RateWindow bound the per-(caller,tool) MCP call rate
 	// (enumeration-abuse protection). Zero selects a conservative default.
 	RateMax    int

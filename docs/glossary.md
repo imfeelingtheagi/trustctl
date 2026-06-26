@@ -98,6 +98,14 @@ identity without hard-coding secrets. The identity document it issues is an **SV
 JWT token. It answers "what service is this?" so services can trust each other. See
 [Workload identity](features/workload-identity.md).
 
+### SPIRE
+
+**SPIRE** is the most common open-source implementation of SPIFFE. It runs a server
+and agents that attest workloads and mint SVIDs for them. An **upstream authority** is
+the CA above SPIRE's local CA: trstctl can be that upstream, so SPIRE keeps minting
+workload SVIDs while trstctl signs and audits SPIRE's intermediate CA through the
+`trstctl-spire-upstream-authority` plugin.
+
 ### Workload
 
 A running unit of software that needs an identity: a service, a container, a

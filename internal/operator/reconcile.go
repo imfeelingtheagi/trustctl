@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"sort"
 	"strings"
@@ -23,11 +24,43 @@ const (
 const defaultControlPlaneImage = "ghcr.io/ctlplne/trstctl:latest"
 
 // ControlPlaneSpec is the desired state declared on a TrstctlControlPlane.spec.
-// Only the fields the operator acts on are modelled; unknown fields are ignored.
+// Unknown fields are ignored, but every field modelled here is reconciled into
+// the managed control-plane Deployment.
 type ControlPlaneSpec struct {
-	Replicas   int    `json:"replicas"`
-	Image      string `json:"image"`
-	SignerMode string `json:"signerMode"`
+	Replicas    int             `json:"replicas"`
+	Image       string          `json:"image"`
+	SignerMode  string          `json:"signerMode"`
+	Postgres    PostgresSpec    `json:"postgres"`
+	NATS        NATSSpec        `json:"nats"`
+	ExternalKMS ExternalKMSSpec `json:"externalKMS"`
+	Signer      SignerSpec      `json:"signer"`
+}
+
+type PostgresSpec struct {
+	DSNSecret    string `json:"dsnSecret"`
+	DSNSecretKey string `json:"dsnSecretKey"`
+}
+
+type NATSSpec struct {
+	URL                 string `json:"url"`
+	Replicas            int    `json:"replicas"`
+	AllowSingleReplica  bool   `json:"allowSingleReplica"`
+	SyncAlways          bool   `json:"syncAlways"`
+	SyncIntervalSeconds int    `json:"syncIntervalSeconds"`
+}
+
+type ExternalKMSSpec struct {
+	Enabled  bool   `json:"enabled"`
+	Provider string `json:"provider"`
+	KeyRef   string `json:"keyRef"`
+}
+
+type SignerSpec struct {
+	AuthSecret    string `json:"authSecret"`
+	AuthSecretKey string `json:"authSecretKey"`
+	KekSecret     string `json:"kekSecret"`
+	KekSecretKey  string `json:"kekSecretKey"`
+	KeyStorePVC   string `json:"keyStorePVC"`
 }
 
 // desiredReplicas returns the spec's replica count, defaulting to 1 (the CRD's
@@ -49,6 +82,44 @@ func (s ControlPlaneSpec) desiredImage() string {
 	return s.Image
 }
 
+func (s ControlPlaneSpec) desiredSignerMode() string {
+	switch strings.ToLower(strings.TrimSpace(s.SignerMode)) {
+	case "sidecar":
+		return "sidecar"
+	case "isolated":
+		return "isolated"
+	default:
+		return ""
+	}
+}
+
+func (s ControlPlaneSpec) postgresDSNSecretKey() string {
+	if strings.TrimSpace(s.Postgres.DSNSecretKey) == "" {
+		return "dsn"
+	}
+	return s.Postgres.DSNSecretKey
+}
+
+func (s ControlPlaneSpec) desiredConfigHash() string {
+	h := fnv.New64a()
+	_ = json.NewEncoder(h).Encode(struct {
+		Image       string
+		SignerMode  string
+		Postgres    PostgresSpec
+		NATS        NATSSpec
+		ExternalKMS ExternalKMSSpec
+		Signer      SignerSpec
+	}{
+		Image:       s.desiredImage(),
+		SignerMode:  s.desiredSignerMode(),
+		Postgres:    s.Postgres,
+		NATS:        s.NATS,
+		ExternalKMS: s.ExternalKMS,
+		Signer:      s.Signer,
+	})
+	return fmt.Sprintf("%016x", h.Sum64())
+}
+
 // controlPlaneObject is a decoded TrstctlControlPlane custom resource.
 type controlPlaneObject struct {
 	Metadata struct {
@@ -68,6 +139,7 @@ type deploymentState struct {
 	exists          bool
 	replicas        int
 	image           string
+	configHash      string
 	resourceVersion string
 }
 
@@ -96,7 +168,7 @@ func decideAction(spec ControlPlaneSpec, live deploymentState) Action {
 	if !live.exists {
 		return ActionCreate
 	}
-	if live.replicas != spec.desiredReplicas() || live.image != spec.desiredImage() {
+	if live.replicas != spec.desiredReplicas() || live.image != spec.desiredImage() || live.configHash != spec.desiredConfigHash() {
 		return ActionUpdate
 	}
 	return ActionNone
@@ -191,7 +263,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, namespace string, cr control
 			return action, err
 		}
 	case ActionUpdate:
-		if err := r.patchDeployment(ctx, namespace, r.deploymentName(cr.Metadata.Name), cr.Spec, live.resourceVersion); err != nil {
+		if err := r.patchDeployment(ctx, namespace, r.deploymentName(cr.Metadata.Name), cr, live.resourceVersion); err != nil {
 			return action, err
 		}
 	case ActionNone:
@@ -222,11 +294,15 @@ func (r *Reconciler) observeDeployment(ctx context.Context, namespace, name stri
 	}
 	var dep struct {
 		Metadata struct {
-			ResourceVersion string `json:"resourceVersion"`
+			ResourceVersion string            `json:"resourceVersion"`
+			Annotations     map[string]string `json:"annotations"`
 		} `json:"metadata"`
 		Spec struct {
 			Replicas int `json:"replicas"`
 			Template struct {
+				Metadata struct {
+					Annotations map[string]string `json:"annotations"`
+				} `json:"metadata"`
 				Spec struct {
 					Containers []struct {
 						Name  string `json:"name"`
@@ -253,6 +329,7 @@ func (r *Reconciler) observeDeployment(ctx context.Context, namespace, name stri
 		exists:          true,
 		replicas:        dep.Spec.Replicas,
 		image:           image,
+		configHash:      firstNonEmpty(dep.Spec.Template.Metadata.Annotations["trstctl.com/config-hash"], dep.Metadata.Annotations["trstctl.com/config-hash"]),
 		resourceVersion: dep.Metadata.ResourceVersion,
 	}, nil
 }
@@ -275,23 +352,17 @@ func (r *Reconciler) createDeployment(ctx context.Context, namespace string, cr 
 	return nil
 }
 
-// patchDeployment applies a strategic-merge patch that pins the replica count and
-// the control-plane container image to the spec, leaving every other field the
-// chart/operator set in place.
-func (r *Reconciler) patchDeployment(ctx context.Context, namespace, name string, spec ControlPlaneSpec, _ string) error {
+// patchDeployment applies a merge patch that pins the replica count, pod
+// template, and operator-owned config to the spec.
+func (r *Reconciler) patchDeployment(ctx context.Context, namespace, name string, cr controlPlaneObject, _ string) error {
 	patch := map[string]any{
+		"metadata": map[string]any{"annotations": r.deploymentAnnotations(cr)},
 		"spec": map[string]any{
-			"replicas": spec.desiredReplicas(),
-			"template": map[string]any{
-				"spec": map[string]any{
-					"containers": []map[string]any{
-						{"name": "control-plane", "image": spec.desiredImage()},
-					},
-				},
-			},
+			"replicas": cr.Spec.desiredReplicas(),
+			"template": r.podTemplate(cr),
 		},
 	}
-	st, body, err := r.client.do(ctx, http.MethodPatch, deploymentItemPath(namespace, name), "application/strategic-merge-patch+json", patch)
+	st, body, err := r.client.do(ctx, http.MethodPatch, deploymentItemPath(namespace, name), "application/merge-patch+json", patch)
 	if err != nil {
 		return err
 	}
@@ -321,12 +392,9 @@ func (r *Reconciler) updateStatus(ctx context.Context, namespace, name string, a
 }
 
 // deploymentObject renders the control-plane Deployment the operator manages for
-// a TrstctlControlPlane. It mirrors the shape of the Helm chart's deployment
-// (the chart remains the richer install): a single unprivileged control-plane
-// container running the built image, owner-referenced to the CR so deleting the
-// CR garbage-collects the Deployment. It is deliberately minimal — the operator
-// owns the replica count and image; Services/secrets/NetworkPolicy/the isolated
-// signer remain the chart's responsibility (documented in deploy/operator/doc.go).
+// a TrstctlControlPlane. It carries the operator-owned runtime config into the
+// pod template and owner-references the CR so deleting the CR garbage-collects
+// the Deployment.
 func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _ string) map[string]any {
 	name := r.deploymentName(cr.Metadata.Name)
 	labels := map[string]any{
@@ -339,9 +407,10 @@ func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 		"metadata": map[string]any{
-			"name":      name,
-			"namespace": namespace,
-			"labels":    labels,
+			"name":        name,
+			"namespace":   namespace,
+			"labels":      labels,
+			"annotations": r.deploymentAnnotations(cr),
 			// Owner reference so the Deployment is garbage-collected with the CR.
 			"ownerReferences": []map[string]any{{
 				"apiVersion":         tcpAPIGroupVersion,
@@ -354,26 +423,211 @@ func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _
 		"spec": map[string]any{
 			"replicas": cr.Spec.desiredReplicas(),
 			"selector": map[string]any{"matchLabels": map[string]any{"trstctl.com/control-plane": cr.Metadata.Name}},
-			"template": map[string]any{
-				"metadata": map[string]any{"labels": labels},
-				"spec": map[string]any{
-					"securityContext": map[string]any{
-						"runAsNonRoot":   true,
-						"seccompProfile": map[string]any{"type": "RuntimeDefault"},
-					},
-					"containers": []map[string]any{{
-						"name":  "control-plane",
-						"image": cr.Spec.desiredImage(),
-						"securityContext": map[string]any{
-							"allowPrivilegeEscalation": false,
-							"readOnlyRootFilesystem":   true,
-							"runAsNonRoot":             true,
-							"capabilities":             map[string]any{"drop": []string{"ALL"}},
-						},
-						"ports": []map[string]any{{"containerPort": 8443, "name": "https"}},
-					}},
-				},
-			},
+			"template": r.podTemplate(cr),
 		},
 	}
+}
+
+func (r *Reconciler) deploymentAnnotations(cr controlPlaneObject) map[string]any {
+	annotations := map[string]any{
+		"trstctl.com/config-hash": cr.Spec.desiredConfigHash(),
+	}
+	if strings.TrimSpace(cr.Spec.ExternalKMS.KeyRef) != "" {
+		annotations["trstctl.com/external-kms-key-ref"] = cr.Spec.ExternalKMS.KeyRef
+	}
+	return annotations
+}
+
+func (r *Reconciler) podTemplate(cr controlPlaneObject) map[string]any {
+	labels := map[string]any{
+		"app.kubernetes.io/name":       "trstctl",
+		"app.kubernetes.io/component":  "control-plane",
+		"app.kubernetes.io/managed-by": "trstctl-operator",
+		"trstctl.com/control-plane":    cr.Metadata.Name,
+	}
+	return map[string]any{
+		"metadata": map[string]any{
+			"labels":      labels,
+			"annotations": r.deploymentAnnotations(cr),
+		},
+		"spec": r.podSpec(cr),
+	}
+}
+
+func (r *Reconciler) podSpec(cr controlPlaneObject) map[string]any {
+	containers := []map[string]any{}
+	volumes := []map[string]any{
+		{"name": "tmp", "emptyDir": map[string]any{}},
+		{"name": "cp-data", "emptyDir": map[string]any{}},
+	}
+	if cr.Spec.desiredSignerMode() == "sidecar" {
+		containers = append(containers, r.signerContainer(cr))
+		volumes = append(volumes,
+			map[string]any{"name": "signer-sock", "emptyDir": map[string]any{"medium": "Memory"}},
+			r.signerKeysVolume(cr),
+			map[string]any{"name": "signer-auth", "secret": map[string]any{"secretName": signerAuthSecret(cr), "defaultMode": 288}},
+			map[string]any{"name": "kek", "secret": map[string]any{"secretName": signerKekSecret(cr), "defaultMode": 288}},
+		)
+	}
+	containers = append(containers, r.controlPlaneContainer(cr))
+	return map[string]any{
+		"securityContext": map[string]any{
+			"runAsNonRoot":   true,
+			"seccompProfile": map[string]any{"type": "RuntimeDefault"},
+		},
+		"containers": containers,
+		"volumes":    volumes,
+	}
+}
+
+func (r *Reconciler) controlPlaneContainer(cr controlPlaneObject) map[string]any {
+	mounts := []map[string]any{
+		{"name": "cp-data", "mountPath": "/data"},
+		{"name": "tmp", "mountPath": "/tmp"},
+	}
+	if cr.Spec.desiredSignerMode() == "sidecar" {
+		mounts = append(mounts,
+			map[string]any{"name": "signer-sock", "mountPath": "/run/trstctl"},
+			map[string]any{"name": "kek", "mountPath": "/etc/trstctl/kek", "readOnly": true},
+		)
+	}
+	return map[string]any{
+		"name":  "control-plane",
+		"image": cr.Spec.desiredImage(),
+		"securityContext": map[string]any{
+			"allowPrivilegeEscalation": false,
+			"readOnlyRootFilesystem":   true,
+			"runAsNonRoot":             true,
+			"capabilities":             map[string]any{"drop": []string{"ALL"}},
+		},
+		"ports":        []map[string]any{{"containerPort": 8443, "name": "https"}},
+		"env":          r.controlPlaneEnv(cr),
+		"volumeMounts": mounts,
+	}
+}
+
+func (r *Reconciler) signerContainer(cr controlPlaneObject) map[string]any {
+	return map[string]any{
+		"name":    "signer",
+		"image":   cr.Spec.desiredImage(),
+		"command": []string{"/usr/local/bin/trstctl-signer"},
+		"args": []string{
+			"--socket=/run/trstctl/signer.sock",
+			"--keystore=/data/signer/keys",
+			"--kek=/etc/trstctl/kek/" + signerKekSecretKey(cr),
+			"--auth-secret=/etc/trstctl/signer-auth/" + signerAuthSecretKey(cr),
+		},
+		"securityContext": map[string]any{
+			"allowPrivilegeEscalation": false,
+			"readOnlyRootFilesystem":   true,
+			"runAsNonRoot":             true,
+			"capabilities":             map[string]any{"drop": []string{"ALL"}},
+		},
+		"volumeMounts": []map[string]any{
+			{"name": "signer-sock", "mountPath": "/run/trstctl"},
+			{"name": "signer-keys", "mountPath": "/data/signer"},
+			{"name": "kek", "mountPath": "/etc/trstctl/kek", "readOnly": true},
+			{"name": "signer-auth", "mountPath": "/etc/trstctl/signer-auth", "readOnly": true},
+		},
+	}
+}
+
+func (r *Reconciler) controlPlaneEnv(cr controlPlaneObject) []map[string]any {
+	env := []map[string]any{}
+	if strings.TrimSpace(cr.Spec.Postgres.DSNSecret) != "" {
+		env = append(env,
+			envValue("TRSTCTL_POSTGRES_MODE", "external"),
+			envSecret("TRSTCTL_POSTGRES_DSN", cr.Spec.Postgres.DSNSecret, cr.Spec.postgresDSNSecretKey()),
+		)
+	}
+	if strings.TrimSpace(cr.Spec.NATS.URL) != "" {
+		env = append(env,
+			envValue("TRSTCTL_NATS_MODE", "external"),
+			envValue("TRSTCTL_NATS_URL", cr.Spec.NATS.URL),
+		)
+		if cr.Spec.NATS.Replicas > 0 {
+			env = append(env, envValue("TRSTCTL_NATS_REPLICAS", fmt.Sprint(cr.Spec.NATS.Replicas)))
+		}
+		if cr.Spec.NATS.AllowSingleReplica {
+			env = append(env, envValue("TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", "true"))
+		}
+		if cr.Spec.NATS.SyncAlways {
+			env = append(env, envValue("TRSTCTL_NATS_SYNC_ALWAYS", "true"))
+		}
+		if cr.Spec.NATS.SyncIntervalSeconds > 0 {
+			env = append(env, envValue("TRSTCTL_NATS_SYNC_INTERVAL", fmt.Sprintf("%ds", cr.Spec.NATS.SyncIntervalSeconds)))
+		}
+	}
+	if cr.Spec.desiredSignerMode() == "sidecar" {
+		env = append(env,
+			envValue("TRSTCTL_SIGNER_MODE", "external"),
+			envValue("TRSTCTL_SIGNER_SOCKET", "/run/trstctl/signer.sock"),
+			envValue("TRSTCTL_SECRETS_KEK_FILE", "/etc/trstctl/kek/"+signerKekSecretKey(cr)),
+		)
+	}
+	if cr.Spec.ExternalKMS.Enabled {
+		env = append(env, envValue("TRSTCTL_MANAGED_KEYS_ENABLED", "true"))
+		if strings.TrimSpace(cr.Spec.ExternalKMS.Provider) != "" {
+			env = append(env, envValue("TRSTCTL_MANAGED_KEYS_PROVIDER", cr.Spec.ExternalKMS.Provider))
+		}
+	}
+	return env
+}
+
+func envValue(name, value string) map[string]any {
+	return map[string]any{"name": name, "value": value}
+}
+
+func envSecret(name, secret, key string) map[string]any {
+	return map[string]any{
+		"name": name,
+		"valueFrom": map[string]any{"secretKeyRef": map[string]any{
+			"name": secret,
+			"key":  key,
+		}},
+	}
+}
+
+func (r *Reconciler) signerKeysVolume(cr controlPlaneObject) map[string]any {
+	if strings.TrimSpace(cr.Spec.Signer.KeyStorePVC) != "" {
+		return map[string]any{"name": "signer-keys", "persistentVolumeClaim": map[string]any{"claimName": cr.Spec.Signer.KeyStorePVC}}
+	}
+	return map[string]any{"name": "signer-keys", "emptyDir": map[string]any{}}
+}
+
+func signerAuthSecret(cr controlPlaneObject) string {
+	if strings.TrimSpace(cr.Spec.Signer.AuthSecret) != "" {
+		return cr.Spec.Signer.AuthSecret
+	}
+	return cr.Metadata.Name + "-signer-auth"
+}
+
+func signerAuthSecretKey(cr controlPlaneObject) string {
+	if strings.TrimSpace(cr.Spec.Signer.AuthSecretKey) != "" {
+		return cr.Spec.Signer.AuthSecretKey
+	}
+	return "sign-auth.bin"
+}
+
+func signerKekSecret(cr controlPlaneObject) string {
+	if strings.TrimSpace(cr.Spec.Signer.KekSecret) != "" {
+		return cr.Spec.Signer.KekSecret
+	}
+	return cr.Metadata.Name + "-kek"
+}
+
+func signerKekSecretKey(cr controlPlaneObject) string {
+	if strings.TrimSpace(cr.Spec.Signer.KekSecretKey) != "" {
+		return cr.Spec.Signer.KekSecretKey
+	}
+	return "kek.bin"
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

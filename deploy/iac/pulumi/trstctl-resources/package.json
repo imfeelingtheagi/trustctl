@@ -1,0 +1,14 @@
+{
+  "name": "trstctl-pulumi-resources",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.120.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
