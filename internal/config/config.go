@@ -777,9 +777,10 @@ type AirGap struct {
 // reporter sends only coarse, anonymized, non-PII data to Endpoint every
 // Interval.
 type Telemetry struct {
-	Enabled  bool   `json:"enabled"`
-	Endpoint string `json:"endpoint"`
-	Interval string `json:"interval"` // Go duration, e.g. "24h"
+	Enabled        bool   `json:"enabled"`
+	Endpoint       string `json:"endpoint"`
+	Interval       string `json:"interval"` // Go duration, e.g. "24h"
+	InstanceIDFile string `json:"instance_id_file,omitempty"`
 }
 
 // IntervalDuration parses the telemetry reporting interval.
@@ -1329,7 +1330,7 @@ func Default() *Config {
 		AirGap:    AirGap{Enabled: false, AllowPrivate: true},
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
-		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h"},
+		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h", InstanceIDFile: "data/telemetry/instance-id"},
 		// OTLP export is OFF by default. When enabled, it sends traces and audit
 		// event metadata only to the operator's collector endpoint.
 		OTLP: OTLP{Enabled: false, Timeout: "5s", QueueSize: 1024, ServiceName: "trstctl"},
@@ -1475,6 +1476,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
 	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
 	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
+	setString(getenv, "TRSTCTL_TELEMETRY_INSTANCE_ID_FILE", &c.Telemetry.InstanceIDFile)
 	setBool(getenv, "TRSTCTL_OTLP_ENABLED", &c.OTLP.Enabled)
 	setString(getenv, "TRSTCTL_OTLP_ENDPOINT", &c.OTLP.Endpoint)
 	setBool(getenv, "TRSTCTL_OTLP_INSECURE", &c.OTLP.Insecure)
@@ -1956,6 +1958,9 @@ func validateOptionalServices(c *Config) []error {
 			errs = append(errs, fmt.Errorf("telemetry.interval %q is invalid: %w", c.Telemetry.Interval, err))
 		} else if d <= 0 {
 			errs = append(errs, errors.New("telemetry.interval must be positive"))
+		}
+		if strings.TrimSpace(c.Telemetry.InstanceIDFile) == "" {
+			errs = append(errs, errors.New("telemetry.instance_id_file is required when telemetry is enabled"))
 		}
 	}
 	errs = append(errs, validateAirGap(c)...)

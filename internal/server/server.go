@@ -46,6 +46,7 @@ import (
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/telemetry"
 	transitpkg "trstctl.com/trstctl/internal/transit"
 	"trstctl.com/trstctl/internal/webui"
 )
@@ -75,15 +76,19 @@ type Deps struct {
 	// artifact signing through a compile-time key resolver (PKCS#11/HSM when supplied,
 	// software keys otherwise), keyless/Sigstore signing through configured Fulcio-style
 	// attestors, and Rekor transparency-log publication through outbox.
-	CodeSigning    CodeSigningConfig
-	EgressGuard    *egress.Guard
-	OutboxHandler  orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions     []api.Option         // auth/audit/etc.
-	SignTimeout    time.Duration        // per-issuance signer deadline (slow → fail closed)
-	CACommonName   string
-	CACertFile     string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
-	LeafProfile    crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
-	DefaultProfile string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	CodeSigning CodeSigningConfig
+	EgressGuard *egress.Guard
+	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
+	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
+	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
+	TelemetryReporter *telemetry.Reporter
+	OutboxHandler     orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions        []api.Option         // auth/audit/etc.
+	SignTimeout       time.Duration        // per-issuance signer deadline (slow → fail closed)
+	CACommonName      string
+	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	LeafProfile       crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
+	DefaultProfile    string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
 	// revoke path (EXC-WIRE-03). Empty uses policy.BaseModule (default-deny, permit
 	// revoke, require a bound profile to issue/deploy). The engine is fail-closed,
@@ -467,6 +472,7 @@ type Server struct {
 	otlp      *observ.OTLPExporter
 	otlpAudit *observ.OTLPAuditStreamer
 	egress    *egress.Guard
+	telemetry *telemetry.Reporter
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
 	retention    *audit.RetentionWorker
@@ -584,6 +590,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		leafProfile: d.LeafProfile,
 		registry:    observ.NewRegistry(),
 		egress:      d.EgressGuard,
+		telemetry:   d.TelemetryReporter,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",

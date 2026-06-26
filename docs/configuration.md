@@ -133,6 +133,7 @@ enabled, it sends only coarse, anonymized, non-PII data.
 | `TRSTCTL_TELEMETRY_ENABLED` | `false` | Set `true` to opt in. A malformed value is ignored (stays off). |
 | `TRSTCTL_TELEMETRY_ENDPOINT` | `https://telemetry.trstctl.com/v1/usage` | Where reports go; must be `https`. |
 | `TRSTCTL_TELEMETRY_INTERVAL` | `24h` | Reporting interval. |
+| `TRSTCTL_TELEMETRY_INSTANCE_ID_FILE` | `data/telemetry/instance-id` | Local file holding the random anonymous instance ID. Required when telemetry is enabled. |
 
 See [Telemetry](telemetry.md) for exactly what is and is not collected.
 
@@ -717,6 +718,6 @@ environment variables override file values, which override defaults.
   "server": { "addr": ":8443" },
   "postgres": { "mode": "external", "dsn": "postgres://..." },
   "nats": { "mode": "external", "url": "nats://..." },
-  "telemetry": { "enabled": false }
+  "telemetry": { "enabled": false, "instance_id_file": "data/telemetry/instance-id" }
 }
 ```

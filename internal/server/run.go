@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -29,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/telemetry"
 )
 
 // Run opens the datastore and event log, supervises the signer as a child
@@ -325,6 +327,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("managed-key custody: %w", err)
 	}
+	telemetryReporter, err := telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard)
+	if err != nil {
+		return Deps{}, fmt.Errorf("telemetry: %w", err)
+	}
 	otlpExporter, err := otlpExporterFromConfig(cfg.OTLP, egressGuard)
 	if err != nil {
 		return Deps{}, err
@@ -332,6 +338,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		EgressGuard:       egressGuard,
+		TelemetryReporter: telemetryReporter,
 		ManagedKeyCustody: managedKeyCustody,
 		CACertFile:        cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
@@ -377,6 +384,33 @@ func egressGuardFromConfig(cfg config.AirGap) (*egress.Guard, error) {
 		AllowHosts:   cfg.AllowHosts,
 		AllowCIDRs:   cfg.AllowCIDRs,
 	})
+}
+
+func telemetryReporterFromConfig(cfg config.Telemetry, st *store.Store, guard *egress.Guard) (*telemetry.Reporter, error) {
+	if !cfg.Enabled {
+		return nil, nil
+	}
+	interval, err := cfg.IntervalDuration()
+	if err != nil {
+		return nil, fmt.Errorf("telemetry interval: %w", err)
+	}
+	instanceID, err := telemetry.LoadOrCreateInstanceID(cfg.InstanceIDFile)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry instance id: %w", err)
+	}
+	var client *http.Client
+	if guard != nil && guard.Enabled() {
+		client = guard.Client(10 * time.Second)
+	}
+	return &telemetry.Reporter{
+		Enabled:    true,
+		Endpoint:   cfg.Endpoint,
+		Interval:   interval,
+		InstanceID: instanceID,
+		Version:    buildinfo.Version(),
+		Counter:    storeTelemetryCounter{store: st},
+		Post:       telemetry.HTTPPoster(client),
+	}, nil
 }
 
 func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*observ.OTLPExporter, error) {
@@ -506,6 +540,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunOutboxGC),
 			startRuntimeWorker(workCtx, srv.RunProjectionTail),
 			startRuntimeWorker(workCtx, srv.RunOTLPAuditStream),
+			startRuntimeWorker(workCtx, srv.RunTelemetry),
 			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),

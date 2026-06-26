@@ -67,6 +67,7 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_AIRGAP_ALLOW_PRIVATE":                          "true",
 		"TRSTCTL_AIRGAP_ALLOW_HOSTS":                            "collector.airgap.local",
 		"TRSTCTL_AIRGAP_ALLOW_CIDRS":                            "10.0.0.0/8,192.168.0.0/16",
+		"TRSTCTL_TELEMETRY_INSTANCE_ID_FILE":                    "/var/lib/trstctl/telemetry/instance-id",
 		"TRSTCTL_MANAGED_KEYS_ENABLED":                          "true",
 		"TRSTCTL_MANAGED_KEYS_PROVIDER":                         "aws",
 		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                       "us-east-1",
@@ -104,6 +105,9 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if !cfg.AirGap.Enabled || !cfg.AirGap.AllowPrivate || strings.Join(cfg.AirGap.AllowHosts, ",") != "collector.airgap.local" || strings.Join(cfg.AirGap.AllowCIDRs, ",") != "10.0.0.0/8,192.168.0.0/16" {
 		t.Errorf("air-gap env overrides not applied: %+v", cfg.AirGap)
+	}
+	if cfg.Telemetry.InstanceIDFile != "/var/lib/trstctl/telemetry/instance-id" {
+		t.Errorf("telemetry instance id env override not applied: %q", cfg.Telemetry.InstanceIDFile)
 	}
 	if cfg.Protocols.RAKeyFile != "/var/lib/trstctl/protocol-ra.key" {
 		t.Errorf("protocols.ra_key_file env override not applied: got %q", cfg.Protocols.RAKeyFile)
@@ -166,8 +170,12 @@ func TestValidateRejectsBadValues(t *testing.T) {
 			c.AI.Model.Name = "model"
 			c.AI.Model.AllowEgress = true
 		},
-		"airgap bad cidr":     func(c *Config) { c.AirGap.AllowCIDRs = []string{"not-a-cidr"} },
-		"airgap host is url":  func(c *Config) { c.AirGap.AllowHosts = []string{"https://collector.example.com"} },
+		"airgap bad cidr":    func(c *Config) { c.AirGap.AllowCIDRs = []string{"not-a-cidr"} },
+		"airgap host is url": func(c *Config) { c.AirGap.AllowHosts = []string{"https://collector.example.com"} },
+		"telemetry missing instance id file": func(c *Config) {
+			c.Telemetry.Enabled = true
+			c.Telemetry.InstanceIDFile = ""
+		},
 		"zero acme quota":     func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
 		"negative acme quota": func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
 		"managed keys missing region": func(c *Config) {
@@ -366,6 +374,9 @@ func TestTelemetryOptInViaEnv(t *testing.T) {
 	}
 	if cfg.Telemetry.Endpoint == "" {
 		t.Error("an enabled telemetry config must have a default endpoint")
+	}
+	if cfg.Telemetry.InstanceIDFile == "" {
+		t.Error("an enabled telemetry config must have a default instance-id file")
 	}
 	if d, err := cfg.Telemetry.IntervalDuration(); err != nil || d <= 0 {
 		t.Errorf("telemetry interval must default to a positive duration, got %v (%v)", d, err)

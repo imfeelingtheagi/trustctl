@@ -49,6 +49,7 @@ export TRSTCTL_TELEMETRY_ENABLED=true
 # optional overrides
 export TRSTCTL_TELEMETRY_ENDPOINT=https://telemetry.trstctl.com/v1/usage
 export TRSTCTL_TELEMETRY_INTERVAL=24h
+export TRSTCTL_TELEMETRY_INSTANCE_ID_FILE=/data/telemetry/instance-id
 ```
 
 or in the config file:
@@ -58,9 +59,11 @@ or in the config file:
 ```
 
 When enabled, the endpoint must be an absolute `https://` URL and the interval a
-positive Go duration; trstctl validates this on boot and refuses to start on a
-bad telemetry configuration. A typo in `TRSTCTL_TELEMETRY_ENABLED` (anything that
-is not a recognized boolean) is ignored and leaves telemetry **off**.
+positive Go duration. `TRSTCTL_TELEMETRY_INSTANCE_ID_FILE` must name a writable
+local file for the random anonymous instance ID. trstctl validates this on boot
+and refuses to start on a bad telemetry configuration. A typo in
+`TRSTCTL_TELEMETRY_ENABLED` (anything that is not a recognized boolean) is
+ignored and leaves telemetry **off**.
 
 Air-gapped installs are stricter: when `TRSTCTL_AIRGAP_ENABLED=true`, trstctl
 refuses to start with `TRSTCTL_TELEMETRY_ENABLED=true`. That turns "off by
