@@ -6,6 +6,7 @@ import { DetailDrawer } from "@/components/DetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
 import {
   api,
   ApiError,
@@ -538,6 +539,15 @@ export function Secrets() {
         </UnavailableState>
       )}
 
+      <SecretTree secrets={items} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReferenceResolver />
+        <EnvDiffPanel secrets={items} />
+      </div>
+
+      <SecretImport onImported={() => void load()} />
+
       <section aria-labelledby="store-heading" className="grid gap-4 border-y border-border py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -651,6 +661,7 @@ export function Secrets() {
               </div>
             </dl>
           )}
+          {detailSecret && <VersionHistory name={detailSecret.name} latestVersion={detailSecret.version} />}
         </DetailDrawer>
       </section>
 
