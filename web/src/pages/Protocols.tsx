@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Copy } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { api, ApiError, type ProtocolRuntimeStatus } from "@/lib/api";
@@ -19,28 +19,6 @@ interface ProtocolSurface {
   requirements: string[];
   profile: string;
   snippets: ProtocolSnippet[];
-  deferredRead: string;
-  diagnostics: string;
-}
-
-interface AriSignal {
-  signal: string;
-  current: string;
-  gate: string;
-}
-
-interface DnsProviderDisclosure {
-  label: string;
-  feature: string;
-  reference: string;
-  posture: string;
-  status: string;
-}
-
-interface ValidationFixture {
-  scenario: string;
-  record: string;
-  result: string;
 }
 
 const protocolSurfaces: ProtocolSurface[] = [
@@ -61,8 +39,6 @@ const protocolSurfaces: ProtocolSurface[] = [
         command: 'client := &acme.Client{DirectoryURL: "https://trstctl.example.test/directory"}',
       },
     ],
-    deferredRead: "ACME accounts, orders, challenges, ARI state, and revocations",
-    diagnostics: "No ACME admin read lists orders or challenge outcomes yet.",
   },
   {
     id: "est",
@@ -81,8 +57,6 @@ const protocolSurfaces: ProtocolSurface[] = [
         command: "curl -s -H 'Authorization: Bearer <bootstrap-token>' --data-binary @device.csr https://trstctl.example.test/.well-known/est/simpleenroll",
       },
     ],
-    deferredRead: "EST enrollment transcript",
-    diagnostics: "No EST admin read exposes recent enrollments or protocol diagnostics yet.",
   },
   {
     id: "scep",
@@ -101,8 +75,6 @@ const protocolSurfaces: ProtocolSurface[] = [
         command: "sscep enroll -u https://trstctl.example.test/scep -c trstctl-ca.pem -k device.key -r device.csr -l device.pem",
       },
     ],
-    deferredRead: "SCEP enrollment transcript",
-    diagnostics: "No SCEP admin read exposes recent PKI operation outcomes or challenge failures yet.",
   },
   {
     id: "cmp",
@@ -117,8 +89,6 @@ const protocolSurfaces: ProtocolSurface[] = [
         command: "openssl cmp -server https://trstctl.example.test -path /cmp -cmd p10cr -csr device.csr -certout device.pem",
       },
     ],
-    deferredRead: "CMP enrollment transcript",
-    diagnostics: "No CMP admin read exposes recent enrollment outcomes or response diagnostics yet.",
   },
   {
     id: "spiffe",
@@ -138,8 +108,6 @@ const protocolSurfaces: ProtocolSurface[] = [
           'source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr("unix:///tmp/trstctl-spiffe-workload.sock")))',
       },
     ],
-    deferredRead: "SPIFFE live workload status",
-    diagnostics: "No console read exposes trust domain, socket path, enabled state, or SVID issuance health yet.",
   },
   {
     id: "ssh",
@@ -158,8 +126,6 @@ const protocolSurfaces: ProtocolSurface[] = [
         command: "curl -s https://trstctl.example.test/ssh/krl -o /etc/ssh/revoked_keys.krl",
       },
     ],
-    deferredRead: "SSH issue/revoke log",
-    diagnostics: "No SSH-CA admin read exposes issued user/host certificates or KRL revocation rows yet.",
   },
   {
     id: "tsa",
@@ -182,132 +148,6 @@ const protocolSurfaces: ProtocolSurface[] = [
         command: "openssl ts -verify -in response.tsr -queryfile request.tsq -CAfile tsa-ca.pem",
       },
     ],
-    deferredRead: "TSA issuance health",
-    diagnostics: "No TSA admin read exposes the active TSA certificate, tenant binding, enabled state, or timestamp issuance health yet.",
-  },
-];
-
-const ariSignals: AriSignal[] = [
-  {
-    signal: "Renewal window",
-    current: "Client renewal windows and Retry-After guidance are protocol concepts only; no live ARI window is read by this console.",
-    gate: "ACME enabled flag plus durable ARI state",
-  },
-  {
-    signal: "Client recommendation",
-    current: "Clients should jitter inside the suggested window and keep using their existing certificate until replacement succeeds.",
-    gate: "Durable ARI recommendation read",
-  },
-  {
-    signal: "Durable-state caveat",
-    current: "ARI recommendations must survive process restart; in-memory hints would make retry storms and duplicate issuance more likely.",
-    gate: "Persistent ACME order/account state",
-  },
-];
-
-const dnsProviderDisclosures: DnsProviderDisclosure[] = [
-  {
-    label: "DNS-01 provider config",
-    feature: "DNS automation",
-    reference: "secret://dns/cloudflare/prod",
-    posture: "Scoped secret reference for _acme-challenge writes only. Raw DNS provider tokens are never typed into this console.",
-    status: "Disabled in console until live ACME status and a DNS preflight read are surfaced here.",
-  },
-  {
-    label: "Built-in provider",
-    feature: "Provider",
-    reference: "route53",
-    posture: "Bundled provider capability summary: create TXT, wait authoritative, clean up challenge TXT.",
-    status: "Activation is blocked until provider health and tenant binding are observable.",
-  },
-  {
-    label: "Plugin provider",
-    feature: "Plugin",
-    reference: "wasm:dns/externaldns",
-    posture: "Plugin providers need conformance results, provenance, and explicit DNS capability grants before activation.",
-    status: "Plugin activation is blocked until verified conformance, provenance, and capability grants are available.",
-  },
-];
-
-const cnameFixtures: ValidationFixture[] = [
-  {
-    scenario: "Delegated validation zone",
-    record: "_acme-challenge.example.test CNAME _acme-challenge.acme-validation.example.net",
-    result: "Preview would pass validation isolation because ACME writes stay in the delegated zone.",
-  },
-  {
-    scenario: "Inline production zone",
-    record: "_acme-challenge.inline.example.test TXT in primary zone",
-    result: "Preview fails validation isolation policy because challenge writes touch the production zone.",
-  },
-];
-
-const caaFixtures: ValidationFixture[] = [
-  {
-    scenario: "No CAA record",
-    record: "example.test has no CAA",
-    result: "Preview allows issuance only when profile and tenant policy allow missing CAA.",
-  },
-  {
-    scenario: "CAA allowed issuer",
-    record: '0 issue "trstctl.example.test"',
-    result: "Preview allows issuance for this CA.",
-  },
-  {
-    scenario: "CAA denied issuer",
-    record: '0 issue "letsencrypt.org"',
-    result: "Preview denies issuance for this CA.",
-  },
-  {
-    scenario: "CAA DNS failure",
-    record: "SERVFAIL while resolving CAA",
-    result: "Preview fails closed until DNS lookup succeeds.",
-  },
-  {
-    scenario: "Wildcard CAA",
-    record: '0 issuewild "trstctl.example.test"',
-    result: "Preview permits wildcard only with DNS-01 and wildcard acknowledgement.",
-  },
-];
-
-const validationMethodFixtures: ValidationFixture[] = [
-  {
-    scenario: "HTTP-01",
-    record: "http://example.test/.well-known/acme-challenge/{token}",
-    result: "Allowed only for single-host issuance when edge HTTP reachability is policy-approved.",
-  },
-  {
-    scenario: "DNS-01",
-    record: "_acme-challenge.example.test TXT",
-    result: "Required for wildcard issuance and compatible with CNAME delegation.",
-  },
-  {
-    scenario: "TLS-ALPN-01",
-    record: "acme-tls/1 on port 443",
-    result: "Blocked when edge termination cannot serve the challenge certificate.",
-  },
-  {
-    scenario: "Policy denied",
-    record: "profile denies requested validation method",
-    result: "Challenge selection fails before any external DNS or HTTP write.",
-  },
-];
-
-const mdmFixtures: ValidationFixture[] = [
-  {
-    scenario: "challenge-required",
-    record: "SCEP profile requires a per-tenant challenge",
-    result: "Enrollment is allowed only after the challenge gate validates the Intune request.",
-  },
-  {
-    scenario: "challenge-missing",
-    record: "SCEP request has no challenge password",
-    result: "Enrollment fails closed before certificate issuance.",
-  },
-  {
-    scenario: "scep-disabled",
-    record: "SCEP status is disabled or unknown",
-    result: "MDM enrollment stays disabled until SCEP status is available and enabled.",
   },
 ];
 
@@ -342,7 +182,6 @@ export function Protocols() {
   }, []);
 
   const statusByProtocol = new Map(protocolStatuses.map((status) => [status.protocol, status]));
-  const acmeStatus = statusByProtocol.get("acme");
 
   async function copySnippet(protocol: ProtocolSurface, snippet: ProtocolSnippet) {
     try {
@@ -381,128 +220,6 @@ export function Protocols() {
             </p>
           </div>
         </div>
-      </section>
-
-      <section aria-labelledby="mdm-heading" className="grid gap-3 border-y border-border py-4">
-        <div>
-          <h2 id="mdm-heading" className="text-title font-semibold">
-            Intune / MDM enrollment
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            MDM enrollment follows the SCEP responder status shown in the protocol register. The console can explain the SCEP challenge gate, Intune profile
-            guidance, challenge rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.
-          </p>
-        </div>
-        <UnavailableState title="MDM gate controls coming soon">
-          Intune/MDM profile state, challenge rotation, and enrollment failures run outside this console today. Use the SCEP responder status in the register to
-          verify whether the enrollment endpoint is available.
-        </UnavailableState>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-          <FixtureTable title="SCEP challenge fixtures" caption="MDM SCEP challenge fixtures" rows={mdmFixtures} />
-          <div className="ui-panel p-3 text-sm">
-            <p className="font-medium">Intune profile guidance</p>
-            <p className="mt-1 text-muted-foreground">
-              Intune should use the tenant-bound SCEP enrollment URL from the deployment profile and require challenge validation before device certificates are
-              issued.
-            </p>
-            <p className="mt-3 font-medium">Challenge lifecycle</p>
-            <p className="mt-1 text-muted-foreground">
-              Challenge rotation and enrollment failures stay in fixture form until an MDM read exists.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="ari-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 id="ari-heading" className="text-title font-semibold">
-              ACME Renewal Information (ARI)
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              ARI tells ACME clients when to renew and how to pace retries. The console shows ACME responder status here while keeping durable renewal-window
-              controls read-only until account and order state is available.
-            </p>
-          </div>
-          <div className="grid justify-items-start gap-1 text-sm">
-            <span className="text-caption text-muted-foreground">ACME responder</span>
-            <ProtocolStatusBadge status={acmeStatus} />
-          </div>
-        </div>
-        <UnavailableState title="ARI live renewal windows coming soon">
-          Renewal-window publishing stays read-only until durable account, order, and renewal guidance are visible here.
-        </UnavailableState>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[48rem]">
-            <caption className="sr-only">ACME ARI disclosure model</caption>
-            <thead>
-              <tr>
-                <th scope="col">Signal</th>
-                <th scope="col">Console posture</th>
-                <th scope="col">Backend gate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ariSignals.map((row) => (
-                <tr key={row.signal} className="align-top">
-                  <td className="font-medium">{row.signal}</td>
-                  <td>{row.current}</td>
-                  <td>{row.gate}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="dns-validation-heading" className="grid gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="dns-validation-heading" className="text-title font-semibold">
-            ACME DNS validation
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            DNS-01 automation, provider plugins, CNAME isolation, CAA enforcement, validation-method policy, and wildcard issuance are shown as non-interactive
-            previews until protocol status and DNS preflight reads are available.
-          </p>
-        </div>
-
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">DNS provider and plugin disclosure</caption>
-            <thead>
-              <tr>
-                <th scope="col">Surface</th>
-                <th scope="col">Reference</th>
-                <th scope="col">Guardrail</th>
-                <th scope="col">Console status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dnsProviderDisclosures.map((row) => (
-                <tr key={row.label} className="align-top">
-                  <td>
-                    <p className="font-medium">{row.label}</p>
-                    <p className="text-caption text-muted-foreground">{row.feature}</p>
-                  </td>
-                  <td className="font-mono text-xs">{row.reference}</td>
-                  <td>{row.posture}</td>
-                  <td>{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-3">
-          <FixtureTable title="CNAME validation isolation" caption="CNAME validation isolation fixtures" rows={cnameFixtures} />
-          <FixtureTable title="CAA policy preview" caption="CAA policy fixtures" rows={caaFixtures} />
-          <FixtureTable title="Validation method policy" caption="Validation method fixtures" rows={validationMethodFixtures} />
-        </div>
-
-        <UnavailableState title="DNS validation controls are protocol-status gated">
-          Live ACME status, DNS provider health, challenge history, and preflight results aren't surfaced in the console yet, so it can't run DNS checks.
-          Wildcard issuance requires explicit operator acknowledgement, DNS-01 only, profile opt-in, and blast-radius review.
-        </UnavailableState>
       </section>
 
       <section aria-labelledby="protocol-table-heading">
@@ -565,7 +282,7 @@ export function Protocols() {
         </h2>
         {protocolSurfaces.map((protocol) => (
           <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="border-y border-border py-4">
-            <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)_minmax(18rem,0.8fr)]">
+            <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
               <div>
                 <h3 id={`${protocol.id}-heading`} className="text-base font-semibold">
                   {protocol.name}
@@ -596,13 +313,6 @@ export function Protocols() {
                   );
                 })}
               </div>
-              <div className="grid content-start gap-3">
-                <UnavailableState title={`${protocol.deferredRead} coming soon`}>
-                  {protocol.diagnostics} This remains blocked until an admin/status read exists; the page does not invent order, challenge, or transcript
-                  data.
-                </UnavailableState>
-                <p className="ui-panel p-3 text-sm text-muted-foreground">Live tenant binding and endpoint health also aren't surfaced in the console yet.</p>
-              </div>
             </div>
           </section>
         ))}
@@ -629,7 +339,7 @@ function ProtocolStatusBadge({ status }: { status: ProtocolRuntimeStatus | undef
 
 function protocolEndpointFallback(protocol: string): string {
   if (protocol === "spiffe") return "unix:///tmp/trstctl-spiffe-workload.sock";
-  return "No responder probe configured";
+  return "No browser-readable route";
 }
 
 function protocolStatusError(err: unknown): string {
@@ -641,35 +351,4 @@ function protocolStatusError(err: unknown): string {
 function formatDate(value?: string): string {
   if (!value) return "Not recorded";
   return formatDateTimePolicy(value);
-}
-
-function FixtureTable({ title, caption, rows }: { title: string; caption: string; rows: ValidationFixture[] }) {
-  return (
-    <section aria-labelledby={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="grid gap-2">
-      <h3 id={`${title.replace(/\W+/g, "-").toLowerCase()}-heading`} className="text-title font-semibold">
-        {title}
-      </h3>
-      <div className="ui-panel overflow-x-auto">
-        <table className="ui-table min-w-[24rem]">
-          <caption className="sr-only">{caption}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Scenario</th>
-              <th scope="col">Record</th>
-              <th scope="col">Preview result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.scenario} className="align-top">
-                <td className="font-medium">{row.scenario}</td>
-                <td className="font-mono text-xs">{row.record}</td>
-                <td>{row.result}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
 }

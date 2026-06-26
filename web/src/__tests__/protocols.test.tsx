@@ -80,6 +80,14 @@ describe("protocol surface", () => {
           detail: "CMP route is mounted and expects a PKIMessage request.",
         },
         {
+          protocol: "spiffe",
+          endpoint: "unix:///tmp/trstctl-spiffe-workload.sock",
+          enabled: true,
+          served: true,
+          status_code: 0,
+          detail: "Workload API socket configured.",
+        },
+        {
           protocol: "ssh",
           endpoint: "/ssh/ca",
           enabled: true,
@@ -123,7 +131,7 @@ describe("protocol surface", () => {
     expect(screen.getByText("Copied command without token material.")).toBeInTheDocument();
   });
 
-  it("renders EST, SCEP, and CMP surfaces with transcript reads honestly unavailable", async () => {
+  it("renders EST, SCEP, and CMP with live responder routes and no transcript placeholders", async () => {
     await renderProtocols();
 
     expect(screen.getAllByText("CA certificate download and simple enrollment flow").length).toBeGreaterThan(0);
@@ -136,10 +144,10 @@ describe("protocol surface", () => {
     expect(screen.getByText("/cmp")).toBeInTheDocument();
     expect(screen.getByText("CMP route is mounted and expects a PKIMessage request.")).toBeInTheDocument();
     expect(screen.getAllByText("Served").length).toBeGreaterThan(0);
-    expect(screen.getByText("EST enrollment transcript coming soon")).toBeInTheDocument();
-    expect(screen.getByText("SCEP enrollment transcript coming soon")).toBeInTheDocument();
-    expect(screen.getByText("CMP enrollment transcript coming soon")).toBeInTheDocument();
-    expect(screen.getAllByText(/does not invent order, challenge, or transcript data/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText("EST enrollment transcript coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("SCEP enrollment transcript coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("CMP enrollment transcript coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText(/does not invent order, challenge, or transcript data/i)).not.toBeInTheDocument();
   });
 
   it("renders SPIFFE, SSH CA, and TSA setup without exposing private key material", async () => {
@@ -149,21 +157,22 @@ describe("protocol surface", () => {
     expect(screen.getAllByText("Workload API socket issuing X.509-SVID and JWT-SVID credentials").length).toBeGreaterThan(0);
     expect(screen.getByText("Trust domain")).toBeInTheDocument();
     expect(screen.getByText("unix:///tmp/trstctl-spiffe-workload.sock")).toBeInTheDocument();
-    expect(screen.getByText("Not browser-readable")).toBeInTheDocument();
-    expect(screen.getByText("SPIFFE live workload status coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Workload API socket configured.")).toBeInTheDocument();
     expect(screen.getByText(/X.509-SVID and JWT-SVID support/i)).toBeInTheDocument();
 
     expect(screen.getAllByText("SSH CA public key, user/host certificate issuance, and revocation list flow").length).toBeGreaterThan(0);
-    expect(screen.getByText("SSH issue/revoke log coming soon")).toBeInTheDocument();
+    expect(screen.getByText("SSH CA public-key endpoint responded.")).toBeInTheDocument();
     expect(screen.getByText(/OpenSSH binary KRL/i)).toBeInTheDocument();
 
     expect(screen.getAllByText("RFC 3161 timestamp request flow").length).toBeGreaterThan(0);
     expect(screen.getByText("TSA certificate file")).toBeInTheDocument();
     expect(screen.getByText("/tsa")).toBeInTheDocument();
     expect(screen.getByText("TSA route is mounted and expects a timestamp request.")).toBeInTheDocument();
-    expect(screen.getByText("TSA issuance health coming soon")).toBeInTheDocument();
     expect(screen.getByText(/openssl ts -query/i)).toBeInTheDocument();
     expect(screen.getByText(/openssl ts -verify/i)).toBeInTheDocument();
+    expect(screen.queryByText("SPIFFE live workload status coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("SSH issue/revoke log coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("TSA issuance health coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN OPENSSH PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/SVID private key:/i)).not.toBeInTheDocument();
@@ -174,61 +183,33 @@ describe("protocol surface", () => {
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/PRIVATE KEY|password/i));
   });
 
-  it("renders ARI as protocol-status gated with the durable-state caveat", async () => {
+  it("hides ARI, DNS validation, CAA, wildcard, and MDM fixture sections", async () => {
     await renderProtocols();
 
-    expect(screen.getByRole("heading", { name: "ACME Renewal Information (ARI)" })).toBeInTheDocument();
-    expect(screen.getByText("ACME responder")).toBeInTheDocument();
-    expect(screen.getByText(/Renewal-window publishing stays read-only/i)).toBeInTheDocument();
-    expect(screen.getByText(/ARI recommendations must survive process restart/i)).toBeInTheDocument();
-    expect(screen.getByText(/client renewal windows and Retry-After guidance/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "ACME Renewal Information (ARI)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "ACME DNS validation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Intune / MDM enrollment" })).not.toBeInTheDocument();
+    expect(screen.queryByText("ACME responder")).not.toBeInTheDocument();
+    expect(screen.queryByText("secret://dns/cloudflare/prod")).not.toBeInTheDocument();
+    expect(screen.queryByText("_acme-challenge.example.test CNAME _acme-challenge.acme-validation.example.net")).not.toBeInTheDocument();
+    expect(screen.queryByText("No CAA record")).not.toBeInTheDocument();
+    expect(screen.queryByText("CAA allowed issuer")).not.toBeInTheDocument();
+    expect(screen.queryByText("CAA denied issuer")).not.toBeInTheDocument();
+    expect(screen.queryByText("CAA DNS failure")).not.toBeInTheDocument();
+    expect(screen.queryByText("Wildcard CAA")).not.toBeInTheDocument();
+    expect(screen.queryByText("TLS-ALPN-01")).not.toBeInTheDocument();
+    expect(screen.queryByText("challenge-required")).not.toBeInTheDocument();
+    expect(screen.queryByText("challenge-missing")).not.toBeInTheDocument();
+    expect(screen.queryByText("scep-disabled")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Renewal-window publishing stays read-only/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Raw DNS provider tokens are never typed into this console/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Wildcard issuance requires explicit operator acknowledgement/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/run outside this console today/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Challenge rotation and enrollment failures stay in fixture form/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();
-  });
-
-  it("renders DNS-01 provider and plugin disclosures without raw provider-token controls", async () => {
-    await renderProtocols();
-
-    expect(screen.getByRole("heading", { name: "ACME DNS validation" })).toBeInTheDocument();
-    expect(screen.getByText("secret://dns/cloudflare/prod")).toBeInTheDocument();
-    expect(screen.getByText(/Raw DNS provider tokens are never typed into this console/i)).toBeInTheDocument();
-    expect(screen.getByText("Built-in provider")).toBeInTheDocument();
-    expect(screen.getByText("Plugin provider")).toBeInTheDocument();
-    expect(screen.getByText(/activation is blocked until verified conformance, provenance, and capability grants are available/i)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /activate|preflight|save provider/i })).not.toBeInTheDocument();
-  });
-
-  it("renders CNAME, CAA, validation-method, and wildcard previews as non-interactive fixtures", async () => {
-    await renderProtocols();
-
-    expect(screen.getByText("_acme-challenge.example.test CNAME _acme-challenge.acme-validation.example.net")).toBeInTheDocument();
-    expect(screen.getByText(/fails validation isolation policy/i)).toBeInTheDocument();
-    expect(screen.getByText("No CAA record")).toBeInTheDocument();
-    expect(screen.getByText("CAA allowed issuer")).toBeInTheDocument();
-    expect(screen.getByText("CAA denied issuer")).toBeInTheDocument();
-    expect(screen.getByText("CAA DNS failure")).toBeInTheDocument();
-    expect(screen.getByText("Wildcard CAA")).toBeInTheDocument();
-    expect(screen.getByText("HTTP-01")).toBeInTheDocument();
-    expect(screen.getByText("DNS-01")).toBeInTheDocument();
-    expect(screen.getByText("TLS-ALPN-01")).toBeInTheDocument();
-    expect(screen.getByText("Policy denied")).toBeInTheDocument();
-    expect(screen.getByText(/Wildcard issuance requires explicit operator acknowledgement/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /issue wildcard|acknowledge wildcard|run challenge/i })).not.toBeInTheDocument();
-  });
-
-  it("renders Intune and MDM enrollment as a SCEP-conditional disclosure", async () => {
-    await renderProtocols();
-
-    expect(screen.getByRole("heading", { name: "Intune / MDM enrollment" })).toBeInTheDocument();
-    expect(screen.getByText(/follows the SCEP responder status/i)).toBeInTheDocument();
-    expect(screen.getByText("MDM gate controls coming soon")).toBeInTheDocument();
-    expect(screen.getByText(/run outside this console today/i)).toBeInTheDocument();
-    expect(screen.getByText(/verify whether the enrollment endpoint is available/i)).toBeInTheDocument();
-    expect(screen.getByText("challenge-required")).toBeInTheDocument();
-    expect(screen.getByText("challenge-missing")).toBeInTheDocument();
-    expect(screen.getByText("scep-disabled")).toBeInTheDocument();
-    expect(screen.getAllByText(/Intune profile guidance/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Challenge rotation and enrollment failures stay in fixture form/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /rotate challenge|sync intune|retry enrollment/i })).not.toBeInTheDocument();
   });
 });

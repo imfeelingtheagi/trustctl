@@ -188,7 +188,7 @@ function deliveryEvidence(identity: Identity, delivery?: ConnectorDelivery, rota
     case "renewing":
       return "Renewal in progress; waiting for a rotation-run receipt.";
     case "revoked":
-      return "Revoked. OCSP/CRL health needs protocol status before it can be shown here.";
+      return "Revoked. Delivery and rotation receipts remain available as evidence.";
     case "retired":
       return "Terminal retired state; no next lifecycle action.";
     default:
@@ -525,25 +525,7 @@ export function Identities() {
         />
       )}
 
-      <section aria-labelledby="issuance-guardrails" className="mb-4 border-y border-border py-4">
-        <h2 id="issuance-guardrails" className="text-title font-semibold">
-          Issuance guardrails
-        </h2>
-        <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
-          <p>
-            Issue and revoke are privileged signing actions. The backend enforces RA separation, dual control, and policy before the signer is asked to act.
-          </p>
-          <p>
-            A request-only principal cannot self-issue, and self-approval is denied. Use the approval action with a distinct approver, then retry the
-            transition.
-          </p>
-          <p>Every lifecycle mutation carries an Idempotency-Key. If the same request is retried by the network, the backend returns the original result.</p>
-        </div>
-      </section>
-
       <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
-
-      <RevocationPublicationPanel />
 
       {notice && (
         <p role="status" className="mb-3 text-sm text-status-success">
@@ -891,21 +873,6 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
           ))}
         </dl>
       )}
-    </section>
-  );
-}
-
-function RevocationPublicationPanel() {
-  return (
-    <section aria-labelledby="revocation-publication-heading" className="mb-4 border-y border-border py-4">
-      <h2 id="revocation-publication-heading" className="text-title font-semibold">
-        Revocation publication
-      </h2>
-      <div className="mt-2 grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
-        <p>Revoked X.509 certificates are published to public OCSP and CRL responders after the backend records the lifecycle transition.</p>
-        <p>Responder paths are tenant-scoped and managed by the protocol layer.</p>
-        <p>Live propagation health is coming soon. Freshness, scheduler, and responder health aren't surfaced in the console yet.</p>
-      </div>
     </section>
   );
 }

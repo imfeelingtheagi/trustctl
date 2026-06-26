@@ -78,6 +78,12 @@ export function Audit() {
     setFilters((current) => ({ ...current, [key]: value }));
   }
 
+  function applyTypePreset(type: string) {
+    const next = { ...filters, type };
+    setFilters(next);
+    void loadEvents(toAuditQuery(next));
+  }
+
   const auditColumns = useMemo<Array<DataGridColumn<AuditEvent>>>(
     () => [
       {
@@ -224,6 +230,12 @@ export function Audit() {
                 columnChooser={columnChooser}
                 actions={
                   <>
+                    <Button type="button" variant="outline" onClick={() => applyTypePreset("policy.decision")}>
+                      Policy decisions
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => applyTypePreset("issuance.profile_evaluated")}>
+                      Profile evaluations
+                    </Button>
                     <Button type="submit" disabled={loading}>
                       Apply filters
                     </Button>

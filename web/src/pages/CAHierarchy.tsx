@@ -2,60 +2,35 @@ import { useEffect, useMemo, useState } from "react";
 import { FileKey2, KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type Issuer } from "@/lib/api";
+import { api, ApiError, type CACeremonyStartRequest, type CAKeyCeremony, type Issuer, type ManagedKey } from "@/lib/api";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
-const ceremonySteps = [
-  {
-    operation: "Create root",
-    purpose: "root:<sha256-of-ca-spec>",
-    guardrail: "m-of-n custodians approve exactly this root spec before the root exists",
+const rootCeremonyRequest: CACeremonyStartRequest = {
+  operation: "create_root",
+  threshold: 2,
+  spec: {
+    common_name: "Trust Root CA",
+    max_path_len: 1,
+    signature_algorithm: "ECDSA-P256",
+    ttl_seconds: 315_360_000,
   },
-  {
-    operation: "Create intermediate",
-    purpose: "intermediate:<parent-ca-id>:<sha256-of-ca-spec>",
-    guardrail: "quorum is bound to the parent CA and reviewed intermediate spec",
-  },
-  {
-    operation: "Rotate CA",
-    purpose: "rotation:<ca-id>",
-    guardrail: "old authority is superseded only after the ceremony is consumed once",
-  },
-  {
-    operation: "Cross-sign",
-    purpose: "cross-sign:<ca-id>:<sha256-of-target-cert-der>",
-    guardrail: "cross-signing is purpose-bound because it can create another valid trust path",
-  },
-];
+};
 
-const custodyRows = [
-  {
-    backend: "Local sealed key file",
-    handle: "sealed://tenant-ca/root",
-    purpose: "evaluation and single-node deployments",
-    status: "root and intermediate CAs are bound to signer handles",
-  },
-  {
-    backend: "PKCS#11 HSM",
-    handle: "pkcs11://slot/ca-signing-key",
-    purpose: "resident signing key, private material never leaves the device",
-    status: "library-tier HSM/KMS lifecycle",
-  },
-  {
-    backend: "YubiHSM 2 / cloud KMS",
-    handle: "kms://tenant-ca/intermediate",
-    purpose: "generate/import, sign, rotate, revoke, and zeroize through the custody boundary",
-    status: "needs custody health and ceremony wiring",
-  },
-];
+const managedKeyRequest = { algorithm: "ECDSA-P256" };
 
 export function CAHierarchy() {
   const [issuers, setIssuers] = useState<Issuer[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
+  const [ceremonyBusy, setCeremonyBusy] = useState(false);
+  const [ceremonyError, setCeremonyError] = useState<string | null>(null);
+  const [managedKey, setManagedKey] = useState<ManagedKey | null>(null);
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -76,12 +51,66 @@ export function CAHierarchy() {
 
   const sortedIssuers = useMemo(() => [...issuers].sort((a, b) => a.name.localeCompare(b.name)), [issuers]);
 
+  async function startRootCeremony() {
+    setCeremonyBusy(true);
+    setCeremonyError(null);
+    try {
+      setCeremony(await api.createCACeremony(rootCeremonyRequest));
+    } catch (err) {
+      setCeremonyError(errorText(err, "Could not start ceremony"));
+    } finally {
+      setCeremonyBusy(false);
+    }
+  }
+
+  async function approveCeremony(id: string) {
+    setCeremonyBusy(true);
+    setCeremonyError(null);
+    try {
+      setCeremony(await api.approveCACeremony(id));
+    } catch (err) {
+      setCeremonyError(errorText(err, "Could not approve ceremony"));
+    } finally {
+      setCeremonyBusy(false);
+    }
+  }
+
+  async function generateManagedKey() {
+    setKeyBusy(true);
+    setKeyError(null);
+    try {
+      setManagedKey(await api.generateManagedKey(managedKeyRequest));
+    } catch (err) {
+      setKeyError(errorText(err, "Could not generate managed key"));
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function runManagedKeyAction(action: "rotate" | "revoke" | "zeroize", keyId: string) {
+    setKeyBusy(true);
+    setKeyError(null);
+    try {
+      const next =
+        action === "rotate"
+          ? await api.rotateManagedKey(keyId)
+          : action === "revoke"
+            ? await api.revokeManagedKey(keyId)
+            : await api.zeroizeManagedKey(keyId);
+      setManagedKey(next);
+    } catch (err) {
+      setKeyError(errorText(err, `Could not ${action} managed key`));
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
         titleId="ca-heading"
         title="CA hierarchy"
-        description="Root and intermediate CA ceremonies use signer-backed custody. Rotation, cross-sign, and HSM/KMS lifecycle workflows are read-only here until their controls ship."
+        description="Root and intermediate CA hierarchy with issuer metadata, quorum approval ceremonies, and managed-key custody actions."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
@@ -89,11 +118,6 @@ export function CAHierarchy() {
           </Button>
         }
       />
-
-      <UnavailableState title="CA creation controls coming soon">
-        Ceremony approvals, root/intermediate creation, and signer-backed leaf issuance are available outside this page. This page is read-only, so it renders no
-        create-root, rotate-root, or ceremony execution controls.
-      </UnavailableState>
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">
@@ -103,8 +127,8 @@ export function CAHierarchy() {
               Issuer visibility
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              This view shows issuer name, kind, public key, internal flag, and chain metadata. Hierarchy mutations use the dedicated ceremony and authority
-              workflows.
+              This view shows issuer name, kind, public key, custody boundary, and chain metadata. The ceremony and managed-key panels below drive the
+              corresponding protected workflows.
             </p>
           </div>
         </div>
@@ -121,42 +145,25 @@ export function CAHierarchy() {
           <FileKey2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="ceremony-heading" className="text-title font-semibold">
-              m-of-n key ceremony model
+              CA key ceremony
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              A ceremony purpose is a tamper-evident label for exactly one CA-key operation. The workflow consumes root/intermediate quorums once, emits
-              tenant-scoped events, and rejects purpose mismatch or replay.
+              Start a root CA ceremony, then record a second custodian approval before using the ceremony for a signer-backed authority action.
             </p>
           </div>
         </div>
-        <a className="text-sm font-medium text-brand-accent underline" href="/docs/runbooks/key-ceremony.md">
-          Key ceremony runbook
-        </a>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[48rem]">
-            <caption className="sr-only">CA ceremony purpose model</caption>
-            <thead>
-              <tr>
-                <th scope="col">Operation</th>
-                <th scope="col">Purpose string</th>
-                <th scope="col">Guardrail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ceremonySteps.map((step) => (
-                <tr key={step.operation} className="align-top">
-                  <td className="font-medium">{step.operation}</td>
-                  <td className="font-mono text-xs">{step.purpose}</td>
-                  <td>{step.guardrail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => void startRootCeremony()} disabled={ceremonyBusy}>
+            Start root ceremony
+          </Button>
+          <span className="text-sm text-muted-foreground">Default request: Trust Root CA, 2 approvals, ECDSA-P256.</span>
         </div>
-        <UnavailableState title="Rotation and cross-sign controls coming soon">
-          Root and intermediate creation are available through authenticated workflows. Rotation and cross-signing still need operator controls before this page
-          can run them.
-        </UnavailableState>
+        {ceremonyError && <ErrorState title="Ceremony action failed">{ceremonyError}</ErrorState>}
+        {ceremony ? (
+          <CeremonyPanel ceremony={ceremony} busy={ceremonyBusy} onApprove={(id) => void approveCeremony(id)} />
+        ) : (
+          <EmptyState title="No ceremony loaded">Start a ceremony to see its purpose, approval threshold, and status.</EmptyState>
+        )}
       </section>
 
       <section aria-labelledby="custody-heading" className="grid gap-3 border-y border-border py-4">
@@ -164,42 +171,105 @@ export function CAHierarchy() {
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="custody-heading" className="text-title font-semibold">
-              Key custody and HSM/KMS
+              Managed key custody
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Private key bytes never belong in the browser. Custody surfaces should expose handles, backend type, purpose constraints, and health only.
+              Private key bytes never enter the browser. This panel shows returned key metadata and drives custody actions by key id.
             </p>
           </div>
         </div>
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[48rem]">
-            <caption className="sr-only">Key custody metadata preview</caption>
-            <thead>
-              <tr>
-                <th scope="col">Backend</th>
-                <th scope="col">Public handle</th>
-                <th scope="col">Purpose</th>
-                <th scope="col">Serving status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {custodyRows.map((row) => (
-                <tr key={row.backend} className="align-top">
-                  <td className="font-medium">{row.backend}</td>
-                  <td className="font-mono text-xs">{row.handle}</td>
-                  <td>{row.purpose}</td>
-                  <td>{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => void generateManagedKey()} disabled={keyBusy}>
+            Generate managed key
+          </Button>
+          <span className="text-sm text-muted-foreground">Default algorithm: ECDSA-P256.</span>
         </div>
-        <UnavailableState title="HSM/KMS lifecycle controls coming soon">
-          HSM slot health, generate/import, resident-key rotation, revoke, and zeroize stay behind the custody boundary. This page does not yet expose lifecycle
-          controls for that workflow.
-        </UnavailableState>
+        {keyError && <ErrorState title="Managed-key action failed">{keyError}</ErrorState>}
+        {managedKey ? (
+          <ManagedKeyPanel
+            managedKey={managedKey}
+            busy={keyBusy}
+            onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
+          />
+        ) : (
+          <EmptyState title="No managed key loaded">Generate a managed key to inspect its public metadata and lifecycle state.</EmptyState>
+        )}
       </section>
     </section>
+  );
+}
+
+function CeremonyPanel({ busy, ceremony, onApprove }: { busy: boolean; ceremony: CAKeyCeremony; onApprove: (id: string) => void }) {
+  const complete = ceremony.approvals >= ceremony.threshold || ceremony.status === "approved";
+  return (
+    <section aria-labelledby="active-ceremony-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="active-ceremony-heading" className="text-title font-semibold">
+            Active ceremony
+          </h3>
+          <p className="mt-1 font-mono text-xs">{ceremony.id}</p>
+        </div>
+        <Button type="button" variant="outline" disabled={busy || complete} onClick={() => onApprove(ceremony.id)} aria-label={`Approve ceremony ${ceremony.id}`}>
+          Approve
+        </Button>
+      </div>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KeyValue label="Purpose" value={ceremony.purpose} mono />
+        <KeyValue label="Approvals" value={`${ceremony.approvals} / ${ceremony.threshold} approvals`} />
+        <KeyValue label="Status" value={ceremony.status} />
+        <KeyValue label="Opened by" value={ceremony.opener || "-"} />
+      </dl>
+    </section>
+  );
+}
+
+function ManagedKeyPanel({
+  busy,
+  managedKey,
+  onAction,
+}: {
+  busy: boolean;
+  managedKey: ManagedKey;
+  onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
+}) {
+  return (
+    <section aria-labelledby="managed-key-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="managed-key-heading" className="text-title font-semibold">
+            Managed key
+          </h3>
+          <p className="mt-1 font-mono text-xs">{managedKey.key_id}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onAction("rotate", managedKey.key_id)} aria-label={`Rotate key ${managedKey.key_id}`}>
+            Rotate
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onAction("revoke", managedKey.key_id)} aria-label={`Revoke key ${managedKey.key_id}`}>
+            Revoke
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onAction("zeroize", managedKey.key_id)} aria-label={`Zeroize key ${managedKey.key_id}`}>
+            Zeroize
+          </Button>
+        </div>
+      </div>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KeyValue label="Algorithm" value={managedKey.algorithm} />
+        <KeyValue label="Version" value={`Version ${managedKey.version}`} />
+        <KeyValue label="State" value={managedKey.state} />
+        <KeyValue label="Public DER" value={managedKey.public_der ? `${managedKey.public_der.length} bytes` : "-"} />
+      </dl>
+    </section>
+  );
+}
+
+function KeyValue({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
+  return (
+    <div>
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className={mono ? "break-all font-mono text-xs" : "font-medium"}>{value}</dd>
+    </div>
   );
 }
 
@@ -245,6 +315,18 @@ function renderNotice(notice: Notice | null) {
     return <PermissionDeniedState>{notice.message}</PermissionDeniedState>;
   }
   return <ErrorState title="Issuer metadata unavailable">{notice.message}</ErrorState>;
+}
+
+function errorText(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    try {
+      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
+      return problem.detail || problem.title || fallback;
+    } catch {
+      return err.body || fallback;
+    }
+  }
+  return err instanceof Error ? err.message : fallback;
 }
 
 function noticeForError(err: unknown, fallback: string): Notice {

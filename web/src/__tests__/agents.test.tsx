@@ -60,9 +60,9 @@ describe("agent fleet surface", () => {
 
     expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
     expect(apiMock.agents).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByText("edge-01").length).toBeGreaterThan(0);
-    expect(screen.getByText("branch-02")).toBeInTheDocument();
-    expect(screen.getByText("lab-03")).toBeInTheDocument();
+    expect((await screen.findAllByText("edge-01")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("branch-02")).toBeInTheDocument();
+    expect(await screen.findByText("lab-03")).toBeInTheDocument();
     expect(screen.getAllByText("online").length).toBeGreaterThan(0);
     expect(screen.getByText("degraded")).toBeInTheDocument();
     expect(screen.getByText("offline")).toBeInTheDocument();

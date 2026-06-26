@@ -395,16 +395,16 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText(/accepted 1; failed 1/i)).toBeInTheDocument();
   });
 
-  it("shows OCSP and CRL publication posture without fake health", async () => {
+  it("removes static revocation endpoint prose from the identities page", async () => {
     apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "revocation-docs", status: "deployed" }]);
 
     renderIdentities();
 
-    expect(await screen.findByText("Revocation publication")).toBeInTheDocument();
-    expect(screen.getByText(/public OCSP and CRL responders/i)).toBeInTheDocument();
-    expect(screen.getByText(/Responder paths are tenant-scoped/i)).toBeInTheDocument();
-    expect(screen.getByText(/Freshness, scheduler, and responder health aren't surfaced in the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/live propagation health is coming soon/i)).toBeInTheDocument();
+    expect(await screen.findByText("revocation-docs")).toBeInTheDocument();
+    expect(screen.queryByText("Revocation publication")).not.toBeInTheDocument();
+    expect(screen.queryByText(/public OCSP and CRL responders/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Responder paths are tenant-scoped/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/live propagation health/i)).not.toBeInTheDocument();
   });
 
   it("surfaces a 429 rate-limit with a Retry-After hint (SURFACE-007)", async () => {
@@ -421,7 +421,7 @@ describe("lifecycle actions from the UI", () => {
     expect(alert).toHaveTextContent(/12s/);
   });
 
-  it("shows RA separation guardrails and served problem details for denied issue", async () => {
+  it("shows served problem details for denied issue", async () => {
     apiMock.identities.mockResolvedValue([{ id: "req-1", name: "request-only-svc", kind: "x509_certificate", status: "requested" }]);
     apiMock.transitionIdentity.mockReset().mockRejectedValue(
       new ApiError(
@@ -434,8 +434,7 @@ describe("lifecycle actions from the UI", () => {
     const user = userEvent.setup();
     renderIdentities();
 
-    expect(await screen.findByText(/A request-only principal cannot self-issue/i)).toBeInTheDocument();
-    const row = screen.getByText("request-only-svc").closest("tr")!;
+    const row = (await screen.findByText("request-only-svc")).closest("tr")!;
     const issue = within(row).getByRole("button", { name: /^issue$/i });
     await user.click(issue);
 

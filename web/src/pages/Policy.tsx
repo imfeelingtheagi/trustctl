@@ -1,126 +1,67 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
-import { UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type ComplianceEvidencePack } from "@/lib/api";
 
-const policyOutcomes = [
-  {
-    state: "Allowed",
-    meaning: "The bound profile and deployed Rego policy explicitly allow the requested issue, deploy, or revoke action.",
-    evidence: "policy.decision allow plus the normal lifecycle event",
-  },
-  {
-    state: "Denied",
-    meaning: "Default-deny wins when no rule allows the action, RA scope is wrong, approval is missing, or the profile rejects the request.",
-    evidence: "policy.decision deny or issuance.profile_evaluated deny",
-  },
-  {
-    state: "Policy error",
-    meaning: "A compile or evaluation error fails closed. The browser should show the backend problem detail, not retry as an allow.",
-    evidence: "problem+json denial and policy.decision error",
-  },
-  {
-    state: "Overload 503",
-    meaning: "The policy bulkhead sheds work when saturated. Operators see a 503 and retry later; issuance is not allowed through.",
-    evidence: "503 problem+json, retry guidance when available",
-  },
+type ComplianceFramework = ComplianceEvidencePack["framework"];
+
+const complianceFrameworks: Array<{ id: ComplianceFramework; label: string }> = [
+  { id: "pci-dss", label: "PCI DSS" },
+  { id: "hipaa", label: "HIPAA" },
+  { id: "soc2", label: "SOC 2" },
+  { id: "fedramp", label: "FedRAMP" },
+  { id: "cnsa-2.0", label: "CNSA 2.0" },
 ];
 
-const notificationChannels = [
-  {
-    channel: "Slack",
-    reference: "secret://notify/slack/prod:****",
-    events: "certificate.expiring, approval.requested",
-    delivery: "duplicate-safe delivery needs outbox status",
-    status: "config and test delivery are coming soon to the console",
-  },
-  {
-    channel: "Microsoft Teams",
-    reference: "secret://notify/teams/prod:****",
-    events: "incident.declared, connector.failed",
-    delivery: "webhook response body is redacted",
-    status: "channel fixture",
-  },
-  {
-    channel: "Email",
-    reference: "secret://notify/smtp/prod:****",
-    events: "audit.export.ready, policy.denied",
-    delivery: "retry and bounce state are not shown in the console yet",
-    status: "recipient list coming soon",
-  },
-  {
-    channel: "PagerDuty",
-    reference: "secret://notify/pagerduty/prod:****",
-    events: "incident.declared, ca.compromise",
-    delivery: "dedupe key would be event id plus tenant id",
-    status: "test delivery not routed",
-  },
-  {
-    channel: "OpsGenie",
-    reference: "secret://notify/opsgenie/prod:****",
-    events: "jit.expiring, rotation.failed",
-    delivery: "retry receipt coming soon",
-    status: "API key never leaves secret reference form",
-  },
-  {
-    channel: "Webhook",
-    reference: "secret://notify/webhook/prod:****",
-    events: "credential.rotated, compliance.evidence.ready",
-    delivery: "signed body and idempotency key coming soon",
-    status: "raw endpoint token is masked",
-  },
-];
+interface ComplianceControl {
+  id?: string;
+  title?: string;
+  status?: string;
+  evidence?: string[];
+}
 
-const notificationFailures = [
-  {
-    channel: "Webhook",
-    error: "401 unauthorized from https://hooks.example.test/ingest; credential ref secret://notify/webhook/prod:****",
-  },
-  {
-    channel: "PagerDuty",
-    error: "429 rate limited; integration key fingerprint sha256:91ab...7c20; response body redacted",
-  },
-];
-
-const complianceRows = [
-  {
-    framework: "PCI DSS",
-    controls: "certificate inventory, key custody, audit evidence",
-    state: "evidence-only",
-    caveat: "framework-mapped posture is coming soon to the console",
-  },
-  {
-    framework: "HIPAA",
-    controls: "access-control audit, encryption boundary, incident evidence",
-    state: "control mapping coming soon",
-    caveat: "evidence, not certification",
-  },
-  {
-    framework: "SOC 2",
-    controls: "change approval, revocation, logging, availability",
-    state: "signed audit export",
-    caveat: "framework report generation coming soon",
-  },
-  {
-    framework: "FedRAMP",
-    controls: "tenant isolation, crypto module posture, vulnerability evidence",
-    state: "posture dashboard blocked",
-    caveat: "requires compliance control state API",
-  },
-  {
-    framework: "CNSA 2.0",
-    controls: "algorithm posture, key sizes, PQC migration waves",
-    state: "CBOM/PQC data shown elsewhere as disclosure",
-    caveat: "certification mapping coming soon",
-  },
-];
+interface ComplianceManifest {
+  controls?: ComplianceControl[];
+  posture?: {
+    total_crypto_assets?: number;
+    quantum_vulnerable?: number;
+    post_quantum?: number;
+  };
+  product_evidences?: string[];
+  operator_attests?: string[];
+}
 
 export function Policy() {
+  const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>("soc2");
+  const [evidencePack, setEvidencePack] = useState<ComplianceEvidencePack | null>(null);
+  const [evidencePackError, setEvidencePackError] = useState<string | null>(null);
+  const [evidencePackLoading, setEvidencePackLoading] = useState(true);
   const [evidenceBundle, setEvidenceBundle] = useState<string | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setEvidencePackLoading(true);
+    setEvidencePackError(null);
+    setEvidencePack(null);
+    api
+      .complianceEvidencePack(selectedFramework)
+      .then((pack) => {
+        if (active) setEvidencePack(pack);
+      })
+      .catch((err: unknown) => {
+        if (active) setEvidencePackError(describePolicyError(err, "evidence pack unavailable"));
+      })
+      .finally(() => {
+        if (active) setEvidencePackLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedFramework]);
 
   async function exportComplianceEvidence() {
     setExporting(true);
@@ -154,92 +95,21 @@ export function Policy() {
             emits the event or returns a fail-closed problem.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="ui-table min-w-[54rem]">
-            <caption className="sr-only">Policy decision outcomes</caption>
-            <thead>
-              <tr>
-                <th scope="col">Outcome</th>
-                <th scope="col">ELI5 technical meaning</th>
-                <th scope="col">Audit evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {policyOutcomes.map((outcome) => (
-                <tr key={outcome.state} className="align-top">
-                  <td className="font-medium">{outcome.state}</td>
-                  <td>{outcome.meaning}</td>
-                  <td className="font-mono text-xs">{outcome.evidence}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
         <p className="text-sm text-muted-foreground">
-          Denials are visible in the action error path on{" "}
+          Decisions are evidence events. Use Audit to inspect allow, deny, and evaluation-error records with the actor, resource, hash, and payload from the
+          event stream. Action errors still appear where the operator started the workflow on{" "}
           <Link className="underline" to="/identities">
             Identities
           </Link>{" "}
-          and in{" "}
-          <Link className="underline" to="/audit?type=policy.decision">
-            Audit policy decisions
-          </Link>
-          . Profile-bound issuance denials are also visible through{" "}
-          <Link className="underline" to="/audit?type=issuance.profile_evaluated">
-            profile evaluation evidence
-          </Link>
           .
         </p>
-      </section>
-
-      <section aria-labelledby="notifications-heading" className="grid gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="notifications-heading" className="text-title font-semibold">
-            Notification integrations
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Slack, Teams, email, PagerDuty, OpsGenie, and webhook notification channels run from scheduler-created outbox work when operators wire them into the
-            process. This console does not configure or test channels yet.
-          </p>
-        </div>
-        <UnavailableState title="Notification channel controls coming soon">
-          Expiry-alert dispatch runs through the scheduler and outbox. Channel config reads, test delivery, and tenant-facing delivery controls are not yet
-          available here, so this page cannot operate notification integrations.
-        </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="ui-table min-w-[70rem]">
-            <caption className="sr-only">Notification channel fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Channel</th>
-                <th scope="col">Secret reference</th>
-                <th scope="col">Events</th>
-                <th scope="col">Delivery posture</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {notificationChannels.map((row) => (
-                <tr key={row.channel} className="align-top">
-                  <td className="font-medium">{row.channel}</td>
-                  <td className="font-mono text-xs">{row.reference}</td>
-                  <td>{row.events}</td>
-                  <td>{row.delivery}</td>
-                  <td>{row.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="ui-panel p-comfortable text-sm">
-          <p className="font-medium">Redacted failure fixtures</p>
-          <ul className="mt-2 grid gap-1 text-muted-foreground">
-            {notificationFailures.map((failure) => (
-              <li key={failure.channel}>
-                <span className="font-medium text-foreground">{failure.channel}:</span> {failure.error}
-              </li>
-            ))}
-          </ul>
+        <div className="flex flex-wrap gap-2">
+          <Link className="underline" to="/audit?type=policy.decision">
+            Open policy decisions in Audit
+          </Link>
+          <Link className="underline" to="/audit?type=issuance.profile_evaluated">
+            Open profile evaluations in Audit
+          </Link>
         </div>
       </section>
 
@@ -249,11 +119,29 @@ export function Policy() {
             Compliance posture and reports
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Framework dashboards need mapped controls, control state, caveats, and report packaging. Today the signed audit evidence export is evidence, not
-            certification.
+            Evidence packs are signed exports built from the audit log and cryptographic inventory. They show what trstctl can prove and what your organization
+            must still attest; they are evidence, not certification.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2" aria-label="Compliance framework">
+          {complianceFrameworks.map((framework) => (
+            <Button
+              key={framework.id}
+              type="button"
+              variant={framework.id === selectedFramework ? "default" : "outline"}
+              aria-pressed={framework.id === selectedFramework}
+              onClick={() => setSelectedFramework(framework.id)}
+            >
+              {framework.label}
+            </Button>
+          ))}
+        </div>
+
+        {evidencePackLoading && <LoadingState>Loading evidence pack.</LoadingState>}
+        {evidencePackError && <ErrorState title="Evidence pack unavailable">{evidencePackError}</ErrorState>}
+        {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework)} />}
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
           <Button type="button" onClick={() => void exportComplianceEvidence()} disabled={exporting}>
             {exporting ? "Exporting..." : "Export audit evidence"}
           </Button>
@@ -271,33 +159,6 @@ export function Policy() {
             {evidenceError}
           </p>
         )}
-        <UnavailableState title="Framework-mapped compliance posture coming soon">
-          PCI, HIPAA, SOC 2, FedRAMP, and CNSA 2.0 control mappings, caveats, and report state are not available in this console yet. The signed audit export
-          above is real evidence, not a compliance certificate.
-        </UnavailableState>
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="ui-table min-w-[62rem]">
-            <caption className="sr-only">Compliance control mapping fixtures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Framework</th>
-                <th scope="col">Control evidence</th>
-                <th scope="col">Control state</th>
-                <th scope="col">Caveat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {complianceRows.map((row) => (
-                <tr key={row.framework} className="align-top">
-                  <td className="font-medium">{row.framework}</td>
-                  <td>{row.controls}</td>
-                  <td>{row.state}</td>
-                  <td>{row.caveat}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section aria-labelledby="policy-dry-run-heading" className="grid gap-4 border-y border-border py-4">
@@ -317,6 +178,133 @@ export function Policy() {
       </section>
     </section>
   );
+}
+
+function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: ComplianceEvidencePack }) {
+  const manifest = manifestFromPack(pack);
+  const controls = manifest.controls ?? [];
+  const evidenced = controls.filter((control) => control.status === "evidenced").length;
+  const gaps = controls.filter((control) => control.status === "gap").length;
+  const posture = manifest.posture ?? {};
+  const productEvidence = manifest.product_evidences ?? [];
+  const operatorAttests = manifest.operator_attests ?? [];
+  const payload = JSON.stringify(pack, null, 2);
+
+  return (
+    <section aria-labelledby="compliance-pack-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="compliance-pack-heading" className="text-title font-semibold">
+            {label} evidence pack
+          </h3>
+          <p className="mt-1 text-muted-foreground">Signed export plus offline verification key for auditor handoff.</p>
+        </div>
+        <a
+          className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm underline"
+          download={`${pack.framework}-evidence-pack.json`}
+          href={`data:application/json;charset=utf-8,${encodeURIComponent(payload)}`}
+        >
+          Download signed bundle
+        </a>
+      </div>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Format" value={pack.format} mono />
+        <Metric label="Controls" value={`${controls.length} ${plural(controls.length, "control")}`} />
+        <Metric label="Evidenced" value={`${evidenced} evidenced`} />
+        <Metric label="Gaps" value={`${gaps} ${plural(gaps, "gap")}`} />
+        <Metric label="Crypto assets" value={String(posture.total_crypto_assets ?? 0)} />
+        <Metric label="Quantum vulnerable" value={`${posture.quantum_vulnerable ?? 0} quantum vulnerable`} />
+        <Metric label="Post-quantum" value={String(posture.post_quantum ?? 0)} />
+        <Metric label="Public key DER" value={`${pack.public_key_der.length} bytes`} />
+      </dl>
+
+      {controls.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[48rem]">
+            <caption className="sr-only">{label} controls</caption>
+            <thead>
+              <tr>
+                <th scope="col">Control</th>
+                <th scope="col">Status</th>
+                <th scope="col">Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {controls.map((control) => (
+                <tr key={control.id ?? control.title ?? "control"} className="align-top">
+                  <td>
+                    <p className="font-medium">{control.title ?? control.id ?? "Control"}</p>
+                    {control.id && <p className="mt-1 font-mono text-xs text-muted-foreground">{control.id}</p>}
+                  </td>
+                  <td>{control.status ?? "unknown"}</td>
+                  <td>{control.evidence?.join(", ") || "No evidence label"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <EvidenceList title="Product evidence" items={productEvidence} />
+        <EvidenceList title="Operator attestations" items={operatorAttests} />
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
+  return (
+    <div>
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className={mono ? "break-all font-mono text-xs" : "text-base font-semibold"}>{value}</dd>
+    </div>
+  );
+}
+
+function EvidenceList({ items, title }: { items: string[]; title: string }) {
+  return (
+    <section aria-label={title} className="rounded-md border border-border p-3">
+      <p className="font-medium">{title}</p>
+      {items.length > 0 ? (
+        <ul className="mt-2 grid gap-1 text-muted-foreground">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-muted-foreground">No labels in this pack.</p>
+      )}
+    </section>
+  );
+}
+
+function manifestFromPack(pack: ComplianceEvidencePack): ComplianceManifest {
+  const raw = pack.signed_export.manifest ?? pack.signed_export.Manifest;
+  if (isRecord(raw)) return raw as ComplianceManifest;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (isRecord(parsed)) return parsed as ComplianceManifest;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function frameworkLabel(framework: ComplianceFramework): string {
+  return complianceFrameworks.find((item) => item.id === framework)?.label ?? framework;
+}
+
+function plural(count: number, singular: string): string {
+  if (count === 1) return singular;
+  return `${singular}s`;
 }
 
 function describePolicyError(err: unknown, fallback: string): string {

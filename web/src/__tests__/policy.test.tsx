@@ -6,13 +6,14 @@ import { Policy } from "@/pages/Policy";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    complianceEvidencePack: vi.fn(),
     exportAudit: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, exportAudit: apiMock.exportAudit } };
+  return { ...actual, api: { ...actual.api, complianceEvidencePack: apiMock.complianceEvidencePack, exportAudit: apiMock.exportAudit } };
 });
 
 function renderPolicy() {
@@ -25,57 +26,78 @@ function renderPolicy() {
 
 describe("policy governance surface", () => {
   beforeEach(() => {
+    apiMock.complianceEvidencePack.mockReset();
     apiMock.exportAudit.mockReset();
+    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0") =>
+      Promise.resolve({
+        format: "trstctl.compliance.evidence-pack.v1",
+        framework,
+        public_key_der: "BASE64PUBLICKEY",
+        signed_export: {
+          manifest: {
+            controls: [
+              { id: `${framework}-crypto-inventory`, title: "Cryptographic inventory maintained", status: "evidenced", evidence: ["CBOM"] },
+              { id: `${framework}-audit-trail`, title: "Tamper-evident audit trail", status: "evidenced", evidence: ["signed audit evidence log"] },
+              { id: `${framework}-operator-attest`, title: "Operator attestation needed", status: "gap", evidence: ["operator attestation"] },
+            ],
+            posture: { total_crypto_assets: 4, quantum_vulnerable: framework === "cnsa-2.0" ? 1 : 0, post_quantum: 2 },
+            product_evidences: ["FIPS 203/204/205 migration posture from the CBOM"],
+            operator_attests: ["organizational policies & governance"],
+          },
+          signature: "signed-by-export-key",
+        },
+      }),
+    );
   });
 
-  it("explains policy outcomes and keeps authoring/dry-run honestly blocked", () => {
+  it("routes policy decisions to Audit and keeps authoring/dry-run honestly blocked", async () => {
     renderPolicy();
+    await screen.findByRole("heading", { name: "SOC 2 evidence pack" });
 
     expect(screen.getByRole("heading", { name: "Policy" })).toBeInTheDocument();
-    expect(screen.getByText("Allowed")).toBeInTheDocument();
-    expect(screen.getByText("Denied")).toBeInTheDocument();
-    expect(screen.getByText("Policy error")).toBeInTheDocument();
-    expect(screen.getByText("Overload 503")).toBeInTheDocument();
-    expect(screen.getByText(/default-deny wins/i)).toBeInTheDocument();
-    expect(screen.getByText(/policy.decision deny/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Audit policy decisions/i })).toHaveAttribute("href", "/audit?type=policy.decision");
-    expect(screen.getByRole("link", { name: /profile evaluation evidence/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
+    expect(screen.getByText(/Decisions are evidence events/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open policy decisions in Audit/i })).toHaveAttribute("href", "/audit?type=policy.decision");
+    expect(screen.getByRole("link", { name: /Open profile evaluations in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
+    expect(screen.queryByRole("table", { name: "Policy decision outcomes" })).not.toBeInTheDocument();
     expect(screen.getByText("Policy authoring and dry-run coming soon")).toBeInTheDocument();
     expect(screen.getByText(/lifecycle mutations remain the real enforcement path/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /dry run/i })).not.toBeInTheDocument();
   });
 
-  it("renders notification integrations with masked secret references and no live channel controls", () => {
+  it("removes notification-channel fixtures and live channel controls", async () => {
     renderPolicy();
+    await screen.findByRole("heading", { name: "SOC 2 evidence pack" });
 
-    expect(screen.getByRole("heading", { name: "Notification integrations" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Notification integrations" })).not.toBeInTheDocument();
     for (const channel of ["Slack", "Microsoft Teams", "Email", "PagerDuty", "OpsGenie", "Webhook"]) {
-      expect(screen.getByText(channel)).toBeInTheDocument();
+      expect(screen.queryByText(channel)).not.toBeInTheDocument();
     }
-    expect(screen.getByText("secret://notify/slack/prod:****")).toBeInTheDocument();
-    expect(screen.getByText("secret://notify/webhook/prod:****")).toBeInTheDocument();
-    expect(screen.getByText(/response body redacted/i)).toBeInTheDocument();
-    expect(screen.getByText("Notification channel controls coming soon")).toBeInTheDocument();
-    expect(screen.getByText(/Expiry-alert dispatch runs through the scheduler and outbox/i)).toBeInTheDocument();
-    expect(screen.getByText(/cannot operate notification integrations/i)).toBeInTheDocument();
+    expect(screen.queryByText(/secret:\/\/notify/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Notification channel controls coming soon/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/xoxb-|pagerduty_api_key|webhook-token-/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /test delivery|configure channel|send notification/i })).not.toBeInTheDocument();
   });
 
-  it("exports audit evidence while keeping compliance reports blocked", async () => {
+  it("renders served compliance evidence packs and still exports audit evidence", async () => {
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "signed.audit.bundle" });
     const user = userEvent.setup();
     renderPolicy();
 
     expect(screen.getByRole("heading", { name: "Compliance posture and reports" })).toBeInTheDocument();
-    expect(screen.getByText("PCI DSS")).toBeInTheDocument();
-    expect(screen.getByText("HIPAA")).toBeInTheDocument();
-    expect(screen.getByText("SOC 2")).toBeInTheDocument();
-    expect(screen.getByText("FedRAMP")).toBeInTheDocument();
-    expect(screen.getByText("CNSA 2.0")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
+    expect(await screen.findByRole("heading", { name: "SOC 2 evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("trstctl.compliance.evidence-pack.v1")).toBeInTheDocument();
+    expect(screen.getByText("3 controls")).toBeInTheDocument();
+    expect(screen.getByText("2 evidenced")).toBeInTheDocument();
+    expect(screen.getByText("1 gap")).toBeInTheDocument();
+    expect(screen.getByText("FIPS 203/204/205 migration posture from the CBOM")).toBeInTheDocument();
     expect(screen.getAllByText(/evidence, not certification/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Framework-mapped compliance posture coming soon")).toBeInTheDocument();
-    expect(screen.getByText(/not a compliance certificate/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "soc2-evidence-pack.json");
+
+    await user.click(screen.getByRole("button", { name: "CNSA 2.0" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cnsa-2.0"));
+    expect(await screen.findByRole("heading", { name: "CNSA 2.0 evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("1 quantum vulnerable")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Export audit evidence" }));
 

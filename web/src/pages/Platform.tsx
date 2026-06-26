@@ -5,107 +5,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { api, type APIToken, type Member, type OIDCMappingStatus, type RoleList } from "@/lib/api";
 
-interface ScopeRequirement {
-  feature: string;
-  scope: string;
-  route: string;
-  denial: string;
-}
-
-interface APICapability {
-  group: string;
-  capability: string;
-  operations: string;
-  access: string;
-}
-
-const requiredScopes: ScopeRequirement[] = [
-  {
-    feature: "Access administration",
-    scope: "access:write",
-    route: "/platform",
-    denial: "Member and API-token administration stays denied unless the principal has the access-admin write scope.",
-  },
-  {
-    feature: "Certificate issuance",
-    scope: "certs:issue",
-    route: "/identities",
-    denial: "Issuance remains denied until RA separation, dual control, and OPA allow the action.",
-  },
-  {
-    feature: "Certificate inventory",
-    scope: "certs:read",
-    route: "/certificates",
-    denial: "Inventory denial is shown as a generic permission message without tenant existence details.",
-  },
-  {
-    feature: "Credential graph",
-    scope: "graph:read",
-    route: "/graph",
-    denial: "Graph denials hide cross-tenant node details and show only the missing evidence scope.",
-  },
-  {
-    feature: "Audit evidence",
-    scope: "audit:read",
-    route: "/audit",
-    denial: "Audit denials suppress raw problem bodies that might mention another tenant.",
-  },
-  {
-    feature: "Secrets",
-    scope: "secrets:write",
-    route: "/secrets",
-    denial: "Secret workflows must never reveal or persist secret material when authorization fails.",
-  },
-];
-
-const apiCapabilities: APICapability[] = [
-  { group: "Access", capability: "Roles, OIDC mappings, members, offboarding, and API tokens", operations: "read, create, update, revoke", access: "session or API token; browser mutations use CSRF and idempotency" },
-  { group: "Agents", capability: "Agent fleet and one-time enrollment tokens", operations: "read, mint", access: "session or API token; token minting uses browser session protection" },
-  { group: "AI", capability: "Grounded query, RCA, and read-only MCP tool calls", operations: "query, analyze, inspect tools", access: "session or API token with tenant/RBAC filtering" },
-  { group: "Audit", capability: "Event search and signed evidence export", operations: "read, export", access: "session or API token" },
-  { group: "Certificates", capability: "Inventory, detail, and explicit public-certificate ingest", operations: "read, ingest", access: "session or API token; ingest is idempotent" },
-  { group: "Graph", capability: "Credential graph, blast radius, reachability, and read-only graph query", operations: "read, analyze", access: "session or API token; graph query is read-only" },
-  { group: "Identities", capability: "Identity request, approval, lifecycle transition, and detail read", operations: "read, request, approve, transition", access: "session or API token; mutations require idempotency" },
-  { group: "Issuers", capability: "Issuer list, issuer detail, and CA authority workflows", operations: "read, create", access: "session or API token; CA mutations require browser session protection" },
-  { group: "Owners", capability: "Owner directory and ownership updates", operations: "read, create, update, delete", access: "session-protected mutations" },
-  { group: "Profiles", capability: "Issuance profile list, create, and version detail", operations: "read, create", access: "session or API token; profile creation is idempotent" },
-  { group: "Risk", capability: "Risk-prioritized credential list", operations: "read, sort, filter", access: "session or API token" },
-  { group: "Secrets", capability: "Native store, PKI secrets, shares, leases, rotation, sync, and machine login", operations: "read metadata, reveal once, create, rotate, delete, issue, redeem, renew, revoke", access: "session or API token; values are never stored in browser storage" },
-];
-
-const cliCommands = [
-  {
-    context: "Certificate inventory",
-    command: "trstctl-cli certificates list --limit 50 --format json",
-    parity: "same list contract as the certificate inventory",
-  },
-  {
-    context: "Audit evidence",
-    command: "trstctl-cli audit export --limit 500 --output audit-evidence.jws",
-    parity: "same signed bundle as audit export",
-  },
-  {
-    context: "Graph blast radius",
-    command: "trstctl-cli graph blast-radius cert:payments-api --format json",
-    parity: "same graph result as blast-radius analysis",
-  },
-  {
-    context: "Agent enrollment",
-    command: "trstctl-cli agents enroll-token --format json",
-    parity: "same one-time token endpoint as the Agents page",
-  },
-  {
-    context: "Access administration",
-    command: "trstctl-cli access members list --include_offboarded true --format json",
-    parity: "same member/offboarding contract as access administration",
-  },
-  {
-    context: "Approver token mint",
-    command: "trstctl-cli access tokens create -f approver-token.json --format json",
-    parity: "same reveal-once token contract as approver-token minting",
-  },
-];
-
 function browserTransport(): { label: string; detail: string; warning?: string } {
   if (typeof window === "undefined") {
     return { label: "Unknown", detail: "Browser transport is evaluated at runtime." };
@@ -141,7 +40,7 @@ export function Platform() {
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRoles, setMemberRoles] = useState("operator");
   const [tokenSubject, setTokenSubject] = useState("");
-  const [tokenScopes, setTokenScopes] = useState("certs:issue");
+  const [tokenScopes, setTokenScopes] = useState("access:read");
   const [offboardSubject, setOffboardSubject] = useState("");
   const [offboardReason, setOffboardReason] = useState("");
   const roleRows = useMemo(() => roles?.items ?? [], [roles]);
@@ -238,7 +137,7 @@ export function Platform() {
       <PageHeader
         titleId="platform-heading"
         title="Platform"
-        description="Tenant context, access-control evidence, browser transport posture, auth status, and API capability view."
+        description="Tenant context, access-control evidence, browser transport posture, and auth status."
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -472,95 +371,6 @@ export function Platform() {
               </tbody>
             </table>
           </div>
-        </div>
-        <table className="ui-table">
-          <caption className="sr-only">Required permission scopes by feature</caption>
-          <thead>
-            <tr>
-              <th scope="col">Feature</th>
-              <th scope="col">Required scope</th>
-              <th scope="col">Route</th>
-              <th scope="col">Denied-action copy</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requiredScopes.map((item) => (
-              <tr key={item.scope} className="align-top">
-                <td>{item.feature}</td>
-                <td className="font-mono text-xs">{item.scope}</td>
-                <td>{item.route}</td>
-                <td>{item.denial}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section aria-labelledby="api-spec-heading">
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 id="api-spec-heading" className="text-title font-semibold">
-              API capability view
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{apiCapabilities.length} capability groups from the product API contract.</p>
-          </div>
-          <span className="rounded-control border border-border bg-muted px-2 py-1 text-caption font-medium text-muted-foreground">Capability view</span>
-        </div>
-        <div className="overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[60rem]">
-            <caption className="sr-only">API capability groups</caption>
-            <thead>
-              <tr>
-                <th scope="col">Group</th>
-                <th scope="col">Capability</th>
-                <th scope="col">Operations</th>
-                <th scope="col">Access posture</th>
-              </tr>
-            </thead>
-            <tbody>
-              {apiCapabilities.map((capability) => (
-                <tr key={capability.group} className="align-top">
-                  <td>{capability.group}</td>
-                  <td>{capability.capability}</td>
-                  <td>{capability.operations}</td>
-                  <td>{capability.access}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="cli-heading" className="grid gap-4 border-y border-border py-4">
-        <div>
-          <h2 id="cli-heading" className="text-title font-semibold">
-            CLI companion
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            These commands mirror the same customer workflows. The browser never renders bearer token values, and the examples avoid inline Authorization
-            headers.
-          </p>
-        </div>
-        <div className="overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[66rem]">
-            <caption className="sr-only">CLI companion commands</caption>
-            <thead>
-              <tr>
-                <th scope="col">Context</th>
-                <th scope="col">Token-safe command</th>
-                <th scope="col">Parity note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cliCommands.map((row) => (
-                <tr key={row.context} className="align-top">
-                  <td className="font-medium">{row.context}</td>
-                  <td className="font-mono text-xs">{row.command}</td>
-                  <td>{row.parity}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </section>
 

@@ -376,7 +376,7 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
 
-  it("shows access administration and the required-scope map", async () => {
+  it("shows access administration from served data", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
@@ -388,22 +388,21 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getAllByText("revoked").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Offboard" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Mint" })).toBeInTheDocument();
-    expect(screen.getAllByText("access:write").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("certs:issue").length).toBeGreaterThan(0);
-    expect(screen.getByText("graph:read")).toBeInTheDocument();
-    expect(screen.getByText("secrets:write")).toBeInTheDocument();
-    expect(screen.getAllByText("/platform").length).toBeGreaterThan(0);
-    expect(screen.getByText(/without tenant existence details/i)).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveTextContent("access:write");
+    expect(screen.getByRole("main")).toHaveTextContent("certs:issue");
+    expect(screen.queryByText("graph:read")).not.toBeInTheDocument();
+    expect(screen.queryByText("secrets:write")).not.toBeInTheDocument();
+    expect(screen.queryByText(/without tenant existence details/i)).not.toBeInTheDocument();
   });
 
-  it("renders the API capability view without raw endpoint or token examples", async () => {
+  it("hides the static API capability table", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByText(/12 capability groups/i)).toBeInTheDocument();
-    expect(screen.getByText("Capability view")).toBeInTheDocument();
-    expect(screen.getByText(/capability groups from the product API contract/i)).toBeInTheDocument();
-    expect(screen.getByText(/Native store, PKI secrets, shares, leases, rotation, sync, and machine login/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/capability groups/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Capability view")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Native store, PKI secrets, shares, leases, rotation, sync, and machine login/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\/api\/v1/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /copy curl/i })).not.toBeInTheDocument();
   });
@@ -420,16 +419,12 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
   });
 
-  it("renders token-safe CLI companion commands that match command groups", async () => {
+  it("hides static CLI companion commands", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByRole("heading", { name: "CLI companion" })).toBeInTheDocument();
-    expect(screen.getByText("trstctl-cli certificates list --limit 50 --format json")).toBeInTheDocument();
-    expect(screen.getByText("trstctl-cli audit export --limit 500 --output audit-evidence.jws")).toBeInTheDocument();
-    expect(screen.getByText("trstctl-cli graph blast-radius cert:payments-api --format json")).toBeInTheDocument();
-    expect(screen.getByText("trstctl-cli agents enroll-token --format json")).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/Authorization: Bearer|trst_[A-Za-z0-9]/);
+    expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/trstctl-cli|Authorization: Bearer|trst_[A-Za-z0-9]/);
   });
 
   it("hides unbacked runtime, plugin, and passive federation disclosures", async () => {

@@ -75,6 +75,92 @@ describe("api error handling (SURFACE-007)", () => {
   });
 });
 
+describe("api compliance evidence packs", () => {
+  it("reads framework evidence packs from the served compliance route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        format: "trstctl.compliance.evidence-pack.v1",
+        framework: "soc2",
+        signed_export: { manifest: { framework: "soc2", controls: [] }, signature: "sig" },
+        public_key_der: "BASE64PUBLICKEY",
+      }),
+    );
+
+    const pack = await api.complianceEvidencePack("soc2");
+
+    expect(pack.framework).toBe("soc2");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/compliance/evidence-packs/soc2");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+  });
+});
+
+describe("api CA hierarchy and managed keys", () => {
+  it("starts and approves CA ceremonies through the served mutation routes", async () => {
+    mockFetchSequence([
+      {
+        status: 201,
+        body: JSON.stringify({
+          id: "ceremony-root-1",
+          tenant_id: "tenant-1",
+          purpose: "create_root:Trust Root CA",
+          threshold: 2,
+          status: "pending",
+          approvals: 1,
+          created_at: "2026-06-26T14:00:00Z",
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({
+          id: "ceremony-root-1",
+          tenant_id: "tenant-1",
+          purpose: "create_root:Trust Root CA",
+          threshold: 2,
+          status: "approved",
+          approvals: 2,
+          created_at: "2026-06-26T14:00:00Z",
+        }),
+      },
+    ]);
+
+    await api.createCACeremony({
+      operation: "create_root",
+      threshold: 2,
+      spec: { common_name: "Trust Root CA", signature_algorithm: "ECDSA-P256" },
+    });
+    await api.approveCACeremony("ceremony-root-1");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.map((call) => call[0])).toEqual(["/api/v1/ca/ceremonies", "/api/v1/ca/ceremonies/ceremony-root-1/approvals"]);
+    for (const call of calls) {
+      expect(call[1]?.method).toBe("POST");
+      expect((call[1]?.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    }
+  });
+
+  it("drives managed-key lifecycle actions through served mutation routes", async () => {
+    mockFetchSequence([
+      { status: 201, body: JSON.stringify({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 1, state: "active" }) },
+      { status: 200, body: JSON.stringify({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "active" }) },
+      { status: 200, body: JSON.stringify({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "revoked" }) },
+      { status: 200, body: JSON.stringify({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" }) },
+    ]);
+
+    await api.generateManagedKey({ algorithm: "ECDSA-P256" });
+    await api.rotateManagedKey("kms/root-1");
+    await api.revokeManagedKey("kms/root-1");
+    await api.zeroizeManagedKey("kms/root-1");
+
+    expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+      "/api/v1/managed-keys",
+      "/api/v1/managed-keys/rotate",
+      "/api/v1/managed-keys/revoke",
+      "/api/v1/managed-keys/zeroize",
+    ]);
+  });
+});
+
 describe("api CSRF contract (SEC-001)", () => {
   function sentHeaders(): Record<string, string> {
     const calls = vi.mocked(fetch).mock.calls;

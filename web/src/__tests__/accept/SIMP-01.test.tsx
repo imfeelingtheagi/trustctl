@@ -1,0 +1,112 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { AuthProvider } from "@/auth/AuthProvider";
+import { Platform } from "@/pages/Platform";
+
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    me: vi.fn(),
+    accessRoles: vi.fn(),
+    oidcMappingStatus: vi.fn(),
+    members: vi.fn(),
+    upsertMember: vi.fn(),
+    offboardMember: vi.fn(),
+    apiTokens: vi.fn(),
+    createAPIToken: vi.fn(),
+    logout: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...apiMock } };
+});
+
+function renderPlatform() {
+  return render(
+    <AuthProvider>
+      <MemoryRouter>
+        <Platform />
+      </MemoryRouter>
+    </AuthProvider>,
+  );
+}
+
+describe("SIMP-01 Platform served-data reduction", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.me.mockResolvedValue({ subject: "access-admin", tenant_id: "tenant-admin", email: "access-admin@example.test" });
+    apiMock.accessRoles.mockResolvedValue({
+      items: [{ name: "access-admin", permissions: ["access:read", "access:write"] }],
+    });
+    apiMock.oidcMappingStatus.mockResolvedValue({
+      enabled: true,
+      tenant_claim: "tenant",
+      groups_claim: "groups",
+      claim_is_tenant: false,
+      allow_default_tenant: false,
+      tenant_mappings: [{ group: "access-admins", tenant_id: "tenant-admin", roles: ["access-admin"] }],
+    });
+    apiMock.members.mockResolvedValue({
+      items: [
+        {
+          tenant_id: "tenant-admin",
+          subject: "access-admin@example.test",
+          roles: ["access-admin"],
+          source: "oidc",
+          status: "active",
+          created_at: "2026-06-26T14:00:00Z",
+          updated_at: "2026-06-26T14:01:00Z",
+        },
+      ],
+    });
+    apiMock.apiTokens.mockResolvedValue({
+      items: [
+        {
+          id: "tok-admin",
+          tenant_id: "tenant-admin",
+          subject: "ops-automation",
+          scopes: ["access:read"],
+          created_at: "2026-06-26T14:02:00Z",
+        },
+      ],
+    });
+    apiMock.logout.mockResolvedValue(undefined);
+  });
+
+  it("keeps only served access-admin data plus session posture on Platform", async () => {
+    renderPlatform();
+
+    expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.accessRoles).toHaveBeenCalledTimes(1));
+    expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
+    expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+
+    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
+    expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
+    expect(screen.getByText("access-admins")).toBeInTheDocument();
+    expect(screen.getAllByText("access-admin@example.test").length).toBeGreaterThan(0);
+    expect(screen.getByText("ops-automation")).toBeInTheDocument();
+
+    expect(screen.queryByRole("heading", { name: "API capability view" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "CLI companion" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Required permission scopes by feature")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/trstctl-cli|OpenAPI|Capability view|API capability groups|Token-safe command/i);
+    expect(document.body.textContent).not.toMatch(/certs:issue|graph:read|secrets:write|static capability|fixture|coming soon|not served yet/i);
+  });
+
+  it("removes the static Platform API, CLI, and scope-map fixtures from the module", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/pages/Platform.tsx"), "utf8");
+    expect(source).not.toMatch(/const\s+requiredScopes|const\s+apiCapabilities|const\s+cliCommands/);
+    expect(source).not.toMatch(/interface\s+ScopeRequirement|interface\s+APICapability/);
+    expect(source).not.toMatch(/API capability view|CLI companion|Required permission scopes by feature|trstctl-cli/);
+  });
+});

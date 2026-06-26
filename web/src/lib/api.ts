@@ -26,6 +26,9 @@ import type {
   CBOMMigrationProgress,
   CBOMScan,
   CBOMScanRequest,
+  CACeremonyStartRequest,
+  CAKeyCeremony,
+  ComplianceEvidencePack,
   Certificate as GenCertificate,
   CertificateIngest,
   CertificateList,
@@ -75,6 +78,8 @@ import type {
   MCPToolResult,
   MachineLoginRequest,
   MachineLoginResponse,
+  ManagedKey,
+  ManagedKeyGenerateRequest,
   Member,
   MemberList,
   MemberRequest,
@@ -177,6 +182,9 @@ export type {
   CBOMMigrationProgress,
   CBOMScan,
   CBOMScanRequest,
+  CACeremonyStartRequest,
+  CAKeyCeremony,
+  ComplianceEvidencePack,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -187,6 +195,8 @@ export type {
   IncidentExecutionRequest,
   MachineLoginRequest,
   MachineLoginResponse,
+  ManagedKey,
+  ManagedKeyGenerateRequest,
   Member,
   MemberList,
   MemberRequest,
@@ -535,6 +545,12 @@ export interface Api {
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
+  createCACeremony(input: CACeremonyStartRequest): Promise<CAKeyCeremony>;
+  approveCACeremony(id: string): Promise<CAKeyCeremony>;
+  generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
+  rotateManagedKey(keyId: string): Promise<ManagedKey>;
+  revokeManagedKey(keyId: string): Promise<ManagedKey>;
+  zeroizeManagedKey(keyId: string): Promise<ManagedKey>;
   accessRoles(): Promise<RoleList>;
   oidcMappingStatus(): Promise<OIDCMappingStatus>;
   members(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): Promise<MemberList>;
@@ -550,6 +566,7 @@ export interface Api {
   privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
+  complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
   graphReachable(id: string): Promise<GraphReachable>;
@@ -654,6 +671,12 @@ export const api: Api = {
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
   getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
+  createCACeremony: (input) => mutate<CAKeyCeremony>("POST", "/api/v1/ca/ceremonies", input),
+  approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),
+  generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
+  rotateManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/rotate", { key_id: keyId }),
+  revokeManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/revoke", { key_id: keyId }),
+  zeroizeManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/zeroize", { key_id: keyId }),
   accessRoles: () => req<RoleList>("/api/v1/access/roles"),
   oidcMappingStatus: () => req<OIDCMappingStatus>("/api/v1/access/oidc-mapping"),
   members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),
@@ -669,6 +692,7 @@ export const api: Api = {
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
+  complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
