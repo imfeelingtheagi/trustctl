@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { FileKey2, KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { CAOverview } from "@/components/ca";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type CACeremonyStartRequest, type CAKeyCeremony, type Issuer, type ManagedKey } from "@/lib/api";
+import { api, ApiError, type CACeremonyStartRequest, type CAKeyCeremony, type Issuer, type ManagedKey, type Profile } from "@/lib/api";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
@@ -23,6 +24,7 @@ const managedKeyRequest = { algorithm: "ECDSA-P256" };
 
 export function CAHierarchy() {
   const [issuers, setIssuers] = useState<Issuer[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [ceremony, setCeremony] = useState<CAKeyCeremony | null>(null);
@@ -47,6 +49,19 @@ export function CAHierarchy() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => api.profiles())
+      .then((list) => {
+        if (!cancelled) setProfiles(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const sortedIssuers = useMemo(() => [...issuers].sort((a, b) => a.name.localeCompare(b.name)), [issuers]);
@@ -118,6 +133,8 @@ export function CAHierarchy() {
           </Button>
         }
       />
+
+      <CAOverview issuers={sortedIssuers} profiles={profiles} />
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">

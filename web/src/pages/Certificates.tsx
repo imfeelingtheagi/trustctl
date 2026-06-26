@@ -1,15 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ApiError, UnauthorizedError, api, type Certificate } from "@/lib/api";
+import { ApiError, UnauthorizedError, api, type Certificate, type ConnectorDelivery, type RotationRun } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
+import { CertificatesDashboard, ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
+import type { RiskItem } from "@/components/risk";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -74,6 +76,24 @@ export function Certificates() {
   const [ingestLoading, setIngestLoading] = useState(false);
   const [ingestError, setIngestError] = useState<Notice | null>(null);
   const [ingestSuccess, setIngestSuccess] = useState<string | null>(null);
+  const [risks, setRisks] = useState<RiskItem[]>([]);
+  const [rotationRuns, setRotationRuns] = useState<RotationRun[]>([]);
+  const [deliveries, setDeliveries] = useState<ConnectorDelivery[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([api.risk({ sort: "score" }), api.rotationRuns({ limit: 100 }), api.connectorDeliveries({ limit: 50 })]).then(
+      ([riskResult, rotationResult, deliveryResult]) => {
+        if (cancelled) return;
+        if (riskResult.status === "fulfilled") setRisks(riskResult.value);
+        if (rotationResult.status === "fulfilled") setRotationRuns(rotationResult.value.items ?? []);
+        if (deliveryResult.status === "fulfilled") setDeliveries(deliveryResult.value.items ?? []);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -282,6 +302,14 @@ export function Certificates() {
 
       {certificates.length > 0 && (
         <>
+          <div className="mb-6 grid gap-4">
+            <CertificatesDashboard certificates={certificates} risks={risks} />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />
+              <ReadinessSimulator certificates={certificates} autoRenewing={autoRenewingCount(certificates, rotationRuns)} />
+            </div>
+            <DeploymentReceipts deliveries={deliveries} />
+          </div>
           <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
             <div>
               <label htmlFor="cert-search" className="mb-1 block text-sm font-medium">
@@ -437,11 +465,9 @@ export function Certificates() {
               </dd>
             </div>
             <div className="md:col-span-2">
-              <dt className="font-medium text-muted-foreground">Certificate chain</dt>
+              <dt className="font-medium text-muted-foreground">Renewal history</dt>
               <dd>
-                <UnavailableState title="Certificate chain coming soon">
-                  The current detail view returns certificate metadata, not chain bytes. Use issuer evidence until chain data appears here.
-                </UnavailableState>
+                <RenewalHistory runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)} />
               </dd>
             </div>
             <div className="md:col-span-2">

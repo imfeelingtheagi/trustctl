@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, identityState, type ConnectorDelivery, type GraphImpact, type Identity, type RotationRun, type TransitionTo } from "@/lib/api";
+import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
@@ -515,6 +516,8 @@ export function Identities() {
           </Button>
         }
       />
+
+      <IssuancePipeline identities={items ?? []} />
 
       {showForm && (
         <NewIdentityForm
