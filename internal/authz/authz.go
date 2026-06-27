@@ -16,30 +16,34 @@ type Permission string
 
 // Well-known permissions for the v1 resources.
 const (
-	OwnersRead       Permission = "owners:read"
-	OwnersWrite      Permission = "owners:write"
-	IssuersRead      Permission = "issuers:read"
-	IssuersWrite     Permission = "issuers:write"
-	IdentitiesRead   Permission = "identities:read"
-	IdentitiesWrite  Permission = "identities:write"
-	CertsRead        Permission = "certs:read"
-	CertsWrite       Permission = "certs:write"
-	AuditRead        Permission = "audit:read"
-	PrivacyRead      Permission = "privacy:read"
-	PrivacyWrite     Permission = "privacy:write"
-	GraphRead        Permission = "graph:read"
-	RiskRead         Permission = "risk:read"
-	AgentsRead       Permission = "agents:read"
-	AgentsWrite      Permission = "agents:write"
-	DiscoveryRead    Permission = "discovery:read"
-	DiscoveryWrite   Permission = "discovery:write"
-	ConnectorsRead   Permission = "connectors:read"
-	LifecycleRead    Permission = "lifecycle:read"
-	IncidentsRead    Permission = "incidents:read"
-	IncidentsWrite   Permission = "incidents:write"
-	AccessRead       Permission = "access:read"
-	AccessWrite      Permission = "access:write"
-	AccessRoleAssign Permission = "access:role.assign"
+	OwnersRead        Permission = "owners:read"
+	OwnersWrite       Permission = "owners:write"
+	IssuersRead       Permission = "issuers:read"
+	IssuersWrite      Permission = "issuers:write"
+	IdentitiesRead    Permission = "identities:read"
+	IdentitiesWrite   Permission = "identities:write"
+	CertsRead         Permission = "certs:read"
+	CertsWrite        Permission = "certs:write"
+	AuditRead         Permission = "audit:read"
+	PrivacyRead       Permission = "privacy:read"
+	PrivacyWrite      Permission = "privacy:write"
+	GraphRead         Permission = "graph:read"
+	RiskRead          Permission = "risk:read"
+	AgentsRead        Permission = "agents:read"
+	AgentsWrite       Permission = "agents:write"
+	AgentsHeartbeat   Permission = "agents:heartbeat"
+	AgentsJobPoll     Permission = "agents:job.poll"
+	AgentsJobComplete Permission = "agents:job.complete"
+	AgentsJobReport   Permission = "agents:job.report"
+	DiscoveryRead     Permission = "discovery:read"
+	DiscoveryWrite    Permission = "discovery:write"
+	ConnectorsRead    Permission = "connectors:read"
+	LifecycleRead     Permission = "lifecycle:read"
+	IncidentsRead     Permission = "incidents:read"
+	IncidentsWrite    Permission = "incidents:write"
+	AccessRead        Permission = "access:read"
+	AccessWrite       Permission = "access:write"
+	AccessRoleAssign  Permission = "access:role.assign"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -77,6 +81,7 @@ func allResourcePermissions() []Permission {
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		PrivacyRead, PrivacyWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
+		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, ConnectorsRead, LifecycleRead,
 		IncidentsRead, IncidentsWrite,
 		AccessRead, AccessWrite, AccessRoleAssign,
@@ -102,37 +107,84 @@ func (r Role) Allows(p Permission) bool {
 	return false
 }
 
-// BuiltinRoles returns the platform's built-in roles: admin (everything),
-// operator (read+write on resources), viewer (read-only), and auditor (read of
-// the audit log).
+// BuiltinRoles returns the platform's built-in roles: human/operator roles plus
+// machine-actor roles for enrolled agents, MCP automation, and CLI users.
 func BuiltinRoles() map[string]Role {
 	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
+	agent := []Permission{CertsRead, AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport, DiscoveryWrite}
+	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
+	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
 		"viewer":   {Name: "viewer", Permissions: readOnly},
 		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead}},
+		"agent":    {Name: "agent", Permissions: agent},
+		"mcp":      {Name: "mcp", Permissions: mcp},
+		"cli":      {Name: "cli", Permissions: cli},
 		// Registration authority: may author/read profiles and REQUEST certificates,
 		// but may NOT approve/issue them (no certs:issue) — the RA separation (S8.1).
 		"ra-officer": {Name: "ra-officer", Permissions: []Permission{ProfilesRead, ProfilesWrite, CertsRead, CertsRequest}},
 	}
 }
 
+func withoutPermissions(perms []Permission, drop ...Permission) []Permission {
+	dropped := map[Permission]bool{}
+	for _, p := range drop {
+		dropped[p] = true
+	}
+	out := make([]Permission, 0, len(perms))
+	for _, p := range perms {
+		if !dropped[p] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func withPermissions(perms []Permission, add ...Permission) []Permission {
+	seen := map[Permission]bool{}
+	out := make([]Permission, 0, len(perms)+len(add))
+	for _, p := range perms {
+		if !seen[p] {
+			out = append(out, p)
+			seen[p] = true
+		}
+	}
+	for _, p := range add {
+		if !seen[p] {
+			out = append(out, p)
+			seen[p] = true
+		}
+	}
+	return out
+}
+
 // Scope is the reach of a grant or the target of a request: a tenant, optionally
-// narrowed to a project/team. An empty Project means tenant-wide.
+// narrowed to a project/team, certificate profile, or issuer. Empty dimensions
+// mean tenant-wide for that dimension.
 type Scope struct {
 	TenantID string
 	Project  string
+	Profile  string
+	Issuer   string
 }
 
 // Covers reports whether a grant with scope g authorizes an action targeting t.
-// It never crosses a tenant boundary; a tenant-wide grant covers any project,
-// while a project grant covers only that exact project.
+// It never crosses a tenant boundary; tenant-wide dimensions cover any target
+// value, while a grant narrowed to a project/profile/issuer covers only that
+// exact non-empty target.
 func (g Scope) Covers(t Scope) bool {
 	if g.TenantID != t.TenantID {
 		return false
 	}
-	return g.Project == "" || g.Project == t.Project
+	return dimensionCovers(g.Project, t.Project) &&
+		dimensionCovers(g.Profile, t.Profile) &&
+		dimensionCovers(g.Issuer, t.Issuer)
+}
+
+func dimensionCovers(grant, target string) bool {
+	return grant == "" || grant == target
 }
 
 // Grant binds a role to the scope it applies in.

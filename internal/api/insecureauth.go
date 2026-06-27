@@ -8,7 +8,8 @@ import (
 )
 
 // WithInsecureHeaderResolver installs a principal resolver that TRUSTS request
-// headers (X-Tenant-ID, X-Roles, X-Subject, X-Role-Project). It authenticates
+// headers (X-Tenant-ID, X-Roles, X-Subject, X-Role-Project, X-Role-Profile,
+// X-Role-Issuer). It authenticates
 // NOTHING — anyone who can reach the API can claim any tenant and any role — so
 // it must NEVER be used in production. It exists only so tests (and local dev)
 // can exercise RBAC and project scoping without standing up an IdP or minting
@@ -26,17 +27,24 @@ func WithInsecureHeaderResolver() Option {
 
 // insecureHeaderResolver resolves the caller's principal from request headers.
 // X-Roles is a comma-separated list of role names (resolved against the given
-// registry, so custom roles work); X-Role-Project is the project those roles are
-// granted in ("" = tenant-wide). It is the test-only header-trust path. When no
-// X-Tenant-ID header is present it defers to the real authenticated resolver, so
-// a test server built with this option still accepts bearer tokens and sessions.
+// registry, so custom roles work); X-Role-Project, X-Role-Profile, and
+// X-Role-Issuer are the optional scope dimensions those roles are granted in
+// ("" = tenant-wide for that dimension). It is the test-only header-trust path.
+// When no X-Tenant-ID header is present it defers to the real authenticated
+// resolver, so a test server built with this option still accepts bearer tokens
+// and sessions.
 func insecureHeaderResolver(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error) {
 	return func(r *http.Request) (authz.Principal, error) {
 		tenantID := r.Header.Get("X-Tenant-ID")
 		if tenantID == "" {
 			return fallback(r)
 		}
-		scope := authz.Scope{TenantID: tenantID, Project: r.Header.Get("X-Role-Project")}
+		scope := authz.Scope{
+			TenantID: tenantID,
+			Project:  r.Header.Get("X-Role-Project"),
+			Profile:  r.Header.Get("X-Role-Profile"),
+			Issuer:   r.Header.Get("X-Role-Issuer"),
+		}
 		var grants []authz.Grant
 		for _, name := range strings.Split(r.Header.Get("X-Roles"), ",") {
 			name = strings.TrimSpace(name)

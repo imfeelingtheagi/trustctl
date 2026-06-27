@@ -2285,10 +2285,10 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 	apiGo := read(t, "../internal/api/api.go")
 	for _, want := range []string{
 		"a.principal = a.resolvePrincipal",
-		"mux.HandleFunc(r.method+\" \"+r.path, a.guard(r.perm, r.handler))",
+		"mux.HandleFunc(r.method+\" \"+r.path, a.guard(r.perm, r.scope, r.handler))",
 		"func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error)",
 		"LookupAPITokenByHash",
-		"func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc",
+		"func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc) http.HandlerFunc",
 		"a.writeProblem(w, problemUnauthorized())",
 		"principal.Can(perm, target)",
 		"WithInsecureHeaderResolver",

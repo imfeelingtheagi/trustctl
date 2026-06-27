@@ -344,7 +344,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	mux := http.NewServeMux()
 	for _, r := range a.routes() {
-		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.handler))
+		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, r.handler))
 	}
 	a.mountVaultCompat(mux)
 	// The browser SSO login + session bridge for the web UI. These routes are
@@ -488,6 +488,109 @@ type route struct {
 	successCode string
 	mutation    bool
 	perm        authz.Permission // required permission; "" means public
+	scope       routeScope
+}
+
+type routeScope func(*http.Request) (authz.Scope, error)
+
+func scopeIssuerPath(name string) routeScope {
+	return func(r *http.Request) (authz.Scope, error) {
+		return authz.Scope{Issuer: strings.TrimSpace(r.PathValue(name))}, nil
+	}
+}
+
+func scopeProfilePath(name string) routeScope {
+	return func(r *http.Request) (authz.Scope, error) {
+		return authz.Scope{Profile: strings.TrimSpace(r.PathValue(name))}, nil
+	}
+}
+
+func scopeProfileJSON(field string) routeScope {
+	return func(r *http.Request) (authz.Scope, error) {
+		value, err := jsonBodyStringField(r, field)
+		if err != nil {
+			return authz.Scope{}, err
+		}
+		return authz.Scope{Profile: value}, nil
+	}
+}
+
+func combineRouteScopes(scopes ...routeScope) routeScope {
+	return func(r *http.Request) (authz.Scope, error) {
+		var out authz.Scope
+		for _, scope := range scopes {
+			if scope == nil {
+				continue
+			}
+			next, err := scope(r)
+			if err != nil {
+				return authz.Scope{}, err
+			}
+			if err := mergeRouteScope(&out, next); err != nil {
+				return authz.Scope{}, err
+			}
+		}
+		return out, nil
+	}
+}
+
+func mergeRouteScope(dst *authz.Scope, next authz.Scope) error {
+	if err := mergeScopeDimension(&dst.TenantID, next.TenantID, "tenant"); err != nil {
+		return err
+	}
+	if err := mergeScopeDimension(&dst.Project, next.Project, "project"); err != nil {
+		return err
+	}
+	if err := mergeScopeDimension(&dst.Profile, next.Profile, "profile"); err != nil {
+		return err
+	}
+	if err := mergeScopeDimension(&dst.Issuer, next.Issuer, "issuer"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func mergeScopeDimension(dst *string, next, label string) error {
+	next = strings.TrimSpace(next)
+	if next == "" {
+		return nil
+	}
+	if *dst != "" && *dst != next {
+		return errStatus(http.StatusBadRequest, "conflicting "+label+" scope")
+	}
+	*dst = next
+	return nil
+}
+
+func jsonBodyStringField(r *http.Request, field string) (string, error) {
+	if r.Body == nil {
+		return "", nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, defaultRESTJSONBodyLimit+1))
+	_ = r.Body.Close()
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil {
+		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+	}
+	if len(body) == 0 {
+		return "", nil
+	}
+	if len(body) > defaultRESTJSONBodyLimit {
+		return "", errStatus(http.StatusRequestEntityTooLarge, "request body too large")
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+	}
+	raw, ok := payload[field]
+	if !ok || len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return "", nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", errStatus(http.StatusBadRequest, field+" must be a string")
+	}
+	return strings.TrimSpace(value), nil
 }
 
 func (a *API) routes() []route {
@@ -569,17 +672,17 @@ func (a *API) routes() []route {
 
 		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},
-		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/ceremonies", opID: "createCACeremony", summary: "Start an m-of-n CA key ceremony", handler: a.createCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CAKeyCeremony", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/ca/ceremonies/{id}", opID: "getCACeremony", summary: "Get a CA key ceremony", handler: a.getCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/ca/ceremonies/{id}/approvals", opID: "approveCACeremony", summary: "Approve a CA key ceremony", handler: a.approveCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/ca/authorities", opID: "listCAAuthorities", summary: "List served CA authorities", handler: a.listCAAuthorities, resSchema: "CAAuthorityList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/ca/authorities/roots", opID: "createRootCA", summary: "Create a signer-backed root CA after ceremony quorum", handler: a.createRootCA, reqSchema: "CACreateRootRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/authorities/intermediates", opID: "createIntermediateCA", summary: "Create a signer-backed intermediate CA after ceremony quorum", handler: a.createIntermediateCA, reqSchema: "CACreateIntermediateRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
-		{method: "POST", path: "/api/v1/ca/authorities/{id}/intermediates/csr", opID: "issueIntermediateCAFromCSR", summary: "Sign an external intermediate CA CSR from a served CA authority", handler: a.issueHierarchyIntermediateCSR, pathParams: caAuthorityPath, reqSchema: "CAIssueIntermediateRequest", resSchema: "CAIssuedIntermediate", successCode: "201", mutation: true, perm: authz.CertsIssue},
-		{method: "POST", path: "/api/v1/ca/authorities/{id}/issue", opID: "issueHierarchyLeaf", summary: "Issue a leaf certificate from a served CA authority", handler: a.issueHierarchyLeaf, pathParams: caAuthorityPath, reqSchema: "CAIssueLeafRequest", resSchema: "CAIssuedLeaf", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/ca/authorities/{id}/intermediates/csr", opID: "issueIntermediateCAFromCSR", summary: "Sign an external intermediate CA CSR from a served CA authority", handler: a.issueHierarchyIntermediateCSR, pathParams: caAuthorityPath, reqSchema: "CAIssueIntermediateRequest", resSchema: "CAIssuedIntermediate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: scopeIssuerPath("id")},
+		{method: "POST", path: "/api/v1/ca/authorities/{id}/issue", opID: "issueHierarchyLeaf", summary: "Issue a leaf certificate from a served CA authority", handler: a.issueHierarchyLeaf, pathParams: caAuthorityPath, reqSchema: "CAIssueLeafRequest", resSchema: "CAIssuedLeaf", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: scopeIssuerPath("id")},
 		{method: "GET", path: "/api/v1/external-cas", opID: "listExternalCAs", summary: "List configured upstream CA integrations", handler: a.listExternalCAs, resSchema: "ExternalCAList", successCode: "200", perm: authz.IssuersRead},
-		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: combineRouteScopes(scopeIssuerPath("id"), scopeProfileJSON("profile_name"))},
 		{method: "POST", path: "/api/v1/workloads/attested-issuance", opID: "issueAttestedSVID", summary: "Issue an X.509-SVID after workload attestation", handler: a.issueAttestedSVID, reqSchema: "AttestedSVIDRequest", resSchema: "AttestedSVID", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/broker/agent-identities", opID: "issueBrokerAgentIdentity", summary: "Issue a policy-gated short-lived identity for an AI/MCP agent", handler: a.issueBrokerAgentIdentity, reqSchema: "BrokerAgentIdentityRequest", resSchema: "BrokerAgentIdentity", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/ephemeral", opID: "issueEphemeralCredential", summary: "Open or complete an attestation-gated JIT credential request", handler: a.issueEphemeralCredential, reqSchema: "EphemeralCredentialRequest", resSchema: "EphemeralCredential", successCode: "202", mutation: true, perm: authz.CertsRequest},
@@ -629,9 +732,9 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/access/sessions", opID: "openPAMSession", summary: "Open a just-in-time privileged access session", handler: a.openPAMSession, reqSchema: "PAMSessionRequest", resSchema: "PAMSession", successCode: "201", mutation: true, perm: authz.AccessWrite},
 		{method: "GET", path: "/api/v1/access/sessions/{id}", opID: "getPAMSession", summary: "Get a privileged access session", handler: a.getPAMSession, pathParams: idPath, resSchema: "PAMSession", successCode: "200", perm: authz.AccessRead},
 
-		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite},
+		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite, scope: scopeProfileJSON("name")},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},
-		{method: "GET", path: "/api/v1/profiles/{name}/versions/{version}", opID: "getProfileVersion", summary: "Get a certificate-profile version", handler: a.getProfileVersion, pathParams: profileVersionPath, resSchema: "Profile", successCode: "200", perm: authz.ProfilesRead},
+		{method: "GET", path: "/api/v1/profiles/{name}/versions/{version}", opID: "getProfileVersion", summary: "Get a certificate-profile version", handler: a.getProfileVersion, pathParams: profileVersionPath, resSchema: "Profile", successCode: "200", perm: authz.ProfilesRead, scope: scopeProfilePath("name")},
 
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
@@ -862,8 +965,8 @@ func bearerToken(r *http.Request) string {
 // guard enforces the route's required permission (AN: RBAC/F8) before invoking
 // the handler. A route with no permission ("") is public. Denials are
 // problem+json: 401 when the principal can't be resolved, 403 when the principal
-// lacks the permission in the target scope (from X-Project).
-func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc {
+// lacks the permission in the route target scope.
+func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc) http.HandlerFunc {
 	if perm == "" {
 		return h
 	}
@@ -881,7 +984,11 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 		if !a.enforceCSRF(w, r) {
 			return
 		}
-		target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+		target, err := requestTargetScope(principal, r, scope)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
 		if !principal.Can(perm, target) {
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
@@ -915,6 +1022,30 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 	}
 }
 
+func requestTargetScope(principal authz.Principal, r *http.Request, scope routeScope) (authz.Scope, error) {
+	target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+	if scope == nil {
+		return target, nil
+	}
+	scoped, err := scope(r)
+	if err != nil {
+		return authz.Scope{}, err
+	}
+	if scoped.TenantID != "" && scoped.TenantID != principal.TenantID {
+		return authz.Scope{}, errStatus(http.StatusForbidden, "forbidden: cross-tenant scope")
+	}
+	if scoped.Project != "" {
+		target.Project = scoped.Project
+	}
+	if scoped.Profile != "" {
+		target.Profile = scoped.Profile
+	}
+	if scoped.Issuer != "" {
+		target.Issuer = scoped.Issuer
+	}
+	return target, nil
+}
+
 func (a *API) checkABAC(ctx context.Context, r *http.Request, principal authz.Principal, perm authz.Permission, target authz.Scope) error {
 	if a.abac == nil {
 		return nil
@@ -930,6 +1061,14 @@ func (a *API) checkABAC(ctx context.Context, r *http.Request, principal authz.Pr
 	if target.Project != "" {
 		resource["request.project"] = target.Project
 		resource["project"] = target.Project
+	}
+	if target.Profile != "" {
+		resource["request.profile"] = target.Profile
+		resource["profile"] = target.Profile
+	}
+	if target.Issuer != "" {
+		resource["request.issuer"] = target.Issuer
+		resource["issuer"] = target.Issuer
 	}
 	in := policy.ABACInput{
 		Permission: string(perm),
