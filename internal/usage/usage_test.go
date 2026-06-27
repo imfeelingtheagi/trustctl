@@ -70,3 +70,23 @@ func TestUsageSetterHooksFire(t *testing.T) {
 		t.Fatalf("quota checker saw %+v", q.got)
 	}
 }
+
+func TestUsageResetRestoresUnlicensedNoop(t *testing.T) {
+	rec := &fakeRecorder{}
+	SetRecorder(rec)
+	SetRecorder(nil)
+	Record("tenant-a", MeterCertificatesIssued, 1)
+	if len(rec.calls) != 0 {
+		t.Fatalf("uninstalled recorder still saw calls: %+v", rec.calls)
+	}
+
+	q := &fakeQuotaChecker{err: errors.New("should not be called")}
+	SetQuotaChecker(q)
+	SetQuotaChecker(nil)
+	if err := AllowCreate(context.Background(), "tenant-a", MeterAgents); err != nil {
+		t.Fatalf("uninstalled quota checker denied create: %v", err)
+	}
+	if q.got.tenant != "" || q.got.meter != "" {
+		t.Fatalf("uninstalled quota checker was called: %+v", q.got)
+	}
+}

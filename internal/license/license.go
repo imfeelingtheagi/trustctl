@@ -39,12 +39,13 @@ const (
 	FeatureBYOK          Feature = "byok"
 	FeatureGovernance    Feature = "governance"
 	FeatureProviderPlane Feature = "provider_plane"
+	FeatureMetering      Feature = "metering"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
 	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK, FeatureGovernance},
-	TierProvider:   {FeatureProviderPlane},
+	TierProvider:   {FeatureProviderPlane, FeatureMetering},
 }
 
 var tierOrder = []Tier{TierEnterprise, TierProvider}

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	_ "trstctl.com/trstctl/ee"
+	eebilling "trstctl.com/trstctl/ee/billing"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
@@ -66,6 +67,12 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		})
 		if log != nil {
 			log.Info("Provider plane attached", slog.String("feature", string(license.FeatureProviderPlane)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureMetering) {
+		eebilling.InstallInMemory(ctx, log, nil)
+		if log != nil {
+			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
 		}
 	}
 	return nil

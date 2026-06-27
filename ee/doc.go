@@ -7,7 +7,8 @@
 // cross-cluster DR/federation worker lives under ee/federation; BYOK/HSM managed
 // keys and KMIP live under ee/managedkeys and ee/kmip; compliance evidence packs
 // and governance policy live under ee/governance; the Provider/MSP console lives
-// under ee/provider. The served API mounts human-triggered remediation routes,
-// background HA federation, BYOK/KMIP, governance, and provider-plane routes only
+// under ee/provider; provider metering and quota export live under ee/billing.
+// The served API mounts human-triggered remediation routes, background HA
+// federation, BYOK/KMIP, governance, provider-plane routes, and metering only
 // through the licensed attach seam.
 package ee

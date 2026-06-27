@@ -32,6 +32,9 @@ Enterprise remediation lives here:
   seam; the tagged attach seam supplies tenant lifecycle, provider audit, tenant
   band enforcement, and consented break-glass only when `FeatureProviderPlane` is
   licensed.
+- `ee/billing`: Provider metering, quota checks, and CSV/JSONL export. Core keeps
+  only the inert `internal/usage` seam; the tagged attach seam installs the
+  recorder and quota checker only when `FeatureMetering` is licensed.
 
 The served trstctl remediation surface is not probectl-style advisory remediation:
 it executes replacement issue/deploy/revoke work on a human trigger. The tagged
