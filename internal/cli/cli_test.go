@@ -506,6 +506,53 @@ func TestConnectorsOutboxCircuitsCommand(t *testing.T) {
 	}
 }
 
+func TestNotificationCommandsSendPathsQueriesAndIdempotencyKeys(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"items":[]}`, &cap)
+	env := cli.Env{Server: srv.URL, HTTPClient: srv.Client(), IdempotencyKey: "notif-cli-idem"}
+
+	code, _, _ := run(t, []string{"notifications", "list", "--status", "dead", "--limit", "10"}, env, "")
+	if code != 0 {
+		t.Fatalf("list exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notifications" {
+		t.Errorf("list request = %s %s", cap.Method, cap.Path)
+	}
+	if !strings.Contains(cap.Query, "status=dead") || !strings.Contains(cap.Query, "limit=10") {
+		t.Errorf("list query = %q, want status and limit", cap.Query)
+	}
+
+	code, _, _ = run(t, []string{"notifications", "get", "42"}, env, "")
+	if code != 0 {
+		t.Fatalf("get exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notifications/42" {
+		t.Errorf("get request = %s %s", cap.Method, cap.Path)
+	}
+
+	code, _, _ = run(t, []string{"notifications", "read", "42"}, env, "")
+	if code != 0 {
+		t.Fatalf("read exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/notifications/42/read" {
+		t.Errorf("read request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("read Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
+	code, _, _ = run(t, []string{"notifications", "requeue", "42"}, env, "")
+	if code != 0 {
+		t.Fatalf("requeue exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/notifications/42/requeue" {
+		t.Errorf("requeue request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("requeue Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+}
+
 func TestGraphQueryWrapsCypher(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"rows":[]}`, &cap)

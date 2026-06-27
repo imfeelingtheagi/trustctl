@@ -26,6 +26,8 @@ var TenantScopedTables = []string{
 	// Children first (foreign keys point "up" to the tables below them).
 	"attestations",
 	"discovery_findings",
+	"notification_reads",
+	"notification_threshold_deliveries",
 	"discovery_runs",
 	"discovery_schedules",
 	"discovery_sources",
@@ -62,6 +64,7 @@ var TenantScopedTables = []string{
 	"credentials",
 	"certificate_profiles",
 	"audit_checkpoints",
+	"notification_routing_policies",
 	"secret_shares",
 	"secret_store_versions",
 	"secret_store",

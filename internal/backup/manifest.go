@@ -46,6 +46,7 @@ var RecoveredFromPostgresBackup = []string{
 	"idempotency_keys",
 	"issuance_approval_requests",
 	"issuance_approvals",
+	"notification_routing_policies",
 	"outbox",
 	"policy_bindings",
 	"secret_shares",

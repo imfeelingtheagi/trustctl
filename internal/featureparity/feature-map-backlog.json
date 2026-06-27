@@ -5847,27 +5847,28 @@
       "phase": "P2",
       "priority": 80,
       "served_state": "partial",
-      "backend_status": "served expiry-alert runtime; channel authoring UI/API pending",
+      "backend_status": "served expiry-alert runtime plus notification inbox/dead-letter API; channel authoring UI/API pending",
       "current_frontend_mapping": "disclosure: Policy at /policy - notification channel fixtures with masked secret references, redacted failures, and served scheduler/outbox delivery disclosure; channel CRUD remains unserved; coverage ledger: /coverage",
       "target_gui_mapping": "Notification channel UI for Slack, Teams, email, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
-      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; UI keeps secret references redacted and exposes no live channel controls.",
+      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; failed dispatches are visible in the served dead-letter API and requeue idempotently.",
       "source_docs": ["docs/features/policy-and-governance.md"],
       "source_backend": ["internal/notify", "internal/server", "internal/store"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: NOTIF-01 serves scheduler-driven notification dispatch through Build/RunLifecycleOnce and the outbox worker; tenant-facing channel CRUD/test-delivery APIs are not mounted yet.",
-      "cli_surface": [],
-      "cli_na": "N/A: served expiry notifications are runtime scheduler/outbox behavior; no tenant-facing notification CLI command is mounted yet.",
+      "api_surface": ["listNotifications", "getNotification", "markNotificationRead", "requeueNotification"],
+      "api_na": "",
+      "cli_surface": ["notifications list", "notifications get", "notifications read", "notifications requeue"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "LifecycleAlertBefore and NotificationChannels in server.Deps wire configured notify channels into the served lifecycle scheduler.",
             "RunLifecycleOnce enqueues notification.expiry outbox rows for alertable certificates, and issuanceDispatcher delivers notification.* rows through notify.Dispatcher.",
+            "GET /api/v1/notifications lists tenant-scoped notification outbox rows, including failed rows as dead letters; POST /read records an event-sourced read receipt and POST /requeue moves failed notification outbox rows back to pending through the idempotent mutation path.",
             "TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification proves a signer-issued served cert inside the alert window reaches an HMAC-signed webhook sink."
           ],
-          "refs": ["internal/server/server.go", "internal/server/issuance.go", "internal/server/notifications_served_test.go", "internal/store/lifecycle.go"]
+          "refs": ["internal/api/notifications.go", "internal/server/server.go", "internal/server/issuance.go", "internal/server/notifications_served_test.go", "internal/store/lifecycle.go"]
         },
         "ui": {
           "evidence": [
@@ -5877,15 +5878,23 @@
           "refs": ["web/src/pages/Policy.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: served expiry notifications are runtime scheduler/outbox behavior; no tenant-facing notification CLI command is mounted yet."
+          "evidence": [
+            "notifications list/get expose the tenant-scoped notification inbox and dead-letter view through the CLI.",
+            "notifications read and notifications requeue call the served mutating endpoints with Idempotency-Key handling."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: NOTIF-01 serves scheduler-driven notification dispatch through Build/RunLifecycleOnce and the outbox worker; tenant-facing channel CRUD/test-delivery APIs are not mounted yet."
+          "evidence": [
+            "OpenAPI exposes listNotifications, getNotification, markNotificationRead, and requeueNotification for the tenant-scoped notification inbox and dead-letter queue.",
+            "Channel authoring and test-delivery APIs remain out of scope; configured channels are still deployment-time process configuration."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/notifications.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; UI keeps secret references redacted and exposes no live channel controls.",
-            "Focused served test drives the running server scheduler, outbox drain, and httptest webhook sink.",
+            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; failed dispatches are visible in the served dead-letter API and requeue idempotently.",
+            "Focused served tests drive the running server scheduler, outbox drain, httptest webhook sink, dead-letter list, idempotent requeue, and mark-read projection.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
@@ -5898,12 +5907,17 @@
         "docs": {
           "evidence": [
             "documented in docs/features/policy-and-governance.md",
-            "limitations page states that expiry alert delivery is served while tenant-facing channel authoring remains pending."
+            "limitations page states that expiry alert delivery and notification inbox/dead-letter handling are served while tenant-facing channel authoring remains pending."
           ],
           "refs": ["docs/features/policy-and-governance.md", "docs/limitations.md"]
         },
         "rbac": {
-          "na": "N/A: notification delivery is an operator-configured background scheduler/outbox path, not a tenant-facing guarded /api/v1 channel-authoring route yet."
+          "evidence": [
+            "feature authz manifest maps api_surface operations to route permissions: listNotifications/getNotification require notifications:read; markNotificationRead/requeueNotification require notifications:write.",
+            "notification inbox read routes require notifications:read; mark-read and requeue require notifications:write and Idempotency-Key.",
+            "built-in viewer/mcp/cli/operator roles include the notification read/write split according to their role shape."
+          ],
+          "refs": ["internal/api/feature_authz_test.go", "internal/api/api.go", "internal/api/notifications.go", "internal/authz/authz.go"]
         },
         "audit": {
           "evidence": [

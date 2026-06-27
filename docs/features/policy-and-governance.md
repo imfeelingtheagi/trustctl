@@ -126,8 +126,10 @@ into a request to loopback, RFC1918, or cloud metadata addresses.
 operator wires notification channels into the process and sets the lifecycle alert
 window: the leader scheduler writes `notification.expiry` outbox work, stamps the
 certificate as alerted, and the outbox dispatcher fans the alert to Slack, Teams, email,
-PagerDuty, OpsGenie, and webhook channel implementations. Tenant-facing channel CRUD,
-test delivery, and delivery-receipt APIs are still not mounted.
+PagerDuty, OpsGenie, and webhook channel implementations. Operators can list/get the
+tenant-scoped notification inbox, mark rows read, and requeue failed notification
+dispatches from the dead-letter view with idempotency keys. Tenant-facing channel CRUD
+and test delivery remain deployment-time configuration rather than served API.
 
 ### Compliance reporting (F62)
 

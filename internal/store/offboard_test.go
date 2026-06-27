@@ -79,8 +79,9 @@ func newStore(t *testing.T) *store.Store {
 		          agents, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
-		          discovery_findings, discovery_runs, discovery_schedules, discovery_sources,
+		          discovery_findings, notification_reads, notification_threshold_deliveries, discovery_runs, discovery_schedules, discovery_sources,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
+		          notification_routing_policies,
 		          connector_delivery_receipts, lifecycle_rotation_runs,
 		          secret_store, read_model_snapshots,
 		          issuance_approval_requests, issuance_approvals

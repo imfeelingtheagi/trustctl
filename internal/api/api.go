@@ -48,6 +48,7 @@ type BootstrapTokenIssuer interface {
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
 	store                   *store.Store
+	log                     *events.Log
 	idem                    *orchestrator.Idempotency
 	orch                    *orchestrator.Orchestrator
 	tenantFn                func(*http.Request) (string, error)
@@ -98,6 +99,7 @@ type Option func(*config)
 
 type config struct {
 	customRoles []authz.Role
+	eventLog    *events.Log
 	principalFn func(*http.Request) (authz.Principal, error)
 	// principalFromReg is a resolver factory the test-only header resolver uses.
 	// It is built against the API's role registry (so custom roles work) and the
@@ -146,6 +148,14 @@ func WithAudit(svc *audit.Service) Option {
 // WithRoles registers custom (tenant-defined) roles alongside the built-ins.
 func WithRoles(roles ...authz.Role) Option {
 	return func(c *config) { c.customRoles = append(c.customRoles, roles...) }
+}
+
+// WithEventLog wires the source-of-truth event log for REST mutations that own a
+// small projection directly (for example notification read receipts). Mutations
+// still run through the idempotency wrapper; this option only gives them the
+// append-only log required by AN-2.
+func WithEventLog(log *events.Log) Option {
+	return func(c *config) { c.eventLog = log }
 }
 
 // WithAuth wires the browser OIDC login + session bridge used by the web UI
@@ -290,6 +300,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	a := &API{
 		store:                   st,
+		log:                     cfg.eventLog,
 		idem:                    idem,
 		orch:                    orch,
 		tenantFn:                tenantFromHeader,
@@ -602,6 +613,7 @@ func (a *API) routes() []route {
 	}
 	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
 	mcpToolPath := []param{pathString("tool", "MCP tool name")}
+	notificationIDPath := []param{pathInteger("id", "notification outbox id")}
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	dynamicLeaseIDPath := []param{pathString("lease_id", "dynamic secret lease id")}
 	pqcMigrationRunPath := []param{pathString("run_id", "PQC migration run id")}
@@ -613,6 +625,11 @@ func (a *API) routes() []route {
 	page := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+	}
+	notificationQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque notification id cursor from a prior page"},
+		{name: "status", typ: "string", desc: "filter by pending, sent, dead, or read"},
 	}
 	certQuery := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
@@ -715,6 +732,10 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/connectors/catalog", opID: "listConnectorCatalog", summary: "List served connector kinds and rollback posture", handler: a.listConnectorCatalog, resSchema: "ConnectorCatalog", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/connectors/outbox-circuits", opID: "listOutboxCircuits", summary: "List outbox destination circuit breaker state", handler: a.listOutboxCircuits, resSchema: "OutboxCircuitList", successCode: "200", perm: authz.ConnectorsRead},
+		{method: "GET", path: "/api/v1/notifications", opID: "listNotifications", summary: "List notification inbox and dead-letter rows", handler: a.listNotifications, query: notificationQuery, resSchema: "NotificationList", successCode: "200", perm: authz.NotificationsRead},
+		{method: "POST", path: "/api/v1/notifications/{id}/read", opID: "markNotificationRead", summary: "Mark a notification as read", handler: a.markNotificationRead, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
+		{method: "POST", path: "/api/v1/notifications/{id}/requeue", opID: "requeueNotification", summary: "Requeue a dead-lettered notification dispatch", handler: a.requeueNotification, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
+		{method: "GET", path: "/api/v1/notifications/{id}", opID: "getNotification", summary: "Get a notification inbox row", handler: a.getNotification, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", perm: authz.NotificationsRead},
 		{method: "GET", path: "/api/v1/connectors/deliveries", opID: "listConnectorDeliveries", summary: "List connector delivery receipts", handler: a.listConnectorDeliveries, query: identityScopedPage, resSchema: "ConnectorDeliveryList", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/connectors/deliveries/{id}", opID: "getConnectorDelivery", summary: "Get a connector delivery receipt", handler: a.getConnectorDelivery, pathParams: idPath, resSchema: "ConnectorDelivery", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},

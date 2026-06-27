@@ -864,6 +864,33 @@ export interface MemberRequest {
   source?: string;
 }
 
+export interface Notification {
+  attempts: number;
+  certificate_id?: string;
+  created_at: string;
+  delivered_at?: string;
+  destination: string;
+  detail?: string;
+  id: string;
+  idempotency_key?: string;
+  kind?: string;
+  last_error?: string;
+  not_after?: string;
+  read_at?: string;
+  routing_policy_id?: string;
+  serial?: string;
+  severity?: "low" | "informational" | "warning" | "critical";
+  status: "pending" | "sent" | "dead" | "read";
+  subject?: string;
+  tenant_id: string;
+  threshold_days?: number;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  next_cursor?: string;
+}
+
 export interface OIDCMappingStatus {
   allow_default_tenant: boolean;
   claim_is_tenant: boolean;

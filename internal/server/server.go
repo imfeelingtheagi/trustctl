@@ -736,6 +736,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithBroker(s),
 		api.WithEphemeralIssuer(s),
 		api.WithPAM(s),
+		api.WithEventLog(d.Log),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithPQCMigration(s.buildPQCMigrationService(d)),
@@ -926,6 +927,10 @@ func (s *Server) configureRevocationSurface(ctx context.Context, d Deps) (func(c
 func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) {
 	if len(d.NotificationChannels) > 0 {
 		s.notifications = notify.NewDispatcher(d.NotificationChannels...)
+		if d.Store != nil {
+			s.notifications.SetPolicyResolver(notify.NewStorePolicyResolver(d.Store))
+			s.notifications.SetThresholdDedupLedger(notify.NewStoreThresholdDedupLedger(d.Store, d.Log))
+		}
 	}
 	switch {
 	case s.obHandler != nil:

@@ -18,58 +18,60 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered              = "tenant.registered"
-	EventTenantOffboarded              = "tenant.offboarded"
-	EventOwnerCreated                  = "owner.created"
-	EventOwnerUpdated                  = "owner.updated"
-	EventOwnerDeleted                  = "owner.deleted"
-	EventIssuerCreated                 = "issuer.created"
-	EventIdentityCreated               = "identity.created"
-	EventIdentityIssued                = "identity.issued"
-	EventIdentityDeployed              = "identity.deployed"
-	EventIdentityRevoked               = "identity.revoked"
-	EventIdentityRenewing              = "identity.renewing"
-	EventIdentityRenewed               = "identity.renewed"
-	EventIdentityRetired               = "identity.retired"
-	EventCertificateRecorded           = "certificate.recorded"
-	EventCertificateRevoked            = "certificate.revoked"
-	EventCertificateSuperseded         = "certificate.superseded"
-	EventCAIssuedCertificate           = "ca.certificate.issued"
-	EventCACertificateRevoked          = "ca.certificate.revoked"
-	EventCACeremonyStarted             = "ca.ceremony.started"
-	EventCACeremonyApproved            = "ca.ceremony.approved"
-	EventCARootCreated                 = "ca.root.created"
-	EventCAIntermediateCreated         = "ca.intermediate.created"
-	EventCAIntermediateCSRIssued       = "ca.intermediate_csr.issued"
-	EventCAEndEntityIssued             = "ca.endentity.issued"
-	EventCRLPublished                  = "ca.crl.published"
-	EventOCSPResponderRotated          = "ca.ocsp_responder.rotated"
-	EventAgentHeartbeat                = "agent.heartbeat"
-	EventAgentCertRenewed              = "agent.cert.renewed"
-	EventProfileCreated                = "profile.created"
-	EventProfileUpdated                = "profile.updated"
-	EventDiscoverySourceUpserted       = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted     = "discovery.schedule.upserted"
-	EventDiscoveryRunQueued            = "discovery.run.queued"
-	EventDiscoveryRunStarted           = "discovery.run.started"
-	EventDiscoveryFindingRecorded      = "discovery.finding.recorded"
-	EventDiscoveryFindingTriageChanged = "discovery.finding.triage_changed"
-	EventDiscoveryRunCompleted         = "discovery.run.completed"
-	EventCBOMAssetObserved             = "cbom.asset.observed"
-	EventPQCMigrationStarted           = "pqc.migration.started"
-	EventPQCMigrationAssetCompleted    = "pqc.migration.asset_completed"
-	EventPQCMigrationRollbackCompleted = "pqc.migration.rollback_completed"
-	EventConnectorDeliveryRecorded     = "connector.delivery.recorded"
-	EventLifecycleRotationRecorded     = "lifecycle.rotation.recorded"
-	EventIncidentExecutionRecorded     = "incident.execution.recorded"
-	EventPrivacySubjectErased          = "privacy.subject.erased"
-	EventPrivacyRetentionEnforced      = "privacy.retention.enforced"
-	EventTenantMemberUpserted          = "tenant.member.upserted"
-	EventTenantMemberOffboarded        = "tenant.member.offboarded"
-	EventAPITokenCreated               = "api_token.created"
-	EventAPITokenRevoked               = "api_token.revoked"
-	EventPAMSessionStarted             = "pam.session.started"
-	EventPAMSessionExpired             = "pam.session.expired"
+	EventTenantRegistered               = "tenant.registered"
+	EventTenantOffboarded               = "tenant.offboarded"
+	EventOwnerCreated                   = "owner.created"
+	EventOwnerUpdated                   = "owner.updated"
+	EventOwnerDeleted                   = "owner.deleted"
+	EventIssuerCreated                  = "issuer.created"
+	EventIdentityCreated                = "identity.created"
+	EventIdentityIssued                 = "identity.issued"
+	EventIdentityDeployed               = "identity.deployed"
+	EventIdentityRevoked                = "identity.revoked"
+	EventIdentityRenewing               = "identity.renewing"
+	EventIdentityRenewed                = "identity.renewed"
+	EventIdentityRetired                = "identity.retired"
+	EventCertificateRecorded            = "certificate.recorded"
+	EventCertificateRevoked             = "certificate.revoked"
+	EventCertificateSuperseded          = "certificate.superseded"
+	EventCAIssuedCertificate            = "ca.certificate.issued"
+	EventCACertificateRevoked           = "ca.certificate.revoked"
+	EventCACeremonyStarted              = "ca.ceremony.started"
+	EventCACeremonyApproved             = "ca.ceremony.approved"
+	EventCARootCreated                  = "ca.root.created"
+	EventCAIntermediateCreated          = "ca.intermediate.created"
+	EventCAIntermediateCSRIssued        = "ca.intermediate_csr.issued"
+	EventCAEndEntityIssued              = "ca.endentity.issued"
+	EventCRLPublished                   = "ca.crl.published"
+	EventOCSPResponderRotated           = "ca.ocsp_responder.rotated"
+	EventAgentHeartbeat                 = "agent.heartbeat"
+	EventAgentCertRenewed               = "agent.cert.renewed"
+	EventProfileCreated                 = "profile.created"
+	EventProfileUpdated                 = "profile.updated"
+	EventDiscoverySourceUpserted        = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted      = "discovery.schedule.upserted"
+	EventDiscoveryRunQueued             = "discovery.run.queued"
+	EventDiscoveryRunStarted            = "discovery.run.started"
+	EventDiscoveryFindingRecorded       = "discovery.finding.recorded"
+	EventDiscoveryFindingTriageChanged  = "discovery.finding.triage_changed"
+	EventDiscoveryRunCompleted          = "discovery.run.completed"
+	EventNotificationRead               = "notification.read"
+	EventNotificationThresholdDelivered = "notification.threshold.delivered"
+	EventCBOMAssetObserved              = "cbom.asset.observed"
+	EventPQCMigrationStarted            = "pqc.migration.started"
+	EventPQCMigrationAssetCompleted     = "pqc.migration.asset_completed"
+	EventPQCMigrationRollbackCompleted  = "pqc.migration.rollback_completed"
+	EventConnectorDeliveryRecorded      = "connector.delivery.recorded"
+	EventLifecycleRotationRecorded      = "lifecycle.rotation.recorded"
+	EventIncidentExecutionRecorded      = "incident.execution.recorded"
+	EventPrivacySubjectErased           = "privacy.subject.erased"
+	EventPrivacyRetentionEnforced       = "privacy.retention.enforced"
+	EventTenantMemberUpserted           = "tenant.member.upserted"
+	EventTenantMemberOffboarded         = "tenant.member.offboarded"
+	EventAPITokenCreated                = "api_token.created"
+	EventAPITokenRevoked                = "api_token.revoked"
+	EventPAMSessionStarted              = "pam.session.started"
+	EventPAMSessionExpired              = "pam.session.expired"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -359,6 +361,23 @@ type DiscoveryRunCompleted struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// NotificationThresholdDelivered is the payload of
+// notification.threshold.delivered.
+type NotificationThresholdDelivered struct {
+	Subject       string    `json:"subject"`
+	ThresholdDays int       `json:"threshold_days"`
+	Channel       string    `json:"channel"`
+	SentAt        time.Time `json:"sent_at,omitempty"`
+}
+
+// NotificationRead is the payload of notification.read. It marks one notification
+// outbox item as read by an operator. The outbox row remains the delivery source
+// of truth; this projection only records inbox read state.
+type NotificationRead struct {
+	OutboxID int64     `json:"outbox_id"`
+	ReadAt   time.Time `json:"read_at,omitempty"`
+}
+
 // CBOMAssetObserved is the payload of cbom.asset.observed. It contains only
 // observed public cryptographic facts and classification labels, never key
 // material. The projector rebuilds crypto_assets from these events.
@@ -638,47 +657,49 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
-	EventOwnerCreated:                  {1: true},
-	EventOwnerUpdated:                  {1: true},
-	EventOwnerDeleted:                  {1: true},
-	EventIssuerCreated:                 {1: true},
-	EventIdentityCreated:               {1: true},
-	EventIdentityIssued:                {1: true},
-	EventIdentityDeployed:              {1: true},
-	EventIdentityRevoked:               {1: true},
-	EventIdentityRenewing:              {1: true},
-	EventIdentityRenewed:               {1: true},
-	EventIdentityRetired:               {1: true},
-	EventCertificateRecorded:           {1: true},
-	EventCertificateRevoked:            {1: true},
-	EventCertificateSuperseded:         {1: true},
-	EventCAIssuedCertificate:           {1: true},
-	EventCACertificateRevoked:          {1: true},
-	EventCRLPublished:                  {1: true, 2: true},
-	EventOCSPResponderRotated:          {1: true},
-	EventAgentHeartbeat:                {1: true},
-	EventAgentCertRenewed:              {1: true},
-	EventProfileCreated:                {1: true, 2: true},
-	EventProfileUpdated:                {1: true, 2: true},
-	EventDiscoverySourceUpserted:       {1: true},
-	EventDiscoveryScheduleUpserted:     {1: true},
-	EventDiscoveryRunQueued:            {1: true},
-	EventDiscoveryRunStarted:           {1: true},
-	EventDiscoveryFindingRecorded:      {1: true},
-	EventDiscoveryFindingTriageChanged: {1: true},
-	EventDiscoveryRunCompleted:         {1: true},
-	EventCBOMAssetObserved:             {1: true},
-	EventConnectorDeliveryRecorded:     {1: true},
-	EventLifecycleRotationRecorded:     {1: true},
-	EventIncidentExecutionRecorded:     {1: true},
-	EventPrivacySubjectErased:          {1: true},
-	EventPrivacyRetentionEnforced:      {1: true},
-	EventTenantMemberUpserted:          {1: true},
-	EventTenantMemberOffboarded:        {1: true},
-	EventAPITokenCreated:               {1: true},
-	EventAPITokenRevoked:               {1: true},
-	EventPAMSessionStarted:             {1: true},
-	EventPAMSessionExpired:             {1: true},
+	EventOwnerCreated:                   {1: true},
+	EventOwnerUpdated:                   {1: true},
+	EventOwnerDeleted:                   {1: true},
+	EventIssuerCreated:                  {1: true},
+	EventIdentityCreated:                {1: true},
+	EventIdentityIssued:                 {1: true},
+	EventIdentityDeployed:               {1: true},
+	EventIdentityRevoked:                {1: true},
+	EventIdentityRenewing:               {1: true},
+	EventIdentityRenewed:                {1: true},
+	EventIdentityRetired:                {1: true},
+	EventCertificateRecorded:            {1: true},
+	EventCertificateRevoked:             {1: true},
+	EventCertificateSuperseded:          {1: true},
+	EventCAIssuedCertificate:            {1: true},
+	EventCACertificateRevoked:           {1: true},
+	EventCRLPublished:                   {1: true, 2: true},
+	EventOCSPResponderRotated:           {1: true},
+	EventAgentHeartbeat:                 {1: true},
+	EventAgentCertRenewed:               {1: true},
+	EventProfileCreated:                 {1: true, 2: true},
+	EventProfileUpdated:                 {1: true, 2: true},
+	EventDiscoverySourceUpserted:        {1: true},
+	EventDiscoveryScheduleUpserted:      {1: true},
+	EventDiscoveryRunQueued:             {1: true},
+	EventDiscoveryRunStarted:            {1: true},
+	EventDiscoveryFindingRecorded:       {1: true},
+	EventDiscoveryFindingTriageChanged:  {1: true},
+	EventDiscoveryRunCompleted:          {1: true},
+	EventNotificationRead:               {1: true},
+	EventNotificationThresholdDelivered: {1: true},
+	EventCBOMAssetObserved:              {1: true},
+	EventConnectorDeliveryRecorded:      {1: true},
+	EventLifecycleRotationRecorded:      {1: true},
+	EventIncidentExecutionRecorded:      {1: true},
+	EventPrivacySubjectErased:           {1: true},
+	EventPrivacyRetentionEnforced:       {1: true},
+	EventTenantMemberUpserted:           {1: true},
+	EventTenantMemberOffboarded:         {1: true},
+	EventAPITokenCreated:                {1: true},
+	EventAPITokenRevoked:                {1: true},
+	EventPAMSessionStarted:              {1: true},
+	EventPAMSessionExpired:              {1: true},
 }
 
 func init() {
@@ -993,6 +1014,31 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, Status: pl.Status, Targets: pl.Targets,
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Error: pl.Error, CompletedAt: &completedAt,
+		})
+	case EventNotificationThresholdDelivered:
+		var pl NotificationThresholdDelivered
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		sentAt := pl.SentAt
+		if sentAt.IsZero() {
+			sentAt = e.Time
+		}
+		return p.store.ApplyNotificationThresholdDeliveredTx(ctx, tx, store.NotificationThresholdDelivery{
+			TenantID: e.TenantID, Subject: pl.Subject, ThresholdDays: pl.ThresholdDays,
+			Channel: pl.Channel, SentAt: sentAt,
+		})
+	case EventNotificationRead:
+		var pl NotificationRead
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		readAt := pl.ReadAt
+		if readAt.IsZero() {
+			readAt = e.Time
+		}
+		return p.store.ApplyNotificationReadTx(ctx, tx, store.NotificationReadReceipt{
+			TenantID: e.TenantID, OutboxID: pl.OutboxID, ReadAt: readAt,
 		})
 	case EventCBOMAssetObserved:
 		var pl CBOMAssetObserved

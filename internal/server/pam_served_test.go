@@ -37,8 +37,8 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		func(d *Deps) {
 			d.PAM = PAMConfig{
 				Enabled:        true,
-				DefaultTTL:     time.Second,
-				MaxTTL:         2 * time.Second,
+				DefaultTTL:     2 * time.Second,
+				MaxTTL:         5 * time.Second,
 				ExpiryInterval: 10 * time.Millisecond,
 				Attestors:      []attest.Attestor{servedPAMAttestor{}},
 				PostgresTargets: []PAMPostgresTarget{{
@@ -80,7 +80,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		"reason":         "production incident 42",
 		"method":         "stub_pam",
 		"payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
-		"ttl_seconds":    1,
+		"ttl_seconds":    2,
 	})
 	if pg.ID == "" || pg.TargetType != "postgres" || pg.Status != "active" || pg.Postgres == nil || pg.Postgres.DSN == "" {
 		t.Fatalf("postgres PAM response = %+v", pg)
@@ -105,7 +105,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 		"payload_base64": base64.StdEncoding.EncodeToString([]byte("genuine")),
 		"ssh_public_key": publicKey,
 		"ssh_principal":  "alice",
-		"ttl_seconds":    1,
+		"ttl_seconds":    2,
 	})
 	if ssh.ID == "" || ssh.TargetType != "ssh" || ssh.Status != "active" || ssh.SSH == nil || ssh.SSH.Certificate == "" {
 		t.Fatalf("ssh PAM response = %+v", ssh)

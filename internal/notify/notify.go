@@ -39,14 +39,26 @@ const (
 	KindCredentialDrift = "credential.drift"
 )
 
+// Alert severity tiers. Low is the safe fallback tier for unknown or missing
+// severity values; informational is accepted as the certctl-compatible spelling.
+const (
+	AlertSeverityLow           = "low"
+	AlertSeverityInformational = "informational"
+	AlertSeverityWarning       = "warning"
+	AlertSeverityCritical      = "critical"
+)
+
 // Alert is one operational alert on the notification surface — the JSON payload
 // of a notification.* outbox entry.
 type Alert struct {
-	Kind          string    `json:"kind"`
-	TenantID      string    `json:"tenant_id"`
-	CertificateID string    `json:"certificate_id,omitempty"`
-	Subject       string    `json:"subject,omitempty"`
-	Serial        string    `json:"serial,omitempty"`
-	NotAfter      time.Time `json:"not_after,omitempty"`
-	Detail        string    `json:"detail,omitempty"`
+	Kind            string    `json:"kind"`
+	TenantID        string    `json:"tenant_id"`
+	CertificateID   string    `json:"certificate_id,omitempty"`
+	Subject         string    `json:"subject,omitempty"`
+	Serial          string    `json:"serial,omitempty"`
+	NotAfter        time.Time `json:"not_after,omitempty"`
+	Detail          string    `json:"detail,omitempty"`
+	Severity        string    `json:"severity,omitempty"`
+	RoutingPolicyID string    `json:"routing_policy_id,omitempty"`
+	ThresholdDays   *int      `json:"threshold_days,omitempty"`
 }

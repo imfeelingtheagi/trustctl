@@ -392,6 +392,15 @@ func componentSchemas() map[string]*Schema {
 		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")
+	notification := object(map[string]*Schema{
+		"id": str(), "tenant_id": uuid(), "destination": str(), "kind": str(),
+		"certificate_id": str(), "subject": str(), "serial": str(), "not_after": timestamp(),
+		"detail": str(), "severity": {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
+		"routing_policy_id": str(), "threshold_days": {Type: "integer"},
+		"status":   {Type: "string", Enum: []string{"pending", "sent", "dead", "read"}},
+		"attempts": {Type: "integer"}, "last_error": str(), "idempotency_key": str(),
+		"created_at": timestamp(), "delivered_at": timestamp(), "read_at": timestamp(),
+	}, "id", "tenant_id", "destination", "status", "attempts", "created_at")
 	outboxCircuit := object(map[string]*Schema{
 		"tenant_id": uuid(), "destination": str(),
 		"state":      {Type: "string", Enum: []string{"closed", "open", "half-open"}},
@@ -1003,6 +1012,8 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorCatalog":              connectorCatalog,
 		"ConnectorDelivery":             connectorDelivery,
 		"ConnectorDeliveryList":         list("ConnectorDelivery"),
+		"Notification":                  notification,
+		"NotificationList":              list("Notification"),
 		"OutboxCircuit":                 outboxCircuit,
 		"OutboxCircuitList":             list("OutboxCircuit"),
 		"RotationRun":                   rotationRun,
