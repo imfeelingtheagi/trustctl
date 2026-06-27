@@ -46,7 +46,7 @@ export function SSHTrust() {
       <PageHeader
         titleId="ssh-heading"
         title="SSH trust"
-        description="SSH trust changes can lock out operators. This surface explains the agent-side model and attestation-gated cert posture without changing `sshd_config`, `authorized_keys`, or trusted CA files from the browser."
+        description="SSH trust changes can lock people out, so this page is read-only: it explains how the agent manages host trust and short-lived SSH certificates. It never edits sshd config, authorized_keys, or CA trust files from the browser."
       />
 
       <UnavailableState title="High-blast-radius change">
@@ -64,9 +64,9 @@ export function SSHTrust() {
             any host changes trust.
           </p>
         </div>
-        <UnavailableState title="SSH trust rollout controls coming soon">
-          SSH trust rollout and drift detection run in the agent today; console management is coming soon. Target-host state, rollout status, health failures,
-          and rollback evidence are not surfaced here. This page must never weaken `authorized_keys` or rewrite trust without agent confirmation.
+        <UnavailableState title="Trust rollout is managed by the agent, not the console">
+          SSH trust rollout and drift detection run in the agent. Target-host state, rollout status, health failures, and rollback evidence aren't surfaced
+          here yet, and the console never weakens authorized_keys or rewrites trust without agent confirmation.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">
@@ -101,9 +101,9 @@ export function SSHTrust() {
             Self-approval blocked is a hard rule, not a UI hint.
           </p>
         </div>
-        <UnavailableState title="Attested SSH issue flow coming soon">
-          Attestation-gated SSH issuance is available via the library today; console management is coming soon. Attestation decisions are not surfaced here, so
-          this console cannot request short-lived SSH user certs yet. The SSH CA private key stays in the signer and is never shown here.
+        <UnavailableState title="Attested SSH issue isn't in the console yet">
+          Attestation-gated SSH issuance runs through the agent and signer. Attestation decisions aren't surfaced here, so the console can't request short-lived
+          SSH user certs yet. The SSH CA private key stays in the signer and is never shown here.
         </UnavailableState>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[52rem]">

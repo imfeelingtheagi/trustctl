@@ -129,7 +129,7 @@ export function Incidents() {
       <PageHeader
         titleId="incidents-heading"
         title="Incidents"
-        description="Execute credential-compromise remediation with blast-radius evidence, replacement-before-revoke lifecycle actions, connector delivery receipts, failed-target rollback evidence, and sealed audit bundles."
+        description="Respond to a compromised credential: see what it can reach (blast radius), issue a replacement before revoking, push it out through connectors, roll back failed targets, and capture a tamper-evident audit bundle."
       />
 
       <section aria-labelledby="execute-heading" className="grid gap-4 border-y border-border py-4">

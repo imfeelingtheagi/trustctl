@@ -23,7 +23,7 @@ describe("SSH trust disclosure surface", () => {
     expect(screen.getByText("sshd -t validation")).toBeInTheDocument();
     expect(screen.getByText("reload health failed")).toBeInTheDocument();
     expect(screen.getByText(/rollback trusted_ca_keys from backup/)).toBeInTheDocument();
-    expect(screen.getAllByText(/SSH trust rollout and drift detection run in the agent today/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/SSH trust rollout and drift detection run in the agent/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /add ca|rewrite sshd|reload ssh|apply trust|rollback now/i })).not.toBeInTheDocument();
   });
 
@@ -39,7 +39,7 @@ describe("SSH trust disclosure surface", () => {
     expect(screen.getByText("attestation approved")).toBeInTheDocument();
     expect(screen.getByText("attestation denied")).toBeInTheDocument();
     expect(screen.getByText("attestation expired")).toBeInTheDocument();
-    expect(screen.getAllByText(/Attestation-gated SSH issuance is available via the library today/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Attestation-gated SSH issuance runs through the agent and signer/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/BEGIN OPENSSH PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /issue ssh cert|approve self|mint ssh/i })).not.toBeInTheDocument();
   });

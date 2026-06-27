@@ -270,7 +270,7 @@ export function Certificates() {
       <PageHeader
         titleId="certs-heading"
         title="Certificates"
-        description="Inventory includes tenant-scoped pagination, expiry filtering, detail fetches, and explicit ingest."
+        description="Your X.509 certificate inventory — search, filter by expiry, import, and inspect. For the non-human identities that hold these certificates, see Identities."
         actions={
           <button
             type="button"

@@ -17,7 +17,7 @@ export function Owners() {
 
   return (
     <section aria-labelledby="owners-heading" className="space-y-4">
-      <PageHeader titleId="owners-heading" title="Owners" description="Search served owner records by name, ID, kind, or email." />
+      <PageHeader titleId="owners-heading" title="Owners" description="Search owner records — the people and teams accountable for credentials — by name, ID, kind, or email." />
 
       <OrphanGovernance owners={owners} />
       {loading && <LoadingState>Loading owners…</LoadingState>}

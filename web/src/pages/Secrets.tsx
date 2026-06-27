@@ -518,7 +518,7 @@ export function Secrets() {
       <PageHeader
         titleId="secrets-heading"
         title="Secrets"
-        description="Secret-store, machine-login, PKI-secret, and one-time-share workflows. Metadata is durable; returned values, keys, and tokens are explicit reveal-once material."
+        description="Stored secrets, API keys, tokens, machine logins, PKI secrets, and one-time shares — distinct from the X.509 certificates in Certificates. Metadata is durable; returned values, keys, and tokens are reveal-once material."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}

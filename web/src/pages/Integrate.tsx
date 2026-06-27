@@ -68,7 +68,7 @@ export function Integrate() {
         </ul>
       </SectionCard>
 
-      <SectionCard title="SDKs" description="Generated clients for the served OpenAPI contract.">
+      <SectionCard title="SDKs" description="Generated client libraries for the trstctl API.">
         <ul className="grid gap-3 md:grid-cols-2">
           {sdks.map((sdk) => (
             <li key={sdk.name} className="grid gap-1">

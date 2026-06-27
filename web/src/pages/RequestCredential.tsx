@@ -203,7 +203,7 @@ export function RequestCredential() {
       <PageHeader
         title="Request a credential"
         titleId="request-credential-heading"
-        description="Submit a profile-bound X.509 request as the session requester. Approval and issuance stay separate lifecycle steps."
+        description="Request a certificate against an issuance profile. Requesting and approving stay separate steps, so no one can self-issue."
       />
 
       {notice && (

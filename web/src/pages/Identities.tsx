@@ -510,6 +510,7 @@ export function Identities() {
       <PageHeader
         titleId="identities-heading"
         title="Identities"
+        description="The non-human identities trstctl manages — services, agents, and workloads — and their lifecycle: issue, deploy, renew, revoke, retire. Each can hold certificates (see Certificates) and secrets (see Secrets)."
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
             New identity

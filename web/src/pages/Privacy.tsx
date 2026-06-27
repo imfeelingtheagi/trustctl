@@ -77,7 +77,7 @@ export function Privacy() {
       <PageHeader
         titleId="privacy-heading"
         title="Privacy & data governance"
-        description="Operate the GDPR stack: inventory personal-data classes, honor subject-erasure requests (right to be forgotten), and enforce retention on a schedule — all against served endpoints."
+        description="Privacy & GDPR controls: inventory the kinds of personal data you hold, honor erasure requests (right to be forgotten), and enforce data-retention schedules."
       />
 
       {loading ? (

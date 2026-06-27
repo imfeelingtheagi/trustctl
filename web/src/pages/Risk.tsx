@@ -158,13 +158,13 @@ export function Risk() {
       <RiskPosture risks={data ?? []} />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
-          Risk scoring covers certificates today; scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities is coming soon.
+          Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.
         </UnavailableState>
       </div>
       {data && ignoredCount > 0 && (
         <p className="mb-3 text-sm text-status-warning">
-          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on console support for other credential kinds, which is
-          coming soon.
+          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on console support for other credential kinds, which isn't
+          available yet.
         </p>
       )}
 
