@@ -65,6 +65,8 @@ export const appRoutePaths = [
   "/risk",
   "/incidents",
   "/approvals",
+  "/operations",
+  "/notifications",
   "/posture",
   "/graph",
   "/audit",
@@ -195,10 +197,10 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F7",
-    routes: ["/connectors"],
+    routes: ["/connectors", "/operations", "/notifications"],
     component: "Connectors",
     kind: "observe",
-    evidence: "native and plugin connector registry, capability grants, delivery receipts, reachability, and rollback posture",
+    evidence: "native and plugin connector registry, capability grants, delivery receipts, operations queue, notification triage, reachability, and rollback posture",
   },
   {
     featureId: "F8",

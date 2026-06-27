@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, type Certificate, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
 import { PageHeader } from "@/components/PageHeader";
 import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
@@ -21,10 +22,14 @@ export function Dashboard() {
   const certs = useResource(api.certificates);
   const risk = useResource(() => api.risk({ sort: "score" }));
   const identities = useResource(api.identities);
+  const rotationRuns = useResource(() => api.rotationRuns({ limit: 100 }));
 
   const riskRows = risk.data ?? [];
-  const realEmpty = (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && (identities.data?.length ?? 0) === 0;
+  const resourcesLoading = certs.loading || risk.loading || identities.loading;
+  const realEmpty = !resourcesLoading && (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && (identities.data?.length ?? 0) === 0;
   const useDemo = preview || realEmpty;
+  const servedCertificates = certs.data ?? [];
+  const servedRotationRuns = rotationRuns.data?.items ?? [];
 
   const d = demoDashboard;
   const topRisk = [...riskRows].sort((a, b) => b.score - a.score).slice(0, 5);
@@ -129,6 +134,7 @@ export function Dashboard() {
       {/* Non-human identity inventory — by kind, with a shared risk lens (real data only) */}
       {!useDemo && <NhiInventory identities={identities.data ?? []} risks={riskRows} />}
       {!useDemo && <NotificationCenter risks={riskRows} certs={certs.data ?? []} />}
+      {!useDemo && <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />}
 
       {/* Trend + algorithm mix */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -235,6 +241,39 @@ export function Dashboard() {
   );
 }
 
+function DashboardTrendCharts({ certificates, rotationRuns }: { certificates: Certificate[]; rotationRuns: RotationRun[] }) {
+  const issuanceData = issuanceRateData(certificates);
+  const renewalData = renewalTrendData(rotationRuns);
+  const expirationData = expirationTimelineData(certificates);
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-3">
+      <TrendCard title="Issuance rate" description="certificates recorded by day">
+        <TimeBarChart ariaLabel="Certificate issuance rate by day" data={issuanceData} tone="brand" />
+      </TrendCard>
+      <TrendCard title="Renewal jobs" description="success vs failure by day">
+        <StackedTimeBarChart ariaLabel="Renewal job success and failure trend" data={renewalData} />
+      </TrendCard>
+      <TrendCard title="Expiration timeline" description="next 90 days">
+        <TimeBarChart ariaLabel="Certificate expirations over the next 90 days" data={expirationData} tone="warning" />
+      </TrendCard>
+    </div>
+  );
+}
+
+function TrendCard({ children, description, title }: { children: ReactNode; description: string; title: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          {title} <span className="ml-1 text-caption font-normal text-muted-foreground">{description}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
 function ActionLink({ to, icon, children, primary }: { to: string; icon: ReactNode; children: ReactNode; primary?: boolean }) {
   return (
     <Link
@@ -308,6 +347,71 @@ function RiskPip({ score }: { score: number }) {
 }
 
 /* -------------------------------------------------------------- charts ---- */
+
+const dayMs = 24 * 60 * 60 * 1000;
+
+function issuanceRateData(certificates: Certificate[]): TimeBarDatum[] {
+  const counts = new Map<string, number>();
+  for (const certificate of certificates) {
+    const key = dayKey(certificate.created_at ?? certificate.not_before);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return sortedCountData(counts, "brand");
+}
+
+function renewalTrendData(rotationRuns: RotationRun[]): StackedTimeBarDatum[] {
+  const counts = new Map<string, { failed: number; succeeded: number }>();
+  for (const run of rotationRuns) {
+    if (run.status !== "failed" && run.status !== "succeeded") continue;
+    const key = dayKey(run.updated_at ?? run.completed_at ?? run.created_at);
+    if (!key) continue;
+    const current = counts.get(key) ?? { failed: 0, succeeded: 0 };
+    current[run.status] += 1;
+    counts.set(key, current);
+  }
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, count]) => ({
+      label: shortDateLabel(key),
+      segments: [
+        { label: "succeeded", value: count.succeeded, tone: "success" as const },
+        { label: "failed", value: count.failed, tone: "critical" as const },
+      ],
+    }));
+}
+
+function expirationTimelineData(certificates: Certificate[]): TimeBarDatum[] {
+  const now = Date.now();
+  const horizon = now + 90 * dayMs;
+  const counts = new Map<string, number>();
+  for (const certificate of certificates) {
+    if (!certificate.not_after) continue;
+    const expires = new Date(certificate.not_after).getTime();
+    if (!Number.isFinite(expires) || expires < now || expires > horizon) continue;
+    const key = dayKey(certificate.not_after);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return sortedCountData(counts, "warning");
+}
+
+function sortedCountData(counts: Map<string, number>, tone: TimeBarDatum["tone"]): TimeBarDatum[] {
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => ({ label: shortDateLabel(key), value, tone }));
+}
+
+function dayKey(value?: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function shortDateLabel(day: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
+}
 
 function Sparkline({ values }: { values: number[] }) {
   const w = 84;

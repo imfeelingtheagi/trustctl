@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ApiError, UnauthorizedError, api, type Certificate, type ConnectorDelivery, type RotationRun } from "@/lib/api";
+import { FilePlus2, PlugZap } from "lucide-react";
+import { ApiError, UnauthorizedError, api, type Certificate, type ConnectorDelivery, type Owner, type RotationRun } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
@@ -34,6 +35,7 @@ function expiryFromSearchParam(value: string | null): ExpiryFilter {
 }
 
 type Notice = { kind: "permission" | "error"; message: string };
+type FacetFilter = "all" | string;
 
 function noticeForError(err: unknown, action: string): Notice {
   if (err instanceof UnauthorizedError) {
@@ -75,6 +77,10 @@ export function Certificates() {
   const [error, setError] = useState<Notice | null>(null);
   const [query, setQuery] = useState("");
   const [expiry, setExpiry] = useState<ExpiryFilter>(() => expiryFromSearchParam(searchParams.get("expiry")));
+  const [issuerFilter, setIssuerFilter] = useState<FacetFilter>(() => searchParams.get("issuer") ?? "all");
+  const [profileFilter, setProfileFilter] = useState<FacetFilter>(() => searchParams.get("profile") ?? "all");
+  const [teamFilter, setTeamFilter] = useState<FacetFilter>(() => searchParams.get("team") ?? "all");
+  const [environmentFilter, setEnvironmentFilter] = useState<FacetFilter>(() => searchParams.get("environment") ?? "all");
   const [limit, setLimit] = useState(20);
   const [detailID, setDetailID] = useState<string | null>(null);
   const [detail, setDetail] = useState<Certificate | null>(null);
@@ -91,6 +97,7 @@ export function Certificates() {
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [rotationRuns, setRotationRuns] = useState<RotationRun[]>([]);
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[]>([]);
+  const [owners, setOwners] = useState<Owner[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,11 +105,13 @@ export function Certificates() {
       settleOptional(() => api.risk({ sort: "score" })),
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
-    ]).then(([riskResult, rotationResult, deliveryResult]) => {
+      settleOptional(() => api.owners()),
+    ]).then(([riskResult, rotationResult, deliveryResult, ownerResult]) => {
       if (cancelled) return;
       if (riskResult) setRisks(riskResult);
       if (rotationResult) setRotationRuns(rotationResult.items ?? []);
       if (deliveryResult) setDeliveries(deliveryResult.items ?? []);
+      if (ownerResult) setOwners(ownerResult);
     });
     return () => {
       cancelled = true;
@@ -166,6 +175,25 @@ export function Certificates() {
     );
   }
 
+  function selectFacet(key: "environment" | "issuer" | "profile" | "team", value: FacetFilter) {
+    if (key === "issuer") setIssuerFilter(value);
+    if (key === "profile") setProfileFilter(value);
+    if (key === "team") setTeamFilter(value);
+    if (key === "environment") setEnvironmentFilter(value);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value === "all") {
+          next.delete(key);
+        } else {
+          next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
   async function openDetail(c: Certificate) {
     setDetailID(c.id);
     setDetail(null);
@@ -209,14 +237,33 @@ export function Certificates() {
     }
   }
 
+  const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
+  const issuerOptions = useMemo(() => uniqueOptions(certificates.map((certificate) => certificate.issuer), issuerFilter), [certificates, issuerFilter]);
+  const profileOptions = useMemo(
+    () => uniqueOptions(certificates.map((certificate) => certificateProfile(certificate)), profileFilter),
+    [certificates, profileFilter],
+  );
+  const environmentOptions = useMemo(
+    () => uniqueOptions(certificates.map((certificate) => certificateEnvironment(certificate)), environmentFilter),
+    [certificates, environmentFilter],
+  );
+  const teamOptions = useMemo(() => teamFacetOptions(certificates, ownerByID, owners, teamFilter), [certificates, ownerByID, owners, teamFilter]);
+  const columns = useMemo(() => certificateColumns(ownerByID), [ownerByID]);
+
   const filtered = useMemo(() => {
     const all = certificates;
     const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((c) =>
-      [c.subject, c.issuer, c.status, c.fingerprint, c.serial, c.deployment_location].filter(Boolean).some((v) => v!.toLowerCase().includes(q)),
-    );
-  }, [certificates, query]);
+    return all.filter((c) => {
+      if (issuerFilter !== "all" && c.issuer !== issuerFilter) return false;
+      if (profileFilter !== "all" && certificateProfile(c) !== profileFilter) return false;
+      if (teamFilter !== "all" && certificateTeamID(c, ownerByID) !== teamFilter) return false;
+      if (environmentFilter !== "all" && certificateEnvironment(c) !== environmentFilter) return false;
+      if (!q) return true;
+      return [c.subject, c.issuer, c.status, c.fingerprint, c.serial, c.deployment_location, certificateProfile(c), certificateEnvironment(c), certificateTeamLabel(c, ownerByID)]
+        .filter(Boolean)
+        .some((v) => v!.toLowerCase().includes(q));
+    });
+  }, [certificates, environmentFilter, issuerFilter, ownerByID, profileFilter, query, teamFilter]);
 
   return (
     <section aria-labelledby="certs-heading">
@@ -309,8 +356,13 @@ export function Certificates() {
       {error?.kind === "error" && <ErrorState title="Could not load certificates">{error.message}</ErrorState>}
 
       {!loading && certificates.length === 0 && !error && (
-        <EmptyState title="No certificates yet" ctaTo="/wizard" ctaLabel="Set up your first certificate">
-          Run the setup wizard to connect a CA, install an agent, and issue your first certificate.
+        <EmptyState
+          icon={<FilePlus2 className="h-5 w-5" aria-hidden="true" />}
+          title="No certificates yet"
+          primaryAction={{ label: "Issue first certificate", to: "/request", icon: <FilePlus2 className="h-4 w-4" /> }}
+          secondaryAction={{ label: "Connect an issuer", to: "/ca-hierarchy", icon: <PlugZap className="h-4 w-4" /> }}
+        >
+          Start with a profile-bound request, or connect an issuer before the first certificate is minted.
         </EmptyState>
       )}
 
@@ -324,7 +376,7 @@ export function Certificates() {
             </div>
             <DeploymentReceipts deliveries={deliveries} />
           </div>
-          <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+          <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(14rem,1.2fr)_repeat(4,minmax(10rem,12rem))_auto_auto] xl:items-end">
             <div>
               <label htmlFor="cert-search" className="mb-1 block text-sm font-medium">
                 Search loaded rows
@@ -338,6 +390,70 @@ export function Certificates() {
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
             </div>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
+              Issuer filter
+              <select
+                id="cert-issuer-filter"
+                value={issuerFilter}
+                onChange={(e) => selectFacet("issuer", e.target.value)}
+                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All issuers</option>
+                {issuerOptions.map((issuer) => (
+                  <option key={issuer} value={issuer}>
+                    {issuer}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
+              Profile filter
+              <select
+                id="cert-profile-filter"
+                value={profileFilter}
+                onChange={(e) => selectFacet("profile", e.target.value)}
+                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All profiles</option>
+                {profileOptions.map((profile) => (
+                  <option key={profile} value={profile}>
+                    {profile}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
+              Team filter
+              <select
+                id="cert-team-filter"
+                value={teamFilter}
+                onChange={(e) => selectFacet("team", e.target.value)}
+                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All teams</option>
+                {teamOptions.map((team) => (
+                  <option key={team.value} value={team.value}>
+                    {team.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
+              Environment filter
+              <select
+                id="cert-environment-filter"
+                value={environmentFilter}
+                onChange={(e) => selectFacet("environment", e.target.value)}
+                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All environments</option>
+                {environmentOptions.map((environment) => (
+                  <option key={environment} value={environment}>
+                    {environment}
+                  </option>
+                ))}
+              </select>
+            </label>
             <fieldset>
               <legend className="mb-1 text-sm font-medium">Server expiry filter</legend>
               <div className="flex flex-wrap gap-2">
@@ -377,7 +493,7 @@ export function Certificates() {
             <DataGrid
               ariaLabel="Inventoried certificates"
               rows={filtered}
-              columns={certificateColumns}
+              columns={columns}
               getRowId={(c) => c.id}
               onRowOpen={(c) => void openDetail(c)}
               rowActionLabel={() => "View details"}
@@ -494,47 +610,121 @@ export function Certificates() {
   );
 }
 
-const certificateColumns: Array<DataGridColumn<Certificate>> = [
-  {
-    id: "subject",
-    header: "Subject",
-    sortable: true,
-    cell: (c) => <span className="font-medium">{c.subject}</span>,
-  },
-  {
-    id: "issuer",
-    header: "Issuer",
-    cell: (c) => c.issuer ?? "—",
-  },
-  {
-    id: "profile",
-    header: "Profile",
-    cell: () => <span className="text-muted-foreground">Not available</span>,
-  },
-  {
-    id: "algorithm",
-    header: "Algorithm",
-    cell: (c) => c.key_algorithm || "—",
-  },
-  {
-    id: "expires",
-    header: "Expires",
-    sortable: true,
-    cell: (c) => formatDate(c.not_after),
-  },
-  {
-    id: "expiry-band",
-    header: "Band",
-    cell: (c) => <StatusBadge vocabulary="expiry" value={expiryBandForDate(c.not_after)} />,
-  },
-  {
-    id: "status",
-    header: "Status",
-    cell: (c) => (
-      <div className="grid gap-1">
-        <StatusBadge vocabulary="certificate" value={c.status} />
-        {c.status === "revoked" && c.revocation_reason && <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>}
-      </div>
-    ),
-  },
-];
+function certificateColumns(ownerByID: Map<string, Owner>): Array<DataGridColumn<Certificate>> {
+  return [
+    {
+      id: "subject",
+      header: "Subject",
+      sortable: true,
+      cell: (c) => <span className="font-medium">{c.subject}</span>,
+    },
+    {
+      id: "issuer",
+      header: "Issuer",
+      cell: (c) => c.issuer ?? "-",
+    },
+    {
+      id: "profile",
+      header: "Profile",
+      cell: (c) => certificateProfile(c) || <span className="text-muted-foreground">-</span>,
+    },
+    {
+      id: "team",
+      header: "Team",
+      cell: (c) => certificateTeamLabel(c, ownerByID) || <span className="text-muted-foreground">-</span>,
+    },
+    {
+      id: "algorithm",
+      header: "Algorithm",
+      cell: (c) => c.key_algorithm || "-",
+    },
+    {
+      id: "expires",
+      header: "Expires",
+      sortable: true,
+      cell: (c) => formatDate(c.not_after),
+    },
+    {
+      id: "expiry-band",
+      header: "Band",
+      cell: (c) => <StatusBadge vocabulary="expiry" value={expiryBandForDate(c.not_after)} />,
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (c) => (
+        <div className="grid gap-1">
+          <StatusBadge vocabulary="certificate" value={c.status} />
+          {c.status === "revoked" && c.revocation_reason && <span className="text-xs text-muted-foreground">{c.revocation_reason}</span>}
+        </div>
+      ),
+    },
+  ];
+}
+
+function uniqueOptions(values: Array<string | undefined>, selected: FacetFilter): string[] {
+  const set = new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)));
+  if (selected !== "all") set.add(selected);
+  return Array.from(set).sort((left, right) => left.localeCompare(right));
+}
+
+function certificateRecord(c: Certificate): Record<string, unknown> {
+  return c as unknown as Record<string, unknown>;
+}
+
+function certificateAttributes(c: Certificate): Record<string, unknown> {
+  const value = certificateRecord(c).attributes;
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function firstString(c: Certificate, keys: string[]): string {
+  const record = certificateRecord(c);
+  const attrs = certificateAttributes(c);
+  for (const key of keys) {
+    const value = record[key] ?? attrs[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function certificateProfile(c: Certificate): string {
+  return firstString(c, ["profile_name", "profile", "certificate_profile_name", "certificate_profile_id"]);
+}
+
+function certificateEnvironment(c: Certificate): string {
+  const explicit = firstString(c, ["environment", "env"]);
+  if (explicit) return explicit;
+  const location = c.deployment_location?.toLowerCase() ?? "";
+  for (const candidate of ["production", "prod", "staging", "stage", "development", "dev"]) {
+    if (new RegExp(`(^|[^a-z])${candidate}([^a-z]|$)`).test(location)) return candidate;
+  }
+  return "";
+}
+
+function certificateTeamID(c: Certificate, ownerByID: Map<string, Owner>): string {
+  const explicit = firstString(c, ["team_id"]);
+  if (explicit) return explicit;
+  if (c.owner_id && ownerByID.get(c.owner_id)?.kind === "team") return c.owner_id;
+  return "";
+}
+
+function certificateTeamLabel(c: Certificate, ownerByID: Map<string, Owner>): string {
+  const explicitName = firstString(c, ["team_name", "team"]);
+  if (explicitName) return explicitName;
+  const teamID = certificateTeamID(c, ownerByID);
+  if (!teamID) return "";
+  return ownerByID.get(teamID)?.name || teamID;
+}
+
+function teamFacetOptions(certificates: Certificate[], ownerByID: Map<string, Owner>, owners: Owner[], selected: FacetFilter): Array<{ value: string; label: string }> {
+  const options = new Map<string, string>();
+  for (const owner of owners) {
+    if (owner.kind === "team") options.set(owner.id, owner.name || owner.id);
+  }
+  for (const certificate of certificates) {
+    const teamID = certificateTeamID(certificate, ownerByID);
+    if (teamID) options.set(teamID, certificateTeamLabel(certificate, ownerByID) || teamID);
+  }
+  if (selected !== "all" && !options.has(selected)) options.set(selected, selected);
+  return Array.from(options, ([value, label]) => ({ value, label })).sort((left, right) => left.label.localeCompare(right.label));
+}

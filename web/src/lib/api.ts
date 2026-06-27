@@ -89,6 +89,8 @@ import type {
   Member,
   MemberList,
   MemberRequest,
+  Notification,
+  NotificationList,
   OffboardMemberRequest,
   OffboardMemberResponse,
   OIDCMappingStatus,
@@ -115,6 +117,8 @@ import type {
   DynamicLeaseRenewRequest,
   EphemeralAPIKey,
   EphemeralAPIKeyRequest,
+  ExternalCA as GenExternalCA,
+  ExternalCAList,
   SecretImportRequest,
   SecretRecoverRequest,
   SecretRequest,
@@ -149,6 +153,7 @@ export type CertificatePage = CertificateList;
 export type CertificateIngestRequest = CertificateIngest;
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
+export type ExternalCA = GenExternalCA;
 export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
@@ -212,6 +217,8 @@ export type {
   Member,
   MemberList,
   MemberRequest,
+  Notification,
+  NotificationList,
   OffboardMemberRequest,
   OffboardMemberResponse,
   OIDCMappingStatus,
@@ -242,6 +249,7 @@ export type {
   DynamicLeaseRenewRequest,
   EphemeralAPIKey,
   EphemeralAPIKeyRequest,
+  IssuerRequest,
   SecretRecoverRequest,
   SecretRequest,
   SecretScan,
@@ -529,6 +537,7 @@ export interface Api {
   createOwner(input: OwnerRequest): Promise<Owner>;
   issuers(): Promise<Issuer[]>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
+  externalCAs(): Promise<ExternalCA[]>;
   identities(): Promise<Identity[]>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
@@ -625,6 +634,9 @@ export interface Api {
   rewrapTransit(input: TransitRewrapRequest): Promise<TransitCiphertext>;
   signTransit(input: TransitSignRequest): Promise<TransitSignature>;
   verifyTransit(input: TransitVerifyRequest): Promise<TransitVerify>;
+  notifications(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): Promise<NotificationList>;
+  markNotificationRead(id: string): Promise<Notification>;
+  requeueNotification(id: string): Promise<Notification>;
 }
 
 export const api: Api = {
@@ -645,6 +657,7 @@ export const api: Api = {
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),
+  externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
@@ -770,6 +783,9 @@ export const api: Api = {
   rewrapTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/rewrap", input),
   signTransit: (input) => mutate<TransitSignature>("POST", "/api/v1/transit/sign", input),
   verifyTransit: (input) => mutate<TransitVerify>("POST", "/api/v1/transit/verify", input),
+  notifications: (options) => req<NotificationList>(`/api/v1/notifications${notificationQueryString(options)}`),
+  markNotificationRead: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/read`),
+  requeueNotification: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/requeue`),
 };
 
 /** loginURL is where the browser is sent to begin the OIDC flow. */
@@ -820,6 +836,15 @@ function pageQueryString(options?: { limit?: number; cursor?: string }, identity
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
   if (identityId) qs.set("identity_id", identityId);
+  const suffix = qs.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
+function notificationQueryString(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): string {
+  const qs = new URLSearchParams();
+  if (options?.limit != null) qs.set("limit", String(options.limit));
+  if (options?.cursor) qs.set("cursor", options.cursor);
+  if (options?.status) qs.set("status", options.status);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import { Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 import { appRoutePaths, navGroups } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,13 @@ interface RouteCommand {
   label: string;
   description: string;
   to: string;
+}
+
+interface ActionCommand {
+  id: string;
+  label: string;
+  description: string;
+  run: () => void | Promise<void>;
 }
 
 export interface CommandPaletteProps {
@@ -75,8 +83,23 @@ function routeScore(command: RouteCommand, query: string): number {
   return 4;
 }
 
+function matchesAction(command: ActionCommand, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [command.label, command.description].some((value) => value.toLowerCase().includes(needle));
+}
+
 function focusableElements(panel: HTMLElement): HTMLElement[] {
   return Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'));
+}
+
+function useDebouncedValue<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), ms);
+    return () => window.clearTimeout(timer);
+  }, [ms, value]);
+  return debounced;
 }
 
 export function CommandPalette({ open, onClose, returnFocusRef }: CommandPaletteProps) {
@@ -85,14 +108,54 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const trimmed = query.trim();
-  const search = useGlobalSearch(query, { enabled: open && trimmed.length > 0 });
+  const debouncedQuery = useDebouncedValue(query, 250);
+  const debouncedTrimmed = debouncedQuery.trim();
+  const search = useGlobalSearch(debouncedQuery, { enabled: open && debouncedTrimmed.length > 0 });
   const commands = useMemo(() => routeCommands(t), [t]);
+  const actions = useMemo<ActionCommand[]>(
+    () => [
+      {
+        id: "action:issue-credential",
+        label: "Issue credential",
+        description: "Open the self-service request workflow",
+        run: () => {
+          navigate("/request");
+          onClose();
+        },
+      },
+      {
+        id: "action:connect-issuer",
+        label: "Connect issuer",
+        description: "Open CA hierarchy and issuer catalog",
+        run: () => {
+          navigate("/ca-hierarchy");
+          onClose();
+        },
+      },
+      {
+        id: "action:run-discovery-scan",
+        label: "Run discovery scan",
+        description: "Queue a run for the first configured discovery source",
+        run: async () => {
+          try {
+            const sources = await api.discoverySources({ limit: 1 });
+            const source = sources.items?.[0];
+            if (source) await api.startDiscoveryRun({ source_id: source.id, dry_run: false });
+          } finally {
+            navigate("/discovery");
+            onClose();
+          }
+        },
+      },
+    ],
+    [navigate, onClose],
+  );
   const filteredRoutes = useMemo(
     () => commands.filter((command) => matchesRoute(command, query)).sort((left, right) => routeScore(left, query) - routeScore(right, query)),
     [commands, query],
   );
-  const choices: Array<RouteCommand | GlobalSearchResult> = [...filteredRoutes, ...search.results];
+  const filteredActions = useMemo(() => actions.filter((command) => matchesAction(command, query)), [actions, query]);
+  const choices: Array<ActionCommand | RouteCommand | GlobalSearchResult> = [...filteredActions, ...filteredRoutes, ...search.results];
   const titleId = "command-palette-title";
   const descriptionId = "command-palette-description";
 
@@ -134,7 +197,11 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
 
   if (!open) return null;
 
-  function activate(target: RouteCommand | GlobalSearchResult) {
+  function activate(target: ActionCommand | RouteCommand | GlobalSearchResult) {
+    if ("run" in target) {
+      void target.run();
+      return;
+    }
     navigate(target.to);
     onClose();
   }
@@ -190,6 +257,13 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
         </div>
         <div className="max-h-[24rem] overflow-y-auto p-2">
           {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}
+          {filteredActions.length > 0 && (
+            <PaletteSection title="Actions">
+              {filteredActions.map((command) => (
+                <PaletteButton key={command.id} label={command.label} description={command.description} onClick={() => void activate(command)} />
+              ))}
+            </PaletteSection>
+          )}
           {filteredRoutes.length > 0 && (
             <PaletteSection title={t("command.routes")}>
               {filteredRoutes.map((command) => (
@@ -251,6 +325,8 @@ function kindLabel(kind: GlobalSearchResult["kind"], t: (key: MessageKey) => str
       return t("search.kind.certificate");
     case "identity":
       return t("search.kind.identity");
+    case "issuer":
+      return "Issuer";
     case "secret":
       return t("search.kind.secret");
     case "agent":

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ClipboardList, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
@@ -13,11 +13,12 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
 
-const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "ct_log", "drift", "secret_store", "api_key", "agent", "manual"];
+const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual"];
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
   ssh: "SSH",
   cloud_certificate: "Cloud certificates",
+  cloud_secret: "Cloud secrets",
   ct_log: "Certificate Transparency",
   drift: "Drift",
   secret_store: "Secret stores",
@@ -40,6 +41,8 @@ export function Discovery() {
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
+  const sourceNameRef = useRef<HTMLInputElement>(null);
+  const scheduleNameRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setLoading(true);
@@ -124,6 +127,16 @@ export function Discovery() {
     }
   }
 
+  function focusSourceForm() {
+    sourceNameRef.current?.scrollIntoView({ block: "center" });
+    sourceNameRef.current?.focus();
+  }
+
+  function focusScheduleForm() {
+    scheduleNameRef.current?.scrollIntoView({ block: "center" });
+    scheduleNameRef.current?.focus();
+  }
+
   return (
     <section aria-labelledby="discovery-heading" className="grid gap-6">
       <PageHeader
@@ -155,7 +168,7 @@ export function Discovery() {
           <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
             <label className="grid gap-1 text-sm font-medium">
               Name
-              <input className="ui-input" value={sourceName} onChange={(event) => setSourceName(event.target.value)} required />
+              <input id="discovery-source-name" ref={sourceNameRef} className="ui-input" value={sourceName} onChange={(event) => setSourceName(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
               Kind
@@ -206,7 +219,7 @@ export function Discovery() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Name
-            <input className="ui-input" value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} required />
+            <input id="discovery-schedule-name" ref={scheduleNameRef} className="ui-input" value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} required />
           </label>
           <label className="grid gap-1 text-sm font-medium">
             Interval seconds
@@ -231,28 +244,72 @@ export function Discovery() {
         <h2 id="sources-heading" className="text-title font-semibold">
           Sources
         </h2>
-        {!loading && sources.length === 0 ? <EmptyState title="No discovery sources" /> : <SourceTable sources={sources} busy={busy} onStart={startRun} />}
+        {!loading && sources.length === 0 ? (
+          <EmptyState
+            icon={<Search className="h-5 w-5" aria-hidden="true" />}
+            title="No discovery sources"
+            primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+            secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
+          >
+            Add a network, cloud, CT log, or agent source before discovery runs can be queued.
+          </EmptyState>
+        ) : (
+          <SourceTable sources={sources} busy={busy} onStart={startRun} />
+        )}
       </section>
 
       <section aria-labelledby="schedules-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="schedules-heading" className="text-title font-semibold">
           Schedules
         </h2>
-        {!loading && schedules.length === 0 ? <EmptyState title="No discovery schedules" /> : <ScheduleTable schedules={schedules} sourceByID={sourceByID} />}
+        {!loading && schedules.length === 0 ? (
+          <EmptyState
+            icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
+            title="No discovery schedules"
+            primaryAction={{ label: sources.length > 0 ? "Create schedule" : "Create source first", onClick: sources.length > 0 ? focusScheduleForm : focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+            secondaryAction={{ label: "Refresh records", onClick: () => void load(), icon: <RefreshCw className="h-4 w-4" /> }}
+          >
+            Schedule a recurring scan once a source exists, or refresh to pick up work created by another operator.
+          </EmptyState>
+        ) : (
+          <ScheduleTable schedules={schedules} sourceByID={sourceByID} />
+        )}
       </section>
 
       <section aria-labelledby="runs-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="runs-heading" className="text-title font-semibold">
           Runs
         </h2>
-        {!loading && runs.length === 0 ? <EmptyState title="No discovery runs" /> : <RunTable runs={runs} sourceByID={sourceByID} />}
+        {!loading && runs.length === 0 ? (
+          <EmptyState
+            icon={<Play className="h-5 w-5" aria-hidden="true" />}
+            title="No discovery runs"
+            primaryAction={{ label: "Create source to run", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+            secondaryAction={{ label: "View certificates", to: "/certificates", icon: <Search className="h-4 w-4" /> }}
+          >
+            Runs appear here after a source is created and a tenant-scoped scan is queued.
+          </EmptyState>
+        ) : (
+          <RunTable runs={runs} sourceByID={sourceByID} />
+        )}
       </section>
 
       <section aria-labelledby="findings-heading" className="grid gap-3 border-y border-border py-4">
         <h2 id="findings-heading" className="text-title font-semibold">
           Findings
         </h2>
-        {!loading && findings.length === 0 ? <EmptyState title="No discovery findings" /> : <FindingTable findings={findings} sourceByID={sourceByID} />}
+        {!loading && findings.length === 0 ? (
+          <EmptyState
+            icon={<Search className="h-5 w-5" aria-hidden="true" />}
+            title="No discovery findings"
+            primaryAction={{ label: "Create discovery source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
+            secondaryAction={{ label: "Open posture", to: "/posture", icon: <Search className="h-4 w-4" /> }}
+          >
+            Findings populate after discovery observes certificates, secrets, SSH trust, or drift.
+          </EmptyState>
+        ) : (
+          <FindingTable findings={findings} sourceByID={sourceByID} />
+        )}
       </section>
     </section>
   );

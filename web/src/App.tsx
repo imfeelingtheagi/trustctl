@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
 import { Login } from "@/pages/Login";
 import { Dashboard } from "@/pages/Dashboard";
@@ -31,6 +32,8 @@ import { Connectors } from "@/pages/Connectors";
 import { CodeSigning } from "@/pages/CodeSigning";
 import { Incidents } from "@/pages/Incidents";
 import { Approvals } from "@/pages/Approvals";
+import { Operations } from "@/pages/Operations";
+import { Notifications } from "@/pages/Notifications";
 import { RequestCredential } from "@/pages/RequestCredential";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
@@ -81,6 +84,8 @@ export function AppRoutes() {
         <Route path="risk" element={<Risk />} />
         <Route path="incidents" element={<Incidents />} />
         <Route path="approvals" element={<Approvals />} />
+        <Route path="operations" element={<Operations />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="posture" element={<Posture />} />
         <Route path="graph" element={<Graph />} />
         <Route path="audit" element={<Audit />} />
@@ -100,9 +105,11 @@ export function App() {
     <IntlProvider>
       <ThemeProvider>
         <AuthProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <ToastProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
     </IntlProvider>

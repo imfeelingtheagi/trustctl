@@ -1,118 +1,246 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, FileKey2, Loader2, RotateCcw, Server, ShieldCheck } from "lucide-react";
 import { api, type Agent } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 
-type Step = 1 | 2 | 3 | 4;
+type WizardStepID = "issuer" | "certificate" | "agent" | "complete";
 
-const steps = [
-  { n: 1, label: "Use internal CA" },
-  { n: 2, label: "Install an agent" },
-  { n: 3, label: "Issue your first cert" },
+const onboardingSteps: CarouselStep[] = [
+  { id: "issuer", label: "Connect issuer", description: "Confirm the signer-backed internal CA or connect an upstream authority later." },
+  { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it through the control plane." },
+  { id: "agent", label: "Enroll agent", description: "Mint a one-time enrollment token and wait for the first in-network agent." },
+  { id: "complete", label: "Complete", description: "Latch this first-run guide and jump into day-two certificate operations." },
 ];
 
-/** Wizard is the first-run flow (F12; UX target: first cert in <15 minutes): a
- * fresh install connects a CA, installs an agent, and issues its first
- * certificate in three guided steps. `pollMs` controls how often the agent step
- * checks for a freshly-registered agent (tunable for tests). */
+/** Wizard is the first-run flow (F12): a fresh install confirms an issuer,
+ * issues its first certificate, enrolls an agent, then closes into an in-memory
+ * completion latch. No browser storage is used for onboarding state. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
-  const [step, setStep] = useState<Step>(1);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [issuerReady, setIssuerReady] = useState(false);
+  const [issuerName, setIssuerName] = useState<string | null>(null);
+  const [certificateName, setCertificateName] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
+  const [completed, setCompleted] = useState(false);
+
+  const currentStep = onboardingSteps[stepIndex]?.id as WizardStepID;
+  const nextEnabled =
+    (currentStep === "issuer" && issuerReady) ||
+    (currentStep === "certificate" && Boolean(certificateName)) ||
+    (currentStep === "agent" && Boolean(agent));
+
+  function resetWizard() {
+    setStepIndex(0);
+    setIssuerReady(false);
+    setIssuerName(null);
+    setCertificateName(null);
+    setAgent(null);
+    setCompleted(false);
+  }
+
+  if (completed) {
+    return (
+      <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
+        <PageHeader title="Set up trstctl" titleId="wizard-heading" description="First-run guide completed for this browser session." />
+        <section className="ui-panel grid gap-4 p-comfortable" aria-labelledby="setup-complete-heading">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
+            <div>
+              <h2 id="setup-complete-heading" className="text-title font-semibold">
+                Setup complete
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {certificateName ?? "Your first certificate"} is tracked. trstctl will alert before expiry; renewal is a manual, one-click action today.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/certificates"
+              className="inline-flex min-h-10 items-center justify-center rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Track and renew certificates
+            </Link>
+            <Button type="button" variant="outline" onClick={resetWizard}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Reopen setup guide
+            </Button>
+          </div>
+        </section>
+      </section>
+    );
+  }
 
   return (
-    <section aria-labelledby="wizard-heading" className="mx-auto max-w-2xl">
-      <PageHeader title="Set up trstctl" titleId="wizard-heading" description="Three steps to your first certificate." />
+    <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
+      <PageHeader title="Set up trstctl" titleId="wizard-heading" description="Connect an issuer, issue a certificate, enroll an agent, and finish." />
 
-      <ol className="mb-8 flex gap-2" aria-label="Setup progress">
-        {steps.map((s) => {
-          const state = step > s.n ? "done" : step === s.n ? "current" : "upcoming";
-          return (
-            <li key={s.n} className="flex flex-1 items-center gap-2 text-body" aria-current={step === s.n ? "step" : undefined}>
-              <span
-                className={
-                  state === "done"
-                    ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-accent text-brand-accent-foreground shadow-elevation1"
-                    : state === "current"
-                      ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand-accent font-semibold text-brand-accent"
-                      : "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground"
-                }
-              >
-                {state === "done" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : s.n}
-              </span>
-              <span className={state === "upcoming" ? "text-muted-foreground" : "font-medium"}>{s.label}</span>
-            </li>
-          );
-        })}
-      </ol>
-
-      <Card>
-        <CardContent className="pt-comfortable">
-          {step === 1 && <InternalCAStep onReady={() => setStep(2)} />}
-          {step === 2 && <InstallAgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} onContinue={() => setStep(3)} />}
-          {step === 3 && <IssueCertStep onIssued={() => setStep(4)} />}
-          {step === 4 && <DoneStep />}
-        </CardContent>
-      </Card>
+      <StepShell
+        steps={onboardingSteps}
+        currentIndex={stepIndex}
+        onPrevious={() => setStepIndex((current) => Math.max(0, current - 1))}
+        onNext={currentStep === "complete" ? undefined : () => setStepIndex((current) => Math.min(onboardingSteps.length - 1, current + 1))}
+        nextDisabled={!nextEnabled}
+        nextLabel={nextLabel(currentStep)}
+      >
+        {currentStep === "issuer" && (
+          <IssuerStep
+            ready={issuerReady}
+            issuerName={issuerName}
+            onReady={(name) => {
+              setIssuerName(name);
+              setIssuerReady(true);
+            }}
+          />
+        )}
+        {currentStep === "certificate" && <CertificateStep certificateName={certificateName} onIssued={setCertificateName} />}
+        {currentStep === "agent" && <AgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} />}
+        {currentStep === "complete" && (
+          <CompleteStep certificateName={certificateName} issuerName={issuerName} agent={agent} onComplete={() => setCompleted(true)} />
+        )}
+      </StepShell>
     </section>
   );
 }
 
-function InternalCAStep({ onReady }: { onReady: () => void }) {
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    onReady();
+function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null; onReady: (name: string) => void; ready: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmIssuer() {
+    setBusy(true);
+    setError(null);
+    try {
+      const issuers = await api.issuers();
+      onReady(issuers.find((issuer) => issuer.internal)?.name ?? issuers[0]?.name ?? "Internal CA");
+    } catch (err) {
+      setError(`Could not confirm issuer readiness: ${String(err instanceof Error ? err.message : err)}`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <form onSubmit={submit} aria-labelledby="step-ca-heading" className="space-y-4">
-      <h2 id="step-ca-heading" className="text-title font-semibold">
-        Use the internal Certificate Authority
-      </h2>
-      <p className="text-body text-muted-foreground">
-        A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. The first certificate uses that CA directly; external CA issuer routing is
-        configured after setup.
-      </p>
-      <Button type="submit">Use internal CA</Button>
+    <section aria-labelledby="step-issuer-heading" className="grid gap-4">
+      <div className="flex items-start gap-3">
+        <Server className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
+        <div>
+          <h3 id="step-issuer-heading" className="text-title font-semibold">
+            Connect an issuer
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. Confirm it before the first certificate is issued.
+          </p>
+        </div>
+      </div>
+      {ready ? (
+        <p className="flex items-center gap-2 text-sm font-medium text-status-success">
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          {issuerName} is ready.
+        </p>
+      ) : (
+        <Button type="button" className="justify-self-start" onClick={() => void confirmIssuer()} disabled={busy}>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          Use internal CA
+        </Button>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function CertificateStep({ certificateName, onIssued }: { certificateName: string | null; onIssued: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    const serviceName = name.trim() || "first-service";
+    try {
+      await api.issueCertificate({ name: serviceName });
+      onIssued(serviceName);
+    } catch (err) {
+      setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} aria-labelledby="step-cert-heading" className="grid gap-4">
+      <div className="flex items-start gap-3">
+        <FileKey2 className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
+        <div>
+          <h3 id="step-cert-heading" className="text-title font-semibold">
+            Issue your first certificate
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Name the service this certificate belongs to. trstctl creates the owner and identity, then issues through the configured authority.
+          </p>
+        </div>
+      </div>
+      <label htmlFor="svc-name" className="grid gap-1 text-sm font-medium">
+        Service name
+        <input
+          id="svc-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
+          placeholder="payments-api"
+        />
+      </label>
+      {certificateName ? (
+        <p className="flex items-center gap-2 text-sm font-medium text-status-success">
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          {certificateName} was issued.
+        </p>
+      ) : (
+        <Button type="submit" className="justify-self-start" disabled={busy}>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          Issue certificate
+        </Button>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
 
-function InstallAgentStep({
-  pollMs,
-  agent,
-  onAgent,
-  onContinue,
-}: {
-  pollMs: number;
-  agent: Agent | null;
-  onAgent: (a: Agent) => void;
-  onContinue: () => void;
-}) {
+function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (agent: Agent) => void; pollMs: number }) {
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const minted = useRef(false);
 
-  // Mint a one-time bootstrap token once, on entering the step.
   useEffect(() => {
     if (minted.current) return;
     minted.current = true;
     api
       .createEnrollmentToken()
-      .then((t) => setToken(t.token))
-      .catch((err) => setError(`Could not mint an enrollment token: ${String(err)}`));
+      .then((result) => setToken(result.token))
+      .catch((err) => setError(`Could not mint an enrollment token: ${String(err instanceof Error ? err.message : err)}`));
   }, []);
 
-  // Poll for the agent to register (UX target: first agent in <5 minutes).
   useEffect(() => {
-    if (agent) return;
-    const id = setInterval(() => {
+    if (agent) return undefined;
+    const id = window.setInterval(() => {
       void check();
     }, pollMs);
-    return () => clearInterval(id);
+    return () => window.clearInterval(id);
+    // check is intentionally not a dependency; each tick uses the latest setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent, pollMs]);
 
@@ -120,9 +248,10 @@ function InstallAgentStep({
     setChecking(true);
     try {
       const list = await api.agents();
-      if (list.length > 0) onAgent(list[0]);
+      const first = list[0];
+      if (first) onAgent(first);
     } catch {
-      // transient; the next poll retries.
+      // Transient network errors are retried by the next poll or manual check.
     } finally {
       setChecking(false);
     }
@@ -139,14 +268,18 @@ function InstallAgentStep({
   ].join(" ");
 
   return (
-    <section aria-labelledby="step-agent-heading" className="space-y-4">
-      <h2 id="step-agent-heading" className="text-title font-semibold">
-        Install an agent
-      </h2>
-      <p className="text-body text-muted-foreground">
-        Save the one-time token to ./trstctl-bootstrap-token with 0600 permissions, then run this on a host inside your network. The agent generates its key
-        locally — private keys never leave the host.
-      </p>
+    <section aria-labelledby="step-agent-heading" className="grid gap-4">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
+        <div>
+          <h3 id="step-agent-heading" className="text-title font-semibold">
+            Enroll an agent
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane.
+          </p>
+        </div>
+      </div>
       {token && (
         <div>
           <p className="text-caption font-medium text-muted-foreground">Bootstrap token</p>
@@ -156,106 +289,73 @@ function InstallAgentStep({
       <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption">
         <code>{command}</code>
       </pre>
-      {error && (
-        <p role="alert" className="text-body text-destructive">
-          {error}
-        </p>
-      )}
-
       {agent ? (
-        <p className="flex items-center gap-2 text-body font-medium text-status-success">
+        <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Agent {agent.name} registered.
         </p>
       ) : (
-        <p className="flex items-center gap-2 text-body text-muted-foreground" role="status">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           {checking && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Waiting for the agent to register…
+          Waiting for the agent to register...
         </p>
       )}
-
-      <div className="flex gap-2">
-        <Button type="button" variant="outline" onClick={() => void check()}>
-          Check for agent
-        </Button>
-        <Button type="button" onClick={onContinue} disabled={!agent}>
-          Continue
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-function IssueCertStep({ onIssued }: { onIssued: () => void }) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      await api.issueCertificate({ name: name.trim() || "first-service" });
-      onIssued();
-    } catch (err) {
-      setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} aria-labelledby="step-cert-heading" className="space-y-4">
-      <h2 id="step-cert-heading" className="text-title font-semibold">
-        Issue your first cert
-      </h2>
-      <p className="text-body text-muted-foreground">
-        Name the service this certificate belongs to. trstctl creates the owner and identity and issues it through the signer-backed internal CA.
-      </p>
-      <div className="space-y-1">
-        <label htmlFor="svc-name" className="block text-body font-medium">
-          Service name
-        </label>
-        <input
-          id="svc-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
-          placeholder="e.g. payments-api"
-        />
-      </div>
+      <Button type="button" variant="outline" className="justify-self-start" onClick={() => void check()}>
+        Check for agent
+      </Button>
       {error && (
-        <p role="alert" className="text-body text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      <Button type="submit" disabled={busy}>
-        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-        Issue certificate
-      </Button>
-    </form>
+    </section>
   );
 }
 
-function DoneStep() {
+function CompleteStep({
+  agent,
+  certificateName,
+  issuerName,
+  onComplete,
+}: {
+  agent: Agent | null;
+  certificateName: string | null;
+  issuerName: string | null;
+  onComplete: () => void;
+}) {
   return (
-    <section aria-labelledby="step-done-heading" className="space-y-4">
-      <h2 id="step-done-heading" className="flex items-center gap-2 text-title font-semibold">
+    <section aria-labelledby="step-complete-heading" className="grid gap-4">
+      <h3 id="step-complete-heading" className="flex items-center gap-2 text-title font-semibold">
         <CheckCircle2 className="h-5 w-5 text-status-success" aria-hidden="true" />
-        Your first certificate has been issued
-      </h2>
-      <p className="text-body text-muted-foreground">
-        You're set up. trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.
+        Ready for certificate operations
+      </h3>
+      <dl className="grid gap-3 sm:grid-cols-3">
+        <SummaryItem label="Issuer" value={issuerName ?? "Internal CA"} />
+        <SummaryItem label="Certificate" value={certificateName ?? "first-service"} />
+        <SummaryItem label="Agent" value={agent?.name ?? "not enrolled"} />
+      </dl>
+      <p className="text-sm text-muted-foreground">
+        trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.
       </p>
-      <div className="flex gap-2">
-        <Link
-          to="/certificates"
-          className="inline-flex items-center justify-center gap-2 rounded-control bg-primary px-4 py-2 text-body font-medium text-primary-foreground shadow-elevation1 transition-[filter] hover:brightness-110 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Track and renew certificates
-        </Link>
-      </div>
+      <Button type="button" className="justify-self-start" onClick={onComplete}>
+        Complete setup
+      </Button>
     </section>
   );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-control border border-border bg-muted/40 p-3">
+      <dt className="text-caption text-muted-foreground">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function nextLabel(step: WizardStepID): string {
+  if (step === "issuer") return "Next: issue certificate";
+  if (step === "certificate") return "Next: enroll agent";
+  if (step === "agent") return "Next: complete setup";
+  return "Next";
 }

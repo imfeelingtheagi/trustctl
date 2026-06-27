@@ -302,6 +302,10 @@ export const messages = {
     defaultMessage: "Integrate",
     description: "Primary navigation item.",
   },
+  "nav.item.operations": {
+    defaultMessage: "Operations",
+    description: "Primary navigation item.",
+  },
   "nav.item.platform": {
     defaultMessage: "Platform",
     description: "Primary navigation item.",

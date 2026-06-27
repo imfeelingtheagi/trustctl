@@ -104,6 +104,136 @@ export function BucketBar({ data, ariaLabel, height = 160, className }: { data: 
   );
 }
 
+export type TimeBarDatum = { label: string; value: number; tone?: ChartTone };
+
+export function TimeBarChart({
+  ariaLabel,
+  className,
+  data,
+  height = 180,
+  tone = "brand",
+}: {
+  data: TimeBarDatum[];
+  ariaLabel: string;
+  height?: number;
+  tone?: ChartTone;
+  className?: string;
+}) {
+  const max = Math.max(1, ...data.map((datum) => datum.value));
+  const width = Math.max(180, data.length * 56);
+  const padX = 18;
+  const top = 20;
+  const bottom = 28;
+  const chartHeight = height - top - bottom;
+  const step = data.length > 0 ? (width - padX * 2) / data.length : width - padX * 2;
+  const barWidth = Math.max(16, Math.min(34, step * 0.62));
+  return (
+    <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className={className}>
+      <title>{ariaLabel}</title>
+      {[0.25, 0.5, 0.75].map((line) => (
+        <line
+          key={line}
+          x1={padX}
+          x2={width - padX}
+          y1={top + line * chartHeight}
+          y2={top + line * chartHeight}
+          stroke="hsl(var(--border))"
+          strokeWidth="1"
+        />
+      ))}
+      {data.map((datum, index) => {
+        const barHeight = Math.round((datum.value / max) * chartHeight);
+        const x = padX + index * step + (step - barWidth) / 2;
+        const y = top + chartHeight - barHeight;
+        return (
+          <g key={datum.label}>
+            <rect x={x} y={y} width={barWidth} height={barHeight} rx={4} style={{ fill: toneColor(datum.tone ?? tone) }}>
+              <title>{`${datum.label}: ${datum.value}`}</title>
+            </rect>
+            <text x={x + barWidth / 2} y={Math.max(12, y - 6)} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--foreground))" }}>
+              {datum.value}
+            </text>
+            <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
+              {datum.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+export type StackedTimeBarDatum = { label: string; segments: Array<{ label: string; value: number; tone: ChartTone }> };
+
+export function StackedTimeBarChart({
+  ariaLabel,
+  className,
+  data,
+  height = 180,
+}: {
+  data: StackedTimeBarDatum[];
+  ariaLabel: string;
+  height?: number;
+  className?: string;
+}) {
+  const max = Math.max(1, ...data.map((datum) => datum.segments.reduce((sum, segment) => sum + segment.value, 0)));
+  const width = Math.max(220, data.length * 64);
+  const padX = 18;
+  const top = 20;
+  const bottom = 42;
+  const chartHeight = height - top - bottom;
+  const step = data.length > 0 ? (width - padX * 2) / data.length : width - padX * 2;
+  const barWidth = Math.max(18, Math.min(38, step * 0.58));
+  const legend = Array.from(new Map(data.flatMap((datum) => datum.segments.map((segment) => [segment.label, segment.tone] as const))));
+  return (
+    <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className={className}>
+      <title>{ariaLabel}</title>
+      {[0.25, 0.5, 0.75].map((line) => (
+        <line
+          key={line}
+          x1={padX}
+          x2={width - padX}
+          y1={top + line * chartHeight}
+          y2={top + line * chartHeight}
+          stroke="hsl(var(--border))"
+          strokeWidth="1"
+        />
+      ))}
+      {data.map((datum, index) => {
+        const x = padX + index * step + (step - barWidth) / 2;
+        let cursor = top + chartHeight;
+        return (
+          <g key={datum.label}>
+            {datum.segments.map((segment) => {
+              const h = Math.round((segment.value / max) * chartHeight);
+              cursor -= h;
+              return (
+                <rect key={segment.label} x={x} y={cursor} width={barWidth} height={h} rx={2} style={{ fill: toneColor(segment.tone) }}>
+                  <title>{`${datum.label} ${segment.label}: ${segment.value}`}</title>
+                </rect>
+              );
+            })}
+            <text x={x + barWidth / 2} y={height - 24} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
+              {datum.label}
+            </text>
+          </g>
+        );
+      })}
+      {legend.map(([label, tone], index) => {
+        const x = padX + index * 92;
+        return (
+          <g key={label} transform={`translate(${x} ${height - 12})`}>
+            <rect width="8" height="8" rx="2" y="-7" style={{ fill: toneColor(tone) }} />
+            <text x="12" y="0" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
+              {label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 export type DonutSegment = { value: number; tone: ChartTone; label: string };
 
 export function Donut({ segments, ariaLabel, size = 120, className }: { segments: DonutSegment[]; ariaLabel: string; size?: number; className?: string }) {

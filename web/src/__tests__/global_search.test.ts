@@ -18,6 +18,14 @@ const identity = {
   tenant_id: "t1",
 } as const;
 
+const issuer = {
+  id: "issuer-1",
+  kind: "x509_ca",
+  name: "payments-ca",
+  internal: true,
+  tenant_id: "t1",
+} as const;
+
 const secret = {
   name: "payments/db/password",
   version: 3,
@@ -33,6 +41,7 @@ const agent = {
 function client(overrides: Partial<SearchClient> = {}): SearchClient {
   return {
     certificatePage: vi.fn().mockResolvedValue({ items: [certificate] }),
+    issuers: vi.fn().mockResolvedValue([issuer]),
     identities: vi.fn().mockResolvedValue([identity]),
     secretPage: vi.fn().mockResolvedValue({ items: [secret] }),
     agents: vi.fn().mockResolvedValue([agent]),
@@ -47,6 +56,7 @@ describe("global inventory search", () => {
     expect(response.unavailableSources).toEqual([]);
     expect(response.results).toEqual([
       expect.objectContaining({ kind: "certificate", label: "payments-api", to: "/certificates" }),
+      expect.objectContaining({ kind: "issuer", label: "payments-ca", to: "/ca-hierarchy" }),
       expect.objectContaining({ kind: "identity", label: "payments-worker", to: "/identities" }),
       expect.objectContaining({ kind: "secret", label: "payments/db/password", to: "/secrets" }),
       expect.objectContaining({ kind: "agent", label: "payments-agent", to: "/agents" }),
@@ -60,6 +70,7 @@ describe("global inventory search", () => {
     expect(response.results).toEqual([]);
     expect(response.unavailableSources).toEqual([]);
     expect(api.certificatePage).not.toHaveBeenCalled();
+    expect(api.issuers).not.toHaveBeenCalled();
     expect(api.identities).not.toHaveBeenCalled();
     expect(api.secretPage).not.toHaveBeenCalled();
     expect(api.agents).not.toHaveBeenCalled();
@@ -74,6 +85,6 @@ describe("global inventory search", () => {
     );
 
     expect(response.unavailableSources).toEqual(["certificates"]);
-    expect(response.results.map((result) => result.kind)).toEqual(["identity", "secret", "agent"]);
+    expect(response.results.map((result) => result.kind)).toEqual(["issuer", "identity", "secret", "agent"]);
   });
 });

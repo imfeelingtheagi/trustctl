@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { api, type Agent, type Api, type Certificate, type Identity, type SecretMeta } from "@/lib/api";
+import { api, type Agent, type Api, type Certificate, type Identity, type Issuer, type SecretMeta } from "@/lib/api";
 
-export type SearchClient = Pick<Api, "certificatePage" | "identities" | "secretPage" | "agents">;
-export type GlobalSearchKind = "certificate" | "identity" | "secret" | "agent";
-export type SearchSource = "certificates" | "identities" | "secrets" | "agents";
+export type SearchClient = Pick<Api, "certificatePage" | "identities"> & Partial<Pick<Api, "agents" | "issuers" | "secretPage">>;
+export type GlobalSearchKind = "agent" | "certificate" | "identity" | "issuer" | "secret";
+export type SearchSource = "agents" | "certificates" | "identities" | "issuers" | "secrets";
 
 export interface GlobalSearchResult {
   id: string;
@@ -58,6 +58,17 @@ function identityResult(identity: Identity): GlobalSearchResult {
   };
 }
 
+function issuerResult(issuer: Issuer): GlobalSearchResult {
+  return {
+    id: `issuer:${issuer.id}`,
+    kind: "issuer",
+    label: issuer.name,
+    description: `Issuer · ${issuer.kind} · ${issuer.internal ? "internal" : "external"}`,
+    to: "/ca-hierarchy",
+    source: "issuers",
+  };
+}
+
 function secretResult(secret: SecretMeta): GlobalSearchResult {
   return {
     id: `secret:${secret.name}`,
@@ -103,6 +114,17 @@ export async function searchInventory(query: string, client: SearchClient = api)
           .map(certificateResult);
       },
     },
+    ...(client.issuers
+      ? [
+          {
+            source: "issuers" as const,
+            load: async () =>
+              (await client.issuers!())
+                .filter((issuer) => matches(trimmed, [issuer.name, issuer.id, issuer.kind, issuer.internal ? "internal" : "external"]))
+                .map(issuerResult),
+          },
+        ]
+      : []),
     {
       source: "identities",
       load: async () =>
@@ -110,17 +132,25 @@ export async function searchInventory(query: string, client: SearchClient = api)
           .filter((identity) => matches(trimmed, [identity.name, identity.id, identity.kind, identity.status, identity.owner_id, identity.issuer_id]))
           .map(identityResult),
     },
-    {
-      source: "secrets",
-      load: async () => {
-        const page = await client.secretPage({ limit: 25 });
-        return (page.items ?? []).filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at])).map(secretResult);
-      },
-    },
-    {
-      source: "agents",
-      load: async () => (await client.agents()).filter((agent) => matches(trimmed, [agent.name, agent.id, agent.status, agent.version])).map(agentResult),
-    },
+    ...(client.secretPage
+      ? [
+          {
+            source: "secrets" as const,
+            load: async () => {
+              const page = await client.secretPage!({ limit: 25 });
+              return (page.items ?? []).filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at])).map(secretResult);
+            },
+          },
+        ]
+      : []),
+    ...(client.agents
+      ? [
+          {
+            source: "agents" as const,
+            load: async () => (await client.agents!()).filter((agent) => matches(trimmed, [agent.name, agent.id, agent.status, agent.version])).map(agentResult),
+          },
+        ]
+      : []),
   ];
 
   const settled = await Promise.allSettled(tasks.map((task) => task.load().then((results) => ({ source: task.source, results }))));

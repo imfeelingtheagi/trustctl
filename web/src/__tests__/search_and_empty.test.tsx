@@ -76,12 +76,13 @@ describe("guiding empty states", () => {
     apiMock.ingestCertificate.mockReset();
   });
 
-  it("guides a fresh install to the setup wizard when the inventory is empty", async () => {
+  it("guides a fresh install to issue a certificate or connect an issuer when the inventory is empty", async () => {
     apiMock.certificatePage.mockResolvedValue({ items: [] });
     const { container } = renderCerts();
 
-    const cta = await screen.findByRole("link", { name: /set up|get started|first certificate|wizard/i });
-    expect(cta).toHaveAttribute("href", expect.stringContaining("/wizard"));
+    const cta = await screen.findByRole("link", { name: "Issue first certificate" });
+    expect(cta).toHaveAttribute("href", expect.stringContaining("/request"));
+    expect(screen.getByRole("link", { name: "Connect an issuer" })).toHaveAttribute("href", expect.stringContaining("/ca-hierarchy"));
     expect(primitive(container, "empty")).toBeInTheDocument();
   });
 
