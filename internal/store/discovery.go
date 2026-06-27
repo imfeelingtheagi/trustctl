@@ -54,17 +54,34 @@ type DiscoveryRun struct {
 
 // DiscoveryFinding is a metadata-only credential reference produced by a run.
 type DiscoveryFinding struct {
-	ID           string
-	TenantID     string
-	RunID        string
-	SourceID     string
-	Kind         string
-	Ref          string
-	Provenance   string
-	Fingerprint  string
-	RiskScore    int
-	Metadata     json.RawMessage
-	DiscoveredAt time.Time
+	ID                string
+	TenantID          string
+	RunID             string
+	SourceID          string
+	Kind              string
+	Ref               string
+	Provenance        string
+	Fingerprint       string
+	RiskScore         int
+	Metadata          json.RawMessage
+	DiscoveredAt      time.Time
+	TriageStatus      string
+	ManagedIdentityID *string
+	TriageActor       string
+	TriageReason      string
+	TriagedAt         *time.Time
+}
+
+// DiscoveryFindingTriageChange is the projected result of a
+// discovery.finding.triage_changed event.
+type DiscoveryFindingTriageChange struct {
+	TenantID          string
+	FindingID         string
+	Status            string
+	ManagedIdentityID *string
+	Actor             string
+	Reason            string
+	ChangedAt         time.Time
 }
 
 func normalizeJSON(raw json.RawMessage) []byte {
@@ -150,6 +167,26 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		f.ID, f.TenantID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance, f.Fingerprint,
 		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt)
 	return err
+}
+
+// ApplyDiscoveryFindingTriageChangedTx projects a discovery.finding.triage_changed event.
+func (s *Store) ApplyDiscoveryFindingTriageChangedTx(ctx context.Context, tx pgx.Tx, ch DiscoveryFindingTriageChange) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE discovery_findings
+		    SET triage_status = $3,
+		        managed_identity_id = $4,
+		        triage_actor = $5,
+		        triage_reason = $6,
+		        triaged_at = $7
+		  WHERE tenant_id = $1 AND id = $2`,
+		ch.TenantID, ch.FindingID, ch.Status, ch.ManagedIdentityID, ch.Actor, ch.Reason, ch.ChangedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // ApplyDiscoveryRunCompletedTx projects a discovery.run.completed event.
@@ -291,7 +328,8 @@ func (s *Store) ListDiscoveryFindingsPage(ctx context.Context, tenantID, runID, 
 	var out []DiscoveryFinding
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		sql := `SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
-		              provenance, fingerprint, risk_score, metadata, discovered_at
+		              provenance, fingerprint, risk_score, metadata, discovered_at,
+		              triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
 		         FROM discovery_findings
 		        WHERE tenant_id = $1 AND id > $2`
 		args := []any{tenantID, afterID, limit}
@@ -317,6 +355,20 @@ func (s *Store) ListDiscoveryFindingsPage(ctx context.Context, tenantID, runID, 
 	return out, err
 }
 
+// GetDiscoveryFinding loads one tenant-scoped discovery finding.
+func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (DiscoveryFinding, error) {
+	var out DiscoveryFinding
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanDiscoveryFinding(tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
+			        provenance, fingerprint, risk_score, metadata, discovered_at,
+			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
+			   FROM discovery_findings
+			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
+	})
+	return out, err
+}
+
 func scanDiscoverySource(row rowScanner, src *DiscoverySource) error {
 	var cfg []byte
 	if err := row.Scan(&src.ID, &src.TenantID, &src.Kind, &src.Name, &cfg, &src.CreatedAt, &src.UpdatedAt); err != nil {
@@ -335,7 +387,8 @@ func scanDiscoveryRun(row rowScanner, run *DiscoveryRun) error {
 func scanDiscoveryFinding(row rowScanner, f *DiscoveryFinding) error {
 	var meta []byte
 	if err := row.Scan(&f.ID, &f.TenantID, &f.RunID, &f.SourceID, &f.Kind, &f.Ref,
-		&f.Provenance, &f.Fingerprint, &f.RiskScore, &meta, &f.DiscoveredAt); err != nil {
+		&f.Provenance, &f.Fingerprint, &f.RiskScore, &meta, &f.DiscoveredAt,
+		&f.TriageStatus, &f.ManagedIdentityID, &f.TriageActor, &f.TriageReason, &f.TriagedAt); err != nil {
 		return err
 	}
 	f.Metadata = json.RawMessage(meta)

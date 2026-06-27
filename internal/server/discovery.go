@@ -15,10 +15,14 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/drift"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/acmdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/gcmdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisc"
+	"trstctl.com/trstctl/internal/discovery/cloudsecret"
+	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
+	gcpsmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/gcpsm"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/events"
@@ -70,6 +74,27 @@ type cloudCertificateProviderConfig struct {
 	TokenRef             string `json:"token_ref"`
 	Project              string `json:"project"`
 	Location             string `json:"location"`
+}
+
+type cloudSecretDiscoveryConfig struct {
+	Providers []cloudSecretProviderConfig `json:"providers"`
+}
+
+type cloudSecretProviderConfig struct {
+	Provider             string `json:"provider"`
+	Region               string `json:"region"`
+	Endpoint             string `json:"endpoint"`
+	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
+	AccessKeyIDRef       string `json:"access_key_id_ref"`
+	SecretAccessKeyRef   string `json:"secret_access_key_ref"`
+	SessionTokenRef      string `json:"session_token_ref"`
+	TokenRef             string `json:"token_ref"`
+	Project              string `json:"project"`
+	TagKey               string `json:"tag_key"`
+	TagValue             string `json:"tag_value"`
+	LabelKey             string `json:"label_key"`
+	LabelValue           string `json:"label_value"`
+	NamePrefix           string `json:"name_prefix"`
 }
 
 type ctLogDiscoveryConfig struct {
@@ -153,6 +178,9 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	}
 	if src.Kind == "cloud_certificate" {
 		return d.executeCloudCertificateDiscoveryRun(ctx, tenantID, src, run)
+	}
+	if src.Kind == cloudsecret.SourceKind {
+		return d.executeCloudSecretDiscoveryRun(ctx, tenantID, src, run)
 	}
 	if src.Kind == "ct_log" {
 		return d.executeCTLogDiscoveryRun(ctx, tenantID, src, run)
@@ -253,6 +281,40 @@ func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Con
 	if rep.Discovered == 0 && rep.Failed == 0 {
 		status = "failed"
 		msg = "cloud certificate providers returned no certificates"
+	}
+	return out, status, msg, nil
+}
+
+func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	providers, err := cloudSecretProviders(ctx, src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
+	if len(providers) == 0 {
+		return netscan.Report{}, "failed", "cloud_secret discovery requires at least one provider", nil
+	}
+	if run.DryRun {
+		return netscan.Report{Targets: len(providers)}, "succeeded", "", nil
+	}
+	sink := cloudSecretDiscoveryRunSink{orch: d.orch, tenantID: tenantID, runID: run.ID, sourceID: src.ID}
+	discoverer := cloudsecret.NewDiscoverer(sink, cloudsecret.WithWorkers(4), cloudsecret.WithQueue(64), cloudsecret.WithBackoff(10*time.Millisecond))
+	defer discoverer.Close()
+	rep := discoverer.Discover(ctx, providers)
+	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed}
+	status := "succeeded"
+	msg := ""
+	if rep.Failed > 0 {
+		if rep.Discovered > 0 {
+			status = "partial"
+			msg = "some cloud secret-manager providers failed"
+		} else {
+			status = "failed"
+			msg = "all cloud secret-manager providers failed"
+		}
+	}
+	if rep.Discovered == 0 && rep.Failed == 0 {
+		status = "failed"
+		msg = "cloud secret-manager providers returned no certificate secrets"
 	}
 	return out, status, msg, nil
 }
@@ -555,6 +617,83 @@ func cloudCertificateProviders(ctx context.Context, raw json.RawMessage) ([]clou
 	return providers, nil
 }
 
+func cloudSecretProviders(ctx context.Context, raw json.RawMessage) ([]cloudsecret.Provider, error) {
+	var cfg cloudSecretDiscoveryConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return nil, fmt.Errorf("decode cloud_secret discovery config: %w", err)
+	}
+	providers := make([]cloudsecret.Provider, 0, len(cfg.Providers))
+	for i, p := range cfg.Providers {
+		provider, err := cloudSecretProvider(ctx, p)
+		if err != nil {
+			return nil, fmt.Errorf("cloud_secret provider %d: %w", i, err)
+		}
+		providers = append(providers, provider)
+	}
+	return providers, nil
+}
+
+func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (cloudsecret.Provider, error) {
+	switch strings.TrimSpace(p.Provider) {
+	case "aws-secrets-manager":
+		region := strings.TrimSpace(p.Region)
+		if region == "" {
+			return nil, errors.New("aws-secrets-manager region is required")
+		}
+		endpoint := strings.TrimSpace(p.Endpoint)
+		if endpoint == "" {
+			endpoint = "https://secretsmanager." + region + ".amazonaws.com"
+		}
+		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		accessKeyID, err := resolveDiscoveryCredentialRef(ctx, p.AccessKeyIDRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve access_key_id_ref: %w", err)
+		}
+		secretAccessKey, err := resolveDiscoveryCredentialBytesRef(ctx, p.SecretAccessKeyRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve secret_access_key_ref: %w", err)
+		}
+		defer secret.Wipe(secretAccessKey)
+		sessionToken, err := resolveOptionalDiscoveryCredentialBytesRef(ctx, p.SessionTokenRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve session_token_ref: %w", err)
+		}
+		defer secret.Wipe(sessionToken)
+		return awssmdisc.New(awssmdisc.Config{
+			Region: region, Endpoint: endpoint, AccessKeyID: accessKeyID,
+			SecretAccessKey: secretAccessKey, SessionToken: sessionToken,
+			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+		})
+	case "gcp-secret-manager":
+		project := strings.TrimSpace(p.Project)
+		if project == "" {
+			return nil, errors.New("gcp-secret-manager project is required")
+		}
+		endpoint := strings.TrimSpace(p.Endpoint)
+		client := netsec.SafeClient(30 * time.Second)
+		if endpoint != "" {
+			var err error
+			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+			if err != nil {
+				return nil, err
+			}
+		}
+		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve token_ref: %w", err)
+		}
+		return gcpsmdisc.New(gcpsmdisc.Config{
+			Project: project, Endpoint: endpoint, Token: cloudcert.StaticToken(token),
+			LabelKey: p.LabelKey, LabelValue: p.LabelValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported cloud secret-manager provider %q", p.Provider)
+	}
+}
+
 func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderConfig) (cloudcert.Provider, error) {
 	switch strings.TrimSpace(p.Provider) {
 	case "aws-acm":
@@ -643,6 +782,21 @@ func resolveOptionalDiscoveryCredentialRef(ctx context.Context, ref string) (str
 		return "", nil
 	}
 	return resolveDiscoveryCredentialRef(ctx, ref)
+}
+
+func resolveOptionalDiscoveryCredentialBytesRef(ctx context.Context, ref string) ([]byte, error) {
+	if strings.TrimSpace(ref) == "" {
+		return nil, nil
+	}
+	return resolveDiscoveryCredentialBytesRef(ctx, ref)
+}
+
+func resolveDiscoveryCredentialBytesRef(ctx context.Context, ref string) ([]byte, error) {
+	value, err := resolveDiscoveryCredentialRef(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(value), nil
 }
 
 func resolveDiscoveryCredentialRef(ctx context.Context, ref string) (string, error) {
@@ -751,6 +905,13 @@ type cloudDiscoveryRunSink struct {
 	sourceID string
 }
 
+type cloudSecretDiscoveryRunSink struct {
+	orch     *orchestrator.Orchestrator
+	tenantID string
+	runID    string
+	sourceID string
+}
+
 func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) error {
 	meta, err := json.Marshal(map[string]any{
 		"provider":        f.Provider,
@@ -785,6 +946,50 @@ func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) er
 	_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
 		RunID: s.runID, SourceID: s.sourceID, Kind: "x509_certificate", Ref: location,
 		Provenance: "cloud:" + f.Provider + ":" + location, Fingerprint: f.Cert.SHA256Fingerprint,
+		RiskScore: discoveryRiskScore(f.Cert.NotAfter), Metadata: meta,
+	})
+	return err
+}
+
+func (s cloudSecretDiscoveryRunSink) Record(ctx context.Context, f cloudsecret.Found) error {
+	metaMap := map[string]any{
+		"provider":        f.Provider,
+		"resource_id":     f.ResourceID,
+		"secret_name":     f.SecretName,
+		"location":        f.Location,
+		"subject":         f.Cert.Subject,
+		"issuer":          f.Cert.Issuer,
+		"serial":          f.Cert.SerialNumber,
+		"sans":            sansOf(f.Cert),
+		"not_before":      f.Cert.NotBefore,
+		"not_after":       f.Cert.NotAfter,
+		"key_algorithm":   f.Cert.KeyAlgorithm,
+		"public_key_bits": f.Cert.PublicKeyBits,
+		"is_ca":           f.Cert.IsCA,
+	}
+	for k, v := range f.Metadata {
+		metaMap[k] = v
+	}
+	meta, err := json.Marshal(metaMap)
+	if err != nil {
+		return err
+	}
+	nb, na := f.Cert.NotBefore, f.Cert.NotAfter
+	location := f.ResourceID
+	if location == "" {
+		location = f.SecretName
+	}
+	if _, err := s.orch.RecordCertificate(ctx, s.tenantID, store.Certificate{
+		Subject: f.Cert.Subject, SANs: sansOf(f.Cert), Issuer: f.Cert.Issuer,
+		Serial: f.Cert.SerialNumber, Fingerprint: f.Cert.SHA256Fingerprint,
+		KeyAlgorithm: f.Cert.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
+		DeploymentLocation: location, Source: "discovery:cloud-secret:" + f.Provider,
+	}); err != nil {
+		return err
+	}
+	_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
+		RunID: s.runID, SourceID: s.sourceID, Kind: cloudsecret.FindingKindCertificate, Ref: location,
+		Provenance: f.Provenance, Fingerprint: f.Cert.SHA256Fingerprint,
 		RiskScore: discoveryRiskScore(f.Cert.NotAfter), Metadata: meta,
 	})
 	return err

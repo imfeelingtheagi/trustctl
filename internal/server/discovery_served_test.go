@@ -334,6 +334,144 @@ func TestServedCloudCertificateDiscoveryACMEndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd is the C7-2 acceptance
+// proof: a cloud_secret source uses credential references only, runs through the
+// discovery outbox worker, reads AWS Secrets Manager through List/Get only, records
+// metadata-only findings, and lands in the C7-1 triage lifecycle as unmanaged.
+func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
+	certSecret := "tls/web"
+	plainSecret := "app/db"
+	var seen []string
+	sm := servedAWSSecretsManagerDouble(map[string]string{
+		certSecret:  servedCloudCertPEM(t, "sm-web.example", "sm-web.example"),
+		plainSecret: "not a certificate",
+	}, map[string]map[string]string{
+		certSecret:  {"type": "certificate"},
+		plainSecret: {"type": "certificate"},
+	}, &seen)
+	t.Cleanup(sm.Close)
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "AKID")
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
+
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "aws-sm-east",
+		"kind": "cloud_secret",
+		"config": map[string]any{
+			"providers": []map[string]any{
+				{
+					"provider":               "aws-secrets-manager",
+					"region":                 "us-east-1",
+					"endpoint":               sm.URL,
+					"allow_private_endpoint": true,
+					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+					"tag_key":                "type",
+					"tag_value":              "certificate",
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create cloud-secret source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "cloud_secret" {
+		t.Fatalf("bad cloud-secret source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start cloud-secret discovery run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued run: %+v", queued)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain cloud-secret outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get cloud-secret discovery run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed cloud-secret run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 1 || completed.Discovered != 1 || completed.Failed != 0 {
+		t.Fatalf("completed cloud-secret run = %+v, want one successful import finding", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list cloud-secret findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "SECRET") || strings.Contains(string(body), "not a certificate") {
+		t.Fatalf("served cloud-secret finding leaked secret material: %s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind         string          `json:"kind"`
+			Ref          string          `json:"ref"`
+			Provenance   string          `json:"provenance"`
+			Fingerprint  string          `json:"fingerprint"`
+			TriageStatus string          `json:"triage_status"`
+			Metadata     json.RawMessage `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode cloud-secret findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 1 {
+		t.Fatalf("cloud-secret findings count = %d body %s, want 1", len(findings.Items), body)
+	}
+	f := findings.Items[0]
+	wantRef := "arn:aws:secretsmanager:us-east-1:111111111111:secret:" + certSecret
+	if f.Kind != "x509_certificate" || f.Ref != wantRef || f.Provenance != "aws-sm://us-east-1/"+certSecret || f.Fingerprint == "" || f.TriageStatus != "unmanaged" {
+		t.Fatalf("bad cloud-secret finding: %+v", f)
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(f.Metadata, &meta); err != nil {
+		t.Fatalf("decode cloud-secret metadata: %v (%s)", err, f.Metadata)
+	}
+	if meta["provider"] != "aws-secrets-manager" || meta["secret_name"] != certSecret || meta["resource_id"] != wantRef {
+		t.Fatalf("cloud-secret metadata = %+v, want provider/secret/resource", meta)
+	}
+	for _, target := range seen {
+		if target != "secretsmanager.ListSecrets" && target != "secretsmanager.GetSecretValue" {
+			t.Fatalf("cloud-secret discovery invoked non-read-only operation %q; seen=%v", target, seen)
+		}
+	}
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; cloud-secret discovery is not event-sourced", eventType)
+		}
+	}
+}
+
 func servedACMDouble(arnToPEM map[string]string, seen *[]string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		target := r.Header.Get("X-Amz-Target")
@@ -355,6 +493,43 @@ func servedACMDouble(arnToPEM map[string]string, seen *[]string) *httptest.Serve
 			var req struct{ CertificateArn string }
 			_ = json.Unmarshal(body, &req)
 			_ = json.NewEncoder(w).Encode(map[string]any{"Certificate": arnToPEM[req.CertificateArn]})
+		default:
+			http.Error(w, "unexpected target "+target, http.StatusBadRequest)
+		}
+	}))
+}
+
+func servedAWSSecretsManagerDouble(secrets map[string]string, tags map[string]map[string]string, seen *[]string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := r.Header.Get("X-Amz-Target")
+		*seen = append(*seen, target)
+		if r.Header.Get("Authorization") == "" {
+			http.Error(w, "unsigned", http.StatusForbidden)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+		switch target {
+		case "secretsmanager.ListSecrets":
+			var list []map[string]any
+			for name := range secrets {
+				var tagList []map[string]string
+				for k, v := range tags[name] {
+					tagList = append(tagList, map[string]string{"Key": k, "Value": v})
+				}
+				list = append(list, map[string]any{
+					"Name": name,
+					"ARN":  "arn:aws:secretsmanager:us-east-1:111111111111:secret:" + name,
+					"Tags": tagList,
+				})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"SecretList": list})
+		case "secretsmanager.GetSecretValue":
+			var req struct {
+				SecretID string `json:"SecretId"`
+			}
+			_ = json.Unmarshal(body, &req)
+			_ = json.NewEncoder(w).Encode(map[string]any{"SecretString": secrets[req.SecretID]})
 		default:
 			http.Error(w, "unexpected target "+target, http.StatusBadRequest)
 		}

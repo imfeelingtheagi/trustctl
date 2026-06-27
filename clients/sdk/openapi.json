@@ -1668,6 +1668,10 @@
           "kind": {
             "type": "string"
           },
+          "managed_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "metadata": {
             "type": "object"
           },
@@ -1690,6 +1694,25 @@
           },
           "tenant_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "triage_actor": {
+            "type": "string"
+          },
+          "triage_reason": {
+            "type": "string"
+          },
+          "triage_status": {
+            "enum": [
+              "unmanaged",
+              "investigating",
+              "managed",
+              "dismissed"
+            ],
+            "type": "string"
+          },
+          "triaged_at": {
+            "format": "date-time",
             "type": "string"
           }
         },
@@ -1722,6 +1745,18 @@
         "required": [
           "items"
         ],
+        "type": "object"
+      },
+      "DiscoveryFindingTriageRequest": {
+        "properties": {
+          "managed_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "DiscoveryRun": {
@@ -1936,6 +1971,7 @@
               "network",
               "ssh",
               "cloud_certificate",
+              "cloud_secret",
               "ct_log",
               "drift",
               "secret_store",
@@ -1995,6 +2031,7 @@
               "network",
               "ssh",
               "cloud_certificate",
+              "cloud_secret",
               "ct_log",
               "drift",
               "secret_store",
@@ -7391,6 +7428,142 @@
         ],
         "summary": "List discovery findings",
         "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/claim": {
+      "post": {
+        "operationId": "claimDiscoveryFinding",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryFindingTriageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryFinding"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Claim a discovery finding as managed",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/dismiss": {
+      "post": {
+        "operationId": "dismissDiscoveryFinding",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryFindingTriageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryFinding"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Dismiss a discovery finding",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/discovery/runs": {

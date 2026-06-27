@@ -47,6 +47,7 @@ const (
 	EventDiscoverySourceUpserted       = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted     = "discovery.schedule.upserted"
 	EventDiscoveryRunQueued            = "discovery.run.queued"
+	EventDiscoveryFindingTriageChanged = "discovery.finding.triage_changed"
 	EventCBOMAssetObserved             = "cbom.asset.observed"
 	EventPQCMigrationStarted           = "pqc.migration.started"
 	EventPQCMigrationAssetCompleted    = "pqc.migration.asset_completed"
@@ -105,6 +106,8 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "create_source", "createDiscoverySource", []string{EventDiscoverySourceUpserted}},
 	{"F2", "Network discovery", "create_schedule", "createDiscoverySchedule", []string{EventDiscoveryScheduleUpserted}},
 	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},
+	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
+	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved}},
 	{"F57", "PQC migration orchestration", "start", "startPQCMigration", []string{EventPQCMigrationStarted, EventPQCMigrationAssetCompleted}},
 	{"F57", "PQC migration orchestration", "rollback", "rollbackPQCMigration", []string{EventPQCMigrationRollbackCompleted}},

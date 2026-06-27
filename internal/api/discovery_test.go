@@ -35,4 +35,19 @@ func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("credential-reference cloud config was rejected: %v", err)
 	}
+
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind: "cloud_secret",
+		Name: "good-referenced-cloud-secret-credential",
+		Config: json.RawMessage(`{
+			"providers":[{
+				"provider":"aws-secrets-manager",
+				"region":"us-east-1",
+				"access_key_id_ref":"env:AWS_ACCESS_KEY_ID",
+				"secret_access_key_ref":"env:AWS_SECRET_ACCESS_KEY"
+			}]
+		}`),
+	}); err != nil {
+		t.Fatalf("credential-reference cloud-secret config was rejected: %v", err)
+	}
 }

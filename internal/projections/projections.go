@@ -53,6 +53,7 @@ const (
 	EventDiscoveryRunQueued            = "discovery.run.queued"
 	EventDiscoveryRunStarted           = "discovery.run.started"
 	EventDiscoveryFindingRecorded      = "discovery.finding.recorded"
+	EventDiscoveryFindingTriageChanged = "discovery.finding.triage_changed"
 	EventDiscoveryRunCompleted         = "discovery.run.completed"
 	EventCBOMAssetObserved             = "cbom.asset.observed"
 	EventPQCMigrationStarted           = "pqc.migration.started"
@@ -336,6 +337,15 @@ type DiscoveryFindingRecorded struct {
 	Fingerprint string          `json:"fingerprint,omitempty"`
 	RiskScore   int             `json:"risk_score,omitempty"`
 	Metadata    json.RawMessage `json:"metadata"`
+}
+
+// DiscoveryFindingTriageChanged is the payload of discovery.finding.triage_changed.
+type DiscoveryFindingTriageChanged struct {
+	ID                string  `json:"id"`
+	Status            string  `json:"status"`
+	ManagedIdentityID *string `json:"managed_identity_id,omitempty"`
+	Actor             string  `json:"actor,omitempty"`
+	Reason            string  `json:"reason,omitempty"`
 }
 
 // DiscoveryRunCompleted is the payload of discovery.run.completed.
@@ -628,46 +638,47 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
-	EventOwnerCreated:              {1: true},
-	EventOwnerUpdated:              {1: true},
-	EventOwnerDeleted:              {1: true},
-	EventIssuerCreated:             {1: true},
-	EventIdentityCreated:           {1: true},
-	EventIdentityIssued:            {1: true},
-	EventIdentityDeployed:          {1: true},
-	EventIdentityRevoked:           {1: true},
-	EventIdentityRenewing:          {1: true},
-	EventIdentityRenewed:           {1: true},
-	EventIdentityRetired:           {1: true},
-	EventCertificateRecorded:       {1: true},
-	EventCertificateRevoked:        {1: true},
-	EventCertificateSuperseded:     {1: true},
-	EventCAIssuedCertificate:       {1: true},
-	EventCACertificateRevoked:      {1: true},
-	EventCRLPublished:              {1: true, 2: true},
-	EventOCSPResponderRotated:      {1: true},
-	EventAgentHeartbeat:            {1: true},
-	EventAgentCertRenewed:          {1: true},
-	EventProfileCreated:            {1: true, 2: true},
-	EventProfileUpdated:            {1: true, 2: true},
-	EventDiscoverySourceUpserted:   {1: true},
-	EventDiscoveryScheduleUpserted: {1: true},
-	EventDiscoveryRunQueued:        {1: true},
-	EventDiscoveryRunStarted:       {1: true},
-	EventDiscoveryFindingRecorded:  {1: true},
-	EventDiscoveryRunCompleted:     {1: true},
-	EventCBOMAssetObserved:         {1: true},
-	EventConnectorDeliveryRecorded: {1: true},
-	EventLifecycleRotationRecorded: {1: true},
-	EventIncidentExecutionRecorded: {1: true},
-	EventPrivacySubjectErased:      {1: true},
-	EventPrivacyRetentionEnforced:  {1: true},
-	EventTenantMemberUpserted:      {1: true},
-	EventTenantMemberOffboarded:    {1: true},
-	EventAPITokenCreated:           {1: true},
-	EventAPITokenRevoked:           {1: true},
-	EventPAMSessionStarted:         {1: true},
-	EventPAMSessionExpired:         {1: true},
+	EventOwnerCreated:                  {1: true},
+	EventOwnerUpdated:                  {1: true},
+	EventOwnerDeleted:                  {1: true},
+	EventIssuerCreated:                 {1: true},
+	EventIdentityCreated:               {1: true},
+	EventIdentityIssued:                {1: true},
+	EventIdentityDeployed:              {1: true},
+	EventIdentityRevoked:               {1: true},
+	EventIdentityRenewing:              {1: true},
+	EventIdentityRenewed:               {1: true},
+	EventIdentityRetired:               {1: true},
+	EventCertificateRecorded:           {1: true},
+	EventCertificateRevoked:            {1: true},
+	EventCertificateSuperseded:         {1: true},
+	EventCAIssuedCertificate:           {1: true},
+	EventCACertificateRevoked:          {1: true},
+	EventCRLPublished:                  {1: true, 2: true},
+	EventOCSPResponderRotated:          {1: true},
+	EventAgentHeartbeat:                {1: true},
+	EventAgentCertRenewed:              {1: true},
+	EventProfileCreated:                {1: true, 2: true},
+	EventProfileUpdated:                {1: true, 2: true},
+	EventDiscoverySourceUpserted:       {1: true},
+	EventDiscoveryScheduleUpserted:     {1: true},
+	EventDiscoveryRunQueued:            {1: true},
+	EventDiscoveryRunStarted:           {1: true},
+	EventDiscoveryFindingRecorded:      {1: true},
+	EventDiscoveryFindingTriageChanged: {1: true},
+	EventDiscoveryRunCompleted:         {1: true},
+	EventCBOMAssetObserved:             {1: true},
+	EventConnectorDeliveryRecorded:     {1: true},
+	EventLifecycleRotationRecorded:     {1: true},
+	EventIncidentExecutionRecorded:     {1: true},
+	EventPrivacySubjectErased:          {1: true},
+	EventPrivacyRetentionEnforced:      {1: true},
+	EventTenantMemberUpserted:          {1: true},
+	EventTenantMemberOffboarded:        {1: true},
+	EventAPITokenCreated:               {1: true},
+	EventAPITokenRevoked:               {1: true},
+	EventPAMSessionStarted:             {1: true},
+	EventPAMSessionExpired:             {1: true},
 }
 
 func init() {
@@ -961,6 +972,16 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, RunID: pl.RunID, SourceID: pl.SourceID,
 			Kind: pl.Kind, Ref: pl.Ref, Provenance: pl.Provenance, Fingerprint: pl.Fingerprint,
 			RiskScore: pl.RiskScore, Metadata: pl.Metadata, DiscoveredAt: e.Time,
+		})
+	case EventDiscoveryFindingTriageChanged:
+		var pl DiscoveryFindingTriageChanged
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryFindingTriageChangedTx(ctx, tx, store.DiscoveryFindingTriageChange{
+			TenantID: e.TenantID, FindingID: pl.ID, Status: pl.Status,
+			ManagedIdentityID: pl.ManagedIdentityID, Actor: pl.Actor, Reason: pl.Reason,
+			ChangedAt: e.Time,
 		})
 	case EventDiscoveryRunCompleted:
 		var pl DiscoveryRunCompleted

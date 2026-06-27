@@ -26,6 +26,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventDiscoverySourceUpserted:       "EventDiscoverySourceUpserted",
 	projections.EventDiscoveryScheduleUpserted:     "EventDiscoveryScheduleUpserted",
 	projections.EventDiscoveryRunQueued:            "EventDiscoveryRunQueued",
+	projections.EventDiscoveryFindingTriageChanged: "EventDiscoveryFindingTriageChanged",
 	projections.EventCBOMAssetObserved:             "EventCBOMAssetObserved",
 	projections.EventPQCMigrationStarted:           "EventPQCMigrationStarted",
 	projections.EventPQCMigrationAssetCompleted:    "EventPQCMigrationAssetCompleted",

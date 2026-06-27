@@ -50,10 +50,12 @@ var commandTable = []Command{
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
 	{Name: []string{"identities", "transition"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions", Body: bodyFile, Summary: "Apply a lifecycle transition"},
 	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyFile, Summary: "Approve a dual-control issuance transition (distinct approver)"},
+	{Name: []string{"identities", "bulk-revoke"}, Method: "POST", Path: "/api/v1/identities/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke identities by id or criteria"},
 
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
+	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke certificate identities by id or criteria"},
 
 	{Name: []string{"workloads", "attested-issuance"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance", Body: bodyFile, Summary: "Issue an attested X.509-SVID"},
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
@@ -69,6 +71,8 @@ var commandTable = []Command{
 	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor"}, Summary: "List discovery runs"},
 	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
 	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id"}, Summary: "List discovery findings"},
+	{Name: []string{"discovery", "findings", "claim"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/claim", Body: bodyFile, Summary: "Claim a discovery finding as managed"},
+	{Name: []string{"discovery", "findings", "dismiss"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/dismiss", Body: bodyFile, Summary: "Dismiss a discovery finding"},
 
 	{Name: []string{"connectors", "catalog"}, Method: "GET", Path: "/api/v1/connectors/catalog", Summary: "List connector kinds"},
 	{Name: []string{"connectors", "outbox-circuits"}, Method: "GET", Path: "/api/v1/connectors/outbox-circuits", Summary: "List outbox destination circuit breaker state"},

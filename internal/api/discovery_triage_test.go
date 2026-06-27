@@ -1,0 +1,40 @@
+package api
+
+import (
+	"net/http"
+	"testing"
+
+	"trstctl.com/trstctl/internal/authz"
+)
+
+func TestDiscoveryTriageRoutesAreGuardedIdempotentMutations(t *testing.T) {
+	routes := New(nil, nil, nil).Routes()
+	claim := findRoute(routes, http.MethodPost, "/api/v1/discovery/findings/{id}/claim")
+	dismiss := findRoute(routes, http.MethodPost, "/api/v1/discovery/findings/{id}/dismiss")
+	for name, rt := range map[string]Route{"claim": claim, "dismiss": dismiss} {
+		if rt.OperationID == "" {
+			t.Fatalf("%s route missing", name)
+		}
+		if !rt.Mutation {
+			t.Fatalf("%s route is not marked as a mutation; the idempotency linter will not protect it", name)
+		}
+		if rt.Permission != authz.DiscoveryWrite {
+			t.Fatalf("%s route permission = %q, want %q", name, rt.Permission, authz.DiscoveryWrite)
+		}
+	}
+	if claim.OperationID != "claimDiscoveryFinding" {
+		t.Fatalf("claim operationId = %q, want claimDiscoveryFinding", claim.OperationID)
+	}
+	if dismiss.OperationID != "dismissDiscoveryFinding" {
+		t.Fatalf("dismiss operationId = %q, want dismissDiscoveryFinding", dismiss.OperationID)
+	}
+}
+
+func findRoute(routes []Route, method, path string) Route {
+	for _, rt := range routes {
+		if rt.Method == method && rt.Path == path {
+			return rt
+		}
+	}
+	return Route{}
+}

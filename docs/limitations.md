@@ -150,13 +150,14 @@ remaining integration work.
   `/api/v1/external-cas`. Rotation and cross-signing remain library/operator
   workflows until their served routes ship (see the
   [key-ceremony runbook](runbooks/key-ceremony.md)).
-- **10 CA integrations** are present under the served external-CA registry when the
+- **14 CA integrations** are present under the served external-CA registry when the
   operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
-  DigiCert, EJBCA, Google CAS, Let's Encrypt/ACME, Sectigo, Smallstep, and Venafi
-  TPP/TLS Protect.
-- **Connector target configuration CRUD**: the 13 shipped deployment connectors
-  (nginx, Apache, IIS, HAProxy, F5, NetScaler, Cisco, FortiGate, Palo Alto, AWS ACM,
-  Azure Key Vault, GCP Certificate Manager, and Java keystore) are now reachable
+  DigiCert, EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo,
+  shell CA, Smallstep, Vault PKI, and Venafi TPP/TLS Protect.
+- **Connector target configuration CRUD**: the 17 shipped deployment connectors
+  (nginx, Apache, Caddy, Envoy, IIS, HAProxy, F5, NetScaler, Cisco, FortiGate,
+  Palo Alto, Postfix, Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager,
+  and Java keystore) are now reachable
   from the served outbox worker through a native registry or signed plugin, but
   tenant self-service target setup is not yet a CRUD API. Operators still provide
   connector instances, endpoints, and credential references at process composition

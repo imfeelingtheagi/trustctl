@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -69,17 +71,27 @@ type discoveryRunResponse struct {
 }
 
 type discoveryFindingResponse struct {
-	ID           string          `json:"id"`
-	TenantID     string          `json:"tenant_id"`
-	RunID        string          `json:"run_id"`
-	SourceID     string          `json:"source_id"`
-	Kind         string          `json:"kind"`
-	Ref          string          `json:"ref"`
-	Provenance   string          `json:"provenance"`
-	Fingerprint  string          `json:"fingerprint"`
-	RiskScore    int             `json:"risk_score"`
-	Metadata     json.RawMessage `json:"metadata"`
-	DiscoveredAt time.Time       `json:"discovered_at"`
+	ID                string          `json:"id"`
+	TenantID          string          `json:"tenant_id"`
+	RunID             string          `json:"run_id"`
+	SourceID          string          `json:"source_id"`
+	Kind              string          `json:"kind"`
+	Ref               string          `json:"ref"`
+	Provenance        string          `json:"provenance"`
+	Fingerprint       string          `json:"fingerprint"`
+	RiskScore         int             `json:"risk_score"`
+	Metadata          json.RawMessage `json:"metadata"`
+	DiscoveredAt      time.Time       `json:"discovered_at"`
+	TriageStatus      string          `json:"triage_status"`
+	ManagedIdentityID *string         `json:"managed_identity_id,omitempty"`
+	TriageActor       string          `json:"triage_actor,omitempty"`
+	TriageReason      string          `json:"triage_reason,omitempty"`
+	TriagedAt         *time.Time      `json:"triaged_at,omitempty"`
+}
+
+type discoveryFindingTriageRequest struct {
+	ManagedIdentityID string `json:"managed_identity_id,omitempty"`
+	Reason            string `json:"reason,omitempty"`
 }
 
 //trstctl:mutation
@@ -286,6 +298,53 @@ func (a *API) listDiscoveryFindings(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
 }
 
+//trstctl:mutation
+func (a *API) claimDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req discoveryFindingTriageRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		var managedID *string
+		if strings.TrimSpace(req.ManagedIdentityID) != "" {
+			id := strings.TrimSpace(req.ManagedIdentityID)
+			managedID = &id
+		}
+		f, err := a.orch.ClaimDiscoveryFinding(ctx, tenantID, r.PathValue("id"), managedID, req.Reason)
+		if err != nil {
+			return 0, nil, discoveryTriageError(err)
+		}
+		return http.StatusOK, toDiscoveryFindingResponse(f), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) dismissDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req discoveryFindingTriageRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		f, err := a.orch.DismissDiscoveryFinding(ctx, tenantID, r.PathValue("id"), req.Reason)
+		if err != nil {
+			return 0, nil, discoveryTriageError(err)
+		}
+		return http.StatusOK, toDiscoveryFindingResponse(f), nil
+	})
+}
+
+func discoveryTriageError(err error) error {
+	if errors.Is(err, discovery.ErrInvalidTriageTransition) {
+		return errStatus(http.StatusConflict, err.Error())
+	}
+	if store.IsNotFound(err) {
+		return errStatus(http.StatusNotFound, "discovery finding not found")
+	}
+	return err
+}
+
 func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage, error) {
 	req.Kind = strings.TrimSpace(req.Kind)
 	req.Name = strings.TrimSpace(req.Name)
@@ -296,9 +355,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
 	switch req.Kind {
-	case "network", "ssh", "cloud_certificate", "ct_log", "drift", "secret_store", "api_key", "agent", "manual":
+	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual":
 	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, ct_log, drift, secret_store, api_key, agent, manual")
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual")
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -395,5 +454,7 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 		ID: f.ID, TenantID: f.TenantID, RunID: f.RunID, SourceID: f.SourceID,
 		Kind: f.Kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 		RiskScore: f.RiskScore, Metadata: meta, DiscoveredAt: f.DiscoveredAt,
+		TriageStatus: f.TriageStatus, ManagedIdentityID: f.ManagedIdentityID,
+		TriageActor: f.TriageActor, TriageReason: f.TriageReason, TriagedAt: f.TriagedAt,
 	}
 }

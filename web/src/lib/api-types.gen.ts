@@ -464,6 +464,7 @@ export interface DiscoveryFinding {
   fingerprint: string;
   id: string;
   kind: string;
+  managed_identity_id?: string;
   metadata: Record<string, unknown>;
   provenance: string;
   ref: string;
@@ -471,11 +472,20 @@ export interface DiscoveryFinding {
   run_id: string;
   source_id: string;
   tenant_id: string;
+  triage_actor?: string;
+  triage_reason?: string;
+  triage_status?: "unmanaged" | "investigating" | "managed" | "dismissed";
+  triaged_at?: string;
 }
 
 export interface DiscoveryFindingList {
   items: DiscoveryFinding[];
   next_cursor?: string;
+}
+
+export interface DiscoveryFindingTriageRequest {
+  managed_identity_id?: string;
+  reason?: string;
 }
 
 export interface DiscoveryRun {
@@ -534,7 +544,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
+  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -547,7 +557,7 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
+  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
   name: string;
 }
 

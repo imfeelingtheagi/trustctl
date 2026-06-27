@@ -413,8 +413,8 @@ func TestServedProtocolDocsNotStaleNotMounted(t *testing.T) {
 	// should be revisited rather than silently passing.
 	mounts := read(t, "../internal/server/protocol_mounts.go")
 	for _, anchor := range []string{
-		"sp.est = est.New(",
-		"sp.scep = scep.New(",
+		"estSrv := est.New(",
+		"scepSrv := scep.New(",
 		"func (sp *servedProtocols) routes(",
 		"mux.Handle(pattern, wrap(h))",
 	} {

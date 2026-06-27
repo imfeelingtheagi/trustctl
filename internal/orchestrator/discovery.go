@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -166,6 +167,58 @@ func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID stri
 	out := in
 	out.ID, out.TenantID, out.Metadata, out.DiscoveredAt = id, tenantID, meta, ev.Time
 	return out, nil
+}
+
+// ClaimDiscoveryFinding marks a tenant finding as managed by an identity. The
+// event log is the source of truth; the read model changes only when the
+// projection applies discovery.finding.triage_changed.
+func (o *Orchestrator) ClaimDiscoveryFinding(ctx context.Context, tenantID, findingID string, managedIdentityID *string, reason string) (store.DiscoveryFinding, error) {
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageManaged, managedIdentityID, reason)
+}
+
+// DismissDiscoveryFinding marks a tenant finding as dismissed.
+func (o *Orchestrator) DismissDiscoveryFinding(ctx context.Context, tenantID, findingID, reason string) (store.DiscoveryFinding, error) {
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageDismissed, nil, reason)
+}
+
+// InvestigateDiscoveryFinding marks a tenant finding as actively under review.
+func (o *Orchestrator) InvestigateDiscoveryFinding(ctx context.Context, tenantID, findingID, reason string) (store.DiscoveryFinding, error) {
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageInvestigating, nil, reason)
+}
+
+func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, findingID string, status discovery.TriageStatus, managedIdentityID *string, reason string) (store.DiscoveryFinding, error) {
+	current, err := o.store.GetDiscoveryFinding(ctx, tenantID, findingID)
+	if err != nil {
+		return store.DiscoveryFinding{}, err
+	}
+	if err := discovery.ValidateTriageTransition(discovery.TriageStatus(current.TriageStatus), status); err != nil {
+		return store.DiscoveryFinding{}, err
+	}
+	if discovery.TriageStatus(current.TriageStatus) == status {
+		return current, nil
+	}
+	actor := ""
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = a.Subject
+	}
+	payload, err := json.Marshal(projections.DiscoveryFindingTriageChanged{
+		ID: findingID, Status: string(status), ManagedIdentityID: managedIdentityID,
+		Actor: actor, Reason: strings.TrimSpace(reason),
+	})
+	if err != nil {
+		return store.DiscoveryFinding{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventDiscoveryFindingTriageChanged, tenantID, payload)
+	if err != nil {
+		return store.DiscoveryFinding{}, err
+	}
+	return store.DiscoveryFinding{
+		ID: findingID, TenantID: tenantID, RunID: current.RunID, SourceID: current.SourceID,
+		Kind: current.Kind, Ref: current.Ref, Provenance: current.Provenance, Fingerprint: current.Fingerprint,
+		RiskScore: current.RiskScore, Metadata: current.Metadata, DiscoveredAt: current.DiscoveredAt,
+		TriageStatus: string(status), ManagedIdentityID: managedIdentityID, TriageActor: actor,
+		TriageReason: strings.TrimSpace(reason), TriagedAt: &ev.Time,
+	}, nil
 }
 
 // RecordAgentInventory records one already-executed, metadata-only agent inventory

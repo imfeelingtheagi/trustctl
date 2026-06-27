@@ -5,6 +5,7 @@
 package certinfo
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Info is the inventory metadata of a certificate.
@@ -114,6 +116,108 @@ func Inspect(raw []byte) (Info, error) {
 	info.PolicyOIDs = policyStrings(cert)
 	info.ExtKeyUsages = extKeyUsageStrings(cert)
 	// Structural fields for the RFC 5280 profile linter (PKIGOV-009).
+	info.Version = cert.Version
+	info.SignatureAlgorithm = cert.SignatureAlgorithm.String()
+	info.KeyUsageSet = cert.KeyUsage != 0
+	info.KeyUsageDigitalSig = cert.KeyUsage&x509.KeyUsageDigitalSignature != 0
+	info.KeyUsageEncipher = cert.KeyUsage&x509.KeyUsageKeyEncipherment != 0
+	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
+	info.BasicConstraints = cert.BasicConstraintsValid
+	if alg, found, err := boundarycrypto.HybridKeyAlgorithmFromExtensions(certificateExtensions(cert.Extensions)); err != nil {
+		return Info{}, err
+	} else if found {
+		info.KeyAlgorithm = alg
+	}
+	return info, nil
+}
+
+// InspectAll parses every certificate in raw. PEM bundles may contain private-key
+// blocks next to certificate blocks; this helper ignores non-certificate PEM
+// blocks and returns only public certificate metadata. Non-PEM input is tried as
+// DER, then as base64-encoded DER. No secret value is returned.
+func InspectAll(raw []byte) ([]Info, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	var out []Info
+	rest := trimmed
+	sawPEM := false
+	for {
+		block, next := pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		sawPEM = true
+		if block.Type == "CERTIFICATE" {
+			info, err := inspectDER(block.Bytes)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, info)
+		}
+		rest = next
+	}
+	if sawPEM {
+		return out, nil
+	}
+	if info, err := inspectDER(trimmed); err == nil {
+		return []Info{info}, nil
+	}
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(trimmed)))
+	n, err := base64.StdEncoding.Decode(decoded, trimmed)
+	if err != nil {
+		return nil, nil
+	}
+	decoded = decoded[:n]
+	defer secret.Wipe(decoded)
+	info, err := inspectDER(decoded)
+	if err != nil {
+		return nil, nil
+	}
+	return []Info{info}, nil
+}
+
+func inspectDER(der []byte) (Info, error) {
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return Info{}, fmt.Errorf("certinfo: parse certificate: %w", err)
+	}
+	if cert.SerialNumber == nil {
+		return Info{}, errors.New("certinfo: certificate has no serial number")
+	}
+
+	sum := sha256.Sum256(cert.Raw)
+	info := Info{
+		Subject:           cert.Subject.String(),
+		Issuer:            cert.Issuer.String(),
+		SerialNumber:      cert.SerialNumber.Text(16),
+		DNSNames:          cert.DNSNames,
+		EmailAddresses:    cert.EmailAddresses,
+		NotBefore:         cert.NotBefore,
+		NotAfter:          cert.NotAfter,
+		SHA256Fingerprint: hex.EncodeToString(sum[:]),
+		KeyAlgorithm:      cert.PublicKeyAlgorithm.String(),
+		PublicKeyBits:     publicKeyBits(cert.PublicKey),
+		IsCA:              cert.IsCA,
+	}
+	for _, ip := range cert.IPAddresses {
+		info.IPAddresses = append(info.IPAddresses, ip.String())
+	}
+	for _, u := range cert.URIs {
+		info.URIs = append(info.URIs, u.String())
+	}
+	if len(cert.SubjectKeyId) > 0 {
+		info.SubjectKeyID = hex.EncodeToString(cert.SubjectKeyId)
+	}
+	if len(cert.AuthorityKeyId) > 0 {
+		info.AuthorityKeyID = hex.EncodeToString(cert.AuthorityKeyId)
+	}
+	info.CRLDistributionPoints = append(info.CRLDistributionPoints, cert.CRLDistributionPoints...)
+	info.OCSPServers = append(info.OCSPServers, cert.OCSPServer...)
+	info.IssuingCertificateURL = append(info.IssuingCertificateURL, cert.IssuingCertificateURL...)
+	info.PolicyOIDs = policyStrings(cert)
+	info.ExtKeyUsages = extKeyUsageStrings(cert)
 	info.Version = cert.Version
 	info.SignatureAlgorithm = cert.SignatureAlgorithm.String()
 	info.KeyUsageSet = cert.KeyUsage != 0
