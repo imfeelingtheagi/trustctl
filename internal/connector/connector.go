@@ -63,6 +63,8 @@ func NewDeployment(target string, certPEM, keyPEM []byte) Deployment {
 type Sandbox interface {
 	// Send delivers payload to a network target (requires net.dial for target).
 	Send(target string, payload []byte) error
+	// ReadFile reads data at path (requires fs.read covering path).
+	ReadFile(path string) ([]byte, error)
 	// WriteFile writes data at path (requires fs.write covering path).
 	WriteFile(path string, data []byte) error
 	// Exec runs an activation command (requires process.exec).
@@ -79,6 +81,13 @@ type Ops interface {
 	Send(target string, payload []byte) error
 	WriteFile(path string, data []byte) error
 	Exec(name string, args []string) error
+}
+
+// FileReader is the optional filesystem read capability of an Ops. File-mode
+// connectors use it for idempotency and rollback decisions; Ops that cannot read
+// report that explicitly through the sandbox.
+type FileReader interface {
+	ReadFile(path string) ([]byte, error)
 }
 
 // Requester is the optional HTTP capability of an Ops, implemented by API
@@ -118,6 +127,18 @@ func (s *sandbox) Send(target string, payload []byte) error {
 		return ErrDenied
 	}
 	return s.ops.Send(target, payload)
+}
+
+func (s *sandbox) ReadFile(path string) ([]byte, error) {
+	if !s.grant.Allows(pluginhost.CapFSRead, path) {
+		s.denied++
+		return nil, ErrDenied
+	}
+	r, ok := s.ops.(FileReader)
+	if !ok {
+		return nil, fmt.Errorf("connector: this target does not support file reads")
+	}
+	return r.ReadFile(path)
 }
 
 func (s *sandbox) WriteFile(path string, data []byte) error {

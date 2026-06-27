@@ -3,6 +3,7 @@ package connector
 import (
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 )
@@ -21,8 +22,9 @@ type MemoryOps struct {
 }
 
 var (
-	_ Ops       = (*MemoryOps)(nil)
-	_ Requester = (*MemoryOps)(nil)
+	_ Ops        = (*MemoryOps)(nil)
+	_ FileReader = (*MemoryOps)(nil)
+	_ Requester  = (*MemoryOps)(nil)
 )
 
 // NewMemoryOps returns an empty in-memory target.
@@ -55,6 +57,17 @@ func (m *MemoryOps) Send(target string, payload []byte) error {
 	defer m.mu.Unlock()
 	m.sent[target] = clone(payload)
 	return nil
+}
+
+// ReadFile reads data previously written at path.
+func (m *MemoryOps) ReadFile(path string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.files[path]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return clone(v), nil
 }
 
 // WriteFile records data written at path (PUT semantics).

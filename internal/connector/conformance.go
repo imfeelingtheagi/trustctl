@@ -109,6 +109,12 @@ func Conformance(ctx context.Context, c Connector) Report {
 func deniesUngranted(grant pluginhost.Grant) bool {
 	sb := &sandbox{grant: grant, ops: NewMemoryOps()}
 	deniedAny := false
+	if !grant.Has(pluginhost.CapFSRead) {
+		if _, err := sb.ReadFile("/conformance/denied"); !errors.Is(err, ErrDenied) {
+			return false
+		}
+		deniedAny = true
+	}
 	if !grant.Has(pluginhost.CapFSWrite) {
 		if !errors.Is(sb.WriteFile("/conformance/denied", nil), ErrDenied) {
 			return false
