@@ -227,13 +227,7 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
   const routeAnnouncement = useRouteFocus(mainRef, t);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("trstctl-sidebar-collapsed") === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
@@ -252,15 +246,7 @@ export function AppShell() {
   }
 
   function toggleSidebar() {
-    setSidebarCollapsed((collapsed) => {
-      const next = !collapsed;
-      try {
-        localStorage.setItem("trstctl-sidebar-collapsed", next ? "1" : "0");
-      } catch {
-        /* storage unavailable — collapse state just isn't remembered */
-      }
-      return next;
-    });
+    setSidebarCollapsed((collapsed) => !collapsed);
   }
 
   useEffect(() => {

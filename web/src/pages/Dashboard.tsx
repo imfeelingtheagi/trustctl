@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
 import { demoDashboard } from "@/lib/demoData";
+import { isOnboardingComplete } from "@/lib/onboardingState";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
@@ -19,11 +20,7 @@ const highRiskThreshold = 70;
  * empty tenant that has NOT onboarded is sent to setup instead of seeing demo
  * numbers (preview mode is a separate, intentional showcase). */
 function readOnboardingDone(): boolean {
-  try {
-    return localStorage.getItem("trstctl:onboarding-complete") === "1";
-  } catch {
-    return false;
-  }
+  return isOnboardingComplete();
 }
 
 /** Dashboard is the single pane of glass over every non-human identity. It renders

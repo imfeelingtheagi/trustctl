@@ -5,6 +5,7 @@ import { api, type Agent } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
+import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
 
 type WizardStepID = "issuer" | "certificate" | "agent" | "complete";
 
@@ -16,9 +17,9 @@ const onboardingSteps: CarouselStep[] = [
 ];
 
 /** Wizard is the first-run flow (F12): a fresh install confirms an issuer,
- * issues its first certificate, enrolls an agent, then persists a completion
- * flag (localStorage `trstctl:onboarding-complete`) so the dashboard stops
- * prompting setup on later visits. "Reopen setup guide" clears the flag. */
+ * issues its first certificate, enrolls an agent, then latches a browser-local
+ * completion flag (see lib/onboardingState) so the dashboard stops prompting
+ * setup on later visits. "Reopen setup guide" clears the flag. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [issuerReady, setIssuerReady] = useState(false);
@@ -40,20 +41,12 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
     setCertificateName(null);
     setAgent(null);
     setCompleted(false);
-    try {
-      localStorage.removeItem("trstctl:onboarding-complete");
-    } catch {
-      /* storage unavailable — onboarding simply re-prompts next visit */
-    }
+    resetOnboarding();
   }
 
   function markComplete() {
     setCompleted(true);
-    try {
-      localStorage.setItem("trstctl:onboarding-complete", "1");
-    } catch {
-      /* storage unavailable — the dashboard will re-prompt setup, which is safe */
-    }
+    markOnboardingComplete();
   }
 
   if (completed) {

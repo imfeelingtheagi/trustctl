@@ -66,7 +66,8 @@ describe("assistant console workflow", () => {
     renderAssistant();
 
     expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Assistant/i })).not.toBeInTheDocument();
+    // Assistant is now a surfaced sidebar destination (audit U1), shown as the current page.
+    expect(screen.getByRole("link", { name: /Assistant/i })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("heading", { name: "AI runtime boundary" })).not.toBeInTheDocument();
     await user.click(screen.getByText("Advanced runtime diagnostics"));
     expect(await screen.findByRole("heading", { name: "AI runtime boundary" })).toBeInTheDocument();
