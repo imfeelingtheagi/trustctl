@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type ComplianceEvidencePack } from "@/lib/api";
+import { api, ApiError, type ComplianceEvidencePack, type NHIReviewCampaign, type NHIReviewDecisionRequest, type NHIReviewItem } from "@/lib/api";
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
 
@@ -41,6 +41,23 @@ export function Policy() {
   const [evidenceBundle, setEvidenceBundle] = useState<string | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [reviewCampaigns, setReviewCampaigns] = useState<NHIReviewCampaign[]>([]);
+  const [activeReview, setActiveReview] = useState<NHIReviewCampaign | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewAction, setReviewAction] = useState<string | null>(null);
+  const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
+  const [reviewForm, setReviewForm] = useState({
+    name: "Quarterly NHI access certification",
+    reviewer: "",
+    nhiId: "svc-payments-api",
+    displayName: "Payments API workload",
+    resource: "k8s://prod/payments",
+    entitlement: "secret:payments/db/read",
+    evidenceRefs: "audit:nhi-discovery/latest",
+    risk: "medium",
+  });
 
   useEffect(() => {
     let active = true;
@@ -63,6 +80,34 @@ export function Policy() {
     };
   }, [selectedFramework]);
 
+  useEffect(() => {
+    let active = true;
+    setReviewLoading(true);
+    setReviewError(null);
+    api
+      .nhiReviewCampaigns({ limit: 5 })
+      .then(async (page) => {
+        if (!active) return;
+        const campaigns = page.items ?? [];
+        setReviewCampaigns(campaigns);
+        if (campaigns.length === 0) {
+          setActiveReview(null);
+          return;
+        }
+        const detailed = await api.getNHIReviewCampaign(campaigns[0].id);
+        if (active) setActiveReview(detailed);
+      })
+      .catch((err: unknown) => {
+        if (active) setReviewError(describePolicyError(err, "NHI access reviews unavailable"));
+      })
+      .finally(() => {
+        if (active) setReviewLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function exportComplianceEvidence() {
     setExporting(true);
     setEvidenceError(null);
@@ -74,6 +119,94 @@ export function Policy() {
       setEvidenceError(`Could not export audit evidence: ${describePolicyError(err, "export failed")}`);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function refreshNHIReviews(preferredID?: string) {
+    setReviewLoading(true);
+    setReviewError(null);
+    try {
+      const page = await api.nhiReviewCampaigns({ limit: 5 });
+      const campaigns = page.items ?? [];
+      setReviewCampaigns(campaigns);
+      const id = preferredID ?? activeReview?.id ?? campaigns[0]?.id;
+      if (id) {
+        setActiveReview(await api.getNHIReviewCampaign(id));
+      } else {
+        setActiveReview(null);
+      }
+    } catch (err) {
+      setReviewError(describePolicyError(err, "NHI access reviews unavailable"));
+    } finally {
+      setReviewLoading(false);
+    }
+  }
+
+  async function startNHIReviewCampaign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setReviewAction("start");
+    setReviewError(null);
+    setReviewNotice(null);
+    try {
+      const campaign = await api.startNHIReviewCampaign({
+        name: reviewForm.name.trim(),
+        reviewer_subject: optionalText(reviewForm.reviewer),
+        scope: "quarterly_access",
+        items: [
+          {
+            nhi_id: reviewForm.nhiId.trim(),
+            nhi_kind: "workload",
+            display_name: optionalText(reviewForm.displayName),
+            resource: reviewForm.resource.trim(),
+            entitlement: reviewForm.entitlement.trim(),
+            risk: optionalText(reviewForm.risk),
+            evidence_refs: splitRefs(reviewForm.evidenceRefs),
+          },
+        ],
+      });
+      setActiveReview(campaign);
+      setDecisionReasons({});
+      setReviewNotice(`${campaign.name} started with ${campaign.item_count} ${plural(campaign.item_count, "item")}.`);
+      await refreshNHIReviews(campaign.id);
+    } catch (err) {
+      setReviewError(describePolicyError(err, "NHI access review start failed"));
+    } finally {
+      setReviewAction(null);
+    }
+  }
+
+  async function selectNHIReviewCampaign(id: string) {
+    setReviewLoading(true);
+    setReviewError(null);
+    try {
+      setActiveReview(await api.getNHIReviewCampaign(id));
+    } catch (err) {
+      setReviewError(describePolicyError(err, "NHI access review unavailable"));
+    } finally {
+      setReviewLoading(false);
+    }
+  }
+
+  async function decideNHIReviewItem(item: NHIReviewItem, decision: NHIReviewDecisionRequest["decision"]) {
+    if (!activeReview) return;
+    const action = `${item.item_id}:${decision}`;
+    setReviewAction(action);
+    setReviewError(null);
+    setReviewNotice(null);
+    try {
+      const campaign = await api.decideNHIReviewItem(activeReview.id, item.item_id, {
+        decision,
+        reviewer_subject: optionalText(reviewForm.reviewer),
+        reason: optionalText(decisionReasons[item.item_id]),
+        decision_evidence_refs: splitRefs(reviewForm.evidenceRefs),
+      });
+      setActiveReview(campaign);
+      setReviewNotice(`${item.display_name} marked ${decision}.`);
+      await refreshNHIReviews(campaign.id);
+    } catch (err) {
+      setReviewError(describePolicyError(err, "NHI access review decision failed"));
+    } finally {
+      setReviewAction(null);
     }
   }
 
@@ -159,6 +292,137 @@ export function Policy() {
             {evidenceError}
           </p>
         )}
+      </section>
+
+      <section aria-labelledby="nhi-access-review-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="nhi-access-review-heading" className="text-title font-semibold">
+            NHI access certification
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Campaigns certify non-human identity access from identifiers and evidence references. The console never accepts credential values here.
+          </p>
+        </div>
+
+        <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void startNHIReviewCampaign(event)}>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">Campaign</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.name}
+              onChange={(event) => setReviewForm((current) => ({ ...current, name: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">Reviewer</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              placeholder="current session subject"
+              value={reviewForm.reviewer}
+              onChange={(event) => setReviewForm((current) => ({ ...current, reviewer: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">Risk</span>
+            <select
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.risk}
+              onChange={(event) => setReviewForm((current) => ({ ...current, risk: event.target.value }))}
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <Button className="w-full" type="submit" disabled={reviewAction === "start" || !reviewForm.name.trim() || !reviewForm.nhiId.trim()}>
+              {reviewAction === "start" ? "Starting..." : "Start campaign"}
+            </Button>
+          </div>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">NHI id</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.nhiId}
+              onChange={(event) => setReviewForm((current) => ({ ...current, nhiId: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">Display name</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.displayName}
+              onChange={(event) => setReviewForm((current) => ({ ...current, displayName: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">Evidence refs</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.evidenceRefs}
+              onChange={(event) => setReviewForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">Resource</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.resource}
+              onChange={(event) => setReviewForm((current) => ({ ...current, resource: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">Entitlement</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={reviewForm.entitlement}
+              onChange={(event) => setReviewForm((current) => ({ ...current, entitlement: event.target.value }))}
+            />
+          </label>
+        </form>
+
+        {reviewLoading && <LoadingState>Loading NHI access reviews.</LoadingState>}
+        {reviewError && <ErrorState title="NHI access review unavailable">{reviewError}</ErrorState>}
+        {reviewNotice && (
+          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+            {reviewNotice}
+          </p>
+        )}
+
+        <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+          <section aria-label="NHI access review campaigns" className="rounded-md border border-border">
+            {reviewCampaigns.length > 0 ? (
+              <div className="divide-y divide-border">
+                {reviewCampaigns.map((campaign) => (
+                  <button
+                    key={campaign.id}
+                    className={`grid w-full gap-1 px-3 py-3 text-left hover:bg-muted ${activeReview?.id === campaign.id ? "bg-muted" : ""}`}
+                    type="button"
+                    onClick={() => void selectNHIReviewCampaign(campaign.id)}
+                  >
+                    <span className="font-medium">{campaign.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {campaign.status} · {campaign.pending_count} pending · {campaign.certified_count} certified · {campaign.revoked_count} revoked
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="p-3 text-sm text-muted-foreground">No access review campaigns.</p>
+            )}
+          </section>
+
+          {activeReview && (
+            <NHIReviewCampaignPanel
+              campaign={activeReview}
+              decisionReasons={decisionReasons}
+              reviewAction={reviewAction}
+              onDecision={decideNHIReviewItem}
+              onReasonChange={setDecisionReasons}
+            />
+          )}
+        </div>
       </section>
 
       <section aria-labelledby="policy-dry-run-heading" className="grid gap-4 border-y border-border py-4">
@@ -254,6 +518,113 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
   );
 }
 
+function NHIReviewCampaignPanel({
+  campaign,
+  decisionReasons,
+  onDecision,
+  onReasonChange,
+  reviewAction,
+}: {
+  campaign: NHIReviewCampaign;
+  decisionReasons: Record<string, string>;
+  onDecision: (item: NHIReviewItem, decision: NHIReviewDecisionRequest["decision"]) => Promise<void>;
+  onReasonChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
+  reviewAction: string | null;
+}) {
+  const items = campaign.items ?? [];
+
+  return (
+    <section aria-labelledby="nhi-access-review-detail-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="nhi-access-review-detail-heading" className="text-title font-semibold">
+            {campaign.name}
+          </h3>
+          <p className="mt-1 text-muted-foreground">
+            {campaign.status} · requested by {campaign.requested_by} · reviewer {campaign.reviewer_subject}
+          </p>
+        </div>
+        <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{campaign.id}</span>
+      </div>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Metric label="Items" value={String(campaign.item_count)} />
+        <Metric label="Pending" value={String(campaign.pending_count)} />
+        <Metric label="Certified" value={String(campaign.certified_count)} />
+        <Metric label="Revoked" value={String(campaign.revoked_count)} />
+        <Metric label="Exceptions" value={String(campaign.exception_count)} />
+      </dl>
+
+      {items.length > 0 ? (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[64rem]">
+            <caption className="sr-only">NHI access review items</caption>
+            <thead>
+              <tr>
+                <th scope="col">Identity</th>
+                <th scope="col">Resource</th>
+                <th scope="col">Evidence</th>
+                <th scope="col">Status</th>
+                <th scope="col">Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => {
+                const reason = decisionReasons[item.item_id] ?? "";
+                const busy = reviewAction?.startsWith(`${item.item_id}:`) ?? false;
+                return (
+                  <tr key={item.item_id} className="align-top">
+                    <td>
+                      <p className="font-medium">{item.display_name}</p>
+                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{item.nhi_id}</p>
+                    </td>
+                    <td>
+                      <p>{item.resource}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.entitlement}</p>
+                    </td>
+                    <td>{item.evidence_refs.join(", ") || "No evidence ref"}</td>
+                    <td>{item.status}</td>
+                    <td>
+                      {item.status === "pending" ? (
+                        <div className="grid min-w-60 gap-2">
+                          <input
+                            className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                            placeholder="Reason for revoke or exception"
+                            value={reason}
+                            onChange={(event) => onReasonChange((current) => ({ ...current, [item.item_id]: event.target.value }))}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" disabled={busy} onClick={() => void onDecision(item, "certified")}>
+                              Certify
+                            </Button>
+                            <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "revoked")}>
+                              Revoke
+                            </Button>
+                            <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void onDecision(item, "exception")}>
+                              Exception
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <p>{item.decision_reason || "Recorded"}</p>
+                          {item.decision_by && <p className="mt-1 text-xs text-muted-foreground">{item.decision_by}</p>}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">No item details loaded.</p>
+      )}
+    </section>
+  );
+}
+
 function Metric({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
   return (
     <div>
@@ -305,6 +676,18 @@ function frameworkLabel(framework: ComplianceFramework): string {
 function plural(count: number, singular: string): string {
   if (count === 1) return singular;
   return `${singular}s`;
+}
+
+function optionalText(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+function splitRefs(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function describePolicyError(err: unknown, fallback: string): string {

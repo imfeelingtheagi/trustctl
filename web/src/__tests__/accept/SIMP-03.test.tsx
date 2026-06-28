@@ -11,7 +11,11 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     auditEvents: vi.fn(),
     complianceEvidencePack: vi.fn(),
+    decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
+    getNHIReviewCampaign: vi.fn(),
+    nhiReviewCampaigns: vi.fn(),
+    startNHIReviewCampaign: vi.fn(),
   },
 }));
 
@@ -58,12 +62,50 @@ function evidencePack(framework: "soc2" | "cnsa-2.0") {
   };
 }
 
+function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "tenant-1",
+    name: "Quarterly NHI access certification",
+    scope: "quarterly_access",
+    reviewer_subject: "ra@example.test",
+    requested_by: "ra@example.test",
+    status: status === "pending" ? "open" : "completed",
+    item_count: 1,
+    pending_count: status === "pending" ? 1 : 0,
+    certified_count: status === "certified" ? 1 : 0,
+    revoked_count: 0,
+    exception_count: 0,
+    created_at: "2026-06-28T12:00:00Z",
+    updated_at: "2026-06-28T12:00:00Z",
+    items: [
+      {
+        item_id: "22222222-2222-4222-8222-222222222222",
+        nhi_id: "svc-payments-api",
+        nhi_kind: "workload",
+        display_name: "Payments API workload",
+        resource: "k8s://prod/payments",
+        entitlement: "secret:payments/db/read",
+        risk: "medium",
+        evidence_refs: ["audit:nhi-discovery/latest"],
+        status,
+        created_at: "2026-06-28T12:00:00Z",
+        updated_at: "2026-06-28T12:00:00Z",
+      },
+    ],
+  };
+}
+
 describe("SIMP-03 policy, audit, and compliance remediation", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.auditEvents.mockReset();
     apiMock.complianceEvidencePack.mockReset();
+    apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
     apiMock.exportAudit.mockReset();
+    apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
+    apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
+    apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0") => Promise.resolve(evidencePack(framework)));
   });
 
@@ -87,6 +129,8 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     expect(await screen.findByRole("heading", { name: "CNSA 2.0 evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("1 quantum vulnerable")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "cnsa-2.0-evidence-pack.json");
+    expect(screen.getByRole("heading", { name: "NHI access certification" })).toBeInTheDocument();
+    expect(await screen.findByText("Payments API workload")).toBeInTheDocument();
   });
 
   it("views policy decisions from Audit filters instead of a static Policy table", async () => {
@@ -125,6 +169,8 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     expect(document.body.textContent).not.toMatch(/Slack|Microsoft Teams|PagerDuty|OpsGenie|secret:\/\/notify|channel fixture|test delivery/i);
 
     const source = readFileSync(path.join(process.cwd(), "src/pages/Policy.tsx"), "utf8");
-    expect(source).not.toMatch(/notificationChannels|notificationFailures|secret:\/\/notify|Slack|Microsoft Teams|PagerDuty|OpsGenie|channel fixture|test delivery/i);
+    expect(source).not.toMatch(
+      /notificationChannels|notificationFailures|secret:\/\/notify|Slack|Microsoft Teams|PagerDuty|OpsGenie|channel fixture|test delivery/i,
+    );
   });
 });

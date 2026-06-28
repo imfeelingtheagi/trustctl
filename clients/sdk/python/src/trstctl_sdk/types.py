@@ -1419,6 +1419,102 @@ MemberRequest = TypedDict(
     total=False,
 )
 
+NHIReviewCampaign = TypedDict(
+    'NHIReviewCampaign',
+    {
+        'certified_count': int,
+        'completed_at': str,
+        'created_at': str,
+        'due_at': str,
+        'exception_count': int,
+        'id': str,
+        'item_count': int,
+        'items': list[dict[str, Any]],
+        'name': str,
+        'pending_count': int,
+        'requested_by': str,
+        'reviewer_subject': str,
+        'revoked_count': int,
+        'scope': str,
+        'status': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+NHIReviewCampaignList = TypedDict(
+    'NHIReviewCampaignList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+NHIReviewCampaignStartRequest = TypedDict(
+    'NHIReviewCampaignStartRequest',
+    {
+        'due_at': str,
+        'id': str,
+        'items': list[dict[str, Any]],
+        'name': str,
+        'reviewer_subject': str,
+        'scope': str,
+    },
+    total=False,
+)
+
+NHIReviewDecisionRequest = TypedDict(
+    'NHIReviewDecisionRequest',
+    {
+        'decision': str,
+        'decision_evidence_refs': list[str],
+        'reason': str,
+        'reviewer_subject': str,
+    },
+    total=False,
+)
+
+NHIReviewItem = TypedDict(
+    'NHIReviewItem',
+    {
+        'created_at': str,
+        'decided_at': str,
+        'decision_by': str,
+        'decision_evidence_refs': list[str],
+        'decision_reason': str,
+        'display_name': str,
+        'entitlement': str,
+        'evidence_refs': list[str],
+        'item_id': str,
+        'nhi_id': str,
+        'nhi_kind': str,
+        'owner_ref': str,
+        'resource': str,
+        'risk': str,
+        'status': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+NHIReviewItemRequest = TypedDict(
+    'NHIReviewItemRequest',
+    {
+        'display_name': str,
+        'entitlement': str,
+        'evidence_refs': list[str],
+        'item_id': str,
+        'nhi_id': str,
+        'nhi_kind': str,
+        'owner_ref': str,
+        'resource': str,
+        'risk': str,
+    },
+    total=False,
+)
+
 Notification = TypedDict(
     'Notification',
     {

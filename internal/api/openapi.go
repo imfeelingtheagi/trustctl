@@ -392,6 +392,44 @@ func componentSchemas() map[string]*Schema {
 		"created_at":         timestamp(),
 		"event_sequence":     {Type: "integer"},
 	}, "tenant_id", "name", "provider_tenant_id", "deployment_model", "managed", "created_at", "event_sequence")
+	nhiReviewItemReq := object(map[string]*Schema{
+		"item_id": uuid(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
+		"owner_ref": str(), "resource": str(), "entitlement": str(), "risk": str(),
+		"evidence_refs": {Type: "array", Items: str()},
+	}, "nhi_id", "nhi_kind", "resource", "entitlement")
+	nhiReviewCampaignStartReq := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "scope": str(), "reviewer_subject": str(),
+		"due_at": timestamp(), "items": {Type: "array", Items: ref("NHIReviewItemRequest")},
+	}, "name", "items")
+	nhiReviewDecisionReq := object(map[string]*Schema{
+		"decision":         {Type: "string", Enum: []string{"certified", "revoked", "exception"}},
+		"reviewer_subject": str(), "reason": str(),
+		"decision_evidence_refs": {Type: "array", Items: str()},
+	}, "decision")
+	nhiReviewItem := object(map[string]*Schema{
+		"item_id": uuid(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
+		"owner_ref": str(), "resource": str(), "entitlement": str(), "risk": str(),
+		"evidence_refs": {Type: "array", Items: str()},
+		"status":        {Type: "string", Enum: []string{"pending", "certified", "revoked", "exception"}},
+		"decision_by":   str(), "decision_reason": str(),
+		"decision_evidence_refs": {Type: "array", Items: str()},
+		"decided_at":             timestamp(), "created_at": timestamp(), "updated_at": timestamp(),
+	}, "item_id", "nhi_id", "nhi_kind", "display_name", "resource", "entitlement", "risk", "evidence_refs", "status", "created_at", "updated_at")
+	nhiReviewCampaign := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "scope": str(),
+		"reviewer_subject": str(), "requested_by": str(),
+		"status":          {Type: "string", Enum: []string{"open", "completed"}},
+		"due_at":          timestamp(),
+		"item_count":      {Type: "integer"},
+		"pending_count":   {Type: "integer"},
+		"certified_count": {Type: "integer"},
+		"revoked_count":   {Type: "integer"},
+		"exception_count": {Type: "integer"},
+		"created_at":      timestamp(),
+		"updated_at":      timestamp(),
+		"completed_at":    timestamp(),
+		"items":           {Type: "array", Items: ref("NHIReviewItem")},
+	}, "id", "tenant_id", "name", "scope", "reviewer_subject", "requested_by", "status", "item_count", "pending_count", "certified_count", "revoked_count", "exception_count", "created_at", "updated_at")
 
 	certificate := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
@@ -1068,6 +1106,12 @@ func componentSchemas() map[string]*Schema {
 		"ManagedOfferingStatus":         managedOfferingStatus,
 		"ManagedTenantProvisionRequest": managedTenantReq,
 		"ManagedTenant":                 managedTenant,
+		"NHIReviewItemRequest":          nhiReviewItemReq,
+		"NHIReviewCampaignStartRequest": nhiReviewCampaignStartReq,
+		"NHIReviewDecisionRequest":      nhiReviewDecisionReq,
+		"NHIReviewItem":                 nhiReviewItem,
+		"NHIReviewCampaign":             nhiReviewCampaign,
+		"NHIReviewCampaignList":         list("NHIReviewCampaign"),
 		"Agent":                         agent,
 		"AgentList":                     agentList,
 		"EnrollmentToken":               enrollmentToken,

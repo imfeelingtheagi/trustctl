@@ -6267,15 +6267,15 @@
     {
       "id": "GUI-F062",
       "feature_id": "F62",
-      "feature": "Cryptographic compliance reporting and posture dashboards",
+      "feature": "Cryptographic compliance reporting & posture dashboards",
       "domain": "Policy and governance",
       "phase": "P2",
       "priority": 81,
       "served_state": "served",
       "backend_status": "served-api",
-      "current_frontend_mapping": "served disclosure: Policy at /policy, /audit - signed audit export plus served framework evidence-pack posture disclosure; coverage ledger: /coverage",
-      "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats.",
-      "acceptance_test": "UI clearly says evidence is not certification and links each control to backing records/tests.",
+      "current_frontend_mapping": "served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure, and NHI access certification campaign controls; coverage ledger: /coverage",
+      "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, NHI access certifications, and caveats.",
+      "acceptance_test": "UI clearly says evidence is not certification and CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
       "source_docs": [
         "docs/features/policy-and-governance.md",
         "docs/compliance.md"
@@ -6283,13 +6283,20 @@
       "source_backend": [
         "ee/governance",
         "internal/api/compliance.go",
-        "internal/server/governance_seam.go"
+        "internal/api/nhi_access_review.go",
+        "internal/orchestrator/nhi_access_review.go",
+        "internal/server/governance_seam.go",
+        "internal/server/nhi_access_review_served_test.go"
       ],
-      "source_frontend": [],
+      "source_frontend": ["web/src/pages/Policy.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and COMP-01 served evidence-pack wiring. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack.",
+      "notes": "Closed by /coverage feature-map hub, COMP-01 served evidence-pack wiring, and CAP-GOV-02 NHI access certification campaigns. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs; internal/server/nhi_access_review_served_test.go proves campaign start, reviewer decisions, completion counts, event projection, and idempotent replay. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack and NHI review operations.",
       "api_surface": [
         "getComplianceEvidencePack",
+        "startNHIReviewCampaign",
+        "listNHIReviewCampaigns",
+        "getNHIReviewCampaign",
+        "decideNHIReviewItem",
         "erasePrivacySubject",
         "listPrivacySubjectErasures",
         "exportPrivacySubject",
@@ -6298,6 +6305,10 @@
       "api_na": "",
       "cli_surface": [
         "compliance evidence-pack",
+        "access reviews start",
+        "access reviews list",
+        "access reviews get",
+        "access reviews decide",
         "privacy erasures erase",
         "privacy erasures list",
         "privacy export",
@@ -6307,27 +6318,33 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph."
+            "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph.",
+            "POST /api/v1/access/reviews starts an IGA-grade NHI access certification campaign from metadata/evidence references, and POST /api/v1/access/reviews/{id}/items/{item_id}/decision records certified/revoked/exception decisions."
           ],
           "refs": [
             "internal/api/compliance.go",
+            "internal/api/nhi_access_review.go",
+            "internal/orchestrator/nhi_access_review.go",
             "internal/server/governance_seam.go",
-            "ee/governance/governance.go"
+            "ee/governance/governance.go",
+            "internal/server/nhi_access_review_served_test.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served disclosure: Policy at /policy, /audit - signed audit export plus served framework evidence-pack posture disclosure; coverage ledger: /coverage",
-            "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats."
+            "current_frontend_mapping: served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure, and NHI access certification campaign controls; coverage ledger: /coverage",
+            "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, NHI access certifications, and caveats."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
-            "web/src/App.tsx"
+            "web/src/App.tsx",
+            "web/src/pages/Policy.tsx"
           ]
         },
         "cli": {
           "evidence": [
             "trstctl-cli compliance evidence-pack maps to the served framework evidence-pack export.",
+            "CLI commands: access reviews start, access reviews list, access reviews get, access reviews decide.",
             "CLI command: privacy erasures erase",
             "CLI command: privacy erasures list",
             "CLI command: privacy export",
@@ -6341,6 +6358,7 @@
         "api": {
           "evidence": [
             "OpenAPI operation getComplianceEvidencePack documents GET /api/v1/compliance/evidence-packs/{framework} and returns ComplianceEvidencePack.",
+            "OpenAPI operations startNHIReviewCampaign, listNHIReviewCampaigns, getNHIReviewCampaign, and decideNHIReviewItem document the served NHI access certification workflow.",
             "OpenAPI operationId: erasePrivacySubject",
             "OpenAPI operationId: listPrivacySubjectErasures",
             "OpenAPI operationId: exportPrivacySubject",
@@ -6355,12 +6373,14 @@
         "test": {
           "evidence": [
             "acceptance_test: auditor role pulls signed SOC 2/FIPS evidence pack via API; non-auditor is denied.",
+            "internal/server/nhi_access_review_served_test.go proves CAP-GOV-02 end-to-end campaign start, item decisions, completion counts, event projection, and idempotent replay.",
             "internal/server/governance_seam_test.go verifies the licensed route mount and RBAC; ee/governance/governance_test.go verifies signed export determinism and tamper detection.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/server/governance_seam_test.go",
+            "internal/server/nhi_access_review_served_test.go",
             "ee/governance/governance_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
@@ -6379,6 +6399,7 @@
         "rbac": {
           "evidence": [
             "The evidence-pack route is guarded by audit:read; served acceptance proves a risk:read caller receives 403.",
+            "NHI access-review campaign list/get routes require access:read; campaign start and item decision routes require access:write and Idempotency-Key.",
             "feature authz manifest maps api_surface operation getComplianceEvidencePack to the route permission."
           ],
           "refs": [
@@ -6388,7 +6409,15 @@
           ]
         },
         "audit": {
-          "na": "N/A: the evidence-pack export is read-only and does not append a new event; the pack is generated from tenant audit records that served mutations already append and seal."
+          "evidence": [
+            "NHI access-review campaign starts emit nhi.access_review.campaign.started and item decisions emit nhi.access_review.item.decided; both are catalogued in internal/eventledger for feature/action audit filters.",
+            "The evidence-pack export remains read-only and is generated from tenant audit records that served mutations append and seal."
+          ],
+          "refs": [
+            "internal/eventledger/ledger.go",
+            "internal/projections/projections.go",
+            "internal/orchestrator/eventledger_completeness_test.go"
+          ]
         },
         "telemetry": {
           "na": "N/A: the read-only evidence-pack export does not emit a feature telemetry signal; underlying CBOM and audit producers carry their own runtime signals."

@@ -957,6 +957,78 @@ export interface MemberRequest {
   source?: string;
 }
 
+export interface NHIReviewCampaign {
+  certified_count: number;
+  completed_at?: string;
+  created_at: string;
+  due_at?: string;
+  exception_count: number;
+  id: string;
+  item_count: number;
+  items?: NHIReviewItem[];
+  name: string;
+  pending_count: number;
+  requested_by: string;
+  reviewer_subject: string;
+  revoked_count: number;
+  scope: string;
+  status: "open" | "completed";
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface NHIReviewCampaignList {
+  items: NHIReviewCampaign[];
+  next_cursor?: string;
+}
+
+export interface NHIReviewCampaignStartRequest {
+  due_at?: string;
+  id?: string;
+  items: NHIReviewItemRequest[];
+  name: string;
+  reviewer_subject?: string;
+  scope?: string;
+}
+
+export interface NHIReviewDecisionRequest {
+  decision: "certified" | "revoked" | "exception";
+  decision_evidence_refs?: string[];
+  reason?: string;
+  reviewer_subject?: string;
+}
+
+export interface NHIReviewItem {
+  created_at: string;
+  decided_at?: string;
+  decision_by?: string;
+  decision_evidence_refs?: string[];
+  decision_reason?: string;
+  display_name: string;
+  entitlement: string;
+  evidence_refs: string[];
+  item_id: string;
+  nhi_id: string;
+  nhi_kind: string;
+  owner_ref?: string;
+  resource: string;
+  risk: string;
+  status: "pending" | "certified" | "revoked" | "exception";
+  updated_at: string;
+}
+
+export interface NHIReviewItemRequest {
+  display_name?: string;
+  entitlement: string;
+  evidence_refs?: string[];
+  item_id?: string;
+  nhi_id: string;
+  nhi_kind: string;
+  owner_ref?: string;
+  resource: string;
+  risk?: string;
+}
+
 export interface Notification {
   attempts: number;
   certificate_id?: string;

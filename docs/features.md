@@ -175,7 +175,7 @@ See **[Policy & governance](features/policy-and-governance.md)**.
 |----|---------|
 | F28 | Policy engine |
 | F29 | Notification integrations |
-| F62 | Cryptographic compliance reporting & posture dashboards |
+| F62 | Cryptographic compliance reporting & posture dashboards, plus NHI access certification campaigns |
 | F8 | RBAC |
 | F9 | Audit log surfaces |
 

@@ -73,6 +73,8 @@ const (
 	EventAPITokenRevoked                = "api_token.revoked"
 	EventPAMSessionStarted              = "pam.session.started"
 	EventPAMSessionExpired              = "pam.session.expired"
+	EventNHIAccessReviewCampaignStarted = "nhi.access_review.campaign.started"
+	EventNHIAccessReviewItemDecided     = "nhi.access_review.item.decided"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -196,6 +198,45 @@ type PrivacyRetentionEnforced struct {
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
 	Cutoffs        store.PrivacyRetentionCutoffs `json:"cutoffs"`
 	Counts         map[string]int                `json:"counts,omitempty"`
+}
+
+// NHIAccessReviewCampaignStarted is the payload of
+// nhi.access_review.campaign.started. It carries non-secret NHI/resource/
+// entitlement facts so the campaign read model rebuilds from the log.
+type NHIAccessReviewCampaignStarted struct {
+	ID              string                `json:"id"`
+	Name            string                `json:"name"`
+	Scope           string                `json:"scope"`
+	ReviewerSubject string                `json:"reviewer_subject"`
+	RequestedBy     string                `json:"requested_by"`
+	DueAt           *time.Time            `json:"due_at,omitempty"`
+	Items           []NHIAccessReviewItem `json:"items"`
+}
+
+// NHIAccessReviewItem is one campaign item in
+// nhi.access_review.campaign.started.
+type NHIAccessReviewItem struct {
+	ItemID       string   `json:"item_id"`
+	NHIID        string   `json:"nhi_id"`
+	NHIKind      string   `json:"nhi_kind"`
+	DisplayName  string   `json:"display_name"`
+	OwnerRef     string   `json:"owner_ref,omitempty"`
+	Resource     string   `json:"resource"`
+	Entitlement  string   `json:"entitlement"`
+	Risk         string   `json:"risk,omitempty"`
+	EvidenceRefs []string `json:"evidence_refs,omitempty"`
+}
+
+// NHIAccessReviewItemDecided is the payload of
+// nhi.access_review.item.decided.
+type NHIAccessReviewItemDecided struct {
+	CampaignID           string    `json:"campaign_id"`
+	ItemID               string    `json:"item_id"`
+	Decision             string    `json:"decision"`
+	ReviewerSubject      string    `json:"reviewer_subject"`
+	Reason               string    `json:"reason,omitempty"`
+	DecisionEvidenceRefs []string  `json:"decision_evidence_refs,omitempty"`
+	DecidedAt            time.Time `json:"decided_at,omitempty"`
 }
 
 // CAIssuedCertificate is a responder-only issued-serial event. It is used by
@@ -743,6 +784,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAPITokenRevoked:                {1: true},
 	EventPAMSessionStarted:              {1: true},
 	EventPAMSessionExpired:              {1: true},
+	EventNHIAccessReviewCampaignStarted: {1: true},
+	EventNHIAccessReviewItemDecided:     {1: true},
 }
 
 func init() {
@@ -1351,6 +1394,58 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			endedAt = e.Time
 		}
 		return p.store.ApplyPAMSessionExpiredTx(ctx, tx, e.TenantID, pl.ID, endedAt)
+	case EventNHIAccessReviewCampaignStarted:
+		var pl NHIAccessReviewCampaignStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.ReviewerSubject == "" || pl.RequestedBy == "" || len(pl.Items) == 0 {
+			return fmt.Errorf("projections: %s requires id, name, reviewer_subject, requested_by, and items", e.Type)
+		}
+		scope := pl.Scope
+		if scope == "" {
+			scope = "all_nhi"
+		}
+		items := make([]store.NHIReviewItem, 0, len(pl.Items))
+		for _, item := range pl.Items {
+			if item.ItemID == "" || item.NHIID == "" || item.NHIKind == "" || item.DisplayName == "" || item.Resource == "" || item.Entitlement == "" {
+				return fmt.Errorf("projections: %s item requires item_id, nhi_id, nhi_kind, display_name, resource, and entitlement", e.Type)
+			}
+			risk := item.Risk
+			if risk == "" {
+				risk = "medium"
+			}
+			items = append(items, store.NHIReviewItem{
+				TenantID: e.TenantID, CampaignID: pl.ID, ItemID: item.ItemID,
+				NHIID: item.NHIID, NHIKind: item.NHIKind, DisplayName: item.DisplayName,
+				OwnerRef: item.OwnerRef, Resource: item.Resource, Entitlement: item.Entitlement,
+				Risk: risk, EvidenceRefs: item.EvidenceRefs, Status: "pending",
+				CreatedAt: e.Time, UpdatedAt: e.Time,
+			})
+		}
+		return p.store.ApplyNHIReviewCampaignStartedTx(ctx, tx, store.NHIReviewCampaign{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Scope: scope,
+			ReviewerSubject: pl.ReviewerSubject, RequestedBy: pl.RequestedBy,
+			Status: "open", DueAt: pl.DueAt, ItemCount: len(items), PendingCount: len(items),
+			CreatedAt: e.Time, UpdatedAt: e.Time,
+		}, items)
+	case EventNHIAccessReviewItemDecided:
+		var pl NHIAccessReviewItemDecided
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CampaignID == "" || pl.ItemID == "" || pl.Decision == "" || pl.ReviewerSubject == "" {
+			return fmt.Errorf("projections: %s requires campaign_id, item_id, decision, and reviewer_subject", e.Type)
+		}
+		decidedAt := pl.DecidedAt
+		if decidedAt.IsZero() {
+			decidedAt = e.Time
+		}
+		return p.store.ApplyNHIReviewItemDecidedTx(ctx, tx, e.TenantID, store.NHIReviewDecision{
+			CampaignID: pl.CampaignID, ItemID: pl.ItemID, Decision: pl.Decision,
+			ReviewerSubject: pl.ReviewerSubject, Reason: pl.Reason,
+			DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
+		})
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model

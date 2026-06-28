@@ -93,6 +93,11 @@ import type {
   Member,
   MemberList,
   MemberRequest,
+  NHIReviewCampaign,
+  NHIReviewCampaignList,
+  NHIReviewCampaignStartRequest,
+  NHIReviewDecisionRequest,
+  NHIReviewItem,
   Notification,
   NotificationList,
   OffboardMemberRequest,
@@ -226,6 +231,11 @@ export type {
   Member,
   MemberList,
   MemberRequest,
+  NHIReviewCampaign,
+  NHIReviewCampaignList,
+  NHIReviewCampaignStartRequest,
+  NHIReviewDecisionRequest,
+  NHIReviewItem,
   Notification,
   NotificationList,
   OffboardMemberRequest,
@@ -505,7 +515,11 @@ async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeSt
       enabled: ok,
       served: ok,
       status_code: res.status,
-      detail: ok ? (methodMismatchServed ? spec.methodMismatchDetail ?? "Responder is mounted and expects a protocol request." : spec.successDetail) : protocolProbeFailureDetail(res),
+      detail: ok
+        ? methodMismatchServed
+          ? (spec.methodMismatchDetail ?? "Responder is mounted and expects a protocol request.")
+          : spec.successDetail
+        : protocolProbeFailureDetail(res),
     };
   } catch {
     return {
@@ -623,6 +637,10 @@ export interface Api {
   members(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): Promise<MemberList>;
   upsertMember(subject: string, input: MemberRequest): Promise<Member>;
   offboardMember(subject: string, input: OffboardMemberRequest): Promise<OffboardMemberResponse>;
+  nhiReviewCampaigns(options?: { limit?: number; cursor?: string }): Promise<NHIReviewCampaignList>;
+  startNHIReviewCampaign(input: NHIReviewCampaignStartRequest): Promise<NHIReviewCampaign>;
+  getNHIReviewCampaign(id: string): Promise<NHIReviewCampaign>;
+  decideNHIReviewItem(campaignId: string, itemId: string, input: NHIReviewDecisionRequest): Promise<NHIReviewCampaign>;
   apiTokens(options?: { limit?: number; cursor?: string; subject?: string; includeRevoked?: boolean }): Promise<APITokenList>;
   createAPIToken(input: APITokenCreateRequest): Promise<APITokenCreateResponse>;
   revokeAPIToken(id: string): Promise<void>;
@@ -760,6 +778,11 @@ export const api: Api = {
   members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),
   upsertMember: (subject, input) => mutate<Member>("PUT", `/api/v1/access/members/${encodeURIComponent(subject)}`, input),
   offboardMember: (subject, input) => mutate<OffboardMemberResponse>("POST", `/api/v1/access/members/${encodeURIComponent(subject)}/offboard`, input),
+  nhiReviewCampaigns: (options) => req<NHIReviewCampaignList>(`/api/v1/access/reviews${pageQueryString(options)}`),
+  startNHIReviewCampaign: (input) => mutate<NHIReviewCampaign>("POST", "/api/v1/access/reviews", input),
+  getNHIReviewCampaign: (id) => req<NHIReviewCampaign>(`/api/v1/access/reviews/${encodeURIComponent(id)}`),
+  decideNHIReviewItem: (campaignId, itemId, input) =>
+    mutate<NHIReviewCampaign>("POST", `/api/v1/access/reviews/${encodeURIComponent(campaignId)}/items/${encodeURIComponent(itemId)}/decision`, input),
   apiTokens: (options) => req<APITokenList>(`/api/v1/access/api-tokens${apiTokensQueryString(options)}`),
   createAPIToken: (input) => mutate<APITokenCreateResponse>("POST", "/api/v1/access/api-tokens", input),
   revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),

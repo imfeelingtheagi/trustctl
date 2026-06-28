@@ -107,6 +107,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List NHI access certification campaigns */
+        get: operations["listNHIReviewCampaigns"];
+        put?: never;
+        /** Start an NHI access certification campaign */
+        post: operations["startNHIReviewCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an NHI access certification campaign */
+        get: operations["getNHIReviewCampaign"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/reviews/{id}/items/{item_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an NHI access-review item decision */
+        post: operations["decideNHIReviewItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/roles": {
         parameters: {
             query?: never;
@@ -3011,6 +3063,88 @@ export interface components {
             roles: string[];
             source?: string;
         };
+        NHIReviewCampaign: {
+            certified_count: number;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            due_at?: string;
+            exception_count: number;
+            /** Format: uuid */
+            id: string;
+            item_count: number;
+            items?: components["schemas"]["NHIReviewItem"][];
+            name: string;
+            pending_count: number;
+            requested_by: string;
+            reviewer_subject: string;
+            revoked_count: number;
+            scope: string;
+            /** @enum {string} */
+            status: "open" | "completed";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NHIReviewCampaignList: {
+            items: components["schemas"]["NHIReviewCampaign"][];
+            next_cursor?: string;
+        };
+        NHIReviewCampaignStartRequest: {
+            /** Format: date-time */
+            due_at?: string;
+            /** Format: uuid */
+            id?: string;
+            items: components["schemas"]["NHIReviewItemRequest"][];
+            name: string;
+            reviewer_subject?: string;
+            scope?: string;
+        };
+        NHIReviewDecisionRequest: {
+            /** @enum {string} */
+            decision: "certified" | "revoked" | "exception";
+            decision_evidence_refs?: string[];
+            reason?: string;
+            reviewer_subject?: string;
+        };
+        NHIReviewItem: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            decided_at?: string;
+            decision_by?: string;
+            decision_evidence_refs?: string[];
+            decision_reason?: string;
+            display_name: string;
+            entitlement: string;
+            evidence_refs: string[];
+            /** Format: uuid */
+            item_id: string;
+            nhi_id: string;
+            nhi_kind: string;
+            owner_ref?: string;
+            resource: string;
+            risk: string;
+            /** @enum {string} */
+            status: "pending" | "certified" | "revoked" | "exception";
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NHIReviewItemRequest: {
+            display_name?: string;
+            entitlement: string;
+            evidence_refs?: string[];
+            /** Format: uuid */
+            item_id?: string;
+            nhi_id: string;
+            nhi_kind: string;
+            owner_ref?: string;
+            resource: string;
+            risk?: string;
+        };
         Notification: {
             attempts: number;
             certificate_id?: string;
@@ -3825,6 +3959,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OIDCMappingStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIReviewCampaigns: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIReviewCampaignList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startNHIReviewCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIReviewCampaignStartRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIReviewCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getNHIReviewCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIReviewCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decideNHIReviewItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIReviewDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIReviewCampaign"];
                 };
             };
             /** @description client error */

@@ -7,13 +7,17 @@ import { Policy } from "@/pages/Policy";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     complianceEvidencePack: vi.fn(),
+    decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
+    getNHIReviewCampaign: vi.fn(),
+    nhiReviewCampaigns: vi.fn(),
+    startNHIReviewCampaign: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, complianceEvidencePack: apiMock.complianceEvidencePack, exportAudit: apiMock.exportAudit } };
+  return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
 function renderPolicy() {
@@ -24,10 +28,51 @@ function renderPolicy() {
   );
 }
 
+function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
+  const completed = status !== "pending";
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "tenant-1",
+    name: "Quarterly NHI access certification",
+    scope: "quarterly_access",
+    reviewer_subject: "ra@example.test",
+    requested_by: "ra@example.test",
+    status: completed ? "completed" : "open",
+    item_count: 1,
+    pending_count: completed ? 0 : 1,
+    certified_count: status === "certified" ? 1 : 0,
+    revoked_count: 0,
+    exception_count: 0,
+    created_at: "2026-06-28T12:00:00Z",
+    updated_at: "2026-06-28T12:00:00Z",
+    items: [
+      {
+        item_id: "22222222-2222-4222-8222-222222222222",
+        nhi_id: "svc-payments-api",
+        nhi_kind: "workload",
+        display_name: "Payments API workload",
+        resource: "k8s://prod/payments",
+        entitlement: "secret:payments/db/read",
+        risk: "medium",
+        evidence_refs: ["audit:nhi-discovery/latest"],
+        status,
+        decision_by: completed ? "ra@example.test" : undefined,
+        decision_reason: completed ? "Recorded" : undefined,
+        created_at: "2026-06-28T12:00:00Z",
+        updated_at: "2026-06-28T12:00:00Z",
+      },
+    ],
+  };
+}
+
 describe("policy governance surface", () => {
   beforeEach(() => {
     apiMock.complianceEvidencePack.mockReset();
+    apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
     apiMock.exportAudit.mockReset();
+    apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
+    apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
+    apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0") =>
       Promise.resolve({
         format: "trstctl.compliance.evidence-pack.v1",
@@ -103,6 +148,29 @@ describe("policy governance surface", () => {
 
     await waitFor(() => expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 500 }));
     expect(await screen.findByText("jws: signed.audit.bundle")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /generate report|certify|attest compliance/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /generate report|attest compliance/i })).not.toBeInTheDocument();
+  });
+
+  it("serves NHI access certification campaigns from the Policy surface", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    expect(await screen.findByRole("heading", { name: "NHI access certification" })).toBeInTheDocument();
+    expect(await screen.findByText("Payments API workload")).toBeInTheDocument();
+    expect(screen.getByText("secret:payments/db/read")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "Certify" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Exception" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Start campaign" }));
+    await waitFor(() =>
+      expect(apiMock.startNHIReviewCampaign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Quarterly NHI access certification",
+          items: [expect.objectContaining({ nhi_id: "svc-payments-api", resource: "k8s://prod/payments" })],
+        }),
+      ),
+    );
   });
 });

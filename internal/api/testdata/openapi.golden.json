@@ -3493,6 +3493,292 @@
         ],
         "type": "object"
       },
+      "NHIReviewCampaign": {
+        "properties": {
+          "certified_count": {
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "exception_count": {
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "item_count": {
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIReviewItem"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pending_count": {
+            "type": "integer"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "reviewer_subject": {
+            "type": "string"
+          },
+          "revoked_count": {
+            "type": "integer"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "scope",
+          "reviewer_subject",
+          "requested_by",
+          "status",
+          "item_count",
+          "pending_count",
+          "certified_count",
+          "revoked_count",
+          "exception_count",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NHIReviewCampaignList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIReviewCampaign"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "NHIReviewCampaignStartRequest": {
+        "properties": {
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIReviewItemRequest"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reviewer_subject": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "items"
+        ],
+        "type": "object"
+      },
+      "NHIReviewDecisionRequest": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "certified",
+              "revoked",
+              "exception"
+            ],
+            "type": "string"
+          },
+          "decision_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reviewer_subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      },
+      "NHIReviewItem": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decision_by": {
+            "type": "string"
+          },
+          "decision_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "decision_reason": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "entitlement": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "item_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nhi_id": {
+            "type": "string"
+          },
+          "nhi_kind": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "certified",
+              "revoked",
+              "exception"
+            ],
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "nhi_id",
+          "nhi_kind",
+          "display_name",
+          "resource",
+          "entitlement",
+          "risk",
+          "evidence_refs",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NHIReviewItemRequest": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "entitlement": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "item_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nhi_id": {
+            "type": "string"
+          },
+          "nhi_kind": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nhi_id",
+          "nhi_kind",
+          "resource",
+          "entitlement"
+        ],
+        "type": "object"
+      },
       "Notification": {
         "properties": {
           "attempts": {
@@ -5811,6 +6097,261 @@
         ],
         "summary": "Show served OIDC tenant and group mapping status",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/reviews": {
+      "get": {
+        "operationId": "listNHIReviewCampaigns",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIReviewCampaignList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List NHI access certification campaigns",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "startNHIReviewCampaign",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIReviewCampaignStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIReviewCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start an NHI access certification campaign",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/reviews/{id}": {
+      "get": {
+        "operationId": "getNHIReviewCampaign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIReviewCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an NHI access certification campaign",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/reviews/{id}/items/{item_id}/decision": {
+      "post": {
+        "operationId": "decideNHIReviewItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIReviewDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIReviewCampaign"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record an NHI access-review item decision",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/access/roles": {

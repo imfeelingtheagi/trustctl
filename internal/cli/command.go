@@ -132,6 +132,10 @@ var commandTable = []Command{
 	{Name: []string{"access", "sessions", "list"}, Method: "GET", Path: "/api/v1/access/sessions", Query: []string{"limit", "cursor"}, Summary: "List just-in-time privileged access sessions"},
 	{Name: []string{"access", "sessions", "open"}, Method: "POST", Path: "/api/v1/access/sessions", Body: bodyFile, Summary: "Open a just-in-time privileged access session"},
 	{Name: []string{"access", "sessions", "get"}, Method: "GET", Path: "/api/v1/access/sessions/{id}", Summary: "Get a privileged access session"},
+	{Name: []string{"access", "reviews", "start"}, Method: "POST", Path: "/api/v1/access/reviews", Body: bodyFile, Summary: "Start an NHI access certification campaign"},
+	{Name: []string{"access", "reviews", "list"}, Method: "GET", Path: "/api/v1/access/reviews", Query: []string{"limit", "cursor"}, Summary: "List NHI access certification campaigns"},
+	{Name: []string{"access", "reviews", "get"}, Method: "GET", Path: "/api/v1/access/reviews/{id}", Summary: "Get an NHI access certification campaign"},
+	{Name: []string{"access", "reviews", "decide"}, Method: "POST", Path: "/api/v1/access/reviews/{id}/items/{item_id}/decision", Body: bodyFile, Summary: "Record an NHI access-review item decision"},
 
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
 	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},

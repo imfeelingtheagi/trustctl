@@ -691,13 +691,13 @@
     },
     {
       "requirement_id": "F62",
-      "requirement_text": "trstctl shall provide Cryptographic compliance reporting & posture dashboards.",
+      "requirement_text": "trstctl shall provide Cryptographic compliance reporting & posture dashboards, plus NHI access certification campaigns.",
       "owner": "Policy and governance",
       "priority": "P2",
-      "acceptance_criteria": "UI clearly says evidence is not certification and links each control to backing records/tests.",
+      "acceptance_criteria": "UI clearly says evidence is not certification and CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served-api",
+      "backend_status": "served-api plus CAP-GOV-02 NHI access-review campaign workflow",
       "source_docs": [
         "docs/features/policy-and-governance.md",
         "docs/compliance.md"

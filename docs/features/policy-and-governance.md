@@ -145,11 +145,22 @@ quantum-vulnerable ones don't). Crucially, it separates **what the product evide
 from **what the operator must still attest** (physical security, personnel) — an honest
 boundary, not an over-claim. Reports are signed through the single crypto path.
 
+The same served governance surface now includes **NHI access certification campaigns**
+(CAP-GOV-02). A reviewer starts a campaign with non-secret NHI/resource/entitlement
+items and evidence references, then records each item decision as `certified`,
+`revoked`, or `exception`. Campaign state is event-sourced: `POST
+/api/v1/access/reviews` emits `nhi.access_review.campaign.started`, each `POST
+/api/v1/access/reviews/{id}/items/{item_id}/decision` emits
+`nhi.access_review.item.decided`, and the read model recomputes pending/certified/
+revoked/exception counts from those events. The request body accepts identifiers and
+evidence refs only; inline secrets, tokens, passwords, and credential values are rejected.
+
 ### In the console
 
 The `/policy` screen renders a **compliance evidence-pack dashboard** — pick a framework
 (PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0), render the signed pack, and export audit
-evidence — and the `/audit` screen is a filterable **audit explorer** (type presets such as
+evidence — plus an **NHI access certification** panel for starting campaigns and recording
+reviewer decisions. The `/audit` screen is a filterable **audit explorer** (type presets such as
 *Policy decisions*, time and sequence windows) that downloads a signed evidence bundle. A
 policy *dry-run preview* and *scheduled* reports are not served and are not faked in the
 console. See [The web console](../web-console.md).
@@ -167,13 +178,22 @@ trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:0
 
 # export a signed SOC 2 evidence pack with CBOM/FIPS posture
 trstctl-cli compliance evidence-pack soc2
+
+# start an NHI access certification campaign from metadata/evidence refs
+trstctl-cli access reviews start -f nhi-review.json
+
+# record an item decision
+trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision.json
 ```
 
 Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`, and
-`GET /api/v1/compliance/evidence-packs/{framework}`. Evidence packs support
-`pci-dss`, `hipaa`, `soc2`, `fedramp`, and `cnsa-2.0`; the response contains a
-signed export plus `public_key_der` so an auditor can verify the manifest offline.
-RBAC is enforced on every route automatically. A default-deny policy looks like
+`GET /api/v1/compliance/evidence-packs/{framework}`. NHI certification campaigns map to
+`POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
+/api/v1/access/reviews/{id}`, and `POST
+/api/v1/access/reviews/{id}/items/{item_id}/decision`; all mutations require an
+`Idempotency-Key`. Evidence packs support `pci-dss`, `hipaa`, `soc2`, `fedramp`, and
+`cnsa-2.0`; the response contains a signed export plus `public_key_der` so an auditor can
+verify the manifest offline. RBAC is enforced on every route automatically. A default-deny policy looks like
 this in Rego:
 
 ```text
@@ -222,8 +242,10 @@ auth:
   is still the remaining integration step — see [Current limitations](../limitations.md).
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
-- **Compliance reporting evidences controls; it does not certify you.** It's explicit
-  about what you still must attest — see also [Audit & compliance](../compliance.md).
+- **Compliance reporting and NHI campaigns evidence controls; they do not certify you.**
+  Campaign decisions prove a reviewer attested to listed machine access at a point in
+  time. External auditors still decide whether your whole program meets a framework —
+  see also [Audit & compliance](../compliance.md).
 - **Notifications are at-least-once**, so design channel handlers to tolerate a duplicate.
 
 ## Reference
@@ -242,6 +264,11 @@ auth:
   `GET /api/v1/notifications/{id}`, `POST /api/v1/notifications/{id}/read`, and
   `POST /api/v1/notifications/{id}/requeue`.
 - **Compliance frameworks:** PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0.
+- **NHI access reviews:** `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`,
+  `GET /api/v1/access/reviews/{id}`, `POST
+  /api/v1/access/reviews/{id}/items/{item_id}/decision`; decisions `certified`,
+  `revoked`, `exception`; events `nhi.access_review.campaign.started` and
+  `nhi.access_review.item.decided`.
 
 ## See also
 

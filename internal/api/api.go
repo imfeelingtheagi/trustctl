@@ -668,6 +668,7 @@ func (a *API) routes() []route {
 		pathInteger("version", "positive certificate profile version"),
 	}
 	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
+	nhiReviewItemPath := []param{pathUUID("id"), pathUUID("item_id")}
 	mcpToolPath := []param{pathString("tool", "MCP tool name")}
 	notificationIDPath := []param{pathInteger("id", "notification outbox id")}
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
@@ -821,6 +822,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/access/sessions", opID: "listPAMSessions", summary: "List just-in-time privileged access sessions", handler: a.listPAMSessions, query: page, resSchema: "PAMSessionList", successCode: "200", sensitiveResponse: true, perm: authz.AccessRead},
 		{method: "POST", path: "/api/v1/access/sessions", opID: "openPAMSession", summary: "Open a just-in-time privileged access session", handler: a.openPAMSession, reqSchema: "PAMSessionRequest", resSchema: "PAMSession", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
 		{method: "GET", path: "/api/v1/access/sessions/{id}", opID: "getPAMSession", summary: "Get a privileged access session", handler: a.getPAMSession, pathParams: idPath, resSchema: "PAMSession", successCode: "200", sensitiveResponse: true, perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/reviews", opID: "startNHIReviewCampaign", summary: "Start an NHI access certification campaign", handler: a.startNHIReviewCampaign, reqSchema: "NHIReviewCampaignStartRequest", resSchema: "NHIReviewCampaign", successCode: "201", mutation: true, perm: authz.AccessWrite},
+		{method: "GET", path: "/api/v1/access/reviews", opID: "listNHIReviewCampaigns", summary: "List NHI access certification campaigns", handler: a.listNHIReviewCampaigns, query: page, resSchema: "NHIReviewCampaignList", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/access/reviews/{id}", opID: "getNHIReviewCampaign", summary: "Get an NHI access certification campaign", handler: a.getNHIReviewCampaign, pathParams: idPath, resSchema: "NHIReviewCampaign", successCode: "200", perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/reviews/{id}/items/{item_id}/decision", opID: "decideNHIReviewItem", summary: "Record an NHI access-review item decision", handler: a.decideNHIReviewItem, pathParams: nhiReviewItemPath, reqSchema: "NHIReviewDecisionRequest", resSchema: "NHIReviewCampaign", successCode: "200", mutation: true, perm: authz.AccessWrite},
 
 		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite, scope: scopeProfileJSON("name")},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},
