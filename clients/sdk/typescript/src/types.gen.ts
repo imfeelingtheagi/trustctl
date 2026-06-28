@@ -2516,8 +2516,10 @@ export interface components {
             reason?: string;
         };
         Agent: {
+            discovery_capabilities: components["schemas"]["AgentDiscoveryCapability"][];
             /** Format: uuid */
             id: string;
+            inventory_report_path: string;
             /** Format: date-time */
             last_seen_at?: string;
             name: string;
@@ -2539,6 +2541,13 @@ export interface components {
             fingerprint?: string;
             reason?: string;
             serial?: string;
+        };
+        AgentDiscoveryCapability: {
+            label: string;
+            metadata_only: boolean;
+            private_key_bytes: boolean;
+            reported_over: string;
+            source_kind: string;
         };
         AgentList: {
             agents: components["schemas"]["Agent"][];

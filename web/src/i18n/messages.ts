@@ -576,6 +576,54 @@ export const messages = {
     defaultMessage: "Secret",
     description: "Global search result kind label.",
   },
+  "agents.endpointDiscovery.heading": {
+    defaultMessage: "Endpoint discovery served",
+    description: "Heading for the served endpoint discovery capability panel on an agent detail view.",
+  },
+  "agents.endpointDiscovery.description": {
+    defaultMessage: "Inventory batches arrive through {path} and project into Discovery findings.",
+    description: "Explanation of the served agent inventory report path.",
+  },
+  "agents.endpointDiscovery.reportPath": {
+    defaultMessage: "Report path",
+    description: "Label for the agent inventory report path field.",
+  },
+  "agents.endpointDiscovery.metadataOnly": {
+    defaultMessage: "metadata-only",
+    description: "Badge indicating agent discovery reports metadata without secret payloads.",
+  },
+  "agents.endpointDiscovery.payload": {
+    defaultMessage: "payload",
+    description: "Badge for a non-metadata-only discovery capability.",
+  },
+  "agents.endpointDiscovery.noKeyBytes": {
+    defaultMessage: "no key bytes",
+    description: "Badge indicating private key bytes are not transported.",
+  },
+  "agents.endpointDiscovery.filesystem": {
+    defaultMessage: "Filesystem certificates",
+    description: "Fallback label for filesystem endpoint discovery capability.",
+  },
+  "agents.endpointDiscovery.pkcs11": {
+    defaultMessage: "PKCS#11 token certificates",
+    description: "Fallback label for PKCS#11 endpoint discovery capability.",
+  },
+  "agents.endpointDiscovery.windowsStore": {
+    defaultMessage: "Windows certificate store",
+    description: "Fallback label for Windows certificate store endpoint discovery capability.",
+  },
+  "agents.endpointDiscovery.k8sSecret": {
+    defaultMessage: "Kubernetes TLS Secrets",
+    description: "Fallback label for Kubernetes Secret endpoint discovery capability.",
+  },
+  "agents.endpointDiscovery.trustStore": {
+    defaultMessage: "Trust stores",
+    description: "Fallback label for trust-store endpoint discovery capability.",
+  },
+  "agents.endpointDiscovery.privateKey": {
+    defaultMessage: "Private-key material",
+    description: "Fallback label for private-key endpoint discovery capability.",
+  },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
@@ -803,6 +851,18 @@ const esESCatalog = {
   "search.kind.certificate": "Certificado",
   "search.kind.identity": "Identidad",
   "search.kind.secret": "Secreto",
+  "agents.endpointDiscovery.heading": "Descubrimiento de endpoints servido",
+  "agents.endpointDiscovery.description": "Los lotes de inventario llegan por {path} y se proyectan en hallazgos de Descubrimiento.",
+  "agents.endpointDiscovery.reportPath": "Ruta de informe",
+  "agents.endpointDiscovery.metadataOnly": "solo metadatos",
+  "agents.endpointDiscovery.payload": "carga",
+  "agents.endpointDiscovery.noKeyBytes": "sin bytes de clave",
+  "agents.endpointDiscovery.filesystem": "Certificados del sistema de archivos",
+  "agents.endpointDiscovery.pkcs11": "Certificados de token PKCS#11",
+  "agents.endpointDiscovery.windowsStore": "Almacén de certificados de Windows",
+  "agents.endpointDiscovery.k8sSecret": "Secretos TLS de Kubernetes",
+  "agents.endpointDiscovery.trustStore": "Almacenes de confianza",
+  "agents.endpointDiscovery.privateKey": "Material de clave privada",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
 } satisfies Record<MessageKey, string>;
 

@@ -966,9 +966,18 @@ func componentSchemas() map[string]*Schema {
 		"rows": {Type: "array", Items: &Schema{Type: "object"}},
 	}, "rows")
 
+	agentDiscoveryCapability := object(map[string]*Schema{
+		"source_kind":       str(),
+		"label":             str(),
+		"reported_over":     str(),
+		"metadata_only":     {Type: "boolean"},
+		"private_key_bytes": {Type: "boolean"},
+	}, "source_kind", "label", "reported_over", "metadata_only", "private_key_bytes")
 	agent := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "status": str(), "version": str(), "last_seen_at": timestamp(),
-	}, "id", "name", "status")
+		"inventory_report_path":  str(),
+		"discovery_capabilities": {Type: "array", Items: ref("AgentDiscoveryCapability")},
+	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities")
 	agentList := object(map[string]*Schema{
 		"agents":      {Type: "array", Items: ref("Agent")},
 		"next_cursor": str(),
@@ -1292,6 +1301,7 @@ func componentSchemas() map[string]*Schema {
 		"NHIReviewItem":                         nhiReviewItem,
 		"NHIReviewCampaign":                     nhiReviewCampaign,
 		"NHIReviewCampaignList":                 list("NHIReviewCampaign"),
+		"AgentDiscoveryCapability":              agentDiscoveryCapability,
 		"Agent":                                 agent,
 		"AgentList":                             agentList,
 		"EnrollmentToken":                       enrollmentToken,

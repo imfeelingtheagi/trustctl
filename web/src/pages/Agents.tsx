@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Copy, Loader2, RefreshCw, X } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
+const defaultEndpointDiscoveryCapabilities = [
+  { source_kind: "filesystem", labelKey: "agents.endpointDiscovery.filesystem", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+  { source_kind: "pkcs11", labelKey: "agents.endpointDiscovery.pkcs11", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+  { source_kind: "windows-store", labelKey: "agents.endpointDiscovery.windowsStore", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+  { source_kind: "k8s-secret", labelKey: "agents.endpointDiscovery.k8sSecret", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+  { source_kind: "trust-store", labelKey: "agents.endpointDiscovery.trustStore", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+  { source_kind: "private-key", labelKey: "agents.endpointDiscovery.privateKey", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+] as const;
 
 export function Agents() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -194,6 +203,12 @@ export function Agents() {
 }
 
 function AgentDetail({ agent }: { agent: Agent }) {
+  const { t } = useTranslation();
+  const capabilities = agent.discovery_capabilities?.length
+    ? agent.discovery_capabilities
+    : defaultEndpointDiscoveryCapabilities.map((capability) => ({ ...capability, label: t(capability.labelKey) }));
+  const reportPath = agent.inventory_report_path || "agent.mtls.ReportInventory";
+
   return (
     <aside aria-labelledby="agent-detail-heading" className="grid content-start gap-3 border-y border-border py-4">
       <div>
@@ -220,10 +235,34 @@ function AgentDetail({ agent }: { agent: Agent }) {
           <dd>{formatDate(agent.last_seen_at)}</dd>
         </div>
       </dl>
-      <UnavailableState title="Agent telemetry is limited for now">
-        Discovery scanning, drift detection, and agent-driven certificate renewal all run in the agent itself. Console views for capabilities, last
-        scan, drift summary, and renewal state aren't surfaced here yet — this page shows the live profile and heartbeat fields.
-      </UnavailableState>
+      <section aria-labelledby="endpoint-discovery-heading" className="grid gap-2 border-t border-border pt-3 text-sm">
+        <div>
+          <h3 id="endpoint-discovery-heading" className="font-semibold">
+            {t("agents.endpointDiscovery.heading")}
+          </h3>
+          <p className="mt-1 text-muted-foreground">{t("agents.endpointDiscovery.description", { path: reportPath })}</p>
+        </div>
+        <dl className="grid gap-1">
+          <div>
+            <dt className="font-medium text-muted-foreground">{t("agents.endpointDiscovery.reportPath")}</dt>
+            <dd className="break-all font-mono text-xs">{reportPath}</dd>
+          </div>
+        </dl>
+        <ul className="grid gap-2">
+          {capabilities.map((capability) => (
+            <li key={capability.source_kind} className="grid gap-1 border-l-2 border-brand-accent/60 pl-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs">{capability.source_kind}</span>
+                <span className="text-xs text-muted-foreground">
+                  {capability.metadata_only ? t("agents.endpointDiscovery.metadataOnly") : t("agents.endpointDiscovery.payload")}
+                </span>
+                {!capability.private_key_bytes && <span className="text-xs text-muted-foreground">{t("agents.endpointDiscovery.noKeyBytes")}</span>}
+              </div>
+              <span className="text-muted-foreground">{capability.label}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </aside>
   );
 }

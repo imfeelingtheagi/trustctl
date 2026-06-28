@@ -106,7 +106,9 @@ APITokenRevokeRequest = TypedDict(
 Agent = TypedDict(
     'Agent',
     {
+        'discovery_capabilities': list[dict[str, Any]],
         'id': str,
+        'inventory_report_path': str,
         'last_seen_at': str,
         'name': str,
         'status': str,
@@ -135,6 +137,18 @@ AgentCertRevocationRequest = TypedDict(
         'fingerprint': str,
         'reason': str,
         'serial': str,
+    },
+    total=False,
+)
+
+AgentDiscoveryCapability = TypedDict(
+    'AgentDiscoveryCapability',
+    {
+        'label': str,
+        'metadata_only': bool,
+        'private_key_bytes': bool,
+        'reported_over': str,
+        'source_kind': str,
     },
     total=False,
 )

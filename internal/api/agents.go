@@ -11,13 +11,34 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+const agentInventoryReportPath = "agent.mtls.ReportInventory"
+
+type agentDiscoveryCapabilityResponse struct {
+	SourceKind      string `json:"source_kind"`
+	Label           string `json:"label"`
+	ReportedOver    string `json:"reported_over"`
+	MetadataOnly    bool   `json:"metadata_only"`
+	PrivateKeyBytes bool   `json:"private_key_bytes"`
+}
+
+var agentDiscoveryCapabilities = []agentDiscoveryCapabilityResponse{
+	{SourceKind: "filesystem", Label: "Filesystem certificates", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+	{SourceKind: "pkcs11", Label: "PKCS#11 token certificates", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+	{SourceKind: "windows-store", Label: "Windows certificate store", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+	{SourceKind: "k8s-secret", Label: "Kubernetes TLS Secrets", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+	{SourceKind: "trust-store", Label: "OS, Java, NSS, browser, and Windows trust stores", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+	{SourceKind: "private-key", Label: "Private-key material locations", ReportedOver: agentInventoryReportPath, MetadataOnly: true},
+}
+
 // agentResponse is an in-network agent in the API's JSON shape.
 type agentResponse struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	Status     string  `json:"status"`
-	Version    string  `json:"version,omitempty"`
-	LastSeenAt *string `json:"last_seen_at,omitempty"`
+	ID                    string                             `json:"id"`
+	Name                  string                             `json:"name"`
+	Status                string                             `json:"status"`
+	Version               string                             `json:"version,omitempty"`
+	LastSeenAt            *string                            `json:"last_seen_at,omitempty"`
+	InventoryReportPath   string                             `json:"inventory_report_path"`
+	DiscoveryCapabilities []agentDiscoveryCapabilityResponse `json:"discovery_capabilities"`
 }
 
 // agentListResponse is the envelope for GET /api/v1/agents.
@@ -27,7 +48,11 @@ type agentListResponse struct {
 }
 
 func toAgentResponse(a store.Agent) agentResponse {
-	out := agentResponse{ID: a.ID, Name: a.Name, Status: a.Status, Version: a.Version}
+	out := agentResponse{
+		ID: a.ID, Name: a.Name, Status: a.Status, Version: a.Version,
+		InventoryReportPath:   agentInventoryReportPath,
+		DiscoveryCapabilities: append([]agentDiscoveryCapabilityResponse(nil), agentDiscoveryCapabilities...),
+	}
 	if a.LastSeenAt != nil {
 		s := a.LastSeenAt.UTC().Format(time.RFC3339)
 		out.LastSeenAt = &s

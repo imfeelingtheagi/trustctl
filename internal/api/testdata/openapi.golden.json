@@ -240,8 +240,17 @@
       },
       "Agent": {
         "properties": {
+          "discovery_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/AgentDiscoveryCapability"
+            },
+            "type": "array"
+          },
           "id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "inventory_report_path": {
             "type": "string"
           },
           "last_seen_at": {
@@ -261,7 +270,9 @@
         "required": [
           "id",
           "name",
-          "status"
+          "status",
+          "inventory_report_path",
+          "discovery_capabilities"
         ],
         "type": "object"
       },
@@ -309,6 +320,33 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "AgentDiscoveryCapability": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "metadata_only": {
+            "type": "boolean"
+          },
+          "private_key_bytes": {
+            "type": "boolean"
+          },
+          "reported_over": {
+            "type": "string"
+          },
+          "source_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_kind",
+          "label",
+          "reported_over",
+          "metadata_only",
+          "private_key_bytes"
+        ],
         "type": "object"
       },
       "AgentList": {

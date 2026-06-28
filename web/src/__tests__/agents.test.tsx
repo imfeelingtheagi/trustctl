@@ -39,6 +39,12 @@ describe("agent fleet surface", () => {
         status: "online",
         version: "0.4.0",
         last_seen_at: "2999-01-01T00:00:00Z",
+        inventory_report_path: "agent.mtls.ReportInventory",
+        discovery_capabilities: [
+          { source_kind: "filesystem", label: "Filesystem certificates", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+          { source_kind: "trust-store", label: "Trust stores", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+          { source_kind: "private-key", label: "Private-key material", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+        ],
       },
       {
         id: "ag-2",
@@ -94,7 +100,7 @@ describe("agent fleet surface", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
-  it("opens an agent detail panel with fields and honest unavailable telemetry", async () => {
+  it("opens an agent detail panel with served endpoint discovery coverage", async () => {
     renderAgents();
     await screen.findByText("branch-02");
 
@@ -104,8 +110,12 @@ describe("agent fleet surface", () => {
     expect(screen.getByRole("heading", { name: "edge-01" })).toBeInTheDocument();
     expect(screen.getByText("ag-1")).toBeInTheDocument();
     expect(screen.getAllByText("0.4.0").length).toBeGreaterThan(0);
-    expect(screen.getByText("Agent telemetry is limited for now")).toBeInTheDocument();
-    expect(screen.getByText(/Discovery scanning, drift detection, and agent-driven certificate renewal all run in the agent itself/i)).toBeInTheDocument();
-    expect(screen.getByText(/console views for capabilities, last scan, drift summary, and renewal state aren't surfaced here yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Endpoint discovery served")).toBeInTheDocument();
+    expect(screen.getByText("agent.mtls.ReportInventory")).toBeInTheDocument();
+    expect(screen.getByText("filesystem")).toBeInTheDocument();
+    expect(screen.getByText("trust-store")).toBeInTheDocument();
+    expect(screen.getByText("private-key")).toBeInTheDocument();
+    expect(screen.getAllByText(/metadata-only/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Agent telemetry is limited for now")).not.toBeInTheDocument();
   });
 });

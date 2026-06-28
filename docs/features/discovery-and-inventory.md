@@ -94,7 +94,9 @@ an enrolled agent sends a metadata-only
 and the server creates a tenant-scoped discovery source, run, findings, audit events,
 and credential-graph nodes from that batch. The server rejects inline secret-looking
 metadata keys, caps batch size, and runs ingest in the bounded agent lane, so a noisy
-fleet cannot starve the API.
+fleet cannot starve the API. `GET /api/v1/agents` now advertises the served
+`agent.mtls.ReportInventory` path and the endpoint source kinds it accepts, and the
+Agents console shows that same capability list for each enrolled endpoint.
 
 For Linux certificate files, the shipped agent can inventory public certificate roots
 at startup with `--inventory-cert-roots`. It reports references, fingerprints, and

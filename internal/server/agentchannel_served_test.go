@@ -516,6 +516,173 @@ func TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph(t *testing.T)
 	}
 }
 
+// TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd is the COMPETE-017 acceptance
+// proof: an enrolled endpoint agent reports metadata-only inventory over the served
+// mTLS channel, the REST API advertises that endpoint-discovery route, and the
+// resulting finding is visible through Discovery and the credential graph.
+func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	if !h.srv.AgentChannelServed() {
+		t.Fatal("agent channel is not served - wire-in failed")
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	t.Cleanup(chCancel)
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	a := enrollAgent(t, h, "edge-agent-cap-disc-02", "agent.trstctl.local")
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	hb, err := a.Heartbeat(ctx, channelClientAdapter{client}, map[string]int64{"certs": 1})
+	if err != nil {
+		t.Fatalf("heartbeat CAP-DISC-02 endpoint agent: %v", err)
+	}
+	if hb.TenantID != h.tenant {
+		t.Fatalf("heartbeat tenant = %q, want %s", hb.TenantID, h.tenant)
+	}
+	inv, err := client.ReportInventory(ctx, &transport.InventoryRequest{
+		SourceKind: agentdiscovery.SourceFilesystem,
+		Findings: []transport.InventoryFinding{{
+			Kind:        "x509_certificate",
+			Ref:         "/etc/ssl/certs/cap-disc-02.pem",
+			Provenance:  "filesystem:/etc/ssl/certs/cap-disc-02.pem",
+			Fingerprint: "sha256:cap-disc-02",
+			RiskScore:   25,
+			Metadata:    map[string]string{"host": "edge-cap-disc-02", "private_key_present": "false"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("report CAP-DISC-02 endpoint inventory: %v", err)
+	}
+	if inv.TenantID != h.tenant || inv.Recorded != 1 || inv.Rejected != 0 || inv.RunID == "" {
+		t.Fatalf("CAP-DISC-02 inventory response = %+v, want one recorded endpoint finding for tenant %s", inv, h.tenant)
+	}
+
+	tok := seedScopedToken(t, h.store, h.tenant, "agents:read", "discovery:read", "graph:read")
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/agents", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list agents after endpoint inventory: status %d body %s", status, body)
+	}
+	var agents struct {
+		Agents []struct {
+			Name                  string `json:"name"`
+			InventoryReportPath   string `json:"inventory_report_path"`
+			DiscoveryCapabilities []struct {
+				SourceKind      string `json:"source_kind"`
+				ReportedOver    string `json:"reported_over"`
+				MetadataOnly    bool   `json:"metadata_only"`
+				PrivateKeyBytes bool   `json:"private_key_bytes"`
+			} `json:"discovery_capabilities"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(body, &agents); err != nil {
+		t.Fatalf("decode agents: %v (%s)", err, body)
+	}
+	if len(agents.Agents) != 1 || agents.Agents[0].Name != "edge-agent-cap-disc-02" {
+		t.Fatalf("agent list did not include enrolled CAP-DISC-02 endpoint: %+v", agents.Agents)
+	}
+	if agents.Agents[0].InventoryReportPath != "agent.mtls.ReportInventory" {
+		t.Fatalf("agent inventory report path = %q, want served mTLS report path", agents.Agents[0].InventoryReportPath)
+	}
+	caps := map[string]struct {
+		reportedOver    string
+		metadataOnly    bool
+		privateKeyBytes bool
+	}{}
+	for _, cap := range agents.Agents[0].DiscoveryCapabilities {
+		caps[cap.SourceKind] = struct {
+			reportedOver    string
+			metadataOnly    bool
+			privateKeyBytes bool
+		}{cap.ReportedOver, cap.MetadataOnly, cap.PrivateKeyBytes}
+	}
+	for _, want := range []string{"filesystem", "pkcs11", "windows-store", "k8s-secret", "trust-store", "private-key"} {
+		got, ok := caps[want]
+		if !ok {
+			t.Fatalf("agent API missing CAP-DISC-02 source kind %s in %+v", want, agents.Agents[0].DiscoveryCapabilities)
+		}
+		if got.reportedOver != "agent.mtls.ReportInventory" || !got.metadataOnly || got.privateKeyBytes {
+			t.Fatalf("unsafe CAP-DISC-02 source capability %s: %+v", want, got)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+inv.RunID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list CAP-DISC-02 findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string            `json:"kind"`
+			Ref         string            `json:"ref"`
+			Provenance  string            `json:"provenance"`
+			Fingerprint string            `json:"fingerprint"`
+			Metadata    map[string]string `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode CAP-DISC-02 findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 1 {
+		t.Fatalf("CAP-DISC-02 finding count = %d body %s, want 1", len(findings.Items), body)
+	}
+	got := findings.Items[0]
+	if got.Kind != "x509_certificate" || got.Ref != "/etc/ssl/certs/cap-disc-02.pem" || got.Fingerprint != "sha256:cap-disc-02" {
+		t.Fatalf("CAP-DISC-02 finding identity mismatch: %+v", got)
+	}
+	if got.Metadata["private_key_present"] != "false" || strings.Contains(string(body), "PRIVATE KEY") {
+		t.Fatalf("CAP-DISC-02 finding exposed private key material or missed key-byte marker: %s", body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/graph", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get graph after CAP-DISC-02 inventory: status %d body %s", status, body)
+	}
+	var graphResp struct {
+		Nodes []struct {
+			Kind  string            `json:"kind"`
+			Attrs map[string]string `json:"attrs"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(body, &graphResp); err != nil {
+		t.Fatalf("decode graph after CAP-DISC-02 inventory: %v (%s)", err, body)
+	}
+	foundGraphNode := false
+	for _, n := range graphResp.Nodes {
+		if n.Kind == "credential" && n.Attrs["discovery_ref"] == "/etc/ssl/certs/cap-disc-02.pem" && n.Attrs["provenance"] == "filesystem:/etc/ssl/certs/cap-disc-02.pem" {
+			foundGraphNode = true
+			break
+		}
+	}
+	if !foundGraphNode {
+		t.Fatalf("CAP-DISC-02 endpoint finding did not appear in graph nodes: %+v", graphResp.Nodes)
+	}
+	for _, eventType := range []string{
+		"discovery.source.upserted", "discovery.run.queued", "discovery.run.started",
+		"discovery.finding.recorded", "discovery.run.completed",
+	} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s for CAP-DISC-02 endpoint discovery", eventType)
+		}
+	}
+}
+
 // TestServedTrustStoreCollectorsReportOverAgentChannel is the DISC-02 acceptance
 // proof: agent-side trust-store collectors enumerate public CA certificates from
 // Linux, Java cacerts/JKS, NSS/browser export, and Windows-store fixtures, then reuse

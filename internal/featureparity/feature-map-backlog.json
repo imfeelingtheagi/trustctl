@@ -316,10 +316,10 @@
       "phase": "P1",
       "priority": 20,
       "served_state": "served",
-      "backend_status": "served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
-      "current_frontend_mapping": "thin: Wizard can inspect agents and mint enrollment tokens; served inventory report evidence is visible through discovery findings, graph, and /coverage",
+      "backend_status": "served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, PKCS#11, Windows-store, Kubernetes Secret, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
+      "current_frontend_mapping": "served: Agents page lists enrolled agents, mints enrollment tokens, and shows endpoint-discovery source capabilities plus the agent.mtls.ReportInventory path; served inventory report evidence is also visible through discovery findings, graph, and /coverage",
       "target_gui_mapping": "Agent fleet page with enrollment, heartbeat, capabilities, discovery sources, last scan, drift summary, renewal state, and per-tenant health.",
-      "acceptance_test": "Served Go tests cover agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
+      "acceptance_test": "Served Go tests cover CAP-DISC-02 agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, API capability metadata, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, endpoint-discovery capability rendering, empty fleet, and stale-agent warning states.",
       "source_docs": ["docs/features/discovery-and-inventory.md"],
       "source_backend": [
         "/api/v1/agents",
@@ -334,9 +334,9 @@
         "internal/crypto/jks/jks.go",
         "cmd/trstctl-agent/main.go"
       ],
-      "source_frontend": ["web/src/pages/Wizard.tsx"],
+      "source_frontend": ["web/src/pages/Wizard.tsx", "web/src/pages/Agents.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and advanced by DISC-01/DISC-03. Backend evidence: served agent mTLS ReportInventory batches are bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the credential graph. DISC-02 adds OS, Java JKS/cacerts, NSS, browser, and Windows trust-store collectors that report public trust anchors with private_key_present=false. DISC-03 adds private-key-material discovery that classifies key files locally, wipes file buffers, and reports private_key findings with key_bytes_present=false.",
+      "notes": "Closed by /coverage feature-map hub and advanced by DISC-01/DISC-03; COMPETE-017 makes CAP-DISC-02 explicit on the served API/UI. Backend evidence: served agent mTLS ReportInventory batches are bulkheaded, tenant-derived from the verified client certificate, projected into discovery source/run/finding rows, and exposed in the credential graph. The listAgents API now advertises agent.mtls.ReportInventory plus filesystem, pkcs11, windows-store, k8s-secret, trust-store, and private-key endpoint source kinds as metadata-only/no-key-byte capabilities. DISC-02 adds OS, Java JKS/cacerts, NSS, browser, and Windows trust-store collectors that report public trust anchors with private_key_present=false. DISC-03 adds private-key-material discovery that classifies key files locally, wipes file buffers, and reports private_key findings with key_bytes_present=false. The Agents console renders the endpoint-discovery capability list for each enrolled endpoint.",
       "api_surface": ["listAgents", "createEnrollmentToken", "listDiscoveryFindings", "getGraph"],
       "api_na": "",
       "cli_surface": ["agents list", "agents enroll-token", "discovery findings list", "graph nodes"],
@@ -345,18 +345,19 @@
         "served": {
           "evidence": [
             "served_state=served",
-            "backend_status=served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
+            "backend_status=served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, PKCS#11, Windows-store, Kubernetes Secret, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
             "AgentService.ReportInventory runs behind the agent bulkhead and records tenant-scoped discovery source/run/finding rows plus graph credential nodes.",
+            "GET /api/v1/agents advertises agent.mtls.ReportInventory and the metadata-only endpoint source kinds accepted by that channel.",
             "Trust-store collectors enumerate OS, Java JKS/cacerts, NSS, browser, and Windows fixture anchors as public certificate metadata only.",
             "Private-key-material collector reports private_key findings with format, algorithm, restricted-file metadata, and public-key-derived fingerprint only."
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: Wizard can inspect agents and mint enrollment tokens; served inventory report evidence is visible through discovery findings, graph, and /coverage",
+            "current_frontend_mapping: served: Agents page lists enrolled agents, mints enrollment tokens, and shows endpoint-discovery source capabilities plus the agent.mtls.ReportInventory path; served inventory report evidence is also visible through discovery findings, graph, and /coverage",
             "target_gui_mapping: Agent fleet page with enrollment, heartbeat, capabilities, discovery sources, last scan, drift summary, renewal state, and per-tenant health."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Wizard.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Wizard.tsx", "web/src/pages/Agents.tsx"]
         },
         "cli": {
           "evidence": ["CLI command: agents list", "CLI command: agents enroll-token", "CLI command: discovery findings list", "CLI command: graph nodes"],
@@ -373,7 +374,9 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served Go tests cover agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
+            "acceptance_test: Served Go tests cover CAP-DISC-02 agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, API capability metadata, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, endpoint-discovery capability rendering, empty fleet, and stale-agent warning states.",
+            "TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd covers enrolled endpoint heartbeat, served mTLS inventory report, listAgents capability metadata, discovery readback, graph readback, and event-sourced discovery events.",
+            "TestAgentResponseAdvertisesEndpointDiscoveryCapabilitiesCAPDISC02 covers the listAgents JSON shape for agent.mtls.ReportInventory and metadata-only endpoint source kinds.",
             "TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph covers agent inventory over the served channel into discovery readback and graph readback.",
             "TestServedTrustStoreCollectorsReportOverAgentChannel covers Linux, Java, NSS, browser, and Windows trust-store fixtures through the served agent channel.",
             "TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly covers private-key discovery fixtures through the served agent channel and asserts no PEM key bytes appear in served findings.",

@@ -78,7 +78,9 @@ export interface APITokenRevokeRequest {
 }
 
 export interface Agent {
+  discovery_capabilities: AgentDiscoveryCapability[];
   id: string;
+  inventory_report_path: string;
   last_seen_at?: string;
   name: string;
   status: string;
@@ -99,6 +101,14 @@ export interface AgentCertRevocationRequest {
   fingerprint?: string;
   reason?: string;
   serial?: string;
+}
+
+export interface AgentDiscoveryCapability {
+  label: string;
+  metadata_only: boolean;
+  private_key_bytes: boolean;
+  reported_over: string;
+  source_kind: string;
 }
 
 export interface AgentList {

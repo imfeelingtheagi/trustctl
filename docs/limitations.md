@@ -218,13 +218,16 @@ remaining integration work.
   detection are now executed by the served discovery worker when operators create
   `ct_log` or `drift` sources; findings are tenant-scoped and alert intents are
   outbox-backed. Dedicated Posture dashboards, resolution workflows, and automatic
-  remediation remain future UI/workflow work. Server-side execution for the **SSH**
-  discovery collector remains library/agent work with no path into the served worker —
-  the discovery *control surface*, the **network** scan executor,
+  remediation remain future UI/workflow work. The generic **agent/endpoint discovery**
+  path is served through the mTLS `ReportInventory` channel and is visible through
+  `/api/v1/agents`, `/api/v1/discovery/findings`, `/api/v1/graph`, and the Agents
+  console. The **SSH-specific host/trust collector** still runs on the agent, not in a
+  server-side discovery-worker scanner, because only the endpoint can safely inspect
+  local SSH files and trust config; its metadata can flow through the served agent
+  inventory report path. The discovery *control surface*, the **network** scan executor,
   **cloud-certificate discovery execution**, the agent-channel **inventory report** path
   for metadata-only local findings including trust-store anchors, and the **CBOM**
-  scan/inventory API are served (above), but that remaining collector execution is not
-  yet driven by the served worker. The **credential
+  scan/inventory API are served (above). The **credential
   graph** and **risk scoring** read APIs are already served (`/api/v1/graph*`,
   `/api/v1/risk/credentials`), and the **AI/RCA/MCP** surface is served behind
   `ai.enable_api`; they are not part of this not-yet-served bucket.
@@ -768,6 +771,11 @@ This is a deliberate, documented trust boundary (not an accident):
   private keys, PEM/DER key bytes, or secret values, and secret-looking inline metadata
   keys are rejected before projection. The tenant is derived from the
   agent's **verified client-certificate SPIFFE SAN**, never a request field. The
+  `GET /api/v1/agents` response also publishes the served
+  `agent.mtls.ReportInventory` path and the endpoint source kinds accepted by that
+  channel (`filesystem`, `pkcs11`, `windows-store`, `k8s-secret`, `trust-store`, and
+  `private-key`), so the console can show a real endpoint-discovery capability panel
+  instead of treating agent discovery as unavailable telemetry. The
   channel is behind its own bounded **agent worker lane** and per-connection gRPC
   stream cap, so a heartbeat or renewal storm sheds with `ResourceExhausted` rather than
   starving API, protocol, outbox, or signer capacity. Agents announce an explicit
@@ -787,7 +795,8 @@ This is a deliberate, documented trust boundary (not an accident):
   signer-only Service under `signer.mode=isolated`, which admits only the control
   plane). An untrusted/unpinned agent client is rejected at the mutual-TLS handshake
   (fail-closed). Proven end-to-end by acceptance tests (real signer + embedded Postgres:
-  enroll → heartbeat → renew → idempotent retry → reject untrusted) and rendered-chart
+  enroll → heartbeat → endpoint inventory report → served API capability readback →
+  Discovery findings → graph node, plus renew → idempotent retry → reject untrusted) and rendered-chart
   assertions.
 
 ## Revocation
