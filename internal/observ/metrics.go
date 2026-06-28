@@ -21,10 +21,11 @@ import (
 // Registry holds the process's metrics and renders them in the Prometheus text
 // exposition format. It is safe for concurrent use.
 type Registry struct {
-	mu       sync.Mutex
-	counters []*CounterVec
-	histos   []*HistogramVec
-	gauges   []*Gauge
+	mu        sync.Mutex
+	counters  []*CounterVec
+	histos    []*HistogramVec
+	gauges    []*Gauge
+	gaugeVecs []*GaugeVec
 }
 
 // NewRegistry returns an empty registry.
@@ -93,8 +94,9 @@ func (cv *CounterVec) WithLabelValues(vals ...string) *Counter {
 
 // Gauge is a single value that can go up or down.
 type Gauge struct {
-	name, help string
-	bits       atomic.Uint64
+	name, help  string
+	labelValues []string
+	bits        atomic.Uint64
 }
 
 // Gauge registers (or returns) a gauge.
@@ -115,6 +117,43 @@ func (r *Registry) Gauge(name, help string) *Gauge {
 func (g *Gauge) Set(f float64) { g.bits.Store(math.Float64bits(f)) }
 
 func (g *Gauge) value() float64 { return math.Float64frombits(g.bits.Load()) }
+
+// GaugeVec is a set of gauges partitioned by a label tuple.
+type GaugeVec struct {
+	name, help string
+	labels     []string
+	mu         sync.Mutex
+	series     map[string]*Gauge
+	order      []string
+}
+
+// GaugeVec registers (or returns) a gauge vector.
+func (r *Registry) GaugeVec(name, help string, labels []string) *GaugeVec {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, gv := range r.gaugeVecs {
+		if gv.name == name {
+			return gv
+		}
+	}
+	gv := &GaugeVec{name: name, help: help, labels: labels, series: map[string]*Gauge{}}
+	r.gaugeVecs = append(r.gaugeVecs, gv)
+	return gv
+}
+
+// WithLabelValues returns the gauge for the given label values.
+func (gv *GaugeVec) WithLabelValues(vals ...string) *Gauge {
+	key := strings.Join(vals, "\x1f")
+	gv.mu.Lock()
+	defer gv.mu.Unlock()
+	if g, ok := gv.series[key]; ok {
+		return g
+	}
+	g := &Gauge{labelValues: append([]string(nil), vals...)}
+	gv.series[key] = g
+	gv.order = append(gv.order, key)
+	return g
+}
 
 // HistogramVec is a set of histograms partitioned by a label tuple.
 type HistogramVec struct {
@@ -197,6 +236,15 @@ func (r *Registry) WriteProm(w io.Writer) error {
 	}
 	for _, g := range r.gauges {
 		pf("# HELP %s %s\n# TYPE %s gauge\n%s %s\n", g.name, g.help, g.name, g.name, formatFloat(g.value()))
+	}
+	for _, gv := range r.gaugeVecs {
+		pf("# HELP %s %s\n# TYPE %s gauge\n", gv.name, gv.help, gv.name)
+		gv.mu.Lock()
+		for _, key := range gv.order {
+			g := gv.series[key]
+			pf("%s%s %s\n", gv.name, renderLabels(gv.labels, g.labelValues), formatFloat(g.value()))
+		}
+		gv.mu.Unlock()
 	}
 	for _, hv := range r.histos {
 		pf("# HELP %s %s\n# TYPE %s histogram\n", hv.name, hv.help, hv.name)

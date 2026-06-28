@@ -3,10 +3,12 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 // TestBulkheadMiddlewareShedsAndIsolates is the R2.3 acceptance "a saturation
@@ -76,5 +78,44 @@ func TestBulkheadMiddlewarePassesThrough(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/owners", nil))
 	if rec.Code != http.StatusOK || !ran {
 		t.Fatalf("normal request = %d, ran=%v, want 200 and the handler to run", rec.Code, ran)
+	}
+}
+
+func TestMetricsEndpointSamplesBulkheadStats(t *testing.T) {
+	set := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 1, Queue: 2})
+	defer set.Close()
+
+	if err := set.Submit(bulkhead.SubsystemOutbox, func() {}); err != nil {
+		t.Fatalf("submit outbox work: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if st := set.Pool(bulkhead.SubsystemOutbox).Stats(); st.Completed == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("outbox work did not complete")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	reg := observ.NewRegistry()
+	srv := &Server{
+		registry:   reg,
+		bulk:       set,
+		mBulkheads: observ.NewBulkheadMetrics(reg),
+	}
+	rec := httptest.NewRecorder()
+	srv.metricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	out := rec.Body.String()
+	for _, want := range []string{
+		`trstctl_bulkhead_workers{subsystem="outbox"} 1`,
+		`trstctl_bulkhead_queue_capacity{subsystem="outbox"} 2`,
+		`trstctl_bulkhead_submitted_total{subsystem="outbox"} 1`,
+		`trstctl_bulkhead_completed_total{subsystem="outbox"} 1`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("/metrics missing %q from:\n%s", want, out)
+		}
 	}
 }

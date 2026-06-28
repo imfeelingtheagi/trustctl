@@ -516,6 +516,7 @@ type Server struct {
 	tracer     *observ.Tracer
 	readiness  *observ.Readiness
 	bulk       *bulkhead.Set
+	mBulkheads *observ.BulkheadMetrics
 	otlp       *observ.OTLPExporter
 	otlpAudit  *observ.OTLPAuditStreamer
 	egress     *egress.Guard
@@ -873,6 +874,7 @@ func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 	if s.bulk == nil {
 		s.bulk = bulkhead.Default()
 	}
+	s.mBulkheads = observ.NewBulkheadMetrics(s.registry)
 	gate, approvals, err := buildMutationGate(d, s.bulk)
 	if err != nil {
 		return err
@@ -1211,7 +1213,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.readiness.Handler())
-	mux.Handle("GET /metrics", s.registry.Handler())
+	mux.Handle("GET /metrics", s.metricsHandler())
 	mux.Handle("/api/v1/graph", heavyHandler)
 	mux.Handle("/api/v1/graph/", heavyHandler)
 	mux.Handle("/api/v1/risk/", heavyHandler)
@@ -2155,6 +2157,21 @@ func (s *Server) sampleSigner(ctx context.Context) {
 		restarts = r.Restarts()
 	}
 	s.mSigner.Observe(up, restarts)
+}
+
+func (s *Server) sampleBulkheads() {
+	if s.mBulkheads == nil || s.bulk == nil {
+		return
+	}
+	s.mBulkheads.Observe(s.bulk.Stats())
+}
+
+func (s *Server) metricsHandler() http.Handler {
+	registryHandler := s.registry.Handler()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.sampleBulkheads()
+		registryHandler.ServeHTTP(w, r)
+	})
 }
 
 // RunRetentionOnce performs one audit retention pass and records its outcome as

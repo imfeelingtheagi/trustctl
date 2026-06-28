@@ -76,6 +76,29 @@ func TestGaugePromText(t *testing.T) {
 	}
 }
 
+// TestGaugeVecPromText: labeled gauges render one series per label set.
+func TestGaugeVecPromText(t *testing.T) {
+	reg := observ.NewRegistry()
+	g := reg.GaugeVec("trstctl_test_depth", "queue depth", []string{"subsystem"})
+	g.WithLabelValues("api").Set(2)
+	g.WithLabelValues("outbox").Set(7)
+
+	var sb strings.Builder
+	if err := reg.WriteProm(&sb); err != nil {
+		t.Fatal(err)
+	}
+	out := sb.String()
+	for _, want := range []string{
+		"# TYPE trstctl_test_depth gauge",
+		`trstctl_test_depth{subsystem="api"} 2`,
+		`trstctl_test_depth{subsystem="outbox"} 7`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("WriteProm output missing %q\n--- got ---\n%s", want, out)
+		}
+	}
+}
+
 // TestMetricsHandler: the /metrics handler serves the exposition over HTTP.
 func TestMetricsHandler(t *testing.T) {
 	reg := observ.NewRegistry()
