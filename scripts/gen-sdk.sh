@@ -17,10 +17,10 @@
 #   scripts/gen-sdk.sh           # re-pin spec + regenerate Go, TS, Python, and Java SDKs
 #   scripts/gen-sdk.sh --check   # verify the SDKs are up to date (CI); exit 1 on drift
 #
-# Requirements: a Go toolchain (for the Go generator, run via `go run`) and
-# Node/npx (for openapi-typescript) plus Python 3 (for the Python/Java generators).
-# The Go/TS generators are invoked with `go run` / `npx` so there is nothing to
-# install ahead of time.
+# Requirements: a Go toolchain, npm (for the lockfile-pinned TypeScript generator),
+# and Python 3 (for the Python/Java generators). The TypeScript generator is
+# installed with `npm ci` from clients/sdk/typescript/package-lock.json before use,
+# so the SDK check never pulls a mutable generator version.
 
 set -euo pipefail
 
@@ -54,15 +54,17 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 1: TypeScript types via openapi-typescript (pure JS, run via npx).
+# Step 1: TypeScript types via openapi-typescript (pure JS, lockfile-pinned).
 # ---------------------------------------------------------------------------
 TS_DIR="${SDK_DIR}/typescript"
 TS_OUT="${TS_DIR}/src/types.gen.ts"
-if command -v npx >/dev/null 2>&1; then
+if command -v npm >/dev/null 2>&1; then
+  log "install TypeScript SDK generator deps from package-lock.json"
+  npm --prefix "${TS_DIR}" ci >/dev/null
   log "generate TypeScript types -> ${TS_OUT#"${REPO_ROOT}/"}"
   if [[ "${CHECK}" == "1" ]]; then
     TMP="$(mktemp)"
-    npx --yes openapi-typescript "${PINNED}" -o "${TMP}" >/dev/null
+    npm --prefix "${TS_DIR}" exec -- openapi-typescript "${PINNED}" -o "${TMP}" >/dev/null
     if ! cmp -s "${TMP}" "${TS_OUT}"; then
       rm -f "${TMP}"
       echo "error: ${TS_OUT#"${REPO_ROOT}/"} is stale; run 'make sdk' and commit the diff" >&2
@@ -70,10 +72,11 @@ if command -v npx >/dev/null 2>&1; then
     fi
     rm -f "${TMP}"
   else
-    npx --yes openapi-typescript "${PINNED}" -o "${TS_OUT}"
+    npm --prefix "${TS_DIR}" exec -- openapi-typescript "${PINNED}" -o "${TS_OUT}"
   fi
 else
-  echo "warn: npx not found; skipping TypeScript generation (the Go SDK is independent of it)" >&2
+  echo "error: npm not found; TypeScript SDK generation is required" >&2
+  exit 1
 fi
 
 # ---------------------------------------------------------------------------

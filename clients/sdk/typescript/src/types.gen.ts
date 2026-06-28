@@ -193,6 +193,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{id}/cert-revocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an agent mTLS certificate */
+        post: operations["revokeAgentCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/query": {
         parameters: {
             query?: never;
@@ -372,7 +389,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign an external intermediate CA CSR from a served CA authority */
+        /** Sign an external intermediate CA CSR from a served CA authority after ceremony quorum */
         post: operations["issueIntermediateCAFromCSR"];
         delete?: never;
         options?: never;
@@ -2026,6 +2043,22 @@ export interface components {
             status: string;
             version?: string;
         };
+        AgentCertRevocation: {
+            agent?: string;
+            /** Format: uuid */
+            agent_id: string;
+            fingerprint?: string;
+            reason?: string;
+            /** Format: date-time */
+            revoked_at: string;
+            serial?: string;
+        };
+        AgentCertRevocationRequest: {
+            agent?: string;
+            fingerprint?: string;
+            reason?: string;
+            serial?: string;
+        };
         AgentList: {
             agents: components["schemas"]["Agent"][];
             next_cursor?: string;
@@ -2179,8 +2212,9 @@ export interface components {
             next_cursor?: string;
         };
         CACeremonyStartRequest: {
+            csr_pem?: string;
             /** @enum {string} */
-            operation: "create_root" | "create_intermediate";
+            operation: "create_root" | "create_intermediate" | "issue_intermediate_csr";
             /** Format: uuid */
             parent_id?: string;
             spec: components["schemas"]["CASpec"];
@@ -2199,6 +2233,8 @@ export interface components {
             spec: components["schemas"]["CASpec"];
         };
         CAIssueIntermediateRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
             csr_pem: string;
             spec: components["schemas"]["CASpec"];
         };
@@ -3913,6 +3949,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrollmentToken"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeAgentCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentCertRevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCertRevocation"];
                 };
             };
             /** @description client error */

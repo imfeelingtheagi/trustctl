@@ -393,6 +393,7 @@ sdk-check: ## Verify the published client SDKs are in sync with the served OpenA
 .PHONY: sdk-test
 sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs
 	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	npm --prefix clients/sdk/typescript ci
 	npm --prefix clients/sdk/typescript run typecheck
 	npm --prefix clients/sdk/typescript test
 	PYTHONPYCACHEPREFIX=$${TMPDIR:-/tmp}/trstctl-sdk-pycache PYTHONPATH=clients/sdk/python/src python3 -m compileall -q clients/sdk/python/src clients/sdk/python/tests

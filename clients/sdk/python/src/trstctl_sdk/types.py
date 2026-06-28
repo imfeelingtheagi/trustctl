@@ -115,6 +115,30 @@ Agent = TypedDict(
     total=False,
 )
 
+AgentCertRevocation = TypedDict(
+    'AgentCertRevocation',
+    {
+        'agent': str,
+        'agent_id': str,
+        'fingerprint': str,
+        'reason': str,
+        'revoked_at': str,
+        'serial': str,
+    },
+    total=False,
+)
+
+AgentCertRevocationRequest = TypedDict(
+    'AgentCertRevocationRequest',
+    {
+        'agent': str,
+        'fingerprint': str,
+        'reason': str,
+        'serial': str,
+    },
+    total=False,
+)
+
 AgentList = TypedDict(
     'AgentList',
     {
@@ -341,6 +365,7 @@ CAAuthorityList = TypedDict(
 CACeremonyStartRequest = TypedDict(
     'CACeremonyStartRequest',
     {
+        'csr_pem': str,
         'operation': str,
         'parent_id': str,
         'spec': dict[str, Any],
@@ -371,6 +396,7 @@ CACreateRootRequest = TypedDict(
 CAIssueIntermediateRequest = TypedDict(
     'CAIssueIntermediateRequest',
     {
+        'ceremony_id': str,
         'csr_pem': str,
         'spec': dict[str, Any],
     },
