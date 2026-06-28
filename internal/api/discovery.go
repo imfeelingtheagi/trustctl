@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/discovery"
+	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
@@ -358,9 +359,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
 	switch req.Kind {
-	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", nhi.SourceKind, oauthgrant.SourceKind, nhibehavior.SourceKind:
+	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", nhi.SourceKind, oauthgrant.SourceKind, nhibehavior.SourceKind, k8stls.SourceKind:
 	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface, oauth_grant, nhi_behavior")
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface, oauth_grant, nhi_behavior, k8s_ingress_gateway")
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -385,6 +386,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == nhibehavior.SourceKind {
 		if err := nhibehavior.ValidateConfig(cfg); err != nil {
+			return nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+	}
+	if req.Kind == k8stls.SourceKind {
+		if err := k8stls.ValidateConfig(cfg); err != nil {
 			return nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 	}

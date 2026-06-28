@@ -24,6 +24,7 @@ import (
 	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
 	gcpsmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/gcpsm"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
+	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
@@ -199,6 +200,9 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	}
 	if src.Kind == nhibehavior.SourceKind {
 		return d.executeNHIBehaviorDiscoveryRun(ctx, tenantID, src, run)
+	}
+	if src.Kind == k8stls.SourceKind {
+		return d.executeKubernetesTLSAutoIssuanceRun(ctx, tenantID, src, run)
 	}
 	rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
 	if err != nil {
@@ -475,6 +479,58 @@ func (d *issuanceDispatcher) executeNHIBehaviorDiscoveryRun(ctx context.Context,
 			return rep, "", "", err
 		}
 		rep.Discovered++
+	}
+	return rep, "succeeded", "", nil
+}
+
+func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	findings, err := k8stls.Findings(src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
+	if run.DryRun {
+		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
+	}
+	rep := netscan.Report{Targets: len(findings)}
+	lastMintErr := ""
+	for _, f := range findings {
+		meta, err := json.Marshal(f.Metadata)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+			RunID: run.ID, SourceID: src.ID, Kind: k8stls.FindingKind, Ref: f.Ref,
+			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: meta,
+		}); err != nil {
+			return rep, "", "", err
+		}
+		issuanceKey := "k8s-auto:" + run.ID + ":" + f.Fingerprint
+		existing, err := d.store.ListCertificatesByIssuanceIdempotencyKey(ctx, tenantID, issuanceKey)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if len(existing) == 0 {
+			cert, err := d.mintServedLeaf(ctx, tenantID, "", f.CommonName, f.DNSNames)
+			if err != nil {
+				rep.Failed++
+				lastMintErr = err.Error()
+				continue
+			}
+			cert.DeploymentLocation = f.DeploymentLocation
+			cert.Source = "discovery:" + k8stls.SourceKind
+			cert.IssuanceIdempotencyKey = issuanceKey
+			if _, err := d.orch.RecordCertificate(ctx, tenantID, cert); err != nil {
+				return rep, "", "", err
+			}
+		}
+		rep.Discovered++
+	}
+	if rep.Failed > 0 {
+		if rep.Discovered > 0 {
+			return rep, "partial", "some Kubernetes TLS resources could not be auto-issued: " + lastMintErr, nil
+		}
+		return rep, "failed", "all Kubernetes TLS resources could not be auto-issued: " + lastMintErr, nil
 	}
 	return rep, "succeeded", "", nil
 }

@@ -369,6 +369,62 @@ sample count, and average usage, never credential values.
 `nhi_behavior_anomaly` findings, REST readback, and UI representation are served
 for CAP-ITDR-01.
 
+### Kubernetes Ingress and Gateway API TLS auto-issuance
+
+Kubernetes TLS automation is served through `k8s_ingress_gateway` discovery
+sources. Operators can feed metadata exported from an Ingress watch, Gateway API
+watch, admission controller, or manifest inventory, and trstctl mints public
+certificate inventory rows through the same signer-backed served issuance path
+used by lifecycle issuance. The source never carries a TLS private key, Kubernetes
+Secret body, kubeconfig, or service-account token.
+
+The source config carries only resource metadata: `kind` (`Ingress` or
+`Gateway`), `api_version`, `namespace`, `name`, `tls_secret_name`, `hosts`,
+and `auto_issue`. Normal runs require `auto_issue` to be true; use discovery
+`dry_run` to plan without minting. Hostnames become the leaf certificate SANs,
+and the Kubernetes TLS Secret reference becomes the certificate deployment
+location.
+
+```json
+{
+  "kind": "k8s_ingress_gateway",
+  "name": "cluster-edge-tls",
+  "config": {
+    "resources": [
+      {
+        "kind": "Ingress",
+        "api_version": "networking.k8s.io/v1",
+        "namespace": "payments",
+        "name": "payments-web",
+        "tls_secret_name": "payments-web-tls",
+        "hosts": ["payments.example.com"],
+        "auto_issue": true
+      },
+      {
+        "kind": "Gateway",
+        "api_version": "gateway.networking.k8s.io/v1",
+        "namespace": "edge",
+        "name": "public",
+        "tls_secret_name": "edge-public-tls",
+        "hosts": ["edge.example.com", "api.example.com"],
+        "auto_issue": true
+      }
+    ]
+  }
+}
+```
+
+Runs execute through the discovery outbox worker, normalize each resource to a
+`k8s_tls_auto_issuance` finding, preserve provenance as
+`k8s_ingress_gateway:<kind>:<namespace>/<name>:<tls_secret_name>`, and record the
+minted certificate through `certificate.recorded`. The generated private key
+lives only inside the crypto boundary during signing and is destroyed before the
+inventory row is recorded; the persisted inventory is public certificate metadata.
+
+**Status:** source creation, run queueing, outbox execution, metadata-only
+`k8s_tls_auto_issuance` findings, signer-backed certificate minting, certificate
+inventory readback, and UI representation are served for CAP-K8S-03.
+
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
 Secrets and API keys live in many systems, and the dangerous ones are the stale,
@@ -497,6 +553,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |
+| Kubernetes Ingress/Gateway API TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` source/schedule/run/finding records normalize Ingress and Gateway TLS metadata into `k8s_tls_auto_issuance` findings and mint signer-backed public certificate inventory rows |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
@@ -525,8 +582,8 @@ what it is.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
 - **Served discovery source kinds:** `network`, `cloud_certificate`,
-  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `nhi_behavior`, `ct_log`,
-  `drift`, `manual`, plus
+  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `nhi_behavior`,
+  `k8s_ingress_gateway`, `ct_log`, `drift`, `manual`, plus
   metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`, `trust-store`, `private-key`.

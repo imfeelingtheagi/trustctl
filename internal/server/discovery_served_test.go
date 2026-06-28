@@ -585,6 +585,178 @@ func TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd is the
+// COMPETE-004 proof: CAP-K8S-03 is served through tenant-scoped discovery
+// source/run/finding records and mints signer-backed public certificate inventory
+// rows for Kubernetes Ingress and Gateway API TLS resources.
+func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "k8s-ingress-gateway",
+		"kind": "k8s_ingress_gateway",
+		"config": map[string]any{
+			"resources": []map[string]any{
+				{
+					"kind":            "Ingress",
+					"api_version":     "networking.k8s.io/v1",
+					"namespace":       "payments",
+					"name":            "payments-web",
+					"tls_secret_name": "payments-web-tls",
+					"hosts":           []string{"payments.example.com"},
+					"auto_issue":      true,
+				},
+				{
+					"kind":            "Gateway",
+					"api_version":     "gateway.networking.k8s.io/v1",
+					"namespace":       "edge",
+					"name":            "public",
+					"tls_secret_name": "edge-public-tls",
+					"hosts":           []string{"edge.example.com", "api.example.com"},
+					"auto_issue":      true,
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create Kubernetes ingress/gateway source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode Kubernetes source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "k8s_ingress_gateway" {
+		t.Fatalf("bad Kubernetes source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start Kubernetes ingress/gateway run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued Kubernetes run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued Kubernetes run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain Kubernetes ingress/gateway outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get Kubernetes ingress/gateway run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed Kubernetes run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 2 || completed.Discovered != 2 || completed.Failed != 0 {
+		t.Fatalf("completed Kubernetes run = %+v, want two auto-issued resources", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list Kubernetes findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "raw-value") || strings.Contains(string(body), "private_key") {
+		t.Fatalf("Kubernetes ingress/gateway findings leaked credential material: %s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode Kubernetes findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 2 {
+		t.Fatalf("Kubernetes finding count = %d body %s, want 2", len(findings.Items), body)
+	}
+	seenResources := map[string]bool{}
+	for _, f := range findings.Items {
+		if f.Kind != "k8s_tls_auto_issuance" || f.Ref == "" || f.Fingerprint == "" || !strings.HasPrefix(f.Provenance, "k8s_ingress_gateway:") {
+			t.Fatalf("bad Kubernetes auto-issuance finding: %+v", f)
+		}
+		resourceKind, _ := f.Metadata["resource_kind"].(string)
+		namespace, _ := f.Metadata["namespace"].(string)
+		name, _ := f.Metadata["name"].(string)
+		seenResources[resourceKind+":"+namespace+"/"+name] = true
+		hosts, ok := f.Metadata["hosts"].([]any)
+		if !ok || len(hosts) == 0 {
+			t.Fatalf("Kubernetes finding is missing host metadata: %+v", f)
+		}
+		if f.Metadata["tls_secret_name"] == "" {
+			t.Fatalf("Kubernetes finding is missing TLS Secret metadata: %+v", f)
+		}
+	}
+	for _, resource := range []string{"Ingress:payments/payments-web", "Gateway:edge/public"} {
+		if !seenResources[resource] {
+			t.Fatalf("resource %q was not represented in findings: %+v", resource, seenResources)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/certificates", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list certificates after Kubernetes auto-issuance: status %d body %s", status, body)
+	}
+	var certs struct {
+		Items []struct {
+			DeploymentLocation string   `json:"deployment_location"`
+			Source             string   `json:"source"`
+			Fingerprint        string   `json:"fingerprint"`
+			SANs               []string `json:"sans"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &certs); err != nil {
+		t.Fatalf("decode Kubernetes certificates: %v (%s)", err, body)
+	}
+	if len(certs.Items) != 2 {
+		t.Fatalf("Kubernetes auto-issuance certificate count = %d body %s, want 2", len(certs.Items), body)
+	}
+	seenLocations := map[string]bool{}
+	for _, cert := range certs.Items {
+		if cert.Source != "discovery:k8s_ingress_gateway" || cert.Fingerprint == "" {
+			t.Fatalf("bad Kubernetes auto-issued cert: %+v", cert)
+		}
+		seenLocations[cert.DeploymentLocation] = true
+		if len(cert.SANs) == 0 {
+			t.Fatalf("Kubernetes auto-issued cert missing SANs: %+v", cert)
+		}
+	}
+	for _, location := range []string{"k8s:Ingress:payments/payments-web:secret/payments-web-tls", "k8s:Gateway:edge/public:secret/edge-public-tls"} {
+		if !seenLocations[location] {
+			t.Fatalf("certificate location %q was not represented: %+v", location, seenLocations)
+		}
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "certificate.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; Kubernetes auto-issuance is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedCloudCertificateDiscoveryACMEndToEnd is the DISC-04 acceptance proof:
 // the served discovery dispatcher constructs the AWS ACM cloud-cert collector from a
 // credential-reference-only source config, runs it from the outbox worker, records

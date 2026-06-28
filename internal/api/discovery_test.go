@@ -156,3 +156,32 @@ func TestValidateDiscoverySourceAcceptsNHIBehaviorMetadataOnly(t *testing.T) {
 		t.Fatal("inline behavior credential material must be rejected; NHI behavior config may carry metadata only")
 	}
 }
+
+func TestValidateDiscoverySourceAcceptsKubernetesIngressGatewayMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"resources":[
+			{"kind":"Ingress","api_version":"networking.k8s.io/v1","namespace":"payments","name":"payments-web","tls_secret_name":"payments-web-tls","hosts":["payments.example.com"],"auto_issue":true},
+			{"kind":"Gateway","api_version":"gateway.networking.k8s.io/v1","namespace":"edge","name":"public","tls_secret_name":"edge-public-tls","hosts":["edge.example.com","api.example.com"],"auto_issue":true}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   "k8s_ingress_gateway",
+		Name:   "k8s-ingress-gateway",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("Kubernetes ingress/gateway metadata-only source was rejected: %v", err)
+	}
+
+	inlineSecret := json.RawMessage(`{
+		"resources":[
+			{"kind":"Ingress","namespace":"payments","name":"payments-web","tls_secret_name":"payments-web-tls","hosts":["payments.example.com"],"private_key":"raw-value"}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   "k8s_ingress_gateway",
+		Name:   "bad-k8s-ingress-gateway",
+		Config: inlineSecret,
+	}); err == nil {
+		t.Fatal("inline Kubernetes TLS credential material must be rejected; discovery config may carry metadata only")
+	}
+}

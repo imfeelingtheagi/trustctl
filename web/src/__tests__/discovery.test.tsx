@@ -296,6 +296,51 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates a Kubernetes ingress/gateway source from metadata-only TLS resources", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "k8s-tls");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "k8s_ingress_gateway");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Kubernetes resources JSON"), {
+      target: {
+        value: JSON.stringify([
+          {
+            kind: "Ingress",
+            namespace: "payments",
+            name: "payments-web",
+            tls_secret_name: "payments-web-tls",
+            hosts: ["payments.example.com"],
+            auto_issue: true,
+          },
+          {
+            kind: "Gateway",
+            namespace: "edge",
+            name: "public",
+            tls_secret_name: "edge-public-tls",
+            hosts: ["edge.example.com", "api.example.com"],
+            auto_issue: true,
+          },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "k8s-tls",
+      kind: "k8s_ingress_gateway",
+      config: {
+        resources: [
+          expect.objectContaining({ kind: "Ingress", namespace: "payments", tls_secret_name: "payments-web-tls" }),
+          expect.objectContaining({ kind: "Gateway", namespace: "edge", tls_secret_name: "edge-public-tls" }),
+        ],
+      },
+    });
+  });
+
   it("uses permission and empty states when discovery records are unavailable or absent", async () => {
     apiMock.discoverySources.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ detail: "missing discovery:read" })));
     apiMock.discoverySchedules.mockResolvedValueOnce({ items: [] });

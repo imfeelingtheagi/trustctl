@@ -266,10 +266,14 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 	if err != nil {
 		return store.Certificate{}, err
 	}
-	owner := ownerID
+	var ownerPtr *string
+	if ownerID = strings.TrimSpace(ownerID); ownerID != "" {
+		owner := ownerID
+		ownerPtr = &owner
+	}
 	nb, na := info.NotBefore, info.NotAfter
 	return store.Certificate{
-		CAID: IssuingCAID(), OwnerID: &owner, Subject: info.Subject, SANs: sansOf(info),
+		CAID: IssuingCAID(), OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
 		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),

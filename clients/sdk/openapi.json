@@ -2035,7 +2035,8 @@
               "manual",
               "nhi_cross_surface",
               "oauth_grant",
-              "nhi_behavior"
+              "nhi_behavior",
+              "k8s_ingress_gateway"
             ],
             "type": "string"
           },
@@ -2098,7 +2099,8 @@
               "manual",
               "nhi_cross_surface",
               "oauth_grant",
-              "nhi_behavior"
+              "nhi_behavior",
+              "k8s_ingress_gateway"
             ],
             "type": "string"
           },

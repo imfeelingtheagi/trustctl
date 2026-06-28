@@ -27,6 +27,7 @@ const sourceKinds: SourceKind[] = [
   "nhi_cross_surface",
   "oauth_grant",
   "nhi_behavior",
+  "k8s_ingress_gateway",
 ];
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
@@ -42,6 +43,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   nhi_cross_surface: "NHI surfaces",
   oauth_grant: "OAuth grants",
   nhi_behavior: "NHI behavior",
+  k8s_ingress_gateway: "Kubernetes TLS",
 };
 
 export function Discovery() {
@@ -58,6 +60,7 @@ export function Discovery() {
   const [nhiObservations, setNHIObservations] = useState("");
   const [oauthGrants, setOAuthGrants] = useState("");
   const [behaviorEvents, setBehaviorEvents] = useState("");
+  const [k8sResources, setK8sResources] = useState("");
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
@@ -110,6 +113,8 @@ export function Discovery() {
           ? { grants: parseOAuthGrants(oauthGrants) }
           : sourceKind === "nhi_behavior"
           ? { events: parseBehaviorEvents(behaviorEvents), business_hours: { start_hour: 8, end_hour: 18 } }
+          : sourceKind === "k8s_ingress_gateway"
+          ? { resources: parseKubernetesTLSResources(k8sResources) }
           : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
@@ -117,6 +122,7 @@ export function Discovery() {
       setNHIObservations("");
       setOAuthGrants("");
       setBehaviorEvents("");
+      setK8sResources("");
       setScheduleSourceID(created.id);
       await load();
     } catch (err) {
@@ -257,6 +263,18 @@ export function Discovery() {
                 value={behaviorEvents}
                 onChange={(event) => setBehaviorEvents(event.target.value)}
                 placeholder='[{"principal":"payments-api","occurred_at":"2026-06-01T10:00:00Z","ip":"198.51.100.10","geo":"US","user_agent":"payments-agent/1.0","usage_count":10,"baseline":true}]'
+                required
+              />
+            </label>
+          )}
+          {sourceKind === "k8s_ingress_gateway" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Kubernetes resources JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={k8sResources}
+                onChange={(event) => setK8sResources(event.target.value)}
+                placeholder='[{"kind":"Ingress","namespace":"payments","name":"payments-web","tls_secret_name":"payments-web-tls","hosts":["payments.example.com"],"auto_issue":true}]'
                 required
               />
             </label>
@@ -546,6 +564,12 @@ function parseBehaviorEvents(value: string): unknown[] {
   return parsed;
 }
 
+function parseKubernetesTLSResources(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Kubernetes resources JSON must be an array.");
+  return parsed;
+}
+
 function targetCount(source: DiscoverySource): string {
   const targets = source.config.targets;
   if (Array.isArray(targets)) return String(targets.length);
@@ -555,6 +579,8 @@ function targetCount(source: DiscoverySource): string {
   if (Array.isArray(grants)) return `${grants.length} grants`;
   const events = source.config.events;
   if (Array.isArray(events)) return `${events.length} events`;
+  const resources = source.config.resources;
+  if (Array.isArray(resources)) return `${resources.length} k8s`;
   const cidrs = source.config.cidrs;
   if (Array.isArray(cidrs)) return `${cidrs.length} cidr`;
   return "-";
