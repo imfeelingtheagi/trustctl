@@ -22,6 +22,32 @@ type Command struct {
 	Summary string
 }
 
+// Destructive reports whether the command can remove, revoke, erase, zeroize,
+// offboard, or otherwise run irreversible/destructive work and therefore needs
+// an explicit --force acknowledgement in the CLI.
+func (c Command) Destructive() bool {
+	if c.Method == "DELETE" {
+		return true
+	}
+	name := strings.Join(c.Name, " ")
+	for _, marker := range []string{
+		"bulk-revoke",
+		"delete",
+		"erase",
+		"managed-keys rotate",
+		"offboard",
+		"recover",
+		"retention run",
+		"revoke",
+		"zeroize",
+	} {
+		if strings.Contains(name, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // commandTable is one command per core API operation (S3.3 surface).
 var commandTable = []Command{
 	{Name: []string{"owners", "create"}, Method: "POST", Path: "/api/v1/owners", Body: bodyFile, Summary: "Create an owner"},

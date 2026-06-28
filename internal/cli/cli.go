@@ -48,6 +48,7 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	token := fs.String("token", env.Token, "API token (env TRSTCTL_TOKEN)")
 	tenant := fs.String("tenant", env.Tenant, "tenant id for header auth (env TRSTCTL_TENANT)")
 	idem := fs.String("idempotency-key", env.IdempotencyKey, "Idempotency-Key for a mutation (generated if unset)")
+	globalForce := fs.Bool("force", false, "allow a destructive command")
 	fs.Usage = func() { usage(stderr) }
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -70,14 +71,22 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		_, _ = fmt.Fprintf(stderr, "error: unknown command %q (try 'trstctl version' or --help)\n", strings.Join(rest, " "))
 		return 2
 	}
+	if commandHelpRequested(cmdArgs) {
+		commandUsage(stdout, cmd)
+		return 0
+	}
 	if *server == "" {
 		_, _ = fmt.Fprintln(stderr, "error: --server (or TRSTCTL_SERVER) is required")
 		return 2
 	}
 
-	path, query, body, err := buildRequest(cmd, cmdArgs, stdin)
+	path, query, body, force, err := buildRequest(cmd, cmdArgs, stdin)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 2
+	}
+	if cmd.Destructive() && !*globalForce && !force {
+		_, _ = fmt.Fprintf(stderr, "error: %s is destructive; rerun with --force after reviewing the command-specific help\n", strings.Join(cmd.Name, " "))
 		return 2
 	}
 
@@ -274,26 +283,26 @@ func secretStorePath(name string) string {
 
 // buildRequest resolves the path (substituting path params), query string, and
 // request body for a command from its arguments.
-func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, query url.Values, body []byte, err error) {
-	positionals, query, bodyFilePath, err := splitArgs(args, cmd.Query)
+func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, query url.Values, body []byte, force bool, err error) {
+	positionals, query, bodyFilePath, force, err := splitArgs(args, cmd.Query)
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, false, err
 	}
 
 	if cmd.Body == bodyCypher {
 		if len(positionals) == 0 {
-			return "", nil, nil, fmt.Errorf("%s needs a query argument", strings.Join(cmd.Name, " "))
+			return "", nil, nil, false, fmt.Errorf("%s needs a query argument", strings.Join(cmd.Name, " "))
 		}
 		body, err = json.Marshal(map[string]string{"query": strings.Join(positionals, " ")})
 		if err != nil {
-			return "", nil, nil, err
+			return "", nil, nil, false, err
 		}
-		return cmd.Path, query, body, nil
+		return cmd.Path, query, body, force, nil
 	}
 
 	params := cmd.pathParams()
 	if len(positionals) != len(params) {
-		return "", nil, nil, fmt.Errorf("%s expects %d argument(s) (%s), got %d",
+		return "", nil, nil, false, fmt.Errorf("%s expects %d argument(s) (%s), got %d",
 			strings.Join(cmd.Name, " "), len(params), strings.Join(params, ", "), len(positionals))
 	}
 	path = cmd.Path
@@ -303,19 +312,19 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 
 	if cmd.Body == bodyFile {
 		if bodyFilePath == "" {
-			return "", nil, nil, fmt.Errorf("%s needs a request body: -f <file> or -f - for stdin", strings.Join(cmd.Name, " "))
+			return "", nil, nil, false, fmt.Errorf("%s needs a request body: -f <file> or -f - for stdin", strings.Join(cmd.Name, " "))
 		}
 		body, err = readBody(bodyFilePath, stdin)
 		if err != nil {
-			return "", nil, nil, err
+			return "", nil, nil, false, err
 		}
 	}
-	return path, query, body, nil
+	return path, query, body, force, nil
 }
 
 // splitArgs separates positional arguments, recognized query flags, and the -f
 // body file from a command's arguments, in any order.
-func splitArgs(args, queryNames []string) (positionals []string, query url.Values, bodyFile string, err error) {
+func splitArgs(args, queryNames []string) (positionals []string, query url.Values, bodyFile string, force bool, err error) {
 	allowed := map[string]bool{}
 	for _, q := range queryNames {
 		allowed[q] = true
@@ -327,11 +336,19 @@ func splitArgs(args, queryNames []string) (positionals []string, query url.Value
 		case a == "-f" || a == "--file":
 			i++
 			if i >= len(args) {
-				return nil, nil, "", fmt.Errorf("-f requires a value")
+				return nil, nil, "", false, fmt.Errorf("-f requires a value")
 			}
 			bodyFile = args[i]
 		case strings.HasPrefix(a, "-f="):
 			bodyFile = strings.TrimPrefix(a, "-f=")
+		case a == "--force":
+			force = true
+		case strings.HasPrefix(a, "--force="):
+			val := strings.TrimPrefix(a, "--force=")
+			if val != "true" {
+				return nil, nil, "", false, fmt.Errorf("--force only accepts true when specified with a value")
+			}
+			force = true
 		case strings.HasPrefix(a, "--"):
 			name := strings.TrimPrefix(a, "--")
 			var val string
@@ -340,19 +357,19 @@ func splitArgs(args, queryNames []string) (positionals []string, query url.Value
 			} else {
 				i++
 				if i >= len(args) {
-					return nil, nil, "", fmt.Errorf("flag --%s requires a value", name)
+					return nil, nil, "", false, fmt.Errorf("flag --%s requires a value", name)
 				}
 				val = args[i]
 			}
 			if !allowed[name] {
-				return nil, nil, "", fmt.Errorf("unknown flag --%s", name)
+				return nil, nil, "", false, fmt.Errorf("unknown flag --%s", name)
 			}
 			query.Set(name, val)
 		default:
 			positionals = append(positionals, a)
 		}
 	}
-	return positionals, query, bodyFile, nil
+	return positionals, query, bodyFile, force, nil
 }
 
 // readBody reads a request body from a file, or stdin when the path is "-".
@@ -435,6 +452,55 @@ func usage(w io.Writer) {
 		_, _ = fmt.Fprintf(w, "  %-26s %s\n", strings.Join(c.Name, " "), c.Summary)
 	}
 	_, _ = fmt.Fprintln(w, "  version                    Print version information")
+	_, _ = fmt.Fprintln(w, "\nRun 'trstctl <command> --help' for command-specific arguments and an example.")
+}
+
+func commandHelpRequested(args []string) bool {
+	return len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help")
+}
+
+func commandUsage(w io.Writer, cmd Command) {
+	name := strings.Join(cmd.Name, " ")
+	_, _ = fmt.Fprintf(w, "Usage: trstctl %s", name)
+	for _, p := range cmd.pathParams() {
+		_, _ = fmt.Fprintf(w, " <%s>", p)
+	}
+	if cmd.Body == bodyFile {
+		_, _ = fmt.Fprint(w, " -f <file|->")
+	}
+	if cmd.Body == bodyCypher {
+		_, _ = fmt.Fprint(w, " <query>")
+	}
+	for _, q := range cmd.Query {
+		_, _ = fmt.Fprintf(w, " [--%s value]", q)
+	}
+	if cmd.Destructive() {
+		_, _ = fmt.Fprint(w, " --force")
+	}
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintf(w, "\n%s\n", cmd.Summary)
+	_, _ = fmt.Fprintf(w, "\nExample: %s\n", commandExample(cmd))
+}
+
+func commandExample(cmd Command) string {
+	parts := []string{"trstctl"}
+	parts = append(parts, cmd.Name...)
+	for _, p := range cmd.pathParams() {
+		parts = append(parts, "<"+p+">")
+	}
+	if cmd.Body == bodyFile {
+		parts = append(parts, "-f", "request.json")
+	}
+	if cmd.Body == bodyCypher {
+		parts = append(parts, "\"MATCH (n) RETURN n\"")
+	}
+	if len(cmd.Query) > 0 {
+		parts = append(parts, "--"+cmd.Query[0], "value")
+	}
+	if cmd.Destructive() {
+		parts = append(parts, "--force")
+	}
+	return strings.Join(parts, " ")
 }
 
 func runUsage(w io.Writer) {

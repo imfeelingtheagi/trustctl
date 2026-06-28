@@ -116,6 +116,65 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestDestructiveCommandRequiresForce(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"revoked":1}`, &cap)
+	body := `{"ids":["identity-1"]}`
+
+	code, _, stderr := run(t, []string{"identities", "bulk-revoke", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "destructive") || !strings.Contains(stderr, "--force") {
+		t.Fatalf("stderr = %q, want destructive --force guidance", stderr)
+	}
+	if cap.Method != "" {
+		t.Fatalf("destructive command reached server without force: %s %s", cap.Method, cap.Path)
+	}
+}
+
+func TestDestructiveCommandSucceedsWithForce(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"revoked":1}`, &cap)
+	body := `{"ids":["identity-1"]}`
+
+	code, _, stderr := run(t, []string{"identities", "bulk-revoke", "--force", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/identities/bulk-revoke" {
+		t.Fatalf("request = %s %s, want POST /api/v1/identities/bulk-revoke", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("destructive mutation should still send an Idempotency-Key")
+	}
+}
+
+func TestCommandHelpIncludesExampleForEveryAPIOperation(t *testing.T) {
+	for _, cmd := range cli.Commands() {
+		if strings.Join(cmd.Name, " ") == "run" {
+			continue
+		}
+		args := append(append([]string{}, cmd.Name...), "--help")
+		code, stdout, stderr := run(t, args, cli.Env{}, "")
+		if code != 0 {
+			t.Fatalf("%s --help exit = %d, stderr = %q", strings.Join(cmd.Name, " "), code, stderr)
+		}
+		if !strings.Contains(stdout, "Usage: trstctl "+strings.Join(cmd.Name, " ")) {
+			t.Errorf("%s --help missing usage: %q", strings.Join(cmd.Name, " "), stdout)
+		}
+		if !strings.Contains(stdout, "Example: trstctl "+strings.Join(cmd.Name, " ")) {
+			t.Errorf("%s --help missing example: %q", strings.Join(cmd.Name, " "), stdout)
+		}
+		if cmd.Destructive() && !strings.Contains(stdout, "--force") {
+			t.Errorf("%s --help missing --force warning in usage/example: %q", strings.Join(cmd.Name, " "), stdout)
+		}
+	}
+}
+
 func TestAttestedIssuanceCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","credential_id":"cred:test","subject":"ns/default/sa/web","not_after":"2026-06-24T12:00:00Z","attestation":{"id":"att:k8s","method":"k8s_sat","subject":"ns/default/sa/web","issuer":"kubernetes","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &cap)
