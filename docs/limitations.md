@@ -185,8 +185,11 @@ remaining integration work.
   `/api/v1/ca/authorities/imported`,
   `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
   `/api/v1/ca/authorities/{id}/offline-intermediates`, and
-  `/api/v1/external-cas`. Rotation and cross-signing remain library/operator
-  workflows until their served routes ship (see the
+  `/api/v1/external-cas`. Public/private direct-CA discovery is now served at
+  `/api/v1/ca/discovery`, which returns configured public upstream CAs, configured
+  private upstream CAs, and imported CA hierarchy authorities without PEM or key
+  material. Rotation and cross-signing remain library/operator workflows until
+  their served routes ship (see the
   [key-ceremony runbook](runbooks/key-ceremony.md)).
 - **14 CA integrations** are present under the served external-CA registry when the
   operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,

@@ -585,6 +585,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List public and private CA discovery inventory */
+        get: operations["listCADiscoveryInventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cbom/assets": {
         parameters: {
             query?: never;
@@ -2728,6 +2745,37 @@ export interface components {
             /** Format: uuid */
             ceremony_id: string;
             spec: components["schemas"]["CASpec"];
+        };
+        CADiscoveryInventory: {
+            items: components["schemas"]["CADiscoveryItem"][];
+            summary: components["schemas"]["CADiscoverySummary"];
+        };
+        CADiscoveryItem: {
+            discovery_methods: string[];
+            id: string;
+            import_path?: string;
+            inventory_path: string;
+            issuance_path?: string;
+            managed: boolean;
+            name: string;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: uuid */
+            parent_id?: string;
+            /** @enum {string} */
+            scope: "public" | "private";
+            serial?: string;
+            /** @enum {string} */
+            source: "external_ca_registry" | "ca_hierarchy";
+            source_id: string;
+            status: string;
+            type: string;
+        };
+        CADiscoverySummary: {
+            authority_count: number;
+            external_registry_count: number;
+            private_count: number;
+            public_count: number;
         };
         CAImportExistingRequest: {
             /** Format: uuid */
@@ -5890,6 +5938,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAKeyCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCADiscoveryInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CADiscoveryInventory"];
                 };
             };
             /** @description client error */

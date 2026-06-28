@@ -10,6 +10,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
   ApiError,
+  type CADiscovery,
   type CAAuthority,
   type CACeremonyStartRequest,
   type CAIntermediateCSR,
@@ -66,6 +67,7 @@ const existingCADefaults: ExistingCAForm = {
 
 export function CAHierarchy() {
   const [issuers, setIssuers] = useState<Issuer[]>([]);
+  const [caDiscovery, setCADiscovery] = useState<CADiscovery | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -97,14 +99,15 @@ export function CAHierarchy() {
   async function load() {
     setLoading(true);
     setNotice(null);
-    try {
-      setIssuers(await api.issuers());
-    } catch (err) {
+    const [issuerResult, discoveryResult] = await Promise.allSettled([api.issuers(), api.caDiscoveryInventory()]);
+    if (issuerResult.status === "fulfilled") {
+      setIssuers(issuerResult.value);
+    } else {
       setIssuers([]);
-      setNotice(noticeForError(err, "Could not load issuers"));
-    } finally {
-      setLoading(false);
+      setNotice(noticeForError(issuerResult.reason, "Could not load issuers"));
     }
+    setCADiscovery(discoveryResult.status === "fulfilled" ? discoveryResult.value : null);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -369,6 +372,8 @@ export function CAHierarchy() {
 
       <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
 
+      <CADiscoveryInventoryPanel inventory={caDiscovery} />
+
       {probe && <ProbeBanner probe={probe} onDismiss={() => setProbe(null)} />}
 
       <section aria-labelledby="issuer-heading" className="grid gap-3 border-y border-border py-4">
@@ -509,6 +514,91 @@ export function CAHierarchy() {
       )}
     </section>
   );
+}
+
+function CADiscoveryInventoryPanel({ inventory }: { inventory: CADiscovery | null }) {
+  const { t } = useTranslation();
+  if (!inventory) return null;
+  const items = inventory.items ?? [];
+  return (
+    <section aria-labelledby="ca-discovery-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Globe2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <h2 id="ca-discovery-heading" className="text-title font-semibold">
+              {t("caHierarchy.discovery.heading")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("caHierarchy.discovery.description")}
+            </p>
+          </div>
+        </div>
+        <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+          <SummaryPill label={t("caHierarchy.discovery.summaryPublic")} value={inventory.summary.public_count} />
+          <SummaryPill label={t("caHierarchy.discovery.summaryPrivate")} value={inventory.summary.private_count} />
+          <SummaryPill label={t("caHierarchy.discovery.summaryUpstream")} value={inventory.summary.external_registry_count} />
+          <SummaryPill label={t("caHierarchy.discovery.summaryAuthorities")} value={inventory.summary.authority_count} />
+        </dl>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState title={t("caHierarchy.discovery.emptyTitle")}>{t("caHierarchy.discovery.emptyBody")}</EmptyState>
+      ) : (
+        <div className="overflow-x-auto rounded-control border border-border">
+          <table className="min-w-full divide-y divide-border text-sm">
+            <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">{t("caHierarchy.discovery.columnName")}</th>
+                <th className="px-3 py-2 font-medium">{t("caHierarchy.discovery.columnScope")}</th>
+                <th className="px-3 py-2 font-medium">{t("caHierarchy.discovery.columnSource")}</th>
+                <th className="px-3 py-2 font-medium">{t("caHierarchy.discovery.columnStatus")}</th>
+                <th className="px-3 py-2 font-medium">{t("caHierarchy.discovery.columnServedPath")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border bg-background">
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td className="px-3 py-2 align-top">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="font-mono text-xs text-muted-foreground">{item.source_id}</div>
+                  </td>
+                  <td className="px-3 py-2 align-top">{item.scope === "public" ? t("caHierarchy.discovery.scopePublic") : t("caHierarchy.discovery.scopePrivate")}</td>
+                  <td className="px-3 py-2 align-top">{caDiscoverySourceLabel(item.source, t)}</td>
+                  <td className="px-3 py-2 align-top">
+                    {item.status}
+                    {item.managed && <span className="ml-2 text-xs text-muted-foreground">{t("caHierarchy.discovery.signerBacked")}</span>}
+                  </td>
+                  <td className="px-3 py-2 align-top font-mono text-xs text-muted-foreground break-all">
+                    {item.issuance_path || item.import_path || item.inventory_path}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SummaryPill({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-control border border-border px-3 py-2">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-base font-semibold">{value}</dd>
+    </div>
+  );
+}
+
+function caDiscoverySourceLabel(source: string, t: ReturnType<typeof useTranslation>["t"]) {
+  switch (source) {
+    case "external_ca_registry":
+      return t("caHierarchy.discovery.sourceExternal");
+    case "ca_hierarchy":
+      return t("caHierarchy.discovery.sourceHierarchy");
+    default:
+      return source;
+  }
 }
 
 function ExistingCAImportWorkflow({

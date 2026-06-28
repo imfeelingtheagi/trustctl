@@ -255,6 +255,23 @@ func componentSchemas() map[string]*Schema {
 		"extended_key_usages": {Type: "array", Items: str()},
 		"created_at":          timestamp(),
 	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")
+	caDiscoveryItem := object(map[string]*Schema{
+		"id": str(), "source_id": str(), "source": {Type: "string", Enum: []string{"external_ca_registry", "ca_hierarchy"}},
+		"scope": {Type: "string", Enum: []string{"public", "private"}}, "type": str(), "name": str(), "status": str(),
+		"managed": {Type: "boolean"}, "parent_id": uuid(), "serial": str(), "not_after": timestamp(),
+		"inventory_path": str(), "issuance_path": str(), "import_path": str(),
+		"discovery_methods": {Type: "array", Items: str()},
+	}, "id", "source_id", "source", "scope", "type", "name", "status", "managed", "inventory_path", "discovery_methods")
+	caDiscoverySummary := object(map[string]*Schema{
+		"public_count":            {Type: "integer"},
+		"private_count":           {Type: "integer"},
+		"external_registry_count": {Type: "integer"},
+		"authority_count":         {Type: "integer"},
+	}, "public_count", "private_count", "external_registry_count", "authority_count")
+	caDiscoveryInventory := object(map[string]*Schema{
+		"items":   {Type: "array", Items: ref("CADiscoveryItem")},
+		"summary": ref("CADiscoverySummary"),
+	}, "items", "summary")
 	caIssueLeafReq := object(map[string]*Schema{
 		"csr_pem": str(), "ttl_seconds": {Type: "integer"},
 	}, "csr_pem")
@@ -1443,6 +1460,9 @@ func componentSchemas() map[string]*Schema {
 		"CAIssueIntermediateRequest":            caIssueIntermediateReq,
 		"CAAuthority":                           caAuthority,
 		"CAAuthorityList":                       list("CAAuthority"),
+		"CADiscoveryItem":                       caDiscoveryItem,
+		"CADiscoverySummary":                    caDiscoverySummary,
+		"CADiscoveryInventory":                  caDiscoveryInventory,
 		"CAIssueLeafRequest":                    caIssueLeafReq,
 		"CAIssuedIntermediate":                  caIssuedIntermediate,
 		"CAIssuedLeaf":                          caIssuedLeaf,

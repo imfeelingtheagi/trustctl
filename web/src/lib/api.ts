@@ -25,6 +25,7 @@ import type {
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
   CAAuthority,
+  CADiscoveryInventory,
   CodeSigningKeylessRequest,
   CodeSigningRequest,
   CodeSigningSignature,
@@ -189,6 +190,7 @@ export type CertificateIngestRequest = CertificateIngest;
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
+export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
@@ -647,6 +649,7 @@ export interface Api {
   issuers(): Promise<Issuer[]>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
   externalCAs(): Promise<ExternalCA[]>;
+  caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
@@ -798,6 +801,7 @@ export const api: Api = {
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),
   externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
+  caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),

@@ -102,6 +102,18 @@ For Linux certificate files, the shipped agent can inventory public certificate 
 at startup with `--inventory-cert-roots`. It reports references, fingerprints, and
 certificate metadata only — never private keys or secret values.
 
+### Direct CA discovery (CAP-DISC-04) — public and private CA inventory
+
+`GET /api/v1/ca/discovery` is the served direct-CA inventory for CA estates. It
+enumerates configured public upstream CAs, configured private upstream CAs, and
+imported private CA hierarchy authorities in one tenant-scoped response. Each row
+contains source id, source kind, public/private scope, status, and served path
+pointers such as `/api/v1/external-cas/{id}/issue` or
+`/api/v1/ca/authorities/{id}/issue`. The response intentionally omits certificate
+PEM and private-key bytes; operators use it to answer which CAs are connected or
+imported, then follow the referenced served route for issuance or import workflow
+details.
+
 Trust-store discovery is a separate agent collector because a trusted CA is not the
 same thing as a deployed service certificate. The agent can read public trust anchors
 from OS trust directories, Java `cacerts`/JKS files, NSS profile exports, browser

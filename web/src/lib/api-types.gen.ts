@@ -284,6 +284,36 @@ export interface CACreateRootRequest {
   spec: CASpec;
 }
 
+export interface CADiscoveryInventory {
+  items: CADiscoveryItem[];
+  summary: CADiscoverySummary;
+}
+
+export interface CADiscoveryItem {
+  discovery_methods: string[];
+  id: string;
+  import_path?: string;
+  inventory_path: string;
+  issuance_path?: string;
+  managed: boolean;
+  name: string;
+  not_after?: string;
+  parent_id?: string;
+  scope: "public" | "private";
+  serial?: string;
+  source: "external_ca_registry" | "ca_hierarchy";
+  source_id: string;
+  status: string;
+  type: string;
+}
+
+export interface CADiscoverySummary {
+  authority_count: number;
+  external_registry_count: number;
+  private_count: number;
+  public_count: number;
+}
+
 export interface CAImportExistingRequest {
   ceremony_id: string;
   certificate_pem: string;

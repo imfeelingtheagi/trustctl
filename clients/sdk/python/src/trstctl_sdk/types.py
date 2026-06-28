@@ -418,6 +418,48 @@ CACreateRootRequest = TypedDict(
     total=False,
 )
 
+CADiscoveryInventory = TypedDict(
+    'CADiscoveryInventory',
+    {
+        'items': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+CADiscoveryItem = TypedDict(
+    'CADiscoveryItem',
+    {
+        'discovery_methods': list[str],
+        'id': str,
+        'import_path': str,
+        'inventory_path': str,
+        'issuance_path': str,
+        'managed': bool,
+        'name': str,
+        'not_after': str,
+        'parent_id': str,
+        'scope': str,
+        'serial': str,
+        'source': str,
+        'source_id': str,
+        'status': str,
+        'type': str,
+    },
+    total=False,
+)
+
+CADiscoverySummary = TypedDict(
+    'CADiscoverySummary',
+    {
+        'authority_count': int,
+        'external_registry_count': int,
+        'private_count': int,
+        'public_count': int,
+    },
+    total=False,
+)
+
 CAImportExistingRequest = TypedDict(
     'CAImportExistingRequest',
     {

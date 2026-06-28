@@ -90,6 +90,73 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 	}
 }
 
+func TestServedDirectCADiscoveryInventoryCAPDISC04(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.ExternalCAs = []ExternalCA{
+			{ID: "digicert-prod", Type: "digicert", CA: newIdempotentExternalCA("digicert-prod")},
+			{ID: "corp-adcs", Type: "adcs", CA: newIdempotentExternalCA("corp-adcs")},
+		}
+	})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "cap-disc-04-operator", []string{
+		"issuers:write", "issuers:read",
+	})
+	approver := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "cap-disc-04-approver", []string{
+		"issuers:write", "issuers:read",
+	})
+
+	privateRootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(privateRootKey.Destroy)
+	privateRoot, err := crypto.SelfSignedHierarchyCA(privateRootKey, crypto.HierarchyCAProfile{
+		CommonName:          "customer private offline root",
+		MaxPathLen:          1,
+		TTL:                 365 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"corp.example.test"},
+		EKUs:                []string{"serverAuth"},
+	})
+	if err != nil {
+		t.Fatalf("create private root fixture: %v", err)
+	}
+	privateSpec := map[string]any{
+		"common_name":           "customer private offline root",
+		"max_path_len":          1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"corp.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	ceremony := createCACeremonyWithCertificate(t, h, operator, "import_offline_root", string(privateRoot.CertificatePEM), privateSpec, 1, "cap-disc-04-offline-root-ceremony")
+	approveCACeremony(t, h, approver, ceremony.ID, 1, "cap-disc-04-offline-root-approval")
+	importedPrivate := importOfflineRootCA(t, h, operator, ceremony.ID, string(privateRoot.CertificatePEM), privateSpec, "cap-disc-04-offline-root-import")
+
+	code, raw := doBearer(t, h.ts, http.MethodGet, "/api/v1/ca/discovery", operator, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("direct CA discovery inventory = %d body=%s; want 200", code, raw)
+	}
+	var got caDiscoveryInventoryResponse
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("decode CA discovery inventory: %v body=%s", err, raw)
+	}
+	if !hasCADiscoveryItem(got.Items, "external-ca/digicert-prod", "public", "external_ca_registry") {
+		t.Fatalf("CA discovery items = %+v, want public DigiCert upstream", got.Items)
+	}
+	if !hasCADiscoveryItem(got.Items, "external-ca/corp-adcs", "private", "external_ca_registry") {
+		t.Fatalf("CA discovery items = %+v, want private ADCS upstream", got.Items)
+	}
+	if !hasCADiscoveryItem(got.Items, "ca-authority/"+importedPrivate.ID, "private", "ca_hierarchy") {
+		t.Fatalf("CA discovery items = %+v, want imported private hierarchy CA %s", got.Items, importedPrivate.ID)
+	}
+	if got.Summary.PublicCount < 1 || got.Summary.PrivateCount < 2 || got.Summary.ExternalRegistryCount != 2 || got.Summary.AuthorityCount != 1 {
+		t.Fatalf("CA discovery summary = %+v, want public/private external and imported authority counts", got.Summary)
+	}
+	if strings.Contains(string(raw), "PRIVATE KEY") || strings.Contains(string(raw), "BEGIN CERTIFICATE") {
+		t.Fatalf("CA discovery inventory leaked key or certificate PEM: %s", raw)
+	}
+}
+
 func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
 	const (
 		caID    = "guarded"
@@ -523,6 +590,31 @@ func forceExternalCAOutboxDue(t *testing.T, h *servedHarness, key string) {
 func hasExternalCA(items []externalCAListItem, id, typ string) bool {
 	for _, item := range items {
 		if item.ID == id && item.Type == typ && item.Name != "" {
+			return true
+		}
+	}
+	return false
+}
+
+type caDiscoveryInventoryResponse struct {
+	Items   []caDiscoveryInventoryItem `json:"items"`
+	Summary struct {
+		PublicCount           int `json:"public_count"`
+		PrivateCount          int `json:"private_count"`
+		ExternalRegistryCount int `json:"external_registry_count"`
+		AuthorityCount        int `json:"authority_count"`
+	} `json:"summary"`
+}
+
+type caDiscoveryInventoryItem struct {
+	ID     string `json:"id"`
+	Scope  string `json:"scope"`
+	Source string `json:"source"`
+}
+
+func hasCADiscoveryItem(items []caDiscoveryInventoryItem, id, scope, source string) bool {
+	for _, item := range items {
+		if item.ID == id && item.Scope == scope && item.Source == source {
 			return true
 		}
 	}

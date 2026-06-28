@@ -8,6 +8,9 @@ import { CAHierarchy } from "@/pages/CAHierarchy";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     issuers: vi.fn(),
+    profiles: vi.fn(),
+    caDiscoveryInventory: vi.fn(),
+    externalCAs: vi.fn(),
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
@@ -56,6 +59,59 @@ describe("CA hierarchy and custody surface", () => {
         public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA",
       },
     ]);
+    apiMock.profiles.mockReset().mockResolvedValue([]);
+    apiMock.externalCAs.mockReset().mockResolvedValue([]);
+    apiMock.caDiscoveryInventory.mockReset().mockResolvedValue({
+      items: [
+        {
+          id: "external-ca/digicert-prod",
+          source_id: "digicert-prod",
+          source: "external_ca_registry",
+          scope: "public",
+          type: "digicert",
+          name: "digicert-prod",
+          status: "available",
+          managed: false,
+          inventory_path: "/api/v1/external-cas",
+          issuance_path: "/api/v1/external-cas/digicert-prod/issue",
+          discovery_methods: ["configured-upstream-ca", "direct-provider-api"],
+        },
+        {
+          id: "external-ca/corp-adcs",
+          source_id: "corp-adcs",
+          source: "external_ca_registry",
+          scope: "private",
+          type: "adcs",
+          name: "corp-adcs",
+          status: "available",
+          managed: false,
+          inventory_path: "/api/v1/external-cas",
+          issuance_path: "/api/v1/external-cas/corp-adcs/issue",
+          discovery_methods: ["configured-upstream-ca", "direct-provider-api"],
+        },
+        {
+          id: "ca-authority/ca-existing-imported",
+          source_id: "ca-existing-imported",
+          source: "ca_hierarchy",
+          scope: "private",
+          type: "intermediate",
+          name: "Imported Existing CA",
+          status: "active",
+          managed: true,
+          serial: "03",
+          inventory_path: "/api/v1/ca/authorities",
+          issuance_path: "/api/v1/ca/authorities/ca-existing-imported/issue",
+          import_path: "/api/v1/ca/authorities/imported",
+          discovery_methods: ["public-chain-inspection", "ca-hierarchy-projection", "signer-backed-authority"],
+        },
+      ],
+      summary: {
+        public_count: 1,
+        private_count: 2,
+        external_registry_count: 2,
+        authority_count: 1,
+      },
+    });
     apiMock.createCACeremony.mockImplementation(async (input: { operation: string }) => {
       const base = {
         tenant_id: "tenant-1",
@@ -146,6 +202,22 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("Root CA -> SSH CA")).toBeInTheDocument();
     expect(screen.getByText(/BEGIN PUBLIC KEY/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Certificates for Root CA" })).toHaveAttribute("href", "/certificates?issuer=iss-root");
+  });
+
+  it("renders public and private direct CA discovery inventory", async () => {
+    renderCAHierarchy();
+
+    expect(await screen.findByRole("heading", { name: "CA discovery inventory" })).toBeInTheDocument();
+    expect(apiMock.caDiscoveryInventory).toHaveBeenCalled();
+    expect(screen.getAllByText("digicert-prod").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("corp-adcs").length).toBeGreaterThan(0);
+    expect(screen.getByText("Imported Existing CA")).toBeInTheDocument();
+    expect(screen.getAllByText("External CA registry").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CA hierarchy").length).toBeGreaterThan(0);
+    expect(screen.getByText("/api/v1/external-cas/digicert-prod/issue")).toBeInTheDocument();
+    expect(screen.getByText("/api/v1/ca/authorities/ca-existing-imported/issue")).toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/PRIVATE KEY/)).not.toBeInTheDocument();
   });
 
   it("starts and approves a CA key ceremony through the API", async () => {
@@ -286,7 +358,7 @@ describe("CA hierarchy and custody surface", () => {
         }),
       ),
     );
-    expect(await screen.findByText("ca-existing-imported")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("ca-existing-imported").length).toBeGreaterThan(0));
     expect(screen.getAllByText("customer-existing-ca").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();

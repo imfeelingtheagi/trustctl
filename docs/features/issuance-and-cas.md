@@ -39,6 +39,12 @@ The running binary now exposes configured upstreams as a served registry at
 `POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
 `Idempotency-Key`.
 
+The same running binary also exposes direct CA discovery at
+`GET /api/v1/ca/discovery`. That read-only inventory normalizes configured public
+upstream CAs, configured private upstream CAs, and imported private CA hierarchy
+authorities into one response with public/private counts, source ids, status, and
+served path pointers. It does not return certificate PEM or private key material.
+
 That single path is where the guarantees live. Each issuance carries an
 [`Idempotency-Key`](../glossary.md): the first call mints the certificate *and* writes a
 `ca.issue` record to the [outbox](../glossary.md) in the same database transaction

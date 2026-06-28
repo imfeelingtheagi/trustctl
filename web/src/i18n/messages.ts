@@ -224,6 +224,78 @@ export const messages = {
     defaultMessage: "CA hierarchy",
     description: "Primary navigation item.",
   },
+  "caHierarchy.discovery.heading": {
+    defaultMessage: "CA discovery inventory",
+    description: "Heading for the CA hierarchy direct-CA discovery inventory panel.",
+  },
+  "caHierarchy.discovery.description": {
+    defaultMessage: "Public upstream CAs, private upstream CAs, and imported CA hierarchy authorities are normalized into one read-only inventory.",
+    description: "Short description for the direct-CA discovery inventory panel.",
+  },
+  "caHierarchy.discovery.summaryPublic": {
+    defaultMessage: "Public",
+    description: "Summary label for public CAs in the direct-CA discovery inventory.",
+  },
+  "caHierarchy.discovery.summaryPrivate": {
+    defaultMessage: "Private",
+    description: "Summary label for private CAs in the direct-CA discovery inventory.",
+  },
+  "caHierarchy.discovery.summaryUpstream": {
+    defaultMessage: "Upstream",
+    description: "Summary label for configured upstream CAs in the direct-CA discovery inventory.",
+  },
+  "caHierarchy.discovery.summaryAuthorities": {
+    defaultMessage: "Authorities",
+    description: "Summary label for imported hierarchy authorities in the direct-CA discovery inventory.",
+  },
+  "caHierarchy.discovery.emptyTitle": {
+    defaultMessage: "No CAs discovered",
+    description: "Empty-state title for the direct-CA discovery inventory.",
+  },
+  "caHierarchy.discovery.emptyBody": {
+    defaultMessage: "Connect an upstream CA or import an authority to populate the inventory.",
+    description: "Empty-state body for the direct-CA discovery inventory.",
+  },
+  "caHierarchy.discovery.columnName": {
+    defaultMessage: "Name",
+    description: "Table column label for discovered CA name.",
+  },
+  "caHierarchy.discovery.columnScope": {
+    defaultMessage: "Scope",
+    description: "Table column label for discovered CA public/private scope.",
+  },
+  "caHierarchy.discovery.columnSource": {
+    defaultMessage: "Source",
+    description: "Table column label for discovered CA source.",
+  },
+  "caHierarchy.discovery.columnStatus": {
+    defaultMessage: "Status",
+    description: "Table column label for discovered CA status.",
+  },
+  "caHierarchy.discovery.columnServedPath": {
+    defaultMessage: "Served path",
+    description: "Table column label for the API path associated with a discovered CA.",
+  },
+  "caHierarchy.discovery.scopePublic": {
+    defaultMessage: "Public",
+    description: "Scope label for public CAs.",
+  },
+  "caHierarchy.discovery.scopePrivate": {
+    defaultMessage: "Private",
+    description: "Scope label for private CAs.",
+  },
+  "caHierarchy.discovery.sourceExternal": {
+    defaultMessage: "External CA registry",
+    description: "Source label for CAs configured in the upstream CA registry.",
+  },
+  "caHierarchy.discovery.sourceHierarchy": {
+    defaultMessage: "CA hierarchy",
+    description: "Source label for CAs stored in the private CA hierarchy.",
+  },
+  "caHierarchy.discovery.signerBacked": {
+    defaultMessage: "signer-backed",
+    description: "Small status label for discovered authorities with a signer-held key handle.",
+  },
   "caHierarchy.offline.heading": {
     defaultMessage: "Offline root",
     description: "Heading for the CA hierarchy offline root workflow.",
@@ -763,6 +835,24 @@ const esESCatalog = {
   "nav.item.profiles": "Perfiles de certificado",
   "nav.item.issuance": "Emisión",
   "nav.item.caHierarchy": "Jerarquía de CA",
+  "caHierarchy.discovery.heading": "Inventario de descubrimiento de CA",
+  "caHierarchy.discovery.description": "Las CA ascendentes públicas, las CA ascendentes privadas y las autoridades importadas de la jerarquía de CA se normalizan en un inventario de solo lectura.",
+  "caHierarchy.discovery.summaryPublic": "Públicas",
+  "caHierarchy.discovery.summaryPrivate": "Privadas",
+  "caHierarchy.discovery.summaryUpstream": "Ascendentes",
+  "caHierarchy.discovery.summaryAuthorities": "Autoridades",
+  "caHierarchy.discovery.emptyTitle": "No se descubrieron CA",
+  "caHierarchy.discovery.emptyBody": "Conecta una CA ascendente o importa una autoridad para completar el inventario.",
+  "caHierarchy.discovery.columnName": "Nombre",
+  "caHierarchy.discovery.columnScope": "Alcance",
+  "caHierarchy.discovery.columnSource": "Origen",
+  "caHierarchy.discovery.columnStatus": "Estado",
+  "caHierarchy.discovery.columnServedPath": "Ruta servida",
+  "caHierarchy.discovery.scopePublic": "Pública",
+  "caHierarchy.discovery.scopePrivate": "Privada",
+  "caHierarchy.discovery.sourceExternal": "Registro de CA externas",
+  "caHierarchy.discovery.sourceHierarchy": "Jerarquía de CA",
+  "caHierarchy.discovery.signerBacked": "respaldada por firmante",
   "caHierarchy.offline.heading": "Raíz sin conexión",
   "caHierarchy.offline.description": "Importa una raíz pública, genera una CSR de intermediaria retenida por el firmante e importa la intermediaria firmada por la raíz.",
   "caHierarchy.offline.errorTitle": "Falló la acción de raíz sin conexión",

@@ -1024,6 +1024,122 @@
         ],
         "type": "object"
       },
+      "CADiscoveryInventory": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CADiscoveryItem"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CADiscoverySummary"
+          }
+        },
+        "required": [
+          "items",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "CADiscoveryItem": {
+        "properties": {
+          "discovery_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "import_path": {
+            "type": "string"
+          },
+          "inventory_path": {
+            "type": "string"
+          },
+          "issuance_path": {
+            "type": "string"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "private"
+            ],
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "external_ca_registry",
+              "ca_hierarchy"
+            ],
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "source",
+          "scope",
+          "type",
+          "name",
+          "status",
+          "managed",
+          "inventory_path",
+          "discovery_methods"
+        ],
+        "type": "object"
+      },
+      "CADiscoverySummary": {
+        "properties": {
+          "authority_count": {
+            "type": "integer"
+          },
+          "external_registry_count": {
+            "type": "integer"
+          },
+          "private_count": {
+            "type": "integer"
+          },
+          "public_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "public_count",
+          "private_count",
+          "external_registry_count",
+          "authority_count"
+        ],
+        "type": "object"
+      },
       "CAImportExistingRequest": {
         "properties": {
           "ceremony_id": {
@@ -9011,6 +9127,53 @@
         ],
         "summary": "Approve a CA key ceremony",
         "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/discovery": {
+      "get": {
+        "operationId": "listCADiscoveryInventory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CADiscoveryInventory"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List public and private CA discovery inventory",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/cbom/assets": {
