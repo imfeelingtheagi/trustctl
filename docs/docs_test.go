@@ -2,6 +2,7 @@ package docs
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/cli"
+	"trstctl.com/trstctl/internal/license"
 )
 
 // requiredPages are the documentation pages S7.6 must deliver, as paths relative
@@ -29,6 +31,7 @@ var requiredPages = []string{
 	"disaster-recovery.md",
 	"migrations.md",
 	"limitations.md",
+	"editions.md",
 	"runbooks/key-ceremony.md",
 	"runbooks/incident-response.md",
 	"runbooks/fleet-rollout.md",
@@ -3386,6 +3389,41 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	sdkPackage := read(t, "../clients/sdk/typescript/package.json")
 	if !strings.Contains(sdkPackage, `"license": "SEE LICENSE IN ../../LICENSE"`) {
 		t.Error("TypeScript SDK package metadata must point at the repository license artifact")
+	}
+}
+
+func TestEditionsMatrixMatchesLicenseFeatureTable(t *testing.T) {
+	body := read(t, "editions.md")
+	for _, tc := range []struct {
+		tier     license.Tier
+		tierName string
+	}{
+		{license.TierEnterprise, "Enterprise"},
+		{license.TierProvider, "Provider"},
+	} {
+		for _, feature := range license.TierFeatures(tc.tier) {
+			want := fmt.Sprintf("| `%s` | %s |", feature, tc.tierName)
+			if !strings.Contains(body, want) {
+				t.Errorf("editions.md missing license feature row %q", want)
+			}
+		}
+	}
+	for _, protocol := range []string{
+		"ACME",
+		"EST",
+		"SCEP",
+		"CMP",
+		"SPIFFE Workload API",
+		"SSH CA",
+		"TSA",
+	} {
+		want := fmt.Sprintf("| %s | Community |", protocol)
+		if !strings.Contains(body, want) {
+			t.Errorf("editions.md must explicitly keep core protocol %q in Community", protocol)
+		}
+	}
+	if strings.Contains(body, "Enterprise protocol") || strings.Contains(body, "Enterprise-only protocol") {
+		t.Error("editions.md must not imply core issuance/enrollment protocols are Enterprise-only")
 	}
 }
 
