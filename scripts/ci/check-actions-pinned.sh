@@ -8,12 +8,6 @@
 # tj-actions/changed-files, 2025). A commit SHA is immutable, so this guard fails
 # CI if any external action regresses to a floating tag.
 #
-# Exception: slsa-github-generator's official generic reusable workflow rejects
-# SHA refs and requires an exact vX.Y.Z tag. That workflow is itself the OIDC
-# signing boundary for SLSA provenance, so this guard allows ONLY that exact
-# workflow path and ONLY an exact semver tag; @v2, @main, and every ordinary
-# action still fail.
-#
 # Scope: a "third-party" action is any `uses:` whose value names an external repo
 # (`owner/repo[/path]@ref`). Local (`./...`) and container (`docker://...`)
 # actions are out of scope. (Today every action we use is third-party; there are
@@ -24,12 +18,6 @@ set -euo pipefail
 
 # A 40-char lowercase-hex commit SHA (what an immutable pin looks like).
 sha_re='[0-9a-f]{40}'
-slsa_generic_re='^slsa-framework/slsa-github-generator/\.github/workflows/generator_generic_slsa3\.yml@v[0-9]+\.[0-9]+\.[0-9]+$'
-
-allowed_tagged_reusable_workflow() {
-	local val="$1"
-	[[ "$val" =~ ${slsa_generic_re} ]]
-}
 
 # offending_uses <workflow-file>
 # Prints every `uses:` line in the file that names a third-party action pinned by
@@ -51,9 +39,6 @@ offending_uses() {
 		# Must be owner/repo[/path]@ref to be a third-party action.
 		[[ "$val" == */*@* ]] || continue
 		ref="${val##*@}"
-		if allowed_tagged_reusable_workflow "$val"; then
-			continue
-		fi
 		if [[ ! "$ref" =~ ^${sha_re}$ ]]; then
 			printf '%s\n' "$line"
 		fi

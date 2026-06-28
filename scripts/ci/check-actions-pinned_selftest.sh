@@ -26,8 +26,6 @@ jobs:
       - uses: docker/build-push-action@${sha} # v6.19.2
       - uses: ./.github/actions/local-thing   # local action: out of scope
       - uses: docker://alpine:3.20             # container action: out of scope
-  slsa:
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
 EOF
 
 # --- BAD fixture A: a floating major tag (@v4) -------------------------------
@@ -57,12 +55,12 @@ jobs:
       - uses: actions/setup-go@34e114876b0b # v5.6.0
 EOF
 
-# --- BAD fixture D: the SLSA exception is exact semver only, not @v2 ---------
+# --- BAD fixture D: SLSA reusable workflow semver tags are not exempt --------
 mkdir -p "$tmp/bad4/.github/workflows"
 cat >"$tmp/bad4/.github/workflows/release.yml" <<EOF
 jobs:
   slsa:
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
 EOF
 
 # --- BAD fixture E: other reusable workflows do not inherit the SLSA exception
@@ -74,11 +72,11 @@ jobs:
 EOF
 
 set +e
-main "$tmp/good" >/dev/null; check "accepts a fully SHA-pinned workflow plus exact SLSA generator tag" 0 $?
+main "$tmp/good" >/dev/null; check "accepts a fully SHA-pinned workflow" 0 $?
 main "$tmp/bad1" >/dev/null; check "rejects a floating major tag (@v4)" 1 $?
 main "$tmp/bad2" >/dev/null; check "rejects a quoted floating semver tag (@v6.19.2)" 1 $?
 main "$tmp/bad3" >/dev/null; check "rejects a short (non-40-hex) sha" 1 $?
-main "$tmp/bad4" >/dev/null; check "rejects non-exact SLSA generator tag (@v2)" 1 $?
+main "$tmp/bad4" >/dev/null; check "rejects semver-tagged SLSA reusable workflow" 1 $?
 main "$tmp/bad5" >/dev/null; check "rejects semver-tagged non-SLSA reusable workflow" 1 $?
 set -e
 

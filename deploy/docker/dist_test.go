@@ -463,21 +463,24 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 
 // TestReleaseWorkflowPublishesSLSAProvenance is the DIST-10 acceptance proof:
 // the release workflow no longer stops at BuildKit provenance. It computes
-// SLSA subjects for every published release artifact class, calls the official
-// slsa-github-generator generic reusable workflow, uploads the signed in-toto
-// provenance to the tag's GitHub Release, and keeps a local dry-run verifier so
-// the subject hashing/provenance contract is testable without GitHub OIDC.
+// SLSA subjects for every published release artifact class, generates a
+// digest-bound in-toto statement through the in-repo helper, signs the provenance
+// with cosign/OIDC, uploads it to the tag's GitHub Release, and keeps a local
+// verifier so the subject hashing/provenance contract is testable without GitHub
+// OIDC.
 func TestReleaseWorkflowPublishesSLSAProvenance(t *testing.T) {
 	wf := repoFile(t, ".github", "workflows", "release.yml")
-	mustContainAll(t, "release SLSA generator wiring", wf,
-		"slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0",
-		"base64-subjects:",
-		"upload-assets: true",
-		"provenance-name:",
-		"actions: read",
+	mustContainAll(t, "release SLSA provenance wiring", wf,
+		"scripts/release/slsa-release-provenance.sh",
+		"SLSA_SUBJECTS_B64:",
+		"sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac",
+		"cosign signs provenance through GitHub OIDC",
 		"id-token: write",
 		"contents: write",
 	)
+	if strings.Contains(wf, "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@") {
+		t.Fatal("release.yml must not use the semver-tagged SLSA reusable workflow")
+	}
 	for _, job := range []string{"image-provenance", "windows-agent-provenance", "helm-chart-provenance"} {
 		if !strings.Contains(wf, job+":") {
 			t.Errorf("release.yml missing %s SLSA provenance job", job)

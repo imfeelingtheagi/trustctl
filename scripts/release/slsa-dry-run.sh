@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Local, offline SLSA provenance dry-run. GitHub's SLSA generator performs the real
-# DSSE signing with OIDC in release.yml; this script creates an equivalent in-toto
-# SLSA predicate for the same subject file so CI can verify the artifact hashing
-# contract without network, Rekor, or GitHub OIDC.
+# Local SLSA provenance statement generator. CI uses it to create a digest-bound
+# in-toto predicate from the same subject files the release jobs computed, then
+# signs that predicate with cosign/OIDC. Local tests leave the default dry-run
+# mode enabled so they can verify the hashing contract without network or Rekor.
 set -euo pipefail
 
 subjects="${1:-}"
@@ -16,6 +16,7 @@ fi
 
 python3 - "$subjects" "$out" "$builder" <<'PY'
 import json
+import os
 import pathlib
 import sys
 import time
@@ -23,6 +24,8 @@ import time
 subjects_path = pathlib.Path(sys.argv[1])
 out_path = pathlib.Path(sys.argv[2])
 builder = sys.argv[3]
+mode = os.environ.get("TRSTCTL_SLSA_PROVENANCE_MODE", "dry-run")
+dry_run = mode != "release"
 
 subjects = []
 for raw in subjects_path.read_text().splitlines():
@@ -51,11 +54,11 @@ statement = {
                 "uri": "git+https://github.com/ctlplne/trstctl",
                 "entryPoint": ".github/workflows/release.yml",
             },
-            "parameters": {"dryRun": True},
-            "environment": {"local_dry_run": True},
+            "parameters": {"dryRun": dry_run},
+            "environment": {"local_dry_run": dry_run, "mode": mode},
         },
         "metadata": {
-            "buildInvocationID": f"local-dry-run-{int(time.time())}",
+            "buildInvocationID": f"{mode}-{int(time.time())}",
             "completeness": {"parameters": True, "environment": False, "materials": False},
             "reproducible": False,
         },

@@ -29,6 +29,11 @@ printf 'helm chart archive\n' >"$tmp/dist/trstctl-0.1.0.tgz"
 "$root/scripts/release/slsa-dry-run.sh" "$tmp/container.subjects" "$tmp/provenance/trstctl-container-and-manifest.intoto.jsonl"
 "$root/scripts/release/slsa-dry-run.sh" "$tmp/windows.subjects" "$tmp/provenance/trstctl-agent-windows.intoto.jsonl"
 "$root/scripts/release/slsa-dry-run.sh" "$tmp/helm.subjects" "$tmp/provenance/trstctl-helm-chart.intoto.jsonl"
+SLSA_SUBJECTS_B64="$("$root/scripts/release/slsa-subjects.sh" encode "$tmp/container.subjects")" \
+TRSTCTL_SLSA_SIGN=0 \
+TRSTCTL_SLSA_UPLOAD=0 \
+TRSTCTL_SLSA_PROVENANCE_MODE=release \
+  "$root/scripts/release/slsa-release-provenance.sh" trstctl-release-mode.intoto.jsonl "$tmp/provenance" >/dev/null
 
 python3 - "$tmp" <<'PY'
 import hashlib
@@ -64,6 +69,12 @@ def verify(subject_file, provenance_file):
 verify(tmp / "container.subjects", tmp / "provenance/trstctl-container-and-manifest.intoto.jsonl")
 verify(tmp / "windows.subjects", tmp / "provenance/trstctl-agent-windows.intoto.jsonl")
 verify(tmp / "helm.subjects", tmp / "provenance/trstctl-helm-chart.intoto.jsonl")
+verify(tmp / "container.subjects", tmp / "provenance/trstctl-release-mode.intoto.jsonl")
+release_stmt = json.loads((tmp / "provenance/trstctl-release-mode.intoto.jsonl").read_text())
+if release_stmt["predicate"]["invocation"]["parameters"]["dryRun"] is not False:
+    raise SystemExit("release-mode provenance must not be marked dryRun")
+if release_stmt["predicate"]["invocation"]["environment"]["mode"] != "release":
+    raise SystemExit("release-mode provenance did not record mode=release")
 PY
 
 echo "SLSA dry-run provenance self-test passed"
