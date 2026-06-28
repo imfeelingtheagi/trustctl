@@ -20,11 +20,20 @@ tenant read surfaces.
 | `approvals.actors` | `issuance_approval_requests.requester / issuance_approvals.approver` | Pseudonymize stale requester and approver subjects while preserving resource/action evidence. |
 | `profiles.created-by` | `certificate_profiles.created_by` | Pseudonymize stale profile author values. |
 | `agents.name` | `agents.name` | Pseudonymize stale agent names while preserving agent id/status/version. |
+| `pam_sessions.subjects` | `pam_sessions.subject/requested_by/reason/audit` | Retention covers terminal PAM session subject fields and free-form reason/audit metadata after the access window; tenant offboarding removes the tenant-scoped read model. |
+| `discovery_findings.triage` | `discovery_findings.triage_actor/triage_reason` | Retention covers stale triage actors and free-form triage reasons after discovery evidence ages out; tenant offboarding removes the tenant-scoped read model. |
+| `notification_threshold_deliveries.subject` | `notification_threshold_deliveries.subject/channel` | Retention covers stale threshold-delivery subjects after notification evidence ages out; tenant offboarding removes the tenant-scoped read model. |
+| `incident_executions.operator-evidence` | `incident_executions.created_by/reason/evidence_bundle/failed_targets/rollback_refs` | Retention covers stale operator/free-form incident evidence while preserving non-PII status and identity IDs; tenant offboarding removes the tenant-scoped read model. |
+| `oidc_prelogin.client-metadata` | `oidcPreLoginEntry.ClientIP/UserAgent` | Delete the in-memory pre-login entry on consume or TTL expiry; no durable read model or event stores the client IP/user-agent metadata. |
 
 Default non-audit retention runs every `24h`. It uses these class windows:
 owners `17520h`, identities/certificates/approvals/profiles/attestations `9528h`,
-SSH keys/agents `4320h`, and access subjects `2160h`. Operators can override
-them with the `TRSTCTL_PRIVACY_RETENTION_*` settings in `docs/configuration.md`.
+SSH keys/agents `4320h`, and access subjects/PAM subjects `2160h`. Discovery,
+notification, and incident free-form evidence follows the 397-day operational
+evidence window unless an operator configures a shorter policy. OIDC pre-login
+metadata is ephemeral and expires after `10m`. Operators can override supported
+retention classes with the `TRSTCTL_PRIVACY_RETENTION_*` settings in
+`docs/configuration.md`.
 
 ## In the console (`/privacy`)
 

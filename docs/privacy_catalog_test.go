@@ -18,6 +18,14 @@ func TestPrivacyCatalogCoversSubjectErasurePIIFields(t *testing.T) {
 		"certificates.subject-sans",
 		"ssh_keys.comment-location",
 		"attestations.evidence",
+		"approvals.actors",
+		"profiles.created-by",
+		"agents.name",
+		"pam_sessions.subjects",
+		"discovery_findings.triage",
+		"notification_threshold_deliveries.subject",
+		"incident_executions.operator-evidence",
+		"oidc_prelogin.client-metadata",
 	}
 	seen := map[string]privacy.CatalogEntry{}
 	for _, entry := range privacy.Catalog() {
