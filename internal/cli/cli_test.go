@@ -141,7 +141,7 @@ func TestAttestedIssuanceCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 func TestCAAuthorityIssueIntermediateCSRCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","serial":"01","not_after":"2026-06-24T12:00:00Z"}`, &cap)
-	body := `{"csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0}}`
+	body := `{"ceremony_id":"ceremony-1","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","spec":{"common_name":"SPIRE Server CA","ttl_seconds":3600,"max_path_len":0}}`
 	code, _, _ := run(t, []string{"ca", "authorities", "issue-intermediate-csr", "root-1", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
 	if code != 0 {
 		t.Fatalf("exit = %d", code)

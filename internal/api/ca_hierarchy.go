@@ -50,6 +50,7 @@ type CASpec struct {
 type CACeremonyStartRequest struct {
 	Operation string `json:"operation"`
 	ParentID  string `json:"parent_id"`
+	CSRPem    string `json:"csr_pem,omitempty"`
 	Threshold int    `json:"threshold"`
 	Spec      CASpec `json:"spec"`
 }
@@ -71,8 +72,9 @@ type CAIssueLeafRequest struct {
 }
 
 type CAIssueIntermediateRequest struct {
-	CSRDER []byte
-	Spec   CASpec
+	CeremonyID string
+	CSRDER     []byte
+	Spec       CASpec
 }
 
 type caIssueLeafJSON struct {
@@ -81,8 +83,9 @@ type caIssueLeafJSON struct {
 }
 
 type caIssueIntermediateJSON struct {
-	CSRPem string `json:"csr_pem"`
-	Spec   CASpec `json:"spec"`
+	CeremonyID string `json:"ceremony_id"`
+	CSRPem     string `json:"csr_pem"`
+	Spec       CASpec `json:"spec"`
 }
 
 type CAKeyCeremony struct {
@@ -251,8 +254,9 @@ func (a *API) issueHierarchyIntermediateCSR(w http.ResponseWriter, r *http.Reque
 			return 0, nil, errStatus(http.StatusBadRequest, "csr_pem must contain one CERTIFICATE REQUEST PEM block")
 		}
 		issued, err := a.caHierarchy.IssueIntermediateCSR(ctx, tenantID, id, CAIssueIntermediateRequest{
-			CSRDER: block.Bytes,
-			Spec:   req.Spec,
+			CeremonyID: req.CeremonyID,
+			CSRDER:     block.Bytes,
+			Spec:       req.Spec,
 		})
 		if err != nil {
 			return 0, nil, err

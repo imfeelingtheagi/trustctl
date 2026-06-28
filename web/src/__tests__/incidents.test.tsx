@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -136,12 +136,21 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText("2 failed targets")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Break-glass procedures" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Break-glass help" }));
+    const opener = screen.getByRole("button", { name: "Break-glass help" });
+    await user.click(opener);
 
     const dialog = screen.getByRole("dialog", { name: "Break-glass help" });
+    const close = within(dialog).getByRole("button", { name: "Close help" });
+    expect(close).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
     expect(dialog).toHaveTextContent(/emergency declaration/i);
     expect(dialog).toHaveTextContent(/quorum approval/i);
     expect(dialog).toHaveTextContent(/offline issue/i);
     expect(dialog).toHaveTextContent(/post-incident checklist/i);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Break-glass help" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
   });
 });

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { api, ApiError, type ConnectorDelivery, type RotationRun } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
+import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -305,7 +306,10 @@ function RejectDialog({
   onSubmit: (reason: string) => void;
 }) {
   const [reason, setReason] = useState("");
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
   const title = `Reject ${row.approval.action} for ${row.approval.identity.name}`;
+  const titleId = "operation-reject-heading";
+  const descriptionId = "operation-reject-description";
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -313,17 +317,29 @@ function RejectDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-      <section aria-labelledby="operation-reject-heading" role="dialog" aria-modal="true" className="w-full max-w-md rounded-panel border border-border bg-card shadow-elevation2">
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      initialFocusRef={reasonRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative w-full max-w-md rounded-panel border border-border bg-card shadow-elevation2"
+    >
         <header className="border-b border-border px-5 py-4">
-          <h2 id="operation-reject-heading" className="text-title font-semibold">
+          <h2 id={titleId} className="text-title font-semibold">
             {title}
           </h2>
+          <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+            Record why this approval request is being rejected.
+          </p>
         </header>
         <form className="grid gap-4 p-5" onSubmit={submit}>
           <label className="grid gap-2 text-sm font-medium">
             Reason
             <textarea
+              ref={reasonRef}
               required
               rows={4}
               value={reason}
@@ -340,8 +356,7 @@ function RejectDialog({
             </Button>
           </div>
         </form>
-      </section>
-    </div>
+    </Dialog>
   );
 }
 

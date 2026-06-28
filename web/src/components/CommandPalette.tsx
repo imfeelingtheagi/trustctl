@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { appRoutePaths, navGroups } from "@/lib/navigation";
@@ -89,10 +90,6 @@ function matchesAction(command: ActionCommand, query: string): boolean {
   return [command.label, command.description].some((value) => value.toLowerCase().includes(needle));
 }
 
-function focusableElements(panel: HTMLElement): HTMLElement[] {
-  return Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'));
-}
-
 function useDebouncedValue<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -105,7 +102,6 @@ function useDebouncedValue<T>(value: T, ms: number): T {
 export function CommandPalette({ open, onClose, returnFocusRef }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 250);
@@ -161,41 +157,10 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const returnTarget = returnFocusRef?.current ?? previous;
-    inputRef.current?.focus();
     return () => {
       setQuery("");
-      returnTarget?.focus();
     };
-  }, [open, returnFocusRef]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = focusableElements(panelRef.current);
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, open]);
-
-  if (!open) return null;
+  }, [open]);
 
   function activate(target: ActionCommand | RouteCommand | GlobalSearchResult) {
     if ("run" in target) {
@@ -215,16 +180,15 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
   }
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-foreground/20" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        className="absolute left-1/2 top-16 flex w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-panel border border-border bg-background shadow-elevation3"
-      >
+    <Dialog
+      open={open}
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      returnFocusRef={returnFocusRef}
+      initialFocusRef={inputRef}
+      panelClassName="absolute left-1/2 top-16 flex w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-panel border border-border bg-background shadow-elevation3"
+    >
         <div className="flex items-start justify-between gap-3 border-b border-border p-comfortable">
           <div>
             <h2 id={titleId} className="text-heading font-semibold">
@@ -285,8 +249,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
           )}
           {!search.loading && choices.length === 0 && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("command.noResults")}</p>}
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

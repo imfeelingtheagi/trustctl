@@ -1,0 +1,13 @@
+trstctl Notice
+
+trstctl is source-available software. The Community core may be self-hosted in
+production under the terms in LICENSE. Enterprise and Provider features require
+a valid offline commercial license before production use.
+
+Copyright (c) 2026 trstctl authors.
+
+This product includes third-party open-source components. Their notices and
+licenses remain with the dependency manifests and lockfiles for each component.
+
+Contributions are accepted under the repository license unless a separate
+written contributor agreement applies.

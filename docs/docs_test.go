@@ -3308,23 +3308,49 @@ func TestSignerCAKeyDocumentedAsPersisted(t *testing.T) {
 	}
 }
 
-// TestLicenseStatusIsConsistent (R4.6 #1c; updated): README and docs/index state the
-// same current license status — source-available but NOT open-source, the license
-// undecided, no license file published yet, all rights reserved — without claiming a
-// specific license or calling the project open-source.
+// TestLicenseStatusIsConsistent (R4.6 #1c; updated): README, docs/index, and
+// package metadata state the same license posture: source-available, not
+// open-source, with concrete LICENSE and NOTICE artifacts and a Community
+// production self-host grant.
 func TestLicenseStatusIsConsistent(t *testing.T) {
+	for _, path := range []string{"../LICENSE", "../NOTICE"} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("%s must exist for production packaging: %v", path, err)
+		}
+	}
+	license := strings.ToLower(read(t, "../LICENSE"))
+	for _, want := range []string{"source-available", "not an osi-approved open-source license", "production use", "enterprise and provider features"} {
+		if !strings.Contains(license, want) {
+			t.Errorf("LICENSE missing %q", want)
+		}
+	}
+	notice := strings.ToLower(read(t, "../NOTICE"))
+	for _, want := range []string{"source-available", "production", "commercial license", "contributions"} {
+		if !strings.Contains(notice, want) {
+			t.Errorf("NOTICE missing %q", want)
+		}
+	}
 	for name, body := range map[string]string{
 		"README.md":     strings.ToLower(read(t, "../README.md")),
 		"docs/index.md": strings.ToLower(read(t, "index.md")),
 	} {
-		for _, want := range []string{"source-available", "not open-source", "all rights reserved"} {
+		for _, want := range []string{"source-available", "not open-source", "license", "notice", "production self-host", "enterprise and provider"} {
 			if !strings.Contains(body, want) {
-				t.Errorf("%s should state the current license status (missing %q): source-available but not open-source, license undecided, all rights reserved", name, want)
+				t.Errorf("%s should state the current license status (missing %q)", name, want)
+			}
+		}
+		for _, stale := range []string{"license is undecided", "no license file is published", "all rights reserved", "nothing is feature-gated today"} {
+			if strings.Contains(body, stale) {
+				t.Errorf("%s still contains stale license posture %q", name, stale)
 			}
 		}
 		if strings.Contains(body, "open-source edition") {
 			t.Errorf("%s must not call trstctl an \"open-source edition\" — it is source-available, not OSS", name)
 		}
+	}
+	sdkPackage := read(t, "../clients/sdk/typescript/package.json")
+	if !strings.Contains(sdkPackage, `"license": "SEE LICENSE IN ../../LICENSE"`) {
+		t.Error("TypeScript SDK package metadata must point at the repository license artifact")
 	}
 }
 

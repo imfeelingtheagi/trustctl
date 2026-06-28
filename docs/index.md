@@ -77,11 +77,11 @@ environments.
 
 ## License and data
 
-trstctl is **source-available but not open-source**. **The license is undecided** —
-no license file is published yet; the specific instrument is still being chosen and
-will be added before any public release, and until then **all rights reserved**.
-Nothing is feature-gated today; revenue is intended to come from commercial/enterprise
-and MSP licensing, support, and a managed offering rather than from withholding
-capabilities. It runs entirely on infrastructure you control: PostgreSQL for state and
-NATS JetStream for the event log, bundled for single-node evaluation or external for
-production.
+trstctl is **source-available but not open-source**. The Community core carries a
+production self-host grant in [LICENSE](../LICENSE), with attribution and
+contribution terms in [NOTICE](../NOTICE). Commercial Enterprise and Provider
+features are activated by an offline signed license and live behind the `ee/`
+boundary; multi-tenancy, the event spine, the crypto boundary, audit/export
+rights, and the license verifier stay in core. It runs entirely on
+infrastructure you control: PostgreSQL for state and NATS JetStream for the event
+log, bundled for single-node evaluation or external for production.

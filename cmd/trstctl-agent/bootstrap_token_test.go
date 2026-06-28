@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,6 +88,22 @@ func TestBootstrapTokenFileNotRequiredAfterIdentityPersisted(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("token = %q, want empty because persisted identity reload does not re-enroll", got)
+	}
+}
+
+func TestAgentK8sIdentityFlagsAreExposed(t *testing.T) {
+	cmd := exec.Command("go", "run", ".", "--help")
+	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=readonly")
+	out, _ := cmd.CombinedOutput()
+	help := string(out)
+	for _, want := range []string{
+		"-key string",
+		"-cert string",
+		"-k8s",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("trstctl-agent --help missing %q; output:\n%s", want, help)
+		}
 	}
 }
 

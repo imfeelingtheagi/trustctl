@@ -849,10 +849,14 @@
       },
       "CACeremonyStartRequest": {
         "properties": {
+          "csr_pem": {
+            "type": "string"
+          },
           "operation": {
             "enum": [
               "create_root",
-              "create_intermediate"
+              "create_intermediate",
+              "issue_intermediate_csr"
             ],
             "type": "string"
           },
@@ -913,6 +917,10 @@
       },
       "CAIssueIntermediateRequest": {
         "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "csr_pem": {
             "type": "string"
           },
@@ -921,6 +929,7 @@
           }
         },
         "required": [
+          "ceremony_id",
           "csr_pem",
           "spec"
         ],
@@ -5203,7 +5212,8 @@
           }
         ],
         "summary": "Mint a tenant-scoped API token for a member",
-        "x-trstctl-permission": "access:write"
+        "x-trstctl-permission": "access:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/access/api-tokens/{id}": {
@@ -5622,7 +5632,8 @@
           }
         ],
         "summary": "List just-in-time privileged access sessions",
-        "x-trstctl-permission": "access:read"
+        "x-trstctl-permission": "access:read",
+        "x-trstctl-sensitive-response": true
       },
       "post": {
         "operationId": "openPAMSession",
@@ -5677,7 +5688,8 @@
           }
         ],
         "summary": "Open a just-in-time privileged access session",
-        "x-trstctl-permission": "access:write"
+        "x-trstctl-permission": "access:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/access/sessions/{id}": {
@@ -5735,7 +5747,8 @@
           }
         ],
         "summary": "Get a privileged access session",
-        "x-trstctl-permission": "access:read"
+        "x-trstctl-permission": "access:read",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/agents": {
@@ -5847,7 +5860,8 @@
           }
         ],
         "summary": "Mint a one-time agent bootstrap token",
-        "x-trstctl-permission": "agents:write"
+        "x-trstctl-permission": "agents:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/ai/query": {
@@ -6576,8 +6590,8 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Sign an external intermediate CA CSR from a served CA authority",
-        "x-trstctl-permission": "certs:issue"
+        "summary": "Sign an external intermediate CA CSR from a served CA authority after ceremony quorum",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/ca/authorities/{id}/issue": {
@@ -8344,7 +8358,8 @@
           }
         ],
         "summary": "Mint a short-TTL API key for machine workflows",
-        "x-trstctl-permission": "access:write"
+        "x-trstctl-permission": "access:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/ephemeral/{id}/approvals": {
@@ -11220,7 +11235,8 @@
           }
         ],
         "summary": "Issue a dynamic secret lease",
-        "x-trstctl-permission": "secrets:write"
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/secrets/leases/{lease_id}": {
@@ -11453,7 +11469,8 @@
           }
         },
         "summary": "Exchange a machine credential for a scoped workload session",
-        "x-trstctl-public-rationale": "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
+        "x-trstctl-public-rationale": "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session.",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/secrets/pki": {
@@ -11510,7 +11527,8 @@
           }
         ],
         "summary": "Issue a dynamic PKI secret (short-lived cert + key)",
-        "x-trstctl-permission": "secrets:write"
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/secrets/rotations": {
@@ -11681,7 +11699,8 @@
           }
         ],
         "summary": "Create a one-time secret share (returns a bearer token)",
-        "x-trstctl-permission": "secrets:write"
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/secrets/shares/redeem": {
@@ -11738,7 +11757,8 @@
           }
         ],
         "summary": "Redeem a one-time secret share exactly once",
-        "x-trstctl-permission": "secrets:read"
+        "x-trstctl-permission": "secrets:read",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/secrets/store": {
@@ -11992,7 +12012,8 @@
           }
         ],
         "summary": "Read one historical application-secret version",
-        "x-trstctl-permission": "secrets:read"
+        "x-trstctl-permission": "secrets:read",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/secrets/store/import": {
@@ -12232,7 +12253,8 @@
           }
         ],
         "summary": "Read an application secret value",
-        "x-trstctl-permission": "secrets:read"
+        "x-trstctl-permission": "secrets:read",
+        "x-trstctl-sensitive-response": true
       },
       "put": {
         "operationId": "rotateSecret",
@@ -12412,7 +12434,8 @@
           }
         ],
         "summary": "Decrypt transit ciphertext",
-        "x-trstctl-permission": "keys:write"
+        "x-trstctl-permission": "keys:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/api/v1/transit/encrypt": {

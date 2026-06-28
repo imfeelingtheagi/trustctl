@@ -11,9 +11,10 @@ import (
 
 // MCPRESTRoute is the served REST route identity the MCP coverage guard checks.
 type MCPRESTRoute struct {
-	OperationID string
-	Method      string
-	Path        string
+	OperationID       string
+	Method            string
+	Path              string
+	SensitiveResponse bool
 }
 
 // MCPRESTTool records that one MCP tool covers one served REST operation.
@@ -73,8 +74,11 @@ func CheckMCPRESTCoverage(routes []MCPRESTRoute, tools []MCPRESTTool, allowlist 
 	var gaps []MCPRESTCoverageGap
 	for _, route := range routes {
 		route = normalizeMCPRESTRoute(route)
+		if route.SensitiveResponse {
+			continue
+		}
 		if route.OperationID == "" || route.Method == "" || route.Path == "" {
-			gaps = append(gaps, MCPRESTCoverageGap(route))
+			gaps = append(gaps, mcpRESTCoverageGap(route))
 			continue
 		}
 		if covered[route.OperationID] {
@@ -89,7 +93,7 @@ func CheckMCPRESTCoverage(routes []MCPRESTRoute, tools []MCPRESTTool, allowlist 
 			}
 		}
 		if !allowed {
-			gaps = append(gaps, MCPRESTCoverageGap(route))
+			gaps = append(gaps, mcpRESTCoverageGap(route))
 		}
 	}
 
@@ -112,6 +116,14 @@ func CheckMCPRESTCoverage(routes []MCPRESTRoute, tools []MCPRESTTool, allowlist 
 		return stale[i].OperationID < stale[j].OperationID
 	})
 	return gaps, stale
+}
+
+func mcpRESTCoverageGap(route MCPRESTRoute) MCPRESTCoverageGap {
+	return MCPRESTCoverageGap{
+		OperationID: route.OperationID,
+		Method:      route.Method,
+		Path:        route.Path,
+	}
 }
 
 func normalizeMCPRESTRoute(route MCPRESTRoute) MCPRESTRoute {

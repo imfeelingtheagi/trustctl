@@ -44,6 +44,18 @@ func NewIssuanceService(ca CA, idem *orchestrator.Idempotency, outbox *orchestra
 	return s
 }
 
+// ProviderIdempotencyKey derives a provider-safe token from trstctl's
+// Idempotency-Key. Hex keeps it accepted by conservative upstream APIs such as
+// AWS PCA while preserving deterministic retry behavior.
+func ProviderIdempotencyKey(idempotencyKey string) string {
+	const tokenBytes = 32
+	sum := crypto.SHA256Hex([]byte(idempotencyKey))
+	if len(sum) <= tokenBytes {
+		return sum
+	}
+	return sum[:tokenBytes]
+}
+
 // Issue signs the request under idempotencyKey: the first call mints the
 // certificate and records the issuance in the outbox; a replay with the same key
 // returns the original certificate without minting again.
@@ -52,6 +64,12 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	// anything is signed. Deterministic, so a replay re-validates and still hits the
 	// idempotency cache below. A violation is rejected with a clear reason.
 	if err := s.enforceProfile(ctx, req); err != nil {
+		return Certificate{}, err
+	}
+	if req.ProviderIdempotencyKey == "" {
+		req.ProviderIdempotencyKey = ProviderIdempotencyKey(idempotencyKey)
+	}
+	if err := s.recordIntent(ctx, req.TenantID, idempotencyKey, req); err != nil {
 		return Certificate{}, err
 	}
 	raw, err := s.idem.Do(ctx, req.TenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
@@ -109,6 +127,35 @@ func (s *IssuanceService) enforceProfile(ctx context.Context, req IssueRequest) 
 		return verr
 	}
 	return s.auditDecision(ctx, req, rec.Version, "allow", "")
+}
+
+// recordIntent durably records the external CA call before any provider request
+// is attempted (AN-6). Replays reuse the same row so retries cannot create a
+// second upstream side effect without an already-recorded local intent.
+func (s *IssuanceService) recordIntent(ctx context.Context, tenantID, key string, req IssueRequest) error {
+	payload, err := json.Marshal(struct {
+		ProviderIdempotencyKey string   `json:"provider_idempotency_key"`
+		DNSNames               []string `json:"dns_names,omitempty"`
+		Profile                string   `json:"profile,omitempty"`
+		Protocol               string   `json:"protocol,omitempty"`
+	}{
+		ProviderIdempotencyKey: req.ProviderIdempotencyKey,
+		DNSNames:               req.DNSNames,
+		Profile:                req.ProfileName,
+		Protocol:               req.Protocol,
+	})
+	if err != nil {
+		return err
+	}
+	return s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID:       tenantID,
+			Destination:    "external-ca.issue",
+			IdempotencyKey: key,
+			Payload:        payload,
+		})
+		return err
+	})
 }
 
 // auditDecision emits the profile-gated issuance decision as an AN-2 event; the

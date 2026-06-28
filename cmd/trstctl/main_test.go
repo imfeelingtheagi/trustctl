@@ -217,6 +217,7 @@ func TestRun_CheckConfigExternalTargets(t *testing.T) {
 		"TRSTCTL_NATS_MODE":                           "external",
 		"TRSTCTL_NATS_URL":                            "nats://nats.example.com:4222",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 	})
 	var stdout, stderr bytes.Buffer
 	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {

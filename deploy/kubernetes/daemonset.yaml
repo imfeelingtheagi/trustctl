@@ -19,6 +19,9 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -39,6 +42,8 @@ spec:
             - "--server=$(TRSTCTL_SERVER)"
             - "--server-name=$(TRSTCTL_SERVER_NAME)"
             - "--name=$(NODE_NAME)"
+            - "--key=/var/lib/trstctl-agent/agent.key"
+            - "--cert=/var/lib/trstctl-agent/agent.crt"
             - "--k8s-secret=trstctl/$(NODE_NAME)-tls"
             - "--cert-manager-issuer=trstctl"
             - "--cert-manager-controller"
@@ -70,6 +75,8 @@ spec:
             - name: ca-bundle
               mountPath: /etc/trstctl
               readOnly: true
+            - name: identity
+              mountPath: /var/lib/trstctl-agent
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -98,3 +105,6 @@ spec:
         - name: ca-bundle
           configMap:
             name: trstctl-ca-bundle
+        - name: identity
+          emptyDir:
+            sizeLimit: 16Mi

@@ -187,17 +187,54 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByRole("link", { name: "Owner owner-x" })).toHaveAttribute("href", "/owners?owner=owner-x");
     expect(screen.getByRole("link", { name: "Issuer issuer-x" })).toHaveAttribute("href", "/protocols?issuer=issuer-x");
     expect(screen.getByText(/api.example.test/)).toBeInTheDocument();
+    await user.click(within(screen.getByRole("dialog", { name: "Identity detail" })).getByRole("button", { name: "Close" }));
 
     const sshRow = screen.getByText("deploy-key").closest("tr")!;
     await user.click(within(sshRow).getByRole("button", { name: /view details/i }));
     expect(await screen.findByText("SSH key identity")).toBeInTheDocument();
     expect(screen.getByText("No issuer bound")).toBeInTheDocument();
     expect(screen.getByText(/SHA256:abc/)).toBeInTheDocument();
+    await user.click(within(screen.getByRole("dialog", { name: "Identity detail" })).getByRole("button", { name: "Close" }));
 
     const workloadRow = screen.getByText("payments-worker").closest("tr")!;
     await user.click(within(workloadRow).getByRole("button", { name: /view details/i }));
     expect(await screen.findByText("Workload identity")).toBeInTheDocument();
     expect(screen.getByText(/spiffe:\/\/example.test\/payments/)).toBeInTheDocument();
+  });
+
+  it("traps focus in the identity detail drawer and returns focus to the opener", async () => {
+    const identity = {
+      id: "x509/1",
+      name: "tls-api",
+      kind: "x509_certificate",
+      owner_id: "owner-x",
+      issuer_id: "issuer-x",
+      status: "issued",
+    };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("tls-api")).closest("tr")!;
+    const opener = within(row).getByRole("button", { name: /view details/i });
+    await user.click(opener);
+
+    const dialog = await screen.findByRole("dialog", { name: "Identity detail" });
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    const lastAction = within(dialog).getByRole("button", { name: "Move to revoked" });
+
+    expect(close).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(lastAction).toHaveFocus();
+
+    await user.tab();
+    expect(close).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Identity detail" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
   });
 
   it("renders the per-credential activity timeline disclosure in the identity drawer (FE-022)", async () => {
@@ -262,6 +299,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText(/Terminal trust state/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Move to issued" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move to retired" })).toBeEnabled();
+    await user.click(within(screen.getByRole("dialog", { name: "Identity detail" })).getByRole("button", { name: "Close" }));
 
     const retiredRow = screen.getByText("retired-svc").closest("tr")!;
     await user.click(within(retiredRow).getByRole("button", { name: /view details/i }));
@@ -286,6 +324,13 @@ describe("lifecycle actions from the UI", () => {
     expect(within(dialog).getAllByText(/to-revoke/).length).toBeGreaterThan(0);
     expect(within(dialog).getByRole("heading")).toHaveTextContent(/revoke.*to-revoke/i);
     expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
+    expect(within(dialog).getByLabelText(/type credential name/i)).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(within(dialog).getByRole("button", { name: /cancel/i })).toHaveFocus();
+
+    await user.tab();
+    expect(within(dialog).getByLabelText(/type credential name/i)).toHaveFocus();
 
     // Confirming requires the credential name and sends the operator reason.
     await user.type(within(dialog).getByLabelText(/type credential name/i), "to-revoke");
@@ -357,11 +402,14 @@ describe("lifecycle actions from the UI", () => {
     renderIdentities();
 
     const row = (await screen.findByText("keep-me")).closest("tr")!;
-    await user.click(within(row).getByRole("button", { name: /^revoke$/i }));
+    const opener = within(row).getByRole("button", { name: /^revoke$/i });
+    await user.click(opener);
     const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    expect(within(dialog).getByLabelText(/type credential name/i)).toHaveFocus();
+    await user.keyboard("{Escape}");
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
   });
 
   it("bulk revokes selected identities with count confirmation and per-item results", async () => {
@@ -385,6 +433,14 @@ describe("lifecycle actions from the UI", () => {
 
     const dialog = await screen.findByRole("alertdialog", { name: /Revoke 2 selected identities/i });
     expect(within(dialog).getByText(/2 selected identities/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Confirm bulk revoke" })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await user.tab();
+    expect(within(dialog).getByRole("button", { name: "Confirm bulk revoke" })).toHaveFocus();
+
     await user.click(within(dialog).getByRole("button", { name: "Confirm bulk revoke" }));
 
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));

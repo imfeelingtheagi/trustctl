@@ -369,10 +369,10 @@ way.
 
 ## License
 
-**Source-available — not open-source (yet).** The full source is published to read,
-audit, and self-host, but no open-source (OSI-approved) license has been granted. **The
-license is undecided** — no license file is published yet; the specific instrument is
-still being chosen and will be added here before any public release, and until a license
-is published, **all rights reserved**. Nothing is feature-gated today; revenue is
-intended to come from commercial/enterprise and MSP licensing, support, and a managed
-offering, not from withholding the platform's capabilities.
+**Source-available — not open-source.** The full source is published to read,
+audit, modify, build, and self-host. The Community core carries a production self-host
+grant in [LICENSE](LICENSE), with attribution and contribution terms in
+[NOTICE](NOTICE). This is not an OSI-approved open-source license. Commercial
+Enterprise and Provider features are activated by an offline signed license and
+live behind the `ee/` boundary; multi-tenancy, the event spine, the crypto
+boundary, audit/export rights, and the license verifier stay in core.

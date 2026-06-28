@@ -163,6 +163,11 @@ spec:
             - name: kek
               mountPath: /etc/trstctl/kek
               readOnly: true
+            {{- if .Values.signer.auth.allowCoResidentAuthorizer }}
+            - name: signer-auth
+              mountPath: /etc/trstctl/signer-auth
+              readOnly: true
+            {{- end }}
             {{- if eq .Values.signer.mode "isolated" }}
             - name: signer-mtls
               mountPath: /etc/trstctl/signer-mtls

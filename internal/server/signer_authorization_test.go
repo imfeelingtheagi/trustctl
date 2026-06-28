@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -91,6 +92,25 @@ func TestProvisionCAUsesDualControlSignerHandle(t *testing.T) {
 	}
 }
 
+func TestProvisionCAUsesSignerAuthTokenCommand(t *testing.T) {
+	secret := bytes.Repeat([]byte{0x42}, 32)
+	authz, err := crypto.NewSignAuthorizer(secret)
+	if err != nil {
+		t.Fatalf("NewSignAuthorizer: %v", err)
+	}
+	t.Cleanup(authz.Destroy)
+	client := serveSignerWithAuthorizer(t, authz)
+	script := signerTokenHelperCommand(t, secret)
+	s := &Server{signAuthz: newSignTokenCommand(script)}
+
+	if err := s.provisionCA(context.Background(), client, "trstctl Test Issuing CA", ""); err != nil {
+		t.Fatalf("provisionCA with signer token command: %v", err)
+	}
+	if s.caSigner == nil || len(s.caCertDER) == 0 {
+		t.Fatal("provisionCA did not install an issuing CA signer and certificate")
+	}
+}
+
 func TestPrivilegedSignerHandleRequiresIndependentTokenProvider(t *testing.T) {
 	authz := testSignAuthorizer(t)
 	client := serveSignerWithAuthorizer(t, authz)
@@ -123,4 +143,52 @@ func TestSignTokenCommandProviderReturnsExternalToken(t *testing.T) {
 	if !bytes.Equal(got, token) {
 		t.Fatalf("token command returned %x, want %x", got, token)
 	}
+}
+
+func TestSignerTokenCommandHelper(t *testing.T) {
+	if os.Getenv("TRSTCTL_SIGNER_TOKEN_HELPER") != "1" {
+		return
+	}
+	secret, err := base64.StdEncoding.DecodeString(os.Getenv("TRSTCTL_SIGNER_TOKEN_SECRET_B64"))
+	if err != nil {
+		t.Fatalf("decode helper secret: %v", err)
+	}
+	var req signTokenCommandIntent
+	if err := json.NewDecoder(os.Stdin).Decode(&req); err != nil {
+		t.Fatalf("decode signer intent: %v", err)
+	}
+	digest, err := base64.StdEncoding.DecodeString(req.DigestB64)
+	if err != nil {
+		t.Fatalf("decode signer digest: %v", err)
+	}
+	authz, err := crypto.NewSignAuthorizer(secret)
+	if err != nil {
+		t.Fatalf("NewSignAuthorizer: %v", err)
+	}
+	defer authz.Destroy()
+	token, err := authz.Authorize(crypto.SignIntent{
+		KeyHandle: req.KeyHandle,
+		Purpose:   req.Purpose,
+		Hash:      crypto.Hash(req.Hash),
+		Padding:   crypto.RSAPadding(req.Padding),
+		Digest:    digest,
+	})
+	if err != nil {
+		t.Fatalf("authorize signer intent: %v", err)
+	}
+	if _, err := os.Stdout.WriteString(base64.StdEncoding.EncodeToString(token)); err != nil {
+		t.Fatalf("write signer token: %v", err)
+	}
+	os.Exit(0)
+}
+
+func signerTokenHelperCommand(t *testing.T, secret []byte) string {
+	t.Helper()
+	script := filepath.Join(t.TempDir(), "signer-token-helper.sh")
+	body := "#!/bin/sh\nTRSTCTL_SIGNER_TOKEN_HELPER=1 TRSTCTL_SIGNER_TOKEN_SECRET_B64='" +
+		base64.StdEncoding.EncodeToString(secret) + "' '" + os.Args[0] + "' -test.run '^TestSignerTokenCommandHelper$'\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatalf("write signer token helper: %v", err)
+	}
+	return script
 }

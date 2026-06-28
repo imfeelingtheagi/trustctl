@@ -176,6 +176,28 @@ startup because their Secret references were never rendered.
 {{- if not (or .Values.kek.existingSecret .Values.kek.generate) -}}
 {{- fail "OPS-003: kek.existingSecret or kek.generate=true is required. Use kek.existingSecret for production; set kek.generate=true only for evaluation so Helm creates and preserves a random KEK Secret." -}}
 {{- end -}}
+{{- $signerMode := "sidecar" -}}
+{{- $signerTokenCommand := "" -}}
+{{- $signerAllowCoResident := false -}}
+{{- with .Values.signer -}}
+{{- with .mode -}}{{- $signerMode = . -}}{{- end -}}
+{{- with .auth -}}
+{{- with .tokenCommand -}}{{- $signerTokenCommand = . -}}{{- end -}}
+{{- if .allowCoResidentAuthorizer -}}{{- $signerAllowCoResident = true -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if and $signerTokenCommand $signerAllowCoResident -}}
+{{- fail "CRYPTO-001: signer.auth.tokenCommand and signer.auth.allowCoResidentAuthorizer are mutually exclusive. Production must use the independent token command; evaluation may explicitly choose the co-resident authorizer." -}}
+{{- end -}}
+{{- if and $signerAllowCoResident (ne $signerMode "sidecar") -}}
+{{- fail "CRYPTO-001: signer.auth.allowCoResidentAuthorizer is only supported for single-pod sidecar evaluation. Isolated signer deployments must use signer.auth.tokenCommand." -}}
+{{- end -}}
+{{- if and (not .Values.nats.allowSingleReplica) $signerAllowCoResident -}}
+{{- fail "CRYPTO-001: signer.auth.allowCoResidentAuthorizer is evaluation-only. Production-style external NATS values (nats.allowSingleReplica=false) must use signer.auth.tokenCommand." -}}
+{{- end -}}
+{{- if and (not .Values.nats.allowSingleReplica) (not $signerTokenCommand) -}}
+{{- fail "CRYPTO-001: signer.auth.tokenCommand is required for production-style external NATS values so privileged CA handles use an independent signer authorization token provider. For a single-node evaluation, set nats.allowSingleReplica=true and signer.auth.allowCoResidentAuthorizer=true." -}}
+{{- end -}}
 {{- include "trstctl.externalKMS.guard" . -}}
 {{- end -}}
 

@@ -406,10 +406,6 @@ func (a *API) mcpCallREST(w http.ResponseWriter, r *http.Request, principal auth
 		_, _ = w.Write(rec.body.Bytes())
 		return
 	}
-	text := strings.TrimSpace(rec.body.String())
-	if text == "" {
-		text = fmt.Sprintf("%s %s returned %d", rt.Method, rt.Path, status)
-	}
 	if legacyMCPCertificateTool(tool) {
 		var issued CAIssuedLeaf
 		if err := json.Unmarshal(rec.body.Bytes(), &issued); err == nil {
@@ -432,13 +428,24 @@ func (a *API) mcpCallREST(w http.ResponseWriter, r *http.Request, principal auth
 	}
 	a.writeJSON(w, status, mcpCallResponse{
 		Tool:      tool,
-		Text:      text,
+		Text:      mcpRESTResponseSummary(rt, status),
 		Citations: []string{rt.Method + " " + rt.Path},
 	})
 }
 
 func legacyMCPCertificateTool(tool string) bool {
 	return tool == "issue_certificate" || tool == "rotate_certificate"
+}
+
+func mcpRESTResponseSummary(rt mcpserver.RESTTool, status int) string {
+	summary := strings.TrimSpace(rt.Summary)
+	if summary == "" {
+		summary = strings.TrimSpace(rt.OperationID)
+	}
+	if summary == "" {
+		summary = rt.Method + " " + rt.Path
+	}
+	return fmt.Sprintf("%s returned %d; full response body is omitted from MCP output", summary, status)
 }
 
 // mcpCallWrite keeps the historical certificate convenience tool names working by
@@ -497,13 +504,14 @@ func (a *API) mcpRESTTools() []mcpserver.RESTTool {
 			continue
 		}
 		tools = append(tools, mcpserver.RESTTool{
-			Method:          rt.method,
-			Path:            rt.path,
-			OperationID:     rt.opID,
-			Summary:         rt.summary,
-			Permission:      string(rt.perm),
-			PublicRationale: publicRationaleForRoute(rt),
-			Mutation:        rt.mutation,
+			Method:            rt.method,
+			Path:              rt.path,
+			OperationID:       rt.opID,
+			Summary:           rt.summary,
+			Permission:        string(rt.perm),
+			PublicRationale:   publicRationaleForRoute(rt),
+			Mutation:          rt.mutation,
+			SensitiveResponse: rt.sensitiveResponse,
 		})
 	}
 	return tools
@@ -511,6 +519,9 @@ func (a *API) mcpRESTTools() []mcpserver.RESTTool {
 
 func mcpRESTToolCandidate(rt route) bool {
 	if rt.opID == "" || rt.perm == "" {
+		return false
+	}
+	if rt.sensitiveResponse {
 		return false
 	}
 	if !strings.HasPrefix(rt.path, "/api/v1/") {

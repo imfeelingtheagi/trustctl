@@ -236,6 +236,59 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	}
 }
 
+func TestKubernetesDaemonSetK8sIdentityPersistsOnWritableVolume(t *testing.T) {
+	ds := daemonSet(t)
+	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	containers, _ := podSpec["containers"].([]any)
+	if len(containers) == 0 {
+		t.Fatal("DaemonSet has no containers")
+	}
+	c := containers[0].(map[string]any)
+	args := asStringSlice(c["args"])
+	const (
+		identityVolume = "identity"
+		identityDir    = "/var/lib/trstctl-agent"
+		keyPath        = identityDir + "/agent.key"
+		certPath       = identityDir + "/agent.crt"
+	)
+	for _, want := range []string{
+		"--key=" + keyPath,
+		"--cert=" + certPath,
+	} {
+		if !contains(args, want) {
+			t.Fatalf("DaemonSet args missing persistent identity path %q; got %v", want, args)
+		}
+	}
+	for _, bad := range []string{"--key=agent.key", "--cert=agent.crt"} {
+		if contains(args, bad) {
+			t.Fatalf("DaemonSet still uses relative identity path %q on a read-only root filesystem", bad)
+		}
+	}
+
+	if !hasWritableVolumeMount(c, identityVolume, identityDir) {
+		t.Fatalf("DaemonSet must mount a writable identity volume named %q at %s", identityVolume, identityDir)
+	}
+	if !hasEmptyDirVolume(podSpec, identityVolume) {
+		t.Fatalf("DaemonSet identity volume %q must be an emptyDir so container restarts keep the bootstrapped identity off the read-only root", identityVolume)
+	}
+	if got, ok := nestedBool(c, "securityContext", "readOnlyRootFilesystem"); !ok || !got {
+		t.Fatalf("agent container must keep readOnlyRootFilesystem=true; identity persistence belongs on the writable volume")
+	}
+	for _, tc := range []struct {
+		key  string
+		want int
+	}{
+		{key: "runAsUser", want: 65532},
+		{key: "runAsGroup", want: 65532},
+		{key: "fsGroup", want: 65532},
+	} {
+		got, ok := nestedInt(podSpec, "securityContext", tc.key)
+		if !ok || got != tc.want {
+			t.Fatalf("DaemonSet pod securityContext.%s = %d (present=%v), want %d so the non-root agent can write identity files", tc.key, got, ok, tc.want)
+		}
+	}
+}
+
 func TestAgentDaemonSetRequiresRenderedReleaseDigest(t *testing.T) {
 	ds := daemonSet(t)
 	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
@@ -426,6 +479,19 @@ func hasVolumeMount(container map[string]any, name, path string) bool {
 	return false
 }
 
+func hasWritableVolumeMount(container map[string]any, name, path string) bool {
+	for _, m := range asMaps(container["volumeMounts"]) {
+		gotName, _ := m["name"].(string)
+		gotPath, _ := m["mountPath"].(string)
+		if gotName != name || gotPath != path {
+			continue
+		}
+		readOnly, hasReadOnly := m["readOnly"].(bool)
+		return !hasReadOnly || !readOnly
+	}
+	return false
+}
+
 func hasSecretVolume(podSpec map[string]any, name, secretName, key string) bool {
 	for _, v := range asMaps(podSpec["volumes"]) {
 		if gotName, _ := v["name"].(string); gotName != name {
@@ -440,6 +506,17 @@ func hasSecretVolume(podSpec map[string]any, name, secretName, key string) bool 
 				return true
 			}
 		}
+	}
+	return false
+}
+
+func hasEmptyDirVolume(podSpec map[string]any, name string) bool {
+	for _, v := range asMaps(podSpec["volumes"]) {
+		if gotName, _ := v["name"].(string); gotName != name {
+			continue
+		}
+		_, ok := v["emptyDir"].(map[string]any)
+		return ok
 	}
 	return false
 }
@@ -472,6 +549,45 @@ func hasEnvFromSecret(container map[string]any, envName, secretName, key string)
 		return secretKeyRef["name"] == secretName && secretKeyRef["key"] == key
 	}
 	return false
+}
+
+func nestedBool(m map[string]any, keys ...string) (bool, bool) {
+	cur := m
+	for i, k := range keys {
+		if i == len(keys)-1 {
+			b, ok := cur[k].(bool)
+			return b, ok
+		}
+		next, ok := cur[k].(map[string]any)
+		if !ok {
+			return false, false
+		}
+		cur = next
+	}
+	return false, false
+}
+
+func nestedInt(m map[string]any, keys ...string) (int, bool) {
+	cur := m
+	for i, k := range keys {
+		if i == len(keys)-1 {
+			switch v := cur[k].(type) {
+			case int:
+				return v, true
+			case int64:
+				return int(v), true
+			case float64:
+				return int(v), true
+			}
+			return 0, false
+		}
+		next, ok := cur[k].(map[string]any)
+		if !ok {
+			return 0, false
+		}
+		cur = next
+	}
+	return 0, false
 }
 
 func nestedString(m map[string]any, keys ...string) (string, bool) {

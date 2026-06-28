@@ -119,13 +119,19 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	}
 }
 
-func TestServedCAHierarchySignsExternalIntermediateCSR(t *testing.T) {
+func TestServedCAHierarchySignsExternalIntermediateCSRRequiresCeremony(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
 	approver := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-approver", []string{
 		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverTwo := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-approver-two", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	certsIssueOnly := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "leaf-issuer", []string{
+		"certs:issue",
 	})
 
 	rootSpec := map[string]any{
@@ -151,16 +157,62 @@ func TestServedCAHierarchySignsExternalIntermediateCSR(t *testing.T) {
 		t.Fatalf("create SPIRE intermediate CSR: %v", err)
 	}
 	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
-
-	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr", map[string]any{
+	intermediateSpec := map[string]any{
+		"common_name":           "SPIRE Server CA",
+		"max_path_len":          0,
+		"ttl_seconds":           int64((24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"example.org"},
+		"extended_key_usages":   []string{"serverAuth"},
+	}
+	issueBody := map[string]any{
 		"csr_pem": csrPEM,
-		"spec": map[string]any{
-			"common_name":           "SPIRE Server CA",
-			"max_path_len":          0,
-			"ttl_seconds":           int64((24 * time.Hour).Seconds()),
-			"permitted_dns_domains": []string{"example.org"},
-		},
-	})
+		"spec":    intermediateSpec,
+	}
+
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", certsIssueOnly, "spire-intermediate-csr-certs-only", issueBody)
+	if code != http.StatusForbidden {
+		t.Fatalf("certs:issue-only external intermediate CSR = %d body=%s; want 403 issuers:write", code, body)
+	}
+
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr-no-ceremony", issueBody)
+	if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), "ceremony_id") {
+		t.Fatalf("external intermediate CSR without ceremony = %d body=%s; want 422 ceremony_id", code, body)
+	}
+
+	intermediateCeremony := createCACeremonyWithCSR(t, h, token, root.ID, csrPEM, intermediateSpec, 2, "spire-intermediate-csr-ceremony")
+	issueBody["ceremony_id"] = intermediateCeremony.ID
+
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr-before-quorum", issueBody)
+	if code != http.StatusConflict || !strings.Contains(string(body), "quorum") {
+		t.Fatalf("external intermediate CSR before quorum = %d body=%s; want 409 quorum problem", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies/"+intermediateCeremony.ID+"/approvals", token, "spire-intermediate-csr-self-approval", nil)
+	if code != http.StatusConflict {
+		t.Fatalf("external intermediate CSR self-approval = %d body=%s; want 409 separation-of-duties refusal", code, body)
+	}
+	approveCACeremony(t, h, approver, intermediateCeremony.ID, 1, "spire-intermediate-csr-approval-one")
+
+	mismatchedSpec := map[string]any{
+		"common_name":           "SPIRE Server CA",
+		"max_path_len":          0,
+		"ttl_seconds":           int64((24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"wrong.example.org"},
+		"extended_key_usages":   []string{"serverAuth"},
+	}
+	mismatchedCeremony := createCACeremonyWithCSR(t, h, token, root.ID, csrPEM, mismatchedSpec, 1, "spire-intermediate-csr-mismatch-ceremony")
+	approveCACeremony(t, h, approver, mismatchedCeremony.ID, 1, "spire-intermediate-csr-mismatch-approval")
+	mismatchedBody := map[string]any{
+		"ceremony_id": mismatchedCeremony.ID,
+		"csr_pem":     csrPEM,
+		"spec":        intermediateSpec,
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr-purpose-mismatch", mismatchedBody)
+	if code != http.StatusConflict || !strings.Contains(string(body), "purpose") {
+		t.Fatalf("external intermediate CSR purpose mismatch = %d body=%s; want 409 purpose mismatch", code, body)
+	}
+
+	approveCACeremony(t, h, approverTwo, intermediateCeremony.ID, 2, "spire-intermediate-csr-approval-two")
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr", issueBody)
 	if code != http.StatusCreated {
 		t.Fatalf("sign external intermediate CSR = %d body=%s; want 201", code, body)
 	}
@@ -184,6 +236,10 @@ func TestServedCAHierarchySignsExternalIntermediateCSR(t *testing.T) {
 	}
 	if !h.hasEvent(t, "ca.intermediate_csr.issued") {
 		t.Fatal("no ca.intermediate_csr.issued event was recorded for the served SPIRE path")
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", token, "spire-intermediate-csr-replay-new-idem", issueBody)
+	if code != http.StatusConflict || !strings.Contains(string(body), "pending") {
+		t.Fatalf("external intermediate CSR ceremony replay = %d body=%s; want 409 consumed ceremony", code, body)
 	}
 }
 
@@ -218,6 +274,25 @@ func createCACeremony(t *testing.T, h *servedHarness, token, operation, parentID
 	var got servedCACeremony
 	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" || got.Threshold != threshold || got.Status != "pending" {
 		t.Fatalf("decode %s ceremony: %v got=%+v body=%s", operation, err, got, raw)
+	}
+	return got
+}
+
+func createCACeremonyWithCSR(t *testing.T, h *servedHarness, token, parentID, csrPEM string, spec map[string]any, threshold int, idem string) servedCACeremony {
+	t.Helper()
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, map[string]any{
+		"operation": "issue_intermediate_csr",
+		"parent_id": parentID,
+		"csr_pem":   csrPEM,
+		"threshold": threshold,
+		"spec":      spec,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("create issue_intermediate_csr ceremony = %d body=%s; want 201", code, raw)
+	}
+	var got servedCACeremony
+	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" || got.Threshold != threshold || got.Status != "pending" {
+		t.Fatalf("decode issue_intermediate_csr ceremony: %v got=%+v body=%s", err, got, raw)
 	}
 	return got
 }

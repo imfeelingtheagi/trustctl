@@ -283,12 +283,24 @@ describe("app shell accessibility and theme", () => {
     const focusableButtons = within(palette).getAllByRole("button");
     expect(focusableButtons[focusableButtons.length - 1]).toHaveFocus();
 
+    await user.tab();
+    expect(close).toHaveFocus();
+
     expect(await axe(container)).toHaveNoViolations();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Open command palette" }));
+    const opener = screen.getByRole("button", { name: "Open command palette" });
+    await user.click(opener);
+    palette = await screen.findByRole("dialog", { name: "Command palette" });
+    search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
+    expect(search).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+
+    await user.click(opener);
     palette = await screen.findByRole("dialog", { name: "Command palette" });
     search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
     await user.type(search, "platform");

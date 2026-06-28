@@ -1414,6 +1414,10 @@ func haValues() map[string]any {
 		"serviceAccount":      map[string]any{"create": true, "name": "", "annotations": map[string]any{}},
 		"signer": map[string]any{
 			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
+			"auth": map[string]any{
+				"allowCoResidentAuthorizer": false,
+				"tokenCommand":              "/usr/local/bin/trstctl-sign-approve",
+			},
 			"mtls": map[string]any{"serverName": "", "signerSecret": "", "controlPlaneSecret": ""},
 		},
 		"networkPolicy": map[string]any{

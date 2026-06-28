@@ -2172,8 +2172,13 @@ func validateSignerConfig(c *Config) []error {
 	if c.Signer.AuthTokenCommand != "" && c.Signer.AllowCoResidentAuthorizer {
 		errs = append(errs, errors.New("signer.auth_token_command and signer.allow_co_resident_authorizer are mutually exclusive"))
 	}
-	if c.Signer.AllowCoResidentAuthorizer && c.NATS.Mode == NATSExternal && !c.NATS.AllowSingleReplica {
-		errs = append(errs, errors.New("signer.allow_co_resident_authorizer is evaluation-only; production external NATS deployments must use signer.auth_token_command or another independent token provider"))
+	if c.NATS.Mode == NATSExternal && !c.NATS.AllowSingleReplica {
+		if c.Signer.AllowCoResidentAuthorizer {
+			errs = append(errs, errors.New("signer.allow_co_resident_authorizer is evaluation-only; production external NATS deployments must use signer.auth_token_command or another independent token provider"))
+		}
+		if c.Signer.AuthTokenCommand == "" {
+			errs = append(errs, errors.New("signer.auth_token_command is required for production external NATS deployments so privileged signer handles have an independent token provider"))
+		}
 	}
 	if c.Signer.AllowInsecureDevNonLinux && c.Signer.Mode != SignerChild {
 		errs = append(errs, errors.New("signer.allow_insecure_dev_nonlinux is only valid for local child signer development; external signer deployments must harden the signer process directly"))

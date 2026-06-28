@@ -30,6 +30,7 @@ func TestRateLimitEnvOverrides(t *testing.T) {
 		"TRSTCTL_POSTGRES_DSN":                        "postgres://u:p@h:5432/db?sslmode=require",
 		"TRSTCTL_NATS_MODE":                           "external",
 		"TRSTCTL_NATS_URL":                            "nats://h:4222",
+		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
 		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
 		"TRSTCTL_RATE_LIMIT_ENABLED":                  "false",
 		"TRSTCTL_RATE_LIMIT_REQUESTS":                 "50",

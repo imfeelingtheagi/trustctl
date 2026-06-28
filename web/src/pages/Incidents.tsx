@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, ApiError, type GraphImpact, type GraphNode, type IncidentExecution, type IncidentExecutionRequest } from "@/lib/api";
+import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function Incidents() {
   const [executeError, setExecuteError] = useState<string | null>(null);
   const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
   const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
+  const breakGlassCloseRef = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -288,17 +290,26 @@ export function Incidents() {
           </Button>
         </div>
         {showBreakGlassHelp && (
-          <div role="dialog" aria-modal="true" aria-labelledby="break-glass-help-heading" className="ui-panel max-w-4xl p-comfortable">
+          <Dialog
+            open
+            onClose={() => setShowBreakGlassHelp(false)}
+            titleId="break-glass-help-heading"
+            descriptionId="break-glass-help-description"
+            initialFocusRef={breakGlassCloseRef}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            overlayClassName="absolute inset-0 bg-black/55"
+            panelClassName="ui-panel relative max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto p-comfortable"
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 id="break-glass-help-heading" className="text-title font-semibold">
                   Break-glass help
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p id="break-glass-help-description" className="mt-1 text-sm text-muted-foreground">
                   Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and cleanup.
                 </p>
               </div>
-              <Button type="button" variant="outline" onClick={() => setShowBreakGlassHelp(false)}>
+              <Button ref={breakGlassCloseRef} type="button" variant="outline" onClick={() => setShowBreakGlassHelp(false)}>
                 Close help
               </Button>
             </div>
@@ -309,7 +320,7 @@ export function Incidents() {
                 </li>
               ))}
             </ul>
-          </div>
+          </Dialog>
         )}
       </section>
     </section>

@@ -67,9 +67,10 @@ func TestMCPRESTCoverageGuardCoversServedRoutes(t *testing.T) {
 	tools := make([]MCPRESTTool, 0, len(listed.Tools))
 	for _, rt := range h.Routes() {
 		routes = append(routes, MCPRESTRoute{
-			OperationID: rt.OperationID,
-			Method:      rt.Method,
-			Path:        rt.Path,
+			OperationID:       rt.OperationID,
+			Method:            rt.Method,
+			Path:              rt.Path,
+			SensitiveResponse: rt.SensitiveResponse,
 		})
 		if containsString(listed.Tools, mcpserver.RESTToolName(rt.OperationID)) {
 			tools = append(tools, MCPRESTTool{OperationID: rt.OperationID})

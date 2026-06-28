@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, identityState, type ConnectorDelivery, type GraphImpact, type Identity, type RotationRun, type TransitionTo } from "@/lib/api";
+import { Dialog } from "@/components/Dialog";
 import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -271,6 +272,8 @@ export function Identities() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
   const [pendingImpact, setPendingImpact] = useState<BlastRadiusState>(emptyBlastRadiusState);
+  const pendingConfirmRef = useRef<HTMLInputElement>(null);
+  const bulkConfirmRef = useRef<HTMLButtonElement>(null);
   const impactRequestRef = useRef(0);
   const filteredItems = useMemo(() => (items ?? []).filter((identity) => kindFilter === "all" || identity.kind === kindFilter), [items, kindFilter]);
   const selectedRows = useMemo(() => filteredItems.filter((identity) => selectedIds.has(identity.id)), [filteredItems, selectedIds]);
@@ -538,12 +541,16 @@ export function Identities() {
       )}
 
       {pending && (
-        <div
+        <Dialog
+          open
           role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="confirm-title"
-          aria-describedby="confirm-desc"
-          className="mb-4 rounded-panel border border-destructive/40 bg-destructive/10 p-4"
+          onClose={clearPending}
+          titleId="confirm-title"
+          descriptionId="confirm-desc"
+          initialFocusRef={pendingConfirmRef}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-destructive/40 bg-card p-4 shadow-elevation2"
         >
           <h2 id="confirm-title" className="text-title font-semibold text-destructive">
             {pending.label} “{pending.name}”?
@@ -559,6 +566,7 @@ export function Identities() {
               Type credential name to confirm
             </label>
             <input
+              ref={pendingConfirmRef}
               id="destructive-confirm-name"
               value={pendingConfirmName}
               onChange={(e) => setPendingConfirmName(e.target.value)}
@@ -595,7 +603,7 @@ export function Identities() {
               Cancel
             </Button>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {selectedRows.length > 0 && (
@@ -611,12 +619,16 @@ export function Identities() {
       )}
 
       {bulkConfirmOpen && (
-        <div
+        <Dialog
+          open
           role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="bulk-revoke-title"
-          aria-describedby="bulk-revoke-desc"
-          className="mb-4 rounded-panel border border-destructive/40 bg-destructive/10 p-4 text-sm"
+          onClose={() => setBulkConfirmOpen(false)}
+          titleId="bulk-revoke-title"
+          descriptionId="bulk-revoke-desc"
+          initialFocusRef={bulkConfirmRef}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative w-full max-w-xl rounded-panel border border-destructive/40 bg-card p-4 text-sm shadow-elevation2"
         >
           <h2 id="bulk-revoke-title" className="text-title font-semibold text-destructive">
             Revoke {selectedRows.length} selected identities?
@@ -627,6 +639,7 @@ export function Identities() {
           </p>
           <div className="mt-3 flex gap-2">
             <Button
+              ref={bulkConfirmRef}
               type="button"
               size="sm"
               variant="outline"
@@ -640,7 +653,7 @@ export function Identities() {
               Cancel
             </Button>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {bulkResults.length > 0 && (

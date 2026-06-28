@@ -311,13 +311,22 @@ signer:
   replicas: 1
   resources: {}
   # Signer content-authorization secret (SIGNER-001). The control plane uses this
-  # to mint per-digest authorization tokens after policy/approval, and the signer
-  # verifies them before using privileged handles. Production should supply an
-  # existing Secret; evaluation can let the chart generate and keep one.
+  # verifier material to check per-digest authorization tokens before using
+  # privileged handles. Production control planes must NOT mount this verifier
+  # secret. They must call an independent token provider through tokenCommand
+  # instead. Evaluation can explicitly opt into the co-resident authorizer path.
   auth:
     existingSecret: ""
     existingSecretKey: sign-auth.bin
     generate: true
+    # Independent control-plane command that receives signer intent JSON on stdin
+    # and writes a base64 token on stdout. Required for production-style external
+    # NATS values (nats.allowSingleReplica=false).
+    tokenCommand: ""
+    # Evaluation-only escape hatch. When true, the chart mounts the signer auth
+    # secret into the control plane and lets it mint tokens locally. This is
+    # rejected for production-style external NATS values.
+    allowCoResidentAuthorizer: false
   # Cross-node mTLS material for signer.mode=isolated (SIGNER-005). Provision the
   # certificates out of band (e.g. with internal/crypto/mtls.GenerateSignerPeerMaterial
   # or your own PKI) — never inline key material in values.

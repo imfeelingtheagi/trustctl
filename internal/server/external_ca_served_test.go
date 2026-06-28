@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/digicert"
 	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
 	"trstctl.com/trstctl/internal/ca/letsencrypt"
@@ -20,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedExternalCARegistryIssuesViaConfiguredBackends is the CLM-03 acceptance
@@ -83,6 +86,74 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 	if got := externalCAOutboxCount(t, h, "clm-03-lets-encrypt:external-ca:lets-encrypt"); got != 1 {
 		t.Fatalf("Let's Encrypt ca.issue outbox rows = %d, want 1", got)
 	}
+}
+
+func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
+	const (
+		caID    = "guarded"
+		idemKey = "spine-001"
+		dnsName = "svc.spine-001.served.test"
+	)
+	issueKey := idemKey + ":external-ca:" + caID
+	guard := &externalCAIntentGuard{
+		key: issueKey,
+	}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		guard.store = d.Store
+		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "guarded", CA: guard}}
+	})
+
+	issued := issueExternalCA(t, h, caID, dnsName, idemKey)
+	if issued.Serial != "spine-001-serial" {
+		t.Fatalf("guarded external CA serial = %q", issued.Serial)
+	}
+	if guard.calls != 1 {
+		t.Fatalf("provider Issue calls = %d, want 1", guard.calls)
+	}
+	if got := externalCAIntentOutboxCount(t, h, issueKey); got != 1 {
+		t.Fatalf("external CA intent outbox rows = %d, want 1", got)
+	}
+	if got := guard.providerToken; got != ca.ProviderIdempotencyKey(issueKey) {
+		t.Fatalf("provider idempotency token = %q, want derived token %q", got, ca.ProviderIdempotencyKey(issueKey))
+	}
+}
+
+type externalCAIntentGuard struct {
+	store         *store.Store
+	key           string
+	calls         int
+	providerToken string
+}
+
+func (g *externalCAIntentGuard) Name() string { return "guarded-external-ca" }
+
+func (g *externalCAIntentGuard) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate, error) {
+	g.calls++
+	g.providerToken = req.ProviderIdempotencyKey
+	count := 0
+	if err := g.store.WithTenant(ctx, req.TenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT count(*)
+			FROM outbox
+			WHERE destination = 'external-ca.issue'
+			  AND idempotency_key = $1
+		`, g.key).Scan(&count)
+	}); err != nil {
+		return ca.Certificate{}, err
+	}
+	if count != 1 {
+		return ca.Certificate{}, fmt.Errorf("external CA provider called before durable outbox intent; count=%d", count)
+	}
+	if req.ProviderIdempotencyKey != ca.ProviderIdempotencyKey(g.key) {
+		return ca.Certificate{}, fmt.Errorf("provider idempotency token = %q, want %q", req.ProviderIdempotencyKey, ca.ProviderIdempotencyKey(g.key))
+	}
+	return ca.Certificate{
+		CertificatePEM: []byte("-----BEGIN CERTIFICATE-----\nspine-001\n-----END CERTIFICATE-----\n"),
+		Serial:         "spine-001-serial",
+		NotAfter:       time.Now().Add(24 * time.Hour).UTC(),
+		Issuer:         g.Name(),
+	}, nil
 }
 
 type externalCAIssueResponse struct {
@@ -202,6 +273,23 @@ func externalCAOutboxCount(t *testing.T, h *servedHarness, key string) int {
 	})
 	if err != nil {
 		t.Fatalf("count ca.issue outbox rows: %v", err)
+	}
+	return count
+}
+
+func externalCAIntentOutboxCount(t *testing.T, h *servedHarness, key string) int {
+	t.Helper()
+	var count int
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT count(*)
+			FROM outbox
+			WHERE destination = 'external-ca.issue'
+			  AND idempotency_key = $1
+		`, key).Scan(&count)
+	})
+	if err != nil {
+		t.Fatalf("count external CA intent outbox rows: %v", err)
 	}
 	return count
 }

@@ -29,14 +29,15 @@ type PathItem map[string]*Operation
 
 // Operation describes one endpoint.
 type Operation struct {
-	OperationID      string                `json:"operationId"`
-	Summary          string                `json:"summary,omitempty"`
-	Parameters       []Parameter           `json:"parameters,omitempty"`
-	RequestBody      *RequestBody          `json:"requestBody,omitempty"`
-	Responses        map[string]Response   `json:"responses"`
-	Security         []map[string][]string `json:"security,omitempty"`
-	XPermission      string                `json:"x-trstctl-permission,omitempty"`
-	XPublicRationale string                `json:"x-trstctl-public-rationale,omitempty"`
+	OperationID        string                `json:"operationId"`
+	Summary            string                `json:"summary,omitempty"`
+	Parameters         []Parameter           `json:"parameters,omitempty"`
+	RequestBody        *RequestBody          `json:"requestBody,omitempty"`
+	Responses          map[string]Response   `json:"responses"`
+	Security           []map[string][]string `json:"security,omitempty"`
+	XPermission        string                `json:"x-trstctl-permission,omitempty"`
+	XPublicRationale   string                `json:"x-trstctl-public-rationale,omitempty"`
+	XSensitiveResponse bool                  `json:"x-trstctl-sensitive-response,omitempty"`
 }
 
 // Parameter is a path or query parameter.
@@ -142,6 +143,9 @@ func buildSpec(routes []route) *Document {
 			doc.Paths[docPath] = pi
 		}
 		op := &Operation{OperationID: r.opID, Summary: r.summary, Responses: map[string]Response{}}
+		if r.sensitiveResponse {
+			op.XSensitiveResponse = true
+		}
 		if r.perm != "" {
 			op.Security = []map[string][]string{{"BearerAuth": {}}, {"SessionCookie": {}}}
 			op.XPermission = string(r.perm)
@@ -212,8 +216,8 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "create_intermediate"}},
-		"parent_id": uuid(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
+		"operation": {Type: "string", Enum: []string{"create_root", "create_intermediate", "issue_intermediate_csr"}},
+		"parent_id": uuid(), "csr_pem": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
 	}, "operation", "threshold", "spec")
 	caCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
@@ -226,8 +230,8 @@ func componentSchemas() map[string]*Schema {
 		"ceremony_id": uuid(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "parent_id", "spec")
 	caIssueIntermediateReq := object(map[string]*Schema{
-		"csr_pem": str(), "spec": ref("CASpec"),
-	}, "csr_pem", "spec")
+		"ceremony_id": uuid(), "csr_pem": str(), "spec": ref("CASpec"),
+	}, "ceremony_id", "csr_pem", "spec")
 	caAuthority := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "parent_id": uuid(), "common_name": str(),
 		"kind": str(), "status": str(), "certificate_pem": str(), "signer_handle": str(),

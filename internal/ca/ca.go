@@ -21,6 +21,11 @@ type IssueRequest struct {
 	DNSNames []string
 	TTL      time.Duration
 
+	// ProviderIdempotencyKey is the deterministic, provider-safe token derived
+	// from the platform Idempotency-Key. External CA implementations that support
+	// upstream idempotency must use it instead of generating a random token.
+	ProviderIdempotencyKey string
+
 	// Profile binding (S8.1). When ProfileName is set, the issuance service
 	// validates the request against that tenant's active profile version before
 	// signing. Protocol names the enrollment path ("api"/"acme"/"est"/...), which a

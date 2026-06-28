@@ -20,6 +20,11 @@ const { apiMock } = vi.hoisted(() => ({
     graphReachable: vi.fn(),
     graphQuery: vi.fn(),
     risk: vi.fn(),
+    rotationRuns: vi.fn(),
+    connectorDeliveries: vi.fn(),
+    identities: vi.fn(),
+    approveIdentityAction: vi.fn(),
+    transitionIdentity: vi.fn(),
   },
 }));
 
@@ -44,6 +49,11 @@ describe("operational console surface", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.rotationRuns.mockResolvedValue({ items: [] });
+    apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
+    apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
   });
 
   it("routes to profiles, lists versions, and creates a profile", async () => {
@@ -241,6 +251,38 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
 
     expect(await screen.findByText(/Could not export evidence: audit export window too large/)).toBeInTheDocument();
+  });
+
+  it("traps focus in the operations rejection dialog and returns focus to the opener", async () => {
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "req-1",
+        name: "requested-svc",
+        status: "requested",
+        attributes: { requester: "app-team", approvals: "1/2", grant_expires_at: "2026-07-01T00:00:00Z" },
+      },
+    ]);
+    const user = userEvent.setup();
+    renderAt("/operations");
+
+    const opener = await screen.findByRole("button", { name: "Reject issue for requested-svc" });
+    await user.click(opener);
+
+    const dialog = await screen.findByRole("dialog", { name: "Reject issue for requested-svc" });
+    const reason = within(dialog).getByLabelText("Reason");
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+
+    expect(reason).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(cancel).toHaveFocus();
+
+    await user.tab();
+    expect(reason).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Reject issue for requested-svc" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
   });
 
   it("routes to graph inventory and runs blast-radius analysis", async () => {

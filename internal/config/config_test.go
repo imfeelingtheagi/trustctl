@@ -225,6 +225,7 @@ func TestExternalModesValidWithConnection(t *testing.T) {
 	c.NATS.Mode = "external"
 	c.NATS.URL = "nats://host:4222"
 	c.Signer.AllowCoResidentAuthorizer = false
+	c.Signer.AuthTokenCommand = "/usr/local/bin/trstctl-sign-approve"
 	if err := c.Validate(); err != nil {
 		t.Fatalf("external config with connection strings should validate: %v", err)
 	}

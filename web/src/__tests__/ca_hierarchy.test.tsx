@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -149,5 +149,31 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("missing issuers:read")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start root ceremony" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate managed key" })).toBeInTheDocument();
+  });
+
+  it("traps focus in the issuer configuration dialog and returns focus to the opener", async () => {
+    const user = userEvent.setup();
+    renderCAHierarchy();
+
+    const opener = await screen.findByRole("button", { name: "Configure ACME" });
+    await user.click(opener);
+
+    const dialog = await screen.findByRole("dialog", { name: "Configure ACME issuer" });
+    const issuerName = within(dialog).getByLabelText("Issuer name");
+    const close = within(dialog).getByRole("button", { name: "Close issuer form" });
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+
+    expect(issuerName).toHaveFocus();
+
+    close.focus();
+    await user.tab({ shift: true });
+    expect(cancel).toHaveFocus();
+
+    await user.tab();
+    expect(close).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Configure ACME issuer" })).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
   });
 });

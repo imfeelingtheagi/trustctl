@@ -135,9 +135,13 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if days < 1 {
 		days = defaultValidityDays
 	}
-	token, err := idempotencyToken()
-	if err != nil {
-		return nil, err
+	token := req.ProviderIdempotencyKey
+	if token == "" {
+		var err error
+		token, err = idempotencyToken()
+		if err != nil {
+			return nil, err
+		}
 	}
 	alg := b.cfg.SigningAlgorithm
 	if alg == "" {

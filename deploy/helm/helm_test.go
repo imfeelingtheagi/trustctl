@@ -13,6 +13,8 @@ import (
 	"text/template"
 
 	"gopkg.in/yaml.v3"
+
+	"trstctl.com/trstctl/internal/config"
 )
 
 const chart = "trstctl"
@@ -140,8 +142,12 @@ func TestSignerIsIsolated(t *testing.T) {
 	cmData := renderConfigMapData(t)
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MODE", "external")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_SOCKET", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", "false")
 	if _, ok := cmData["TRSTCTL_SIGNER_AUTH_SECRET_FILE"]; ok {
 		t.Error("control-plane ConfigMap must not render TRSTCTL_SIGNER_AUTH_SECRET_FILE; that secret is signer-side verifier material")
+	}
+	if _, ok := cmData["TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND"]; ok {
+		t.Error("default production-style chart values must not invent a signer token provider command")
 	}
 	if _, ok := cmData["TRSTCTL_SIGNER_MTLS_ADDRESS"]; ok {
 		t.Error("sidecar mode must not render TRSTCTL_SIGNER_MTLS_ADDRESS; it would conflict with the UDS signer socket")
@@ -214,6 +220,7 @@ func TestIsolatedSignerControlPlaneWiring(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_CERT_FILE", "/etc/trstctl/signer-mtls/tls.crt")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_KEY_FILE", "/etc/trstctl/signer-mtls/tls.key")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", "/etc/trstctl/signer-mtls/peer-ca.pem")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", "false")
 	if _, ok := cmData["TRSTCTL_SIGNER_SOCKET"]; ok {
 		t.Error("isolated signer mode must not render TRSTCTL_SIGNER_SOCKET; socket and mTLS are mutually exclusive")
 	}
@@ -815,7 +822,7 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 
 	err := renderRequiredInputsGuard(t, map[string]any{
 		"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
-		"nats":     map[string]any{"url": "nats://nats:4222"},
+		"nats":     map[string]any{"url": "nats://nats:4222", "allowSingleReplica": true},
 		"kek":      map[string]any{"existingSecret": "", "generate": true},
 	})
 	if err != nil {
@@ -825,6 +832,88 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 	deployment := read(t, "templates", "deployment.yaml")
 	if !strings.Contains(deployment, `include "trstctl.requiredInputs.guard" .`) {
 		t.Error("deployment.yaml must invoke trstctl.requiredInputs.guard so default helm install fails before creating broken pods")
+	}
+}
+
+func TestProductionSignerAuthTokenCommandRequired(t *testing.T) {
+	prod := productionishValues()
+	signer := prod["signer"].(map[string]any)
+	auth := signer["auth"].(map[string]any)
+	auth["tokenCommand"] = ""
+
+	err := renderRequiredInputsGuard(t, prod)
+	if err == nil || !strings.Contains(err.Error(), "signer.auth.tokenCommand") {
+		t.Fatalf("production-style values without an independent signer token command must fail closed; err = %v", err)
+	}
+
+	auth["tokenCommand"] = "/usr/local/bin/trstctl-sign-approve"
+	if err := renderRequiredInputsGuard(t, prod); err != nil {
+		t.Fatalf("production-style values with signer.auth.tokenCommand should render: %v", err)
+	}
+}
+
+func TestProductionSignerAuthTokenCommandRendersLoadableConfig(t *testing.T) {
+	v := productionishValues()
+	cmData := renderConfigMapDataWithValues(t, v)
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", "/usr/local/bin/trstctl-sign-approve")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", "false")
+	if _, ok := cmData["TRSTCTL_SIGNER_AUTH_SECRET_FILE"]; ok {
+		t.Fatal("production chart config must not expose signer verifier secret material to the control plane")
+	}
+
+	env := map[string]string{}
+	for k, v := range cmData {
+		env[k] = v
+	}
+	env["TRSTCTL_POSTGRES_DSN"] = "postgres://u:p@pg:5432/trstctl?sslmode=require"
+	cfg, err := config.Load(func(key string) string { return env[key] })
+	if err != nil {
+		t.Fatalf("rendered production signer token config should load: %v", err)
+	}
+	if cfg.Signer.AuthTokenCommand != "/usr/local/bin/trstctl-sign-approve" {
+		t.Fatalf("loaded signer.auth_token_command = %q", cfg.Signer.AuthTokenCommand)
+	}
+	if cfg.Signer.AllowCoResidentAuthorizer {
+		t.Fatal("loaded production chart config must keep co-resident authorizer disabled")
+	}
+}
+
+func TestEvalSignerCoResidentAuthorizerRequiresEvalShape(t *testing.T) {
+	eval := defaultishValues()
+	eval["replicaCount"] = 1
+	eval["postgres"] = map[string]any{"mode": "external", "dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": "", "existingSecretKey": "dsn"}
+	eval["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 1, "allowSingleReplica": true}
+	eval["kek"] = map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": true}
+	signer := eval["signer"].(map[string]any)
+	auth := signer["auth"].(map[string]any)
+	auth["allowCoResidentAuthorizer"] = true
+
+	if err := renderRequiredInputsGuard(t, eval); err != nil {
+		t.Fatalf("single-replica eval values should allow explicit co-resident signer authorizer: %v", err)
+	}
+	dep := renderControlPlaneDeployment(t, eval)
+	objs := decodeAllYAML(t, dep)
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] == "Deployment" {
+			spec, _ := o["spec"].(map[string]any)
+			tmpl, _ := spec["template"].(map[string]any)
+			pod, _ = tmpl["spec"].(map[string]any)
+		}
+	}
+	cp := containerNamed(asMaps(pod["containers"]), "trstctl")
+	if cp == nil || !hasMountPath(cp, "/etc/trstctl/signer-auth") {
+		t.Fatal("eval co-resident authorizer must mount signer-auth into the control plane")
+	}
+
+	prod := productionishValues()
+	prodSigner := prod["signer"].(map[string]any)
+	prodAuth := prodSigner["auth"].(map[string]any)
+	prodAuth["tokenCommand"] = ""
+	prodAuth["allowCoResidentAuthorizer"] = true
+	err := renderRequiredInputsGuard(t, prod)
+	if err == nil || !strings.Contains(err.Error(), "allowCoResidentAuthorizer is evaluation-only") {
+		t.Fatalf("production-style values must reject co-resident signer authorizer; err = %v", err)
 	}
 }
 
@@ -866,6 +955,7 @@ func TestExternalKMSFailsClosedUntilWired(t *testing.T) {
 		"postgres":    map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
 		"nats":        map[string]any{"url": "nats://nats:4222"},
 		"kek":         map[string]any{"existingSecret": "", "generate": true},
+		"signer":      map[string]any{"auth": map[string]any{"tokenCommand": "/usr/local/bin/trstctl-sign-approve"}},
 		"externalKMS": map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:...:key/abc"},
 	})
 	if wiredErr == nil || !strings.Contains(wiredErr.Error(), "OPS-004") {
@@ -1303,6 +1393,10 @@ func defaultishValues() map[string]any {
 		"serviceAccount":      map[string]any{"create": true, "name": "", "annotations": map[string]any{}},
 		"signer": map[string]any{
 			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
+			"auth": map[string]any{
+				"existingSecret": "", "existingSecretKey": "sign-auth.bin", "generate": true,
+				"tokenCommand": "", "allowCoResidentAuthorizer": false,
+			},
 			"mtls": map[string]any{"serverName": "", "signerSecret": "", "controlPlaneSecret": ""},
 		},
 		"networkPolicy": map[string]any{
@@ -1325,6 +1419,18 @@ func defaultishValues() map[string]any {
 			"serverName": "", "heartbeatInterval": "", "allowedCIDRs": []any{},
 		},
 	}
+}
+
+func productionishValues() map[string]any {
+	v := defaultishValues()
+	v["postgres"] = map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-postgres", "existingSecretKey": "dsn"}
+	v["nats"] = map[string]any{"mode": "external", "url": "nats://nats:4222", "replicas": 3, "allowSingleReplica": false}
+	v["kek"] = map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false}
+	signer := v["signer"].(map[string]any)
+	auth := signer["auth"].(map[string]any)
+	auth["tokenCommand"] = "/usr/local/bin/trstctl-sign-approve"
+	auth["allowCoResidentAuthorizer"] = false
+	return v
 }
 
 func mergeValues(base, overlay map[string]any) map[string]any {

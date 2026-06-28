@@ -50,7 +50,7 @@ func (h *caHierarchyService) StartCeremony(ctx context.Context, tenantID string,
 	if req.Threshold < 1 {
 		return api.CAKeyCeremony{}, fmt.Errorf("%w: threshold must be at least 1", api.ErrCAHierarchyInvalid)
 	}
-	purpose, err := hierarchyPurpose(req.Operation, req.ParentID, req.Spec)
+	purpose, err := hierarchyPurposeFromStartRequest(req)
 	if err != nil {
 		return api.CAKeyCeremony{}, err
 	}
@@ -227,6 +227,9 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 }
 
 func (h *caHierarchyService) IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req api.CAIssueIntermediateRequest) (api.CAIssuedIntermediate, error) {
+	if req.CeremonyID == "" {
+		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: ceremony_id is required", api.ErrCAHierarchyInvalid)
+	}
 	if len(req.CSRDER) == 0 {
 		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: CSR is required", api.ErrCAHierarchyInvalid)
 	}
@@ -252,18 +255,31 @@ func (h *caHierarchyService) IssueIntermediateCSR(ctx context.Context, tenantID,
 	if len(profile.PermittedDNSDomains) == 0 {
 		profile.PermittedDNSDomains = append([]string(nil), ca.PermittedDNSNames...)
 	}
-	issued, err := crypto.SignIntermediateHierarchyCAFromCSR(caDER, signer, req.CSRDER, profile)
-	if err != nil {
-		return api.CAIssuedIntermediate{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
-	}
-	info, err := certinfo.Inspect(issued.CertificateDER)
+	purpose, err := externalIntermediateCSRPurpose(caID, req.CSRDER, req.Spec)
 	if err != nil {
 		return api.CAIssuedIntermediate{}, err
+	}
+	var issued crypto.IssuedHierarchyCA
+	var info certinfo.Info
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
+			return err
+		}
+		var err error
+		issued, err = crypto.SignIntermediateHierarchyCAFromCSR(caDER, signer, req.CSRDER, profile)
+		if err != nil {
+			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		info, err = certinfo.Inspect(issued.CertificateDER)
+		return err
+	})
+	if err != nil {
+		return api.CAIssuedIntermediate{}, caHierarchyConflict(err)
 	}
 	out := append([]byte{}, issued.CertificatePEM...)
 	out = append(out, []byte(ca.CertificatePEM)...)
 	if err := h.emit(ctx, tenantID, "ca.intermediate_csr.issued", map[string]any{
-		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject,
+		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject, "ceremony_id": req.CeremonyID,
 	}); err != nil {
 		return api.CAIssuedIntermediate{}, err
 	}
@@ -332,6 +348,41 @@ func hierarchyPurpose(operation, parentID string, spec api.CASpec) (string, erro
 	default:
 		return "", fmt.Errorf("%w: unsupported ceremony operation %q", api.ErrCAHierarchyInvalid, operation)
 	}
+}
+
+func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, error) {
+	switch req.Operation {
+	case "issue_intermediate_csr":
+		csrDER, err := csrDERFromPEM(req.CSRPem)
+		if err != nil {
+			return "", err
+		}
+		return externalIntermediateCSRPurpose(req.ParentID, csrDER, req.Spec)
+	default:
+		return hierarchyPurpose(req.Operation, req.ParentID, req.Spec)
+	}
+}
+
+func externalIntermediateCSRPurpose(parentID string, csrDER []byte, spec api.CASpec) (string, error) {
+	if parentID == "" {
+		return "", fmt.Errorf("%w: parent_id is required for issue_intermediate_csr", api.ErrCAHierarchyInvalid)
+	}
+	if len(csrDER) == 0 {
+		return "", fmt.Errorf("%w: csr_pem is required for issue_intermediate_csr", api.ErrCAHierarchyInvalid)
+	}
+	specPurpose, err := hierarchyPurpose("create_intermediate", parentID, spec)
+	if err != nil {
+		return "", err
+	}
+	return "intermediate-csr:" + parentID + ":" + crypto.SHA256Hex(csrDER) + ":" + specPurpose, nil
+}
+
+func csrDERFromPEM(csrPEM string) ([]byte, error) {
+	block, _ := pem.Decode([]byte(csrPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return nil, fmt.Errorf("%w: csr_pem must contain one CERTIFICATE REQUEST PEM block", api.ErrCAHierarchyInvalid)
+	}
+	return block.Bytes, nil
 }
 
 func validateCASpec(spec api.CASpec) error {

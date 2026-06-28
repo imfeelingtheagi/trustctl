@@ -64,6 +64,13 @@ data:
   {{- else }}
   TRSTCTL_SIGNER_SOCKET: "/run/trstctl/signer.sock"
   {{- end }}
+  {{- with .Values.signer.auth.tokenCommand }}
+  TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND: {{ . | quote }}
+  {{- end }}
+  TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER: {{ .Values.signer.auth.allowCoResidentAuthorizer | quote }}
+  {{- if .Values.signer.auth.allowCoResidentAuthorizer }}
+  TRSTCTL_SIGNER_AUTH_SECRET_FILE: "/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
+  {{- end }}
   # Sealed-at-rest secrets + stable issuing CA + tamper-evident audit chain.
   TRSTCTL_SECRETS_KEK_FILE: "/etc/trstctl/kek/kek.bin"
   TRSTCTL_CA_CERT_FILE: "/data/ca/issuing-ca.crt"

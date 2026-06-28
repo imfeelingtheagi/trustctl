@@ -467,12 +467,13 @@ func (a *API) routeEnabled(r route) bool {
 // tests can confirm the spec covers every route and that each route has an
 // authorization contract.
 type Route struct {
-	Method          string
-	Path            string
-	OperationID     string
-	Permission      authz.Permission
-	PublicRationale string
-	Mutation        bool
+	Method            string
+	Path              string
+	OperationID       string
+	Permission        authz.Permission
+	PublicRationale   string
+	Mutation          bool
+	SensitiveResponse bool
 }
 
 // Routes returns the served routes. Paths are reported in their OpenAPI-template
@@ -485,12 +486,13 @@ func (a *API) Routes() []Route {
 	out := make([]Route, 0, len(rs))
 	for _, r := range rs {
 		out = append(out, Route{
-			Method:          r.method,
-			Path:            openapiPath(r.path),
-			OperationID:     r.opID,
-			Permission:      r.perm,
-			PublicRationale: publicRationaleForRoute(r),
-			Mutation:        r.mutation,
+			Method:            r.method,
+			Path:              openapiPath(r.path),
+			OperationID:       r.opID,
+			Permission:        r.perm,
+			PublicRationale:   publicRationaleForRoute(r),
+			Mutation:          r.mutation,
+			SensitiveResponse: r.sensitiveResponse,
 		})
 	}
 	return out
@@ -540,19 +542,20 @@ func pathInteger(name, desc string) param {
 // route binds an HTTP method+path to a handler and carries the metadata used to
 // generate the OpenAPI document and to enforce RBAC.
 type route struct {
-	method      string
-	path        string
-	opID        string
-	summary     string
-	handler     http.HandlerFunc
-	pathParams  []param
-	query       []param
-	reqSchema   string
-	resSchema   string
-	successCode string
-	mutation    bool
-	perm        authz.Permission // required permission; "" means public
-	scope       routeScope
+	method            string
+	path              string
+	opID              string
+	summary           string
+	handler           http.HandlerFunc
+	pathParams        []param
+	query             []param
+	reqSchema         string
+	resSchema         string
+	successCode       string
+	mutation          bool
+	sensitiveResponse bool
+	perm              authz.Permission // required permission; "" means public
+	scope             routeScope
 }
 
 type routeScope func(*http.Request) (authz.Scope, error)
@@ -751,14 +754,14 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/ca/authorities", opID: "listCAAuthorities", summary: "List served CA authorities", handler: a.listCAAuthorities, resSchema: "CAAuthorityList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/ca/authorities/roots", opID: "createRootCA", summary: "Create a signer-backed root CA after ceremony quorum", handler: a.createRootCA, reqSchema: "CACreateRootRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/authorities/intermediates", opID: "createIntermediateCA", summary: "Create a signer-backed intermediate CA after ceremony quorum", handler: a.createIntermediateCA, reqSchema: "CACreateIntermediateRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
-		{method: "POST", path: "/api/v1/ca/authorities/{id}/intermediates/csr", opID: "issueIntermediateCAFromCSR", summary: "Sign an external intermediate CA CSR from a served CA authority", handler: a.issueHierarchyIntermediateCSR, pathParams: caAuthorityPath, reqSchema: "CAIssueIntermediateRequest", resSchema: "CAIssuedIntermediate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: scopeIssuerPath("id")},
+		{method: "POST", path: "/api/v1/ca/authorities/{id}/intermediates/csr", opID: "issueIntermediateCAFromCSR", summary: "Sign an external intermediate CA CSR from a served CA authority after ceremony quorum", handler: a.issueHierarchyIntermediateCSR, pathParams: caAuthorityPath, reqSchema: "CAIssueIntermediateRequest", resSchema: "CAIssuedIntermediate", successCode: "201", mutation: true, perm: authz.IssuersWrite, scope: scopeIssuerPath("id")},
 		{method: "POST", path: "/api/v1/ca/authorities/{id}/issue", opID: "issueHierarchyLeaf", summary: "Issue a leaf certificate from a served CA authority", handler: a.issueHierarchyLeaf, pathParams: caAuthorityPath, reqSchema: "CAIssueLeafRequest", resSchema: "CAIssuedLeaf", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: scopeIssuerPath("id")},
 		{method: "GET", path: "/api/v1/external-cas", opID: "listExternalCAs", summary: "List configured upstream CA integrations", handler: a.listExternalCAs, resSchema: "ExternalCAList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: combineRouteScopes(scopeIssuerPath("id"), scopeProfileJSON("profile_name"))},
 		{method: "POST", path: "/api/v1/workloads/attested-issuance", opID: "issueAttestedSVID", summary: "Issue an X.509-SVID after workload attestation", handler: a.issueAttestedSVID, reqSchema: "AttestedSVIDRequest", resSchema: "AttestedSVID", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/broker/agent-identities", opID: "issueBrokerAgentIdentity", summary: "Issue a policy-gated short-lived identity for an AI/MCP agent", handler: a.issueBrokerAgentIdentity, reqSchema: "BrokerAgentIdentityRequest", resSchema: "BrokerAgentIdentity", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/ephemeral", opID: "issueEphemeralCredential", summary: "Open or complete an attestation-gated JIT credential request", handler: a.issueEphemeralCredential, reqSchema: "EphemeralCredentialRequest", resSchema: "EphemeralCredential", successCode: "202", mutation: true, perm: authz.CertsRequest},
-		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, perm: authz.AccessWrite},
+		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
@@ -806,11 +809,11 @@ func (a *API) routes() []route {
 		{method: "PUT", path: "/api/v1/access/members/{subject}", opID: "upsertMember", summary: "Onboard or update a tenant member", handler: a.upsertMember, pathParams: memberSubjectPath, reqSchema: "MemberRequest", resSchema: "Member", successCode: "200", mutation: true, perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/access/members/{subject}/offboard", opID: "offboardMember", summary: "Offboard a tenant member and revoke their API tokens", handler: a.offboardMember, pathParams: memberSubjectPath, reqSchema: "OffboardMemberRequest", resSchema: "OffboardMemberResponse", successCode: "200", mutation: true, perm: authz.AccessWrite},
 		{method: "GET", path: "/api/v1/access/api-tokens", opID: "listAPITokens", summary: "List API token metadata", handler: a.listAPITokens, query: apiTokenQuery, resSchema: "APITokenList", successCode: "200", perm: authz.AccessRead},
-		{method: "POST", path: "/api/v1/access/api-tokens", opID: "createAPIToken", summary: "Mint a tenant-scoped API token for a member", handler: a.createAPIToken, reqSchema: "APITokenCreateRequest", resSchema: "APITokenCreateResponse", successCode: "201", mutation: true, perm: authz.AccessWrite},
+		{method: "POST", path: "/api/v1/access/api-tokens", opID: "createAPIToken", summary: "Mint a tenant-scoped API token for a member", handler: a.createAPIToken, reqSchema: "APITokenCreateRequest", resSchema: "APITokenCreateResponse", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
 		{method: "DELETE", path: "/api/v1/access/api-tokens/{id}", opID: "revokeAPIToken", summary: "Revoke an API token", handler: a.revokeAPIToken, pathParams: idPath, successCode: "204", mutation: true, perm: authz.AccessWrite},
-		{method: "GET", path: "/api/v1/access/sessions", opID: "listPAMSessions", summary: "List just-in-time privileged access sessions", handler: a.listPAMSessions, query: page, resSchema: "PAMSessionList", successCode: "200", perm: authz.AccessRead},
-		{method: "POST", path: "/api/v1/access/sessions", opID: "openPAMSession", summary: "Open a just-in-time privileged access session", handler: a.openPAMSession, reqSchema: "PAMSessionRequest", resSchema: "PAMSession", successCode: "201", mutation: true, perm: authz.AccessWrite},
-		{method: "GET", path: "/api/v1/access/sessions/{id}", opID: "getPAMSession", summary: "Get a privileged access session", handler: a.getPAMSession, pathParams: idPath, resSchema: "PAMSession", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/access/sessions", opID: "listPAMSessions", summary: "List just-in-time privileged access sessions", handler: a.listPAMSessions, query: page, resSchema: "PAMSessionList", successCode: "200", sensitiveResponse: true, perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/sessions", opID: "openPAMSession", summary: "Open a just-in-time privileged access session", handler: a.openPAMSession, reqSchema: "PAMSessionRequest", resSchema: "PAMSession", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
+		{method: "GET", path: "/api/v1/access/sessions/{id}", opID: "getPAMSession", summary: "Get a privileged access session", handler: a.getPAMSession, pathParams: idPath, resSchema: "PAMSession", successCode: "200", sensitiveResponse: true, perm: authz.AccessRead},
 
 		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite, scope: scopeProfileJSON("name")},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},
@@ -854,7 +857,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one MCP tool (read by default; guarded writes when enabled)", handler: a.mcpCall, pathParams: mcpToolPath, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, query: page, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
-		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AgentsWrite},
 
 		// Served secrets/identity surface (GAP-006): the secret store (CRUD + rotation,
 		// secretsdk/F64), one-time secret sharing (secretshare/F60), and the dynamic PKI
@@ -866,25 +869,25 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/secrets/store", opID: "createSecret", summary: "Create an application secret (sealed at rest)", handler: a.createSecret, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/store/import", opID: "importSecrets", summary: "Import a tree of application secrets (sealed at rest)", handler: a.importSecrets, reqSchema: "SecretImportRequest", resSchema: "SecretMetaList", successCode: "201", mutation: true, perm: authz.SecretsWrite},
-		{method: "GET", path: "/api/v1/secrets/store/history/{name...}", opID: "getSecretVersion", summary: "Read one historical application-secret version", handler: a.getSecretVersion, pathParams: secretNamePath, query: []param{{name: "version", typ: "integer", desc: "historical version number to read"}}, resSchema: "SecretValue", successCode: "200", perm: authz.SecretsRead},
+		{method: "GET", path: "/api/v1/secrets/store/history/{name...}", opID: "getSecretVersion", summary: "Read one historical application-secret version", handler: a.getSecretVersion, pathParams: secretNamePath, query: []param{{name: "version", typ: "integer", desc: "historical version number to read"}}, resSchema: "SecretValue", successCode: "200", sensitiveResponse: true, perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/store/recover/{name...}", opID: "recoverSecretAt", summary: "Recover an application secret to a point in time", handler: a.recoverSecretAt, pathParams: secretNamePath, reqSchema: "SecretRecoverRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/rotations", opID: "rotateStaticSecret", summary: "Run a rollback-safe static secret rotation", handler: a.rotateStaticSecret, reqSchema: "SecretRotationRequest", resSchema: "SecretRotation", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/syncs", opID: "syncSecret", summary: "Push a stored secret to a configured external sync target", handler: a.syncSecret, reqSchema: "SecretSyncRequest", resSchema: "SecretSync", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/scans", opID: "scanSecrets", summary: "Run a Gitleaks secret scan and record redacted findings", handler: a.scanSecrets, reqSchema: "SecretScanRequest", resSchema: "SecretScan", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/store/approvals/{name...}", opID: "approveSecretChange", summary: "Approve a pending sensitive secret-store change", handler: a.approveSecretChange, pathParams: secretNamePath, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, perm: authz.SecretsWrite},
-		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: secretNamePath, query: []param{{name: "resolve", typ: "boolean", desc: "expand ${secret.path} references in the returned value"}}, resSchema: "SecretValue", successCode: "200", perm: authz.SecretsRead},
+		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: secretNamePath, query: []param{{name: "resolve", typ: "boolean", desc: "expand ${secret.path} references in the returned value"}}, resSchema: "SecretValue", successCode: "200", sensitiveResponse: true, perm: authz.SecretsRead},
 		{method: "PUT", path: "/api/v1/secrets/store/{name...}", opID: "rotateSecret", summary: "Rotate an application secret (new value, bumped version)", handler: a.rotateSecret, pathParams: secretNamePath, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "DELETE", path: "/api/v1/secrets/store/{name...}", opID: "deleteSecret", summary: "Delete an application secret", handler: a.deleteSecret, pathParams: secretNamePath, successCode: "204", mutation: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/leases", opID: "issueDynamicSecretLease", summary: "Issue a dynamic secret lease", handler: a.issueDynamicLease, reqSchema: "DynamicLeaseRequest", resSchema: "DynamicLease", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/leases", opID: "issueDynamicSecretLease", summary: "Issue a dynamic secret lease", handler: a.issueDynamicLease, reqSchema: "DynamicLeaseRequest", resSchema: "DynamicLease", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/leases/{lease_id}", opID: "getDynamicSecretLease", summary: "Read dynamic secret lease metadata", handler: a.getDynamicLease, pathParams: dynamicLeaseIDPath, resSchema: "DynamicLease", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/leases/{lease_id}/renew", opID: "renewDynamicSecretLease", summary: "Renew a dynamic secret lease", handler: a.renewDynamicLease, pathParams: dynamicLeaseIDPath, reqSchema: "DynamicLeaseRenewRequest", resSchema: "DynamicLease", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/leases/{lease_id}/revoke", opID: "revokeDynamicSecretLease", summary: "Revoke a dynamic secret lease", handler: a.revokeDynamicLease, pathParams: dynamicLeaseIDPath, resSchema: "DynamicLease", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 
-		{method: "POST", path: "/api/v1/secrets/shares", opID: "createShare", summary: "Create a one-time secret share (returns a bearer token)", handler: a.createShare, reqSchema: "ShareRequest", resSchema: "ShareToken", successCode: "201", mutation: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/shares/redeem", opID: "redeemShare", summary: "Redeem a one-time secret share exactly once", handler: a.redeemShare, reqSchema: "ShareRedeemRequest", resSchema: "ShareValue", successCode: "200", mutation: true, perm: authz.SecretsRead},
+		{method: "POST", path: "/api/v1/secrets/shares", opID: "createShare", summary: "Create a one-time secret share (returns a bearer token)", handler: a.createShare, reqSchema: "ShareRequest", resSchema: "ShareToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/shares/redeem", opID: "redeemShare", summary: "Redeem a one-time secret share exactly once", handler: a.redeemShare, reqSchema: "ShareRedeemRequest", resSchema: "ShareValue", successCode: "200", mutation: true, sensitiveResponse: true, perm: authz.SecretsRead},
 
-		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200"},
+		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/login", opID: "machineLogin", summary: "Exchange a machine credential for a scoped workload session", handler: a.machineLogin, reqSchema: "MachineLoginRequest", resSchema: "MachineLoginResponse", successCode: "200", sensitiveResponse: true},
 
 		// Transit/EaaS (KMS-01/F66): a served envelope-free cryptographic operation
 		// surface backed by compile-time Go interfaces behind internal/crypto. This
@@ -895,7 +898,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/transit/keys", opID: "createTransitKey", summary: "Create a tenant-scoped transit key", handler: a.createTransitKey, reqSchema: "TransitKeyRequest", resSchema: "TransitKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/keys/rotate", opID: "rotateTransitKey", summary: "Rotate a tenant-scoped transit key", handler: a.rotateTransitKey, reqSchema: "TransitRotateRequest", resSchema: "TransitKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/encrypt", opID: "encryptTransit", summary: "Encrypt plaintext with a transit key", handler: a.encryptTransit, reqSchema: "TransitEncryptRequest", resSchema: "TransitCiphertext", successCode: "200", mutation: true, perm: authz.KeysWrite},
-		{method: "POST", path: "/api/v1/transit/decrypt", opID: "decryptTransit", summary: "Decrypt transit ciphertext", handler: a.decryptTransit, reqSchema: "TransitDecryptRequest", resSchema: "TransitPlaintext", successCode: "200", perm: authz.KeysWrite},
+		{method: "POST", path: "/api/v1/transit/decrypt", opID: "decryptTransit", summary: "Decrypt transit ciphertext", handler: a.decryptTransit, reqSchema: "TransitDecryptRequest", resSchema: "TransitPlaintext", successCode: "200", sensitiveResponse: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/rewrap", opID: "rewrapTransit", summary: "Re-encrypt transit ciphertext under the current key version", handler: a.rewrapTransit, reqSchema: "TransitRewrapRequest", resSchema: "TransitCiphertext", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/hmac", opID: "hmacTransit", summary: "Compute an HMAC with a transit key", handler: a.hmacTransit, reqSchema: "TransitHMACRequest", resSchema: "TransitHMAC", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/sign", opID: "signTransit", summary: "Sign a message with a transit signing key", handler: a.signTransit, reqSchema: "TransitSignRequest", resSchema: "TransitSignature", successCode: "200", mutation: true, perm: authz.KeysWrite},

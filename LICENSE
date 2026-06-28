@@ -1,0 +1,51 @@
+trstctl Source Available License 1.0
+
+Copyright (c) 2026 trstctl authors.
+
+This license grants the Community core of trstctl as source-available software.
+It is not an OSI-approved open-source license.
+
+1. Community production-use grant.
+
+You may read, copy, build, modify, run, and self-host the Community core of
+trstctl for evaluation, development, internal business use, and production use
+on infrastructure you control.
+
+2. Commercial features.
+
+Commercial Enterprise and Provider features live under the repository's `ee/`
+directory or are activated by an offline trstctl commercial license. You may
+read that source for audit and integration planning, but you may not use
+Enterprise or Provider features in production unless you have a valid commercial
+license from the licensor.
+
+3. Managed-service and resale limits.
+
+You may not offer trstctl itself as a hosted control plane, managed service,
+MSP platform, marketplace service, or materially equivalent competing service
+for third parties without a valid Provider or other commercial license. You may
+not sell, sublicense, or redistribute trstctl as a standalone product except as
+allowed by a separate written agreement.
+
+4. Notices and attribution.
+
+You must keep this LICENSE file, the NOTICE file, and copyright notices in
+source and binary distributions. You may not use trstctl names, logos, or marks
+to imply endorsement without written permission.
+
+5. Contributions.
+
+Unless a separate contributor agreement says otherwise, contributions you submit
+to this repository are licensed under this license so they can be included in
+the Community core and commercial distributions.
+
+6. Third-party software.
+
+Third-party dependencies and generated assets remain under their own licenses.
+This license does not replace or narrow those third-party license terms.
+
+7. No warranty.
+
+trstctl is provided "as is", without warranties or conditions of any kind. You
+are responsible for evaluating fitness, security, compliance, and operational
+suitability for your environment.

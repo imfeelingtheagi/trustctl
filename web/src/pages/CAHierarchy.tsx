@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Building2, CheckCircle2, Cloud, FileKey2, Globe2, Home, KeyRound, LockKeyhole, Plus, RefreshCw, Server, ShieldCheck, X, XCircle } from "lucide-react";
+import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { CAOverview } from "@/components/ca";
@@ -386,6 +387,9 @@ function CreateIssuerDialog({
   const [name, setName] = useState("");
   const [chainPEM, setChainPEM] = useState("");
   const [config, setConfig] = useState<Record<string, string>>(() => defaultIssuerConfigValues(type));
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const titleId = "issuer-create-heading";
+  const descriptionId = "issuer-create-description";
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -393,19 +397,24 @@ function CreateIssuerDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-      <div
-        aria-labelledby="issuer-create-heading"
-        role="dialog"
-        aria-modal="true"
-        className="max-h-[min(42rem,calc(100vh-2rem))] w-full max-w-3xl overflow-hidden rounded-panel border border-border bg-card shadow-elevation2"
-      >
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={descriptionId}
+      initialFocusRef={nameInputRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[min(42rem,calc(100vh-2rem))] w-full max-w-3xl overflow-hidden rounded-panel border border-border bg-card shadow-elevation2"
+    >
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">
-            <h2 id="issuer-create-heading" className="truncate text-title font-semibold">
+            <h2 id={titleId} className="truncate text-title font-semibold">
               Configure {type.name} issuer
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{type.internal ? "Local signing authority" : "External CA integration"}</p>
+            <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+              {type.internal ? "Local signing authority" : "External CA integration"}
+            </p>
           </div>
           <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close issuer form">
             <X className="h-4 w-4" aria-hidden="true" />
@@ -415,7 +424,7 @@ function CreateIssuerDialog({
           <div className="grid gap-5 p-5">
             {error && <ErrorState title="Issuer create failed">{error}</ErrorState>}
             <div className="grid gap-4 md:grid-cols-2">
-              <LabeledInput id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder="Production ACME" />
+              <LabeledInput inputRef={nameInputRef} id="issuer-name" label="Issuer name" value={name} required onChange={setName} placeholder="Production ACME" />
               <div className="grid gap-2">
                 <label className="text-sm font-medium" htmlFor="issuer-kind">
                   Issuer kind
@@ -453,8 +462,7 @@ function CreateIssuerDialog({
             </Button>
           </footer>
         </form>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -536,6 +544,7 @@ function LabeledInput({
   required,
   type = "text",
   value,
+  inputRef,
 }: {
   id: string;
   label: string;
@@ -544,6 +553,7 @@ function LabeledInput({
   required?: boolean;
   placeholder?: string;
   onChange: (value: string) => void;
+  inputRef?: RefObject<HTMLInputElement>;
 }) {
   return (
     <div className="grid gap-2">
@@ -551,6 +561,7 @@ function LabeledInput({
         {label}
       </label>
       <input
+        ref={inputRef}
         id={id}
         type={type}
         required={required}

@@ -93,6 +93,7 @@ func TestMCPRESTToolsCoverRouteFamiliesAndGateWrites(t *testing.T) {
 		{Method: "GET", Path: "/api/v1/graph", OperationID: "getGraph", Summary: "Get the credential graph", Permission: "graph:read"},
 		{Method: "GET", Path: "/api/v1/notifications", OperationID: "listNotifications", Summary: "List notifications", Permission: "notifications:read"},
 		{Method: "POST", Path: "/api/v1/owners", OperationID: "createOwner", Summary: "Create an owner", Permission: "owners:write", Mutation: true},
+		{Method: "POST", Path: "/api/v1/transit/decrypt", OperationID: "decryptTransit", Summary: "Decrypt transit ciphertext", Permission: "keys:write", SensitiveResponse: true},
 	}
 
 	readonly := newServer(t, &auditsink.Recorder{}, NewRateLimiter(100, time.Minute))
@@ -108,6 +109,9 @@ func TestMCPRESTToolsCoverRouteFamiliesAndGateWrites(t *testing.T) {
 	if containsString(readonly.Tools(), "rest_create_owner") || readonly.IsWriteTool("rest_create_owner") {
 		t.Fatalf("mutating REST tool leaked without write opt-in: tools=%v", readonly.Tools())
 	}
+	if containsString(readonly.Tools(), "rest_decrypt_transit") {
+		t.Fatalf("sensitive REST tool leaked into read-only catalog: tools=%v", readonly.Tools())
+	}
 
 	enabled := newServer(t, &auditsink.Recorder{}, NewRateLimiter(100, time.Minute))
 	enabled = New(enabled.tenantID, enabled.pipeline, enabled.synth, enabled.rate, enabled.audit, enabled.identity, WithRESTTools(routes, true))
@@ -117,6 +121,34 @@ func TestMCPRESTToolsCoverRouteFamiliesAndGateWrites(t *testing.T) {
 	}
 	if !enabled.IsWriteTool("rest_create_owner") || !rt.Mutation || rt.Permission != "owners:write" || rt.Method != "POST" || rt.Path != "/api/v1/owners" {
 		t.Fatalf("rest_create_owner descriptor = %+v write=%t, want guarded POST /api/v1/owners", rt, enabled.IsWriteTool("rest_create_owner"))
+	}
+	if containsString(enabled.Tools(), "rest_decrypt_transit") {
+		t.Fatalf("sensitive REST tool leaked into write-enabled catalog: tools=%v", enabled.Tools())
+	}
+}
+
+func TestMCPSensitiveRESTToolsAreNeverExposed(t *testing.T) {
+	routes := []RESTTool{
+		{Method: "GET", Path: "/api/v1/certificates", OperationID: "listCertificates", Summary: "Query certificate inventory", Permission: "certs:read"},
+		{Method: "GET", Path: "/api/v1/secrets/store/{name}", OperationID: "getSecret", Summary: "Read an application secret value", Permission: "secrets:read", SensitiveResponse: true},
+		{Method: "POST", Path: "/api/v1/transit/decrypt", OperationID: "decryptTransit", Summary: "Decrypt transit ciphertext", Permission: "keys:write", SensitiveResponse: true},
+		{Method: "POST", Path: "/api/v1/secrets/pki", OperationID: "issuePKISecret", Summary: "Issue a dynamic PKI secret", Permission: "secrets:write", Mutation: true, SensitiveResponse: true},
+	}
+	srv := newServer(t, &auditsink.Recorder{}, NewRateLimiter(100, time.Minute))
+	srv = New(srv.tenantID, srv.pipeline, srv.synth, srv.rate, srv.audit, srv.identity, WithRESTTools(routes, true))
+	if !containsString(srv.Tools(), "rest_list_certificates") {
+		t.Fatalf("safe REST tool missing from catalog: tools=%v", srv.Tools())
+	}
+	for _, name := range []string{"rest_get_secret", "rest_decrypt_transit", "rest_issue_pki_secret"} {
+		if containsString(srv.Tools(), name) {
+			t.Fatalf("sensitive REST tool %q leaked into catalog: tools=%v", name, srv.Tools())
+		}
+		if _, ok := srv.RESTTool(name); ok {
+			t.Fatalf("sensitive REST tool %q is callable through RESTTool lookup", name)
+		}
+		if srv.IsWriteTool(name) {
+			t.Fatalf("sensitive REST tool %q leaked into write-tool set", name)
+		}
 	}
 }
 

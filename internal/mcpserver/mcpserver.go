@@ -73,14 +73,15 @@ type ToolResult struct {
 // routing and guard metadata: the API layer executes it through the real HTTP router
 // so RBAC, tenant scoping, idempotency, CSRF, ABAC, and audit stay in one place.
 type RESTTool struct {
-	Name            string
-	Method          string
-	Path            string
-	OperationID     string
-	Summary         string
-	Permission      string
-	PublicRationale string
-	Mutation        bool
+	Name              string
+	Method            string
+	Path              string
+	OperationID       string
+	Summary           string
+	Permission        string
+	PublicRationale   string
+	Mutation          bool
+	SensitiveResponse bool
 }
 
 // Server is the MCP tool surface. It is read-only unless guarded write-tool metadata
@@ -111,10 +112,10 @@ func WithWriteTools() Option {
 	}
 }
 
-// WithRESTTools exposes route-backed MCP tools. Non-mutating routes are always
-// exposed; mutating routes appear only when exposeWrites is true. The returned tool
-// names are stable rest_<operation_id> slugs, making each MCP tool map 1:1 to one
-// served API operation.
+// WithRESTTools exposes route-backed MCP tools. Sensitive-response routes are never
+// exposed; non-mutating safe routes are always exposed, and mutating safe routes
+// appear only when exposeWrites is true. The returned tool names are stable
+// rest_<operation_id> slugs, making each MCP tool map 1:1 to one served API operation.
 func WithRESTTools(routes []RESTTool, exposeWrites bool) Option {
 	return func(s *Server) {
 		if s.rest == nil {
@@ -123,6 +124,9 @@ func WithRESTTools(routes []RESTTool, exposeWrites bool) Option {
 		for _, rt := range routes {
 			rt = normalizeRESTTool(rt)
 			if rt.Name == "" || rt.Method == "" || rt.Path == "" || rt.OperationID == "" {
+				continue
+			}
+			if rt.SensitiveResponse {
 				continue
 			}
 			if rt.Mutation && !exposeWrites {
