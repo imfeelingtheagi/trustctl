@@ -13,10 +13,14 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/a10"
+	"trstctl.com/trstctl/internal/connector/a10/a10test"
 	"trstctl.com/trstctl/internal/connector/acm"
 	"trstctl.com/trstctl/internal/connector/acm/acmtest"
 	"trstctl.com/trstctl/internal/connector/azurekv"
 	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
+	"trstctl.com/trstctl/internal/connector/kemp"
+	"trstctl.com/trstctl/internal/connector/kemp/kemptest"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -103,6 +107,102 @@ func TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators(t *testing
 	}
 	if !h.hasEvent(t, "connector.delivery.recorded") {
 		t.Fatal("native connector deployment did not emit connector.delivery.recorded")
+	}
+}
+
+func TestServedLoadBalancerConnectorBreadthCAPDEP01(t *testing.T) {
+	const (
+		a10User   = "admin"
+		a10Pass   = "a10-secret"
+		a10Target = "payments-client-ssl"
+		kempToken = "kemp-token"
+		kempVS    = "vs-payments-443"
+	)
+
+	a10Srv := a10test.New(a10User, a10Pass)
+	defer a10Srv.Close()
+	kempSrv := kemptest.New(kempToken)
+	defer kempSrv.Close()
+
+	reg := connector.NewRegistry(func(name string) connector.Ops {
+		switch name {
+		case "a10":
+			return connector.NewHTTPOps(a10Srv.Client())
+		case "kemp":
+			return connector.NewHTTPOps(kempSrv.Client())
+		default:
+			return connector.NewHTTPOps(nil)
+		}
+	})
+	reg.Register(a10.New(a10Srv.URL(), a10User, []byte(a10Pass)))
+	reg.Register(kemp.New(kempSrv.URL(), []byte(kempToken)))
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ConnectorRegistry = reg
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/connectors/catalog", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("connector catalog: status %d body %s", status, body)
+	}
+	for _, want := range []string{`"name":"f5"`, `"name":"netscaler"`, `"name":"a10"`, `"name":"kemp"`} {
+		if !jsonContains(t, body, want) {
+			t.Fatalf("connector catalog missing %s: %s", want, body)
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		connector string
+		target    string
+	}{
+		{name: "dc1/a10/payments", connector: "a10", target: a10Target},
+		{name: "dc1/kemp/payments", connector: "kemp", target: kempVS},
+	} {
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+			"name":      tc.name,
+			"connector": tc.connector,
+			"config": map[string]any{
+				"target":         tc.target,
+				"credential_ref": "secret://connectors/" + tc.connector + "/payments",
+			},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s target: status %d body %s", tc.connector, status, body)
+		}
+	}
+
+	certPEM, keyPEM := servedNativeDeployCredential(t, h, "cap-dep-01.served.test")
+	defer secret.Wipe(keyPEM)
+	enqueueServedConnectorDeploy(t, h, "cap-dep-01-a10", "a10", connector.NewDeployment(a10Target, certPEM, keyPEM))
+	enqueueServedConnectorDeploy(t, h, "cap-dep-01-kemp", "kemp", connector.NewDeployment(kempVS, certPEM, keyPEM))
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain load-balancer connector outbox: %v", err)
+	}
+
+	a10Binding, ok := a10Srv.Binding(a10Target)
+	if !ok || !bytes.Equal(a10Binding.Certificate, certPEM) || !bytes.Equal(a10Binding.PrivateKey, keyPEM) {
+		t.Fatalf("A10 connector did not bind the renewed credential: %+v ok=%v", a10Binding, ok)
+	}
+	kempBinding, ok := kempSrv.Binding(kempVS)
+	if !ok || !bytes.Equal(kempBinding.Certificate, certPEM) || !bytes.Equal(kempBinding.PrivateKey, keyPEM) {
+		t.Fatalf("Kemp connector did not bind the renewed credential: %+v ok=%v", kempBinding, ok)
+	}
+
+	deliveries := connectorDeliveries(t, h, tok)
+	want := map[string]string{"a10": a10Target, "kemp": kempVS}
+	for _, got := range deliveries.Items {
+		if want[got.Connector] != got.Target {
+			continue
+		}
+		if got.Status != "delivered" || got.Reason != "native_delivered" || got.Fingerprint == "" {
+			t.Fatalf("bad load-balancer connector receipt for %s: %+v", got.Connector, got)
+		}
+		delete(want, got.Connector)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing delivered load-balancer connector receipts for %+v; got %s", want, deliveries.Raw)
 	}
 }
 

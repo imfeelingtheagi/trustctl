@@ -158,7 +158,10 @@ follow the [connector authoring guide](../guides/connector-authoring.md).
   prefix-constrained).
 - **Initial connectors (F7):** `nginx`, `apache`, `caddy`, `haproxy`, `iis`,
   `traefik`, `envoy`, `postfix`, `aws-acm`, `azurekv`, `gcpcm`, `javakeystore`, `f5`.
-- **Appliance connectors (F27):** `netscaler`, `cisco`, `fortigate`, `paloalto`.
+- **Appliance connectors (F27):** `netscaler`, `a10`, `kemp`, `cisco`,
+  `fortigate`, `paloalto`. The served load-balancer set covers F5/BIG-IP,
+  Citrix ADC/NetScaler, A10 Thunder/AX, and Kemp LoadMaster target mutation through
+  the same outbox plus native-registry or signed-plugin delivery path.
 - **Outbox destination:** `connector.deploy`.
 - **Guide:** [Authoring a connector](../guides/connector-authoring.md).
 

@@ -41,6 +41,30 @@ describe("connector deployment disclosure surface", () => {
           delivery_mode: "native registry, signed plugin, or receipt",
           rollback: "receipt:rollback-nginx-2026-06-26",
         },
+        {
+          name: "f5",
+          kind: "appliance",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous Client SSL profile binding",
+        },
+        {
+          name: "netscaler",
+          kind: "appliance",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "bind previous certKey to the service group",
+        },
+        {
+          name: "a10",
+          kind: "appliance",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous client-SSL template certificate/key binding",
+        },
+        {
+          name: "kemp",
+          kind: "appliance",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "rebind virtual service to previous certificate object",
+        },
       ],
     });
     apiMock.connectorTargets.mockReset().mockResolvedValue({
@@ -113,8 +137,10 @@ describe("connector deployment disclosure surface", () => {
     expect(apiMock.identities).toHaveBeenCalled();
     expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 20 });
     expect(screen.getAllByText("nginx").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("a10").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("kemp").length).toBeGreaterThan(0);
     expect(screen.getAllByText("edge/prod/payments").length).toBeGreaterThan(0);
-    expect(screen.getByText("native registry, signed plugin, or receipt")).toBeInTheDocument();
+    expect(screen.getAllByText("native registry, signed plugin, or receipt").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
     expect(screen.getByText("delivered")).toBeInTheDocument();
     expect(screen.getByText("sha256:served-receipt")).toBeInTheDocument();
