@@ -19,8 +19,8 @@ import (
 // receive the key but does NOT dedupe.
 func logf(format string, args ...any) {}
 
-// save forwards to the dedupe store; its parameter is the idempotency key, so a
-// call to it is a recognized forwarding sink (the API.mutate pattern).
+// save pretends to accept the idempotency key but does not dedupe; forwarding to
+// this helper must not satisfy AN-5.
 func save(ctx context.Context, idempotencyKey string) error {
 	_ = ctx
 	_ = idempotencyKey
@@ -29,6 +29,15 @@ func save(ctx context.Context, idempotencyKey string) error {
 
 // dedupe is the orchestrator dedupe store used by the canonical-sink cases.
 var dedupe *orchestrator.Idempotency
+
+// mutate is the served API pattern: it accepts the idempotency key and threads it
+// to the canonical orchestrator.Idempotency.Do sink.
+func mutate(ctx context.Context, idempotencyKey string) error {
+	_, err := dedupe.Do(ctx, "tenant", idempotencyKey, func(ctx context.Context) ([]byte, error) {
+		return nil, nil
+	})
+	return err
+}
 
 type API struct{}
 
@@ -87,13 +96,23 @@ func ParamButUnused(ctx context.Context, tenantID, name, idempotencyKey string) 
 	return nil
 }
 
-// CreateGoodViaMutate threads the extracted key into a forwarding sink (save
-// takes an idempotency-named parameter), the served-handler pattern.
+// CreateBadViaNonDedupeHelper threads the key into a helper that merely accepts
+// an idempotency-named parameter and discards it. ARCH-002: this must be flagged.
+//
+//trstctl:mutation
+func CreateBadViaNonDedupeHelper(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	_ = save(r.Context(), idempotencyKey)
+	_ = w
+}
+
+// CreateGoodViaMutate threads the extracted key into a proven forwarding sink,
+// the served-handler pattern.
 //
 //trstctl:mutation
 func CreateGoodViaMutate(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	_ = save(r.Context(), idempotencyKey)
+	_ = mutate(r.Context(), idempotencyKey)
 	_ = w
 }
 
@@ -114,7 +133,7 @@ func CreateGoodViaDo(w http.ResponseWriter, r *http.Request) {
 //
 //trstctl:mutation
 func RegisterTenantForwards(ctx context.Context, tenantID, name, idempotencyKey string) error {
-	return save(ctx, idempotencyKey)
+	return mutate(ctx, idempotencyKey)
 }
 
 // Unmarked is not annotated as a mutation, so it is ignored even though it never
@@ -135,7 +154,7 @@ func (a *API) RouteMutationNoKey(w http.ResponseWriter, r *http.Request) { // wa
 // same real dedupe flow as marker-derived coverage.
 func (a *API) RouteMutationGoodViaMutate(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	_ = save(r.Context(), idempotencyKey)
+	_ = mutate(r.Context(), idempotencyKey)
 	_ = w
 }
 

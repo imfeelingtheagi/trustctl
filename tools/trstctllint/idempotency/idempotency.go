@@ -56,8 +56,9 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
+	decls := funcDecls(pass)
 	for fn := range servedmutation.Funcs(pass) {
-		if !honorsIdempotency(pass, fn) {
+		if !honorsIdempotency(pass, decls, fn) {
 			pass.Reportf(fn.Pos(),
 				"mutating handler must thread an idempotency key into a dedupe sink (Idempotency.Do or a key-accepting mutate), not merely name or log it (AN-5)")
 		}
@@ -69,16 +70,42 @@ func run(pass *analysis.Pass) (interface{}, error) {
 // idempotency-named value into a recognized dedupe sink somewhere in its body.
 // A parameter, or a header read, is necessary but NOT sufficient: the value must
 // reach a sink call.
-func honorsIdempotency(pass *analysis.Pass, fn *ast.FuncDecl) bool {
+func honorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.FuncDecl, fn *ast.FuncDecl) bool {
+	fnObj, _ := pass.TypesInfo.Defs[fn.Name].(*types.Func)
+	return functionHonorsIdempotency(pass, decls, fnObj, fn, map[*types.Func]bool{})
+}
+
+func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.FuncDecl, fnObj *types.Func, fn *ast.FuncDecl, visiting map[*types.Func]bool) bool {
+	if fn == nil || fn.Body == nil {
+		return false
+	}
+	if fnObj != nil {
+		if visiting[fnObj] {
+			return false
+		}
+		visiting[fnObj] = true
+		defer delete(visiting, fnObj)
+	}
 	honored := false
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if callIsDedupeSink(pass, call) && callPassesIdempotencyArg(call) {
+		callee := calleeFunc(pass, call.Fun)
+		if callee == nil {
+			return true
+		}
+		if isCanonicalIdempotencyDo(callee) && callPassesIdempotencyArg(call) {
 			honored = true
 			return false
+		}
+		if callForwardsIdempotencyArgToParam(call, callee.Type()) {
+			if calleeDecl := decls[callee]; calleeDecl != nil &&
+				functionHonorsIdempotency(pass, decls, callee, calleeDecl, visiting) {
+				honored = true
+				return false
+			}
 		}
 		return true
 	})
@@ -96,23 +123,6 @@ func callPassesIdempotencyArg(call *ast.CallExpr) bool {
 		}
 	}
 	return false
-}
-
-// callIsDedupeSink reports whether the call targets a recognized dedupe sink:
-// either orchestrator.Idempotency.Do (resolved by type), or a function/method
-// whose signature declares an idempotency-named parameter (a forwarding sink
-// such as API.mutate that threads the key onward to Idempotency.Do). Resolution
-// is by type so an arbitrary call that merely receives the value (e.g. a logger)
-// is rejected.
-func callIsDedupeSink(pass *analysis.Pass, call *ast.CallExpr) bool {
-	fnObj := calleeFunc(pass, call.Fun)
-	if fnObj == nil {
-		return false
-	}
-	if isCanonicalIdempotencyDo(fnObj) {
-		return true
-	}
-	return signatureHasIdempotencyParam(fnObj.Type())
 }
 
 // calleeFunc resolves the function/method object a call expression targets,
@@ -140,6 +150,22 @@ func calleeFunc(pass *analysis.Pass, fun ast.Expr) *types.Func {
 	return nil
 }
 
+func funcDecls(pass *analysis.Pass) map[*types.Func]*ast.FuncDecl {
+	decls := map[*types.Func]*ast.FuncDecl{}
+	for _, file := range pass.Files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if obj, ok := pass.TypesInfo.Defs[fn.Name].(*types.Func); ok {
+				decls[obj] = fn
+			}
+		}
+	}
+	return decls
+}
+
 // isCanonicalIdempotencyDo reports whether fn is
 // (*orchestrator.Idempotency).Do — the canonical dedupe sink.
 func isCanonicalIdempotencyDo(fn *types.Func) bool {
@@ -159,18 +185,20 @@ func isCanonicalIdempotencyDo(fn *types.Func) bool {
 		obj.Pkg() != nil && obj.Pkg().Path() == idempotencyPkgPath
 }
 
-// signatureHasIdempotencyParam reports whether a function signature declares a
-// parameter whose name mentions idempotency. Such a callee is a forwarding sink:
-// it accepts the key in order to thread it onward (the served API.mutate
-// pattern). This is what lets a handler satisfy AN-5 by calling
-// mutate(w, r, idempotencyKey, fn) rather than Idempotency.Do directly.
-func signatureHasIdempotencyParam(t types.Type) bool {
+// callForwardsIdempotencyArgToParam reports whether this call passes an
+// idempotency-named value into the corresponding idempotency-named parameter of
+// the callee. The callee is not accepted on that signature alone; the analyzer
+// must also recursively prove that callee reaches Idempotency.Do.
+func callForwardsIdempotencyArgToParam(call *ast.CallExpr, t types.Type) bool {
 	sig, ok := t.(*types.Signature)
 	if !ok {
 		return false
 	}
 	params := sig.Params()
-	for i := 0; i < params.Len(); i++ {
+	for i, arg := range call.Args {
+		if !exprMentionsIdempotency(arg) || i >= params.Len() {
+			continue
+		}
 		if mentionsIdempotency(params.At(i).Name()) {
 			return true
 		}
