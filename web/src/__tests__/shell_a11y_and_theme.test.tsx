@@ -466,4 +466,19 @@ describe("app shell accessibility and theme", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(localStorage.getItem("trstctl-theme")).toBe("light");
   });
+
+  it("collapses and restores the desktop sidebar via the header hamburger", async () => {
+    const user = userEvent.setup();
+    resizeViewport(1280); // desktop
+    renderShell();
+    await screen.findByText("u@example.test");
+    // Sidebar visible on first load.
+    expect(document.getElementById("desktop-primary-nav")).not.toBeNull();
+    // Hamburger collapses it.
+    await user.click(screen.getByRole("button", { name: /hide navigation sidebar/i }));
+    expect(document.getElementById("desktop-primary-nav")).toBeNull();
+    // And restores it.
+    await user.click(screen.getByRole("button", { name: /show navigation sidebar/i }));
+    expect(document.getElementById("desktop-primary-nav")).not.toBeNull();
+  });
 });
