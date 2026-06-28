@@ -242,7 +242,7 @@ export const extractedMessages = [
     key: "source.a.real.editor.needs.a.tenant.scoped.workfl.9470dedfb0",
     defaultMessage: "A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That workflow isn't in the console yet.",
     sources: [
-      "src/pages/Policy.tsx:439",
+      "src/pages/Policy.tsx:441",
     ],
   },
   {
@@ -344,7 +344,7 @@ export const extractedMessages = [
     key: "source.active.policy.read.candidate.validation.dr.63be8df857",
     defaultMessage: "Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then, lifecycle mutations remain the real enforcement path.",
     sources: [
-      "src/pages/Policy.tsx:444",
+      "src/pages/Policy.tsx:446",
     ],
   },
   {
@@ -1300,14 +1300,14 @@ export const extractedMessages = [
     key: "source.campaign.268286d2ef",
     defaultMessage: "Campaign",
     sources: [
-      "src/pages/Policy.tsx:315",
+      "src/pages/Policy.tsx:317",
     ],
   },
   {
     key: "source.campaigns.certify.non.human.identity.acces.5d99189fbe",
     defaultMessage: "Campaigns certify non-human identity access from identifiers and evidence references. The console never accepts credential values here.",
     sources: [
-      "src/pages/Policy.tsx:308",
+      "src/pages/Policy.tsx:310",
     ],
   },
   {
@@ -1469,7 +1469,7 @@ export const extractedMessages = [
     key: "source.certify.c1567c2908",
     defaultMessage: "Certify",
     sources: [
-      "src/pages/Policy.tsx:603",
+      "src/pages/Policy.tsx:605",
     ],
   },
   {
@@ -1726,14 +1726,14 @@ export const extractedMessages = [
     key: "source.compliance.framework.248b5a307a",
     defaultMessage: "Compliance framework",
     sources: [
-      "src/pages/Policy.tsx:265",
+      "src/pages/Policy.tsx:267",
     ],
   },
   {
     key: "source.compliance.posture.and.reports.340cf36dd3",
     defaultMessage: "Compliance posture and reports",
     sources: [
-      "src/pages/Policy.tsx:257",
+      "src/pages/Policy.tsx:259",
     ],
   },
   {
@@ -1903,7 +1903,7 @@ export const extractedMessages = [
     key: "source.control.32d7e82082",
     defaultMessage: "Control",
     sources: [
-      "src/pages/Policy.tsx:498",
+      "src/pages/Policy.tsx:500",
     ],
   },
   {
@@ -2217,7 +2217,7 @@ export const extractedMessages = [
     defaultMessage: "Critical",
     sources: [
       "src/lib/statusVocab.ts:28",
-      "src/pages/Policy.tsx:341",
+      "src/pages/Policy.tsx:343",
     ],
   },
   {
@@ -2315,7 +2315,7 @@ export const extractedMessages = [
     key: "source.current.session.subject.1f6510ea4d",
     defaultMessage: "current session subject",
     sources: [
-      "src/pages/Policy.tsx:326",
+      "src/pages/Policy.tsx:328",
     ],
   },
   {
@@ -2386,7 +2386,7 @@ export const extractedMessages = [
     key: "source.decision.640ae4baf9",
     defaultMessage: "Decision",
     sources: [
-      "src/pages/Policy.tsx:574",
+      "src/pages/Policy.tsx:576",
     ],
   },
   {
@@ -2721,7 +2721,7 @@ export const extractedMessages = [
     defaultMessage: "Display name",
     sources: [
       "src/pages/Platform.tsx:560",
-      "src/pages/Policy.tsx:358",
+      "src/pages/Policy.tsx:360",
     ],
   },
   {
@@ -2729,7 +2729,7 @@ export const extractedMessages = [
     defaultMessage: "Download signed bundle",
     sources: [
       "src/pages/Audit.tsx:328",
-      "src/pages/Policy.tsx:476",
+      "src/pages/Policy.tsx:478",
     ],
   },
   {
@@ -2929,7 +2929,7 @@ export const extractedMessages = [
     key: "source.enforcement.path.0e8665bcfe",
     defaultMessage: "Enforcement path",
     sources: [
-      "src/pages/Policy.tsx:229",
+      "src/pages/Policy.tsx:231",
     ],
   },
   {
@@ -3007,7 +3007,7 @@ export const extractedMessages = [
     key: "source.entitlement.0d8f0b2d3a",
     defaultMessage: "Entitlement",
     sources: [
-      "src/pages/Policy.tsx:382",
+      "src/pages/Policy.tsx:384",
     ],
   },
   {
@@ -3099,7 +3099,7 @@ export const extractedMessages = [
     key: "source.etsi.e1bfef3514",
     defaultMessage: "ETSI",
     sources: [
-      "src/pages/Policy.tsx:20",
+      "src/pages/Policy.tsx:22",
     ],
   },
   {
@@ -3129,8 +3129,8 @@ export const extractedMessages = [
     sources: [
       "src/pages/Incidents.tsx:661",
       "src/pages/Incidents.tsx:751",
-      "src/pages/Policy.tsx:500",
-      "src/pages/Policy.tsx:572",
+      "src/pages/Policy.tsx:502",
+      "src/pages/Policy.tsx:574",
     ],
   },
   {
@@ -3144,14 +3144,14 @@ export const extractedMessages = [
     key: "source.evidence.pack.unavailable.7f26f198c7",
     defaultMessage: "Evidence pack unavailable",
     sources: [
-      "src/pages/Policy.tsx:280",
+      "src/pages/Policy.tsx:282",
     ],
   },
   {
     key: "source.evidence.refs.edfa905c2f",
     defaultMessage: "Evidence refs",
     sources: [
-      "src/pages/Policy.tsx:366",
+      "src/pages/Policy.tsx:368",
     ],
   },
   {
@@ -3172,7 +3172,7 @@ export const extractedMessages = [
     key: "source.exception.b4fe3d529d",
     defaultMessage: "Exception",
     sources: [
-      "src/pages/Policy.tsx:609",
+      "src/pages/Policy.tsx:611",
     ],
   },
   {
@@ -3663,7 +3663,7 @@ export const extractedMessages = [
     defaultMessage: "High",
     sources: [
       "src/lib/statusVocab.ts:29",
-      "src/pages/Policy.tsx:340",
+      "src/pages/Policy.tsx:342",
     ],
   },
   {
@@ -3779,7 +3779,7 @@ export const extractedMessages = [
     defaultMessage: "Identities",
     sources: [
       "src/pages/Identities.tsx:515",
-      "src/pages/Policy.tsx:240",
+      "src/pages/Policy.tsx:242",
     ],
   },
   {
@@ -3787,7 +3787,7 @@ export const extractedMessages = [
     defaultMessage: "Identity",
     sources: [
       "src/pages/Connectors.tsx:185",
-      "src/pages/Policy.tsx:570",
+      "src/pages/Policy.tsx:572",
       "src/pages/SSHTrust.tsx:355",
     ],
   },
@@ -4570,7 +4570,7 @@ export const extractedMessages = [
     key: "source.loading.evidence.pack.02321aed0c",
     defaultMessage: "Loading evidence pack.",
     sources: [
-      "src/pages/Policy.tsx:279",
+      "src/pages/Policy.tsx:281",
     ],
   },
   {
@@ -4612,7 +4612,7 @@ export const extractedMessages = [
     key: "source.loading.nhi.access.reviews.cd87c4f77e",
     defaultMessage: "Loading NHI access reviews.",
     sources: [
-      "src/pages/Policy.tsx:391",
+      "src/pages/Policy.tsx:393",
     ],
   },
   {
@@ -4700,7 +4700,7 @@ export const extractedMessages = [
     defaultMessage: "Low",
     sources: [
       "src/lib/statusVocab.ts:31",
-      "src/pages/Policy.tsx:338",
+      "src/pages/Policy.tsx:340",
     ],
   },
   {
@@ -4857,7 +4857,7 @@ export const extractedMessages = [
     defaultMessage: "Medium",
     sources: [
       "src/lib/statusVocab.ts:30",
-      "src/pages/Policy.tsx:339",
+      "src/pages/Policy.tsx:341",
     ],
   },
   {
@@ -5165,42 +5165,42 @@ export const extractedMessages = [
     key: "source.nhi.access.certification.3fd94ffdff",
     defaultMessage: "NHI access certification",
     sources: [
-      "src/pages/Policy.tsx:305",
+      "src/pages/Policy.tsx:307",
     ],
   },
   {
     key: "source.nhi.access.review.campaigns.873389dac9",
     defaultMessage: "NHI access review campaigns",
     sources: [
-      "src/pages/Policy.tsx:400",
+      "src/pages/Policy.tsx:402",
     ],
   },
   {
     key: "source.nhi.access.review.items.d360cac314",
     defaultMessage: "NHI access review items",
     sources: [
-      "src/pages/Policy.tsx:567",
+      "src/pages/Policy.tsx:569",
     ],
   },
   {
     key: "source.nhi.access.review.unavailable.7f4d6bdefd",
     defaultMessage: "NHI access review unavailable",
     sources: [
-      "src/pages/Policy.tsx:392",
+      "src/pages/Policy.tsx:394",
     ],
   },
   {
     key: "source.nhi.id.52919bf0d5",
     defaultMessage: "NHI id",
     sources: [
-      "src/pages/Policy.tsx:350",
+      "src/pages/Policy.tsx:352",
     ],
   },
   {
     key: "source.no.access.review.campaigns.5e5e0fbd56",
     defaultMessage: "No access review campaigns.",
     sources: [
-      "src/pages/Policy.tsx:418",
+      "src/pages/Policy.tsx:420",
     ],
   },
   {
@@ -5488,14 +5488,14 @@ export const extractedMessages = [
     key: "source.no.item.details.loaded.e93e8c8e0d",
     defaultMessage: "No item details loaded.",
     sources: [
-      "src/pages/Policy.tsx:628",
+      "src/pages/Policy.tsx:630",
     ],
   },
   {
     key: "source.no.labels.in.this.pack.afb9ef5039",
     defaultMessage: "No labels in this pack.",
     sources: [
-      "src/pages/Policy.tsx:654",
+      "src/pages/Policy.tsx:656",
     ],
   },
   {
@@ -5901,7 +5901,7 @@ export const extractedMessages = [
     key: "source.open.audit.explorer.e155d6131a",
     defaultMessage: "Open audit explorer",
     sources: [
-      "src/pages/Policy.tsx:287",
+      "src/pages/Policy.tsx:289",
     ],
   },
   {
@@ -5929,7 +5929,7 @@ export const extractedMessages = [
     key: "source.open.policy.decisions.in.audit.90cbff764c",
     defaultMessage: "Open policy decisions in Audit",
     sources: [
-      "src/pages/Policy.tsx:246",
+      "src/pages/Policy.tsx:248",
     ],
   },
   {
@@ -5943,7 +5943,7 @@ export const extractedMessages = [
     key: "source.open.profile.evaluations.in.audit.cde124deba",
     defaultMessage: "Open profile evaluations in Audit",
     sources: [
-      "src/pages/Policy.tsx:249",
+      "src/pages/Policy.tsx:251",
     ],
   },
   {
@@ -6000,7 +6000,7 @@ export const extractedMessages = [
     key: "source.operator.attestations.bb1bff1074",
     defaultMessage: "Operator attestations",
     sources: [
-      "src/pages/Policy.tsx:521",
+      "src/pages/Policy.tsx:523",
     ],
   },
   {
@@ -6300,21 +6300,21 @@ export const extractedMessages = [
     key: "source.policy.authoring.and.dry.run.2281ab2888",
     defaultMessage: "Policy authoring and dry run",
     sources: [
-      "src/pages/Policy.tsx:436",
+      "src/pages/Policy.tsx:438",
     ],
   },
   {
     key: "source.policy.authoring.and.dry.run.aren.eb84aa3d1b",
     defaultMessage: "Policy authoring and dry-run aren",
     sources: [
-      "src/pages/Policy.tsx:444",
+      "src/pages/Policy.tsx:446",
     ],
   },
   {
     key: "source.policy.c611981fab",
     defaultMessage: "Policy",
     sources: [
-      "src/pages/Policy.tsx:223",
+      "src/pages/Policy.tsx:225",
     ],
   },
   {
@@ -6485,7 +6485,7 @@ export const extractedMessages = [
     key: "source.product.evidence.1b4586bcc7",
     defaultMessage: "Product evidence",
     sources: [
-      "src/pages/Policy.tsx:520",
+      "src/pages/Policy.tsx:522",
     ],
   },
   {
@@ -6598,7 +6598,7 @@ export const extractedMessages = [
       "src/lib/search.ts:98",
       "src/lib/useResource.ts:10",
       "src/pages/Certificates.tsx:63",
-      "src/pages/Policy.tsx:536",
+      "src/pages/Policy.tsx:538",
     ],
   },
   {
@@ -6849,7 +6849,7 @@ export const extractedMessages = [
     key: "source.reason.for.revoke.or.exception.5df8423828",
     defaultMessage: "Reason for revoke or exception",
     sources: [
-      "src/pages/Policy.tsx:598",
+      "src/pages/Policy.tsx:600",
     ],
   },
   {
@@ -7248,8 +7248,8 @@ export const extractedMessages = [
     defaultMessage: "Resource",
     sources: [
       "src/components/GraphView.tsx:23",
-      "src/pages/Policy.tsx:374",
-      "src/pages/Policy.tsx:571",
+      "src/pages/Policy.tsx:376",
+      "src/pages/Policy.tsx:573",
     ],
   },
   {
@@ -7376,7 +7376,7 @@ export const extractedMessages = [
     key: "source.reviewer.d29f46772c",
     defaultMessage: "Reviewer",
     sources: [
-      "src/pages/Policy.tsx:323",
+      "src/pages/Policy.tsx:325",
     ],
   },
   {
@@ -7394,7 +7394,7 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:106",
       "src/pages/Identities.tsx:111",
       "src/pages/Identities.tsx:114",
-      "src/pages/Policy.tsx:606",
+      "src/pages/Policy.tsx:608",
       "src/pages/Workloads.tsx:251",
     ],
   },
@@ -7468,7 +7468,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Discovery.tsx:557",
       "src/pages/Graph.tsx:545",
-      "src/pages/Policy.tsx:332",
+      "src/pages/Policy.tsx:334",
     ],
   },
   {
@@ -8342,7 +8342,7 @@ export const extractedMessages = [
     key: "source.signed.export.plus.offline.verification.ke.f03caf9838",
     defaultMessage: "Signed export plus offline verification key for auditor handoff.",
     sources: [
-      "src/pages/Policy.tsx:470",
+      "src/pages/Policy.tsx:472",
     ],
   },
   {
@@ -8561,8 +8561,8 @@ export const extractedMessages = [
       "src/pages/Incidents.tsx:748",
       "src/pages/Platform.tsx:659",
       "src/pages/Platform.tsx:682",
-      "src/pages/Policy.tsx:499",
-      "src/pages/Policy.tsx:573",
+      "src/pages/Policy.tsx:501",
+      "src/pages/Policy.tsx:575",
       "src/pages/SSHTrust.tsx:235",
     ],
   },
@@ -9403,7 +9403,7 @@ export const extractedMessages = [
     key: "source.webtrust.f5a90cfc69",
     defaultMessage: "WebTrust",
     sources: [
-      "src/pages/Policy.tsx:19",
+      "src/pages/Policy.tsx:21",
     ],
   },
   {

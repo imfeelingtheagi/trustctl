@@ -1,7 +1,7 @@
 // Package governance produces evidence packs and posture from the tamper-evident
 // audit log (F9) and the CBOM (S20.5, F62): report templates for PCI-DSS, HIPAA,
-// SOC 2, FedRAMP, CNSA 2.0, CA/Browser Forum Baseline Requirements,
-// WebTrust, and ETSI, posture over the live CBOM, and signed, reproducible
+// SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/Browser Forum
+// Baseline Requirements, WebTrust, and ETSI, posture over the live CBOM, and signed, reproducible
 // exports. Reports derive from the audit log (AN-2). It does not overclaim:
 // output separates what the product evidences from what the operator must still
 // attest; evidence supports controls, it does not confer certification.
@@ -21,14 +21,16 @@ import (
 type Framework = api.ComplianceFramework
 
 const (
-	PCIDSS   Framework = api.CompliancePCIDSS
-	HIPAA    Framework = api.ComplianceHIPAA
-	SOC2     Framework = api.ComplianceSOC2
-	FedRAMP  Framework = api.ComplianceFedRAMP
-	CNSA2    Framework = api.ComplianceCNSA2
-	CABFBR   Framework = api.ComplianceCABFBR
-	WebTrust Framework = api.ComplianceWebTrust
-	ETSI     Framework = api.ComplianceETSI
+	PCIDSS         Framework = api.CompliancePCIDSS
+	HIPAA          Framework = api.ComplianceHIPAA
+	SOC2           Framework = api.ComplianceSOC2
+	FedRAMP        Framework = api.ComplianceFedRAMP
+	CNSA2          Framework = api.ComplianceCNSA2
+	FIPS140        Framework = api.ComplianceFIPS140
+	CommonCriteria Framework = api.ComplianceCommonCriteria
+	CABFBR         Framework = api.ComplianceCABFBR
+	WebTrust       Framework = api.ComplianceWebTrust
+	ETSI           Framework = api.ComplianceETSI
 )
 
 // Control is one evidenced control.
@@ -118,6 +120,50 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 		controls = append(controls, Control{
 			ID: string(fw) + "-pqc-adoption", Title: "Post-quantum algorithms in use", Status: statusIf(p.PostQuantum > 0 && p.QuantumVulnerable == 0), Evidence: []string{"CBOM classification", "PQC migration program"},
 		})
+	}
+	if fw == FIPS140 {
+		controls = append(controls,
+			Control{
+				ID:       "fips-140-module-post",
+				Title:    "FIPS-capable build path and fail-closed power-on self-test are evidenced",
+				Status:   "evidenced",
+				Evidence: []string{"make fips-build artifact gate", "--fips fail-closed POST", "crypto.fips.module_active posture"},
+			},
+			Control{
+				ID:       "fips-140-crypto-boundary",
+				Title:    "All product cryptography enters through the audited crypto boundary",
+				Status:   "evidenced",
+				Evidence: []string{"internal/crypto boundary", "architecture linter", "isolated signing service"},
+			},
+			Control{
+				ID:       "fips-140-cmvp-certificate-residual",
+				Title:    "NIST CMVP validation certificate for the deployed module remains an external artifact",
+				Status:   "gap",
+				Evidence: []string{"operator attestation", "NIST CMVP certificate", "validated module configuration"},
+			},
+		)
+	}
+	if fw == CommonCriteria {
+		controls = append(controls,
+			Control{
+				ID:       "common-criteria-security-target-evidence",
+				Title:    "Security-target evidence map covers the served TOE controls",
+				Status:   "evidenced",
+				Evidence: []string{"security-target evidence map", "tenant isolation", "RBAC", "tamper-evident audit", "crypto boundary"},
+			},
+			Control{
+				ID:       "common-criteria-configuration-management-evidence",
+				Title:    "Configuration and lifecycle changes are attributable and signed",
+				Status:   statusIf(hasAudit),
+				Evidence: []string{"signed audit evidence log", "event-sourced change trail", "release artifact evidence"},
+			},
+			Control{
+				ID:       "common-criteria-evaluation-residual",
+				Title:    "External lab evaluation and certificate remain operator responsibilities",
+				Status:   "gap",
+				Evidence: []string{"external evaluation lab report", "Common Criteria certificate", "evaluated configuration guide"},
+			},
+		)
 	}
 	if fw == CABFBR {
 		controls = append(controls,
@@ -209,6 +255,20 @@ func productEvidencesFor(fw Framework) []string {
 			"isolated signer and HSM-capable key-management posture",
 		)
 	}
+	if fw == FIPS140 {
+		evidence = append(evidence,
+			"FIPS-capable build and fail-closed POST evidence",
+			"crypto boundary routes product cryptography through the Go FIPS module when active",
+			"CI fips-capable build artifact verification",
+		)
+	}
+	if fw == CommonCriteria {
+		evidence = append(evidence,
+			"security-target evidence map over served controls",
+			"TOE boundary evidence for API, signer, tenant isolation, audit, and crypto boundary",
+			"signed audit/change-management evidence",
+		)
+	}
 	if fw == WebTrust || fw == ETSI {
 		evidence = append(evidence,
 			"CA issuance and revocation audit evidence",
@@ -234,6 +294,20 @@ func operatorAttestsFor(fw Framework) []string {
 			"independent WebTrust practitioner opinion for public-trust issuance",
 			"CA/Browser Forum policy program operation",
 			"domain validation and CAA procedure evidence",
+		)
+	}
+	if fw == FIPS140 {
+		attests = append(attests,
+			"NIST CMVP certificate number for the deployed validated module",
+			"approved FIPS deployment configuration",
+			"external module validation scope and vendor certificate",
+		)
+	}
+	if fw == CommonCriteria {
+		attests = append(attests,
+			"Common Criteria certificate and evaluation report",
+			"protection profile and TOE security target approved by the lab",
+			"evaluated configuration guide and lab verdict",
 		)
 	}
 	if fw == ETSI {

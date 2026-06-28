@@ -235,6 +235,10 @@ trstctl-cli risk credentials --sort score
 # Export a signed SOC 2 evidence pack from audit records plus CBOM posture.
 trstctl-cli compliance evidence-pack soc2
 
+# Export FIPS 140 and Common Criteria evidence posture.
+trstctl-cli compliance evidence-pack fips-140
+trstctl-cli compliance evidence-pack common-criteria
+
 # Export CA/Browser Forum Baseline Requirements evidence posture.
 trstctl-cli compliance evidence-pack cabf-br
 

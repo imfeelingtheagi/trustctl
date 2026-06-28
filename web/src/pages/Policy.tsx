@@ -15,6 +15,8 @@ const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; lab
   { id: "soc2", label: "SOC 2" },
   { id: "fedramp", label: "FedRAMP" },
   { id: "cnsa-2.0", label: "CNSA 2.0" },
+  { id: "fips-140", labelKey: "policy.framework.fips140" },
+  { id: "common-criteria", labelKey: "policy.framework.commonCriteria" },
   { id: "cabf-br", labelKey: "policy.framework.cabfBR" },
   { id: "webtrust", label: "WebTrust" },
   { id: "etsi", label: "ETSI" },

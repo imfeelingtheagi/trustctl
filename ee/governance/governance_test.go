@@ -134,6 +134,49 @@ func TestCABFBaselineRequirementsReportSeparatesEvidenceFromPublicTrustAttestati
 	}
 }
 
+func TestFIPSAndCommonCriteriaReportSeparatesEvidenceFromExternalValidation(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	for _, tc := range []struct {
+		framework       Framework
+		evidenced       string
+		residual        string
+		productEvidence string
+		operatorAttest  string
+	}{
+		{
+			framework:       FIPS140,
+			evidenced:       "fips-140-module-post",
+			residual:        "fips-140-cmvp-certificate-residual",
+			productEvidence: "FIPS-capable build and fail-closed POST evidence",
+			operatorAttest:  "NIST CMVP certificate number for the deployed validated module",
+		},
+		{
+			framework:       CommonCriteria,
+			evidenced:       "common-criteria-security-target-evidence",
+			residual:        "common-criteria-evaluation-residual",
+			productEvidence: "security-target evidence map over served controls",
+			operatorAttest:  "Common Criteria certificate and evaluation report",
+		},
+	} {
+		rep, err := New("t1", caKey).Generate(tc.framework, auditFixture(), cbom())
+		if err != nil {
+			t.Fatalf("Generate(%s): %v", tc.framework, err)
+		}
+		if rep.Framework != string(tc.framework) {
+			t.Fatalf("framework = %q, want %q", rep.Framework, tc.framework)
+		}
+		mustHaveControl(t, rep.Controls, tc.evidenced, "evidenced")
+		mustHaveControl(t, rep.Controls, tc.residual, "gap")
+		if !contains(rep.ProductEvidences, tc.productEvidence) {
+			t.Fatalf("%s product evidence missing %q: %+v", tc.framework, tc.productEvidence, rep.ProductEvidences)
+		}
+		if !contains(rep.OperatorAttests, tc.operatorAttest) {
+			t.Fatalf("%s operator attestation missing %q: %+v", tc.framework, tc.operatorAttest, rep.OperatorAttests)
+		}
+	}
+}
+
 func mustHaveControl(t *testing.T, controls []Control, id, status string) {
 	t.Helper()
 	for _, control := range controls {

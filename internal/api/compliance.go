@@ -17,14 +17,16 @@ const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v1"
 type ComplianceFramework string
 
 const (
-	CompliancePCIDSS   ComplianceFramework = "pci-dss"
-	ComplianceHIPAA    ComplianceFramework = "hipaa"
-	ComplianceSOC2     ComplianceFramework = "soc2"
-	ComplianceFedRAMP  ComplianceFramework = "fedramp"
-	ComplianceCNSA2    ComplianceFramework = "cnsa-2.0"
-	ComplianceCABFBR   ComplianceFramework = "cabf-br"
-	ComplianceWebTrust ComplianceFramework = "webtrust"
-	ComplianceETSI     ComplianceFramework = "etsi"
+	CompliancePCIDSS         ComplianceFramework = "pci-dss"
+	ComplianceHIPAA          ComplianceFramework = "hipaa"
+	ComplianceSOC2           ComplianceFramework = "soc2"
+	ComplianceFedRAMP        ComplianceFramework = "fedramp"
+	ComplianceCNSA2          ComplianceFramework = "cnsa-2.0"
+	ComplianceFIPS140        ComplianceFramework = "fips-140"
+	ComplianceCommonCriteria ComplianceFramework = "common-criteria"
+	ComplianceCABFBR         ComplianceFramework = "cabf-br"
+	ComplianceWebTrust       ComplianceFramework = "webtrust"
+	ComplianceETSI           ComplianceFramework = "etsi"
 )
 
 // ParseComplianceFramework accepts stable API path values and common aliases.
@@ -40,6 +42,10 @@ func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
 		return ComplianceFedRAMP, nil
 	case "cnsa-2.0", "cnsa-2", "cnsa2":
 		return ComplianceCNSA2, nil
+	case "fips-140", "fips-140-2", "fips-140-3", "fips140", "fips":
+		return ComplianceFIPS140, nil
+	case "common-criteria", "commoncriteria", "cc", "iso-15408", "iso15408":
+		return ComplianceCommonCriteria, nil
 	case "cabf-br", "cabf", "ca-browser-forum", "ca-browser-forum-br", "ca-browser-forum-baseline-requirements":
 		return ComplianceCABFBR, nil
 	case "webtrust", "web-trust", "webtrust-ca":
@@ -47,7 +53,7 @@ func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
 	case "etsi", "etsi-en-319-411", "etsi-en-319-411-1", "etsi-en-319-411-2":
 		return ComplianceETSI, nil
 	default:
-		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, cnsa-2.0, cabf-br, webtrust, or etsi")
+		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, cnsa-2.0, fips-140, common-criteria, cabf-br, webtrust, or etsi")
 	}
 }
 

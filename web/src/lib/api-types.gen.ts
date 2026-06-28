@@ -453,7 +453,7 @@ export interface CodeSigningSignature {
 
 export interface ComplianceEvidencePack {
   format: string;
-  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "cabf-br" | "webtrust" | "etsi";
+  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
   public_key_der: string;
   signed_export: Record<string, unknown>;
 }

@@ -73,7 +73,7 @@ describe("policy governance surface", () => {
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
-    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "cabf-br" | "webtrust" | "etsi") =>
+    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi") =>
       Promise.resolve({
         format: "trstctl.compliance.evidence-pack.v1",
         framework,
@@ -99,6 +99,38 @@ describe("policy governance surface", () => {
                     },
                   ]
                 : []),
+              ...(framework === "fips-140"
+                ? [
+                    {
+                      id: "fips-140-module-post",
+                      title: "FIPS-capable build path and fail-closed power-on self-test are evidenced",
+                      status: "evidenced",
+                      evidence: ["make fips-build artifact gate", "--fips fail-closed POST"],
+                    },
+                    {
+                      id: "fips-140-cmvp-certificate-residual",
+                      title: "NIST CMVP validation certificate remains an external artifact",
+                      status: "gap",
+                      evidence: ["NIST CMVP certificate"],
+                    },
+                  ]
+                : []),
+              ...(framework === "common-criteria"
+                ? [
+                    {
+                      id: "common-criteria-security-target-evidence",
+                      title: "Security-target evidence map covers the served TOE controls",
+                      status: "evidenced",
+                      evidence: ["security-target evidence map"],
+                    },
+                    {
+                      id: "common-criteria-evaluation-residual",
+                      title: "External lab evaluation and certificate remain operator responsibilities",
+                      status: "gap",
+                      evidence: ["Common Criteria certificate"],
+                    },
+                  ]
+                : []),
               ...(framework === "webtrust" || framework === "etsi"
                 ? [
                     {
@@ -115,12 +147,20 @@ describe("policy governance surface", () => {
             product_evidences:
               framework === "cabf-br"
                 ? ["CA/Browser Forum profile lint evidence", "external zlint corpus gate", "served CA issuance and revocation audit evidence"]
+                : framework === "fips-140"
+                  ? ["FIPS-capable build and fail-closed POST evidence"]
+                : framework === "common-criteria"
+                  ? ["security-target evidence map over served controls"]
                 : framework === "webtrust" || framework === "etsi"
                 ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
                 : ["FIPS 203/204/205 migration posture from the CBOM"],
             operator_attests:
               framework === "cabf-br"
                 ? ["independent WebTrust practitioner opinion for public-trust issuance", "CA/Browser Forum policy program operation"]
+                : framework === "fips-140"
+                ? ["NIST CMVP certificate number for the deployed validated module"]
+                : framework === "common-criteria"
+                ? ["Common Criteria certificate and evaluation report"]
                 : framework === "webtrust"
                 ? ["WebTrust practitioner audit opinion"]
                 : framework === "etsi"
@@ -181,6 +221,18 @@ describe("policy governance surface", () => {
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cnsa-2.0"));
     expect(await screen.findByRole("heading", { name: "CNSA 2.0 evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("1 quantum vulnerable")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "FIPS 140" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("fips-140"));
+    expect(await screen.findByRole("heading", { name: "FIPS 140 evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("FIPS-capable build and fail-closed POST evidence")).toBeInTheDocument();
+    expect(screen.getByText("NIST CMVP certificate number for the deployed validated module")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Common Criteria" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("common-criteria"));
+    expect(await screen.findByRole("heading", { name: "Common Criteria evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("security-target evidence map over served controls")).toBeInTheDocument();
+    expect(screen.getByText("Common Criteria certificate and evaluation report")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "CA/B Forum BR" }));
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cabf-br"));

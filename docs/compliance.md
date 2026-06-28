@@ -28,7 +28,8 @@ makes you compliant.
   An auditor verifies the signature and recomputes the chain offline.
 - **Signed framework evidence packs.** `GET /api/v1/compliance/evidence-packs/{framework}`
   turns the tenant audit log and CBOM graph into a signed report for `pci-dss`,
-  `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `cabf-br`, `webtrust`, or `etsi`. The response includes
+  `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `fips-140`, `common-criteria`,
+  `cabf-br`, `webtrust`, or `etsi`. The response includes
   `signed_export` plus `public_key_der`, so an auditor can verify the report
   manifest offline without trusting the API response body after the fact.
 - **Tenant isolation.** Every audit query is tenant-scoped.
@@ -63,7 +64,8 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_SERVER/api/v1/compliance/evidence-packs/soc2"
 ```
 
-Use `pci-dss`, `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `cabf-br`, `webtrust`, or `etsi` as the framework path
+Use `pci-dss`, `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `fips-140`,
+`common-criteria`, `cabf-br`, `webtrust`, or `etsi` as the framework path
 value. The JSON response has four stable fields:
 
 | Field | Meaning |
@@ -79,6 +81,15 @@ separates what trstctl can prove from what your organization must still attest.
 For example, the SOC 2 pack can show tamper-evident audit evidence and FIPS
 203/204/205 migration posture from the CBOM, but it does not claim trstctl or
 your deployment is SOC 2 certified.
+
+The `fips-140` pack shows the FIPS-capable build artifact gate, `--fips`
+fail-closed power-on self-test, crypto boundary, signer isolation, and CI
+verification evidence. It still marks the deployed module's NIST CMVP certificate
+number, approved FIPS configuration, and validation scope as operator or vendor
+artifacts. The `common-criteria` pack maps served TOE evidence for API, signer,
+tenant isolation, RBAC, tamper-evident audit, and crypto-boundary controls; it
+keeps the lab evaluation report, certificate, protection profile, security target,
+and evaluated configuration guide as external residuals.
 
 For CA audit programs, the `cabf-br` pack adds CA/Browser Forum Baseline
 Requirements posture controls for profile lint/zlint evidence, certificate
@@ -156,6 +167,8 @@ control.
 | PCI DSS v4 | Req. 10 (log and monitor access) — *who/what/when trail*; 10.5 — *enforced retention: archive to signed bundles → checkpoint → prune, when configured* | 10.5 the chosen window (≥12 months) + WORM archive storage + 3-readily-available copies, daily review, FIM, key custody |
 | HIPAA | §164.312(b) audit controls — *recording and examining activity* | §164.308 review procedures, retention (6 years), BAAs |
 | FedRAMP / NIST 800-53 | AU-2/3 (event content), AU-9 (protection of audit info, via the chain + signed export), AU-11 (retention — *enforced archive + prune when configured*), AU-12 (generation) | AU-6 review, AU-11 retention schedule + WORM storage, AU-9 storage hardening (WORM), FIPS-validated crypto (a build caveat) |
+| FIPS 140 | FIPS-capable build artifact gate, `--fips` fail-closed POST, `crypto.fips.module_active` posture, single crypto boundary | NIST CMVP certificate for the deployed module, approved FIPS configuration, validation scope |
+| Common Criteria | TOE evidence for API, signer, tenant isolation, RBAC, tamper-evident audit, crypto boundary, and release/change evidence | Protection profile, security target approval, external lab evaluation report, certificate, evaluated configuration guide |
 | WebTrust for CAs | CA lifecycle event evidence, signer isolation, HSM-capable key-management posture, revocation/profile decision trail | CP/CPS publication, CA/Browser Forum policy program, independent WebTrust practitioner opinion |
 | ETSI EN 319 411 | CA operations evidence, key-management posture, audit/profile/revocation trail | External conformity assessment, qualified trust-service status if claimed, subscriber and registration-authority procedures |
 
@@ -168,6 +181,8 @@ framework, that FIPS-validated cryptography is in the *default* build (it is a
 FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trstctl product's own
 NIST CMVP certificate is a separate, external process — see
 [FIPS cryptography](#fips-cryptography--a-fips-capable-build-path)),
+that trstctl has a Common Criteria certificate or evaluated configuration by
+itself,
 or that your archive storage is WORM-hardened (that is yours to provide).
 
 ## FIPS cryptography — a FIPS-capable build path

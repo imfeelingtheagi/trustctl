@@ -22,6 +22,12 @@ func TestParseComplianceFrameworkAcceptsCAAuditPostureFrameworks(t *testing.T) {
 		{raw: "cabf-br", want: api.ComplianceCABFBR},
 		{raw: "cabf", want: api.ComplianceCABFBR},
 		{raw: "ca-browser-forum-br", want: api.ComplianceCABFBR},
+		{raw: "fips-140", want: api.ComplianceFIPS140},
+		{raw: "fips-140-3", want: api.ComplianceFIPS140},
+		{raw: "fips", want: api.ComplianceFIPS140},
+		{raw: "common-criteria", want: api.ComplianceCommonCriteria},
+		{raw: "cc", want: api.ComplianceCommonCriteria},
+		{raw: "iso-15408", want: api.ComplianceCommonCriteria},
 	} {
 		got, err := api.ParseComplianceFramework(tc.raw)
 		if err != nil {

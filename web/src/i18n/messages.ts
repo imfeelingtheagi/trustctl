@@ -480,6 +480,14 @@ export const messages = {
     defaultMessage: "CA/B Forum BR",
     description: "Short label for the CA/Browser Forum Baseline Requirements compliance evidence-pack selector.",
   },
+  "policy.framework.fips140": {
+    defaultMessage: "FIPS 140",
+    description: "Short label for the FIPS 140 compliance evidence-pack selector.",
+  },
+  "policy.framework.commonCriteria": {
+    defaultMessage: "Common Criteria",
+    description: "Short label for the Common Criteria compliance evidence-pack selector.",
+  },
   "nav.item.privacy": {
     defaultMessage: "Privacy",
     description: "Primary navigation item.",
@@ -771,6 +779,8 @@ const esESCatalog = {
   "nav.item.rbac": "RBAC",
   "nav.item.policy": "Política",
   "policy.framework.cabfBR": "BR del Foro CA/B",
+  "policy.framework.fips140": "FIPS 140",
+  "policy.framework.commonCriteria": "Criterios comunes",
   "nav.item.privacy": "Privacidad",
   "nav.item.integrate": "Integración y SDK",
   "nav.item.operations": "Operaciones",
