@@ -38,6 +38,13 @@ func lifecycleTransitionPayload(identityID string, from, to orchestrator.State) 
 	return b
 }
 
+func tenantOffboardedPayload(rowsDeleted int) []byte {
+	b, _ := json.Marshal(struct {
+		RowsDeleted int `json:"rows_deleted"`
+	}{RowsDeleted: rowsDeleted})
+	return b
+}
+
 // TestBackupPreservesEventSchemaVersion is the DR regression for SCHEMA-001:
 // backup/restore must carry the event envelope's schema version. Profile v2
 // events contain the complete read-model row, while legacy v1 profile events are
@@ -228,6 +235,83 @@ func TestApplyTxRejectsUnknownVersionForKnownType(t *testing.T) {
 	if err := p.Apply(ctx, unknownIdentityPrefix); err != nil {
 		t.Errorf("Apply of an unknown identity.* event should be ignored until registered, got %v", err)
 	}
+}
+
+// TestTenantLifecycleSchemaVersionGate pins SCHEMA-001 on the two tenant
+// lifecycle events handled outside ApplyTx. They still decode payloads and mutate
+// tenant-scoped state, so unknown versions must fail before the shortcut path
+// applies either live or during rebuild.
+func TestTenantLifecycleSchemaVersionGate(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("apply_rejects_unknown_tenant_registered_version", func(t *testing.T) {
+		s := newStore(t)
+		p := projections.New(s)
+		ev := events.Event{
+			Type:          projections.EventTenantRegistered,
+			TenantID:      tenantA,
+			SchemaVersion: 99,
+			Data:          tenantRegistered("Acme"),
+		}
+		if err := p.Apply(ctx, ev); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+			t.Fatalf("Apply tenant.registered v99 err = %v, want ErrUnknownSchemaVersion", err)
+		}
+	})
+
+	t.Run("rebuild_rejects_unknown_tenant_registered_version", func(t *testing.T) {
+		s := newStore(t)
+		log := openLog(t)
+		p := projections.New(s)
+		if _, err := log.Append(ctx, events.Event{
+			Type:          projections.EventTenantRegistered,
+			TenantID:      tenantA,
+			SchemaVersion: 99,
+			Data:          tenantRegistered("Acme"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Rebuild(ctx, log); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+			t.Fatalf("Rebuild tenant.registered v99 err = %v, want ErrUnknownSchemaVersion", err)
+		}
+	})
+
+	t.Run("apply_rejects_unknown_tenant_offboarded_version", func(t *testing.T) {
+		s := newStore(t)
+		p := projections.New(s)
+		ev := events.Event{
+			Type:          projections.EventTenantOffboarded,
+			TenantID:      tenantA,
+			SchemaVersion: 99,
+			Data:          tenantOffboardedPayload(2),
+		}
+		if err := p.Apply(ctx, ev); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+			t.Fatalf("Apply tenant.offboarded v99 err = %v, want ErrUnknownSchemaVersion", err)
+		}
+	})
+
+	t.Run("rebuild_rejects_unknown_tenant_offboarded_version", func(t *testing.T) {
+		s := newStore(t)
+		log := openLog(t)
+		p := projections.New(s)
+		if _, err := log.Append(ctx, events.Event{
+			Type:     projections.EventTenantRegistered,
+			TenantID: tenantA,
+			Data:     tenantRegistered("Acme"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := log.Append(ctx, events.Event{
+			Type:          projections.EventTenantOffboarded,
+			TenantID:      tenantA,
+			SchemaVersion: 99,
+			Data:          tenantOffboardedPayload(2),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Rebuild(ctx, log); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+			t.Fatalf("Rebuild tenant.offboarded v99 err = %v, want ErrUnknownSchemaVersion", err)
+		}
+	})
 }
 
 // TestLifecycleSchemaVersionGate extends SCHEMA-001 to the lifecycle transition

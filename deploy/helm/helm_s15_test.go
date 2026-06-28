@@ -224,7 +224,11 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 	data := map[string]any{
 		"Values": map[string]any{
 			"signer": map[string]any{
-				"mode": "isolated", "replicas": 1, "resources": map[string]any{},
+				"mode": "isolated", "replicas": 1,
+				"resources": map[string]any{
+					"requests": map[string]any{"cpu": "100m", "memory": "128Mi"},
+					"limits":   map[string]any{"cpu": "500m", "memory": "512Mi"},
+				},
 				"mtls": map[string]any{"serverName": "trstctl-signer.ns.svc", "signerSecret": ""},
 			},
 			"persistence": map[string]any{"enabled": true},
@@ -245,6 +249,50 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 		t.Fatalf("rendered signer-deployment.yaml is not a Deployment (kind=%v)", obj["kind"])
 	}
 	return obj
+}
+
+func TestIsolatedSignerResources(t *testing.T) {
+	var values struct {
+		Signer struct {
+			Resources map[string]map[string]string `yaml:"resources"`
+		} `yaml:"signer"`
+	}
+	if err := yaml.Unmarshal([]byte(read(t, "values.yaml")), &values); err != nil {
+		t.Fatalf("values.yaml is not valid YAML: %v", err)
+	}
+	for section, want := range map[string]map[string]string{
+		"requests": {"cpu": "100m", "memory": "128Mi"},
+		"limits":   {"cpu": "500m", "memory": "512Mi"},
+	} {
+		got := values.Signer.Resources[section]
+		if got["cpu"] != want["cpu"] || got["memory"] != want["memory"] {
+			t.Fatalf("signer.resources.%s = %+v, want %+v", section, got, want)
+		}
+	}
+
+	dep := renderIsolatedSigner(t, read(t, "templates", "signer-deployment.yaml"))
+	tpl := dep["spec"].(map[string]any)["template"].(map[string]any)
+	pod := tpl["spec"].(map[string]any)
+	signer := containerNamed(asMaps(pod["containers"]), "signer")
+	if signer == nil {
+		t.Fatal("isolated signer Deployment has no signer container")
+	}
+	resources, ok := signer["resources"].(map[string]any)
+	if !ok {
+		t.Fatalf("isolated signer resources missing or wrong shape: %+v", signer["resources"])
+	}
+	for section, want := range map[string]map[string]string{
+		"requests": {"cpu": "100m", "memory": "128Mi"},
+		"limits":   {"cpu": "500m", "memory": "512Mi"},
+	} {
+		got, ok := resources[section].(map[string]any)
+		if !ok {
+			t.Fatalf("isolated signer resources.%s missing: %+v", section, resources)
+		}
+		if got["cpu"] != want["cpu"] || got["memory"] != want["memory"] {
+			t.Fatalf("isolated signer resources.%s = %+v, want %+v", section, got, want)
+		}
+	}
 }
 
 func helmTestNindent(n int, s string) string {

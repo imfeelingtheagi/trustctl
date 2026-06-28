@@ -826,9 +826,18 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	base := baseURL(r)
 	s.mu.Lock()
 	o := s.orders[r.PathValue("id")]
+	replayValid := o != nil && o.status == statusValid && o.certID != ""
+	var replayAuthzURLs []string
+	if replayValid {
+		replayAuthzURLs = s.orderAuthzURLs(base, o)
+	}
 	s.mu.Unlock()
 	if o == nil {
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such order")
+		return
+	}
+	if replayValid {
+		writeJSON(w, http.StatusOK, s.orderJSON(base, o, replayAuthzURLs))
 		return
 	}
 	if o.status != statusReady {
@@ -860,14 +869,19 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
 		return
 	}
-	authzURLs := make([]string, 0, len(o.authzIDs))
-	for _, id := range o.authzIDs {
-		authzURLs = append(authzURLs, base+"/acme/authz/"+id)
-	}
+	authzURLs := s.orderAuthzURLs(base, o)
 	s.mu.Unlock()
 
 	w.Header().Set("Location", base+"/acme/order/"+o.id)
 	writeJSON(w, http.StatusOK, s.orderJSON(base, o, authzURLs))
+}
+
+func (s *Server) orderAuthzURLs(base string, o *order) []string {
+	authzURLs := make([]string, 0, len(o.authzIDs))
+	for _, id := range o.authzIDs {
+		authzURLs = append(authzURLs, base+"/acme/authz/"+id)
+	}
+	return authzURLs
 }
 
 func (s *Server) getCert(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, _ *account) {

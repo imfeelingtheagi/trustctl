@@ -309,7 +309,13 @@ signer:
   # requires the mTLS material below.
   mode: sidecar
   replicas: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   # Signer content-authorization secret (SIGNER-001). The control plane uses this
   # verifier material to check per-digest authorization tokens before using
   # privileged handles. Production control planes must NOT mount this verifier

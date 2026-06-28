@@ -644,6 +644,9 @@ type PAMSessionExpired struct {
 // right after appending it, using the same logic a rebuild uses.
 func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 	if e.Type == EventTenantRegistered {
+		if err := ValidateSchemaVersion(e); err != nil {
+			return err
+		}
 		var payload tenantRegistered
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
@@ -653,6 +656,9 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 		})
 	}
 	if e.Type == EventTenantOffboarded {
+		if err := ValidateSchemaVersion(e); err != nil {
+			return err
+		}
 		// Validate the payload shape (the event contract) before acting; the projector
 		// does not need its fields to reproduce state, but a malformed payload signals a
 		// producer bug we want to surface rather than silently ignore.
@@ -689,6 +695,8 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
+	EventTenantRegistered:               {1: true},
+	EventTenantOffboarded:               {1: true},
 	EventOwnerCreated:                   {1: true},
 	EventOwnerUpdated:                   {1: true},
 	EventOwnerDeleted:                   {1: true},
@@ -1627,6 +1635,9 @@ func (p *Projector) RestoreFromSnapshot(ctx context.Context, log *events.Log) (r
 func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Event) error {
 	switch e.Type {
 	case EventTenantRegistered:
+		if err := ValidateSchemaVersion(e); err != nil {
+			return err
+		}
 		var payload tenantRegistered
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
@@ -1635,6 +1646,9 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
 		})
 	case EventTenantOffboarded:
+		if err := ValidateSchemaVersion(e); err != nil {
+			return err
+		}
 		var payload tenantOffboarded
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)

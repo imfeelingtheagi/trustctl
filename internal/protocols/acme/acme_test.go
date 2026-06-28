@@ -232,6 +232,69 @@ func TestACMEClientEnrollsEndToEnd(t *testing.T) {
 	}
 }
 
+func TestACMEFinalizeReplayReturnsOriginalOrder(t *testing.T) {
+	builtin, err := ca.NewBuiltin("trstctl ACME replay CA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(acmesrv.New(builtin, acmesrv.AcceptAll{}))
+	t.Cleanup(ts.Close)
+
+	client, err := acmekey.NewRSAClient(ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs("replay.acme.test"))
+	if err != nil {
+		t.Fatalf("authorize order: %v", err)
+	}
+	for _, authzURL := range order.AuthzURLs {
+		authz, err := client.GetAuthorization(ctx, authzURL)
+		if err != nil {
+			t.Fatalf("get authorization: %v", err)
+		}
+		var chal *xacme.Challenge
+		for _, c := range authz.Challenges {
+			if c.Type == "http-01" {
+				chal = c
+			}
+		}
+		if chal == nil {
+			t.Fatal("server offered no http-01 challenge")
+		}
+		if _, err := client.Accept(ctx, chal); err != nil {
+			t.Fatalf("accept challenge: %v", err)
+		}
+		if _, err := client.WaitAuthorization(ctx, authzURL); err != nil {
+			t.Fatalf("wait authorization: %v", err)
+		}
+	}
+	if order, err = client.WaitOrder(ctx, order.URI); err != nil {
+		t.Fatalf("wait order: %v", err)
+	}
+
+	csr := buildCSR(t, "replay.acme.test", []string{"replay.acme.test"})
+	der, certURL, err := client.CreateOrderCert(ctx, order.FinalizeURL, csr, true)
+	if err != nil {
+		t.Fatalf("first finalize/create cert: %v", err)
+	}
+	replayDER, replayCertURL, err := client.CreateOrderCert(ctx, order.FinalizeURL, csr, true)
+	if err != nil {
+		t.Fatalf("replay finalize/create cert: %v", err)
+	}
+	if replayCertURL != certURL {
+		t.Fatalf("replay certificate URL = %q, want original %q", replayCertURL, certURL)
+	}
+	if !bytes.Equal(chainToPEM(replayDER), chainToPEM(der)) {
+		t.Fatal("replay finalize returned a different certificate chain")
+	}
+}
+
 // TestRejectsUnknownNonce: a request carrying a nonce the server never issued is
 // rejected as badNonce (anti-replay), without needing a valid signature.
 func TestRejectsUnknownNonce(t *testing.T) {
