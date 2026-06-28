@@ -54,7 +54,7 @@ command="/usr/bin/true",no-pty ` + edPub + `
 
 // ParseKnownHosts parses each host key and the host patterns it is trusted for.
 func TestParseKnownHosts(t *testing.T) {
-	file := "host1.example.com " + edPub + "\n[host2.example.com]:2222 " + rsaPub + "\n"
+	file := "not a host key at all\nhost1.example.com " + edPub + "\n[host2.example.com]:2222 " + rsaPub + "\n"
 	hosts := sshkeys.ParseKnownHosts([]byte(file))
 	if len(hosts) != 2 {
 		t.Fatalf("parsed %d entries, want 2", len(hosts))

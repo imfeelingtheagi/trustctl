@@ -8,7 +8,14 @@
 package sshkeys
 
 import (
+	"bytes"
+
 	"golang.org/x/crypto/ssh"
+)
+
+const (
+	maxKnownHostsFileBytes = 1 << 20
+	maxKnownHostsLineBytes = 64 << 10
 )
 
 // KeyInfo is the inventory metadata of an SSH public key.
@@ -77,14 +84,25 @@ func ParseAuthorizedKeys(data []byte) []AuthorizedKey {
 // key and the host patterns it is trusted for.
 func ParseKnownHosts(data []byte) []KnownHostKey {
 	var out []KnownHostKey
-	rest := data
-	for len(rest) > 0 {
-		_, hosts, pub, comment, remaining, err := ssh.ParseKnownHosts(rest)
+	if len(data) > maxKnownHostsFileBytes {
+		data = data[:maxKnownHostsFileBytes]
+	}
+	for len(data) > 0 {
+		line := data
+		if i := bytes.IndexByte(data, '\n'); i >= 0 {
+			line = data[:i+1]
+			data = data[i+1:]
+		} else {
+			data = nil
+		}
+		if len(line) == 0 || len(line) > maxKnownHostsLineBytes {
+			continue
+		}
+		_, hosts, pub, comment, _, err := ssh.ParseKnownHosts(line)
 		if err != nil {
-			break
+			continue
 		}
 		out = append(out, KnownHostKey{KeyInfo: infoOf(pub, comment), Hosts: hosts})
-		rest = remaining
 	}
 	return out
 }
