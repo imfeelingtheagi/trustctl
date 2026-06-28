@@ -3,7 +3,7 @@ set -euo pipefail
 
 profile="smoke"
 out=""
-samples="${PERF_SMOKE_SAMPLES:-64}"
+samples=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -20,11 +20,19 @@ while [[ $# -gt 0 ]]; do
 			shift 2
 			;;
 		*)
-			echo "usage: scripts/perf/run-local.sh [--profile smoke] [--samples N] [--out path]" >&2
+			echo "usage: scripts/perf/run-local.sh [--profile smoke|live] [--samples N] [--out path]" >&2
 			exit 2
 			;;
 	esac
 done
+
+if [[ -z "$samples" ]]; then
+	if [[ "$profile" == "live" || "$profile" == "live-load" ]]; then
+		samples="${PERF_LIVE_SAMPLES:-32}"
+	else
+		samples="${PERF_SMOKE_SAMPLES:-64}"
+	fi
+fi
 
 args=(./scripts/perf/cmd/perfgate --profile "$profile" --samples "$samples")
 if [[ -n "$out" ]]; then

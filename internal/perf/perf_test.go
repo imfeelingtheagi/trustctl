@@ -96,6 +96,99 @@ func TestPerfSmokeGateRejectsUnknownObservationHotPath(t *testing.T) {
 	}
 }
 
+func TestPerfLiveLoadHarnessCoversEveryHotPathAndPhase(t *testing.T) {
+	report, err := RunLiveLoad("live", 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Profile != "live" {
+		t.Fatalf("profile = %q, want live", report.Profile)
+	}
+	if report.MeasurementArtifact != LiveMeasurementArtifact {
+		t.Fatalf("measurement artifact = %q, want %q", report.MeasurementArtifact, LiveMeasurementArtifact)
+	}
+	if !report.ServedStack {
+		t.Fatal("live report did not mark the served stack as booted")
+	}
+	if report.StackProfile == "" {
+		t.Fatal("live report has no stack profile")
+	}
+	if len(report.LoadPhases) != 2 {
+		t.Fatalf("live phases = %d, want realistic and peak", len(report.LoadPhases))
+	}
+	if got, want := len(report.Results), len(HotPaths())*len(report.LoadPhases); got != want {
+		t.Fatalf("live results = %d, want %d", got, want)
+	}
+
+	seen := map[string]bool{}
+	for _, result := range report.Results {
+		if !result.ServedStack {
+			t.Fatalf("%s/%s did not mark served_stack", result.HotPath, result.Phase)
+		}
+		if result.StackProfile != report.StackProfile {
+			t.Fatalf("%s/%s stack profile = %q, want %q", result.HotPath, result.Phase, result.StackProfile, report.StackProfile)
+		}
+		if result.Phase != "realistic" && result.Phase != "peak" {
+			t.Fatalf("%s phase = %q, want realistic or peak", result.HotPath, result.Phase)
+		}
+		if result.P50MS <= 0 || result.P95MS <= 0 || result.P99MS <= 0 || result.MaxMS <= 0 {
+			t.Fatalf("%s/%s missing latency percentiles/max: %+v", result.HotPath, result.Phase, result)
+		}
+		if result.MaxMS < result.P99MS {
+			t.Fatalf("%s/%s max %.4fms < p99 %.4fms", result.HotPath, result.Phase, result.MaxMS, result.P99MS)
+		}
+		if result.ThroughputPerSecond <= 0 || result.TargetRatePerSecond <= 0 {
+			t.Fatalf("%s/%s missing throughput/target rate: %+v", result.HotPath, result.Phase, result)
+		}
+		if result.Errors != 0 {
+			t.Fatalf("%s/%s recorded %d errors: %+v", result.HotPath, result.Phase, result.Errors, result.Failures)
+		}
+		if result.ResourceMetrics == nil || result.ResourceMetrics.Goroutines <= 0 || result.ResourceMetrics.CPUCount <= 0 {
+			t.Fatalf("%s/%s missing resource metrics: %+v", result.HotPath, result.Phase, result.ResourceMetrics)
+		}
+		seen[result.HotPath+"/"+result.Phase] = true
+	}
+	for _, slo := range HotPaths() {
+		for _, phase := range []string{"realistic", "peak"} {
+			key := slo.HotPath + "/" + phase
+			if !seen[key] {
+				t.Fatalf("missing live result for %s", key)
+			}
+		}
+	}
+	if report.Summary.Measurements != len(report.Results) || report.Summary.HotPaths != len(HotPaths()) {
+		t.Fatalf("bad live summary: %+v", report.Summary)
+	}
+}
+
+func TestPerfLiveLoadGateFailsInjectedRuntimeBreaches(t *testing.T) {
+	report, err := RunLiveLoadWithObservations("live", 16, map[string]Observation{
+		"api.issuance": {QueueSaturation: 0.81},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Summary.OK {
+		t.Fatalf("live report unexpectedly passed with injected queue breach: %+v", report.Summary)
+	}
+	found := false
+	for _, result := range report.Results {
+		if result.HotPath != "api.issuance" {
+			continue
+		}
+		found = true
+		if result.Met {
+			t.Fatalf("api.issuance/%s met SLO despite injected queue breach: %+v", result.Phase, result)
+		}
+		if !containsFailure(result.Failures, "queue saturation") {
+			t.Fatalf("api.issuance/%s failures = %v, want queue saturation", result.Phase, result.Failures)
+		}
+	}
+	if !found {
+		t.Fatal("missing api.issuance live result")
+	}
+}
+
 func containsFailure(failures []string, substr string) bool {
 	for _, failure := range failures {
 		if strings.Contains(failure, substr) {

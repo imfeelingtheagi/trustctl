@@ -177,6 +177,12 @@ perf-smoke: ## Run the committed hot-path performance SLO smoke gate (PERF-001/0
 	echo ">> perf-smoke ($$out)"; \
 	scripts/perf/run-local.sh --profile smoke --out "$$out"
 
+.PHONY: perf-live
+perf-live: ## Run the served hot-path live load gate with realistic and peak phases (PERF-001)
+	@out="$${PERF_LIVE_OUT:-$${TMPDIR:-/tmp}/trstctl-perf-live.json}"; \
+	echo ">> perf-live ($$out)"; \
+	scripts/perf/run-local.sh --profile live --out "$$out"
+
 .PHONY: soak
 soak: ## Run the endurance/soak gate self-test: fail on an induced leak, pass on a healthy series (PERF-004)
 	@out="$${SOAK_OUT:-$${TMPDIR:-/tmp}/trstctl-soak.json}"; \

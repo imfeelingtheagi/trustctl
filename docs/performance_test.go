@@ -77,7 +77,7 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read perf script: %v", err)
 	}
-	for _, want := range []string{"--profile", "--out", "./scripts/perf/cmd/perfgate"} {
+	for _, want := range []string{"--profile", "--out", "smoke|live", "./scripts/perf/cmd/perfgate"} {
 		if !strings.Contains(string(script), want) {
 			t.Errorf("scripts/perf/run-local.sh missing %q", want)
 		}
@@ -86,6 +86,75 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 	for _, want := range []string{"Perf smoke SLO gate", "scripts/perf/run-local.sh --profile smoke", "perf-smoke-slo"} {
 		if !strings.Contains(ci, want) {
 			t.Errorf("ci.yml missing perf gate evidence %q", want)
+		}
+	}
+}
+
+func TestPerfLiveLoadArtifactCoversServedRealisticAndPeakPhases(t *testing.T) {
+	doc := read(t, "performance.md")
+	for _, want := range []string{
+		"make perf-live",
+		"scripts/perf/run-local.sh --profile live",
+		perf.LiveMeasurementArtifact,
+		"realistic",
+		"peak",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("performance.md missing live load evidence %q", want)
+		}
+	}
+	capacity := read(t, "performance-capacity.md")
+	if !strings.Contains(capacity, perf.LiveMeasurementArtifact) {
+		t.Fatalf("performance-capacity.md must cite %s", perf.LiveMeasurementArtifact)
+	}
+	mk := read(t, "../Makefile")
+	if !strings.Contains(mk, "perf-live:") || !strings.Contains(mk, "--profile live") {
+		t.Fatal("Makefile must expose a perf-live target that runs the live profile")
+	}
+
+	artifact := readLivePerfArtifact(t)
+	if !artifact.ServedStack || artifact.StackProfile == "" {
+		t.Fatalf("live artifact did not record a served stack profile: %+v", artifact)
+	}
+	if !artifact.Summary.OK {
+		t.Fatalf("live artifact summary is not ok: %+v", artifact.Summary)
+	}
+	if got, want := artifact.Summary.Measurements, len(perf.HotPaths())*2; got != want {
+		t.Fatalf("live artifact measurements = %d, want %d", got, want)
+	}
+	results := map[string]perf.Result{}
+	for _, result := range artifact.Results {
+		results[result.HotPath+"/"+result.Phase] = result
+		if !result.ServedStack {
+			t.Errorf("%s/%s is not marked served_stack", result.HotPath, result.Phase)
+		}
+		if result.MaxMS <= 0 || result.MaxMS < result.P99MS {
+			t.Errorf("%s/%s max latency %.4f must be present and >= p99 %.4f", result.HotPath, result.Phase, result.MaxMS, result.P99MS)
+		}
+		if result.ThroughputPerSecond <= 0 || result.TargetRatePerSecond <= 0 {
+			t.Errorf("%s/%s missing throughput evidence: %+v", result.HotPath, result.Phase, result)
+		}
+		if result.Errors != 0 {
+			t.Errorf("%s/%s recorded errors: %+v", result.HotPath, result.Phase, result.Failures)
+		}
+		if result.ResourceMetrics == nil || result.ResourceMetrics.Goroutines <= 0 || result.ResourceMetrics.CPUCount <= 0 {
+			t.Errorf("%s/%s missing resource metrics: %+v", result.HotPath, result.Phase, result.ResourceMetrics)
+		}
+		if !result.Met {
+			t.Errorf("%s/%s failed live SLO: %+v", result.HotPath, result.Phase, result.Failures)
+		}
+	}
+	for _, slo := range perf.HotPaths() {
+		for _, phase := range []string{"realistic", "peak"} {
+			key := slo.HotPath + "/" + phase
+			result, ok := results[key]
+			if !ok {
+				t.Errorf("live artifact missing %s", key)
+				continue
+			}
+			if result.SLOID != slo.ID || result.Benchmark != slo.Benchmark {
+				t.Errorf("%s metadata = %s/%s, want %s/%s", key, result.SLOID, result.Benchmark, slo.ID, slo.Benchmark)
+			}
 		}
 	}
 }
@@ -144,6 +213,16 @@ func readPerfArtifact(t *testing.T) perf.Report {
 	data := read(t, "../"+perf.MeasurementArtifact)
 	if err := json.Unmarshal([]byte(data), &report); err != nil {
 		t.Fatalf("parse %s: %v", perf.MeasurementArtifact, err)
+	}
+	return report
+}
+
+func readLivePerfArtifact(t *testing.T) perf.Report {
+	t.Helper()
+	var report perf.Report
+	data := read(t, "../"+perf.LiveMeasurementArtifact)
+	if err := json.Unmarshal([]byte(data), &report); err != nil {
+		t.Fatalf("parse %s: %v", perf.LiveMeasurementArtifact, err)
 	}
 	return report
 }

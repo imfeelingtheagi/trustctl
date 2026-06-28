@@ -28,9 +28,9 @@ func main() {
 			fail("load perf observations: %v", err)
 		}
 	}
-	report, err := perf.RunSmokeWithObservations(*profile, *samples, observations)
+	report, err := runProfile(*profile, *samples, observations)
 	if err != nil {
-		fail("run perf smoke: %v", err)
+		fail("run perf %s: %v", *profile, err)
 	}
 	var data []byte
 	if *printPretty {
@@ -56,6 +56,17 @@ func main() {
 	}
 	if !report.Summary.OK {
 		fail("perf gate failed: %d of %d hot paths missed SLO", report.Summary.Failed, report.Summary.HotPaths)
+	}
+}
+
+func runProfile(profile string, samples int, observations map[string]perf.Observation) (perf.Report, error) {
+	switch profile {
+	case "", "smoke":
+		return perf.RunSmokeWithObservations(profile, samples, observations)
+	case "live", "live-load":
+		return perf.RunLiveLoadWithObservations("live", samples, observations)
+	default:
+		return perf.Report{}, fmt.Errorf("unknown perf profile %q", profile)
 	}
 }
 

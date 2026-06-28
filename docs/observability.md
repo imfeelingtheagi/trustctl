@@ -94,7 +94,7 @@ per-minute drift, even if no single sample breached a ceiling), and it emits a J
 
 The threshold contract and the trend analyzer are a single code-owned definition, so
 the docs, the local gate, and CI share one denominator — the same pattern as the
-hot-path smoke gate. Run it via:
+hot-path smoke and served live-load gates. Run it via:
 
 ```sh
 make soak                          # self-test: induced leak must fail, healthy must pass

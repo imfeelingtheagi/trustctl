@@ -11,8 +11,31 @@ scripts/perf/run-local.sh --profile smoke --out /tmp/trstctl-perf-smoke.json
 
 The committed baseline receipt is `scripts/perf/artifacts/smoke-baseline.json`.
 The smoke profile is a fast CI guard over representative product code paths. It is
-not a substitute for a multi-hour soak or a customer-specific load test, but it
-turns the hot-path denominator into executable release evidence.
+not a substitute for the served live-load receipt, a multi-hour soak, or a
+customer-specific load test, but it turns the hot-path denominator into executable
+release evidence.
+
+## Served live-load gate
+
+The served live-load profile boots the local eval perf stack, drives every
+`PERF-SLO-*` hot path through an HTTP handler, and exercises the signer path through
+the generated signer gRPC service over an in-memory `bufconn` transport. That keeps
+the committed receipt runnable in restricted CI while still measuring the served
+RPC request path rather than a protobuf-only library shortcut. Customer load runs
+should swap the signer transport to their production UDS or mTLS placement.
+
+```sh
+make perf-live
+scripts/perf/run-local.sh --profile live --out /tmp/trstctl-perf-live.json
+```
+
+The committed live receipt is
+`scripts/perf/artifacts/live-load-baseline.json`. Each SLO row must have both
+`realistic` and `peak` phase measurements with p50, p95, p99, max latency,
+throughput, error count, queue saturation, projection lag, and resource metrics.
+The live profile is still a local eval-stack receipt, not a promise that one vendor
+SKU will satisfy every production tenant shape; customer capacity reviews should run
+the same profile against their chosen datastore, signer placement, and connector mix.
 
 ## Endurance / soak gate
 
@@ -49,6 +72,13 @@ The fast local gate:
 scripts/perf/run-local.sh --profile smoke
 ```
 
+The served local live-load gate:
+
+```sh
+make perf-live
+scripts/perf/run-local.sh --profile live
+```
+
 The Go benchmark denominator (the `Benchmark*` targets named in the SLO table
 above), and the broader benchmark discovery command used for release review:
 
@@ -57,5 +87,5 @@ go test -run '^$' -bench=. ./...
 ```
 
 CI runs the smoke profile and uploads the JSON receipt as a workflow artifact.
-Release review compares that artifact with the capacity model in
-`docs/performance-capacity.md`.
+Release review compares the smoke receipt, the served live-load receipt, and the
+capacity model in `docs/performance-capacity.md`.

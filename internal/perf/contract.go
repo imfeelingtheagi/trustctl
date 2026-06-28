@@ -38,7 +38,10 @@ type CapacityTier struct {
 	Notes                      string  `json:"notes"`
 }
 
-const MeasurementArtifact = "scripts/perf/artifacts/smoke-baseline.json"
+const (
+	MeasurementArtifact     = "scripts/perf/artifacts/smoke-baseline.json"
+	LiveMeasurementArtifact = "scripts/perf/artifacts/live-load-baseline.json"
+)
 
 var hotPathSLOs = []HotPathSLO{
 	{

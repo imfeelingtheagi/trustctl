@@ -578,8 +578,9 @@ func TestPQCMigrationNotTraceCompleteDisclosed(t *testing.T) {
 // ---- TRACE-011: usability outcome NFRs are aspirational/unmeasured ---------------
 
 // TestUsabilityOutcomeNFRsDisclosedAsUnmeasured pins TRACE-011. Performance/scale
-// NFRs have executable evidence (smoke + soak gates); usability outcome NFRs (timed
-// first-run wall-clock, NPS/satisfaction) are aspirational and NOT measured in CI.
+// NFRs have executable evidence (smoke + served live-load + soak gates); usability
+// outcome NFRs (timed first-run wall-clock, NPS/satisfaction) are aspirational and
+// NOT measured in CI.
 // The disclosure must say so, and the performance NFRs it contrasts against must
 // remain backed by the real gates (so "measured" stays true).
 func TestUsabilityOutcomeNFRsDisclosedAsUnmeasured(t *testing.T) {
@@ -608,8 +609,12 @@ func TestUsabilityOutcomeNFRsDisclosedAsUnmeasured(t *testing.T) {
 	}
 
 	// Reality anchor: the contrast it draws — that performance/scale NFRs ARE measured
-	// — must stay true. The executable evidence exists (smoke + soak gates). If the
-	// soak gate denominator is removed, this disclosure's "measured" contrast rots.
+	// — must stay true. The executable evidence exists (smoke + served live-load +
+	// soak gates). If the live or soak denominator is removed, this disclosure's
+	// "measured" contrast rots.
+	if _, err := os.Stat("../scripts/perf/artifacts/live-load-baseline.json"); err != nil {
+		t.Fatalf("scripts/perf/artifacts/live-load-baseline.json no longer exists; the TRACE-011 measured-vs-aspirational contrast has no served live-load anchor — revisit this reality test: %v", err)
+	}
 	if _, err := os.Stat("../internal/perf/soak.go"); err != nil {
 		t.Fatalf("internal/perf/soak.go no longer exists; the TRACE-011 measured-vs-aspirational contrast has no anchor — revisit this reality test: %v", err)
 	}

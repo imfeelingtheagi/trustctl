@@ -1071,10 +1071,11 @@ We separate NFRs that have **executable evidence** from ones that are **aspirati
 and not yet measured** in CI, so neither is silently over-claimed.
 
 - **Performance & scale NFRs are measured.** The hot-path latency/throughput SLOs and
-  the capacity model are pinned to a committed measurement receipt by an executable
-  smoke gate (`make perf-smoke`), and sustained-load endurance is pinned by a **soak
-  gate** (`make soak`) that fails on a leak slope or an SLO breach. These are
-  smoke/self-test scale denominators, not a substitute for a customer-specific
+  the capacity model are pinned to committed measurement receipts by an executable
+  smoke gate (`make perf-smoke`) and a served realistic/peak live-load gate
+  (`make perf-live`), and sustained-load endurance is pinned by a **soak gate**
+  (`make soak`) that fails on a leak slope or an SLO breach. These are local
+  eval/self-test scale denominators, not a substitute for a customer-specific
   multi-hour load test at your own capacity tier.
 - **Usability outcome NFRs are aspirational and unmeasured.** Targets such as a
   **timed first-run / time-to-first-certificate** wall-clock budget and any

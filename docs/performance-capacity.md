@@ -2,8 +2,9 @@
 
 This capacity model translates the committed performance SLOs into right-sizing
 guidance. It is tied to the measured smoke artifact at
-`scripts/perf/artifacts/smoke-baseline.json`; operators should replace the cost
-column with their infrastructure pricing, but should not remove the unit rows.
+`scripts/perf/artifacts/smoke-baseline.json` and the served live-load artifact at
+`scripts/perf/artifacts/live-load-baseline.json`; operators should replace the
+cost column with their infrastructure pricing, but should not remove the unit rows.
 
 ## Capacity Tiers
 
@@ -34,6 +35,7 @@ Move from `CAP-SMALL` to `CAP-MEDIUM` when any of these becomes true:
 - More than 5 tenants or 25,000 managed credentials.
 - More than 250,000 events/day.
 - Projection lag exceeds 25 events during the smoke profile.
+- The served live-load `realistic` phase misses any p95 or throughput SLO.
 - API, protocol, or signing queue saturation exceeds 80% in normal operation.
 
 Move from `CAP-MEDIUM` to `CAP-LARGE` when any of these becomes true:
@@ -42,6 +44,7 @@ Move from `CAP-MEDIUM` to `CAP-LARGE` when any of these becomes true:
 - More than 2,500,000 events/day.
 - Replay/rebuild windows exceed the recovery-time objective in
   `docs/disaster-recovery.md`.
+- The served live-load `peak` phase misses any p99, max-latency, or throughput SLO.
 - Signer CPU is the limiting resource while control-plane API workers still have
   headroom. The signer scales separately by design.
 
@@ -54,3 +57,12 @@ when:
 - Every result has `met: true`.
 - The artifact names the capacity tiers above.
 - `summary.ok` is true.
+
+Release review must also publish the served live-load JSON artifact. The live
+artifact is valid only when:
+
+- It has `served_stack: true` and names the stack profile used for the run.
+- It has one `realistic` and one `peak` result for every `PERF-SLO-*` row.
+- Every result carries p50, p95, p99, max latency, throughput, error count, queue
+  saturation, projection lag, and resource metrics.
+- Every result has `met: true` and `summary.ok` is true.

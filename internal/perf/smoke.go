@@ -23,19 +23,27 @@ import (
 )
 
 type Result struct {
-	HotPath             string   `json:"hot_path"`
-	SLOID               string   `json:"slo_id"`
-	Benchmark           string   `json:"benchmark"`
-	Samples             int      `json:"samples"`
-	P50MS               float64  `json:"p50_ms"`
-	P95MS               float64  `json:"p95_ms"`
-	P99MS               float64  `json:"p99_ms"`
-	ThroughputPerSecond float64  `json:"throughput_per_second"`
-	ErrorBudgetPercent  float64  `json:"error_budget_percent"`
-	QueueSaturation     float64  `json:"queue_saturation"`
-	ProjectionLagEvents int      `json:"projection_lag_events"`
-	Met                 bool     `json:"met"`
-	Failures            []string `json:"failures,omitempty"`
+	HotPath             string           `json:"hot_path"`
+	SLOID               string           `json:"slo_id"`
+	Benchmark           string           `json:"benchmark"`
+	Phase               string           `json:"phase,omitempty"`
+	Samples             int              `json:"samples"`
+	P50MS               float64          `json:"p50_ms"`
+	P95MS               float64          `json:"p95_ms"`
+	P99MS               float64          `json:"p99_ms"`
+	MaxMS               float64          `json:"max_ms"`
+	ThroughputPerSecond float64          `json:"throughput_per_second"`
+	TargetRatePerSecond float64          `json:"target_rate_per_second,omitempty"`
+	ErrorBudgetPercent  float64          `json:"error_budget_percent"`
+	QueueSaturation     float64          `json:"queue_saturation"`
+	ProjectionLagEvents int              `json:"projection_lag_events"`
+	Errors              int              `json:"errors"`
+	ServedStack         bool             `json:"served_stack,omitempty"`
+	StackProfile        string           `json:"stack_profile,omitempty"`
+	Transport           string           `json:"transport,omitempty"`
+	ResourceMetrics     *ResourceMetrics `json:"resource_metrics,omitempty"`
+	Met                 bool             `json:"met"`
+	Failures            []string         `json:"failures,omitempty"`
 }
 
 type Observation struct {
@@ -44,21 +52,47 @@ type Observation struct {
 	ProjectionLagEvents int     `json:"projection_lag_events"`
 }
 
+type ResourceMetrics struct {
+	Goroutines        int    `json:"goroutines"`
+	CPUCount          int    `json:"cpu_count"`
+	OpenFDs           int    `json:"open_fds"`
+	HeapAllocBytes    uint64 `json:"heap_alloc_bytes"`
+	HeapInuseBytes    uint64 `json:"heap_inuse_bytes"`
+	StackInuseBytes   uint64 `json:"stack_inuse_bytes"`
+	TotalAllocBytes   uint64 `json:"total_alloc_bytes"`
+	MemorySysBytes    uint64 `json:"memory_sys_bytes"`
+	NumGC             uint32 `json:"num_gc"`
+	ProjectionLagHint int    `json:"projection_lag_hint"`
+}
+
+type LoadPhase struct {
+	Name                 string  `json:"name"`
+	Samples              int     `json:"samples"`
+	TargetRateMultiplier float64 `json:"target_rate_multiplier"`
+	RateMultiplier       float64 `json:"rate_multiplier"`
+}
+
 type Report struct {
-	SchemaVersion       int      `json:"schema_version"`
-	Profile             string   `json:"profile"`
-	GeneratedAt         string   `json:"generated_at"`
-	MeasurementArtifact string   `json:"measurement_artifact"`
-	CapacityTiers       []string `json:"capacity_tiers"`
-	Results             []Result `json:"results"`
-	Summary             Summary  `json:"summary"`
+	SchemaVersion       int              `json:"schema_version"`
+	Profile             string           `json:"profile"`
+	GeneratedAt         string           `json:"generated_at"`
+	MeasurementArtifact string           `json:"measurement_artifact"`
+	CapacityTiers       []string         `json:"capacity_tiers"`
+	ServedStack         bool             `json:"served_stack,omitempty"`
+	StackProfile        string           `json:"stack_profile,omitempty"`
+	LoadPhases          []LoadPhase      `json:"load_phases,omitempty"`
+	ResourceMetrics     *ResourceMetrics `json:"resource_metrics,omitempty"`
+	Results             []Result         `json:"results"`
+	Summary             Summary          `json:"summary"`
 }
 
 type Summary struct {
-	HotPaths int  `json:"hot_paths"`
-	Met      int  `json:"met"`
-	Failed   int  `json:"failed"`
-	OK       bool `json:"ok"`
+	HotPaths     int      `json:"hot_paths"`
+	Measurements int      `json:"measurements,omitempty"`
+	Phases       []string `json:"phases,omitempty"`
+	Met          int      `json:"met"`
+	Failed       int      `json:"failed"`
+	OK           bool     `json:"ok"`
 }
 
 type operation func() error
@@ -170,12 +204,14 @@ func measure(slo HotPathSLO, op operation, samples int, observation Observation)
 		P50MS:               percentile(durations, 0.50),
 		P95MS:               percentile(durations, 0.95),
 		P99MS:               percentile(durations, 0.99),
+		MaxMS:               maxOfSorted(durations),
 		ThroughputPerSecond: float64(samples) / elapsed,
 		ErrorBudgetPercent:  observation.ErrorBudgetPercent,
 		QueueSaturation:     observation.QueueSaturation,
 		ProjectionLagEvents: observation.ProjectionLagEvents,
 		Failures:            failures,
 	}
+	result.Errors = len(failures)
 	if result.P50MS > slo.P50MS {
 		result.Failures = append(result.Failures, fmt.Sprintf("p50 %.2fms exceeds %.2fms", result.P50MS, slo.P50MS))
 	}
@@ -199,6 +235,13 @@ func measure(slo HotPathSLO, op operation, samples int, observation Observation)
 	}
 	result.Met = len(result.Failures) == 0
 	return result
+}
+
+func maxOfSorted(sorted []float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	return sorted[len(sorted)-1]
 }
 
 func percentile(sorted []float64, p float64) float64 {
