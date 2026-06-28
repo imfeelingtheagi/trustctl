@@ -25,6 +25,7 @@ const sourceKinds: SourceKind[] = [
   "agent",
   "manual",
   "nhi_cross_surface",
+  "oauth_grant",
 ];
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
@@ -38,6 +39,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   agent: "Agent",
   manual: "Manual",
   nhi_cross_surface: "NHI surfaces",
+  oauth_grant: "OAuth grants",
 };
 
 export function Discovery() {
@@ -52,6 +54,7 @@ export function Discovery() {
   const [sourceKind, setSourceKind] = useState<SourceKind>("network");
   const [targets, setTargets] = useState("");
   const [nhiObservations, setNHIObservations] = useState("");
+  const [oauthGrants, setOAuthGrants] = useState("");
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
@@ -100,11 +103,14 @@ export function Discovery() {
           ? { targets: parseTargets(targets) }
           : sourceKind === "nhi_cross_surface"
           ? { observations: parseNHIObservations(nhiObservations) }
+          : sourceKind === "oauth_grant"
+          ? { grants: parseOAuthGrants(oauthGrants) }
           : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
       setNHIObservations("");
+      setOAuthGrants("");
       setScheduleSourceID(created.id);
       await load();
     } catch (err) {
@@ -225,6 +231,18 @@ export function Discovery() {
               />
             </label>
           )}
+          {sourceKind === "oauth_grant" && (
+            <label className="grid gap-1 text-sm font-medium">
+              OAuth grants JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={oauthGrants}
+                onChange={(event) => setOAuthGrants(event.target.value)}
+                placeholder='[{"provider":"okta","app_id":"0oa-payments","principal":"payments-bi-export","resource":"google-workspace","scopes":["drive.readonly"],"third_party":true}]'
+                required
+              />
+            </label>
+          )}
           <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Create source
@@ -283,7 +301,7 @@ export function Discovery() {
             primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
             secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
           >
-            Add a network, cloud, CT log, NHI, or agent source before discovery runs can be queued.
+            Add a network, cloud, CT log, NHI, OAuth, or agent source before discovery runs can be queued.
           </EmptyState>
         ) : (
           <SourceTable sources={sources} busy={busy} onStart={startRun} />
@@ -498,11 +516,19 @@ function parseNHIObservations(value: string): unknown[] {
   return parsed;
 }
 
+function parseOAuthGrants(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("OAuth grants JSON must be an array.");
+  return parsed;
+}
+
 function targetCount(source: DiscoverySource): string {
   const targets = source.config.targets;
   if (Array.isArray(targets)) return String(targets.length);
   const observations = source.config.observations;
   if (Array.isArray(observations)) return `${observations.length} NHI`;
+  const grants = source.config.grants;
+  if (Array.isArray(grants)) return `${grants.length} grants`;
   const cidrs = source.config.cidrs;
   if (Array.isArray(cidrs)) return `${cidrs.length} cidr`;
   return "-";

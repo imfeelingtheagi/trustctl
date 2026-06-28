@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/discovery/nhi"
+	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 )
 
 func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
@@ -84,5 +85,43 @@ func TestValidateDiscoverySourceAcceptsCrossSurfaceNHIMetadataOnly(t *testing.T)
 		Config: inlineSecret,
 	}); err == nil {
 		t.Fatal("inline NHI credential material must be rejected; discovery config may carry metadata only")
+	}
+}
+
+func TestValidateDiscoverySourceAcceptsOAuthGrantMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"grants":[
+			{
+				"provider":"okta",
+				"app_id":"0oa-payments",
+				"app_name":"Payments BI Export",
+				"principal":"payments-bi-export",
+				"resource":"google-workspace",
+				"scopes":["drive.readonly","admin.directory.user.readonly"],
+				"consent_type":"admin",
+				"third_party":true,
+				"owner":"finance-platform"
+			}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   oauthgrant.SourceKind,
+		Name:   "oauth-grants",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("OAuth grant metadata-only source was rejected: %v", err)
+	}
+
+	inlineSecret := json.RawMessage(`{
+		"grants":[
+			{"provider":"okta","app_id":"0oa-payments","client_secret":"raw-value","scopes":["drive.readonly"]}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   oauthgrant.SourceKind,
+		Name:   "bad-oauth-grants",
+		Config: inlineSecret,
+	}); err == nil {
+		t.Fatal("inline OAuth client credential material must be rejected; discovery config may carry grant metadata only")
 	}
 }

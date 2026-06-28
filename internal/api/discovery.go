@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/discovery/nhi"
+	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -356,9 +357,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
 	switch req.Kind {
-	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", nhi.SourceKind:
+	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", nhi.SourceKind, oauthgrant.SourceKind:
 	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface")
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface, oauth_grant")
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -373,6 +374,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == nhi.SourceKind {
 		if err := nhi.ValidateConfig(cfg); err != nil {
+			return nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+	}
+	if req.Kind == oauthgrant.SourceKind {
+		if err := oauthgrant.ValidateConfig(cfg); err != nil {
 			return nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 	}

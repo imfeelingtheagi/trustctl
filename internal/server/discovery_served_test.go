@@ -301,6 +301,149 @@ func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd is the COMPETE-002 proof:
+// CAP-OAUTH-01 is served through the tenant-scoped discovery source/run/finding
+// path for metadata-only OAuth app grants, SaaS-to-SaaS consent, and scopes.
+func TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "oauth-grants",
+		"kind": "oauth_grant",
+		"config": map[string]any{
+			"grants": []map[string]any{
+				{
+					"provider":     "okta",
+					"app_id":       "0oa-payments",
+					"app_name":     "Payments BI Export",
+					"principal":    "payments-bi-export",
+					"resource":     "google-workspace",
+					"scopes":       []string{"drive.readonly", "admin.directory.user.readonly"},
+					"consent_type": "admin",
+					"third_party":  true,
+					"owner":        "finance-platform",
+				},
+				{
+					"provider":     "entra-id",
+					"app_id":       "app-invoice-sync",
+					"app_name":     "Invoice Sync",
+					"principal":    "invoice-sync",
+					"resource":     "salesforce",
+					"scopes":       []string{"api.read", "contacts.write"},
+					"consent_type": "user",
+					"third_party":  true,
+					"owner":        "revops",
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create OAuth grant source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode OAuth grant source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "oauth_grant" {
+		t.Fatalf("bad OAuth grant source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start OAuth grant run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued OAuth grant run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued OAuth grant run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain OAuth grant discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get OAuth grant run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed OAuth grant run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 2 || completed.Discovered != 2 || completed.Failed != 0 {
+		t.Fatalf("completed OAuth grant run = %+v, want two discovered grants", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list OAuth grant findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "raw-value") || strings.Contains(string(body), "client_secret") {
+		t.Fatalf("OAuth grant discovery findings leaked inline credential material: %s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode OAuth grant findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 2 {
+		t.Fatalf("OAuth grant finding count = %d body %s, want 2", len(findings.Items), body)
+	}
+	providers := map[string]bool{}
+	for _, f := range findings.Items {
+		if f.Kind != "oauth_grant" || f.Ref == "" || f.Fingerprint == "" || !strings.HasPrefix(f.Provenance, "oauth_grant:") {
+			t.Fatalf("bad OAuth grant finding: %+v", f)
+		}
+		if f.RiskScore <= 0 {
+			t.Fatalf("OAuth grant finding should carry risk score: %+v", f)
+		}
+		provider, _ := f.Metadata["provider"].(string)
+		providers[provider] = true
+		if f.Metadata["app_id"] == "" || f.Metadata["resource"] == "" {
+			t.Fatalf("OAuth grant finding is missing app/resource metadata: %+v", f)
+		}
+		scopes, ok := f.Metadata["scopes"].([]any)
+		if !ok || len(scopes) == 0 {
+			t.Fatalf("OAuth grant finding is missing scope metadata: %+v", f)
+		}
+	}
+	for _, provider := range []string{"okta", "entra-id"} {
+		if !providers[provider] {
+			t.Fatalf("provider %q was not represented in findings: %+v", provider, providers)
+		}
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; OAuth grant discovery is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedCloudCertificateDiscoveryACMEndToEnd is the DISC-04 acceptance proof:
 // the served discovery dispatcher constructs the AWS ACM cloud-cert collector from a
 // credential-reference-only source config, runs it from the outbox worker, records

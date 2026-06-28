@@ -206,6 +206,49 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates an OAuth grant source from metadata-only app consent records", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "oauth-quarterly");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "oauth_grant");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("OAuth grants JSON"), {
+      target: {
+        value: JSON.stringify([
+          {
+            provider: "okta",
+            app_id: "0oa-payments",
+            app_name: "Payments BI Export",
+            principal: "payments-bi-export",
+            resource: "google-workspace",
+            scopes: ["drive.readonly", "admin.directory.user.readonly"],
+            consent_type: "admin",
+            third_party: true,
+            owner: "finance-platform",
+          },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "oauth-quarterly",
+      kind: "oauth_grant",
+      config: {
+        grants: [
+          expect.objectContaining({
+            provider: "okta",
+            app_id: "0oa-payments",
+            resource: "google-workspace",
+          }),
+        ],
+      },
+    });
+  });
+
   it("uses permission and empty states when discovery records are unavailable or absent", async () => {
     apiMock.discoverySources.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ detail: "missing discovery:read" })));
     apiMock.discoverySchedules.mockResolvedValueOnce({ items: [] });

@@ -263,6 +263,54 @@ secret value, private key, or token body is stored.
 REST readback, and UI representation are served for the six-surface NHI
 denominator.
 
+### OAuth app & grant discovery — SaaS-to-SaaS consent and scopes
+
+OAuth grants are the consent edge between one non-human identity and another SaaS
+or API resource. trstctl serves `oauth_grant` discovery sources so an operator can
+ingest provider exports from Okta, Entra ID, Google Workspace, GitHub, Salesforce,
+or similar systems and see third-party apps, granted resources, and scopes in the
+same tenant discovery ledger as certificates, secrets, and broader NHI findings.
+
+The source config is metadata only: `provider`, `app_id`, `app_name`, `principal`,
+`resource`, `scopes`, `consent_type`, `third_party`, `owner`, publisher, tenant,
+timestamps, redirect URIs, and tags. It deliberately has no client-secret or token
+field. The API rejects inline secret-looking fields before the source is stored.
+Each grant must include at least one scope so the served path proves OAuth app
+discovery, grant discovery, and scope discovery together.
+
+```json
+{
+  "kind": "oauth_grant",
+  "name": "quarterly-oauth-consent",
+  "config": {
+    "grants": [
+      {
+        "provider": "okta",
+        "app_id": "0oa-payments",
+        "app_name": "Payments BI Export",
+        "principal": "payments-bi-export",
+        "resource": "google-workspace",
+        "scopes": ["drive.readonly", "admin.directory.user.readonly"],
+        "consent_type": "admin",
+        "third_party": true,
+        "owner": "finance-platform"
+      }
+    ]
+  }
+}
+```
+
+Runs execute through the discovery outbox worker, normalize every grant to an
+`oauth_grant` finding, preserve provenance as
+`oauth_grant:<provider>:<app_id>:<resource>`, and append the standard
+`discovery.*` events. Risk scoring highlights third-party grants, admin consent,
+sensitive scopes such as directory, drive, mail, or write permissions, and missing
+owners.
+
+**Status:** source creation, run queueing, outbox execution, metadata-only
+`oauth_grant` findings, REST readback, and UI representation are served for
+CAP-OAUTH-01.
+
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
 Secrets and API keys live in many systems, and the dangerous ones are the stale,
@@ -389,6 +437,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering |
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
+| OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
@@ -417,7 +466,7 @@ what it is.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
 - **Served discovery source kinds:** `network`, `cloud_certificate`,
-  `cloud_secret`, `nhi_cross_surface`, `ct_log`, `drift`, `manual`, plus
+  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `ct_log`, `drift`, `manual`, plus
   metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`, `trust-store`, `private-key`.

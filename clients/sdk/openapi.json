@@ -2033,7 +2033,8 @@
               "api_key",
               "agent",
               "manual",
-              "nhi_cross_surface"
+              "nhi_cross_surface",
+              "oauth_grant"
             ],
             "type": "string"
           },
@@ -2094,7 +2095,8 @@
               "api_key",
               "agent",
               "manual",
-              "nhi_cross_surface"
+              "nhi_cross_surface",
+              "oauth_grant"
             ],
             "type": "string"
           },
