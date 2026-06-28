@@ -57,6 +57,14 @@ never stored in the event log, outbox payload, UI, or audit response. The reques
 idempotent like every other mutation: replaying the same `Idempotency-Key` returns the
 same queued receipt instead of creating a second ticket request.
 
+Detection is served on the Discovery side, not hidden inside remediation. A
+`credential_compromise` source accepts metadata-only ITDR, honeytoken,
+secret-scanner, IdP, SaaS, or threat-intel signals and emits
+`compromised_credential` findings tagged `CAP-ITDR-02` and OWASP NHI2. Those
+findings carry credential references and evidence refs only; the raw stolen token
+or secret body never enters the control plane. Operators can use those findings as
+the evidence that justifies the incident execution path above.
+
 Supported tables are `incident`, `change_request`, and `sc_task`. Production
 endpoints must be public HTTPS by default; `allow_private_endpoint` exists for
 operator-controlled private/eval instances and is explicit in the request.
@@ -254,6 +262,8 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 - **Serving status:** credential-compromise execution (F31) is served through
   `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`;
+  compromised-credential / stolen-token detection (CAP-ITDR-02) is served through
+  `credential_compromise` Discovery sources, runs, and findings;
   ServiceNow / ITSM ticket creation is served through
   `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is served. Break-glass reconciliation is served at
   `/api/v1/breakglass/reconcile`, while online emergency issuance and fleet reissue

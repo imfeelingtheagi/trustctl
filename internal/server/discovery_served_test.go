@@ -585,6 +585,139 @@ func TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd is the COMPETE-008
+// proof: CAP-ITDR-02 is served through tenant-scoped discovery source/run/finding
+// records for stolen-token and compromised-credential evidence, with only
+// credential references and external evidence refs stored in the control plane.
+func TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "compromised-credentials",
+		"kind": "credential_compromise",
+		"config": map[string]any{
+			"signals": []map[string]any{
+				{
+					"principal":       "payments-api",
+					"credential_ref":  "api-token:payments-ci",
+					"credential_kind": "api_token",
+					"provider":        "github-actions",
+					"detector":        "honeytoken",
+					"observed_at":     "2026-06-03T03:15:00Z",
+					"reason":          "revoked token replayed from unfamiliar network",
+					"confidence":      "critical",
+					"evidence_refs": []string{
+						"audit:api-token-use/evt-42",
+						"threatintel:leak/sha256",
+					},
+					"source_event_ref": "github-audit:evt-42",
+					"ip":               "203.0.113.44",
+					"geo":              "DE",
+					"user_agent":       "curl/8.7",
+					"action":           "token_use",
+					"owner":            "platform",
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create compromised-credential source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode compromised-credential source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "credential_compromise" {
+		t.Fatalf("bad compromised-credential source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start compromised-credential run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued compromised-credential run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued compromised-credential run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain compromised-credential outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get compromised-credential run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed compromised-credential run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 1 || completed.Discovered != 1 || completed.Failed != 0 {
+		t.Fatalf("completed compromised-credential run = %+v, want one finding", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list compromised-credential findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "raw-token-value") || strings.Contains(string(body), "access_token") || strings.Contains(string(body), "token\":\"") {
+		t.Fatalf("compromised-credential findings leaked inline credential material: %s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode compromised-credential findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 1 {
+		t.Fatalf("compromised-credential finding count = %d body %s, want 1", len(findings.Items), body)
+	}
+	f := findings.Items[0]
+	if f.Kind != "compromised_credential" || f.Ref != "api-token:payments-ci" || f.Fingerprint == "" || !strings.HasPrefix(f.Provenance, "credential_compromise:github-actions:honeytoken:") {
+		t.Fatalf("bad compromised-credential finding: %+v", f)
+	}
+	if f.RiskScore < 95 {
+		t.Fatalf("compromised-credential finding risk score = %d, want critical stolen-token signal", f.RiskScore)
+	}
+	if f.Metadata["owasp_category"] != "NHI2" || f.Metadata["capability"] != "CAP-ITDR-02" {
+		t.Fatalf("compromised-credential finding missing CAP-ITDR-02 metadata: %+v", f.Metadata)
+	}
+	refs, ok := f.Metadata["evidence_refs"].([]any)
+	if !ok || len(refs) != 2 {
+		t.Fatalf("compromised-credential finding is missing evidence refs: %+v", f)
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; compromised-credential discovery is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd is the
 // COMPETE-004 proof: CAP-K8S-03 is served through tenant-scoped discovery
 // source/run/finding records and mints signer-backed public certificate inventory

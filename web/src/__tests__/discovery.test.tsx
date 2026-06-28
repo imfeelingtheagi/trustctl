@@ -296,6 +296,49 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates a compromised-credential source from metadata-only external signals", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "compromise-signals");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "credential_compromise");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Compromise signals JSON"), {
+      target: {
+        value: JSON.stringify([
+          {
+            principal: "payments-api",
+            credential_ref: "api-token:payments-ci",
+            credential_kind: "api_token",
+            provider: "github-actions",
+            detector: "honeytoken",
+            observed_at: "2026-06-03T03:15:00Z",
+            reason: "revoked token replayed from unfamiliar network",
+            confidence: "critical",
+            evidence_refs: ["audit:api-token-use/evt-42"],
+          },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "compromise-signals",
+      kind: "credential_compromise",
+      config: {
+        signals: [
+          expect.objectContaining({
+            principal: "payments-api",
+            credential_ref: "api-token:payments-ci",
+            detector: "honeytoken",
+          }),
+        ],
+      },
+    });
+  });
+
   it("creates a Kubernetes ingress/gateway source from metadata-only TLS resources", async () => {
     const user = userEvent.setup();
     renderDiscovery();

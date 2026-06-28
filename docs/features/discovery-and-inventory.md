@@ -369,6 +369,60 @@ sample count, and average usage, never credential values.
 `nhi_behavior_anomaly` findings, REST readback, and UI representation are served
 for CAP-ITDR-01.
 
+### Compromised-credential and stolen-token detection
+
+Compromised-credential detection turns external ITDR, IdP, SaaS, scanner,
+honeytoken, and threat-intel signals into a served Discovery finding. trstctl
+serves `credential_compromise` discovery sources for OWASP NHI2 style events:
+a token or credential reference was observed in a known leak, replayed after
+revocation, used from an unfamiliar network, or triggered a honeytoken. The
+source stores only `credential_ref` and evidence references, never the token,
+secret, private key, refresh token, or password body.
+
+The source config carries `principal`, `credential_ref`, `credential_kind`,
+`provider`, `detector`, `observed_at`, `reason`, `confidence`, optional IP/geo
+metadata, and `evidence_refs` or `source_event_ref`. API validation rejects
+inline secret-looking fields before the source is stored, and the detector also
+performs its own secret-shaped-key check before normalizing findings.
+
+```json
+{
+  "kind": "credential_compromise",
+  "name": "compromised-credentials-itdr",
+  "config": {
+    "signals": [
+      {
+        "principal": "payments-api",
+        "credential_ref": "api-token:payments-ci",
+        "credential_kind": "api_token",
+        "provider": "github-actions",
+        "detector": "honeytoken",
+        "observed_at": "2026-06-03T03:15:00Z",
+        "reason": "revoked token replayed from unfamiliar network",
+        "confidence": "critical",
+        "evidence_refs": ["audit:api-token-use/evt-42"],
+        "source_event_ref": "github-audit:evt-42",
+        "ip": "203.0.113.44",
+        "geo": "DE",
+        "user_agent": "curl/8.7"
+      }
+    ]
+  }
+}
+```
+
+Runs execute through the discovery outbox worker, normalize each signal to a
+`compromised_credential` finding, preserve provenance as
+`credential_compromise:<provider>:<detector>:<credential_ref>:<observed_at>`,
+tag the finding with `owasp_category=NHI2` and `capability=CAP-ITDR-02`, and
+append the standard `discovery.*` events. High and critical signals produce
+high-risk findings that can drive the incident workflow without pretending that
+remediation is the detector.
+
+**Status:** source creation, run queueing, outbox execution, metadata-only
+`compromised_credential` findings, REST readback, and UI representation are
+served for CAP-ITDR-02.
+
 ### Kubernetes Ingress and Gateway API TLS auto-issuance
 
 Kubernetes TLS automation is served through `k8s_ingress_gateway` discovery
@@ -553,6 +607,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |
+| Compromised-credential / stolen-token detection (CAP-ITDR-02) | **Served** — `credential_compromise` source/schedule/run/finding records normalize ITDR, honeytoken, scanner, IdP, and threat-intel signals into metadata-only `compromised_credential` findings tagged to OWASP NHI2 |
 | Kubernetes Ingress/Gateway API TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` source/schedule/run/finding records normalize Ingress and Gateway TLS metadata into `k8s_tls_auto_issuance` findings and mint signer-backed public certificate inventory rows |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
@@ -583,7 +638,7 @@ what it is.
   expiry window the inventory and lifecycle treat as "renew soon".
 - **Served discovery source kinds:** `network`, `cloud_certificate`,
   `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `nhi_behavior`,
-  `k8s_ingress_gateway`, `ct_log`, `drift`, `manual`, plus
+  `credential_compromise`, `k8s_ingress_gateway`, `ct_log`, `drift`, `manual`, plus
   metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`, `trust-store`, `private-key`.

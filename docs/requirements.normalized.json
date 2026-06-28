@@ -484,12 +484,13 @@
       "requirement_text": "trstctl shall provide Credential compromise workflow.",
       "owner": "Incident and JIT",
       "priority": "P2",
-      "acceptance_criteria": "Served API test executes a compromised identity remediation and UI test renders live execution evidence.",
+      "acceptance_criteria": "Served API test executes a compromised identity remediation; CAP-ITDR-02 served test detects a compromised credential/stolen token from metadata-only evidence; UI tests render live execution and discovery evidence.",
       "status": "served",
       "served_state": "served",
       "backend_status": "served-runtime",
       "source_docs": [
-        "docs/features/incident-and-jit.md"
+        "docs/features/incident-and-jit.md",
+        "docs/features/discovery-and-inventory.md"
       ]
     },
     {

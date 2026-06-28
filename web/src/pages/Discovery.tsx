@@ -27,6 +27,7 @@ const sourceKinds: SourceKind[] = [
   "nhi_cross_surface",
   "oauth_grant",
   "nhi_behavior",
+  "credential_compromise",
   "k8s_ingress_gateway",
 ];
 const sourceKindLabels: Record<SourceKind, string> = {
@@ -43,6 +44,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   nhi_cross_surface: "NHI surfaces",
   oauth_grant: "OAuth grants",
   nhi_behavior: "NHI behavior",
+  credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
 };
 
@@ -60,6 +62,7 @@ export function Discovery() {
   const [nhiObservations, setNHIObservations] = useState("");
   const [oauthGrants, setOAuthGrants] = useState("");
   const [behaviorEvents, setBehaviorEvents] = useState("");
+  const [compromiseSignals, setCompromiseSignals] = useState("");
   const [k8sResources, setK8sResources] = useState("");
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
@@ -113,6 +116,8 @@ export function Discovery() {
           ? { grants: parseOAuthGrants(oauthGrants) }
           : sourceKind === "nhi_behavior"
           ? { events: parseBehaviorEvents(behaviorEvents), business_hours: { start_hour: 8, end_hour: 18 } }
+          : sourceKind === "credential_compromise"
+          ? { signals: parseCompromiseSignals(compromiseSignals) }
           : sourceKind === "k8s_ingress_gateway"
           ? { resources: parseKubernetesTLSResources(k8sResources) }
           : {};
@@ -122,6 +127,7 @@ export function Discovery() {
       setNHIObservations("");
       setOAuthGrants("");
       setBehaviorEvents("");
+      setCompromiseSignals("");
       setK8sResources("");
       setScheduleSourceID(created.id);
       await load();
@@ -279,6 +285,18 @@ export function Discovery() {
               />
             </label>
           )}
+          {sourceKind === "credential_compromise" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Compromise signals JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={compromiseSignals}
+                onChange={(event) => setCompromiseSignals(event.target.value)}
+                placeholder='[{"principal":"payments-api","credential_ref":"api-token:payments-ci","credential_kind":"api_token","provider":"github-actions","detector":"honeytoken","observed_at":"2026-06-03T03:15:00Z","reason":"revoked token replayed from unfamiliar network","confidence":"critical","evidence_refs":["audit:api-token-use/evt-42"]}]'
+                required
+              />
+            </label>
+          )}
           <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Create source
@@ -337,7 +355,7 @@ export function Discovery() {
             primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
             secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
           >
-            Add a network, cloud, CT log, NHI, OAuth, behavior, or agent source before discovery runs can be queued.
+            Add a network, cloud, CT log, NHI, OAuth, behavior, compromise, or agent source before discovery runs can be queued.
           </EmptyState>
         ) : (
           <SourceTable sources={sources} busy={busy} onStart={startRun} />
@@ -564,6 +582,12 @@ function parseBehaviorEvents(value: string): unknown[] {
   return parsed;
 }
 
+function parseCompromiseSignals(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Compromise signals JSON must be an array.");
+  return parsed;
+}
+
 function parseKubernetesTLSResources(value: string): unknown[] {
   const parsed = JSON.parse(value);
   if (!Array.isArray(parsed)) throw new Error("Kubernetes resources JSON must be an array.");
@@ -579,6 +603,8 @@ function targetCount(source: DiscoverySource): string {
   if (Array.isArray(grants)) return `${grants.length} grants`;
   const events = source.config.events;
   if (Array.isArray(events)) return `${events.length} events`;
+  const signals = source.config.signals;
+  if (Array.isArray(signals)) return `${signals.length} signals`;
   const resources = source.config.resources;
   if (Array.isArray(resources)) return `${resources.length} k8s`;
   const cidrs = source.config.cidrs;

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
@@ -154,6 +155,58 @@ func TestValidateDiscoverySourceAcceptsNHIBehaviorMetadataOnly(t *testing.T) {
 		Config: inlineSecret,
 	}); err == nil {
 		t.Fatal("inline behavior credential material must be rejected; NHI behavior config may carry metadata only")
+	}
+}
+
+func TestValidateDiscoverySourceAcceptsCompromisedCredentialMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"signals":[
+			{
+				"principal":"payments-api",
+				"credential_ref":"api-token:payments-ci",
+				"credential_kind":"api_token",
+				"provider":"github-actions",
+				"detector":"honeytoken",
+				"observed_at":"2026-06-03T03:15:00Z",
+				"reason":"revoked token replayed from unfamiliar network",
+				"confidence":"critical",
+				"evidence_refs":["audit:api-token-use/evt-42"],
+				"ip":"203.0.113.44",
+				"geo":"DE",
+				"user_agent":"curl/8.7"
+			}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   compromise.SourceKind,
+		Name:   "compromised-credentials",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("compromised-credential metadata-only source was rejected: %v", err)
+	}
+
+	inlineSecret := json.RawMessage(`{
+		"signals":[
+			{
+				"principal":"payments-api",
+				"credential_ref":"api-token:payments-ci",
+				"credential_kind":"api_token",
+				"provider":"github-actions",
+				"detector":"secret-scanner",
+				"observed_at":"2026-06-03T03:15:00Z",
+				"reason":"known leak",
+				"confidence":"high",
+				"evidence_refs":["scanner:evt-1"],
+				"token_value":"raw-token-value"
+			}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   compromise.SourceKind,
+		Name:   "bad-compromised-credentials",
+		Config: inlineSecret,
+	}); err == nil {
+		t.Fatal("inline stolen-token material must be rejected; compromised-credential config may carry metadata only")
 	}
 }
 

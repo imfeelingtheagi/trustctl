@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudsecret"
 	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
 	gcpsmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/gcpsm"
+	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/discovery/netscan"
@@ -200,6 +201,9 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	}
 	if src.Kind == nhibehavior.SourceKind {
 		return d.executeNHIBehaviorDiscoveryRun(ctx, tenantID, src, run)
+	}
+	if src.Kind == compromise.SourceKind {
+		return d.executeCompromisedCredentialDiscoveryRun(ctx, tenantID, src, run)
 	}
 	if src.Kind == k8stls.SourceKind {
 		return d.executeKubernetesTLSAutoIssuanceRun(ctx, tenantID, src, run)
@@ -473,6 +477,32 @@ func (d *issuanceDispatcher) executeNHIBehaviorDiscoveryRun(ctx context.Context,
 		}
 		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID: run.ID, SourceID: src.ID, Kind: nhibehavior.FindingKind, Ref: f.Ref,
+			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: meta,
+		}); err != nil {
+			return rep, "", "", err
+		}
+		rep.Discovered++
+	}
+	return rep, "succeeded", "", nil
+}
+
+func (d *issuanceDispatcher) executeCompromisedCredentialDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	findings, err := compromise.Findings(src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
+	if run.DryRun {
+		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
+	}
+	rep := netscan.Report{Targets: len(findings)}
+	for _, f := range findings {
+		meta, err := json.Marshal(f.Metadata)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+			RunID: run.ID, SourceID: src.ID, Kind: compromise.FindingKind, Ref: f.Ref,
 			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 			RiskScore: f.RiskScore, Metadata: meta,
 		}); err != nil {
