@@ -7,8 +7,9 @@ short-lived SSH certificates from a single authority. The outcome is hosts that 
 *one* SSH certificate authority, users who get certificates that expire on their own
 (say, valid until 5 p.m.), and a clean inventory of any leftover keys still granting
 access. This is for an operator who wants central, time-bounded, auditable SSH access
-instead of per-host key copying. It is honest about which pieces the running binary
-serves and which are agent/library work today.
+instead of per-host key copying. The running binary serves the CA, KRL, attested-cert,
+rollout-evidence, revocation, and retirement handoff; host file mutation remains in the
+operator-confirmed agent path.
 
 ## Before you start
 
@@ -85,23 +86,50 @@ serves and which are agent/library work today.
    -> the agent backs up the files, validates the new config (`sshd -t`), reloads, runs
    your post-reload health command, and auto-rolls-back to the last-known-good on any
    failure — so a bad rewrite cannot lock you out. It never removes existing trust
-   without an explicit confirmation. This applier is wired into the agent binary behind
-   the opt-in; see [Current limitations](../limitations.md).
+   without an explicit confirmation. Record the served rollout evidence after the agent
+   reports the result:
+
+   ```sh
+   trstctl ssh trust-rollout \
+     --source <source-id> \
+     --hosts edge-1.internal \
+     --ca-fingerprint SHA256:... \
+     --reload-cmd 'systemctl reload sshd' \
+     --health-cmd 'ssh -o BatchMode=yes localhost true' \
+     --rollback-plan 'restore trusted_user_ca_keys backup and reload sshd' \
+     --status health_passed \
+     --confirm
+   ```
 
 4. Issue a short-lived user certificate tied to a verified identity, not handed to
    anyone who asks. The attested issuer runs an attestation check first and only then
    derives the certificate's principals from the verified result, defaulting to a short
    TTL. Every issuance is an immutable `ssh.cert.issued` event. See [SSH](../features/ssh.md).
 
+   ```sh
+   trstctl ssh issue-attested-user \
+     --method k8s_sat \
+     --payload-base64 "$K8S_SAT_B64" \
+     --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
+     --key-id jit-deployer \
+     --ttl-seconds 900
+   ```
+
    -> the user connects normally and `sshd` validates the certificate against the
    trusted CA with no stored key. Access expires on its own — no standing key left
-   behind. The attestation-gated issuer is library-complete and tested; the served SSH
-   CA mints user/host certs and publishes the binary KRL today — see
-   [SSH](../features/ssh.md) and [Current limitations](../limitations.md).
+   behind. The attestation-gated issuer is served through the SSH workflow API/CLI/UI and
+   still keeps the private key with the user, never in trstctl.
 
 5. Pull a certificate back before it expires. Revoking it puts its serial on the SSH
    CA's key-revocation list, served in OpenSSH binary format at `/ssh/krl`, which a
    host's `sshd` consumes via its `RevokedKeys` directive. See [SSH](../features/ssh.md).
+
+   ```sh
+   trstctl ssh status
+   trstctl ssh revoke --serial <serial> --reason 'operator requested revocation'
+   curl -fsS "$TRSTCTL_SERVER/ssh/krl" -o trstctl.krl
+   trstctl ssh retire-host --host edge-1.internal --source <source-id> --run <run-id> --reason 'standing SSH access replaced'
+   ```
 
    -> a revoked certificate is reported as revoked by stock `ssh-keygen`; budget for
    pushing the updated KRL to hosts, since distribution is push-based.

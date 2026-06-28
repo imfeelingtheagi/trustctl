@@ -3676,45 +3676,51 @@
       "priority": 28,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "observe: Protocols at /protocols - SSH CA endpoint/KRL setup and protocol-status unavailable state; coverage ledger: /coverage",
+      "current_frontend_mapping": "served: SSHTrust at /ssh - SSH CA status, binary KRL status, and revocation workflow; Protocols at /protocols still probes the public /ssh/ca endpoint; coverage ledger: /coverage",
       "target_gui_mapping": "SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation.",
       "acceptance_test": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
       "source_docs": ["docs/features/ssh.md"],
       "source_backend": ["/ssh/ca", "/ssh/issue/user", "/ssh/issue/host", "/ssh/krl"],
-      "source_frontend": [],
+      "source_frontend": ["web/src/pages/SSHTrust.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-      "cli_surface": [],
-      "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+      "notes": "Closed by /coverage feature-map hub; JOURNEY-002 adds served SSH status/revocation/KRL workflow handoff. Test evidence: internal/server/ssh_journey_served_test.go drives discovery through trust rollout, attested SSH issuance, KRL revocation, and host retirement; web/src/__tests__/ssh_trust.test.tsx covers the console workflow controls; feature coverage tests render the catalog and /coverage ledger.",
+      "api_surface": ["getSSHStatus", "revokeSSHCertificate"],
+      "api_na": "",
+      "cli_surface": ["ssh status", "ssh revoke"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": ["served_state=conditional", "backend_status=conditional served"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - SSH CA endpoint/KRL setup and protocol-status unavailable state; coverage ledger: /coverage",
+            "current_frontend_mapping: served: SSHTrust at /ssh - SSH CA status, binary KRL status, and revocation workflow; Protocols at /protocols still probes the public /ssh/ca endpoint; coverage ledger: /coverage",
             "target_gui_mapping: SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/SSHTrust.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+          "evidence": ["CLI commands: ssh status, ssh revoke"],
+          "refs": ["internal/cli/command.go", "cmd/trstctl/ssh.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": ["OpenAPI operationIds: getSSHStatus, revokeSSHCertificate"],
+          "refs": ["internal/api/api.go", "internal/api/ssh_workflow.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
+            "internal/server/ssh_journey_served_test.go drives the served SSH workflow through revocation and confirms /ssh/krl is OpenSSH binary format.",
+            "web/src/__tests__/ssh_trust.test.tsx covers the status and revoke controls without exposing private-key material.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ssh_journey_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/__tests__/ssh_trust.test.tsx"
           ]
         },
         "docs": {
@@ -3723,14 +3729,18 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps getSSHStatus to certs:read and revokeSSHCertificate to certs:write.",
             "protocol authz manifest maps ssh route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "ssh is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the guarded SSH workflow operations; public /ssh protocol paths keep their explicit protocol rationale."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_spiffe_ssh_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go"]
         },
         "audit": {
-          "evidence": ["protocol-served feature: protocol issuance/revocation paths emit protocol audit events or expose an explicit status gate."],
-          "refs": ["internal/server/protocols.go", "internal/server/protocol_mounts.go"]
+          "evidence": [
+            "served SSH revocation appends ssh.cert.revoked before returning updated KRL status.",
+            "protocol issuance/revocation paths continue to emit protocol audit events or expose an explicit status gate."
+          ],
+          "refs": ["internal/server/ssh_workflow.go", "internal/server/protocol_ssh.go", "internal/server/protocols.go"]
         },
         "telemetry": {
           "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
@@ -3754,46 +3764,57 @@
       "phase": "P2",
       "priority": 65,
       "served_state": "conditional",
-      "backend_status": "agent-side explicit opt-in",
-      "current_frontend_mapping": "observe: SSHTrust at /ssh - SSH trust rollout and rollback fixtures without live mutation controls; coverage ledger: /coverage",
+      "backend_status": "agent-side explicit opt-in with served rollout and retirement evidence API",
+      "current_frontend_mapping": "served: SSHTrust at /ssh - explicit-confirmation trust rollout, rollback evidence, and host retirement handoff; coverage ledger: /coverage",
       "target_gui_mapping": "SSH trust rollout UI showing candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation state.",
       "acceptance_test": "UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
       "source_docs": ["docs/features/ssh.md", "docs/design/ssh-trust-rewrite.md"],
       "source_backend": ["internal/agent/sshtrust", "cmd/trstctl-agent/sshtrust.go"],
-      "source_frontend": [],
+      "source_frontend": ["web/src/pages/SSHTrust.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract.",
-      "cli_surface": [],
-      "cli_na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table.",
+      "notes": "Closed by /coverage feature-map hub; JOURNEY-002 adds served trust-rollout and host-retirement handoff without allowing the browser to rewrite sshd_config. Test evidence: internal/server/ssh_journey_served_test.go drives source creation, run queueing, trust rollout, attested issuance, KRL revocation, and host retirement; web/src/__tests__/ssh_trust.test.tsx covers explicit confirmation and host retirement controls.",
+      "api_surface": ["recordSSHTrustRollout", "retireSSHHost"],
+      "api_na": "",
+      "cli_surface": ["ssh trust-rollout", "ssh retire-host"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=agent-side explicit opt-in"]
+          "evidence": [
+            "served_state=conditional",
+            "backend_status=agent-side explicit opt-in with served rollout and retirement evidence API",
+            "POST /api/v1/ssh/trust-rollouts requires explicit confirmation and records rollback/health evidence; POST /api/v1/ssh/hosts/retire records host retirement evidence."
+          ],
+          "refs": ["internal/server/ssh_workflow.go", "internal/api/ssh_workflow.go", "internal/server/ssh_journey_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: SSHTrust at /ssh - SSH trust rollout and rollback fixtures without live mutation controls; coverage ledger: /coverage",
+            "current_frontend_mapping: served: SSHTrust at /ssh - explicit-confirmation trust rollout, rollback evidence, and host retirement handoff; coverage ledger: /coverage",
             "target_gui_mapping: SSH trust rollout UI showing candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation state."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/SSHTrust.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the trstctl CLI command table."
+          "evidence": ["CLI commands: ssh trust-rollout, ssh retire-host"],
+          "refs": ["internal/cli/command.go", "cmd/trstctl/ssh.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": ["OpenAPI operationIds: recordSSHTrustRollout, retireSSHHost"],
+          "refs": ["internal/api/api.go", "internal/api/ssh_workflow.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
+            "internal/server/ssh_journey_served_test.go proves trust rollout and host retirement are served, idempotent mutation paths.",
+            "web/src/__tests__/ssh_trust.test.tsx covers explicit confirmation before trust rollout and host retirement.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ssh_journey_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/__tests__/ssh_trust.test.tsx"
           ]
         },
         "docs": {
@@ -3801,13 +3822,22 @@
           "refs": ["docs/features/ssh.md", "docs/design/ssh-trust-rewrite.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; served through protocol-specific endpoints/configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "feature authz manifest maps recordSSHTrustRollout to agents:write and retireSSHHost to identities:write.",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the guarded SSH trust workflow operations."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F44; current mapping is observe: SSHTrust at /ssh - SSH trust rollout and rollback fixtures without live mutation controls; coverage ledger: /coverage."
+          "evidence": [
+            "served trust rollout appends ssh.trust_rollout.recorded.",
+            "served host retirement appends ssh.host.retired."
+          ],
+          "refs": ["internal/server/ssh_workflow.go", "internal/server/ssh_journey_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F44 has a served API/protocol entrypoint."
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -3826,47 +3856,58 @@
       "domain": "SSH",
       "phase": "P2",
       "priority": 66,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: SSHTrust at /ssh - attestation-gated SSH user cert fixtures without live issue control; coverage ledger: /coverage",
+      "served_state": "conditional",
+      "backend_status": "conditional served attestation-gated SSH user cert API",
+      "current_frontend_mapping": "served: SSHTrust at /ssh - attestation-gated SSH user cert request and retrieval workflow; coverage ledger: /coverage",
       "target_gui_mapping": "SSH JIT UI requiring attestation evidence, approver, principal, TTL, source address, force-command constraints, and issued cert retrieval.",
       "acceptance_test": "UI blocks self-approval and tests attestation denied/approved/expired cases.",
       "source_docs": ["docs/features/ssh.md"],
-      "source_backend": ["internal/protocols/ssh/attested.go"],
-      "source_frontend": [],
+      "source_backend": ["internal/protocols/ssh/attested.go", "internal/server/ssh_workflow.go", "internal/api/ssh_workflow.go"],
+      "source_frontend": ["web/src/pages/SSHTrust.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub; JOURNEY-002 wires the library attested SSH issuer through the served API, CLI, and console request flow. Test evidence: internal/server/ssh_journey_served_test.go verifies attestation.verified and ssh.attested_cert.issued events; web/src/__tests__/ssh_trust.test.tsx covers the attested issue request without exposing private key material.",
+      "api_surface": ["issueAttestedSSHUserCert"],
+      "api_na": "",
+      "cli_surface": ["ssh issue-attested-user"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=conditional",
+            "backend_status=conditional served attestation-gated SSH user cert API",
+            "POST /api/v1/ssh/attested-user-certs verifies attestation, derives principals from the attested identity, and returns an OpenSSH user certificate."
+          ],
+          "refs": ["internal/server/ssh_workflow.go", "internal/protocols/ssh/attested.go", "internal/server/ssh_journey_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: SSHTrust at /ssh - attestation-gated SSH user cert fixtures without live issue control; coverage ledger: /coverage",
+            "current_frontend_mapping: served: SSHTrust at /ssh - attestation-gated SSH user cert request and retrieval workflow; coverage ledger: /coverage",
             "target_gui_mapping: SSH JIT UI requiring attestation evidence, approver, principal, TTL, source address, force-command constraints, and issued cert retrieval."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/SSHTrust.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command: ssh issue-attested-user"],
+          "refs": ["internal/cli/command.go", "cmd/trstctl/ssh.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: issueAttestedSSHUserCert"],
+          "refs": ["internal/api/api.go", "internal/api/ssh_workflow.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI blocks self-approval and tests attestation denied/approved/expired cases.",
+            "internal/server/ssh_journey_served_test.go proves attested SSH issuance is served and emits attestation.verified plus ssh.attested_cert.issued.",
+            "web/src/__tests__/ssh_trust.test.tsx covers the attested issue form and verifies private key material is not rendered.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/ssh_journey_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/__tests__/ssh_trust.test.tsx"
           ]
         },
         "docs": {
@@ -3875,16 +3916,22 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps issueAttestedSSHUserCert to certs:issue.",
             "protocol authz manifest maps ssh route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "ssh is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the guarded attested SSH issuance operation."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_spiffe_ssh_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F45; current mapping is disclosure: SSHTrust at /ssh - attestation-gated SSH user cert fixtures without live issue control; coverage ledger: /coverage."
+          "evidence": [
+            "served attested SSH issuance emits attestation.verified and ssh.attested_cert.issued.",
+            "denied attestation fails closed without minting a certificate."
+          ],
+          "refs": ["internal/server/ssh_workflow.go", "internal/server/ssh_journey_served_test.go", "internal/protocols/ssh/attested.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F45 has a served API/protocol entrypoint."
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

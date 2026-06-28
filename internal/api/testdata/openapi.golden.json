@@ -5299,6 +5299,302 @@
         ],
         "type": "object"
       },
+      "SSHAttestedUserCert": {
+        "properties": {
+          "attestation": {
+            "$ref": "#/components/schemas/Attestation"
+          },
+          "certificate": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "valid_before": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate",
+          "serial",
+          "key_id",
+          "subject",
+          "principals",
+          "valid_before",
+          "attestation"
+        ],
+        "type": "object"
+      },
+      "SSHAttestedUserCertRequest": {
+        "properties": {
+          "key_id": {
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "aws_iid",
+              "azure_imds",
+              "gcp_iit",
+              "github_oidc",
+              "k8s_sat",
+              "tpm"
+            ],
+            "type": "string"
+          },
+          "payload_base64": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "payload_base64",
+          "public_key"
+        ],
+        "type": "object"
+      },
+      "SSHHostRetireRequest": {
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "SSHHostRetirement": {
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "retired"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "host",
+          "status",
+          "recorded_at"
+        ],
+        "type": "object"
+      },
+      "SSHRevokeCertificateRequest": {
+        "properties": {
+          "key_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SSHStatus": {
+        "properties": {
+          "attestors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "authority_key": {
+            "type": "string"
+          },
+          "krl_version": {
+            "type": "integer"
+          },
+          "revoked_count": {
+            "type": "integer"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "served",
+          "tenant_id",
+          "krl_version",
+          "revoked_count"
+        ],
+        "type": "object"
+      },
+      "SSHTrustRollout": {
+        "properties": {
+          "candidate_ca_fingerprint": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "health_command": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reload_command": {
+            "type": "string"
+          },
+          "rollback_plan": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "planned",
+              "validating",
+              "health_passed",
+              "rolled_back",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "target_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "target_hosts",
+          "status",
+          "confirmed",
+          "recorded_at"
+        ],
+        "type": "object"
+      },
+      "SSHTrustRolloutRequest": {
+        "properties": {
+          "candidate_ca_fingerprint": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "health_command": {
+            "type": "string"
+          },
+          "reload_command": {
+            "type": "string"
+          },
+          "rollback_plan": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "planned",
+              "validating",
+              "health_passed",
+              "rolled_back",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "target_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "target_hosts",
+          "status",
+          "confirmed"
+        ],
+        "type": "object"
+      },
       "SecretImportRequest": {
         "properties": {
           "prefix": {
@@ -14259,6 +14555,281 @@
         ],
         "summary": "Push a stored secret to a configured external sync target",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/ssh/attested-user-certs": {
+      "post": {
+        "operationId": "issueAttestedSSHUserCert",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHAttestedUserCertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHAttestedUserCert"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue an attestation-gated SSH user certificate",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/ssh/certificates/revoke": {
+      "post": {
+        "operationId": "revokeSSHCertificate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHRevokeCertificateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke an SSH certificate and publish KRL status",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/ssh/hosts/retire": {
+      "post": {
+        "operationId": "retireSSHHost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHHostRetireRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHHostRetirement"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record SSH host retirement evidence",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/ssh/status": {
+      "get": {
+        "operationId": "getSSHStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get SSH CA, KRL, and attestation workflow status",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/ssh/trust-rollouts": {
+      "post": {
+        "operationId": "recordSSHTrustRollout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHTrustRolloutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHTrustRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record SSH trust rollout status from the agent-safe workflow",
+        "x-trstctl-permission": "agents:write"
       }
     },
     "/api/v1/support/enterprise": {

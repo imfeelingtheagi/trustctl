@@ -74,6 +74,7 @@ type API struct {
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
 	attestedIssuer          AttestedIssuerService
+	sshWorkflow             SSHWorkflowService
 	broker                  BrokerService
 	ephemeral               EphemeralIssuerService
 	pam                     PAMService
@@ -128,6 +129,7 @@ type config struct {
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
 	attestedIssuer          AttestedIssuerService
+	sshWorkflow             SSHWorkflowService
 	broker                  BrokerService
 	ephemeral               EphemeralIssuerService
 	pam                     PAMService
@@ -350,6 +352,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		caHierarchy:             cfg.caHierarchy,
 		externalCAs:             cfg.externalCAs,
 		attestedIssuer:          cfg.attestedIssuer,
+		sshWorkflow:             cfg.sshWorkflow,
 		broker:                  cfg.broker,
 		ephemeral:               cfg.ephemeral,
 		pam:                     cfg.pam,
@@ -767,6 +770,11 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/external-cas", opID: "listExternalCAs", summary: "List configured upstream CA integrations", handler: a.listExternalCAs, resSchema: "ExternalCAList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: combineRouteScopes(scopeIssuerPath("id"), scopeProfileJSON("profile_name"))},
 		{method: "POST", path: "/api/v1/workloads/attested-issuance", opID: "issueAttestedSVID", summary: "Issue an X.509-SVID after workload attestation", handler: a.issueAttestedSVID, reqSchema: "AttestedSVIDRequest", resSchema: "AttestedSVID", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "GET", path: "/api/v1/ssh/status", opID: "getSSHStatus", summary: "Get SSH CA, KRL, and attestation workflow status", handler: a.getSSHStatus, resSchema: "SSHStatus", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/ssh/trust-rollouts", opID: "recordSSHTrustRollout", summary: "Record SSH trust rollout status from the agent-safe workflow", handler: a.recordSSHTrustRollout, reqSchema: "SSHTrustRolloutRequest", resSchema: "SSHTrustRollout", successCode: "201", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/ssh/attested-user-certs", opID: "issueAttestedSSHUserCert", summary: "Issue an attestation-gated SSH user certificate", handler: a.issueAttestedSSHUserCert, reqSchema: "SSHAttestedUserCertRequest", resSchema: "SSHAttestedUserCert", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/ssh/certificates/revoke", opID: "revokeSSHCertificate", summary: "Revoke an SSH certificate and publish KRL status", handler: a.revokeSSHCertificate, reqSchema: "SSHRevokeCertificateRequest", resSchema: "SSHStatus", successCode: "200", mutation: true, perm: authz.CertsWrite},
+		{method: "POST", path: "/api/v1/ssh/hosts/retire", opID: "retireSSHHost", summary: "Record SSH host retirement evidence", handler: a.retireSSHHost, reqSchema: "SSHHostRetireRequest", resSchema: "SSHHostRetirement", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "POST", path: "/api/v1/broker/agent-identities", opID: "issueBrokerAgentIdentity", summary: "Issue a policy-gated short-lived identity for an AI/MCP agent", handler: a.issueBrokerAgentIdentity, reqSchema: "BrokerAgentIdentityRequest", resSchema: "BrokerAgentIdentity", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/ephemeral", opID: "issueEphemeralCredential", summary: "Open or complete an attestation-gated JIT credential request", handler: a.issueEphemeralCredential, reqSchema: "EphemeralCredentialRequest", resSchema: "EphemeralCredential", successCode: "202", mutation: true, perm: authz.CertsRequest},
 		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
@@ -1314,6 +1322,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case a.writeBrokerError(w, err):
 	case a.writeEphemeralError(w, err):
 	case a.writePAMError(w, err):
+	case a.writeSSHWorkflowError(w, err):
 	case store.IsNotFound(err):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrInvalidTransition):

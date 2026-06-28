@@ -2135,6 +2135,116 @@ RotationRunList = TypedDict(
     total=False,
 )
 
+SSHAttestedUserCert = TypedDict(
+    'SSHAttestedUserCert',
+    {
+        'attestation': dict[str, Any],
+        'certificate': str,
+        'key_id': str,
+        'principals': list[str],
+        'serial': int,
+        'subject': str,
+        'valid_before': str,
+    },
+    total=False,
+)
+
+SSHAttestedUserCertRequest = TypedDict(
+    'SSHAttestedUserCertRequest',
+    {
+        'key_id': str,
+        'method': str,
+        'payload_base64': str,
+        'public_key': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+SSHHostRetireRequest = TypedDict(
+    'SSHHostRetireRequest',
+    {
+        'host': str,
+        'identity_id': str,
+        'reason': str,
+        'run_id': str,
+        'source_id': str,
+    },
+    total=False,
+)
+
+SSHHostRetirement = TypedDict(
+    'SSHHostRetirement',
+    {
+        'host': str,
+        'id': str,
+        'identity_id': str,
+        'reason': str,
+        'recorded_at': str,
+        'run_id': str,
+        'source_id': str,
+        'status': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+SSHRevokeCertificateRequest = TypedDict(
+    'SSHRevokeCertificateRequest',
+    {
+        'key_id': str,
+        'reason': str,
+        'serial': int,
+    },
+    total=False,
+)
+
+SSHStatus = TypedDict(
+    'SSHStatus',
+    {
+        'attestors': list[str],
+        'authority_key': str,
+        'krl_version': int,
+        'revoked_count': int,
+        'served': bool,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+SSHTrustRollout = TypedDict(
+    'SSHTrustRollout',
+    {
+        'candidate_ca_fingerprint': str,
+        'confirmed': bool,
+        'health_command': str,
+        'id': str,
+        'recorded_at': str,
+        'reload_command': str,
+        'rollback_plan': str,
+        'source_id': str,
+        'status': str,
+        'target_hosts': list[str],
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+SSHTrustRolloutRequest = TypedDict(
+    'SSHTrustRolloutRequest',
+    {
+        'candidate_ca_fingerprint': str,
+        'confirmed': bool,
+        'health_command': str,
+        'reload_command': str,
+        'rollback_plan': str,
+        'source_id': str,
+        'status': str,
+        'target_hosts': list[str],
+    },
+    total=False,
+)
+
 SecretImportRequest = TypedDict(
     'SecretImportRequest',
     {

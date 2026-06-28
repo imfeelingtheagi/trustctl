@@ -2015,6 +2015,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/attested-user-certs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue an attestation-gated SSH user certificate */
+        post: operations["issueAttestedSSHUserCert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/certificates/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an SSH certificate and publish KRL status */
+        post: operations["revokeSSHCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/hosts/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record SSH host retirement evidence */
+        post: operations["retireSSHHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get SSH CA, KRL, and attestation workflow status */
+        get: operations["getSSHStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/trust-rollouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record SSH trust rollout status from the agent-safe workflow */
+        post: operations["recordSSHTrustRollout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/support/enterprise": {
         parameters: {
             query?: never;
@@ -3684,6 +3769,94 @@ export interface components {
         RotationRunList: {
             items: components["schemas"]["RotationRun"][];
             next_cursor?: string;
+        };
+        SSHAttestedUserCert: {
+            attestation: components["schemas"]["Attestation"];
+            certificate: string;
+            key_id: string;
+            principals: string[];
+            serial: number;
+            subject: string;
+            /** Format: date-time */
+            valid_before: string;
+        };
+        SSHAttestedUserCertRequest: {
+            key_id?: string;
+            /** @enum {string} */
+            method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+            payload_base64: string;
+            public_key: string;
+            ttl_seconds?: number;
+        };
+        SSHHostRetireRequest: {
+            host: string;
+            /** Format: uuid */
+            identity_id?: string;
+            reason?: string;
+            /** Format: uuid */
+            run_id?: string;
+            /** Format: uuid */
+            source_id?: string;
+        };
+        SSHHostRetirement: {
+            host: string;
+            id: string;
+            /** Format: uuid */
+            identity_id?: string;
+            reason?: string;
+            /** Format: date-time */
+            recorded_at: string;
+            /** Format: uuid */
+            run_id?: string;
+            /** Format: uuid */
+            source_id?: string;
+            /** @enum {string} */
+            status: "retired";
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        SSHRevokeCertificateRequest: {
+            key_id?: string;
+            reason?: string;
+            serial?: number;
+        };
+        SSHStatus: {
+            attestors?: string[];
+            authority_key?: string;
+            krl_version: number;
+            revoked_count: number;
+            served: boolean;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        SSHTrustRollout: {
+            candidate_ca_fingerprint?: string;
+            confirmed: boolean;
+            health_command?: string;
+            id: string;
+            /** Format: date-time */
+            recorded_at: string;
+            reload_command?: string;
+            rollback_plan?: string;
+            /** Format: uuid */
+            source_id?: string;
+            /** @enum {string} */
+            status: "planned" | "validating" | "health_passed" | "rolled_back" | "failed";
+            target_hosts: string[];
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        SSHTrustRolloutRequest: {
+            candidate_ca_fingerprint?: string;
+            confirmed: boolean;
+            health_command?: string;
+            reload_command?: string;
+            rollback_plan?: string;
+            /** Format: uuid */
+            source_id?: string;
+            /** @enum {string} */
+            status: "planned" | "validating" | "health_passed" | "rolled_back" | "failed";
+            target_hosts: string[];
         };
         SecretImportRequest: {
             prefix?: string;
@@ -9688,6 +9861,212 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueAttestedSSHUserCert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHAttestedUserCertRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHAttestedUserCert"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeSSHCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHRevokeCertificateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retireSSHHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHHostRetireRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHHostRetirement"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSSHStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    recordSSHTrustRollout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHTrustRolloutRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHTrustRollout"];
                 };
             };
             /** @description client error */

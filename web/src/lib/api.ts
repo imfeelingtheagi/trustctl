@@ -83,6 +83,14 @@ import type {
   Attestation as GenAttestation,
   AttestedSVID as GenAttestedSVID,
   AttestedSVIDRequest,
+  SSHAttestedUserCert,
+  SSHAttestedUserCertRequest,
+  SSHHostRetireRequest,
+  SSHHostRetirement,
+  SSHRevokeCertificateRequest,
+  SSHStatus,
+  SSHTrustRollout,
+  SSHTrustRolloutRequest,
   BrokerAgentIdentity as GenBrokerAgentIdentity,
   BrokerAgentIdentityRequest,
   EnrollmentToken as GenEnrollmentToken,
@@ -293,6 +301,14 @@ export type {
   ShareRequest,
   ShareToken,
   ShareValue,
+  SSHAttestedUserCert,
+  SSHAttestedUserCertRequest,
+  SSHHostRetireRequest,
+  SSHHostRetirement,
+  SSHRevokeCertificateRequest,
+  SSHStatus,
+  SSHTrustRollout,
+  SSHTrustRolloutRequest,
   TransitCiphertext,
   TransitDecryptRequest,
   TransitEncryptRequest,
@@ -684,6 +700,11 @@ export interface Api {
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
   issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest): Promise<BrokerAgentIdentity>;
   issueAttestedSVID(input: AttestedSVIDRequest): Promise<AttestedSVID>;
+  sshStatus(): Promise<SSHStatus>;
+  recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
+  issueAttestedSSHUserCert(input: SSHAttestedUserCertRequest): Promise<SSHAttestedUserCert>;
+  revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
+  retireSSHHost(input: SSHHostRetireRequest): Promise<SSHHostRetirement>;
   protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
   createSecret(input: SecretRequest): Promise<SecretMeta>;
@@ -833,6 +854,11 @@ export const api: Api = {
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
   issueBrokerAgentIdentity: (input) => mutate<BrokerAgentIdentity>("POST", "/api/v1/broker/agent-identities", input),
   issueAttestedSVID: (input) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input),
+  sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
+  recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),
+  issueAttestedSSHUserCert: (input) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input),
+  revokeSSHCertificate: (input) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input),
+  retireSSHHost: (input) => mutate<SSHHostRetirement>("POST", "/api/v1/ssh/hosts/retire", input),
   protocolStatuses: async () => ({
     source: "public_responder_probe",
     checked_at: new Date().toISOString(),

@@ -44,6 +44,13 @@ other work. The CA also maintains a **key revocation list (KRL)** — it can rev
 serial or key ID and produce a snapshot to distribute to hosts, which is how you pull back
 a certificate before it expires.
 
+The operator workflow is served in two forms: the OpenSSH-compatible protocol endpoints
+(`/ssh/ca`, `/ssh/issue/user`, `/ssh/issue/host`, `/ssh/krl`) and the guarded product
+API (`GET /api/v1/ssh/status`, `POST /api/v1/ssh/certificates/revoke`) used by the CLI
+and console. The product API reports the authority key, current KRL version, revoked
+certificate count, and configured attestors, and revocation appends an immutable
+`ssh.cert.revoked` event before publishing the updated KRL snapshot.
+
 ### SSH deployment & trust configuration (F44)
 
 For a host to accept the CA's certificates, it must trust the CA's public key — written
@@ -66,6 +73,14 @@ If restoration or the restored-config reload fails, the agent audits
 `ssh.trust.rollback_failed` instead; that means the host is in an unknown SSH-trust
 state and needs operator intervention.
 
+The control plane now has a served handoff for that high-blast-radius path:
+`POST /api/v1/ssh/trust-rollouts` records the source, target hosts, candidate CA
+fingerprint, reload command, health command, rollback plan, rollout status, and an
+explicit `confirmed=true` acknowledgement. `POST /api/v1/ssh/hosts/retire` records host
+retirement evidence after the standing key/trust migration is complete. The browser and
+CLI record/request the workflow; the actual host file edits still happen only inside the
+operator-confirmed agent path.
+
 ### Attestation-gated short-lived user certificates (F45)
 
 The most powerful pattern: don't issue an SSH user certificate to anyone who asks —
@@ -77,6 +92,12 @@ calls the SSH CA. It fails closed if attestation fails, defaults to a 15-minute 
 trail via an immutable `ssh.attested_cert.issued` event. The result: SSH access that is
 short-lived *and* provably tied to, say, a specific CI job or a specific cloud instance —
 no standing keys at all.
+
+That issuer is served at `POST /api/v1/ssh/attested-user-certs` and by
+`trstctl ssh issue-attested-user`. The request carries an attestation method, base64
+payload, SSH public key, optional key ID, and TTL. The response is the OpenSSH user
+certificate plus serial, key ID, principals, expiry, and the attestation record; the
+private key never crosses the API or UI.
 
 ## Use it
 
@@ -94,9 +115,29 @@ TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... trstctl-ssh-ca
 ```
 
-A user certificate is then issued with explicit principals and a short TTL (e.g. 15
-minutes for `alice`), and the user connects normally — `sshd` validates the certificate
+A user certificate is then issued with an attestation-bound principal and a short TTL
+(e.g. 15 minutes), and the user connects normally — `sshd` validates the certificate
 against the trusted CA without any stored key.
+
+```sh
+trstctl ssh status
+trstctl ssh trust-rollout \
+  --hosts edge-1.internal \
+  --ca-fingerprint SHA256:... \
+  --reload-cmd 'systemctl reload sshd' \
+  --health-cmd 'ssh -o BatchMode=yes localhost true' \
+  --rollback-plan 'restore trusted_user_ca_keys backup and reload sshd' \
+  --status health_passed \
+  --confirm
+trstctl ssh issue-attested-user \
+  --method k8s_sat \
+  --payload-base64 "$K8S_SAT_B64" \
+  --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
+  --key-id jit-deployer \
+  --ttl-seconds 900
+trstctl ssh revoke --serial 42 --reason 'operator requested revocation'
+trstctl ssh retire-host --host edge-1.internal --reason 'standing SSH access replaced'
+```
 
 ## Pitfalls & limits
 
@@ -108,9 +149,11 @@ against the trusted CA without any stored key.
   and the OpenSSH **binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it).
   The CA key lives in the isolated signing service under its own SSH-cert-constrained
   handle, never in the API process, and issuance keeps each tenant's data isolated at the
-  database layer with every step recorded as an immutable event. The **trust agent** and
-  the **attested issuer** are library-complete and tested but not yet wired into the agent
-  binary — see [Current limitations](../limitations.md).
+  database layer with every step recorded as an immutable event. The served SSH workflow
+  API and CLI cover status, explicit-confirmation trust rollout evidence, attested user
+  cert issue, KRL revocation, and host retirement. SSH key/trust discovery execution is
+  still agent/library work rather than a server-side discovery-worker executor — see
+  [Current limitations](../limitations.md).
 - **Short TTLs require renewal.** That's the security benefit, but plan the renewal path
   for long-running sessions.
 - **KRL distribution is push-based.** Revoking a certificate means distributing the
@@ -120,6 +163,9 @@ against the trusted CA without any stored key.
 
 - **CA operations:** `IssueUserCert`, `IssueHostCert`, `AuthorityKey` (for
   `TrustedUserCAKeys` / `@cert-authority`), `KRL.RevokeSerial`, `KRL.Distribute`.
+- **Served API/CLI:** `GET /api/v1/ssh/status`, `POST /api/v1/ssh/trust-rollouts`,
+  `POST /api/v1/ssh/attested-user-certs`, `POST /api/v1/ssh/certificates/revoke`,
+  `POST /api/v1/ssh/hosts/retire`; `trstctl ssh status|trust-rollout|issue-attested-user|revoke|retire-host`.
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
   `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method + payload → attested cert).

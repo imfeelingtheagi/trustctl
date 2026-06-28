@@ -769,6 +769,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	defaults := []api.Option{
 		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
+		api.WithSSHWorkflow(s),
 		api.WithBroker(s),
 		api.WithEphemeralIssuer(s),
 		api.WithPAM(s),

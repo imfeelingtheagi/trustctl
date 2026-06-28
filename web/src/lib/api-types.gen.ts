@@ -1441,6 +1441,84 @@ export interface RotationRunList {
   next_cursor?: string;
 }
 
+export interface SSHAttestedUserCert {
+  attestation: Attestation;
+  certificate: string;
+  key_id: string;
+  principals: string[];
+  serial: number;
+  subject: string;
+  valid_before: string;
+}
+
+export interface SSHAttestedUserCertRequest {
+  key_id?: string;
+  method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+  payload_base64: string;
+  public_key: string;
+  ttl_seconds?: number;
+}
+
+export interface SSHHostRetireRequest {
+  host: string;
+  identity_id?: string;
+  reason?: string;
+  run_id?: string;
+  source_id?: string;
+}
+
+export interface SSHHostRetirement {
+  host: string;
+  id: string;
+  identity_id?: string;
+  reason?: string;
+  recorded_at: string;
+  run_id?: string;
+  source_id?: string;
+  status: "retired";
+  tenant_id: string;
+}
+
+export interface SSHRevokeCertificateRequest {
+  key_id?: string;
+  reason?: string;
+  serial?: number;
+}
+
+export interface SSHStatus {
+  attestors?: string[];
+  authority_key?: string;
+  krl_version: number;
+  revoked_count: number;
+  served: boolean;
+  tenant_id: string;
+}
+
+export interface SSHTrustRollout {
+  candidate_ca_fingerprint?: string;
+  confirmed: boolean;
+  health_command?: string;
+  id: string;
+  recorded_at: string;
+  reload_command?: string;
+  rollback_plan?: string;
+  source_id?: string;
+  status: "planned" | "validating" | "health_passed" | "rolled_back" | "failed";
+  target_hosts: string[];
+  tenant_id: string;
+}
+
+export interface SSHTrustRolloutRequest {
+  candidate_ca_fingerprint?: string;
+  confirmed: boolean;
+  health_command?: string;
+  reload_command?: string;
+  rollback_plan?: string;
+  source_id?: string;
+  status: "planned" | "validating" | "health_passed" | "rolled_back" | "failed";
+  target_hosts: string[];
+}
+
 export interface SecretImportRequest {
   prefix?: string;
   values: Record<string, unknown>;

@@ -84,6 +84,11 @@ var commandTable = []Command{
 	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke certificate identities by id or criteria"},
 
 	{Name: []string{"workloads", "attested-issuance"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance", Body: bodyFile, Summary: "Issue an attested X.509-SVID"},
+	{Name: []string{"ssh", "status"}, Method: "GET", Path: "/api/v1/ssh/status", Summary: "Show SSH CA, KRL, and attestation workflow status"},
+	{Name: []string{"ssh", "trust-rollout"}, Method: "POST", Path: "/api/v1/ssh/trust-rollouts", Body: bodyFile, Summary: "Record SSH trust rollout status from the agent-safe workflow"},
+	{Name: []string{"ssh", "issue-attested-user"}, Method: "POST", Path: "/api/v1/ssh/attested-user-certs", Body: bodyFile, Summary: "Issue an attestation-gated SSH user certificate"},
+	{Name: []string{"ssh", "revoke"}, Method: "POST", Path: "/api/v1/ssh/certificates/revoke", Body: bodyFile, Summary: "Revoke an SSH certificate and publish KRL status"},
+	{Name: []string{"ssh", "retire-host"}, Method: "POST", Path: "/api/v1/ssh/hosts/retire", Body: bodyFile, Summary: "Record SSH host retirement evidence"},
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
 	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
 	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a short-TTL API key"},

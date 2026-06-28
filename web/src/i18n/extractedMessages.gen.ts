@@ -249,7 +249,7 @@ export const extractedMessages = [
     key: "source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9",
     defaultMessage: "A safe rollout names the candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation copy before any host changes trust.",
     sources: [
-      "src/pages/SSHTrust.tsx:62",
+      "src/pages/SSHTrust.tsx:209",
     ],
   },
   {
@@ -806,31 +806,25 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.attestation.gated.ssh.cert.fixtures.ca4fe6c573",
-    defaultMessage: "Attestation gated SSH cert fixtures",
-    sources: [
-      "src/pages/SSHTrust.tsx:110",
-    ],
-  },
-  {
-    key: "source.attestation.gated.ssh.issuance.runs.throug.68772aa223",
-    defaultMessage: "Attestation-gated SSH issuance runs through the agent and signer. Attestation decisions aren't surfaced here, so the console can't request short-lived SSH user certs yet. The SSH CA private key stays in the signer and is never shown here.",
-    sources: [
-      "src/pages/SSHTrust.tsx:104",
-    ],
-  },
-  {
     key: "source.attestation.gated.ssh.user.certs.d49d24e892",
     defaultMessage: "Attestation-gated SSH user certs",
     sources: [
-      "src/pages/SSHTrust.tsx:96",
+      "src/pages/SSHTrust.tsx:262",
     ],
   },
   {
     key: "source.attestation.method.1f0610be7c",
     defaultMessage: "Attestation method",
     sources: [
+      "src/pages/SSHTrust.tsx:271",
       "src/pages/Workloads.tsx:288",
+    ],
+  },
+  {
+    key: "source.attestation.payload.base64.11bfdba122",
+    defaultMessage: "Attestation payload base64",
+    sources: [
+      "src/pages/SSHTrust.tsx:289",
     ],
   },
   {
@@ -848,13 +842,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.attested.ssh.issue.isn.e74b30c2cb",
-    defaultMessage: "Attested SSH issue isn",
-    sources: [
-      "src/pages/SSHTrust.tsx:104",
-    ],
-  },
-  {
     key: "source.attested.svid.failed.de434cde0c",
     defaultMessage: "Attested SVID failed",
     sources: [
@@ -866,6 +853,13 @@ export const extractedMessages = [
     defaultMessage: "Attested SVID outcomes",
     sources: [
       "src/pages/Workloads.tsx:320",
+    ],
+  },
+  {
+    key: "source.attestors.2e3ad3c00b",
+    defaultMessage: "Attestors",
+    sources: [
+      "src/pages/SSHTrust.tsx:193",
     ],
   },
   {
@@ -959,6 +953,13 @@ export const extractedMessages = [
     defaultMessage: "Authenticate with your organization's identity provider to manage credentials.",
     sources: [
       "src/pages/Login.tsx:36",
+    ],
+  },
+  {
+    key: "source.authority.key.60329d7d7b",
+    defaultMessage: "Authority key",
+    sources: [
+      "src/pages/SSHTrust.tsx:197",
     ],
   },
   {
@@ -1322,6 +1323,13 @@ export const extractedMessages = [
     defaultMessage: "Cancel is not available for this operation yet. Use the owning workflow to stop or roll it back.",
     sources: [
       "src/pages/Operations.tsx:143",
+    ],
+  },
+  {
+    key: "source.candidate.ca.fingerprint.78e53d126d",
+    defaultMessage: "Candidate CA fingerprint",
+    sources: [
+      "src/pages/SSHTrust.tsx:223",
     ],
   },
   {
@@ -1769,6 +1777,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476",
+    defaultMessage: "Confirm high-blast-radius SSH trust rollout evidence",
+    sources: [
+      "src/pages/SSHTrust.tsx:250",
+    ],
+  },
+  {
     key: "source.confirm.the.signer.backed.internal.ca.or.c.b20abca15c",
     defaultMessage: "Confirm the signer-backed internal CA or connect an upstream authority later.",
     sources: [
@@ -1866,13 +1881,6 @@ export const extractedMessages = [
     defaultMessage: "Connector workflow failed",
     sources: [
       "src/pages/Connectors.tsx:93",
-    ],
-  },
-  {
-    key: "source.constraint.aa78ff00c4",
-    defaultMessage: "Constraint",
-    sources: [
-      "src/pages/SSHTrust.tsx:115",
     ],
   },
   {
@@ -2630,6 +2638,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.discovery.run.f6dd5be06b",
+    defaultMessage: "Discovery run",
+    sources: [
+      "src/pages/SSHTrust.tsx:351",
+    ],
+  },
+  {
     key: "source.discovery.runs.6c691cc9f4",
     defaultMessage: "Discovery runs",
     sources: [
@@ -2648,6 +2663,14 @@ export const extractedMessages = [
     defaultMessage: "Discovery schedules",
     sources: [
       "src/pages/Discovery.tsx:484",
+    ],
+  },
+  {
+    key: "source.discovery.source.f533df1c0c",
+    defaultMessage: "Discovery source",
+    sources: [
+      "src/pages/SSHTrust.tsx:215",
+      "src/pages/SSHTrust.tsx:347",
     ],
   },
   {
@@ -3096,7 +3119,6 @@ export const extractedMessages = [
       "src/pages/Incidents.tsx:516",
       "src/pages/Policy.tsx:496",
       "src/pages/Policy.tsx:568",
-      "src/pages/SSHTrust.tsx:114",
     ],
   },
   {
@@ -3392,13 +3414,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.fixture.2ab25f1094",
-    defaultMessage: "Fixture",
-    sources: [
-      "src/pages/SSHTrust.tsx:113",
-    ],
-  },
-  {
     key: "source.folder.prefix.2d63670e07",
     defaultMessage: "Folder prefix",
     sources: [
@@ -3617,17 +3632,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.health.command.5ad9864488",
+    defaultMessage: "Health command",
+    sources: [
+      "src/pages/SSHTrust.tsx:231",
+    ],
+  },
+  {
     key: "source.health.resume.cc24ec71d6",
     defaultMessage: "Health / resume",
     sources: [
       "src/pages/Incidents.tsx:429",
-    ],
-  },
-  {
-    key: "source.high.blast.radius.change.6ff4f0c82a",
-    defaultMessage: "High-blast-radius change",
-    sources: [
-      "src/pages/SSHTrust.tsx:52",
     ],
   },
   {
@@ -3668,10 +3683,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.host.4a823118b9",
+    defaultMessage: "Host",
+    sources: [
+      "src/pages/SSHTrust.tsx:343",
+    ],
+  },
+  {
     key: "source.host.config.paths.8b2c6c7bdd",
     defaultMessage: "Host config paths",
     sources: [
       "src/pages/Posture.tsx:252",
+    ],
+  },
+  {
+    key: "source.host.retirement.4f92fcc0ea",
+    defaultMessage: "Host retirement",
+    sources: [
+      "src/pages/SSHTrust.tsx:338",
     ],
   },
   {
@@ -3746,6 +3775,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Connectors.tsx:178",
       "src/pages/Policy.tsx:566",
+      "src/pages/SSHTrust.tsx:355",
     ],
   },
   {
@@ -3789,6 +3819,13 @@ export const extractedMessages = [
     defaultMessage: "Identity payload",
     sources: [
       "src/pages/CodeSigning.tsx:92",
+    ],
+  },
+  {
+    key: "source.identity.uuid.ae37807bc4",
+    defaultMessage: "identity uuid",
+    sources: [
+      "src/pages/SSHTrust.tsx:357",
     ],
   },
   {
@@ -3968,6 +4005,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.issue.attested.ssh.cert.fba31f1beb",
+    defaultMessage: "Issue attested SSH cert",
+    sources: [
+      "src/pages/SSHTrust.tsx:297",
+    ],
+  },
+  {
+    key: "source.issue.attested.ssh.user.certificate.f7e0f6ef66",
+    defaultMessage: "Issue attested SSH user certificate",
+    sources: [
+      "src/pages/SSHTrust.tsx:270",
+    ],
+  },
+  {
     key: "source.issue.attested.svid.ce058c18f8",
     defaultMessage: "Issue attested SVID",
     sources: [
@@ -4065,6 +4116,13 @@ export const extractedMessages = [
     defaultMessage: "issued",
     sources: [
       "src/lib/statusVocab.ts:14",
+    ],
+  },
+  {
+    key: "source.issued.ssh.certificate.3775bb2dee",
+    defaultMessage: "Issued SSH certificate",
+    sources: [
+      "src/pages/SSHTrust.tsx:305",
     ],
   },
   {
@@ -4168,6 +4226,14 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.key.id.d54d56ee0a",
+    defaultMessage: "Key ID",
+    sources: [
+      "src/pages/SSHTrust.tsx:281",
+      "src/pages/SSHTrust.tsx:322",
+    ],
+  },
+  {
     key: "source.key.name.6f245e973f",
     defaultMessage: "Key name",
     sources: [
@@ -4238,6 +4304,20 @@ export const extractedMessages = [
     defaultMessage: "KRL",
     sources: [
       "src/pages/Protocols.tsx:125",
+    ],
+  },
+  {
+    key: "source.krl.revocation.7e579fb6c5",
+    defaultMessage: "KRL revocation",
+    sources: [
+      "src/pages/SSHTrust.tsx:313",
+    ],
+  },
+  {
+    key: "source.krl.version.2381c27676",
+    defaultMessage: "KRL version",
+    sources: [
+      "src/pages/SSHTrust.tsx:185",
     ],
   },
   {
@@ -4565,6 +4645,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.loading.ssh.workflow.eee4586266",
+    defaultMessage: "Loading SSH workflow...",
+    sources: [
+      "src/pages/SSHTrust.tsx:169",
+    ],
+  },
+  {
     key: "source.loading.tools.efc190cd4c",
     defaultMessage: "Loading tools...",
     sources: [
@@ -4787,7 +4874,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:563",
+      "src/lib/api.ts:579",
     ],
   },
   {
@@ -4880,72 +4967,76 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:728",
-      "src/lib/api.ts:739",
-      "src/lib/api.ts:741",
-      "src/lib/api.ts:743",
-      "src/lib/api.ts:747",
-      "src/lib/api.ts:748",
       "src/lib/api.ts:749",
       "src/lib/api.ts:760",
       "src/lib/api.ts:762",
       "src/lib/api.ts:764",
-      "src/lib/api.ts:767",
-      "src/lib/api.ts:778",
-      "src/lib/api.ts:779",
-      "src/lib/api.ts:780",
+      "src/lib/api.ts:768",
+      "src/lib/api.ts:769",
+      "src/lib/api.ts:770",
       "src/lib/api.ts:781",
-      "src/lib/api.ts:782",
+      "src/lib/api.ts:783",
       "src/lib/api.ts:785",
-      "src/lib/api.ts:786",
-      "src/lib/api.ts:789",
-      "src/lib/api.ts:790",
-      "src/lib/api.ts:791",
-      "src/lib/api.ts:795",
-      "src/lib/api.ts:796",
-      "src/lib/api.ts:797",
-      "src/lib/api.ts:798",
+      "src/lib/api.ts:788",
       "src/lib/api.ts:799",
       "src/lib/api.ts:800",
       "src/lib/api.ts:801",
-      "src/lib/api.ts:805",
+      "src/lib/api.ts:802",
+      "src/lib/api.ts:803",
       "src/lib/api.ts:806",
-      "src/lib/api.ts:808",
+      "src/lib/api.ts:807",
       "src/lib/api.ts:810",
-      "src/lib/api.ts:813",
-      "src/lib/api.ts:814",
-      "src/lib/api.ts:815",
+      "src/lib/api.ts:811",
+      "src/lib/api.ts:812",
+      "src/lib/api.ts:816",
       "src/lib/api.ts:817",
-      "src/lib/api.ts:833",
+      "src/lib/api.ts:818",
+      "src/lib/api.ts:819",
+      "src/lib/api.ts:820",
+      "src/lib/api.ts:821",
+      "src/lib/api.ts:822",
+      "src/lib/api.ts:826",
+      "src/lib/api.ts:827",
+      "src/lib/api.ts:829",
+      "src/lib/api.ts:831",
       "src/lib/api.ts:834",
       "src/lib/api.ts:835",
-      "src/lib/api.ts:848",
-      "src/lib/api.ts:849",
+      "src/lib/api.ts:836",
+      "src/lib/api.ts:838",
+      "src/lib/api.ts:854",
+      "src/lib/api.ts:855",
+      "src/lib/api.ts:856",
       "src/lib/api.ts:858",
       "src/lib/api.ts:859",
       "src/lib/api.ts:860",
       "src/lib/api.ts:861",
-      "src/lib/api.ts:862",
-      "src/lib/api.ts:863",
-      "src/lib/api.ts:865",
-      "src/lib/api.ts:866",
-      "src/lib/api.ts:867",
-      "src/lib/api.ts:868",
-      "src/lib/api.ts:869",
-      "src/lib/api.ts:870",
-      "src/lib/api.ts:871",
-      "src/lib/api.ts:872",
-      "src/lib/api.ts:873",
       "src/lib/api.ts:874",
       "src/lib/api.ts:875",
-      "src/lib/api.ts:876",
-      "src/lib/api.ts:877",
-      "src/lib/api.ts:878",
-      "src/lib/api.ts:879",
-      "src/lib/api.ts:880",
-      "src/lib/api.ts:881",
-      "src/lib/api.ts:883",
       "src/lib/api.ts:884",
+      "src/lib/api.ts:885",
+      "src/lib/api.ts:886",
+      "src/lib/api.ts:887",
+      "src/lib/api.ts:888",
+      "src/lib/api.ts:889",
+      "src/lib/api.ts:891",
+      "src/lib/api.ts:892",
+      "src/lib/api.ts:893",
+      "src/lib/api.ts:894",
+      "src/lib/api.ts:895",
+      "src/lib/api.ts:896",
+      "src/lib/api.ts:897",
+      "src/lib/api.ts:898",
+      "src/lib/api.ts:899",
+      "src/lib/api.ts:900",
+      "src/lib/api.ts:901",
+      "src/lib/api.ts:902",
+      "src/lib/api.ts:903",
+      "src/lib/api.ts:904",
+      "src/lib/api.ts:905",
+      "src/lib/api.ts:906",
+      "src/lib/api.ts:907",
+      "src/lib/api.ts:909",
+      "src/lib/api.ts:910",
     ],
   },
   {
@@ -6036,14 +6127,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:573",
+      "src/lib/api.ts:589",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:497",
+      "src/lib/api.ts:513",
     ],
   },
   {
@@ -6222,10 +6313,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:826",
-      "src/lib/api.ts:828",
-      "src/lib/api.ts:829",
-      "src/lib/api.ts:831",
+      "src/lib/api.ts:847",
+      "src/lib/api.ts:849",
+      "src/lib/api.ts:850",
+      "src/lib/api.ts:852",
     ],
   },
   {
@@ -6728,6 +6819,8 @@ export const extractedMessages = [
       "src/pages/Platform.tsx:604",
       "src/pages/Privacy.tsx:107",
       "src/pages/Privacy.tsx:129",
+      "src/pages/SSHTrust.tsx:326",
+      "src/pages/SSHTrust.tsx:359",
     ],
   },
   {
@@ -6889,6 +6982,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.reload.command.cf1acb1111",
+    defaultMessage: "Reload command",
+    sources: [
+      "src/pages/SSHTrust.tsx:227",
+    ],
+  },
+  {
     key: "source.remaining.f3e4352a5d",
     defaultMessage: "Remaining",
     sources: [
@@ -6984,52 +7084,53 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:723",
-      "src/lib/api.ts:724",
-      "src/lib/api.ts:725",
-      "src/lib/api.ts:726",
-      "src/lib/api.ts:727",
-      "src/lib/api.ts:738",
-      "src/lib/api.ts:740",
-      "src/lib/api.ts:742",
       "src/lib/api.ts:744",
       "src/lib/api.ts:745",
       "src/lib/api.ts:746",
+      "src/lib/api.ts:747",
+      "src/lib/api.ts:748",
       "src/lib/api.ts:759",
       "src/lib/api.ts:761",
       "src/lib/api.ts:763",
       "src/lib/api.ts:765",
       "src/lib/api.ts:766",
-      "src/lib/api.ts:776",
-      "src/lib/api.ts:777",
-      "src/lib/api.ts:783",
+      "src/lib/api.ts:767",
+      "src/lib/api.ts:780",
+      "src/lib/api.ts:782",
       "src/lib/api.ts:784",
+      "src/lib/api.ts:786",
       "src/lib/api.ts:787",
-      "src/lib/api.ts:788",
-      "src/lib/api.ts:792",
-      "src/lib/api.ts:793",
-      "src/lib/api.ts:794",
-      "src/lib/api.ts:802",
-      "src/lib/api.ts:803",
+      "src/lib/api.ts:797",
+      "src/lib/api.ts:798",
       "src/lib/api.ts:804",
-      "src/lib/api.ts:807",
+      "src/lib/api.ts:805",
+      "src/lib/api.ts:808",
       "src/lib/api.ts:809",
-      "src/lib/api.ts:812",
-      "src/lib/api.ts:816",
-      "src/lib/api.ts:818",
-      "src/lib/api.ts:819",
-      "src/lib/api.ts:820",
-      "src/lib/api.ts:821",
-      "src/lib/api.ts:822",
+      "src/lib/api.ts:813",
+      "src/lib/api.ts:814",
+      "src/lib/api.ts:815",
       "src/lib/api.ts:823",
       "src/lib/api.ts:824",
       "src/lib/api.ts:825",
-      "src/lib/api.ts:827",
+      "src/lib/api.ts:828",
       "src/lib/api.ts:830",
-      "src/lib/api.ts:832",
-      "src/lib/api.ts:856",
-      "src/lib/api.ts:864",
+      "src/lib/api.ts:833",
+      "src/lib/api.ts:837",
+      "src/lib/api.ts:839",
+      "src/lib/api.ts:840",
+      "src/lib/api.ts:841",
+      "src/lib/api.ts:842",
+      "src/lib/api.ts:843",
+      "src/lib/api.ts:844",
+      "src/lib/api.ts:845",
+      "src/lib/api.ts:846",
+      "src/lib/api.ts:848",
+      "src/lib/api.ts:851",
+      "src/lib/api.ts:853",
+      "src/lib/api.ts:857",
       "src/lib/api.ts:882",
+      "src/lib/api.ts:890",
+      "src/lib/api.ts:908",
     ],
   },
   {
@@ -7130,7 +7231,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:542",
+      "src/lib/api.ts:558",
     ],
   },
   {
@@ -7188,6 +7289,13 @@ export const extractedMessages = [
     defaultMessage: "Retire",
     sources: [
       "src/pages/Identities.tsx:116",
+    ],
+  },
+  {
+    key: "source.retire.ssh.host.6d1acfd432",
+    defaultMessage: "Retire SSH host",
+    sources: [
+      "src/pages/SSHTrust.tsx:342",
     ],
   },
   {
@@ -7259,10 +7367,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.revoke.and.publish.krl.d5e98fd13c",
+    defaultMessage: "Revoke and publish KRL",
+    sources: [
+      "src/pages/SSHTrust.tsx:330",
+    ],
+  },
+  {
     key: "source.revoke.is.not.valid.from.this.lifecycle.st.1447e2d0ca",
     defaultMessage: "revoke is not valid from this lifecycle state",
     sources: [
       "src/pages/Identities.tsx:426",
+    ],
+  },
+  {
+    key: "source.revoke.ssh.certificate.63b6e335c3",
+    defaultMessage: "Revoke SSH certificate",
+    sources: [
+      "src/pages/SSHTrust.tsx:317",
     ],
   },
   {
@@ -7285,6 +7407,13 @@ export const extractedMessages = [
     defaultMessage: "revoked but still deployed",
     sources: [
       "src/lib/demoData.ts:44",
+    ],
+  },
+  {
+    key: "source.revoked.certs.267c0b721b",
+    defaultMessage: "Revoked certs",
+    sources: [
+      "src/pages/SSHTrust.tsx:189",
     ],
   },
   {
@@ -7375,17 +7504,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.rollback.fixture.ec4f06aec1",
-    defaultMessage: "Rollback fixture",
-    sources: [
-      "src/pages/SSHTrust.tsx:78",
-    ],
-  },
-  {
     key: "source.rollback.instructions.8fb506160a",
     defaultMessage: "Rollback instructions",
     sources: [
       "src/pages/Incidents.tsx:240",
+    ],
+  },
+  {
+    key: "source.rollback.plan.952efc8286",
+    defaultMessage: "Rollback plan",
+    sources: [
+      "src/pages/SSHTrust.tsx:245",
     ],
   },
   {
@@ -7400,13 +7529,6 @@ export const extractedMessages = [
     defaultMessage: "Rollback-safe static rotation is available for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not yet exposed in this console, so this page offers only per-secret rotate/delete controls.",
     sources: [
       "src/pages/Secrets.tsx:677",
-    ],
-  },
-  {
-    key: "source.rollout.step.6cf70dcce5",
-    defaultMessage: "Rollout step",
-    sources: [
-      "src/pages/SSHTrust.tsx:76",
     ],
   },
   {
@@ -7543,6 +7665,13 @@ export const extractedMessages = [
     defaultMessage: "Run secret scan",
     sources: [
       "src/pages/Secrets.tsx:1014",
+    ],
+  },
+  {
+    key: "source.run.uuid.0b1b6844cb",
+    defaultMessage: "run uuid",
+    sources: [
+      "src/pages/SSHTrust.tsx:353",
     ],
   },
   {
@@ -7950,6 +8079,14 @@ export const extractedMessages = [
     defaultMessage: "Serial",
     sources: [
       "src/pages/Certificates.tsx:548",
+      "src/pages/SSHTrust.tsx:318",
+    ],
+  },
+  {
+    key: "source.served.3f1de66ba2",
+    defaultMessage: "Served",
+    sources: [
+      "src/pages/SSHTrust.tsx:181",
     ],
   },
   {
@@ -8099,7 +8236,7 @@ export const extractedMessages = [
     key: "source.short.lived.ssh.user.certs.require.attesta.9981502432",
     defaultMessage: "Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy. Self-approval blocked is a hard rule, not a UI hint.",
     sources: [
-      "src/pages/SSHTrust.tsx:99",
+      "src/pages/SSHTrust.tsx:265",
     ],
   },
   {
@@ -8242,6 +8379,14 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.source.uuid.266dd280b0",
+    defaultMessage: "source uuid",
+    sources: [
+      "src/pages/SSHTrust.tsx:217",
+      "src/pages/SSHTrust.tsx:349",
+    ],
+  },
+  {
     key: "source.sources.caf85b0888",
     defaultMessage: "Sources",
     sources: [
@@ -8263,6 +8408,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.ssh.ca.and.krl.status.f38597dc96",
+    defaultMessage: "SSH CA and KRL status",
+    sources: [
+      "src/pages/SSHTrust.tsx:175",
+    ],
+  },
+  {
     key: "source.ssh.certificate.identity.d5833485f8",
     defaultMessage: "SSH certificate identity",
     sources: [
@@ -8273,7 +8425,7 @@ export const extractedMessages = [
     key: "source.ssh.deployment.and.trust.rollout.098d316f31",
     defaultMessage: "SSH deployment and trust rollout",
     sources: [
-      "src/pages/SSHTrust.tsx:59",
+      "src/pages/SSHTrust.tsx:206",
     ],
   },
   {
@@ -8284,24 +8436,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.ssh.public.key.c9be6a369e",
+    defaultMessage: "SSH public key",
+    sources: [
+      "src/pages/SSHTrust.tsx:293",
+    ],
+  },
+  {
     key: "source.ssh.trust.8a25c0e13c",
     defaultMessage: "SSH trust",
     sources: [
-      "src/pages/SSHTrust.tsx:48",
+      "src/pages/SSHTrust.tsx:164",
     ],
   },
   {
-    key: "source.ssh.trust.rollout.and.drift.detection.run.04e8a821bc",
-    defaultMessage: "SSH trust rollout and drift detection run in the agent. Target-host state, rollout status, health failures, and rollback evidence aren't surfaced here yet, and the console never weakens authorized_keys or rewrites trust without agent confirmation.",
+    key: "source.ssh.workflow.failed.e76cbdb07c",
+    defaultMessage: "SSH workflow failed",
     sources: [
-      "src/pages/SSHTrust.tsx:67",
-    ],
-  },
-  {
-    key: "source.ssh.trust.rollout.fixtures.579359a16b",
-    defaultMessage: "SSH trust rollout fixtures",
-    sources: [
-      "src/pages/SSHTrust.tsx:73",
+      "src/pages/SSHTrust.tsx:168",
     ],
   },
   {
@@ -8366,6 +8518,7 @@ export const extractedMessages = [
       "src/pages/Platform.tsx:682",
       "src/pages/Policy.tsx:495",
       "src/pages/Policy.tsx:569",
+      "src/pages/SSHTrust.tsx:235",
     ],
   },
   {
@@ -8536,6 +8689,13 @@ export const extractedMessages = [
     defaultMessage: "Target actions",
     sources: [
       "src/pages/Connectors.tsx:162",
+    ],
+  },
+  {
+    key: "source.target.hosts.b345027096",
+    defaultMessage: "Target hosts",
+    sources: [
+      "src/pages/SSHTrust.tsx:219",
     ],
   },
   {
@@ -8922,23 +9082,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.trust.rollout.is.managed.by.the.agent.not.e943a7a42f",
-    defaultMessage: "Trust rollout is managed by the agent, not the console",
-    sources: [
-      "src/pages/SSHTrust.tsx:67",
-    ],
-  },
-  {
-    key: "source.ttl.posture.db3f2841a8",
-    defaultMessage: "TTL posture",
-    sources: [
-      "src/pages/SSHTrust.tsx:116",
-    ],
-  },
-  {
     key: "source.ttl.seconds.862d08de5a",
     defaultMessage: "TTL seconds",
     sources: [
+      "src/pages/SSHTrust.tsx:285",
       "src/pages/Secrets.tsx:1115",
       "src/pages/Secrets.tsx:801",
       "src/pages/Secrets.tsx:895",
@@ -9063,13 +9210,6 @@ export const extractedMessages = [
     defaultMessage: "Urgency",
     sources: [
       "src/pages/Incidents.tsx:345",
-    ],
-  },
-  {
-    key: "source.validation.68e1ca5752",
-    defaultMessage: "Validation",
-    sources: [
-      "src/pages/SSHTrust.tsx:77",
     ],
   },
   {

@@ -164,14 +164,25 @@ func (p *sshProtocol) revoke(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ssh: malformed revoke request", http.StatusBadRequest)
 		return
 	}
-	if req.Serial != 0 {
-		p.krl.RevokeSerial(req.Serial)
+	p.Revoke(req.Serial, req.KeyID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (p *sshProtocol) Revoke(serial uint64, keyID string) {
+	if serial != 0 {
+		p.krl.RevokeSerial(serial)
 	}
-	if req.KeyID != "" {
-		p.krl.RevokeKeyID(req.KeyID)
+	if keyID != "" {
+		p.krl.RevokeKeyID(keyID)
 	}
 	p.krlVersion.Add(1)
-	w.WriteHeader(http.StatusNoContent)
+}
+
+func (p *sshProtocol) KRLVersion() uint64 { return p.krlVersion.Load() }
+
+func (p *sshProtocol) RevokedCount() int {
+	snap := p.krl.Distribute()
+	return len(snap.Serials) + len(snap.KeyIDs)
 }
 
 // serveKRL emits the current KRL in the OpenSSH BINARY KRL format (PROTOCOL.krl) —

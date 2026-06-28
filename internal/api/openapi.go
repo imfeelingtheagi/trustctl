@@ -732,6 +732,76 @@ func componentSchemas() map[string]*Schema {
 		"not_after":       timestamp(),
 		"attestation":     ref("Attestation"),
 	}, "certificate_pem", "credential_id", "subject", "not_after", "attestation")
+	sshStatus := object(map[string]*Schema{
+		"served":        {Type: "boolean"},
+		"tenant_id":     uuid(),
+		"authority_key": str(),
+		"krl_version":   {Type: "integer"},
+		"revoked_count": {Type: "integer"},
+		"attestors":     {Type: "array", Items: str()},
+	}, "served", "tenant_id", "krl_version", "revoked_count")
+	sshTrustRolloutReq := object(map[string]*Schema{
+		"source_id":                uuid(),
+		"target_hosts":             {Type: "array", Items: str()},
+		"candidate_ca_fingerprint": str(),
+		"reload_command":           str(),
+		"health_command":           str(),
+		"rollback_plan":            str(),
+		"status":                   {Type: "string", Enum: []string{"planned", "validating", "health_passed", "rolled_back", "failed"}},
+		"confirmed":                {Type: "boolean"},
+	}, "target_hosts", "status", "confirmed")
+	sshTrustRollout := object(map[string]*Schema{
+		"id":                       str(),
+		"tenant_id":                uuid(),
+		"source_id":                uuid(),
+		"target_hosts":             {Type: "array", Items: str()},
+		"candidate_ca_fingerprint": str(),
+		"reload_command":           str(),
+		"health_command":           str(),
+		"rollback_plan":            str(),
+		"status":                   {Type: "string", Enum: []string{"planned", "validating", "health_passed", "rolled_back", "failed"}},
+		"confirmed":                {Type: "boolean"},
+		"recorded_at":              timestamp(),
+	}, "id", "tenant_id", "target_hosts", "status", "confirmed", "recorded_at")
+	sshAttestedUserCertReq := object(map[string]*Schema{
+		"method":         {Type: "string", Enum: []string{"aws_iid", "azure_imds", "gcp_iit", "github_oidc", "k8s_sat", "tpm"}},
+		"payload_base64": str(),
+		"public_key":     str(),
+		"key_id":         str(),
+		"ttl_seconds":    {Type: "integer"},
+	}, "method", "payload_base64", "public_key")
+	sshAttestedUserCert := object(map[string]*Schema{
+		"certificate":  str(),
+		"serial":       {Type: "integer"},
+		"key_id":       str(),
+		"subject":      str(),
+		"principals":   {Type: "array", Items: str()},
+		"valid_before": timestamp(),
+		"attestation":  ref("Attestation"),
+	}, "certificate", "serial", "key_id", "subject", "principals", "valid_before", "attestation")
+	sshRevokeCertReq := object(map[string]*Schema{
+		"serial": {Type: "integer"},
+		"key_id": str(),
+		"reason": str(),
+	})
+	sshHostRetireReq := object(map[string]*Schema{
+		"host":        str(),
+		"source_id":   uuid(),
+		"run_id":      uuid(),
+		"identity_id": uuid(),
+		"reason":      str(),
+	}, "host")
+	sshHostRetirement := object(map[string]*Schema{
+		"id":          str(),
+		"tenant_id":   uuid(),
+		"host":        str(),
+		"source_id":   uuid(),
+		"run_id":      uuid(),
+		"identity_id": uuid(),
+		"reason":      str(),
+		"status":      {Type: "string", Enum: []string{"retired"}},
+		"recorded_at": timestamp(),
+	}, "id", "tenant_id", "host", "status", "recorded_at")
 	brokerAgentIdentityReq := object(map[string]*Schema{
 		"agent_id":       str(),
 		"method":         str(),
@@ -1250,6 +1320,14 @@ func componentSchemas() map[string]*Schema {
 		"Attestation":                    attestation,
 		"AttestedSVIDRequest":            attestedSVIDReq,
 		"AttestedSVID":                   attestedSVID,
+		"SSHStatus":                      sshStatus,
+		"SSHTrustRolloutRequest":         sshTrustRolloutReq,
+		"SSHTrustRollout":                sshTrustRollout,
+		"SSHAttestedUserCertRequest":     sshAttestedUserCertReq,
+		"SSHAttestedUserCert":            sshAttestedUserCert,
+		"SSHRevokeCertificateRequest":    sshRevokeCertReq,
+		"SSHHostRetireRequest":           sshHostRetireReq,
+		"SSHHostRetirement":              sshHostRetirement,
 		"BrokerAgentIdentityRequest":     brokerAgentIdentityReq,
 		"BrokerAgentIdentity":            brokerAgentIdentity,
 		"EphemeralCredentialRequest":     ephemeralCredentialReq,

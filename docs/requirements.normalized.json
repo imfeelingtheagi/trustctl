@@ -537,10 +537,10 @@
       "requirement_text": "trstctl shall provide SSH certificate authority.",
       "owner": "SSH",
       "priority": "P1",
-      "acceptance_criteria": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
+      "acceptance_criteria": "Served acceptance covers SSH status, KRL version, revocation, CLI/UI handoff, disabled state, and no private-key exposure.",
       "status": "conditional",
       "served_state": "conditional",
-      "backend_status": "conditional served",
+      "backend_status": "conditional served CA, status, and KRL revocation workflow",
       "source_docs": [
         "docs/features/ssh.md"
       ]
@@ -550,10 +550,10 @@
       "requirement_text": "trstctl shall provide SSH deployment & trust configuration (agent).",
       "owner": "SSH",
       "priority": "P2",
-      "acceptance_criteria": "UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
+      "acceptance_criteria": "Served acceptance records trust rollout with explicit confirmation, rollback/health evidence, and host retirement without browser-side host-file mutation.",
       "status": "conditional",
       "served_state": "conditional",
-      "backend_status": "agent-side explicit opt-in",
+      "backend_status": "agent-side explicit opt-in with served rollout and retirement evidence API",
       "source_docs": [
         "docs/features/ssh.md",
         "docs/design/ssh-trust-rewrite.md"
@@ -564,10 +564,10 @@
       "requirement_text": "trstctl shall provide Attestation-gated short-lived SSH user certs.",
       "owner": "SSH",
       "priority": "P2",
-      "acceptance_criteria": "UI blocks self-approval and tests attestation denied/approved/expired cases.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "acceptance_criteria": "Served acceptance issues an attestation-gated SSH user cert through the API/CLI/UI path, emits attestation and SSH cert events, and never exposes private key material.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served attestation-gated SSH user cert API",
       "source_docs": [
         "docs/features/ssh.md"
       ]

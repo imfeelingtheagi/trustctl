@@ -620,8 +620,11 @@ This is a deliberate, documented trust boundary (not an accident):
   - the **SSH CA** is served at `/ssh/...` (`protocols.ssh.enabled`): cert issuance
     plus the **OpenSSH binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it);
     a served acceptance test issues a user cert (verified with `ssh-keygen -L`),
-    revokes it, and confirms the served KRL is the binary format. The SSH CA key lives
-    in the isolated signer under its own handle constrained to SSH-cert signing.
+    revokes it, and confirms the served KRL is the binary format. The SSH workflow API
+    and CLI also serve status, explicit-confirmation trust-rollout evidence,
+    attestation-gated user cert issuance, KRL revocation, and host retirement handoff.
+    The SSH CA key lives in the isolated signer under its own handle constrained to
+    SSH-cert signing.
   - the **RFC 3161 TSA** is served at `/tsa` (`protocols.tsa.enabled`): clients POST
     `application/timestamp-query` `TimeStampReq` bodies and receive
     `application/timestamp-reply` `TimeStampResp` bodies. The timestamping key lives
