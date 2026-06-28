@@ -177,6 +177,92 @@ SSRF guard.
 **Status:** source, schedule, run, provider execution, metadata-only findings, and
 certificate-inventory projection are served.
 
+### Cross-surface NHI discovery — IdP, cloud, SaaS, on-prem, code, and CI
+
+Some non-human identities are not certificates yet. They are OAuth apps in an
+IdP, cloud roles, SaaS integrations, LDAP service accounts, deploy keys found in
+code, or workflow identities in CI. trstctl serves those as one
+`nhi_cross_surface` discovery source so an operator can ingest metadata from all
+six places and see the resulting machine identities in the same finding ledger as
+certificates and secrets.
+
+The source config is intentionally only public reference metadata:
+`surface`, `system`, `external_id`, `principal`, `owner`, `credential_kind`,
+`scopes`, and timestamps. The API rejects inline secret-looking fields before the
+source is stored. A valid source must include at least one observation from each
+required surface: `idp`, `cloud`, `saas`, `on_prem`, `code`, and `ci`. That keeps
+the category denominator honest: a two-source import cannot pretend to be full
+cross-surface NHI discovery.
+
+```json
+{
+  "kind": "nhi_cross_surface",
+  "name": "quarterly-nhi-inventory",
+  "config": {
+    "observations": [
+      {
+        "surface": "idp",
+        "system": "okta",
+        "external_id": "app/payments",
+        "principal": "payments-api",
+        "owner": "platform",
+        "credential_kind": "oauth_client"
+      },
+      {
+        "surface": "cloud",
+        "system": "aws-iam",
+        "external_id": "role/payments-prod",
+        "principal": "arn:aws:iam::111111111111:role/payments-prod",
+        "owner": "platform",
+        "credential_kind": "role"
+      },
+      {
+        "surface": "saas",
+        "system": "github",
+        "external_id": "app/installations/42",
+        "principal": "payments-ci-app",
+        "owner": "devex",
+        "credential_kind": "github_app"
+      },
+      {
+        "surface": "on_prem",
+        "system": "ldap",
+        "external_id": "svc-payments",
+        "principal": "svc-payments",
+        "owner": "identity",
+        "credential_kind": "service_account"
+      },
+      {
+        "surface": "code",
+        "system": "github-code-search",
+        "external_id": "repo/payments/path/deploy.yaml",
+        "principal": "payments-deploy-key",
+        "owner": "devex",
+        "credential_kind": "deploy_key"
+      },
+      {
+        "surface": "ci",
+        "system": "github-actions",
+        "external_id": "repo/payments/env/prod",
+        "principal": "payments-ci-token",
+        "owner": "devex",
+        "credential_kind": "workflow_identity"
+      }
+    ]
+  }
+}
+```
+
+Runs execute through the discovery outbox worker, normalize every observation to a
+`non_human_identity` finding, preserve provenance as
+`nhi_cross_surface:<surface>:<system>:<external_id>`, and append the same
+`discovery.*` events as other discovery paths. The finding is metadata only; no
+secret value, private key, or token body is stored.
+
+**Status:** source creation, run queueing, outbox execution, metadata-only findings,
+REST readback, and UI representation are served for the six-surface NHI
+denominator.
+
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
 Secrets and API keys live in many systems, and the dangerous ones are the stale,
@@ -302,6 +388,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Agent-based discovery loop (F3) | **Served report path** — local filesystem, trust-store, private-key-material, token, Windows-store, and Kubernetes enumeration runs inside the agent; mTLS `ReportInventory` records source/run/finding rows and graph nodes |
 | Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering |
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
+| Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
@@ -329,8 +416,9 @@ what it is.
   when `agent_channel.enabled` is true.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
-- **Served discovery source kinds:** `network`, `cloud_certificate`, `ct_log`, `drift`,
-  `manual`, plus metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
+- **Served discovery source kinds:** `network`, `cloud_certificate`,
+  `cloud_secret`, `nhi_cross_surface`, `ct_log`, `drift`, `manual`, plus
+  metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`, `trust-store`, `private-key`.
 - **Agent inventory flags:** `--inventory-cert-roots`, `--inventory-os-trust-roots`,

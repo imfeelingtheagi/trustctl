@@ -180,6 +180,127 @@ func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
 	}
 }
 
+// TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd is the COMPETE-001 proof:
+// CAP-NHI-01 is served through the same tenant-scoped discovery source/run/finding
+// path as certificate discovery, but for metadata-only non-human identity
+// observations across IdP, cloud, SaaS, on-prem, code, and CI surfaces.
+func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "nhi-cross-surface",
+		"kind": "nhi_cross_surface",
+		"config": map[string]any{
+			"observations": []map[string]any{
+				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-api", "owner": "platform", "credential_kind": "oauth_client", "scopes": []string{"payments.read"}},
+				{"surface": "cloud", "system": "aws-iam", "external_id": "role/payments-prod", "principal": "arn:aws:iam::111111111111:role/payments-prod", "owner": "platform", "credential_kind": "role"},
+				{"surface": "saas", "system": "github", "external_id": "app/installations/42", "principal": "payments-ci-app", "owner": "devex", "credential_kind": "github_app"},
+				{"surface": "on_prem", "system": "ldap", "external_id": "svc-payments", "principal": "svc-payments", "owner": "identity", "credential_kind": "service_account"},
+				{"surface": "code", "system": "github-code-search", "external_id": "repo/payments/path/deploy.yaml", "principal": "payments-deploy-key", "owner": "devex", "credential_kind": "deploy_key"},
+				{"surface": "ci", "system": "github-actions", "external_id": "repo/payments/env/prod", "principal": "payments-ci-token", "owner": "devex", "credential_kind": "workflow_identity"},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create cross-surface NHI source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "nhi_cross_surface" {
+		t.Fatalf("bad NHI source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start cross-surface NHI run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain NHI discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get cross-surface NHI run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 6 || completed.Discovered != 6 || completed.Failed != 0 {
+		t.Fatalf("completed run = %+v, want six successful NHI observations", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list NHI discovery findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode NHI findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 6 {
+		t.Fatalf("findings count = %d body %s, want 6", len(findings.Items), body)
+	}
+	surfaces := map[string]bool{}
+	for _, f := range findings.Items {
+		if f.Kind != "non_human_identity" || f.Ref == "" || f.Fingerprint == "" || !strings.HasPrefix(f.Provenance, "nhi_cross_surface:") {
+			t.Fatalf("bad NHI finding: %+v", f)
+		}
+		if f.RiskScore <= 0 {
+			t.Fatalf("NHI finding should carry risk score: %+v", f)
+		}
+		surface, _ := f.Metadata["surface"].(string)
+		surfaces[surface] = true
+	}
+	for _, surface := range []string{"idp", "cloud", "saas", "on_prem", "code", "ci"} {
+		if !surfaces[surface] {
+			t.Fatalf("surface %q was not represented in findings: %+v", surface, surfaces)
+		}
+	}
+	if strings.Contains(string(body), "raw-value") || strings.Contains(string(body), "client_secret") {
+		t.Fatalf("NHI discovery findings leaked inline credential material: %s", body)
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; NHI discovery is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedCloudCertificateDiscoveryACMEndToEnd is the DISC-04 acceptance proof:
 // the served discovery dispatcher constructs the AWS ACM cloud-cert collector from a
 // credential-reference-only source config, runs it from the outbox worker, records

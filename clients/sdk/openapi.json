@@ -2032,7 +2032,8 @@
               "secret_store",
               "api_key",
               "agent",
-              "manual"
+              "manual",
+              "nhi_cross_surface"
             ],
             "type": "string"
           },
@@ -2092,7 +2093,8 @@
               "secret_store",
               "api_key",
               "agent",
-              "manual"
+              "manual",
+              "nhi_cross_surface"
             ],
             "type": "string"
           },

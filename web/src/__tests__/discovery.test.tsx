@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -169,6 +169,41 @@ describe("discovery control-plane surface", () => {
 
     await user.click(screen.getAllByRole("button", { name: "Run" })[0]);
     expect(apiMock.startDiscoveryRun).toHaveBeenCalledWith({ source_id: "source-1", dry_run: false });
+  });
+
+  it("creates a cross-surface NHI source from metadata-only observations", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "nhi-quarterly");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "nhi_cross_surface");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Observations JSON"), {
+      target: {
+        value: JSON.stringify([
+          { surface: "idp", system: "okta", external_id: "app/payments", principal: "payments-api" },
+          { surface: "cloud", system: "aws-iam", external_id: "role/payments-prod", principal: "payments-role" },
+          { surface: "saas", system: "github", external_id: "app/installations/42", principal: "payments-ci-app" },
+          { surface: "on_prem", system: "ldap", external_id: "svc-payments", principal: "svc-payments" },
+          { surface: "code", system: "github-code-search", external_id: "repo/payments/path/deploy.yaml", principal: "payments-deploy-key" },
+          { surface: "ci", system: "github-actions", external_id: "repo/payments/env/prod", principal: "payments-ci-token" },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "nhi-quarterly",
+      kind: "nhi_cross_surface",
+      config: {
+        observations: expect.arrayContaining([
+          expect.objectContaining({ surface: "idp", system: "okta" }),
+          expect.objectContaining({ surface: "ci", system: "github-actions" }),
+        ]),
+      },
+    });
   });
 
   it("uses permission and empty states when discovery records are unavailable or absent", async () => {

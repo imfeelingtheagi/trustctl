@@ -13,7 +13,19 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
 
-const sourceKinds: SourceKind[] = ["network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual"];
+const sourceKinds: SourceKind[] = [
+  "network",
+  "ssh",
+  "cloud_certificate",
+  "cloud_secret",
+  "ct_log",
+  "drift",
+  "secret_store",
+  "api_key",
+  "agent",
+  "manual",
+  "nhi_cross_surface",
+];
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
   ssh: "SSH",
@@ -25,6 +37,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   api_key: "API keys",
   agent: "Agent",
   manual: "Manual",
+  nhi_cross_surface: "NHI surfaces",
 };
 
 export function Discovery() {
@@ -38,6 +51,7 @@ export function Discovery() {
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("network");
   const [targets, setTargets] = useState("");
+  const [nhiObservations, setNHIObservations] = useState("");
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
@@ -81,10 +95,16 @@ export function Discovery() {
     setBusy("source");
     setNotice(null);
     try {
-      const config = sourceKind === "network" ? { targets: parseTargets(targets) } : {};
+      const config =
+        sourceKind === "network"
+          ? { targets: parseTargets(targets) }
+          : sourceKind === "nhi_cross_surface"
+          ? { observations: parseNHIObservations(nhiObservations) }
+          : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
+      setNHIObservations("");
       setScheduleSourceID(created.id);
       await load();
     } catch (err) {
@@ -193,6 +213,18 @@ export function Discovery() {
               />
             </label>
           )}
+          {sourceKind === "nhi_cross_surface" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Observations JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={nhiObservations}
+                onChange={(event) => setNHIObservations(event.target.value)}
+                placeholder='[{"surface":"idp","system":"okta","external_id":"app/payments","principal":"payments-api","owner":"platform","credential_kind":"oauth_client"}]'
+                required
+              />
+            </label>
+          )}
           <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Create source
@@ -251,7 +283,7 @@ export function Discovery() {
             primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
             secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
           >
-            Add a network, cloud, CT log, or agent source before discovery runs can be queued.
+            Add a network, cloud, CT log, NHI, or agent source before discovery runs can be queued.
           </EmptyState>
         ) : (
           <SourceTable sources={sources} busy={busy} onStart={startRun} />
@@ -460,9 +492,17 @@ function parseTargets(value: string): string[] {
     .filter(Boolean);
 }
 
+function parseNHIObservations(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Observations JSON must be an array.");
+  return parsed;
+}
+
 function targetCount(source: DiscoverySource): string {
   const targets = source.config.targets;
   if (Array.isArray(targets)) return String(targets.length);
+  const observations = source.config.observations;
+  if (Array.isArray(observations)) return `${observations.length} NHI`;
   const cidrs = source.config.cidrs;
   if (Array.isArray(cidrs)) return `${cidrs.length} cidr`;
   return "-";

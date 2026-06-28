@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"testing"
+
+	"trstctl.com/trstctl/internal/discovery/nhi"
 )
 
 func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
@@ -49,5 +51,38 @@ func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
 		}`),
 	}); err != nil {
 		t.Fatalf("credential-reference cloud-secret config was rejected: %v", err)
+	}
+}
+
+func TestValidateDiscoverySourceAcceptsCrossSurfaceNHIMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"observations":[
+			{"surface":"idp","system":"okta","external_id":"app/payments","principal":"payments-api","owner":"platform","credential_kind":"oauth_client","scopes":["payments.read"]},
+			{"surface":"cloud","system":"aws-iam","external_id":"role/payments-prod","principal":"arn:aws:iam::111111111111:role/payments-prod","owner":"platform","credential_kind":"role"},
+			{"surface":"saas","system":"github","external_id":"app/installations/42","principal":"payments-ci-app","owner":"devex","credential_kind":"github_app"},
+			{"surface":"on_prem","system":"ldap","external_id":"svc-payments","principal":"svc-payments","owner":"identity","credential_kind":"service_account"},
+			{"surface":"code","system":"github-code-search","external_id":"repo/payments/path/deploy.yaml","principal":"payments-deploy-key","owner":"devex","credential_kind":"deploy_key"},
+			{"surface":"ci","system":"github-actions","external_id":"repo/payments/env/prod","principal":"payments-ci-token","owner":"devex","credential_kind":"workflow_identity"}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   nhi.SourceKind,
+		Name:   "nhi-cross-surface",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("cross-surface NHI metadata-only source was rejected: %v", err)
+	}
+
+	inlineSecret := json.RawMessage(`{
+		"observations":[
+			{"surface":"idp","system":"okta","external_id":"app/payments","principal":"payments-api","client_secret":"raw-value"}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   nhi.SourceKind,
+		Name:   "bad-nhi-source",
+		Config: inlineSecret,
+	}); err == nil {
+		t.Fatal("inline NHI credential material must be rejected; discovery config may carry metadata only")
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/discovery"
+	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -355,9 +356,9 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		return nil, errStatus(http.StatusBadRequest, "name is required")
 	}
 	switch req.Kind {
-	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual":
+	case "network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", nhi.SourceKind:
 	default:
-		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual")
+		return nil, errStatus(http.StatusBadRequest, "kind must be one of network, ssh, cloud_certificate, cloud_secret, ct_log, drift, secret_store, api_key, agent, manual, nhi_cross_surface")
 	}
 	cfg := req.Config
 	if len(cfg) == 0 {
@@ -369,6 +370,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if containsInlineSecret(obj) {
 		return nil, errStatus(http.StatusBadRequest, "config may contain credential references, not inline secret values")
+	}
+	if req.Kind == nhi.SourceKind {
+		if err := nhi.ValidateConfig(cfg); err != nil {
+			return nil, errStatus(http.StatusBadRequest, err.Error())
+		}
 	}
 	return append(json.RawMessage(nil), cfg...), nil
 }
