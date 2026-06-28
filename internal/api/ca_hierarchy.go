@@ -28,6 +28,7 @@ type CAHierarchyService interface {
 	ListAuthorities(ctx context.Context, tenantID string) ([]CAAuthority, error)
 	CreateRoot(ctx context.Context, tenantID string, req CACreateRootRequest) (CAAuthority, error)
 	ImportOfflineRoot(ctx context.Context, tenantID string, req CAImportOfflineRootRequest) (CAAuthority, error)
+	ImportExisting(ctx context.Context, tenantID string, req CAImportExistingRequest) (CAAuthority, error)
 	CreateIntermediate(ctx context.Context, tenantID string, req CACreateIntermediateRequest) (CAAuthority, error)
 	CreateOfflineIntermediateCSR(ctx context.Context, tenantID, caID string, req CACreateOfflineIntermediateCSRRequest) (CAIntermediateCSR, error)
 	ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req CAImportOfflineIntermediateRequest) (CAAuthority, error)
@@ -55,6 +56,7 @@ type CACeremonyStartRequest struct {
 	ParentID       string `json:"parent_id"`
 	CSRPem         string `json:"csr_pem,omitempty"`
 	CertificatePEM string `json:"certificate_pem,omitempty"`
+	SignerHandle   string `json:"signer_handle,omitempty"`
 	Threshold      int    `json:"threshold"`
 	Spec           CASpec `json:"spec"`
 }
@@ -67,6 +69,13 @@ type CACreateRootRequest struct {
 type CAImportOfflineRootRequest struct {
 	CeremonyID     string `json:"ceremony_id"`
 	CertificatePEM string `json:"certificate_pem"`
+	Spec           CASpec `json:"spec"`
+}
+
+type CAImportExistingRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+	SignerHandle   string `json:"signer_handle"`
 	Spec           CASpec `json:"spec"`
 }
 
@@ -258,6 +267,25 @@ func (a *API) importOfflineRootCA(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		ca, err := a.caHierarchy.ImportOfflineRoot(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, ca, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) importExistingCA(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAImportExistingRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		ca, err := a.caHierarchy.ImportExisting(ctx, tenantID, req)
 		if err != nil {
 			return 0, nil, err
 		}

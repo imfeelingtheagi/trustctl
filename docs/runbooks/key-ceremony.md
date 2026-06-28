@@ -43,6 +43,10 @@ Purpose values are deliberately concrete:
 - `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>` authorizes generating
   one signer-held intermediate CSR beneath that imported offline root and importing
   the corresponding offline-root-signed intermediate certificate.
+- `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>`
+  authorizes importing one existing root/intermediate public certificate chain and
+  binding it to the exact signer-held key handle whose public key appears in the
+  first certificate.
 - `rotation:<ca-id>` authorizes one rotation of that exact CA.
 - `cross-sign:<ca-id>:<sha256-of-target-cert-der>` authorizes one cross-signature
   from that CA over that exact target certificate.
@@ -54,8 +58,9 @@ The mechanism, in the hierarchy manager:
 - `Approve(tenant, ceremonyID, custodian)` records one custodian's approval and
   returns the running approval count. Approvals are de-duplicated per custodian.
 - `CreateRoot` / `CreateIntermediate` / `ImportOfflineRoot` /
-  `CreateOfflineIntermediateCSR` / `ImportOfflineIntermediate` / `Rotate` /
-  `CrossSign` are **gated on purpose-bound quorum**. CA mutations lock the pending
+  `ImportExisting` / `CreateOfflineIntermediateCSR` /
+  `ImportOfflineIntermediate` / `Rotate` / `CrossSign` are **gated on
+  purpose-bound quorum**. CA mutations lock the pending
   ceremony, check quorum and exact purpose, and mark it completed in the same
   database transaction as the mutation. `CreateOfflineIntermediateCSR` checks the
   same quorum and purpose before creating the signer-held key, and
@@ -165,6 +170,48 @@ ceremonies.
 After that, leaf issuance uses the imported intermediate at the normal
 `POST /api/v1/ca/authorities/{intermediate-id}/issue` route. Leaf issuance directly
 from the imported offline root fails closed because the root has no signer handle.
+
+## Procedure: importing an existing signer-backed CA chain
+
+Use this when an existing root or issuing intermediate certificate should become a
+served trstctl authority and the matching private key already lives behind a signer
+handle. Do not paste private-key PEM into the API or UI.
+
+1. **Pre-provision the signer handle.** The signer must already hold the CA private
+   key under a handle constrained to CA signing. The control plane will use only that
+   handle and the public key returned by the signer.
+2. **Export the public CA chain.** Put the imported authority certificate first,
+   followed by its issuer chain up to a self-signed root. For a root import, the
+   chain is just the self-signed root certificate. The PEM bundle must contain only
+   `CERTIFICATE` blocks.
+3. **Open the import ceremony** with the exact chain, signer handle, and reviewed
+   `CASpec`:
+
+   ```json
+   {
+     "operation": "import_existing_ca",
+     "threshold": 2,
+     "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+     "signer_handle": "customer-existing-ca",
+     "spec": {
+       "common_name": "Example Imported Issuing CA",
+       "ttl_seconds": 71280000,
+       "signature_algorithm": "ECDSA-P256",
+       "max_path_len": 0,
+       "permitted_dns_domains": ["example.internal"]
+     }
+   }
+   ```
+
+4. **Collect approvals** with `POST /api/v1/ca/ceremonies/{id}/approvals`.
+5. **Import the CA** with `POST /api/v1/ca/authorities/imported`. The request
+   repeats `ceremony_id`, `certificate_pem`, `signer_handle`, and the same `spec`.
+   The server verifies the first certificate is a usable CA, the chain reaches a
+   self-signed root, the reviewed profile matches, and the first certificate's
+   public key exactly matches the signer-held key. The stored authority contains
+   only public chain metadata plus the signer handle.
+
+Leaf issuance then uses `POST /api/v1/ca/authorities/{imported-ca-id}/issue`.
 
 ## Procedure: rotating a CA
 

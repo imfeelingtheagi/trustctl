@@ -226,6 +226,60 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 	return authorityResponse(created), nil
 }
 
+func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string, req api.CAImportExistingRequest) (api.CAAuthority, error) {
+	if req.CeremonyID == "" || req.SignerHandle == "" {
+		return api.CAAuthority{}, fmt.Errorf("%w: ceremony_id and signer_handle are required", api.ErrCAHierarchyInvalid)
+	}
+	chainDER, chainPEM, err := certificateChainPEM(req.CertificatePEM)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	client := h.signer.Client()
+	if client == nil {
+		return api.CAAuthority{}, api.ErrCAHierarchyUnavailable
+	}
+	signer, err := client.SignerForDualControlHandle(ctx, req.SignerHandle, signing.PurposeCASign, h.signAuthz)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	issued, kind, err := crypto.VerifyImportedCAChain(chainDER, signer.Public(), cryptoProfile(req.Spec))
+	if err != nil {
+		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	purpose, err := existingCAPurpose(chainDER, req.SignerHandle, req.Spec)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	var created store.CAAuthority
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
+			return err
+		}
+		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
+			TenantID: tenantID, CommonName: issued.CommonName, Kind: kind, Status: "active",
+			CertificatePEM: chainPEM, SignerHandle: req.SignerHandle, Serial: issued.Serial,
+			NotAfter: &issued.NotAfter, MaxPathLen: issued.MaxPathLen,
+			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
+		})
+		if err != nil {
+			return err
+		}
+		created = inserted
+		return nil
+	})
+	if err != nil {
+		return api.CAAuthority{}, caHierarchyConflict(err)
+	}
+	h.rememberSigner(created.ID, signer)
+	if err := h.emit(ctx, tenantID, "ca.authority.imported", map[string]any{
+		"ca_id": created.ID, "common_name": created.CommonName, "ceremony_id": req.CeremonyID,
+		"signer_handle": req.SignerHandle, "kind": kind, "chain_sha256": crypto.SHA256Hex([]byte(chainPEM)),
+	}); err != nil {
+		return api.CAAuthority{}, err
+	}
+	return authorityResponse(created), nil
+}
+
 func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID string, req api.CACreateIntermediateRequest) (api.CAAuthority, error) {
 	if req.CeremonyID == "" || req.ParentID == "" {
 		return api.CAAuthority{}, fmt.Errorf("%w: ceremony_id and parent_id are required", api.ErrCAHierarchyInvalid)
@@ -528,6 +582,12 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 			return "", err
 		}
 		return offlineRootPurpose(certDER, req.Spec)
+	case "import_existing_ca":
+		chainDER, _, err := certificateChainPEM(req.CertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		return existingCAPurpose(chainDER, req.SignerHandle, req.Spec)
 	case "create_offline_intermediate":
 		return offlineIntermediatePurpose(req.ParentID, req.Spec)
 	case "issue_intermediate_csr":
@@ -547,6 +607,17 @@ func offlineRootPurpose(certDER []byte, spec api.CASpec) (string, error) {
 		return "", err
 	}
 	return "offline-root:" + crypto.SHA256Hex(certDER) + ":" + rootPurpose, nil
+}
+
+func existingCAPurpose(chainDER [][]byte, signerHandle string, spec api.CASpec) (string, error) {
+	if signerHandle == "" {
+		return "", fmt.Errorf("%w: signer_handle is required for import_existing_ca", api.ErrCAHierarchyInvalid)
+	}
+	rootPurpose, err := hierarchyPurpose("create_root", "", spec)
+	if err != nil {
+		return "", err
+	}
+	return "import-existing-ca:" + signerHandle + ":" + crypto.SHA256Hex(flattenDERChain(chainDER)) + ":" + rootPurpose, nil
 }
 
 func offlineIntermediatePurpose(parentID string, spec api.CASpec) (string, error) {
@@ -574,12 +645,49 @@ func externalIntermediateCSRPurpose(parentID string, csrDER []byte, spec api.CAS
 	return "intermediate-csr:" + parentID + ":" + crypto.SHA256Hex(csrDER) + ":" + specPurpose, nil
 }
 
+func flattenDERChain(chain [][]byte) []byte {
+	var out []byte
+	for _, der := range chain {
+		out = append(out, der...)
+	}
+	return out
+}
+
 func csrDERFromPEM(csrPEM string) ([]byte, error) {
 	block, _ := pem.Decode([]byte(csrPEM))
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
 		return nil, fmt.Errorf("%w: csr_pem must contain one CERTIFICATE REQUEST PEM block", api.ErrCAHierarchyInvalid)
 	}
 	return block.Bytes, nil
+}
+
+func certificateChainPEM(raw string) ([][]byte, string, error) {
+	rest := []byte(raw)
+	var chain [][]byte
+	var normalized []byte
+	for {
+		block, next := pem.Decode(rest)
+		if block == nil {
+			if strings.TrimSpace(string(rest)) != "" {
+				return nil, "", fmt.Errorf("%w: certificate_pem contains trailing non-PEM data", api.ErrCAHierarchyInvalid)
+			}
+			break
+		}
+		if strings.Contains(block.Type, "PRIVATE KEY") {
+			return nil, "", fmt.Errorf("%w: certificate_pem must not contain private key material", api.ErrCAHierarchyInvalid)
+		}
+		if block.Type != "CERTIFICATE" {
+			return nil, "", fmt.Errorf("%w: certificate_pem contains unsupported PEM block %q", api.ErrCAHierarchyInvalid, block.Type)
+		}
+		der := append([]byte(nil), block.Bytes...)
+		chain = append(chain, der)
+		normalized = append(normalized, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
+		rest = next
+	}
+	if len(chain) == 0 {
+		return nil, "", fmt.Errorf("%w: certificate_pem must contain at least one CERTIFICATE PEM block", api.ErrCAHierarchyInvalid)
+	}
+	return chain, string(normalized), nil
 }
 
 func singleCertificatePEM(raw string) ([]byte, string, error) {

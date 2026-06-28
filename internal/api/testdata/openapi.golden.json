@@ -905,6 +905,7 @@
             "enum": [
               "create_root",
               "import_offline_root",
+              "import_existing_ca",
               "create_intermediate",
               "create_offline_intermediate",
               "issue_intermediate_csr"
@@ -913,6 +914,9 @@
           },
           "parent_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "signer_handle": {
             "type": "string"
           },
           "spec": {
@@ -978,6 +982,30 @@
         },
         "required": [
           "ceremony_id",
+          "spec"
+        ],
+        "type": "object"
+      },
+      "CAImportExistingRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "signer_handle": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CASpec"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "certificate_pem",
+          "signer_handle",
           "spec"
         ],
         "type": "object"
@@ -8269,6 +8297,63 @@
         ],
         "summary": "List served CA authorities",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/ca/authorities/imported": {
+      "post": {
+        "operationId": "importExistingCA",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAImportExistingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAAuthority"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Import an existing signer-backed CA certificate chain after ceremony quorum",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/ca/authorities/intermediates": {

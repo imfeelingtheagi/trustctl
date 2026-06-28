@@ -40,6 +40,7 @@ const (
 	EventCACeremonyStarted               = "ca.ceremony.started"
 	EventCACeremonyApproved              = "ca.ceremony.approved"
 	EventCARootCreated                   = "ca.root.created"
+	EventCAAuthorityImported             = "ca.authority.imported"
 	EventCAIntermediateCreated           = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued         = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued               = "ca.endentity.issued"
@@ -135,6 +136,7 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "approve_ceremony", "approveCACeremony", []string{EventCACeremonyApproved}},
 	{"F48", "Private/enterprise CA hierarchy management", "create_root", "createRootCA", []string{EventCARootCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "import_offline_root", "importOfflineRootCA", []string{EventCARootCreated}},
+	{"F48", "Private/enterprise CA hierarchy management", "import_existing_ca", "importExistingCA", []string{EventCAAuthorityImported}},
 	{"F48", "Private/enterprise CA hierarchy management", "create_intermediate", "createIntermediateCA", []string{EventCAIntermediateCreated}},
 	{"F48", "Private/enterprise CA hierarchy management", "create_offline_intermediate_csr", "createOfflineIntermediateCSR", []string{EventCAIntermediateCSRIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "import_offline_intermediate", "importOfflineIntermediateCA", []string{EventCAIntermediateCreated}},

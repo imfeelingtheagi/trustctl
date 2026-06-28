@@ -1578,9 +1578,9 @@
       "priority": 52,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "CAHierarchy at /ca-hierarchy exposes ceremonies, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, and signer-backed leaf issuance; coverage ledger: /coverage",
+      "current_frontend_mapping": "CAHierarchy at /ca-hierarchy exposes ceremonies, existing signer-backed CA import, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, and signer-backed leaf issuance; coverage ledger: /coverage",
       "target_gui_mapping": "CA hierarchy UI for roots, offline roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution.",
-      "acceptance_test": "Served tests create online root/intermediate authorities and drive the offline-root import plus offline-signed intermediate workflow through /api/v1/ca/* before issuing a leaf from the intermediate.",
+      "acceptance_test": "Served tests create online root/intermediate authorities, import an existing signer-backed CA chain, and drive the offline-root import plus offline-signed intermediate workflow through /api/v1/ca/* before issuing leaves from the imported intermediates.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/runbooks/key-ceremony.md"],
       "source_backend": [
         "internal/ca/hierarchy",
@@ -1591,7 +1591,7 @@
       ],
       "source_frontend": ["web/src/pages/CAHierarchy.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub; CLM-02 adds served signer-backed CA hierarchy APIs, and COMPETE-009 adds the served offline-root workflow. Test evidence: internal/server/ca_hierarchy_served_test.go drives server.Build over bearer auth, a real signer process, m-of-n ceremony approvals, online root/intermediate creation, offline-root import, offline intermediate CSR/import, and hierarchy leaf issuance.",
+      "notes": "Closed by /coverage feature-map hub; CLM-02 adds served signer-backed CA hierarchy APIs, COMPETE-009 adds the served offline-root workflow, and COMPETE-010 adds existing signer-backed CA chain import. Test evidence: internal/server/ca_hierarchy_served_test.go drives server.Build over bearer auth, a real signer process, m-of-n ceremony approvals, online root/intermediate creation, existing CA chain import, offline-root import, offline intermediate CSR/import, and hierarchy leaf issuance.",
       "api_surface": [
         "createCACeremony",
         "getCACeremony",
@@ -1599,6 +1599,7 @@
         "listCAAuthorities",
         "createRootCA",
         "importOfflineRootCA",
+        "importExistingCA",
         "createIntermediateCA",
         "createOfflineIntermediateCSR",
         "importOfflineIntermediateCA",
@@ -1613,6 +1614,7 @@
         "ca authorities list",
         "ca authorities create-root",
         "ca authorities import-offline-root",
+        "ca authorities import-existing",
         "ca authorities create-intermediate",
         "ca authorities offline-intermediate-csr",
         "ca authorities import-offline-intermediate",
@@ -1625,35 +1627,37 @@
           "evidence": [
             "server.Build wires api.WithCAHierarchy when an isolated signer and dual-control sign authorizer are available.",
             "CA roots and intermediates are created only after store-backed m-of-n ceremony quorum and use signer-held CA key handles.",
+            "Existing CA import verifies a public root/intermediate chain against a signer-held key handle before making it an issuing authority.",
             "Offline-root import stores a public root with no signer handle, while offline intermediate CSR/import binds the signed certificate back to the signer-held public key."
           ],
           "refs": ["internal/server/ca_hierarchy.go", "internal/api/ca_hierarchy.go", "internal/server/ca_hierarchy_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: CAHierarchy at /ca-hierarchy exposes ceremonies, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, and signer-backed leaf issuance; coverage ledger: /coverage",
+            "current_frontend_mapping: CAHierarchy at /ca-hierarchy exposes ceremonies, existing signer-backed CA import, offline-root import, offline intermediate CSR/import, managed-key custody, issuer catalog, and signer-backed leaf issuance; coverage ledger: /coverage",
             "target_gui_mapping: CA hierarchy UI for roots, offline roots, intermediates, ceremonies, quorum, cross-signing, rotation, expiry, and trust distribution.",
-            "web/src/__tests__/ca_hierarchy.test.tsx drives the offline-root workflow controls through the typed API client."
+            "web/src/__tests__/ca_hierarchy.test.tsx drives the existing signer-backed CA import and offline-root workflow controls through the typed API client."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/CAHierarchy.tsx", "web/src/__tests__/ca_hierarchy.test.tsx"]
         },
         "cli": {
           "evidence": [
-            "CLI parity exposes the CA ceremony and CA authority commands, including import-offline-root, offline-intermediate-csr, import-offline-intermediate, and issue-intermediate-csr for SPIRE/upstream-authority CSRs."
+            "CLI parity exposes the CA ceremony and CA authority commands, including import-existing, import-offline-root, offline-intermediate-csr, import-offline-intermediate, and issue-intermediate-csr for SPIRE/upstream-authority CSRs."
           ],
           "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
           "evidence": [
-            "api_surface: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, importOfflineRootCA, createIntermediateCA, createOfflineIntermediateCSR, importOfflineIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf are in the served OpenAPI route registry.",
-            "OpenAPI schemas define CACeremonyStartRequest, CAKeyCeremony, CAAuthority, CAImportOfflineRootRequest, CACreateOfflineIntermediateCSRRequest, CAImportOfflineIntermediateRequest, CAIntermediateCSR, CAIssueIntermediateRequest, CAIssuedIntermediate, and CAIssuedLeaf."
+            "api_surface: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, importOfflineRootCA, importExistingCA, createIntermediateCA, createOfflineIntermediateCSR, importOfflineIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf are in the served OpenAPI route registry.",
+            "OpenAPI schemas define CACeremonyStartRequest, CAKeyCeremony, CAAuthority, CAImportOfflineRootRequest, CAImportExistingRequest, CACreateOfflineIntermediateCSRRequest, CAImportOfflineIntermediateRequest, CAIntermediateCSR, CAIssueIntermediateRequest, CAIssuedIntermediate, and CAIssuedLeaf."
           ],
           "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/ca_hierarchy.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served tests create online root/intermediate authorities and drive the offline-root import plus offline-signed intermediate workflow through /api/v1/ca/* before issuing a leaf from the intermediate.",
+            "acceptance_test: Served tests create online root/intermediate authorities, import an existing signer-backed CA chain, and drive the offline-root import plus offline-signed intermediate workflow through /api/v1/ca/* before issuing leaves from the imported intermediates.",
             "internal/server/ca_hierarchy_served_test.go verifies root before quorum fails, self-approval fails, two custodians satisfy quorum, and the issued leaf verifies against the intermediate.",
+            "internal/server/ca_hierarchy_served_test.go verifies existing CA import rejects the wrong signer handle, rejects before quorum, imports a chain bound to the reviewed signer handle, and issues a leaf from the imported authority.",
             "internal/server/ca_hierarchy_served_test.go verifies offline-root import before quorum fails, the imported root has no signer handle, root hot-path leaf issuance fails closed, offline intermediate CSR/import succeeds, and the served leaf verifies against the imported intermediate.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
@@ -1671,14 +1675,14 @@
         },
         "rbac": {
           "evidence": [
-            "CA hierarchy route registry maps ceremony/authority reads to issuers:read, ceremony/root/intermediate mutations to issuers:write, and leaf/external-intermediate CSR issuance to certs:issue.",
-            "feature authz manifest maps api_surface operations to route permissions: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, importOfflineRootCA, createIntermediateCA, createOfflineIntermediateCSR, importOfflineIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf."
+            "CA hierarchy route registry maps ceremony/authority reads to issuers:read, ceremony/root/import/intermediate mutations to issuers:write, and leaf/external-intermediate CSR issuance to certs:issue.",
+            "feature authz manifest maps api_surface operations to route permissions: createCACeremony, getCACeremony, approveCACeremony, listCAAuthorities, createRootCA, importOfflineRootCA, importExistingCA, createIntermediateCA, createOfflineIntermediateCSR, importOfflineIntermediateCA, issueIntermediateCAFromCSR, issueHierarchyLeaf."
           ],
           "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
           "evidence": [
-            "F48 mutating API operations append ca.ceremony.started, ca.ceremony.approved, ca.root.created, ca.intermediate.created, ca.intermediate_csr.issued, and ca.endentity.issued events, including offline-root import and offline-signed intermediate import.",
+            "F48 mutating API operations append ca.ceremony.started, ca.ceremony.approved, ca.root.created, ca.authority.imported, ca.intermediate.created, ca.intermediate_csr.issued, and ca.endentity.issued events, including existing CA import, offline-root import, and offline-signed intermediate import.",
             "eventledger maps the F48 ceremony/create/issue operations to those event types for audit feature filtering."
           ],
           "refs": ["internal/server/ca_hierarchy.go", "internal/eventledger/ledger.go"]

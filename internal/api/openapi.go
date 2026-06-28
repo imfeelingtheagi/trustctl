@@ -216,8 +216,8 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr"}},
-		"parent_id": uuid(), "csr_pem": str(), "certificate_pem": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr"}},
+		"parent_id": uuid(), "csr_pem": str(), "certificate_pem": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
 	}, "operation", "threshold", "spec")
 	caCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
@@ -229,6 +229,9 @@ func componentSchemas() map[string]*Schema {
 	caImportOfflineRootReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(), "spec": ref("CASpec"),
 	}, "ceremony_id", "certificate_pem", "spec")
+	caImportExistingReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "certificate_pem": str(), "signer_handle": str(), "spec": ref("CASpec"),
+	}, "ceremony_id", "certificate_pem", "signer_handle", "spec")
 	caCreateIntermediateReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "parent_id", "spec")
@@ -1422,6 +1425,7 @@ func componentSchemas() map[string]*Schema {
 		"CAKeyCeremony":                         caCeremony,
 		"CACreateRootRequest":                   caCreateRootReq,
 		"CAImportOfflineRootRequest":            caImportOfflineRootReq,
+		"CAImportExistingRequest":               caImportExistingReq,
 		"CACreateIntermediateRequest":           caCreateIntermediateReq,
 		"CACreateOfflineIntermediateCSRRequest": caCreateOfflineIntermediateCSRReq,
 		"CAImportOfflineIntermediateRequest":    caImportOfflineIntermediateReq,

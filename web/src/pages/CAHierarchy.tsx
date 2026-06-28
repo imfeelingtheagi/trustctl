@@ -26,6 +26,7 @@ type Notice = { kind: "permission" | "error"; message: string };
 type ProbeState = { issuerID: string; issuerName: string; status: "pending" | "passed" | "failed"; message: string };
 type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDomains: string; maxPathLen: string; ttlDays: string };
 type OfflineIntermediateForm = OfflineCAForm & { parentID: string };
+type ExistingCAForm = OfflineCAForm & { signerHandle: string };
 
 const rootCeremonyRequest: CACeremonyStartRequest = {
   operation: "create_root",
@@ -54,6 +55,14 @@ const offlineIntermediateDefaults: OfflineIntermediateForm = {
   maxPathLen: "0",
   ttlDays: "825",
 };
+const existingCADefaults: ExistingCAForm = {
+  certificatePEM: "",
+  commonName: "Imported Existing CA",
+  dnsDomains: "example.internal",
+  maxPathLen: "0",
+  signerHandle: "",
+  ttlDays: "825",
+};
 
 export function CAHierarchy() {
   const [issuers, setIssuers] = useState<Issuer[]>([]);
@@ -79,6 +88,11 @@ export function CAHierarchy() {
   const [offlineIntermediate, setOfflineIntermediate] = useState<CAAuthority | null>(null);
   const [offlineBusy, setOfflineBusy] = useState(false);
   const [offlineError, setOfflineError] = useState<string | null>(null);
+  const [existingCAForm, setExistingCAForm] = useState<ExistingCAForm>(existingCADefaults);
+  const [existingCACeremonyID, setExistingCACeremonyID] = useState("");
+  const [existingCA, setExistingCA] = useState<CAAuthority | null>(null);
+  const [existingCABusy, setExistingCABusy] = useState(false);
+  const [existingCAError, setExistingCAError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -298,6 +312,45 @@ export function CAHierarchy() {
     }
   }
 
+  async function startExistingCACeremony() {
+    setExistingCABusy(true);
+    setExistingCAError(null);
+    try {
+      const next = await api.createCACeremony({
+        operation: "import_existing_ca",
+        threshold: 2,
+        certificate_pem: existingCAForm.certificatePEM.trim(),
+        signer_handle: existingCAForm.signerHandle.trim(),
+        spec: offlineFormSpec(existingCAForm),
+      });
+      setExistingCACeremonyID(next.id);
+      setCeremony(next);
+    } catch (err) {
+      setExistingCAError(errorText(err, "Could not start existing-CA import ceremony"));
+    } finally {
+      setExistingCABusy(false);
+    }
+  }
+
+  async function importExistingCA() {
+    setExistingCABusy(true);
+    setExistingCAError(null);
+    try {
+      setExistingCA(
+        await api.importExistingCA({
+          ceremony_id: existingCACeremonyID.trim(),
+          certificate_pem: existingCAForm.certificatePEM.trim(),
+          signer_handle: existingCAForm.signerHandle.trim(),
+          spec: offlineFormSpec(existingCAForm),
+        }),
+      );
+    } catch (err) {
+      setExistingCAError(errorText(err, "Could not import existing CA"));
+    } finally {
+      setExistingCABusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -400,6 +453,18 @@ export function CAHierarchy() {
         onStartRootCeremony={() => void startOfflineRootCeremony()}
       />
 
+      <ExistingCAImportWorkflow
+        busy={existingCABusy}
+        ceremonyID={existingCACeremonyID}
+        error={existingCAError}
+        form={existingCAForm}
+        imported={existingCA}
+        onCeremonyIDChange={setExistingCACeremonyID}
+        onFormChange={(patch) => setExistingCAForm((current) => ({ ...current, ...patch }))}
+        onImport={() => void importExistingCA()}
+        onStartCeremony={() => void startExistingCACeremony()}
+      />
+
       <section aria-labelledby="custody-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -442,6 +507,113 @@ export function CAHierarchy() {
           onSubmit={(name, chainPEM) => void createIssuerFromCatalog(issuerDialogType, name, chainPEM)}
         />
       )}
+    </section>
+  );
+}
+
+function ExistingCAImportWorkflow({
+  busy,
+  ceremonyID,
+  error,
+  form,
+  imported,
+  onCeremonyIDChange,
+  onFormChange,
+  onImport,
+  onStartCeremony,
+}: {
+  busy: boolean;
+  ceremonyID: string;
+  error: string | null;
+  form: ExistingCAForm;
+  imported: CAAuthority | null;
+  onCeremonyIDChange: (value: string) => void;
+  onFormChange: (patch: Partial<ExistingCAForm>) => void;
+  onImport: () => void;
+  onStartCeremony: () => void;
+}) {
+  const { t } = useTranslation();
+  const ready = form.certificatePEM.trim() !== "" && form.commonName.trim() !== "" && form.signerHandle.trim() !== "";
+  const importReady = ready && ceremonyID.trim() !== "";
+
+  return (
+    <section aria-labelledby="existing-ca-import-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <h2 id="existing-ca-import-heading" className="text-title font-semibold">
+            {t("caHierarchy.existing.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {t("caHierarchy.existing.description")}
+          </p>
+        </div>
+      </div>
+      {error && <ErrorState title={t("caHierarchy.existing.errorTitle")}>{error}</ErrorState>}
+      <section aria-labelledby="existing-ca-form-heading" className="ui-panel p-comfortable text-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 id="existing-ca-form-heading" className="text-title font-semibold">
+              {t("caHierarchy.existing.formHeading")}
+            </h3>
+            {imported && <p className="mt-1 font-mono text-xs">{imported.id}</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={onStartCeremony} disabled={busy || !ready}>
+              {t("caHierarchy.existing.startCeremony")}
+            </Button>
+            <Button type="button" size="sm" onClick={onImport} disabled={busy || !importReady}>
+              {t("caHierarchy.existing.import")}
+            </Button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4">
+          <OfflineSpecFields
+            commonNameId="existing-ca-common-name"
+            dnsDomainsId="existing-ca-dns-domains"
+            form={form}
+            maxPathLenId="existing-ca-max-path-len"
+            onChange={onFormChange}
+            ttlDaysId="existing-ca-ttl-days"
+          />
+          <LabeledInput
+            id="existing-ca-signer-handle"
+            label={t("caHierarchy.offline.signerHandle")}
+            value={form.signerHandle}
+            required
+            onChange={(value) => onFormChange({ signerHandle: value })}
+            placeholder={t("caHierarchy.existing.placeholderSignerHandle")}
+          />
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="existing-ca-chain">
+              {t("caHierarchy.existing.chainPEM")}
+            </label>
+            <textarea
+              id="existing-ca-chain"
+              rows={6}
+              value={form.certificatePEM}
+              onChange={(event) => onFormChange({ certificatePEM: event.target.value })}
+              className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              placeholder={t("caHierarchy.offline.placeholderCertificate")}
+            />
+          </div>
+          <LabeledInput
+            id="existing-ca-ceremony-id"
+            label={t("caHierarchy.existing.ceremonyID")}
+            value={ceremonyID}
+            onChange={onCeremonyIDChange}
+            placeholder={t("caHierarchy.existing.placeholderCeremonyID")}
+          />
+          {imported && (
+            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <KeyValue label={t("caHierarchy.offline.commonName")} value={imported.common_name} />
+              <KeyValue label={t("caHierarchy.existing.kind")} value={imported.kind} />
+              <KeyValue label={t("caHierarchy.offline.signerHandle")} value={imported.signer_handle || "-"} mono />
+              <KeyValue label={t("caHierarchy.existing.serial")} value={imported.serial || "-"} mono />
+            </dl>
+          )}
+        </div>
+      </section>
     </section>
   );
 }

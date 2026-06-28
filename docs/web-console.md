@@ -138,8 +138,8 @@ remains an API call.
 - **Code signing** — a real signing console (key-backed and keyless/Fulcio), submitting only
   the artifact digest and rendering the signature receipt; private keys and artifact bytes
   never enter the browser (`/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).
-- **CA hierarchy** — the m-of-n key **ceremony** flow, served **offline-root**
-  import/intermediate CSR/import workflow, and HSM/KMS **managed-key custody**
+- **CA hierarchy** — the m-of-n key **ceremony** flow, served existing CA chain
+  import, **offline-root** import/intermediate CSR/import workflow, and HSM/KMS **managed-key custody**
   (generate, rotate, revoke, zeroize), guarded by RBAC. The issuer catalog includes
   schema-driven config forms for built-in CA and upstream issuer types, sensitive-field
   masking, and per-issuer **Test connection** actions wired to the served issuer

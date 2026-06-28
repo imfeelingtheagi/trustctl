@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     importOfflineRootCA: vi.fn(),
+    importExistingCA: vi.fn(),
     createOfflineIntermediateCSR: vi.fn(),
     importOfflineIntermediateCA: vi.fn(),
     generateManagedKey: vi.fn(),
@@ -70,6 +71,9 @@ describe("CA hierarchy and custody surface", () => {
       if (input.operation === "create_offline_intermediate") {
         return { ...base, id: "ceremony-offline-intermediate", purpose: "offline-intermediate:ca-offline-root" };
       }
+      if (input.operation === "import_existing_ca") {
+        return { ...base, id: "ceremony-existing-ca", purpose: "import-existing-ca:customer-existing-ca" };
+      }
       return { ...base, id: "ceremony-root-1", purpose: "create_root:Trust Root CA" };
     });
     apiMock.approveCACeremony.mockResolvedValue({
@@ -113,6 +117,18 @@ describe("CA hierarchy and custody surface", () => {
       signer_handle: "ca/offline-intermediate/ceremony-offline-intermediate",
       certificate_pem: "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----",
       serial: "02",
+      max_path_len: 0,
+      status: "active",
+      created_at: "2026-06-26T14:00:00Z",
+    });
+    apiMock.importExistingCA.mockResolvedValue({
+      id: "ca-existing-imported",
+      tenant_id: "tenant-1",
+      kind: "intermediate",
+      common_name: "Imported Existing CA",
+      signer_handle: "customer-existing-ca",
+      certificate_pem: "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----",
+      serial: "03",
       max_path_len: 0,
       status: "active",
       created_at: "2026-06-26T14:00:00Z",
@@ -236,6 +252,43 @@ describe("CA hierarchy and custody surface", () => {
       ),
     );
     expect(await screen.findByText("ca-offline-intermediate")).toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+  });
+
+  it("imports an existing signer-backed CA chain without collecting private key bytes", async () => {
+    const user = userEvent.setup();
+    renderCAHierarchy();
+
+    const chainPEM = "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----";
+    await user.clear(await screen.findByLabelText("Signer handle"));
+    await user.type(screen.getByLabelText("Signer handle"), "customer-existing-ca");
+    await user.type(screen.getByLabelText("Existing CA chain PEM"), chainPEM);
+    await user.click(screen.getByRole("button", { name: "Start existing-CA ceremony" }));
+
+    await waitFor(() =>
+      expect(apiMock.createCACeremony).toHaveBeenCalledWith({
+        operation: "import_existing_ca",
+        threshold: 2,
+        certificate_pem: chainPEM,
+        signer_handle: "customer-existing-ca",
+        spec: expect.objectContaining({ common_name: "Imported Existing CA", max_path_len: 0, signature_algorithm: "ECDSA-P256" }),
+      }),
+    );
+    expect(await screen.findByDisplayValue("ceremony-existing-ca")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Import existing CA" }));
+    await waitFor(() =>
+      expect(apiMock.importExistingCA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ceremony_id: "ceremony-existing-ca",
+          certificate_pem: chainPEM,
+          signer_handle: "customer-existing-ca",
+        }),
+      ),
+    );
+    expect(await screen.findByText("ca-existing-imported")).toBeInTheDocument();
+    expect(screen.getAllByText("customer-existing-ca").length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
   });
 

@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
@@ -369,6 +370,125 @@ func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
 	}
 }
 
+func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "byo-ca-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverOne := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "byo-ca-custodian-one", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverTwo := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "byo-ca-custodian-two", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+
+	externalRootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(externalRootKey.Destroy)
+	rootProfile := crypto.HierarchyCAProfile{
+		CommonName:          "customer existing root",
+		MaxPathLen:          1,
+		TTL:                 365 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"imported.example.test"},
+		EKUs:                []string{"serverAuth"},
+	}
+	externalRoot, err := crypto.SelfSignedHierarchyCA(externalRootKey, rootProfile)
+	if err != nil {
+		t.Fatalf("create external root fixture: %v", err)
+	}
+
+	client := h.signer.Client()
+	importedHandle := "imported-existing-intermediate"
+	importedSigner, err := client.GenerateDualControlKeyHandle(context.Background(), crypto.ECDSAP256, importedHandle,
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.authz)
+	if err != nil {
+		t.Fatalf("pre-provision imported CA signer handle: %v", err)
+	}
+	wrongHandle := "imported-existing-wrong"
+	wrongSigner, err := client.GenerateDualControlKeyHandle(context.Background(), crypto.ECDSAP256, wrongHandle,
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.authz)
+	if err != nil || wrongSigner == nil {
+		t.Fatalf("pre-provision wrong signer handle: %v", err)
+	}
+	interProfile := crypto.HierarchyCAProfile{
+		CommonName:          "customer existing issuing ca",
+		MaxPathLen:          0,
+		TTL:                 30 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"imported.example.test"},
+		EKUs:                []string{"serverAuth"},
+	}
+	existingIntermediate, err := crypto.SignIntermediateHierarchyCA(externalRoot.CertificateDER, externalRootKey, importedSigner.Public(), interProfile)
+	if err != nil {
+		t.Fatalf("create externally signed intermediate fixture: %v", err)
+	}
+	chainPEM := string(existingIntermediate.CertificatePEM) + string(externalRoot.CertificatePEM)
+	interSpec := map[string]any{
+		"common_name":           interProfile.CommonName,
+		"max_path_len":          interProfile.MaxPathLen,
+		"ttl_seconds":           int64(interProfile.TTL.Seconds()),
+		"permitted_dns_domains": interProfile.PermittedDNSDomains,
+		"extended_key_usages":   interProfile.EKUs,
+		"signature_algorithm":   "ecdsa-p256",
+	}
+
+	wrongCeremony := createImportExistingCACeremony(t, h, operator, chainPEM, wrongHandle, interSpec, 1, "byo-ca-wrong-ceremony")
+	approveCACeremony(t, h, approverOne, wrongCeremony.ID, 1, "byo-ca-wrong-approval")
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", operator, "byo-ca-wrong-import", map[string]any{
+		"ceremony_id":     wrongCeremony.ID,
+		"certificate_pem": chainPEM,
+		"signer_handle":   wrongHandle,
+		"spec":            interSpec,
+	})
+	if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), "public key") {
+		t.Fatalf("import existing CA with wrong signer = %d body=%s; want 422 public-key mismatch", code, body)
+	}
+
+	ceremony := createImportExistingCACeremony(t, h, operator, chainPEM, importedHandle, interSpec, 2, "byo-ca-ceremony")
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", operator, "byo-ca-before-quorum", map[string]any{
+		"ceremony_id":     ceremony.ID,
+		"certificate_pem": chainPEM,
+		"signer_handle":   importedHandle,
+		"spec":            interSpec,
+	})
+	if code != http.StatusConflict || !strings.Contains(string(body), "quorum") {
+		t.Fatalf("import existing CA before quorum = %d body=%s; want 409 quorum problem", code, body)
+	}
+	approveCACeremony(t, h, approverOne, ceremony.ID, 1, "byo-ca-approval-one")
+	approveCACeremony(t, h, approverTwo, ceremony.ID, 2, "byo-ca-approval-two")
+	imported := importExistingCA(t, h, operator, ceremony.ID, chainPEM, importedHandle, interSpec, "byo-ca-import")
+	if imported.Kind != "intermediate" || imported.SignerHandle != importedHandle || imported.CommonName != interProfile.CommonName {
+		t.Fatalf("imported CA = %+v; want signer-backed existing intermediate", imported)
+	}
+	if strings.Contains(imported.CertificatePEM, "PRIVATE KEY") || strings.Count(imported.CertificatePEM, "BEGIN CERTIFICATE") != 2 {
+		t.Fatalf("imported CA certificate response leaked key material or lost chain: %q", imported.CertificatePEM)
+	}
+
+	leafCSRDER := hierarchyLeafCSR(t, "leaf.imported.example.test")
+	leafCSRPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: leafCSRDER}))
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+imported.ID+"/issue", operator, "byo-ca-leaf", map[string]any{
+		"csr_pem":     leafCSRPEM,
+		"ttl_seconds": int64((24 * time.Hour).Seconds()),
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("issue leaf from imported existing CA = %d body=%s; want 201", code, body)
+	}
+	var issued struct {
+		CertificatePEM string `json:"certificate_pem"`
+		Serial         string `json:"serial"`
+	}
+	if err := json.Unmarshal(body, &issued); err != nil || issued.CertificatePEM == "" || issued.Serial == "" {
+		t.Fatalf("decode imported-CA leaf: %v body=%s", err, body)
+	}
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(issued.CertificatePEM)), caCertDER(t, []byte(imported.CertificatePEM))); err != nil {
+		t.Fatalf("imported existing CA did not sign served leaf: %v", err)
+	}
+	if !h.hasEvent(t, "ca.authority.imported") || !h.hasEvent(t, "ca.endentity.issued") {
+		t.Fatal("imported existing CA workflow did not emit the expected events")
+	}
+}
+
 type servedCACeremony struct {
 	ID        string `json:"id"`
 	Purpose   string `json:"purpose"`
@@ -429,6 +549,25 @@ func createCACeremonyWithCertificate(t *testing.T, h *servedHarness, token, oper
 	return got
 }
 
+func createImportExistingCACeremony(t *testing.T, h *servedHarness, token, certificatePEM, signerHandle string, spec map[string]any, threshold int, idem string) servedCACeremony {
+	t.Helper()
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, map[string]any{
+		"operation":       "import_existing_ca",
+		"certificate_pem": certificatePEM,
+		"signer_handle":   signerHandle,
+		"threshold":       threshold,
+		"spec":            spec,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("create import_existing_ca ceremony = %d body=%s; want 201", code, raw)
+	}
+	var got servedCACeremony
+	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" || got.Threshold != threshold || got.Status != "pending" {
+		t.Fatalf("decode import_existing_ca ceremony: %v got=%+v body=%s", err, got, raw)
+	}
+	return got
+}
+
 func createCACeremonyWithCSR(t *testing.T, h *servedHarness, token, parentID, csrPEM string, spec map[string]any, threshold int, idem string) servedCACeremony {
 	t.Helper()
 	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, map[string]any{
@@ -444,6 +583,24 @@ func createCACeremonyWithCSR(t *testing.T, h *servedHarness, token, parentID, cs
 	var got servedCACeremony
 	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" || got.Threshold != threshold || got.Status != "pending" {
 		t.Fatalf("decode issue_intermediate_csr ceremony: %v got=%+v body=%s", err, got, raw)
+	}
+	return got
+}
+
+func importExistingCA(t *testing.T, h *servedHarness, token, ceremonyID, certificatePEM, signerHandle string, spec map[string]any, idem string) servedCAAuthority {
+	t.Helper()
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/imported", token, idem, map[string]any{
+		"ceremony_id":     ceremonyID,
+		"certificate_pem": certificatePEM,
+		"signer_handle":   signerHandle,
+		"spec":            spec,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("import existing CA = %d body=%s; want 201", code, raw)
+	}
+	var got servedCAAuthority
+	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" {
+		t.Fatalf("decode imported existing CA: %v got=%+v body=%s", err, got, raw)
 	}
 	return got
 }

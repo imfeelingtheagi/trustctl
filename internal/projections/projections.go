@@ -39,6 +39,7 @@ const (
 	EventCACeremonyStarted               = "ca.ceremony.started"
 	EventCACeremonyApproved              = "ca.ceremony.approved"
 	EventCARootCreated                   = "ca.root.created"
+	EventCAAuthorityImported             = "ca.authority.imported"
 	EventCAIntermediateCreated           = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued         = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued               = "ca.endentity.issued"

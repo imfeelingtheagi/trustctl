@@ -171,6 +171,62 @@ func VerifyOfflineSignedIntermediate(parentCertDER, certDER []byte, signerPublic
 	return hierarchyResultFromCert(cert), nil
 }
 
+// VerifyImportedCAChain validates an existing CA certificate chain whose private
+// key is already custodied by the signer. chainDER[0] is the imported issuing CA
+// certificate; any following certificates must build to a self-signed root. The
+// first certificate's public key must match signerPublic, proving the signer-held
+// handle can actually operate this imported CA without moving private bytes into
+// the control plane.
+func VerifyImportedCAChain(chainDER [][]byte, signerPublic PublicKey, profile HierarchyCAProfile) (IssuedHierarchyCA, string, error) {
+	if len(chainDER) == 0 {
+		return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain is empty")
+	}
+	certs := make([]*x509.Certificate, 0, len(chainDER))
+	for i, der := range chainDER {
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: parse imported CA chain certificate %d: %w", i, err)
+		}
+		if err := verifyCAUsable(cert, "imported CA chain certificate"); err != nil {
+			return IssuedHierarchyCA{}, "", err
+		}
+		certs = append(certs, cert)
+	}
+	pubDER, err := x509.MarshalPKIXPublicKey(certs[0].PublicKey)
+	if err != nil {
+		return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: marshal imported CA public key: %w", err)
+	}
+	if !bytes.Equal(pubDER, signerPublic.DER) {
+		return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA public key does not match signer-held key")
+	}
+	if err := verifyImportedProfile(certs[0], profile); err != nil {
+		return IssuedHierarchyCA{}, "", err
+	}
+	if len(certs) == 1 {
+		if err := certs[0].CheckSignatureFrom(certs[0]); err != nil {
+			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported root is not self-signed: %w", err)
+		}
+		return hierarchyResultFromCert(certs[0]), "root", nil
+	}
+	for i := 0; i < len(certs)-1; i++ {
+		child, parent := certs[i], certs[i+1]
+		if err := child.CheckSignatureFrom(parent); err != nil {
+			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain certificate %d is not signed by certificate %d: %w", i, i+1, err)
+		}
+		if err := verifyChildPathLen(parent, child); err != nil {
+			return IssuedHierarchyCA{}, "", err
+		}
+		if child.NotAfter.After(parent.NotAfter) {
+			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain certificate %d outlives issuer", i)
+		}
+	}
+	root := certs[len(certs)-1]
+	if err := root.CheckSignatureFrom(root); err != nil {
+		return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: imported CA chain root is not self-signed: %w", err)
+	}
+	return hierarchyResultFromCert(certs[0]), "intermediate", nil
+}
+
 func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.Certificate, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
 	if profile.CommonName == "" {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: CA common name is required")

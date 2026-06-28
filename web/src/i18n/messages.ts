@@ -328,6 +328,54 @@ export const messages = {
     defaultMessage: "example.internal",
     description: "Placeholder DNS domain for CA name constraints.",
   },
+  "caHierarchy.existing.heading": {
+    defaultMessage: "Existing CA import",
+    description: "Heading for the existing signer-backed CA import workflow.",
+  },
+  "caHierarchy.existing.description": {
+    defaultMessage: "Bind an already-existing root or intermediate certificate chain to a signer-held key handle after m-of-n review.",
+    description: "Short description for the existing signer-backed CA import workflow.",
+  },
+  "caHierarchy.existing.errorTitle": {
+    defaultMessage: "Existing CA import failed",
+    description: "Error title for failed existing CA import workflow actions.",
+  },
+  "caHierarchy.existing.formHeading": {
+    defaultMessage: "Import signer-backed chain",
+    description: "Subheading for the existing CA import form.",
+  },
+  "caHierarchy.existing.startCeremony": {
+    defaultMessage: "Start existing-CA ceremony",
+    description: "Button label for opening an existing CA import ceremony.",
+  },
+  "caHierarchy.existing.import": {
+    defaultMessage: "Import existing CA",
+    description: "Button label for importing an existing signer-backed CA chain.",
+  },
+  "caHierarchy.existing.chainPEM": {
+    defaultMessage: "Existing CA chain PEM",
+    description: "Field label for the imported public existing CA chain.",
+  },
+  "caHierarchy.existing.ceremonyID": {
+    defaultMessage: "Existing CA ceremony ID",
+    description: "Field label for the existing CA import ceremony id.",
+  },
+  "caHierarchy.existing.placeholderSignerHandle": {
+    defaultMessage: "ca-hierarchy-imported-existing",
+    description: "Placeholder signer handle for importing an existing CA chain.",
+  },
+  "caHierarchy.existing.placeholderCeremonyID": {
+    defaultMessage: "ceremony id",
+    description: "Placeholder for an existing CA import ceremony id field.",
+  },
+  "caHierarchy.existing.kind": {
+    defaultMessage: "Kind",
+    description: "Metadata label for an imported existing CA kind.",
+  },
+  "caHierarchy.existing.serial": {
+    defaultMessage: "Serial",
+    description: "Metadata label for an imported existing CA serial number.",
+  },
   "nav.item.protocols": {
     defaultMessage: "Protocols",
     description: "Primary navigation item.",
@@ -681,6 +729,18 @@ const esESCatalog = {
   "caHierarchy.offline.placeholderCeremonyID": "ceremony-id",
   "caHierarchy.offline.placeholderAuthorityID": "ca-authority-id",
   "caHierarchy.offline.placeholderDNSDomain": "example.internal",
+  "caHierarchy.existing.heading": "Importación de CA existente",
+  "caHierarchy.existing.description": "Vincula una cadena de certificados raíz o intermedia ya existente a un identificador de clave retenido por el firmante después de una revisión m-de-n.",
+  "caHierarchy.existing.errorTitle": "Falló la importación de CA existente",
+  "caHierarchy.existing.formHeading": "Importar cadena respaldada por firmante",
+  "caHierarchy.existing.startCeremony": "Iniciar ceremonia de CA existente",
+  "caHierarchy.existing.import": "Importar CA existente",
+  "caHierarchy.existing.chainPEM": "PEM de cadena de CA existente",
+  "caHierarchy.existing.ceremonyID": "ID de ceremonia de CA existente",
+  "caHierarchy.existing.placeholderSignerHandle": "ca-hierarchy-imported-existing",
+  "caHierarchy.existing.placeholderCeremonyID": "ID de ceremonia",
+  "caHierarchy.existing.kind": "Tipo",
+  "caHierarchy.existing.serial": "Serie",
   "nav.item.protocols": "Protocolos",
   "nav.item.acmeAndDns": "ACME y DNS",
   "nav.item.enrollmentProtocols": "Protocolos de inscripción",

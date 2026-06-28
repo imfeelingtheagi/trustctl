@@ -93,7 +93,9 @@ the CA. Each operation consumes one pending ceremony whose purpose matches the
 reviewed resource: `root:<sha256-of-ca-spec>`,
 `intermediate:<parent-ca-id>:<sha256-of-ca-spec>`,
 `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>`, or
-`offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. If approvals are short,
+`offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. Existing CA import uses
+`import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>`,
+binding the reviewed certificate chain to the exact signer-held key handle. If approvals are short,
 the operation returns `ErrQuorumNotMet`; if the opener tries to approve their own
 ceremony, or the ceremony was already used or opened for a different resource/spec,
 it fails closed before committing the CA mutation. This is how you stop a single
@@ -102,18 +104,23 @@ one valid ceremony from being replayed against a different CA request.
 
 The served hierarchy API lives at `/api/v1/ca/ceremonies`,
 `/api/v1/ca/authorities`, `/api/v1/ca/authorities/offline-roots`,
+`/api/v1/ca/authorities/imported`,
 `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
 `/api/v1/ca/authorities/{id}/issue`. Online root and intermediate private keys are
 created in the isolated signing service and referenced by signer handles; the control
 plane stores certificates, chains, metadata, and ceremony state, but it never
-receives the CA private key. Offline-root import accepts exactly one public
+receives the CA private key. Existing CA import accepts a public root or
+intermediate chain plus a signer handle, verifies the first certificate's public key
+matches that signer-held key, verifies the chain/profile, and then serves normal leaf
+issuance from the imported authority. Offline-root import accepts exactly one public
 certificate PEM and rejects private-key PEM blocks. It then generates a signer-held
 intermediate CSR, the operator signs that CSR with the offline root outside trstctl,
 and trstctl imports the signed intermediate only if it chains to the offline root,
 matches the reviewed `CASpec`, and carries the signer-held public key. Every served
 step (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
-`ca.intermediate_csr.issued`, `ca.intermediate.created`, `ca.endentity.issued`) is a
+`ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
+`ca.endentity.issued`) is a
 tenant-scoped event carrying the ceremony/authority context and is recorded
 immutably in the tamper-evident log.
 Rotation and cross-signing remain purpose-bound library/operator workflows for now:
@@ -305,9 +312,10 @@ external CA registry API, each of which calls the one issuance path with an
   Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA, Smallstep,
   Vault PKI, and Venafi TPP/TLS Protect.
 - **Key ceremony:** `StartCeremony` → ≥`threshold` × `Approve` → `CreateRoot` /
-  `CreateIntermediate`. See the [runbook](../runbooks/key-ceremony.md).
+  `ImportExisting` / `CreateIntermediate`. See the
+  [runbook](../runbooks/key-ceremony.md).
 - **Events:** `ca.issue`, `issuance.profile_evaluated`, `ca.root.created`,
-  `ca.intermediate.created`, `ca.rotated`, `ca.cross_signed`,
+  `ca.authority.imported`, `ca.intermediate.created`, `ca.rotated`, `ca.cross_signed`,
   `ca.certificate.revoked`, `ca.crl.published`.
 - **RFCs:** 5280 (X.509/CRL), 6960 (OCSP), 9773 (ARI).
 

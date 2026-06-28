@@ -186,6 +186,19 @@ cat > offline-root-import.json <<'JSON'
 JSON
 trstctl-cli ca authorities import-offline-root -f offline-root-import.json
 
+# Import an existing root/intermediate chain bound to a signer-held key handle.
+cat > existing-ca-ceremony.json <<'JSON'
+{"operation":"import_existing_ca","threshold":2,"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","signer_handle":"customer-existing-ca","spec":{"common_name":"Example Imported Issuing CA","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca ceremonies start -f existing-ca-ceremony.json
+trstctl-cli ca ceremonies approve <existing-ca-ceremony-id>
+trstctl-cli ca ceremonies approve <existing-ca-ceremony-id>
+
+cat > existing-ca-import.json <<'JSON'
+{"ceremony_id":"<existing-ca-ceremony-id>","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","signer_handle":"customer-existing-ca","spec":{"common_name":"Example Imported Issuing CA","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca authorities import-existing -f existing-ca-import.json
+
 cat > offline-intermediate-ceremony.json <<'JSON'
 {"operation":"create_offline_intermediate","parent_id":"<offline-root-authority-id>","threshold":2,"spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
 JSON

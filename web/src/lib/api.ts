@@ -35,6 +35,7 @@ import type {
   CBOMScanRequest,
   CACeremonyStartRequest,
   CACreateOfflineIntermediateCSRRequest,
+  CAImportExistingRequest,
   CAImportOfflineIntermediateRequest,
   CAImportOfflineRootRequest,
   CAIntermediateCSR,
@@ -242,6 +243,7 @@ export type {
   CAAuthority,
   CACeremonyStartRequest,
   CACreateOfflineIntermediateCSRRequest,
+  CAImportExistingRequest,
   CAImportOfflineIntermediateRequest,
   CAImportOfflineRootRequest,
   CAIntermediateCSR,
@@ -693,6 +695,7 @@ export interface Api {
   createCACeremony(input: CACeremonyStartRequest): Promise<CAKeyCeremony>;
   approveCACeremony(id: string): Promise<CAKeyCeremony>;
   importOfflineRootCA(input: CAImportOfflineRootRequest): Promise<CAAuthority>;
+  importExistingCA(input: CAImportExistingRequest): Promise<CAAuthority>;
   createOfflineIntermediateCSR(id: string, input: CACreateOfflineIntermediateCSRRequest): Promise<CAIntermediateCSR>;
   importOfflineIntermediateCA(id: string, input: CAImportOfflineIntermediateRequest): Promise<CAAuthority>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
@@ -857,6 +860,7 @@ export const api: Api = {
   createCACeremony: (input) => mutate<CAKeyCeremony>("POST", "/api/v1/ca/ceremonies", input),
   approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),
   importOfflineRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/offline-roots", input),
+  importExistingCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/imported", input),
   createOfflineIntermediateCSR: (id, input) => mutate<CAIntermediateCSR>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates/csr`, input),
   importOfflineIntermediateCA: (id, input) => mutate<CAAuthority>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates`, input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
