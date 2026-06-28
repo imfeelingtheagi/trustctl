@@ -841,6 +841,50 @@ func (o *Orchestrator) RecordIncidentExecution(ctx context.Context, tenantID str
 	return r, nil
 }
 
+// RecordIncidentFleetReissuance records a compromised-issuer fleet reissuance
+// evidence snapshot. The row is a projection of this event, so pause/resume,
+// rollback evidence, rebuild, and snapshot restore all replay from the immutable
+// log instead of mutating read state directly (AN-2).
+func (o *Orchestrator) RecordIncidentFleetReissuance(ctx context.Context, tenantID string, r store.IncidentFleetReissuanceRun) (store.IncidentFleetReissuanceRun, error) {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	batches := make([]projections.FleetReissuanceBatch, 0, len(r.Batches))
+	for _, b := range r.Batches {
+		batches = append(batches, projections.FleetReissuanceBatch{
+			Index: b.Index, Status: b.Status, IdentityIDs: b.IdentityIDs,
+			ReplacementIdentityIDs: b.ReplacementIdentityIDs, HealthGate: b.HealthGate,
+		})
+	}
+	healthGates := make([]projections.FleetReissuanceHealthGate, 0, len(r.HealthGates))
+	for _, g := range r.HealthGates {
+		healthGates = append(healthGates, projections.FleetReissuanceHealthGate{Name: g.Name, Status: g.Status})
+	}
+	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
+		ID: r.ID, IssuerID: r.IssuerID, Status: r.Status, Phase: r.Phase,
+		Reason: r.Reason, BatchSize: r.BatchSize, Connector: r.Connector, Target: r.Target,
+		GraphImpact: r.GraphImpact, AffectedIdentityIDs: r.AffectedIdentityIDs,
+		ReplacementIdentityIDs: r.ReplacementIdentityIDs, RevokedIdentityIDs: r.RevokedIdentityIDs,
+		ConnectorDeliveryIDs: r.ConnectorDeliveryIDs, Batches: batches, HealthGates: healthGates,
+		FailedTargets: r.FailedTargets, RollbackRefs: r.RollbackRefs,
+		EvidenceBundleFormat: r.EvidenceBundleFormat, EvidenceBundle: r.EvidenceBundle,
+		IdempotencyKey: r.IdempotencyKey, CreatedBy: r.CreatedBy,
+	})
+	if err != nil {
+		return store.IncidentFleetReissuanceRun{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventIncidentFleetReissuanceRecorded, tenantID, payload)
+	if err != nil {
+		return store.IncidentFleetReissuanceRun{}, err
+	}
+	r.TenantID = tenantID
+	if r.CreatedAt.IsZero() {
+		r.CreatedAt = ev.Time
+	}
+	r.UpdatedAt = ev.Time
+	return r, nil
+}
+
 // RecordSuccessorCertificate records a certificate.recorded event for the
 // successor produced by a renewal/rotation, carrying its predecessor link
 // (replaces_id) in the event so the link survives a Rebuild() (CORRECT-002).

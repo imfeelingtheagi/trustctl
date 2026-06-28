@@ -771,6 +771,79 @@ export interface FIPSStatus {
   self_test_passed: boolean;
 }
 
+export interface FleetReissuanceActionRequest {
+  reason?: string;
+  rollback_ref?: string;
+}
+
+export interface FleetReissuanceBatch {
+  health_gate?: string;
+  identity_ids: string[];
+  index: number;
+  replacement_identity_ids: string[];
+  status: string;
+}
+
+export interface FleetReissuanceEvidence {
+  evidence_bundle: string;
+  evidence_bundle_format: string;
+  exported_at: string;
+  failed_targets?: string[];
+  rollback_refs: string[];
+  run_id: string;
+}
+
+export interface FleetReissuanceHealthGate {
+  name: string;
+  status: string;
+}
+
+export interface FleetReissuanceRequest {
+  batch_size?: number;
+  connector?: string;
+  evidence_hint?: string;
+  health_gates?: FleetReissuanceHealthGate[];
+  issuer_id: string;
+  reason?: string;
+  rollback_ref?: string;
+  target?: string;
+}
+
+export interface FleetReissuanceRun {
+  affected_identity_ids: string[];
+  batch_count: number;
+  batch_size: number;
+  batches: FleetReissuanceBatch[];
+  connector?: string;
+  connector_deliveries?: ConnectorDelivery[];
+  connector_delivery_ids?: string[];
+  created_at: string;
+  created_by?: string;
+  evidence_bundle?: string;
+  evidence_bundle_format?: string;
+  failed_targets?: string[];
+  graph_impact: GraphImpact;
+  health_gates: FleetReissuanceHealthGate[];
+  id: string;
+  idempotency_key?: string;
+  issuer_id: string;
+  phase: string;
+  reason?: string;
+  replacement_identities?: Identity[];
+  replacement_identity_ids: string[];
+  revoked_identity_ids: string[];
+  rollback_refs: string[];
+  status: string;
+  target?: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface FleetReissuanceRunList {
+  items: FleetReissuanceRun[];
+  next_cursor?: string;
+}
+
 export interface GraphEdge {
   from: string;
   to: string;

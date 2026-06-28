@@ -570,6 +570,24 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
 	}, "identity_id")
+	fleetHealthGate := object(map[string]*Schema{
+		"name": str(), "status": str(),
+	}, "name", "status")
+	fleetBatch := object(map[string]*Schema{
+		"index": {Type: "integer"}, "status": str(),
+		"identity_ids":             {Type: "array", Items: uuid()},
+		"replacement_identity_ids": {Type: "array", Items: uuid()},
+		"health_gate":              str(),
+	}, "index", "status", "identity_ids", "replacement_identity_ids")
+	fleetReissuanceReq := object(map[string]*Schema{
+		"issuer_id": uuid(), "reason": str(), "batch_size": {Type: "integer"},
+		"connector": str(), "target": str(), "rollback_ref": str(),
+		"health_gates":  {Type: "array", Items: ref("FleetReissuanceHealthGate")},
+		"evidence_hint": str(),
+	}, "issuer_id")
+	fleetReissuanceActionReq := object(map[string]*Schema{
+		"reason": str(), "rollback_ref": str(),
+	})
 	serviceNowTicketReq := object(map[string]*Schema{
 		"instance_url":           str(),
 		"table":                  {Type: "string", Enum: []string{"incident", "change_request", "sc_task"}},
@@ -900,6 +918,30 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"replacement_identity": ref("Identity"), "connector_delivery": ref("ConnectorDelivery"),
 	}, "id", "tenant_id", "compromised_identity_id", "status", "phase", "blast_radius", "failed_targets", "rollback_refs", "created_at", "updated_at")
+	fleetReissuanceRun := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "issuer_id": uuid(),
+		"status": str(), "phase": str(), "reason": str(), "batch_size": {Type: "integer"},
+		"batch_count": {Type: "integer"}, "connector": str(), "target": str(),
+		"graph_impact":             ref("GraphImpact"),
+		"affected_identity_ids":    {Type: "array", Items: uuid()},
+		"replacement_identity_ids": {Type: "array", Items: uuid()},
+		"revoked_identity_ids":     {Type: "array", Items: uuid()},
+		"connector_delivery_ids":   {Type: "array", Items: uuid()},
+		"batches":                  {Type: "array", Items: ref("FleetReissuanceBatch")},
+		"health_gates":             {Type: "array", Items: ref("FleetReissuanceHealthGate")},
+		"failed_targets":           {Type: "array", Items: str()},
+		"rollback_refs":            {Type: "array", Items: str()},
+		"evidence_bundle_format":   str(), "evidence_bundle": str(),
+		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
+		"replacement_identities": {Type: "array", Items: ref("Identity")},
+		"connector_deliveries":   {Type: "array", Items: ref("ConnectorDelivery")},
+	}, "id", "tenant_id", "issuer_id", "status", "phase", "batch_size", "batch_count", "graph_impact", "affected_identity_ids", "replacement_identity_ids", "revoked_identity_ids", "batches", "health_gates", "rollback_refs", "created_at", "updated_at")
+	fleetReissuanceEvidence := object(map[string]*Schema{
+		"run_id": uuid(), "evidence_bundle_format": str(), "evidence_bundle": str(),
+		"rollback_refs":  {Type: "array", Items: str()},
+		"failed_targets": {Type: "array", Items: str()},
+		"exported_at":    timestamp(),
+	}, "run_id", "evidence_bundle_format", "evidence_bundle", "rollback_refs", "exported_at")
 	itsmTicket := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "provider": str(), "destination": str(),
 		"table": str(), "status": str(), "outbox_id": {Type: "integer"},
@@ -1286,6 +1328,13 @@ func componentSchemas() map[string]*Schema {
 		"IncidentExecutionRequest":       incidentExecutionReq,
 		"IncidentExecution":              incidentExecution,
 		"IncidentExecutionList":          list("IncidentExecution"),
+		"FleetReissuanceHealthGate":      fleetHealthGate,
+		"FleetReissuanceBatch":           fleetBatch,
+		"FleetReissuanceRequest":         fleetReissuanceReq,
+		"FleetReissuanceActionRequest":   fleetReissuanceActionReq,
+		"FleetReissuanceRun":             fleetReissuanceRun,
+		"FleetReissuanceRunList":         list("FleetReissuanceRun"),
+		"FleetReissuanceEvidence":        fleetReissuanceEvidence,
 		"ServiceNowTicketRequest":        serviceNowTicketReq,
 		"ITSMTicket":                     itsmTicket,
 		"Role":                           role,

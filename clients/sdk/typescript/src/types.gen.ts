@@ -1240,6 +1240,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents/fleet-reissuance-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List compromised-issuer fleet reissuance runs */
+        get: operations["listFleetReissuanceRuns"];
+        put?: never;
+        /** Run compromised-issuer fleet reissuance */
+        post: operations["startFleetReissuance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/fleet-reissuance-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a fleet reissuance run evidence pack */
+        get: operations["getFleetReissuanceRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export fleet reissuance evidence */
+        get: operations["exportFleetReissuanceEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record pause evidence for a fleet reissuance run */
+        post: operations["pauseFleetReissuance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record resume evidence for a fleet reissuance run */
+        post: operations["resumeFleetReissuance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record rollback evidence for a fleet reissuance run */
+        post: operations["rollbackFleetReissuance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuers": {
         parameters: {
             query?: never;
@@ -3071,6 +3174,80 @@ export interface components {
             module_active: boolean;
             required: boolean;
             self_test_passed: boolean;
+        };
+        FleetReissuanceActionRequest: {
+            reason?: string;
+            rollback_ref?: string;
+        };
+        FleetReissuanceBatch: {
+            health_gate?: string;
+            identity_ids: string[];
+            index: number;
+            replacement_identity_ids: string[];
+            status: string;
+        };
+        FleetReissuanceEvidence: {
+            evidence_bundle: string;
+            evidence_bundle_format: string;
+            /** Format: date-time */
+            exported_at: string;
+            failed_targets?: string[];
+            rollback_refs: string[];
+            /** Format: uuid */
+            run_id: string;
+        };
+        FleetReissuanceHealthGate: {
+            name: string;
+            status: string;
+        };
+        FleetReissuanceRequest: {
+            batch_size?: number;
+            connector?: string;
+            evidence_hint?: string;
+            health_gates?: components["schemas"]["FleetReissuanceHealthGate"][];
+            /** Format: uuid */
+            issuer_id: string;
+            reason?: string;
+            rollback_ref?: string;
+            target?: string;
+        };
+        FleetReissuanceRun: {
+            affected_identity_ids: string[];
+            batch_count: number;
+            batch_size: number;
+            batches: components["schemas"]["FleetReissuanceBatch"][];
+            connector?: string;
+            connector_deliveries?: components["schemas"]["ConnectorDelivery"][];
+            connector_delivery_ids?: string[];
+            /** Format: date-time */
+            created_at: string;
+            created_by?: string;
+            evidence_bundle?: string;
+            evidence_bundle_format?: string;
+            failed_targets?: string[];
+            graph_impact: components["schemas"]["GraphImpact"];
+            health_gates: components["schemas"]["FleetReissuanceHealthGate"][];
+            /** Format: uuid */
+            id: string;
+            idempotency_key?: string;
+            /** Format: uuid */
+            issuer_id: string;
+            phase: string;
+            reason?: string;
+            replacement_identities?: components["schemas"]["Identity"][];
+            replacement_identity_ids: string[];
+            revoked_identity_ids: string[];
+            rollback_refs: string[];
+            status: string;
+            target?: string;
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        FleetReissuanceRunList: {
+            items: components["schemas"]["FleetReissuanceRun"][];
+            next_cursor?: string;
         };
         GraphEdge: {
             from: string;
@@ -7557,6 +7734,305 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IncidentExecution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listFleetReissuanceRuns: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+                /** @description return only runs for this compromised issuer */
+                issuer_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startFleetReissuance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetReissuanceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getFleetReissuanceRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportFleetReissuanceEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceEvidence"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pauseFleetReissuance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetReissuanceActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeFleetReissuance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetReissuanceActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rollbackFleetReissuance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetReissuanceActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetReissuanceRun"];
                 };
             };
             /** @description client error */

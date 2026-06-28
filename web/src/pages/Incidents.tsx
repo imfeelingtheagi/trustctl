@@ -1,7 +1,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { Download, Pause, Play, RotateCcw } from "lucide-react";
 import {
   api,
   ApiError,
+  type FleetReissuanceEvidence,
+  type FleetReissuanceRequest,
+  type FleetReissuanceRun,
   type GraphImpact,
   type GraphNode,
   type IncidentExecution,
@@ -36,29 +40,19 @@ const defaultServiceNowTicket: ServiceNowTicketRequest = {
   correlation_id: "",
 };
 
-const fleetStages = [
-  {
-    batch: "Wave 0",
-    scope: "issuer inventory and canary service",
-    status: "12 percent complete",
-    health: "synthetic check passed",
-    failed: "0 failed targets",
-  },
-  {
-    batch: "Wave 1",
-    scope: "payments and checkout workloads",
-    status: "48 percent complete",
-    health: "two targets paused for owner review",
-    failed: "2 failed targets",
-  },
-  {
-    batch: "Wave 2",
-    scope: "remaining edge and appliance targets",
-    status: "scheduled",
-    health: "resume requires incident commander approval",
-    failed: "rollback plan staged",
-  },
-];
+const defaultFleetRun: FleetReissuanceRequest = {
+  issuer_id: "",
+  reason: "intermediate CA private key exposure",
+  batch_size: 25,
+  connector: "nginx",
+  target: "",
+  rollback_ref: "",
+  health_gates: [
+    { name: "replacement deployed", status: "passed" },
+    { name: "revocation published", status: "passed" },
+  ],
+  evidence_hint: "",
+};
 
 const breakGlassChecklist = [
   "emergency declaration names incident ID, commander, reason, and expiry",
@@ -73,27 +67,34 @@ export function Incidents() {
   const [form, setForm] = useState<IncidentExecutionRequest>(defaultExecution);
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [executions, setExecutions] = useState<IncidentExecution[]>([]);
+  const [fleetForm, setFleetForm] = useState<FleetReissuanceRequest>(defaultFleetRun);
+  const [fleetRuns, setFleetRuns] = useState<FleetReissuanceRun[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [executeError, setExecuteError] = useState<string | null>(null);
+  const [fleetError, setFleetError] = useState<string | null>(null);
   const [ticketForm, setTicketForm] = useState<ServiceNowTicketRequest>(defaultServiceNowTicket);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
+  const [latestFleetRun, setLatestFleetRun] = useState<FleetReissuanceRun | null>(null);
+  const [fleetEvidence, setFleetEvidence] = useState<FleetReissuanceEvidence | null>(null);
   const [latestTicket, setLatestTicket] = useState<ITSMTicket | null>(null);
   const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
   const breakGlassCloseRef = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [runningFleet, setRunningFleet] = useState(false);
+  const [fleetAction, setFleetAction] = useState<string | null>(null);
   const [ticketing, setTicketing] = useState(false);
 
   useEffect(() => {
     let active = true;
-    api
-      .incidentExecutions({ limit: 10 })
-      .then((result) => {
+    Promise.all([api.incidentExecutions({ limit: 10 }), api.fleetReissuanceRuns({ limit: 10 })])
+      .then(([executionResult, fleetResult]) => {
         if (!active) return;
-        setExecutions(result.items ?? []);
+        setExecutions(executionResult.items ?? []);
+        setFleetRuns(fleetResult.items ?? []);
         setLoadError(null);
       })
       .catch((err) => {
@@ -181,6 +182,70 @@ export function Incidents() {
       setTicketError(apiProblemMessage(err, "Could not queue ServiceNow ticket"));
     } finally {
       setTicketing(false);
+    }
+  }
+
+  async function startFleetReissuance(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!fleetForm.issuer_id.trim()) {
+      setFleetError("Compromised issuer ID is required.");
+      return;
+    }
+    setRunningFleet(true);
+    setFleetError(null);
+    setLatestFleetRun(null);
+    setFleetEvidence(null);
+    try {
+      const result = await api.startFleetReissuance({
+        ...fleetForm,
+        issuer_id: fleetForm.issuer_id.trim(),
+        reason: fleetForm.reason?.trim() || "fleet reissuance",
+        connector: fleetForm.connector?.trim() || "nginx",
+        target: fleetForm.target?.trim() || "unconfigured-target",
+        rollback_ref: fleetForm.rollback_ref?.trim() || "restore previous credential binding",
+      });
+      setFleetRuns((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
+      setLatestFleetRun(result);
+    } catch (err) {
+      setFleetError(apiProblemMessage(err, "Could not start fleet reissuance"));
+    } finally {
+      setRunningFleet(false);
+    }
+  }
+
+  async function recordFleetAction(kind: "pause" | "resume" | "rollback" | "evidence", run: FleetReissuanceRun) {
+    const actionKey = `${kind}:${run.id}`;
+    setFleetAction(actionKey);
+    setFleetError(null);
+    try {
+      if (kind === "evidence") {
+        const evidence = await api.exportFleetReissuanceEvidence(run.id);
+        setFleetEvidence(evidence);
+        return;
+      }
+      const input = kind === "rollback" ? { reason: "operator rollback", rollback_ref: "restore previous credential bindings" } : { reason: `operator ${kind}` };
+      const updated =
+        kind === "pause"
+          ? await api.pauseFleetReissuance(run.id, input)
+          : kind === "resume"
+            ? await api.resumeFleetReissuance(run.id, input)
+            : await api.rollbackFleetReissuance(run.id, input);
+      setFleetRuns((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)].slice(0, 10));
+      setLatestFleetRun(updated);
+      if (kind === "rollback") {
+        setFleetEvidence({
+          run_id: updated.id,
+          evidence_bundle_format: updated.evidence_bundle_format ?? "",
+          evidence_bundle: updated.evidence_bundle ?? "",
+          rollback_refs: updated.rollback_refs ?? [],
+          failed_targets: updated.failed_targets ?? [],
+          exported_at: updated.updated_at ?? new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      setFleetError(apiProblemMessage(err, `Could not ${kind} fleet reissuance`));
+    } finally {
+      setFleetAction(null);
     }
   }
 
@@ -412,37 +477,109 @@ export function Incidents() {
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="fleet-heading" className="text-title font-semibold">
-            Example fleet re-issuance plan
+            Fleet re-issuance
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Example planning data for a CA compromise drill. Live fleet batch execution is not available in this console.
-          </p>
         </div>
-        <div className="overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[56rem]">
-            <caption className="sr-only">Example fleet reissuance plan</caption>
-            <thead>
-              <tr>
-                <th scope="col">Batch</th>
-                <th scope="col">Affected issuer scope</th>
-                <th scope="col">Percent complete</th>
-                <th scope="col">Health / resume</th>
-                <th scope="col">Failed targets / rollback</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fleetStages.map((stage) => (
-                <tr key={stage.batch} className="align-top">
-                  <td className="font-medium">{stage.batch}</td>
-                  <td>{stage.scope}</td>
-                  <td>{stage.status}</td>
-                  <td>{stage.health}</td>
-                  <td>{stage.failed}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={startFleetReissuance}>
+          <label className="grid gap-1 text-sm font-medium">
+            Compromised issuer
+            <input
+              className="ui-input font-mono"
+              value={fleetForm.issuer_id}
+              onChange={(event) => setFleetForm({ ...fleetForm, issuer_id: event.target.value })}
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Batch size
+            <input
+              className="ui-input"
+              type="number"
+              min={1}
+              max={100}
+              value={fleetForm.batch_size ?? ""}
+              onChange={(event) =>
+                setFleetForm({ ...fleetForm, batch_size: event.target.value === "" ? undefined : Number(event.target.value) || undefined })
+              }
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            What happened
+            <input
+              className="ui-input"
+              value={fleetForm.reason ?? ""}
+              onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Delivery method
+            <input
+              className="ui-input"
+              value={fleetForm.connector ?? ""}
+              onChange={(event) => setFleetForm({ ...fleetForm, connector: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Deployment target
+            <input
+              className="ui-input"
+              value={fleetForm.target ?? ""}
+              onChange={(event) => setFleetForm({ ...fleetForm, target: event.target.value })}
+              placeholder="edge/prod"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Rollback instructions
+            <input
+              className="ui-input"
+              value={fleetForm.rollback_ref ?? ""}
+              onChange={(event) => setFleetForm({ ...fleetForm, rollback_ref: event.target.value })}
+              placeholder="restore previous bindings"
+            />
+          </label>
+          <div className="md:col-span-2">
+            <Button type="button" onClick={() => void startFleetReissuance()} disabled={runningFleet}>
+              <Play className="h-4 w-4" aria-hidden="true" />
+              {runningFleet ? "Starting..." : "Start fleet run"}
+            </Button>
+          </div>
+        </form>
+        {fleetError && <ErrorState title="Fleet reissuance failed">{fleetError}</ErrorState>}
+        {latestFleetRun && (
+          <section role="status" aria-labelledby="fleet-progress-heading" className="ui-panel p-comfortable">
+            <h3 id="fleet-progress-heading" className="text-title font-semibold">
+              Fleet run recorded
+            </h3>
+            <dl className="mt-3 grid gap-2 md:grid-cols-4">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Run</dt>
+                <dd className="font-mono text-xs">{latestFleetRun.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
+                <dd>{latestFleetRun.status}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Batches</dt>
+                <dd>{latestFleetRun.batch_count}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Revoked</dt>
+                <dd>{latestFleetRun.revoked_identity_ids.length}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
+        {fleetEvidence && (
+          <section role="status" aria-labelledby="fleet-evidence-heading" className="ui-panel p-comfortable">
+            <h3 id="fleet-evidence-heading" className="text-title font-semibold">
+              Fleet evidence exported
+            </h3>
+            <p className="mt-2 max-w-full truncate font-mono text-xs text-muted-foreground">{fleetEvidence.evidence_bundle}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{fleetEvidence.rollback_refs.join(", ") || "No rollback refs recorded."}</p>
+          </section>
+        )}
+        <FleetReissuanceTable runs={fleetRuns} action={fleetAction} onAction={recordFleetAction} />
       </section>
 
       <section aria-labelledby="incident-help-heading" className="grid gap-3 border-y border-border py-4">
@@ -494,6 +631,104 @@ export function Incidents() {
         )}
       </section>
     </section>
+  );
+}
+
+function FleetReissuanceTable({
+  runs,
+  action,
+  onAction,
+}: {
+  runs: FleetReissuanceRun[];
+  action: string | null;
+  onAction: (kind: "pause" | "resume" | "rollback" | "evidence", run: FleetReissuanceRun) => void;
+}) {
+  if (runs.length === 0) {
+    return <p className="text-sm text-muted-foreground">No fleet reissuance runs have been recorded.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-panel border border-border">
+      <table className="ui-table min-w-[76rem]">
+        <caption className="sr-only">Fleet reissuance runs</caption>
+        <thead>
+          <tr>
+            <th scope="col">Run</th>
+            <th scope="col">Issuer</th>
+            <th scope="col">Status</th>
+            <th scope="col">Scope</th>
+            <th scope="col">Batches</th>
+            <th scope="col">Failed targets</th>
+            <th scope="col">Evidence</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((run) => (
+            <tr key={run.id} className="align-top">
+              <td className="font-mono text-xs">{run.id}</td>
+              <td className="font-mono text-xs">{run.issuer_id}</td>
+              <td>
+                <p className="font-medium">{run.status}</p>
+                <p className="text-xs text-muted-foreground">{run.phase}</p>
+              </td>
+              <td>
+                <p>{run.affected_identity_ids.length} affected</p>
+                <p className="text-xs text-muted-foreground">{run.revoked_identity_ids.length} revoked</p>
+              </td>
+              <td>
+                <p>{run.batch_count} batches</p>
+                <p className="text-xs text-muted-foreground">{run.health_gates.map((gate) => `${gate.name}:${gate.status}`).join(", ")}</p>
+              </td>
+              <td>{run.failed_targets?.length ? run.failed_targets.join(", ") : "none"}</td>
+              <td>
+                <p className="font-medium">{run.evidence_bundle_format || "unavailable"}</p>
+                <p className="max-w-[14rem] truncate font-mono text-xs text-muted-foreground">{run.evidence_bundle || "-"}</p>
+              </td>
+              <td>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onAction("pause", run)}
+                    disabled={action === `pause:${run.id}`}
+                    aria-label={`Pause fleet run ${shortId(run.id)}`}
+                  >
+                    <Pause className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onAction("resume", run)}
+                    disabled={action === `resume:${run.id}`}
+                    aria-label={`Resume fleet run ${shortId(run.id)}`}
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onAction("rollback", run)}
+                    disabled={action === `rollback:${run.id}`}
+                    aria-label={`Rollback fleet run ${shortId(run.id)}`}
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onAction("evidence", run)}
+                    disabled={action === `evidence:${run.id}`}
+                    aria-label={`Export fleet run ${shortId(run.id)} evidence`}
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -594,6 +829,10 @@ function displayValue(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function shortId(id: string): string {
+  return id.length > 8 ? id.slice(0, 8) : id;
 }
 
 function apiProblemMessage(err: unknown, fallback: string): string {

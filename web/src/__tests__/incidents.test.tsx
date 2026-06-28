@@ -11,6 +11,12 @@ const { apiMock } = vi.hoisted(() => ({
     incidentExecutions: vi.fn(),
     executeIncident: vi.fn(),
     createServiceNowTicket: vi.fn(),
+    fleetReissuanceRuns: vi.fn(),
+    startFleetReissuance: vi.fn(),
+    pauseFleetReissuance: vi.fn(),
+    resumeFleetReissuance: vi.fn(),
+    rollbackFleetReissuance: vi.fn(),
+    exportFleetReissuanceEvidence: vi.fn(),
   },
 }));
 
@@ -24,6 +30,12 @@ vi.mock("@/lib/api", async (orig) => {
       incidentExecutions: apiMock.incidentExecutions,
       executeIncident: apiMock.executeIncident,
       createServiceNowTicket: apiMock.createServiceNowTicket,
+      fleetReissuanceRuns: apiMock.fleetReissuanceRuns,
+      startFleetReissuance: apiMock.startFleetReissuance,
+      pauseFleetReissuance: apiMock.pauseFleetReissuance,
+      resumeFleetReissuance: apiMock.resumeFleetReissuance,
+      rollbackFleetReissuance: apiMock.rollbackFleetReissuance,
+      exportFleetReissuanceEvidence: apiMock.exportFleetReissuanceEvidence,
     },
   };
 });
@@ -77,11 +89,81 @@ const execution = {
   },
 };
 
+const fleetRun = {
+  id: "66666666-6666-6666-6666-666666666666",
+  tenant_id: "tenant-1",
+  issuer_id: "77777777-7777-7777-7777-777777777777",
+  status: "executed",
+  phase: "fleet_reissued_and_compromised_revoked",
+  reason: "intermediate CA private key exposure",
+  batch_size: 1,
+  batch_count: 2,
+  connector: "nginx",
+  target: "edge/prod",
+  graph_impact: {
+    node: { id: "iss:77777777-7777-7777-7777-777777777777", kind: "issuer", name: "compromised intermediate" },
+    affected: [{ id: "id:11111111-1111-1111-1111-111111111111", kind: "credential", name: "payments-api" }],
+    by_kind: { credential: [] },
+  },
+  affected_identity_ids: ["11111111-1111-1111-1111-111111111111", "88888888-8888-8888-8888-888888888888"],
+  replacement_identity_ids: ["99999999-9999-9999-9999-999999999999", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+  revoked_identity_ids: ["11111111-1111-1111-1111-111111111111", "88888888-8888-8888-8888-888888888888"],
+  connector_delivery_ids: ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "cccccccc-cccc-cccc-cccc-cccccccccccc"],
+  batches: [
+    {
+      index: 1,
+      status: "completed",
+      identity_ids: ["11111111-1111-1111-1111-111111111111"],
+      replacement_identity_ids: ["99999999-9999-9999-9999-999999999999"],
+      health_gate: "replacement deployed:passed",
+    },
+    {
+      index: 2,
+      status: "completed",
+      identity_ids: ["88888888-8888-8888-8888-888888888888"],
+      replacement_identity_ids: ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+      health_gate: "revocation published:passed",
+    },
+  ],
+  health_gates: [
+    { name: "replacement deployed", status: "passed" },
+    { name: "revocation published", status: "passed" },
+  ],
+  failed_targets: ["nginx:edge/prod:unrouted"],
+  rollback_refs: ["issuer:77777777-7777-7777-7777-777777777777", "restore previous bindings"],
+  evidence_bundle_format: "jws",
+  evidence_bundle: "fleet.audit.bundle",
+  idempotency_key: "fleet-1",
+  created_by: "incident-commander",
+  created_at: "2026-06-20T12:10:00Z",
+  updated_at: "2026-06-20T12:10:00Z",
+  replacement_identities: [],
+  connector_deliveries: [],
+};
+
 describe("incident response served execution surface", () => {
   beforeEach(() => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
+    apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
+    apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
+    apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
+    apiMock.resumeFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, phase: "resume_recorded" });
+    apiMock.rollbackFleetReissuance.mockReset().mockResolvedValue({
+      ...fleetRun,
+      status: "rollback_recorded",
+      phase: "rollback_evidence_recorded",
+      rollback_refs: [...fleetRun.rollback_refs, "restore previous credential bindings"],
+    });
+    apiMock.exportFleetReissuanceEvidence.mockReset().mockResolvedValue({
+      run_id: fleetRun.id,
+      evidence_bundle_format: "jws",
+      evidence_bundle: "fleet.audit.bundle",
+      rollback_refs: fleetRun.rollback_refs,
+      failed_targets: fleetRun.failed_targets,
+      exported_at: fleetRun.updated_at,
+    });
     apiMock.createServiceNowTicket.mockReset().mockResolvedValue({
       id: "55555555-5555-5555-5555-555555555555",
       tenant_id: "tenant-1",
@@ -105,10 +187,10 @@ describe("incident response served execution surface", () => {
     expect(screen.queryByText(/Incident execution is not served/i)).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
-    await user.clear(screen.getByLabelText("What happened"));
-    await user.type(screen.getByLabelText("What happened"), "key export detected");
-    await user.type(screen.getByLabelText("Deployment target"), "edge/prod/payments");
-    await user.type(screen.getByLabelText("Rollback instructions"), "restore previous fullchain");
+    await user.clear(screen.getAllByLabelText("What happened")[0]);
+    await user.type(screen.getAllByLabelText("What happened")[0], "key export detected");
+    await user.type(screen.getAllByLabelText("Deployment target")[0], "edge/prod/payments");
+    await user.type(screen.getAllByLabelText("Rollback instructions")[0], "restore previous fullchain");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:11111111-1111-1111-1111-111111111111"));
@@ -129,7 +211,7 @@ describe("incident response served execution surface", () => {
     );
     expect(await screen.findByText("Incident execution recorded")).toBeInTheDocument();
     expect(await screen.findByText("nginx:edge/prod/payments:unrouted")).toBeInTheDocument();
-    expect(screen.getByText("jws")).toBeInTheDocument();
+    expect(screen.getAllByText("jws").length).toBeGreaterThan(0);
     expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("ServiceNow instance"), "http://servicenow.test");
@@ -153,7 +235,7 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
   });
 
-  it("renders fleet and break-glass sections with error state for unavailable graph preview", async () => {
+  it("runs fleet reissuance actions and keeps break-glass in help", async () => {
     apiMock.graphBlastRadius.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "graph projection is rebuilding" })));
     const user = userEvent.setup();
     renderIncidents();
@@ -162,11 +244,44 @@ describe("incident response served execution surface", () => {
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("graph projection is rebuilding");
-    expect(screen.getByRole("heading", { name: "Example fleet re-issuance plan" })).toBeInTheDocument();
-    expect(screen.getByText(/Example planning data/i)).toBeInTheDocument();
-    expect(screen.getByText("Wave 0")).toBeInTheDocument();
-    expect(screen.getByText("48 percent complete")).toBeInTheDocument();
-    expect(screen.getByText("2 failed targets")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fleet re-issuance" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Fleet reissuance runs" })).toBeInTheDocument();
+    expect(screen.getByText("66666666-6666-6666-6666-666666666666")).toBeInTheDocument();
+    expect(screen.getByText("2 affected")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Compromised issuer"), "77777777-7777-7777-7777-777777777777");
+    await user.clear(screen.getByLabelText("Batch size"));
+    await user.type(screen.getByLabelText("Batch size"), "1");
+    await user.type(screen.getAllByLabelText("Deployment target")[1], "edge/prod");
+    await user.type(screen.getAllByLabelText("Rollback instructions")[1], "restore previous bindings");
+    await user.click(screen.getByRole("button", { name: "Start fleet run" }));
+    await waitFor(() =>
+      expect(apiMock.startFleetReissuance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          issuer_id: "77777777-7777-7777-7777-777777777777",
+          batch_size: 1,
+          connector: "nginx",
+          target: "edge/prod",
+          rollback_ref: "restore previous bindings",
+        }),
+      ),
+    );
+    expect(await screen.findByText("Fleet run recorded")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Pause fleet run 66666666" }));
+    await waitFor(() => expect(apiMock.pauseFleetReissuance).toHaveBeenCalledWith(fleetRun.id, { reason: "operator pause" }));
+    await user.click(screen.getByRole("button", { name: "Resume fleet run 66666666" }));
+    await waitFor(() => expect(apiMock.resumeFleetReissuance).toHaveBeenCalledWith(fleetRun.id, { reason: "operator resume" }));
+    await user.click(screen.getByRole("button", { name: "Rollback fleet run 66666666" }));
+    await waitFor(() =>
+      expect(apiMock.rollbackFleetReissuance).toHaveBeenCalledWith(fleetRun.id, {
+        reason: "operator rollback",
+        rollback_ref: "restore previous credential bindings",
+      }),
+    );
+    expect(await screen.findByText("Fleet evidence exported")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Export fleet run 66666666 evidence" }));
+    await waitFor(() => expect(apiMock.exportFleetReissuanceEvidence).toHaveBeenCalledWith(fleetRun.id));
+    await waitFor(() => expect(screen.getAllByText("fleet.audit.bundle").length).toBeGreaterThan(0));
     expect(screen.queryByRole("heading", { name: "Break-glass procedures" })).not.toBeInTheDocument();
 
     const opener = screen.getByRole("button", { name: "Break-glass help" });

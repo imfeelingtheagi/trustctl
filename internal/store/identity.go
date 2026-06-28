@@ -197,3 +197,42 @@ func (s *Store) ListIdentities(ctx context.Context, tenantID string) ([]Identity
 	})
 	return out, err
 }
+
+// ListRevocableIdentitiesByIssuer returns every active identity issued by issuerID
+// that a compromise run is allowed to replace and revoke. The issuer predicate is
+// part of the tenant-scoped SQL denominator (AN-1): a fleet incident never trusts
+// a caller-supplied identity list as the blast radius.
+func (s *Store) ListRevocableIdentitiesByIssuer(ctx context.Context, tenantID, issuerID string) ([]Identity, error) {
+	var out []Identity
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text,
+			        status, not_before, not_after, attributes, created_at
+			   FROM identities
+			  WHERE tenant_id = $1
+			    AND issuer_id::text = $2
+			    AND status = ANY($3)
+			  ORDER BY created_at, id`,
+			tenantID, issuerID, []string{"issued", "deployed", "renewing"})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				it    Identity
+				kind  string
+				attrs []byte
+			)
+			if err := rows.Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
+				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt); err != nil {
+				return err
+			}
+			it.Kind = IdentityKind(kind)
+			it.Attributes = attrs
+			out = append(out, it)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

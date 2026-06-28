@@ -2847,6 +2847,300 @@
         ],
         "type": "object"
       },
+      "FleetReissuanceActionRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FleetReissuanceBatch": {
+        "properties": {
+          "health_gate": {
+            "type": "string"
+          },
+          "identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "replacement_identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "status",
+          "identity_ids",
+          "replacement_identity_ids"
+        ],
+        "type": "object"
+      },
+      "FleetReissuanceEvidence": {
+        "properties": {
+          "evidence_bundle": {
+            "type": "string"
+          },
+          "evidence_bundle_format": {
+            "type": "string"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "failed_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rollback_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "evidence_bundle_format",
+          "evidence_bundle",
+          "rollback_refs",
+          "exported_at"
+        ],
+        "type": "object"
+      },
+      "FleetReissuanceHealthGate": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "type": "object"
+      },
+      "FleetReissuanceRequest": {
+        "properties": {
+          "batch_size": {
+            "type": "integer"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "evidence_hint": {
+            "type": "string"
+          },
+          "health_gates": {
+            "items": {
+              "$ref": "#/components/schemas/FleetReissuanceHealthGate"
+            },
+            "type": "array"
+          },
+          "issuer_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer_id"
+        ],
+        "type": "object"
+      },
+      "FleetReissuanceRun": {
+        "properties": {
+          "affected_identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "batch_count": {
+            "type": "integer"
+          },
+          "batch_size": {
+            "type": "integer"
+          },
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/FleetReissuanceBatch"
+            },
+            "type": "array"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "connector_deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectorDelivery"
+            },
+            "type": "array"
+          },
+          "connector_delivery_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "evidence_bundle": {
+            "type": "string"
+          },
+          "evidence_bundle_format": {
+            "type": "string"
+          },
+          "failed_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "graph_impact": {
+            "$ref": "#/components/schemas/GraphImpact"
+          },
+          "health_gates": {
+            "items": {
+              "$ref": "#/components/schemas/FleetReissuanceHealthGate"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "issuer_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "replacement_identities": {
+            "items": {
+              "$ref": "#/components/schemas/Identity"
+            },
+            "type": "array"
+          },
+          "replacement_identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revoked_identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rollback_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "issuer_id",
+          "status",
+          "phase",
+          "batch_size",
+          "batch_count",
+          "graph_impact",
+          "affected_identity_ids",
+          "replacement_identity_ids",
+          "revoked_identity_ids",
+          "batches",
+          "health_gates",
+          "rollback_refs",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "FleetReissuanceRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FleetReissuanceRun"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "GraphEdge": {
         "properties": {
           "from": {
@@ -11327,6 +11621,455 @@
         ],
         "summary": "Get an incident execution evidence pack",
         "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs": {
+      "get": {
+        "operationId": "listFleetReissuanceRuns",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only runs for this compromised issuer",
+            "in": "query",
+            "name": "issuer_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List compromised-issuer fleet reissuance runs",
+        "x-trstctl-permission": "incidents:read"
+      },
+      "post": {
+        "operationId": "startFleetReissuance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetReissuanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run compromised-issuer fleet reissuance",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs/{id}": {
+      "get": {
+        "operationId": "getFleetReissuanceRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a fleet reissuance run evidence pack",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence": {
+      "get": {
+        "operationId": "exportFleetReissuanceEvidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceEvidence"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export fleet reissuance evidence",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/pause": {
+      "post": {
+        "operationId": "pauseFleetReissuance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetReissuanceActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record pause evidence for a fleet reissuance run",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/resume": {
+      "post": {
+        "operationId": "resumeFleetReissuance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetReissuanceActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record resume evidence for a fleet reissuance run",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback": {
+      "post": {
+        "operationId": "rollbackFleetReissuance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetReissuanceActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetReissuanceRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record rollback evidence for a fleet reissuance run",
+        "x-trstctl-permission": "incidents:write"
       }
     },
     "/api/v1/issuers": {

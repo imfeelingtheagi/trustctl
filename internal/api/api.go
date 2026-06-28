@@ -455,7 +455,10 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) { a.mux.ServeHTT
 
 func (a *API) routeEnabled(r route) bool {
 	switch r.opID {
-	case "executeIncident", "listIncidentExecutions", "getIncidentExecution", "startPQCMigration", "rollbackPQCMigration":
+	case "executeIncident", "listIncidentExecutions", "getIncidentExecution",
+		"startFleetReissuance", "listFleetReissuanceRuns", "getFleetReissuanceRun",
+		"pauseFleetReissuance", "resumeFleetReissuance", "rollbackFleetReissuance", "exportFleetReissuanceEvidence",
+		"startPQCMigration", "rollbackPQCMigration":
 		return a.remediation
 	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return a.managedKeys != nil
@@ -711,6 +714,11 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "identity_id", typ: "string", format: "uuid", desc: "return only executions for this compromised identity"},
 	}
+	issuerScopedPage := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+		{name: "issuer_id", typ: "string", format: "uuid", desc: "return only runs for this compromised issuer"},
+	}
 	auditQuery := []param{
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
 		{name: "feature_id", typ: "string", desc: "catalog feature id (e.g. F6); returns only events the feature's mutating actions emit"},
@@ -825,9 +833,16 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
 
 		{method: "POST", path: "/api/v1/incidents/executions", opID: "executeIncident", summary: "Execute a credential-compromise incident remediation", handler: a.executeIncident, reqSchema: "IncidentExecutionRequest", resSchema: "IncidentExecution", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
+		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs", opID: "startFleetReissuance", summary: "Run compromised-issuer fleet reissuance", handler: a.startFleetReissuance, reqSchema: "FleetReissuanceRequest", resSchema: "FleetReissuanceRun", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
 		{method: "POST", path: "/api/v1/itsm/servicenow/tickets", opID: "createServiceNowTicket", summary: "Queue a ServiceNow ITSM ticket through the outbox", handler: a.createServiceNowTicket, reqSchema: "ServiceNowTicketRequest", resSchema: "ITSMTicket", successCode: "202", mutation: true, perm: authz.IncidentsWrite},
 		{method: "GET", path: "/api/v1/incidents/executions", opID: "listIncidentExecutions", summary: "List incident execution evidence packs", handler: a.listIncidentExecutions, query: incidentScopedPage, resSchema: "IncidentExecutionList", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/incidents/executions/{id}", opID: "getIncidentExecution", summary: "Get an incident execution evidence pack", handler: a.getIncidentExecution, pathParams: idPath, resSchema: "IncidentExecution", successCode: "200", perm: authz.IncidentsRead},
+		{method: "GET", path: "/api/v1/incidents/fleet-reissuance-runs", opID: "listFleetReissuanceRuns", summary: "List compromised-issuer fleet reissuance runs", handler: a.listFleetReissuanceRuns, query: issuerScopedPage, resSchema: "FleetReissuanceRunList", successCode: "200", perm: authz.IncidentsRead},
+		{method: "GET", path: "/api/v1/incidents/fleet-reissuance-runs/{id}", opID: "getFleetReissuanceRun", summary: "Get a fleet reissuance run evidence pack", handler: a.getFleetReissuanceRun, pathParams: idPath, resSchema: "FleetReissuanceRun", successCode: "200", perm: authz.IncidentsRead},
+		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/pause", opID: "pauseFleetReissuance", summary: "Record pause evidence for a fleet reissuance run", handler: a.pauseFleetReissuance, pathParams: idPath, reqSchema: "FleetReissuanceActionRequest", resSchema: "FleetReissuanceRun", successCode: "200", mutation: true, perm: authz.IncidentsWrite},
+		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/resume", opID: "resumeFleetReissuance", summary: "Record resume evidence for a fleet reissuance run", handler: a.resumeFleetReissuance, pathParams: idPath, reqSchema: "FleetReissuanceActionRequest", resSchema: "FleetReissuanceRun", successCode: "200", mutation: true, perm: authz.IncidentsWrite},
+		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback", opID: "rollbackFleetReissuance", summary: "Record rollback evidence for a fleet reissuance run", handler: a.rollbackFleetReissuance, pathParams: idPath, reqSchema: "FleetReissuanceActionRequest", resSchema: "FleetReissuanceRun", successCode: "200", mutation: true, perm: authz.IncidentsWrite},
+		{method: "GET", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence", opID: "exportFleetReissuanceEvidence", summary: "Export fleet reissuance evidence", handler: a.exportFleetReissuanceEvidence, pathParams: idPath, resSchema: "FleetReissuanceEvidence", successCode: "200", perm: authz.IncidentsRead},
 
 		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},

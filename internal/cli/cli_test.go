@@ -360,6 +360,71 @@ func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestFleetReissuanceCommandsSendBodiesQueriesAndIdempotencyKeys(t *testing.T) {
+	var startCap capture
+	startSrv := mockServer(t, 201, `{"id":"fleet-1","status":"executed"}`, &startCap)
+	startBody := `{"issuer_id":"issuer-1","reason":"compromised intermediate","batch_size":10}`
+	code, _, _ := run(t, []string{"incidents", "fleet-reissuance", "start", "-f", "-"}, cli.Env{Server: startSrv.URL, HTTPClient: startSrv.Client()}, startBody)
+	if code != 0 {
+		t.Fatalf("start exit = %d", code)
+	}
+	if startCap.Method != "POST" || startCap.Path != "/api/v1/incidents/fleet-reissuance-runs" {
+		t.Errorf("start request = %s %s", startCap.Method, startCap.Path)
+	}
+	if strings.TrimSpace(string(startCap.Body)) != startBody {
+		t.Errorf("start body = %q, want %q", startCap.Body, startBody)
+	}
+	if startCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("fleet reissuance start mutation should send an Idempotency-Key")
+	}
+
+	var listCap capture
+	listSrv := mockServer(t, 200, `{"items":[]}`, &listCap)
+	code, _, _ = run(t, []string{"incidents", "fleet-reissuance", "list", "--issuer_id", "issuer-1", "--limit", "5"}, cli.Env{Server: listSrv.URL, HTTPClient: listSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("list exit = %d", code)
+	}
+	if listCap.Method != "GET" || listCap.Path != "/api/v1/incidents/fleet-reissuance-runs" {
+		t.Errorf("list request = %s %s", listCap.Method, listCap.Path)
+	}
+	if !strings.Contains(listCap.Query, "issuer_id=issuer-1") || !strings.Contains(listCap.Query, "limit=5") {
+		t.Errorf("list query = %q, want issuer_id and limit", listCap.Query)
+	}
+	if listCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("fleet reissuance list must not send an Idempotency-Key")
+	}
+
+	var pauseCap capture
+	pauseSrv := mockServer(t, 200, `{"id":"fleet-1","status":"paused"}`, &pauseCap)
+	pauseBody := `{"reason":"operator inspection"}`
+	code, _, _ = run(t, []string{"incidents", "fleet-reissuance", "pause", "fleet-1", "-f", "-"}, cli.Env{Server: pauseSrv.URL, HTTPClient: pauseSrv.Client()}, pauseBody)
+	if code != 0 {
+		t.Fatalf("pause exit = %d", code)
+	}
+	if pauseCap.Method != "POST" || pauseCap.Path != "/api/v1/incidents/fleet-reissuance-runs/fleet-1/pause" {
+		t.Errorf("pause request = %s %s", pauseCap.Method, pauseCap.Path)
+	}
+	if strings.TrimSpace(string(pauseCap.Body)) != pauseBody {
+		t.Errorf("pause body = %q, want %q", pauseCap.Body, pauseBody)
+	}
+	if pauseCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("fleet reissuance pause mutation should send an Idempotency-Key")
+	}
+
+	var evidenceCap capture
+	evidenceSrv := mockServer(t, 200, `{"run_id":"fleet-1"}`, &evidenceCap)
+	code, _, _ = run(t, []string{"incidents", "fleet-reissuance", "evidence", "fleet-1"}, cli.Env{Server: evidenceSrv.URL, HTTPClient: evidenceSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("evidence exit = %d", code)
+	}
+	if evidenceCap.Method != "GET" || evidenceCap.Path != "/api/v1/incidents/fleet-reissuance-runs/fleet-1/evidence" {
+		t.Errorf("evidence request = %s %s", evidenceCap.Method, evidenceCap.Path)
+	}
+	if evidenceCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("fleet reissuance evidence export must not send an Idempotency-Key")
+	}
+}
+
 func TestManagedOfferingCommandsSendStatusAndProvisionTenant(t *testing.T) {
 	var statusCap capture
 	statusSrv := mockServer(t, 200, `{"served":true,"deployment_model":"managed_provider","provider_plane_mode":"enabled"}`, &statusCap)

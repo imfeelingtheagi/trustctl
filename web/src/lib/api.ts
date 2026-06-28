@@ -66,6 +66,11 @@ import type {
   GraphReachable,
   GraphResponse,
   ITSMTicket,
+  FleetReissuanceActionRequest,
+  FleetReissuanceEvidence,
+  FleetReissuanceRequest,
+  FleetReissuanceRun,
+  FleetReissuanceRunList,
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
@@ -237,6 +242,11 @@ export type {
   GraphQueryResult,
   GraphReachable,
   GraphResponse,
+  FleetReissuanceActionRequest,
+  FleetReissuanceEvidence,
+  FleetReissuanceRequest,
+  FleetReissuanceRun,
+  FleetReissuanceRunList,
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
@@ -654,6 +664,13 @@ export interface Api {
   createServiceNowTicket(input: ServiceNowTicketRequest): Promise<ITSMTicket>;
   incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
   getIncidentExecution(id: string): Promise<IncidentExecution>;
+  startFleetReissuance(input: FleetReissuanceRequest): Promise<FleetReissuanceRun>;
+  fleetReissuanceRuns(options?: { limit?: number; cursor?: string; issuerId?: string }): Promise<FleetReissuanceRunList>;
+  getFleetReissuanceRun(id: string): Promise<FleetReissuanceRun>;
+  pauseFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
+  resumeFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
+  rollbackFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
+  exportFleetReissuanceEvidence(id: string): Promise<FleetReissuanceEvidence>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
   signCode(input: CodeSigningRequest): Promise<CodeSigningSignature>;
   signCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningSignature>;
@@ -807,6 +824,14 @@ export const api: Api = {
   createServiceNowTicket: (input) => mutate<ITSMTicket>("POST", "/api/v1/itsm/servicenow/tickets", input),
   incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
+  startFleetReissuance: (input) => mutate<FleetReissuanceRun>("POST", "/api/v1/incidents/fleet-reissuance-runs", input),
+  fleetReissuanceRuns: (options) =>
+    req<FleetReissuanceRunList>(`/api/v1/incidents/fleet-reissuance-runs${pageQueryString(options, options?.issuerId, "issuer_id")}`),
+  getFleetReissuanceRun: (id) => req<FleetReissuanceRun>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}`),
+  pauseFleetReissuance: (id, input) => mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/pause`, input),
+  resumeFleetReissuance: (id, input) => mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/resume`, input),
+  rollbackFleetReissuance: (id, input) => mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/rollback`, input),
+  exportFleetReissuanceEvidence: (id) => req<FleetReissuanceEvidence>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/evidence`),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
   signCodeKeyless: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input),
@@ -953,11 +978,11 @@ function apiTokensQueryString(options?: { limit?: number; cursor?: string; subje
   return suffix ? `?${suffix}` : "";
 }
 
-function pageQueryString(options?: { limit?: number; cursor?: string }, identityId?: string): string {
+function pageQueryString(options?: { limit?: number; cursor?: string }, scopedId?: string, scopedKey = "identity_id"): string {
   const qs = new URLSearchParams();
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
-  if (identityId) qs.set("identity_id", identityId);
+  if (scopedId) qs.set(scopedKey, scopedId);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

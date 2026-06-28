@@ -79,8 +79,13 @@ never live in the API process. What you can do end to end against the running bi
   history-reconstructable single-identity remediation — replacement issue/deploy,
   revocation, blast-radius capture, and a
   sealed evidence pack readable via `GET /api/v1/incidents/executions{,/{id}}`.
-  *Fleet-wide* re-issuance and online m-of-n break-glass issuance are not this
-  surface. Break-glass recovery reconciliation is served separately at
+  *Fleet-wide* re-issuance is served separately at
+  `POST /api/v1/incidents/fleet-reissuance-runs` with pause/resume/rollback and
+  evidence export routes under `/api/v1/incidents/fleet-reissuance-runs/{id}`,
+  matching `trstctl incidents fleet-reissuance *` CLI commands, and the `/incidents`
+  console;
+  online m-of-n break-glass issuance is not this surface. Break-glass recovery
+  reconciliation is served separately at
   `POST /api/v1/breakglass/reconcile`, where signed offline bundles are verified and
   recorded as `breakglass.issued` audit events.
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
@@ -246,12 +251,12 @@ the running binary serves**:
   **Profiles** (`/profiles`, profile list + create), **Graph** (`/graph`, graph inventory
   + blast-radius query), **Audit** (`/audit`, audit-event list + evidence export),
   **dual-control approvals** from the identity table, licensed **incident execution** (`/incidents`,
-  replacement issue/deploy, revocation queue, connector receipt, rollback evidence, and
-  sealed audit bundle), and the existing
+  replacement issue/deploy, compromised-issuer fleet reissuance, revocation queue,
+  connector receipt, rollback evidence, and sealed audit bundle), and the existing
   **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**
-  surfaces remain labeled here until they receive their own served UI: fleet
-  reissuance/break-glass workflows (with API-served break-glass reconciliation but no
-  console workflow), secret-sync dispatch, connector-driven deploy actions, discovery
+  surfaces remain labeled here until they receive their own served UI: online
+  break-glass issuance workflows (with API-served break-glass reconciliation but no
+  always-online issuance workflow), secret-sync dispatch, connector-driven deploy actions, discovery
   scan scheduling, and very-large-list cursor/virtualized browsing.
 - **Console UX hardening.** A **destructive-transition confirmation**
   (revoke/retire require an explicit, credential-named confirm dialog) and

@@ -82,6 +82,17 @@ because re-issuance is idempotent and outbound work is journaled first so a cras
 drop or duplicate it. For an SSH CA it re-establishes trust and publishes an updated KRL
 *after* confirmed-healthy re-issuance.
 
+**Status:** compromised-issuer fleet re-issuance is served through
+`POST /api/v1/incidents/fleet-reissuance-runs`, with list/get evidence at
+`GET /api/v1/incidents/fleet-reissuance-runs{,/{id}}`, pause/resume/rollback evidence
+at `POST /api/v1/incidents/fleet-reissuance-runs/{id}/{pause,resume,rollback}`, and a
+signed evidence export at
+`GET /api/v1/incidents/fleet-reissuance-runs/{id}/evidence`. The run enumerates the
+tenant's affected identities by issuer, batches the replacements, deploys replacements
+before revoking originals, records connector delivery receipts, and projects
+`incident.fleet_reissuance.recorded` evidence. CLI parity is
+`trstctl-cli incidents fleet-reissuance start|list|get|pause|resume|rollback|evidence`.
+
 ### Just-in-time issuance with approval (F33)
 
 JIT turns issuance into an approval workflow. A request enters `awaiting-approval` and
@@ -146,6 +157,9 @@ Credential compromise is served through REST, CLI, and the console:
 
 ```bash
 trstctl incidents executions execute -f incident.json
+trstctl incidents fleet-reissuance start -f compromised-issuer.json
+trstctl incidents fleet-reissuance pause 33333333-3333-4333-8333-333333333333 -f pause.json
+trstctl incidents fleet-reissuance evidence 33333333-3333-4333-8333-333333333333
 trstctl itsm servicenow tickets create -f servicenow-ticket.json
 trstctl incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
 trstctl incidents executions get 22222222-2222-2222-2222-222222222222
@@ -262,13 +276,15 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 - **Serving status:** credential-compromise execution (F31) is served through
   `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`;
+  CA-compromise fleet re-issuance (F32) is served through
+  `/api/v1/incidents/fleet-reissuance-runs`,
+  `trstctl incidents fleet-reissuance *`, and the `/incidents` console;
   compromised-credential / stolen-token detection (CAP-ITDR-02) is served through
   `credential_compromise` Discovery sources, runs, and findings;
   ServiceNow / ITSM ticket creation is served through
   `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is served. Break-glass reconciliation is served at
-  `/api/v1/breakglass/reconcile`, while online emergency issuance and fleet reissue
-  still expose their current library/operator limits until their own served surfaces
-  land.
+  `/api/v1/breakglass/reconcile`; online emergency issuance still remains an offline
+  ceremony plus reconciliation path rather than an always-online issuance surface.
 - **Order matters in remediation.** The reissue-before-revoke ordering is deliberate;
   don't shortcut it, or you risk an outage mid-incident.
 - **JIT needs real approvers configured** and a notifier wired, or requests will sit in
@@ -285,7 +301,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   `Workflow.Preview`, `Workflow.Remediate` (replacement→deploy→revoke).
 - **ITSM:** `/api/v1/itsm/servicenow/tickets`, `itsm.ticket.requested`,
   `itsm.servicenow` outbox delivery; token material by `token_ref` only.
-- **Fleet:** `Fleet.ReissueFleet(issuerID, runID)` — staged, health-checked, resumable.
+- **Fleet:** `/api/v1/incidents/fleet-reissuance-runs`,
+  `trstctl incidents fleet-reissuance *`,
+  `incident.fleet_reissuance.recorded` — staged, health-checked, resumable.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.
 - **PAM-lite:** `/api/v1/access/sessions`; Postgres scoped login roles; OpenSSH user

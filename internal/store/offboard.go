@@ -31,6 +31,7 @@ var TenantScopedTables = []string{
 	"discovery_runs",
 	"discovery_schedules",
 	"discovery_sources",
+	"incident_fleet_reissuance_runs",
 	"incident_executions",
 	"pam_sessions",
 	"nhi_access_review_items",

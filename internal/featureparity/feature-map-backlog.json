@@ -4741,44 +4741,96 @@
       "domain": "Incident and JIT",
       "phase": "P2",
       "priority": 73,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Incidents at /incidents - fleet reissue wave, health, resume, rollback, failed target, and audit receipt fixture; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served compromised-issuer fleet reissuance with graph enumeration, batched replacement issue/deploy, original revocation, pause/resume/rollback evidence, and signed evidence export",
+      "current_frontend_mapping": "served: Incidents at /incidents starts compromised-issuer fleet runs, shows batch/health/progress/failed-target evidence, and records pause/resume/rollback/export actions from served API data; coverage ledger: /coverage",
       "target_gui_mapping": "Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts.",
-      "acceptance_test": "UI must simulate staged plan with fixtures and block live run until served workflow exists.",
+      "acceptance_test": "Served e2e test proves a compromised issuer reissues, deploys, and revokes multiple identities with rollback evidence; UI test starts the live fleet run and exercises pause/resume/rollback/evidence export actions.",
       "source_docs": ["docs/features/incident-and-jit.md"],
-      "source_backend": ["ee/fleet"],
-      "source_frontend": [],
+      "source_backend": [
+        "/api/v1/incidents/fleet-reissuance-runs",
+        "/api/v1/incidents/fleet-reissuance-runs/{id}",
+        "/api/v1/incidents/fleet-reissuance-runs/{id}/pause",
+        "/api/v1/incidents/fleet-reissuance-runs/{id}/resume",
+        "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback",
+        "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence",
+        "internal/api/incident_fleet_reissuance.go",
+        "internal/server/incident_fleet_reissuance_served_test.go"
+      ],
+      "source_frontend": ["web/src/pages/Incidents.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub and JOURNEY-003. Test evidence: internal/server/incident_fleet_reissuance_served_test.go proves a compromised issuer is enumerated through the graph, split into health-gated batches, reissued/deployed through served identity and connector paths, revoked at the original identities, and exported with rollback/evidence refs. UI evidence: web/src/__tests__/incidents.test.tsx starts a live fleet run and records pause/resume/rollback/evidence export from /incidents.",
+      "api_surface": [
+        "startFleetReissuance",
+        "listFleetReissuanceRuns",
+        "getFleetReissuanceRun",
+        "pauseFleetReissuance",
+        "resumeFleetReissuance",
+        "rollbackFleetReissuance",
+        "exportFleetReissuanceEvidence"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "incidents fleet-reissuance start",
+        "incidents fleet-reissuance list",
+        "incidents fleet-reissuance get",
+        "incidents fleet-reissuance pause",
+        "incidents fleet-reissuance resume",
+        "incidents fleet-reissuance rollback",
+        "incidents fleet-reissuance evidence"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=served",
+            "backend_status=served compromised-issuer fleet reissuance with graph enumeration, batched replacement issue/deploy, original revocation, pause/resume/rollback evidence, and signed evidence export"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Incidents at /incidents - fleet reissue wave, health, resume, rollback, failed target, and audit receipt fixture; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Incidents at /incidents starts compromised-issuer fleet runs, shows batch/health/progress/failed-target evidence, and records pause/resume/rollback/export actions from served API data; coverage ledger: /coverage",
             "target_gui_mapping: Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Incidents.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: incidents fleet-reissuance start",
+            "CLI command: incidents fleet-reissuance list",
+            "CLI command: incidents fleet-reissuance get",
+            "CLI command: incidents fleet-reissuance pause",
+            "CLI command: incidents fleet-reissuance resume",
+            "CLI command: incidents fleet-reissuance rollback",
+            "CLI command: incidents fleet-reissuance evidence"
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: startFleetReissuance",
+            "OpenAPI operationId: listFleetReissuanceRuns",
+            "OpenAPI operationId: getFleetReissuanceRun",
+            "OpenAPI operationId: pauseFleetReissuance",
+            "OpenAPI operationId: resumeFleetReissuance",
+            "OpenAPI operationId: rollbackFleetReissuance",
+            "OpenAPI operationId: exportFleetReissuanceEvidence"
+          ],
+          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI must simulate staged plan with fixtures and block live run until served workflow exists.",
+            "acceptance_test: Served e2e test proves a compromised issuer reissues, deploys, and revokes multiple identities with rollback evidence; UI test starts the live fleet run and exercises pause/resume/rollback/evidence export actions.",
+            "internal/server/incident_fleet_reissuance_served_test.go proves graph-enumerated compromised issuer runs reissue/deploy replacements, revoke originals, record pause/resume/rollback events, and export evidence.",
+            "internal/cli/cli_test.go proves fleet reissuance CLI start/list/pause/evidence commands map to the served API with idempotency on mutations.",
+            "web/src/__tests__/incidents.test.tsx proves /incidents calls startFleetReissuance and all operator evidence actions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/incident_fleet_reissuance_served_test.go",
+            "internal/cli/cli_test.go",
+            "web/src/__tests__/incidents.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -4789,17 +4841,26 @@
           "refs": ["docs/features/incident-and-jit.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest guards fleet reissuance routes with incidents:read/write; startFleetReissuance also requires certs:issue before minting replacements.",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded fleet reissuance operations."
+          ],
+          "refs": ["internal/featureparity/authz_manifest.go", "internal/api/api.go", "internal/api/incident_fleet_reissuance.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F32; current mapping is disclosure: Incidents at /incidents - fleet reissue wave, health, resume, rollback, failed target, and audit receipt fixture; coverage ledger: /coverage."
+          "evidence": [
+            "startFleetReissuance records incident.fleet_reissuance.recorded with graph impact, batch, delivery, failed target, rollback, and JWS evidence; pause/resume/rollback re-emit the same event family for immutable replay.",
+            "replacement deployment records connector delivery receipts and original identity revocation is projected from lifecycle transitions."
+          ],
+          "refs": ["internal/api/incident_fleet_reissuance.go", "internal/orchestrator/commands.go", "internal/projections/projections.go", "internal/eventledger/ledger.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F32 has a served API/protocol entrypoint."
+          "evidence": ["served HTTP entrypoints are covered by normalized request metrics and tracing without tenant/secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, axe checks, and icon-button aria labels cover the GUI fleet reissuance path."],
+          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/__tests__/incidents.test.tsx", "web/src/index.css"]
         },
         "i18n": {
           "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],

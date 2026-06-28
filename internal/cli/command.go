@@ -128,6 +128,13 @@ var commandTable = []Command{
 	{Name: []string{"incidents", "executions", "execute"}, Method: "POST", Path: "/api/v1/incidents/executions", Body: bodyFile, Summary: "Execute credential-compromise remediation"},
 	{Name: []string{"incidents", "executions", "list"}, Method: "GET", Path: "/api/v1/incidents/executions", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List incident execution evidence packs"},
 	{Name: []string{"incidents", "executions", "get"}, Method: "GET", Path: "/api/v1/incidents/executions/{id}", Summary: "Get an incident execution evidence pack"},
+	{Name: []string{"incidents", "fleet-reissuance", "start"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs", Body: bodyFile, Summary: "Start compromised-issuer fleet reissuance"},
+	{Name: []string{"incidents", "fleet-reissuance", "list"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs", Query: []string{"limit", "cursor", "issuer_id"}, Summary: "List compromised-issuer fleet reissuance runs"},
+	{Name: []string{"incidents", "fleet-reissuance", "get"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}", Summary: "Get a fleet reissuance evidence pack"},
+	{Name: []string{"incidents", "fleet-reissuance", "pause"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/pause", Body: bodyFile, Summary: "Record pause evidence for a fleet reissuance run"},
+	{Name: []string{"incidents", "fleet-reissuance", "resume"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/resume", Body: bodyFile, Summary: "Record resume evidence for a fleet reissuance run"},
+	{Name: []string{"incidents", "fleet-reissuance", "rollback"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback", Body: bodyFile, Summary: "Record rollback evidence for a fleet reissuance run"},
+	{Name: []string{"incidents", "fleet-reissuance", "evidence"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence", Summary: "Export fleet reissuance evidence"},
 	{Name: []string{"itsm", "servicenow", "tickets", "create"}, Method: "POST", Path: "/api/v1/itsm/servicenow/tickets", Body: bodyFile, Summary: "Queue a ServiceNow ITSM ticket through the outbox"},
 	{Name: []string{"breakglass", "reconcile"}, Method: "POST", Path: "/api/v1/breakglass/reconcile", Body: bodyFile, Summary: "Reconcile signed offline break-glass bundles into audit"},
 

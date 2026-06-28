@@ -1145,6 +1145,107 @@ FIPSStatus = TypedDict(
     total=False,
 )
 
+FleetReissuanceActionRequest = TypedDict(
+    'FleetReissuanceActionRequest',
+    {
+        'reason': str,
+        'rollback_ref': str,
+    },
+    total=False,
+)
+
+FleetReissuanceBatch = TypedDict(
+    'FleetReissuanceBatch',
+    {
+        'health_gate': str,
+        'identity_ids': list[str],
+        'index': int,
+        'replacement_identity_ids': list[str],
+        'status': str,
+    },
+    total=False,
+)
+
+FleetReissuanceEvidence = TypedDict(
+    'FleetReissuanceEvidence',
+    {
+        'evidence_bundle': str,
+        'evidence_bundle_format': str,
+        'exported_at': str,
+        'failed_targets': list[str],
+        'rollback_refs': list[str],
+        'run_id': str,
+    },
+    total=False,
+)
+
+FleetReissuanceHealthGate = TypedDict(
+    'FleetReissuanceHealthGate',
+    {
+        'name': str,
+        'status': str,
+    },
+    total=False,
+)
+
+FleetReissuanceRequest = TypedDict(
+    'FleetReissuanceRequest',
+    {
+        'batch_size': int,
+        'connector': str,
+        'evidence_hint': str,
+        'health_gates': list[dict[str, Any]],
+        'issuer_id': str,
+        'reason': str,
+        'rollback_ref': str,
+        'target': str,
+    },
+    total=False,
+)
+
+FleetReissuanceRun = TypedDict(
+    'FleetReissuanceRun',
+    {
+        'affected_identity_ids': list[str],
+        'batch_count': int,
+        'batch_size': int,
+        'batches': list[dict[str, Any]],
+        'connector': str,
+        'connector_deliveries': list[dict[str, Any]],
+        'connector_delivery_ids': list[str],
+        'created_at': str,
+        'created_by': str,
+        'evidence_bundle': str,
+        'evidence_bundle_format': str,
+        'failed_targets': list[str],
+        'graph_impact': dict[str, Any],
+        'health_gates': list[dict[str, Any]],
+        'id': str,
+        'idempotency_key': str,
+        'issuer_id': str,
+        'phase': str,
+        'reason': str,
+        'replacement_identities': list[dict[str, Any]],
+        'replacement_identity_ids': list[str],
+        'revoked_identity_ids': list[str],
+        'rollback_refs': list[str],
+        'status': str,
+        'target': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+FleetReissuanceRunList = TypedDict(
+    'FleetReissuanceRunList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 GraphEdge = TypedDict(
     'GraphEdge',
     {
