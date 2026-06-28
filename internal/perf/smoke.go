@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -37,6 +38,12 @@ type Result struct {
 	Failures            []string `json:"failures,omitempty"`
 }
 
+type Observation struct {
+	ErrorBudgetPercent  float64 `json:"error_budget_percent"`
+	QueueSaturation     float64 `json:"queue_saturation"`
+	ProjectionLagEvents int     `json:"projection_lag_events"`
+}
+
 type Report struct {
 	SchemaVersion       int      `json:"schema_version"`
 	Profile             string   `json:"profile"`
@@ -57,11 +64,18 @@ type Summary struct {
 type operation func() error
 
 func RunSmoke(profile string, samples int) (Report, error) {
+	return RunSmokeWithObservations(profile, samples, nil)
+}
+
+func RunSmokeWithObservations(profile string, samples int, observations map[string]Observation) (Report, error) {
 	if profile == "" {
 		profile = "smoke"
 	}
 	if samples <= 0 {
 		samples = 64
+	}
+	if err := validateObservations(observations); err != nil {
+		return Report{}, err
 	}
 	ops, cleanup, err := operations()
 	if err != nil {
@@ -81,7 +95,7 @@ func RunSmoke(profile string, samples int) (Report, error) {
 		if !ok {
 			return Report{}, fmt.Errorf("perf: no smoke operation for hot path %s", slo.HotPath)
 		}
-		result := measure(slo, op, samples)
+		result := measure(slo, op, samples, observations[slo.HotPath])
 		report.Results = append(report.Results, result)
 		if result.Met {
 			report.Summary.Met++
@@ -94,6 +108,37 @@ func RunSmoke(profile string, samples int) (Report, error) {
 	return report, nil
 }
 
+func LoadSmokeObservations(path string) (map[string]Observation, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read perf observations: %w", err)
+	}
+	observations := map[string]Observation{}
+	if err := json.Unmarshal(data, &observations); err != nil {
+		return nil, fmt.Errorf("decode perf observations: %w", err)
+	}
+	if err := validateObservations(observations); err != nil {
+		return nil, err
+	}
+	return observations, nil
+}
+
+func validateObservations(observations map[string]Observation) error {
+	if len(observations) == 0 {
+		return nil
+	}
+	known := map[string]bool{}
+	for _, slo := range HotPaths() {
+		known[slo.HotPath] = true
+	}
+	for hotPath := range observations {
+		if !known[hotPath] {
+			return fmt.Errorf("perf: observation for unknown hot path %s", hotPath)
+		}
+	}
+	return nil
+}
+
 func capacityTierIDs() []string {
 	tiers := CapacityTiers()
 	out := make([]string, 0, len(tiers))
@@ -103,7 +148,7 @@ func capacityTierIDs() []string {
 	return out
 }
 
-func measure(slo HotPathSLO, op operation, samples int) Result {
+func measure(slo HotPathSLO, op operation, samples int, observation Observation) Result {
 	_ = op() // warm the path before measuring.
 	durations := make([]float64, 0, samples)
 	startAll := time.Now()
@@ -126,19 +171,33 @@ func measure(slo HotPathSLO, op operation, samples int) Result {
 		P95MS:               percentile(durations, 0.95),
 		P99MS:               percentile(durations, 0.99),
 		ThroughputPerSecond: float64(samples) / elapsed,
-		ErrorBudgetPercent:  0,
-		QueueSaturation:     0,
-		ProjectionLagEvents: 0,
+		ErrorBudgetPercent:  observation.ErrorBudgetPercent,
+		QueueSaturation:     observation.QueueSaturation,
+		ProjectionLagEvents: observation.ProjectionLagEvents,
 		Failures:            failures,
 	}
-	result.Met = len(failures) == 0 &&
-		result.P50MS <= slo.P50MS &&
-		result.P95MS <= slo.P95MS &&
-		result.P99MS <= slo.P99MS &&
-		result.ThroughputPerSecond >= slo.MinThroughputPerSecond &&
-		result.ErrorBudgetPercent <= slo.ErrorBudgetPercent &&
-		result.QueueSaturation <= slo.MaxQueueSaturation &&
-		result.ProjectionLagEvents <= slo.MaxProjectionLagEvents
+	if result.P50MS > slo.P50MS {
+		result.Failures = append(result.Failures, fmt.Sprintf("p50 %.2fms exceeds %.2fms", result.P50MS, slo.P50MS))
+	}
+	if result.P95MS > slo.P95MS {
+		result.Failures = append(result.Failures, fmt.Sprintf("p95 %.2fms exceeds %.2fms", result.P95MS, slo.P95MS))
+	}
+	if result.P99MS > slo.P99MS {
+		result.Failures = append(result.Failures, fmt.Sprintf("p99 %.2fms exceeds %.2fms", result.P99MS, slo.P99MS))
+	}
+	if result.ThroughputPerSecond < slo.MinThroughputPerSecond {
+		result.Failures = append(result.Failures, fmt.Sprintf("throughput %.2f/s below %.2f/s", result.ThroughputPerSecond, slo.MinThroughputPerSecond))
+	}
+	if result.ErrorBudgetPercent > slo.ErrorBudgetPercent {
+		result.Failures = append(result.Failures, fmt.Sprintf("error budget %.2f%% exceeds %.2f%%", result.ErrorBudgetPercent, slo.ErrorBudgetPercent))
+	}
+	if result.QueueSaturation > slo.MaxQueueSaturation {
+		result.Failures = append(result.Failures, fmt.Sprintf("queue saturation %.2f exceeds %.2f", result.QueueSaturation, slo.MaxQueueSaturation))
+	}
+	if result.ProjectionLagEvents > slo.MaxProjectionLagEvents {
+		result.Failures = append(result.Failures, fmt.Sprintf("projection lag %d events exceeds %d", result.ProjectionLagEvents, slo.MaxProjectionLagEvents))
+	}
+	result.Met = len(result.Failures) == 0
 	return result
 }
 

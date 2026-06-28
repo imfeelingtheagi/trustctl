@@ -14,12 +14,21 @@ func main() {
 	var (
 		profile     = flag.String("profile", "smoke", "perf profile name")
 		out         = flag.String("out", "", "optional JSON output path; stdout when empty")
+		obsPath     = flag.String("observations", "", "optional JSON hot-path runtime observations file")
 		samples     = flag.Int("samples", 64, "samples per hot path")
 		printPretty = flag.Bool("pretty", true, "pretty-print JSON")
 	)
 	flag.Parse()
 
-	report, err := perf.RunSmoke(*profile, *samples)
+	var observations map[string]perf.Observation
+	if *obsPath != "" {
+		var err error
+		observations, err = perf.LoadSmokeObservations(*obsPath)
+		if err != nil {
+			fail("load perf observations: %v", err)
+		}
+	}
+	report, err := perf.RunSmokeWithObservations(*profile, *samples, observations)
 	if err != nil {
 		fail("run perf smoke: %v", err)
 	}
