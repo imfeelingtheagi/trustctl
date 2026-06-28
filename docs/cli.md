@@ -50,7 +50,7 @@ secret injection:
 | `owners` | `create` · `list` · `get` · `update` · `delete` |
 | `issuers` | `create` · `list` · `get` |
 | `ca ceremonies` | `start` · `get` · `approve` |
-| `ca authorities` | `list` · `create-root` · `create-intermediate` · `issue-intermediate-csr` · `issue` |
+| `ca authorities` | `list` · `create-root` · `import-offline-root` · `create-intermediate` · `offline-intermediate-csr` · `import-offline-intermediate` · `issue-intermediate-csr` · `issue` |
 | `external-cas` | `list` · `issue` |
 | `identities` | `create` · `list` · `get` · `transition` · `approve` |
 | `certificates` | `ingest` · `list` · `get` |
@@ -160,7 +160,7 @@ trstctl-cli certificates list --limit 50
 
 # Start a root CA ceremony, collect two approvals, then create the root.
 cat > root-ceremony.json <<'JSON'
-{"operation":"root","threshold":2,"spec":{"common_name":"Example Root CA","validity":"87600h","is_ca":true,"max_path_len":1}}
+{"operation":"create_root","threshold":2,"spec":{"common_name":"Example Root CA","ttl_seconds":315360000,"signature_algorithm":"ECDSA-P256","max_path_len":1,"permitted_dns_domains":["example.internal"]}}
 JSON
 trstctl-cli ca ceremonies start -f root-ceremony.json
 # Run each approval with a distinct custodian token.
@@ -168,9 +168,40 @@ trstctl-cli ca ceremonies approve <ceremony-id>
 trstctl-cli ca ceremonies approve <ceremony-id>
 
 cat > root-create.json <<'JSON'
-{"ceremony_id":"<ceremony-id>","spec":{"common_name":"Example Root CA","validity":"87600h","is_ca":true,"max_path_len":1}}
+{"ceremony_id":"<ceremony-id>","spec":{"common_name":"Example Root CA","ttl_seconds":315360000,"signature_algorithm":"ECDSA-P256","max_path_len":1,"permitted_dns_domains":["example.internal"]}}
 JSON
 trstctl-cli ca authorities create-root -f root-create.json
+
+# Import an offline root, generate a signer-held intermediate CSR, sign it offline,
+# then import the signed intermediate.
+cat > offline-root-ceremony.json <<'JSON'
+{"operation":"import_offline_root","threshold":2,"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","spec":{"common_name":"Example Offline Root CA","ttl_seconds":315360000,"signature_algorithm":"ECDSA-P256","max_path_len":1,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca ceremonies start -f offline-root-ceremony.json
+trstctl-cli ca ceremonies approve <offline-root-ceremony-id>
+trstctl-cli ca ceremonies approve <offline-root-ceremony-id>
+
+cat > offline-root-import.json <<'JSON'
+{"ceremony_id":"<offline-root-ceremony-id>","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","spec":{"common_name":"Example Offline Root CA","ttl_seconds":315360000,"signature_algorithm":"ECDSA-P256","max_path_len":1,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca authorities import-offline-root -f offline-root-import.json
+
+cat > offline-intermediate-ceremony.json <<'JSON'
+{"operation":"create_offline_intermediate","parent_id":"<offline-root-authority-id>","threshold":2,"spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca ceremonies start -f offline-intermediate-ceremony.json
+trstctl-cli ca ceremonies approve <offline-intermediate-ceremony-id>
+trstctl-cli ca ceremonies approve <offline-intermediate-ceremony-id>
+
+cat > offline-intermediate-csr.json <<'JSON'
+{"ceremony_id":"<offline-intermediate-ceremony-id>","spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca authorities offline-intermediate-csr <offline-root-authority-id> -f offline-intermediate-csr.json
+
+cat > offline-intermediate-import.json <<'JSON'
+{"ceremony_id":"<offline-intermediate-ceremony-id>","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
+JSON
+trstctl-cli ca authorities import-offline-intermediate <offline-root-authority-id> -f offline-intermediate-import.json
 
 # Sign an external intermediate CA CSR, for example SPIRE's local server CA.
 cat > spire-intermediate.json <<'JSON'

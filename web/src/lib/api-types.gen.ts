@@ -249,8 +249,9 @@ export interface CAAuthorityList {
 }
 
 export interface CACeremonyStartRequest {
+  certificate_pem?: string;
   csr_pem?: string;
-  operation: "create_root" | "create_intermediate" | "issue_intermediate_csr";
+  operation: "create_root" | "import_offline_root" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr";
   parent_id?: string;
   spec: CASpec;
   threshold: number;
@@ -262,9 +263,33 @@ export interface CACreateIntermediateRequest {
   spec: CASpec;
 }
 
+export interface CACreateOfflineIntermediateCSRRequest {
+  ceremony_id: string;
+  spec: CASpec;
+}
+
 export interface CACreateRootRequest {
   ceremony_id: string;
   spec: CASpec;
+}
+
+export interface CAImportOfflineIntermediateRequest {
+  ceremony_id: string;
+  certificate_pem: string;
+  spec: CASpec;
+}
+
+export interface CAImportOfflineRootRequest {
+  ceremony_id: string;
+  certificate_pem: string;
+  spec: CASpec;
+}
+
+export interface CAIntermediateCSR {
+  ceremony_id: string;
+  csr_pem: string;
+  parent_id: string;
+  signer_handle: string;
 }
 
 export interface CAIssueIntermediateRequest {

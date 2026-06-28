@@ -6,11 +6,26 @@ import { PageHeader } from "@/components/PageHeader";
 import { CAOverview } from "@/components/ca";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type CACeremonyStartRequest, type CAKeyCeremony, type ExternalCA, type Issuer, type IssuerRequest, type ManagedKey, type Profile } from "@/lib/api";
+import { useTranslation } from "@/i18n/I18nProvider";
+import {
+  api,
+  ApiError,
+  type CAAuthority,
+  type CACeremonyStartRequest,
+  type CAIntermediateCSR,
+  type CAKeyCeremony,
+  type ExternalCA,
+  type Issuer,
+  type IssuerRequest,
+  type ManagedKey,
+  type Profile,
+} from "@/lib/api";
 import { defaultIssuerConfigValues, issuerTypes, splitPEMChain, type IssuerConfigField, type IssuerTypeConfig } from "@/lib/issuerCatalog";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type ProbeState = { issuerID: string; issuerName: string; status: "pending" | "passed" | "failed"; message: string };
+type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDomains: string; maxPathLen: string; ttlDays: string };
+type OfflineIntermediateForm = OfflineCAForm & { parentID: string };
 
 const rootCeremonyRequest: CACeremonyStartRequest = {
   operation: "create_root",
@@ -24,6 +39,21 @@ const rootCeremonyRequest: CACeremonyStartRequest = {
 };
 
 const managedKeyRequest = { algorithm: "ECDSA-P256" };
+const offlineRootDefaults: OfflineCAForm = {
+  certificatePEM: "",
+  commonName: "Offline Root CA",
+  dnsDomains: "example.internal",
+  maxPathLen: "1",
+  ttlDays: "3650",
+};
+const offlineIntermediateDefaults: OfflineIntermediateForm = {
+  parentID: "",
+  certificatePEM: "",
+  commonName: "Offline Issuing Intermediate",
+  dnsDomains: "example.internal",
+  maxPathLen: "0",
+  ttlDays: "825",
+};
 
 export function CAHierarchy() {
   const [issuers, setIssuers] = useState<Issuer[]>([]);
@@ -40,6 +70,15 @@ export function CAHierarchy() {
   const [issuerBusy, setIssuerBusy] = useState(false);
   const [issuerError, setIssuerError] = useState<string | null>(null);
   const [probe, setProbe] = useState<ProbeState | null>(null);
+  const [offlineRootForm, setOfflineRootForm] = useState<OfflineCAForm>(offlineRootDefaults);
+  const [offlineIntermediateForm, setOfflineIntermediateForm] = useState<OfflineIntermediateForm>(offlineIntermediateDefaults);
+  const [offlineRootCeremonyID, setOfflineRootCeremonyID] = useState("");
+  const [offlineIntermediateCeremonyID, setOfflineIntermediateCeremonyID] = useState("");
+  const [offlineRoot, setOfflineRoot] = useState<CAAuthority | null>(null);
+  const [offlineCSR, setOfflineCSR] = useState<CAIntermediateCSR | null>(null);
+  const [offlineIntermediate, setOfflineIntermediate] = useState<CAAuthority | null>(null);
+  const [offlineBusy, setOfflineBusy] = useState(false);
+  const [offlineError, setOfflineError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -166,6 +205,99 @@ export function CAHierarchy() {
     }
   }
 
+  async function startOfflineRootCeremony() {
+    setOfflineBusy(true);
+    setOfflineError(null);
+    try {
+      const certPEM = offlineRootForm.certificatePEM.trim();
+      const next = await api.createCACeremony({
+        operation: "import_offline_root",
+        threshold: 2,
+        certificate_pem: certPEM,
+        spec: offlineFormSpec(offlineRootForm),
+      });
+      setOfflineRootCeremonyID(next.id);
+      setCeremony(next);
+    } catch (err) {
+      setOfflineError(errorText(err, "Could not start offline-root ceremony"));
+    } finally {
+      setOfflineBusy(false);
+    }
+  }
+
+  async function importOfflineRoot() {
+    setOfflineBusy(true);
+    setOfflineError(null);
+    try {
+      const next = await api.importOfflineRootCA({
+        ceremony_id: offlineRootCeremonyID.trim(),
+        certificate_pem: offlineRootForm.certificatePEM.trim(),
+        spec: offlineFormSpec(offlineRootForm),
+      });
+      setOfflineRoot(next);
+      setOfflineIntermediateForm((current) => ({ ...current, parentID: next.id }));
+    } catch (err) {
+      setOfflineError(errorText(err, "Could not import offline root"));
+    } finally {
+      setOfflineBusy(false);
+    }
+  }
+
+  async function startOfflineIntermediateCeremony() {
+    setOfflineBusy(true);
+    setOfflineError(null);
+    try {
+      const parentID = offlineIntermediateForm.parentID.trim();
+      const next = await api.createCACeremony({
+        operation: "create_offline_intermediate",
+        threshold: 2,
+        parent_id: parentID,
+        spec: offlineFormSpec(offlineIntermediateForm),
+      });
+      setOfflineIntermediateCeremonyID(next.id);
+      setCeremony(next);
+    } catch (err) {
+      setOfflineError(errorText(err, "Could not start offline-intermediate ceremony"));
+    } finally {
+      setOfflineBusy(false);
+    }
+  }
+
+  async function createOfflineIntermediateCSR() {
+    setOfflineBusy(true);
+    setOfflineError(null);
+    try {
+      setOfflineCSR(
+        await api.createOfflineIntermediateCSR(offlineIntermediateForm.parentID.trim(), {
+          ceremony_id: offlineIntermediateCeremonyID.trim(),
+          spec: offlineFormSpec(offlineIntermediateForm),
+        }),
+      );
+    } catch (err) {
+      setOfflineError(errorText(err, "Could not create offline-intermediate CSR"));
+    } finally {
+      setOfflineBusy(false);
+    }
+  }
+
+  async function importOfflineIntermediate() {
+    setOfflineBusy(true);
+    setOfflineError(null);
+    try {
+      setOfflineIntermediate(
+        await api.importOfflineIntermediateCA(offlineIntermediateForm.parentID.trim(), {
+          ceremony_id: offlineIntermediateCeremonyID.trim(),
+          certificate_pem: offlineIntermediateForm.certificatePEM.trim(),
+          spec: offlineFormSpec(offlineIntermediateForm),
+        }),
+      );
+    } catch (err) {
+      setOfflineError(errorText(err, "Could not import offline-signed intermediate"));
+    } finally {
+      setOfflineBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -247,6 +379,27 @@ export function CAHierarchy() {
         )}
       </section>
 
+      <OfflineRootWorkflow
+        busy={offlineBusy}
+        error={offlineError}
+        intermediate={offlineIntermediate}
+        intermediateCeremonyID={offlineIntermediateCeremonyID}
+        intermediateForm={offlineIntermediateForm}
+        offlineCSR={offlineCSR}
+        root={offlineRoot}
+        rootCeremonyID={offlineRootCeremonyID}
+        rootForm={offlineRootForm}
+        onCreateCSR={() => void createOfflineIntermediateCSR()}
+        onImportIntermediate={() => void importOfflineIntermediate()}
+        onImportRoot={() => void importOfflineRoot()}
+        onIntermediateCeremonyIDChange={setOfflineIntermediateCeremonyID}
+        onIntermediateFormChange={(patch) => setOfflineIntermediateForm((current) => ({ ...current, ...patch }))}
+        onRootCeremonyIDChange={setOfflineRootCeremonyID}
+        onRootFormChange={(patch) => setOfflineRootForm((current) => ({ ...current, ...patch }))}
+        onStartIntermediateCeremony={() => void startOfflineIntermediateCeremony()}
+        onStartRootCeremony={() => void startOfflineRootCeremony()}
+      />
+
       <section aria-labelledby="custody-heading" className="grid gap-3 border-y border-border py-4">
         <div className="flex items-start gap-3">
           <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -290,6 +443,218 @@ export function CAHierarchy() {
         />
       )}
     </section>
+  );
+}
+
+function OfflineRootWorkflow({
+  busy,
+  error,
+  intermediate,
+  intermediateCeremonyID,
+  intermediateForm,
+  offlineCSR,
+  onCreateCSR,
+  onImportIntermediate,
+  onImportRoot,
+  onIntermediateCeremonyIDChange,
+  onIntermediateFormChange,
+  onRootCeremonyIDChange,
+  onRootFormChange,
+  onStartIntermediateCeremony,
+  onStartRootCeremony,
+  root,
+  rootCeremonyID,
+  rootForm,
+}: {
+  busy: boolean;
+  error: string | null;
+  intermediate: CAAuthority | null;
+  intermediateCeremonyID: string;
+  intermediateForm: OfflineIntermediateForm;
+  offlineCSR: CAIntermediateCSR | null;
+  root: CAAuthority | null;
+  rootCeremonyID: string;
+  rootForm: OfflineCAForm;
+  onCreateCSR: () => void;
+  onImportIntermediate: () => void;
+  onImportRoot: () => void;
+  onIntermediateCeremonyIDChange: (value: string) => void;
+  onIntermediateFormChange: (patch: Partial<OfflineIntermediateForm>) => void;
+  onRootCeremonyIDChange: (value: string) => void;
+  onRootFormChange: (patch: Partial<OfflineCAForm>) => void;
+  onStartIntermediateCeremony: () => void;
+  onStartRootCeremony: () => void;
+}) {
+  const { t } = useTranslation();
+  const rootReady = rootForm.certificatePEM.trim() !== "" && rootForm.commonName.trim() !== "";
+  const rootImportReady = rootReady && rootCeremonyID.trim() !== "";
+  const parentID = intermediateForm.parentID.trim();
+  const intermediateReady = parentID !== "" && intermediateForm.commonName.trim() !== "";
+  const csrReady = intermediateReady && intermediateCeremonyID.trim() !== "";
+  const importIntermediateReady = csrReady && intermediateForm.certificatePEM.trim() !== "";
+
+  return (
+    <section aria-labelledby="offline-root-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex items-start gap-3">
+        <FileKey2 className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <h2 id="offline-root-heading" className="text-title font-semibold">
+            {t("caHierarchy.offline.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.offline.description")}</p>
+        </div>
+      </div>
+      {error && <ErrorState title={t("caHierarchy.offline.errorTitle")}>{error}</ErrorState>}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section aria-labelledby="offline-root-import-heading" className="ui-panel p-comfortable text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 id="offline-root-import-heading" className="text-title font-semibold">
+                {t("caHierarchy.offline.rootImport")}
+              </h3>
+              {root && <p className="mt-1 font-mono text-xs">{root.id}</p>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={onStartRootCeremony} disabled={busy || !rootReady}>
+                {t("caHierarchy.offline.startRootCeremony")}
+              </Button>
+              <Button type="button" size="sm" onClick={onImportRoot} disabled={busy || !rootImportReady}>
+                {t("caHierarchy.offline.importRoot")}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-4">
+            <OfflineSpecFields
+              commonNameId="offline-root-common-name"
+              dnsDomainsId="offline-root-dns-domains"
+              maxPathLenId="offline-root-max-path-len"
+              ttlDaysId="offline-root-ttl-days"
+              form={rootForm}
+              onChange={onRootFormChange}
+            />
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="offline-root-cert">
+                {t("caHierarchy.offline.rootCertPEM")}
+              </label>
+              <textarea
+                id="offline-root-cert"
+                rows={5}
+                value={rootForm.certificatePEM}
+                onChange={(event) => onRootFormChange({ certificatePEM: event.target.value })}
+                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+                placeholder={t("caHierarchy.offline.placeholderCertificate")}
+              />
+            </div>
+            <LabeledInput id="offline-root-ceremony-id" label={t("caHierarchy.offline.rootCeremonyID")} value={rootCeremonyID} onChange={onRootCeremonyIDChange} placeholder={t("caHierarchy.offline.placeholderCeremonyID")} />
+            {root && (
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <KeyValue label={t("caHierarchy.offline.commonName")} value={root.common_name} />
+                <KeyValue label={t("caHierarchy.offline.signerHandle")} value={root.signer_handle || t("caHierarchy.offline.signerOffline")} mono />
+              </dl>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="offline-intermediate-heading" className="ui-panel p-comfortable text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 id="offline-intermediate-heading" className="text-title font-semibold">
+                {t("caHierarchy.offline.intermediate")}
+              </h3>
+              {intermediate && <p className="mt-1 font-mono text-xs">{intermediate.id}</p>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={onStartIntermediateCeremony} disabled={busy || !intermediateReady}>
+                {t("caHierarchy.offline.startIntermediateCeremony")}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={onCreateCSR} disabled={busy || !csrReady}>
+                {t("caHierarchy.offline.generateCSR")}
+              </Button>
+              <Button type="button" size="sm" onClick={onImportIntermediate} disabled={busy || !importIntermediateReady}>
+                {t("caHierarchy.offline.importIntermediate")}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-4">
+            <LabeledInput
+              id="offline-parent-authority-id"
+              label={t("caHierarchy.offline.parentAuthorityID")}
+              value={intermediateForm.parentID}
+              onChange={(value) => onIntermediateFormChange({ parentID: value })}
+              placeholder={t("caHierarchy.offline.placeholderAuthorityID")}
+            />
+            <OfflineSpecFields
+              commonNameId="offline-intermediate-common-name"
+              dnsDomainsId="offline-intermediate-dns-domains"
+              maxPathLenId="offline-intermediate-max-path-len"
+              ttlDaysId="offline-intermediate-ttl-days"
+              form={intermediateForm}
+              onChange={onIntermediateFormChange}
+            />
+            <LabeledInput id="offline-intermediate-ceremony-id" label={t("caHierarchy.offline.intermediateCeremonyID")} value={intermediateCeremonyID} onChange={onIntermediateCeremonyIDChange} placeholder={t("caHierarchy.offline.placeholderCeremonyID")} />
+            {offlineCSR && (
+              <div className="grid gap-2">
+                <label className="text-sm font-medium" htmlFor="offline-intermediate-csr">
+                  {t("caHierarchy.offline.signerCSRPEM")}
+                </label>
+                <textarea
+                  id="offline-intermediate-csr"
+                  readOnly
+                  rows={5}
+                  value={offlineCSR.csr_pem}
+                  className="min-h-32 rounded-control border border-border bg-muted/40 px-3 py-2 font-mono text-xs outline-none"
+                />
+              </div>
+            )}
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="offline-intermediate-cert">
+                {t("caHierarchy.offline.signedIntermediatePEM")}
+              </label>
+              <textarea
+                id="offline-intermediate-cert"
+                rows={5}
+                value={intermediateForm.certificatePEM}
+                onChange={(event) => onIntermediateFormChange({ certificatePEM: event.target.value })}
+                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+                placeholder={t("caHierarchy.offline.placeholderCertificate")}
+              />
+            </div>
+            {intermediate && (
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <KeyValue label={t("caHierarchy.offline.commonName")} value={intermediate.common_name} />
+                <KeyValue label={t("caHierarchy.offline.signerHandle")} value={intermediate.signer_handle || "-"} mono />
+              </dl>
+            )}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function OfflineSpecFields({
+  commonNameId,
+  dnsDomainsId,
+  form,
+  maxPathLenId,
+  onChange,
+  ttlDaysId,
+}: {
+  commonNameId: string;
+  dnsDomainsId: string;
+  form: OfflineCAForm;
+  maxPathLenId: string;
+  onChange: (patch: Partial<OfflineCAForm>) => void;
+  ttlDaysId: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <LabeledInput id={commonNameId} label={t("caHierarchy.offline.commonName")} value={form.commonName} required onChange={(value) => onChange({ commonName: value })} />
+      <LabeledInput id={dnsDomainsId} label={t("caHierarchy.offline.permittedDNSDomains")} value={form.dnsDomains} onChange={(value) => onChange({ dnsDomains: value })} placeholder={t("caHierarchy.offline.placeholderDNSDomain")} />
+      <LabeledInput id={maxPathLenId} label={t("caHierarchy.offline.maxPathLen")} value={form.maxPathLen} required type="number" onChange={(value) => onChange({ maxPathLen: value })} />
+      <LabeledInput id={ttlDaysId} label={t("caHierarchy.offline.ttlDays")} value={form.ttlDays} required type="number" onChange={(value) => onChange({ ttlDays: value })} />
+    </div>
   );
 }
 
@@ -724,6 +1089,30 @@ function IssuerIcon({ icon }: { icon: IssuerTypeConfig["icon"] }) {
     default:
       return <KeyRound className={className} aria-hidden="true" />;
   }
+}
+
+function offlineFormSpec(form: OfflineCAForm): CACeremonyStartRequest["spec"] {
+  const permitted = splitTokenList(form.dnsDomains);
+  return {
+    common_name: form.commonName.trim(),
+    max_path_len: positiveInteger(form.maxPathLen, 0),
+    permitted_dns_domains: permitted.length ? permitted : undefined,
+    signature_algorithm: "ECDSA-P256",
+    ttl_seconds: positiveInteger(form.ttlDays, 1) * 86_400,
+  };
+}
+
+function positiveInteger(value: string, fallback: number): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, parsed);
+}
+
+function splitTokenList(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function findExternalCAForIssuer(issuer: Issuer, externalCAs: ExternalCA[]): ExternalCA | undefined {

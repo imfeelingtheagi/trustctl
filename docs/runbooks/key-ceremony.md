@@ -6,10 +6,13 @@ CA-key operations behind an **m-of-n key ceremony** — the key is created only 
 a configured number of distinct **custodians** approve — so no single operator can
 unilaterally stand up or rotate a CA.
 
-> **Maturity note.** Root and intermediate CA ceremonies are now served over REST.
-> The served path still keeps CA private keys in the isolated signer process and
-> stores only signer handles in the control plane. Rotation, cross-signing, and
-> online break-glass issuance remain library/operator procedures. Break-glass bundle
+> **Maturity note.** Root and intermediate CA ceremonies are now served over REST,
+> including the offline-root flow where trstctl imports only the public root
+> certificate, generates a signer-held intermediate CSR, and imports the
+> offline-root-signed intermediate. The served path still keeps online CA private
+> keys in the isolated signer process and stores only signer handles in the control
+> plane; the offline root private key never enters trstctl. Rotation, cross-signing,
+> and online break-glass issuance remain library/operator procedures. Break-glass bundle
 > reconciliation is served separately at `POST /api/v1/breakglass/reconcile` so
 > operators can verify signed emergency bundles into the audit chain after recovery.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
@@ -34,6 +37,12 @@ Purpose values are deliberately concrete:
   `CASpec` (common name, constraints, path length, EKUs, and TTL).
 - `intermediate:<parent-ca-id>:<sha256-of-ca-spec>` authorizes one intermediate
   under that exact parent with that exact reviewed `CASpec`.
+- `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>` authorizes
+  importing one public, self-signed offline root certificate that matches the exact
+  reviewed `CASpec`.
+- `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>` authorizes generating
+  one signer-held intermediate CSR beneath that imported offline root and importing
+  the corresponding offline-root-signed intermediate certificate.
 - `rotation:<ca-id>` authorizes one rotation of that exact CA.
 - `cross-sign:<ca-id>:<sha256-of-target-cert-der>` authorizes one cross-signature
   from that CA over that exact target certificate.
@@ -44,12 +53,16 @@ The mechanism, in the hierarchy manager:
   its id.
 - `Approve(tenant, ceremonyID, custodian)` records one custodian's approval and
   returns the running approval count. Approvals are de-duplicated per custodian.
-- `CreateRoot` / `CreateIntermediate` / `Rotate` / `CrossSign` are **gated on
-  purpose-bound quorum**: each takes a `ceremonyID`, locks the pending ceremony,
-  checks quorum and exact purpose, and marks it completed in the same database
-  transaction as the CA mutation. On success the ceremony is consumed and cannot be
-  reused. Cross-signing is gated because it, too, extends trust (it mints a CA
-  certificate under your signing CA).
+- `CreateRoot` / `CreateIntermediate` / `ImportOfflineRoot` /
+  `CreateOfflineIntermediateCSR` / `ImportOfflineIntermediate` / `Rotate` /
+  `CrossSign` are **gated on purpose-bound quorum**. CA mutations lock the pending
+  ceremony, check quorum and exact purpose, and mark it completed in the same
+  database transaction as the mutation. `CreateOfflineIntermediateCSR` checks the
+  same quorum and purpose before creating the signer-held key, and
+  `ImportOfflineIntermediate` consumes the ceremony when the signed certificate is
+  accepted. After consumption, that ceremony cannot be reused. Cross-signing is
+  gated because it, too, extends trust (it mints a CA certificate under your signing
+  CA).
 
 The ceremony and its approvals are tenant-scoped rows under row-level security:
 `ca_key_ceremonies` (with the `threshold`) and `ca_ceremony_approvals`.
@@ -66,18 +79,19 @@ The ceremony and its approvals are tenant-scoped rows under row-level security:
 
    ```json
    {
-     "operation": "root",
+     "operation": "create_root",
      "threshold": 2,
      "spec": {
        "common_name": "Example Root CA",
-       "validity": "87600h",
-       "is_ca": true,
-       "max_path_len": 1
+       "ttl_seconds": 315360000,
+       "signature_algorithm": "ECDSA-P256",
+       "max_path_len": 1,
+       "permitted_dns_domains": ["example.internal"]
      }
    }
    ```
 
-   For an intermediate, use `"operation": "intermediate"` and include
+   For an intermediate, use `"operation": "create_intermediate"` and include
    `"parent_id": "<root-ca-id>"`; the server derives
    `intermediate:<parent-ca-id>:<sha256-of-ca-spec>` from the same request the CA
    operation will execute.
@@ -100,6 +114,57 @@ After an intermediate exists, leaf issuance is served at
 `POST /api/v1/ca/authorities/{id}/issue` with a CSR PEM, the desired validity, and a
 token carrying `certs:issue`. The CA private key still signs inside the isolated
 signer process; the API returns the issued certificate and chain.
+
+## Procedure: offline root with served intermediate
+
+Use this when the root key lives outside the control plane and only comes online for
+ceremonies.
+
+1. **Create the offline root certificate outside trstctl.** Keep the root private key
+   on the offline system. Export only the public root certificate PEM.
+2. **Open the offline-root import ceremony** with the exact public root certificate
+   and reviewed `CASpec`:
+
+   ```json
+   {
+     "operation": "import_offline_root",
+     "threshold": 2,
+     "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+     "spec": {
+       "common_name": "Example Offline Root CA",
+       "ttl_seconds": 315360000,
+       "signature_algorithm": "ECDSA-P256",
+       "max_path_len": 1,
+       "permitted_dns_domains": ["example.internal"]
+     }
+   }
+   ```
+
+3. **Collect approvals** with `POST /api/v1/ca/ceremonies/{id}/approvals`.
+4. **Import the public offline root** with
+   `POST /api/v1/ca/authorities/offline-roots`. The request repeats
+   `ceremony_id`, `certificate_pem`, and the same reviewed `spec`. The server
+   accepts exactly one certificate PEM, rejects private-key PEM blocks, verifies the
+   root is self-signed and CA-capable, and stores the authority with no signer handle.
+5. **Open the offline-intermediate ceremony** with operation
+   `create_offline_intermediate`, `parent_id` set to the imported root authority id,
+   and the exact intermediate `CASpec`. Collect the required approvals.
+6. **Generate the signer-held CSR** with
+   `POST /api/v1/ca/authorities/{offline-root-id}/offline-intermediates/csr`. The
+   signer process creates and keeps the intermediate private key; the API returns
+   only a CSR PEM plus the signer handle.
+7. **Sign the CSR on the offline root system.** Move only the CSR to the offline
+   system, sign it as a CA certificate under the offline root, then bring back only
+   the signed intermediate certificate PEM.
+8. **Import the offline-signed intermediate** with
+   `POST /api/v1/ca/authorities/{offline-root-id}/offline-intermediates`. The server
+   verifies the certificate chains to the imported offline root, matches the reviewed
+   `CASpec`, obeys path-length constraints, and contains the exact public key from
+   the signer-held CSR.
+
+After that, leaf issuance uses the imported intermediate at the normal
+`POST /api/v1/ca/authorities/{intermediate-id}/issue` route. Leaf issuance directly
+from the imported offline root fails closed because the root has no signer handle.
 
 ## Procedure: rotating a CA
 

@@ -88,24 +88,34 @@ the intermediates do the day-to-day signing.
 
 The dangerous operations are gated by an **m-of-n key ceremony**: nothing happens
 until *m* of *n* named custodians approve. Root and intermediate creation are served
-today: open a ceremony, collect distinct custodian approvals, then create the CA.
-Each operation consumes one pending ceremony whose purpose matches the reviewed
-resource: `root:<sha256-of-ca-spec>` or
-`intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. If approvals are short, the
-operation returns `ErrQuorumNotMet`; if the opener tries to approve their own
-ceremony, or the ceremony was already used or opened for a different resource/spec, it
-fails closed before committing the CA mutation. This is how you stop a single
+today: open a ceremony, collect distinct custodian approvals, then create or import
+the CA. Each operation consumes one pending ceremony whose purpose matches the
+reviewed resource: `root:<sha256-of-ca-spec>`,
+`intermediate:<parent-ca-id>:<sha256-of-ca-spec>`,
+`offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>`, or
+`offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. If approvals are short,
+the operation returns `ErrQuorumNotMet`; if the opener tries to approve their own
+ceremony, or the ceremony was already used or opened for a different resource/spec,
+it fails closed before committing the CA mutation. This is how you stop a single
 compromised admin account from minting a rogue root or intermediate, and how you stop
 one valid ceremony from being replayed against a different CA request.
 
 The served hierarchy API lives at `/api/v1/ca/ceremonies`,
-`/api/v1/ca/authorities`, and `/api/v1/ca/authorities/{id}/issue`. Root and
-intermediate private keys are created in the isolated signing service and referenced
-by signer handles; the control plane stores certificates, chains, metadata, and
-ceremony state, but it never receives the CA private key. Every served step
-(`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
-`ca.intermediate.created`, `ca.endentity.issued`) is a tenant-scoped event carrying
-the ceremony/authority context and is recorded immutably in the tamper-evident log.
+`/api/v1/ca/authorities`, `/api/v1/ca/authorities/offline-roots`,
+`/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
+`/api/v1/ca/authorities/{id}/offline-intermediates`, and
+`/api/v1/ca/authorities/{id}/issue`. Online root and intermediate private keys are
+created in the isolated signing service and referenced by signer handles; the control
+plane stores certificates, chains, metadata, and ceremony state, but it never
+receives the CA private key. Offline-root import accepts exactly one public
+certificate PEM and rejects private-key PEM blocks. It then generates a signer-held
+intermediate CSR, the operator signs that CSR with the offline root outside trstctl,
+and trstctl imports the signed intermediate only if it chains to the offline root,
+matches the reviewed `CASpec`, and carries the signer-held public key. Every served
+step (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
+`ca.intermediate_csr.issued`, `ca.intermediate.created`, `ca.endentity.issued`) is a
+tenant-scoped event carrying the ceremony/authority context and is recorded
+immutably in the tamper-evident log.
 Rotation and cross-signing remain purpose-bound library/operator workflows for now:
 they use `rotation:<ca-id>` and `cross-sign:<ca-id>:<sha256-of-target-cert-der>`
 ceremonies, with the same single-use quorum gate, until served rotation/cross-sign

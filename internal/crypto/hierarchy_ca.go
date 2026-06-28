@@ -1,12 +1,14 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -30,6 +32,7 @@ type HierarchyCAProfile struct {
 // IssuedHierarchyCA is the public result of CA certificate creation. It contains
 // the certificate only; private key material remains inside the supplied signer.
 type IssuedHierarchyCA struct {
+	CommonName          string
 	CertificateDER      []byte
 	CertificatePEM      []byte
 	Serial              string
@@ -106,6 +109,68 @@ func SignIntermediateHierarchyCAFromCSR(parentCertDER []byte, parentSigner Diges
 	return SignIntermediateHierarchyCA(parentCertDER, parentSigner, PublicKey{DER: pubDER}, profile)
 }
 
+// VerifyImportedOfflineRoot validates a public root certificate produced outside
+// trstctl's hot path. It never accepts private-key bytes; callers pass only the
+// certificate DER. The root must be a self-signed CA with certificate-signing
+// capability and must match the operator-reviewed profile bound to the ceremony.
+func VerifyImportedOfflineRoot(certDER []byte, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse offline root: %w", err)
+	}
+	if err := verifyCAUsable(cert, "offline root"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	if err := cert.CheckSignatureFrom(cert); err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: offline root is not self-signed: %w", err)
+	}
+	if err := verifyImportedProfile(cert, profile); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	return hierarchyResultFromCert(cert), nil
+}
+
+// VerifyOfflineSignedIntermediate validates an intermediate CA certificate signed
+// by an offline parent root. The certificate must chain to parentCertDER, obey the
+// parent's path-length boundary, match the reviewed profile, and contain exactly
+// the public key held by the served signer handle.
+func VerifyOfflineSignedIntermediate(parentCertDER, certDER []byte, signerPublic PublicKey, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
+	parent, err := x509.ParseCertificate(parentCertDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse offline parent root: %w", err)
+	}
+	if err := verifyCAUsable(parent, "offline parent root"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse offline-signed intermediate: %w", err)
+	}
+	if err := verifyCAUsable(cert, "offline-signed intermediate"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	if err := cert.CheckSignatureFrom(parent); err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: intermediate is not signed by offline root: %w", err)
+	}
+	if err := verifyChildPathLen(parent, cert); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	if cert.NotAfter.After(parent.NotAfter) {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: intermediate outlives offline root")
+	}
+	pubDER, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+	if err != nil {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: marshal intermediate public key: %w", err)
+	}
+	if !bytes.Equal(pubDER, signerPublic.DER) {
+		return IssuedHierarchyCA{}, fmt.Errorf("crypto: intermediate public key does not match signer-held key")
+	}
+	if err := verifyImportedProfile(cert, profile); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	return hierarchyResultFromCert(cert), nil
+}
+
 func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.Certificate, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
 	if profile.CommonName == "" {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: CA common name is required")
@@ -175,6 +240,7 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: issued CA failed verification: %w", err)
 	}
 	return IssuedHierarchyCA{
+		CommonName:          cert.Subject.CommonName,
 		CertificateDER:      der,
 		CertificatePEM:      pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
 		Serial:              cert.SerialNumber.Text(16),
@@ -183,6 +249,96 @@ func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.
 		PermittedDNSDomains: append([]string(nil), profile.PermittedDNSDomains...),
 		EKUs:                append([]string(nil), profile.EKUs...),
 	}, nil
+}
+
+func verifyCAUsable(cert *x509.Certificate, label string) error {
+	if !cert.IsCA || !cert.BasicConstraintsValid {
+		return fmt.Errorf("crypto: %s is not a valid CA certificate", label)
+	}
+	now := time.Now()
+	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
+		return fmt.Errorf("crypto: %s is not currently valid", label)
+	}
+	if cert.KeyUsage&x509.KeyUsageCertSign == 0 {
+		return fmt.Errorf("crypto: %s is missing keyCertSign usage", label)
+	}
+	if cert.SerialNumber == nil {
+		return fmt.Errorf("crypto: %s has no serial number", label)
+	}
+	return nil
+}
+
+func verifyChildPathLen(parent, child *x509.Certificate) error {
+	parentHasPathLen := parent.MaxPathLen > 0 || parent.MaxPathLenZero
+	if !parentHasPathLen {
+		return nil
+	}
+	if parent.MaxPathLen == 0 {
+		return fmt.Errorf("crypto: offline root path-length constraint is exhausted")
+	}
+	childHasPathLen := child.MaxPathLen > 0 || child.MaxPathLenZero
+	if !childHasPathLen {
+		return fmt.Errorf("crypto: offline-signed intermediate is missing path-length constraint")
+	}
+	if child.MaxPathLen > parent.MaxPathLen-1 {
+		return fmt.Errorf("crypto: offline-signed intermediate path-length exceeds offline root")
+	}
+	return nil
+}
+
+func verifyImportedProfile(cert *x509.Certificate, profile HierarchyCAProfile) error {
+	if profile.CommonName != "" && cert.Subject.CommonName != profile.CommonName {
+		return fmt.Errorf("crypto: imported CA common name %q does not match ceremony profile %q", cert.Subject.CommonName, profile.CommonName)
+	}
+	if profile.MaxPathLen >= 0 {
+		hasPathLen := cert.MaxPathLen > 0 || cert.MaxPathLenZero
+		if !hasPathLen {
+			return fmt.Errorf("crypto: imported CA is missing path-length constraint")
+		}
+		if cert.MaxPathLen != profile.MaxPathLen {
+			return fmt.Errorf("crypto: imported CA max_path_len %d does not match ceremony profile %d", cert.MaxPathLen, profile.MaxPathLen)
+		}
+	}
+	if len(profile.PermittedDNSDomains) > 0 && !sameStringSet(profile.PermittedDNSDomains, cert.PermittedDNSDomains) {
+		return fmt.Errorf("crypto: imported CA permitted DNS domains do not match ceremony profile")
+	}
+	if len(profile.EKUs) > 0 && !sameStringSet(profile.EKUs, extKeyUsageStrings(cert.ExtKeyUsage)) {
+		return fmt.Errorf("crypto: imported CA extended key usages do not match ceremony profile")
+	}
+	return nil
+}
+
+func hierarchyResultFromCert(cert *x509.Certificate) IssuedHierarchyCA {
+	maxPathLen := cert.MaxPathLen
+	if cert.MaxPathLen == 0 && !cert.MaxPathLenZero {
+		maxPathLen = -1
+	}
+	return IssuedHierarchyCA{
+		CommonName:          cert.Subject.CommonName,
+		CertificateDER:      append([]byte(nil), cert.Raw...),
+		CertificatePEM:      pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}),
+		Serial:              cert.SerialNumber.Text(16),
+		NotAfter:            cert.NotAfter,
+		MaxPathLen:          maxPathLen,
+		PermittedDNSDomains: append([]string(nil), cert.PermittedDNSDomains...),
+		EKUs:                extKeyUsageStrings(cert.ExtKeyUsage),
+	}
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aa := append([]string(nil), a...)
+	bb := append([]string(nil), b...)
+	sort.Strings(aa)
+	sort.Strings(bb)
+	for i := range aa {
+		if aa[i] != bb[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func parsePKIXPublicKey(pub PublicKey) (any, error) {

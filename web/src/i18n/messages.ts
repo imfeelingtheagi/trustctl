@@ -224,6 +224,110 @@ export const messages = {
     defaultMessage: "CA hierarchy",
     description: "Primary navigation item.",
   },
+  "caHierarchy.offline.heading": {
+    defaultMessage: "Offline root",
+    description: "Heading for the CA hierarchy offline root workflow.",
+  },
+  "caHierarchy.offline.description": {
+    defaultMessage: "Import a public root, generate a signer-held intermediate CSR, and import the root-signed intermediate.",
+    description: "Short description for the offline root workflow.",
+  },
+  "caHierarchy.offline.errorTitle": {
+    defaultMessage: "Offline-root action failed",
+    description: "Error title for failed offline root workflow actions.",
+  },
+  "caHierarchy.offline.rootImport": {
+    defaultMessage: "Root import",
+    description: "Subheading for the offline root import panel.",
+  },
+  "caHierarchy.offline.startRootCeremony": {
+    defaultMessage: "Start offline-root ceremony",
+    description: "Button label for opening an offline root import ceremony.",
+  },
+  "caHierarchy.offline.importRoot": {
+    defaultMessage: "Import offline root",
+    description: "Button label for importing an offline root certificate.",
+  },
+  "caHierarchy.offline.commonName": {
+    defaultMessage: "Common name",
+    description: "CA common-name field label.",
+  },
+  "caHierarchy.offline.permittedDNSDomains": {
+    defaultMessage: "Permitted DNS domains",
+    description: "CA DNS name-constraint field label.",
+  },
+  "caHierarchy.offline.maxPathLen": {
+    defaultMessage: "Max path length",
+    description: "CA path-length constraint field label.",
+  },
+  "caHierarchy.offline.ttlDays": {
+    defaultMessage: "TTL days",
+    description: "CA lifetime field label.",
+  },
+  "caHierarchy.offline.rootCertPEM": {
+    defaultMessage: "Offline root certificate PEM",
+    description: "Field label for the imported public offline root certificate.",
+  },
+  "caHierarchy.offline.rootCeremonyID": {
+    defaultMessage: "Root ceremony ID",
+    description: "Field label for the offline root import ceremony id.",
+  },
+  "caHierarchy.offline.intermediate": {
+    defaultMessage: "Intermediate",
+    description: "Subheading for the offline intermediate panel.",
+  },
+  "caHierarchy.offline.startIntermediateCeremony": {
+    defaultMessage: "Start intermediate ceremony",
+    description: "Button label for opening an offline intermediate ceremony.",
+  },
+  "caHierarchy.offline.generateCSR": {
+    defaultMessage: "Generate signer CSR",
+    description: "Button label for creating a signer-held intermediate CSR.",
+  },
+  "caHierarchy.offline.importIntermediate": {
+    defaultMessage: "Import offline-signed intermediate",
+    description: "Button label for importing an offline-root-signed intermediate.",
+  },
+  "caHierarchy.offline.parentAuthorityID": {
+    defaultMessage: "Offline-root authority ID",
+    description: "Field label for the imported offline root authority id.",
+  },
+  "caHierarchy.offline.intermediateCeremonyID": {
+    defaultMessage: "Intermediate ceremony ID",
+    description: "Field label for the offline intermediate ceremony id.",
+  },
+  "caHierarchy.offline.signerCSRPEM": {
+    defaultMessage: "Signer CSR PEM",
+    description: "Field label for the generated intermediate CSR PEM.",
+  },
+  "caHierarchy.offline.signedIntermediatePEM": {
+    defaultMessage: "Offline-signed intermediate PEM",
+    description: "Field label for the signed intermediate certificate PEM.",
+  },
+  "caHierarchy.offline.signerHandle": {
+    defaultMessage: "Signer handle",
+    description: "Metadata label for a CA signer handle.",
+  },
+  "caHierarchy.offline.signerOffline": {
+    defaultMessage: "offline",
+    description: "Metadata value when an imported offline root has no signer handle.",
+  },
+  "caHierarchy.offline.placeholderCertificate": {
+    defaultMessage: "-----BEGIN CERTIFICATE-----",
+    description: "Placeholder for certificate PEM textareas.",
+  },
+  "caHierarchy.offline.placeholderCeremonyID": {
+    defaultMessage: "ceremony-id",
+    description: "Placeholder for ceremony id fields.",
+  },
+  "caHierarchy.offline.placeholderAuthorityID": {
+    defaultMessage: "ca-authority-id",
+    description: "Placeholder for CA authority id fields.",
+  },
+  "caHierarchy.offline.placeholderDNSDomain": {
+    defaultMessage: "example.internal",
+    description: "Placeholder DNS domain for CA name constraints.",
+  },
   "nav.item.protocols": {
     defaultMessage: "Protocols",
     description: "Primary navigation item.",
@@ -551,6 +655,32 @@ const esESCatalog = {
   "nav.item.profiles": "Perfiles de certificado",
   "nav.item.issuance": "Emisión",
   "nav.item.caHierarchy": "Jerarquía de CA",
+  "caHierarchy.offline.heading": "Raíz sin conexión",
+  "caHierarchy.offline.description": "Importa una raíz pública, genera una CSR de intermediaria retenida por el firmante e importa la intermediaria firmada por la raíz.",
+  "caHierarchy.offline.errorTitle": "Falló la acción de raíz sin conexión",
+  "caHierarchy.offline.rootImport": "Importación de raíz",
+  "caHierarchy.offline.startRootCeremony": "Iniciar ceremonia de raíz sin conexión",
+  "caHierarchy.offline.importRoot": "Importar raíz sin conexión",
+  "caHierarchy.offline.commonName": "Nombre común",
+  "caHierarchy.offline.permittedDNSDomains": "Dominios DNS permitidos",
+  "caHierarchy.offline.maxPathLen": "Longitud máxima de ruta",
+  "caHierarchy.offline.ttlDays": "Días de TTL",
+  "caHierarchy.offline.rootCertPEM": "PEM del certificado de raíz sin conexión",
+  "caHierarchy.offline.rootCeremonyID": "ID de ceremonia de raíz",
+  "caHierarchy.offline.intermediate": "Intermediaria",
+  "caHierarchy.offline.startIntermediateCeremony": "Iniciar ceremonia de intermediaria",
+  "caHierarchy.offline.generateCSR": "Generar CSR del firmante",
+  "caHierarchy.offline.importIntermediate": "Importar intermediaria firmada sin conexión",
+  "caHierarchy.offline.parentAuthorityID": "ID de autoridad raíz sin conexión",
+  "caHierarchy.offline.intermediateCeremonyID": "ID de ceremonia de intermediaria",
+  "caHierarchy.offline.signerCSRPEM": "PEM de CSR del firmante",
+  "caHierarchy.offline.signedIntermediatePEM": "PEM de intermediaria firmada sin conexión",
+  "caHierarchy.offline.signerHandle": "Identificador del firmante",
+  "caHierarchy.offline.signerOffline": "sin conexión",
+  "caHierarchy.offline.placeholderCertificate": "-----BEGIN CERTIFICATE-----",
+  "caHierarchy.offline.placeholderCeremonyID": "ceremony-id",
+  "caHierarchy.offline.placeholderAuthorityID": "ca-authority-id",
+  "caHierarchy.offline.placeholderDNSDomain": "example.internal",
   "nav.item.protocols": "Protocolos",
   "nav.item.acmeAndDns": "ACME y DNS",
   "nav.item.enrollmentProtocols": "Protocolos de inscripción",

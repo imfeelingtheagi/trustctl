@@ -24,6 +24,7 @@ import type {
   BreakglassBundle,
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
+  CAAuthority,
   CodeSigningKeylessRequest,
   CodeSigningRequest,
   CodeSigningSignature,
@@ -33,6 +34,10 @@ import type {
   CBOMScan,
   CBOMScanRequest,
   CACeremonyStartRequest,
+  CACreateOfflineIntermediateCSRRequest,
+  CAImportOfflineIntermediateRequest,
+  CAImportOfflineRootRequest,
+  CAIntermediateCSR,
   CAKeyCeremony,
   ComplianceEvidencePack,
   Certificate as GenCertificate,
@@ -234,7 +239,12 @@ export type {
   CBOMMigrationProgress,
   CBOMScan,
   CBOMScanRequest,
+  CAAuthority,
   CACeremonyStartRequest,
+  CACreateOfflineIntermediateCSRRequest,
+  CAImportOfflineIntermediateRequest,
+  CAImportOfflineRootRequest,
+  CAIntermediateCSR,
   CAKeyCeremony,
   ComplianceEvidencePack,
   GraphImpact,
@@ -682,6 +692,9 @@ export interface Api {
   createProfile(input: ProfileRequest): Promise<Profile>;
   createCACeremony(input: CACeremonyStartRequest): Promise<CAKeyCeremony>;
   approveCACeremony(id: string): Promise<CAKeyCeremony>;
+  importOfflineRootCA(input: CAImportOfflineRootRequest): Promise<CAAuthority>;
+  createOfflineIntermediateCSR(id: string, input: CACreateOfflineIntermediateCSRRequest): Promise<CAIntermediateCSR>;
+  importOfflineIntermediateCA(id: string, input: CAImportOfflineIntermediateRequest): Promise<CAAuthority>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
   rotateManagedKey(keyId: string): Promise<ManagedKey>;
   revokeManagedKey(keyId: string): Promise<ManagedKey>;
@@ -843,6 +856,9 @@ export const api: Api = {
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
   createCACeremony: (input) => mutate<CAKeyCeremony>("POST", "/api/v1/ca/ceremonies", input),
   approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),
+  importOfflineRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/offline-roots", input),
+  createOfflineIntermediateCSR: (id, input) => mutate<CAIntermediateCSR>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates/csr`, input),
+  importOfflineIntermediateCA: (id, input) => mutate<CAAuthority>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates`, input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
   rotateManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/rotate", { key_id: keyId }),
   revokeManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/revoke", { key_id: keyId }),

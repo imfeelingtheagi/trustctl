@@ -183,6 +183,49 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 	return authorityResponse(created), nil
 }
 
+func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID string, req api.CAImportOfflineRootRequest) (api.CAAuthority, error) {
+	if req.CeremonyID == "" {
+		return api.CAAuthority{}, fmt.Errorf("%w: ceremony_id is required", api.ErrCAHierarchyInvalid)
+	}
+	rootDER, rootPEM, err := singleCertificatePEM(req.CertificatePEM)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	issued, err := crypto.VerifyImportedOfflineRoot(rootDER, cryptoProfile(req.Spec))
+	if err != nil {
+		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	purpose, err := offlineRootPurpose(rootDER, req.Spec)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	var created store.CAAuthority
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
+			return err
+		}
+		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
+			TenantID: tenantID, CommonName: issued.CommonName, Kind: "root", Status: "active",
+			CertificatePEM: rootPEM, Serial: issued.Serial, NotAfter: &issued.NotAfter,
+			MaxPathLen: issued.MaxPathLen, PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
+		})
+		if err != nil {
+			return err
+		}
+		created = inserted
+		return nil
+	})
+	if err != nil {
+		return api.CAAuthority{}, caHierarchyConflict(err)
+	}
+	if err := h.emit(ctx, tenantID, "ca.root.created", map[string]any{
+		"ca_id": created.ID, "common_name": created.CommonName, "ceremony_id": req.CeremonyID, "offline_root": true,
+	}); err != nil {
+		return api.CAAuthority{}, err
+	}
+	return authorityResponse(created), nil
+}
+
 func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID string, req api.CACreateIntermediateRequest) (api.CAAuthority, error) {
 	if req.CeremonyID == "" || req.ParentID == "" {
 		return api.CAAuthority{}, fmt.Errorf("%w: ceremony_id and parent_id are required", api.ErrCAHierarchyInvalid)
@@ -240,6 +283,113 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 	h.rememberSigner(created.ID, childSigner)
 	if err := h.emit(ctx, tenantID, "ca.intermediate.created", map[string]any{
 		"ca_id": created.ID, "parent_id": req.ParentID, "ceremony_id": req.CeremonyID, "signer_handle": handle,
+	}); err != nil {
+		return api.CAAuthority{}, err
+	}
+	return authorityResponse(created), nil
+}
+
+func (h *caHierarchyService) CreateOfflineIntermediateCSR(ctx context.Context, tenantID, caID string, req api.CACreateOfflineIntermediateCSRRequest) (api.CAIntermediateCSR, error) {
+	if req.CeremonyID == "" {
+		return api.CAIntermediateCSR{}, fmt.Errorf("%w: ceremony_id is required", api.ErrCAHierarchyInvalid)
+	}
+	parent, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return api.CAIntermediateCSR{}, err
+	}
+	if parent.Kind != "root" || parent.SignerHandle != "" {
+		return api.CAIntermediateCSR{}, fmt.Errorf("%w: parent must be an imported offline root", api.ErrCAHierarchyInvalid)
+	}
+	purpose, err := offlineIntermediatePurpose(caID, req.Spec)
+	if err != nil {
+		return api.CAIntermediateCSR{}, err
+	}
+	if err := h.requirePendingCeremonyQuorum(ctx, tenantID, req.CeremonyID, purpose); err != nil {
+		return api.CAIntermediateCSR{}, caHierarchyConflict(err)
+	}
+	handle := hierarchySignerHandle(req.CeremonyID)
+	signer, err := h.createOrBindSigner(ctx, handle)
+	if err != nil {
+		return api.CAIntermediateCSR{}, err
+	}
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: req.Spec.CommonName}, signer)
+	if err != nil {
+		return api.CAIntermediateCSR{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
+	if err := h.emit(ctx, tenantID, "ca.intermediate_csr.issued", map[string]any{
+		"ca_id": caID, "ceremony_id": req.CeremonyID, "signer_handle": handle, "csr_sha256": crypto.SHA256Hex(csrDER), "offline_root": true,
+	}); err != nil {
+		return api.CAIntermediateCSR{}, err
+	}
+	return api.CAIntermediateCSR{CeremonyID: req.CeremonyID, ParentID: caID, CSRPem: csrPEM, SignerHandle: handle}, nil
+}
+
+func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req api.CAImportOfflineIntermediateRequest) (api.CAAuthority, error) {
+	if req.CeremonyID == "" {
+		return api.CAAuthority{}, fmt.Errorf("%w: ceremony_id is required", api.ErrCAHierarchyInvalid)
+	}
+	parent, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	if parent.Kind != "root" || parent.SignerHandle != "" {
+		return api.CAAuthority{}, fmt.Errorf("%w: parent must be an imported offline root", api.ErrCAHierarchyInvalid)
+	}
+	parentDER, err := firstCertDER(parent.CertificatePEM)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	childDER, childPEM, err := singleCertificatePEM(req.CertificatePEM)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	purpose, err := offlineIntermediatePurpose(caID, req.Spec)
+	if err != nil {
+		return api.CAAuthority{}, err
+	}
+	handle := hierarchySignerHandle(req.CeremonyID)
+	client := h.signer.Client()
+	if client == nil {
+		return api.CAAuthority{}, api.ErrCAHierarchyUnavailable
+	}
+	childSigner, err := client.SignerForDualControlHandle(ctx, handle, signing.PurposeCASign, h.signAuthz)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return api.CAAuthority{}, fmt.Errorf("%w: offline intermediate CSR has not been generated", api.ErrCAHierarchyConflict)
+		}
+		return api.CAAuthority{}, err
+	}
+	issued, err := crypto.VerifyOfflineSignedIntermediate(parentDER, childDER, childSigner.Public(), cryptoProfile(req.Spec))
+	if err != nil {
+		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	var created store.CAAuthority
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
+			return err
+		}
+		chain := append([]byte{}, childPEM...)
+		chain = append(chain, []byte(parent.CertificatePEM)...)
+		pid := caID
+		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
+			TenantID: tenantID, ParentID: &pid, CommonName: issued.CommonName, Kind: "intermediate", Status: "active",
+			CertificatePEM: string(chain), SignerHandle: handle, Serial: issued.Serial,
+			NotAfter: &issued.NotAfter, MaxPathLen: issued.MaxPathLen,
+			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
+		})
+		if err != nil {
+			return err
+		}
+		created = inserted
+		return nil
+	})
+	if err != nil {
+		return api.CAAuthority{}, caHierarchyConflict(err)
+	}
+	h.rememberSigner(created.ID, childSigner)
+	if err := h.emit(ctx, tenantID, "ca.intermediate.created", map[string]any{
+		"ca_id": created.ID, "parent_id": caID, "ceremony_id": req.CeremonyID, "signer_handle": handle, "offline_root": true,
 	}); err != nil {
 		return api.CAAuthority{}, err
 	}
@@ -372,6 +522,14 @@ func hierarchyPurpose(operation, parentID string, spec api.CASpec) (string, erro
 
 func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, error) {
 	switch req.Operation {
+	case "import_offline_root":
+		certDER, _, err := singleCertificatePEM(req.CertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		return offlineRootPurpose(certDER, req.Spec)
+	case "create_offline_intermediate":
+		return offlineIntermediatePurpose(req.ParentID, req.Spec)
 	case "issue_intermediate_csr":
 		csrDER, err := csrDERFromPEM(req.CSRPem)
 		if err != nil {
@@ -381,6 +539,25 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 	default:
 		return hierarchyPurpose(req.Operation, req.ParentID, req.Spec)
 	}
+}
+
+func offlineRootPurpose(certDER []byte, spec api.CASpec) (string, error) {
+	rootPurpose, err := hierarchyPurpose("create_root", "", spec)
+	if err != nil {
+		return "", err
+	}
+	return "offline-root:" + crypto.SHA256Hex(certDER) + ":" + rootPurpose, nil
+}
+
+func offlineIntermediatePurpose(parentID string, spec api.CASpec) (string, error) {
+	if parentID == "" {
+		return "", fmt.Errorf("%w: parent_id is required for create_offline_intermediate", api.ErrCAHierarchyInvalid)
+	}
+	intermediatePurpose, err := hierarchyPurpose("create_intermediate", parentID, spec)
+	if err != nil {
+		return "", err
+	}
+	return "offline-" + intermediatePurpose, nil
 }
 
 func externalIntermediateCSRPurpose(parentID string, csrDER []byte, spec api.CASpec) (string, error) {
@@ -405,6 +582,36 @@ func csrDERFromPEM(csrPEM string) ([]byte, error) {
 	return block.Bytes, nil
 }
 
+func singleCertificatePEM(raw string) ([]byte, string, error) {
+	rest := []byte(raw)
+	var der []byte
+	for {
+		block, next := pem.Decode(rest)
+		if block == nil {
+			if strings.TrimSpace(string(rest)) != "" {
+				return nil, "", fmt.Errorf("%w: certificate_pem contains trailing non-PEM data", api.ErrCAHierarchyInvalid)
+			}
+			break
+		}
+		if strings.Contains(block.Type, "PRIVATE KEY") {
+			return nil, "", fmt.Errorf("%w: certificate_pem must not contain private key material", api.ErrCAHierarchyInvalid)
+		}
+		if block.Type != "CERTIFICATE" {
+			return nil, "", fmt.Errorf("%w: certificate_pem contains unsupported PEM block %q", api.ErrCAHierarchyInvalid, block.Type)
+		}
+		if der != nil {
+			return nil, "", fmt.Errorf("%w: certificate_pem must contain exactly one CERTIFICATE block", api.ErrCAHierarchyInvalid)
+		}
+		der = append([]byte(nil), block.Bytes...)
+		rest = next
+	}
+	if der == nil {
+		return nil, "", fmt.Errorf("%w: certificate_pem must contain one CERTIFICATE PEM block", api.ErrCAHierarchyInvalid)
+	}
+	normalized := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	return der, normalized, nil
+}
+
 func validateCASpec(spec api.CASpec) error {
 	if spec.CommonName == "" {
 		return fmt.Errorf("%w: common_name is required", api.ErrCAHierarchyInvalid)
@@ -418,6 +625,23 @@ func validateCASpec(spec api.CASpec) error {
 	default:
 		return fmt.Errorf("%w: only ecdsa-p256 CA keys are supported by the served signer path", api.ErrCAHierarchyInvalid)
 	}
+}
+
+func (h *caHierarchyService) requirePendingCeremonyQuorum(ctx context.Context, tenantID, ceremonyID, purpose string) error {
+	c, err := h.store.GetKeyCeremony(ctx, tenantID, ceremonyID)
+	if err != nil {
+		return err
+	}
+	if c.Status != "pending" {
+		return store.ErrKeyCeremonyNotPending
+	}
+	if c.Purpose != purpose {
+		return store.ErrKeyCeremonyPurposeMismatch
+	}
+	if c.Approvals < c.Threshold {
+		return store.ErrKeyCeremonyQuorumNotMet
+	}
+	return nil
 }
 
 func cryptoProfile(spec api.CASpec) crypto.HierarchyCAProfile {

@@ -27,7 +27,10 @@ type CAHierarchyService interface {
 	ApproveCeremony(ctx context.Context, tenantID, id string) (CAKeyCeremony, error)
 	ListAuthorities(ctx context.Context, tenantID string) ([]CAAuthority, error)
 	CreateRoot(ctx context.Context, tenantID string, req CACreateRootRequest) (CAAuthority, error)
+	ImportOfflineRoot(ctx context.Context, tenantID string, req CAImportOfflineRootRequest) (CAAuthority, error)
 	CreateIntermediate(ctx context.Context, tenantID string, req CACreateIntermediateRequest) (CAAuthority, error)
+	CreateOfflineIntermediateCSR(ctx context.Context, tenantID, caID string, req CACreateOfflineIntermediateCSRRequest) (CAIntermediateCSR, error)
+	ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req CAImportOfflineIntermediateRequest) (CAAuthority, error)
 	IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req CAIssueIntermediateRequest) (CAIssuedIntermediate, error)
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
 }
@@ -48,11 +51,12 @@ type CASpec struct {
 }
 
 type CACeremonyStartRequest struct {
-	Operation string `json:"operation"`
-	ParentID  string `json:"parent_id"`
-	CSRPem    string `json:"csr_pem,omitempty"`
-	Threshold int    `json:"threshold"`
-	Spec      CASpec `json:"spec"`
+	Operation      string `json:"operation"`
+	ParentID       string `json:"parent_id"`
+	CSRPem         string `json:"csr_pem,omitempty"`
+	CertificatePEM string `json:"certificate_pem,omitempty"`
+	Threshold      int    `json:"threshold"`
+	Spec           CASpec `json:"spec"`
 }
 
 type CACreateRootRequest struct {
@@ -60,10 +64,27 @@ type CACreateRootRequest struct {
 	Spec       CASpec `json:"spec"`
 }
 
+type CAImportOfflineRootRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+	Spec           CASpec `json:"spec"`
+}
+
 type CACreateIntermediateRequest struct {
 	CeremonyID string `json:"ceremony_id"`
 	ParentID   string `json:"parent_id"`
 	Spec       CASpec `json:"spec"`
+}
+
+type CACreateOfflineIntermediateCSRRequest struct {
+	CeremonyID string `json:"ceremony_id"`
+	Spec       CASpec `json:"spec"`
+}
+
+type CAImportOfflineIntermediateRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+	Spec           CASpec `json:"spec"`
 }
 
 type CAIssueLeafRequest struct {
@@ -86,6 +107,13 @@ type caIssueIntermediateJSON struct {
 	CeremonyID string `json:"ceremony_id"`
 	CSRPem     string `json:"csr_pem"`
 	Spec       CASpec `json:"spec"`
+}
+
+type CAIntermediateCSR struct {
+	CeremonyID   string `json:"ceremony_id"`
+	ParentID     string `json:"parent_id"`
+	CSRPem       string `json:"csr_pem"`
+	SignerHandle string `json:"signer_handle"`
 }
 
 type CAKeyCeremony struct {
@@ -219,6 +247,25 @@ func (a *API) createRootCA(w http.ResponseWriter, r *http.Request) {
 }
 
 //trstctl:mutation
+func (a *API) importOfflineRootCA(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAImportOfflineRootRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		ca, err := a.caHierarchy.ImportOfflineRoot(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, ca, nil
+	})
+}
+
+//trstctl:mutation
 func (a *API) createIntermediateCA(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
@@ -230,6 +277,46 @@ func (a *API) createIntermediateCA(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		ca, err := a.caHierarchy.CreateIntermediate(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, ca, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) createOfflineIntermediateCSR(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CACreateOfflineIntermediateCSRRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		csr, err := a.caHierarchy.CreateOfflineIntermediateCSR(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, csr, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) importOfflineIntermediateCA(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAImportOfflineIntermediateRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		ca, err := a.caHierarchy.ImportOfflineIntermediate(ctx, tenantID, id, req)
 		if err != nil {
 			return 0, nil, err
 		}

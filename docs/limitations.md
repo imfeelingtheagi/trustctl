@@ -176,9 +176,13 @@ are usable from Go today; "served, authenticated, end-to-end in the binary" is t
 remaining integration work.
 
 - Remaining **private CA hierarchy** operator flows beyond root/intermediate/leaf
-  issuance. Root/intermediate CA creation, m-of-n approvals, signer-backed leaf
+  issuance. Root/intermediate CA creation, offline-root import,
+  offline-intermediate CSR generation/import, m-of-n approvals, signer-backed leaf
   issuance, and configured upstream CA issuance are now served at
-  `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`, and
+  `/api/v1/ca/ceremonies`, `/api/v1/ca/authorities`,
+  `/api/v1/ca/authorities/offline-roots`,
+  `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
+  `/api/v1/ca/authorities/{id}/offline-intermediates`, and
   `/api/v1/external-cas`. Rotation and cross-signing remain library/operator
   workflows until their served routes ship (see the
   [key-ceremony runbook](runbooks/key-ceremony.md)).
