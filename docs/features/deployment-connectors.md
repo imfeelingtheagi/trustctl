@@ -135,12 +135,14 @@ srv, err := server.Build(ctx, server.Deps{
 })
 ```
 
-When an outbox payload contains the issued certificate and private key bytes, the matching
-connector runs inside its sandbox and the new certificate lands on the target. Metadata-only
-lifecycle transitions still produce receipts, but they do not mutate a target unless a
-deployment payload carries the credential bytes; this is deliberate, because the served CA
-destroys generated private keys after issuance. To add a target trstctl doesn't ship,
-follow the [connector authoring guide](../guides/connector-authoring.md).
+For endpoint-binding issue and renewal flows, the issuer builds a credential-bearing
+`connector.deploy` payload while the freshly generated private key is still in memory,
+then wipes the exported key buffer after the outbox intent is recorded. The matching
+connector runs inside its sandbox and the new certificate lands on the target; delivery
+receipts keep only identity, route, fingerprint, and status metadata. Metadata-only
+operator deploy actions still produce receipts when no credential bytes are available, but
+they do not claim target mutation. To add a target trstctl doesn't ship, follow the
+[connector authoring guide](../guides/connector-authoring.md).
 
 ## Pitfalls & limits
 

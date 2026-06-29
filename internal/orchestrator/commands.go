@@ -542,7 +542,7 @@ func (o *Orchestrator) BindIdentityDeploymentTarget(ctx context.Context, tenantI
 		return store.Identity{}, fmt.Errorf("orchestrator: deployment target requires id, connector, and name")
 	}
 	payload, err := json.Marshal(projections.IdentityConnectorTargetBound{
-		IdentityID: identityID, TargetID: target.ID, Connector: target.Type, Target: target.Name,
+		IdentityID: identityID, TargetID: target.ID, Connector: target.Type, Target: target.Name, Route: deploymentRoute(target),
 	})
 	if err != nil {
 		return store.Identity{}, err
@@ -551,6 +551,24 @@ func (o *Orchestrator) BindIdentityDeploymentTarget(ctx context.Context, tenantI
 		return store.Identity{}, err
 	}
 	return o.store.GetIdentity(ctx, tenantID, identityID)
+}
+
+func deploymentRoute(target store.DeploymentTarget) string {
+	if len(target.Config) == 0 {
+		return ""
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(target.Config, &cfg); err != nil {
+		return ""
+	}
+	for _, key := range []string{"target", "route", "deployment_route", "endpoint", "object", "virtual_service"} {
+		if raw, ok := cfg[key]; ok {
+			if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s)
+			}
+		}
+	}
+	return ""
 }
 
 // RecordCertificate records a certificate.recorded event (keyed by fingerprint)

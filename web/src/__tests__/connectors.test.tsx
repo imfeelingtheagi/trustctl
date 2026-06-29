@@ -131,7 +131,7 @@ describe("connector deployment disclosure surface", () => {
       created_at: "2026-06-20T00:00:00Z",
     });
     apiMock.createEndpointBinding.mockReset().mockResolvedValue({
-      identity: { id: "identity-bound", status: "deployed" },
+      identity: { id: "identity-bound", status: "issued" },
       target: { id: "target-created", name: "edge/prod/payments", connector: "nginx" },
       queued_lifecycle_intents: ["ca.issue", "connector.deploy"],
       renewal_intent: "ca.renew",

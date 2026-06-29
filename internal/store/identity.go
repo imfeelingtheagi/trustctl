@@ -131,7 +131,7 @@ func (s *Store) SetIdentityStatusTx(ctx context.Context, tx pgx.Tx, tenantID, id
 
 // BindIdentityDeploymentTargetTx projects identity.connector_target_bound by
 // merging non-secret connector routing metadata into the identity attributes.
-func (s *Store) BindIdentityDeploymentTargetTx(ctx context.Context, tx pgx.Tx, tenantID, identityID, targetID, connectorName, targetName string) error {
+func (s *Store) BindIdentityDeploymentTargetTx(ctx context.Context, tx pgx.Tx, tenantID, identityID, targetID, connectorName, targetName, deploymentRoute string) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE identities
 		    SET attributes = COALESCE(attributes, '{}'::jsonb) ||
@@ -141,9 +141,12 @@ func (s *Store) BindIdentityDeploymentTargetTx(ctx context.Context, tx pgx.Tx, t
 		          'target', $4::text,
 		          'deployment_target', $4::text,
 		          'deployment_target_id', $5::text
-		        )
+		        ) ||
+		        jsonb_strip_nulls(jsonb_build_object(
+		          'deployment_route', NULLIF($6::text, '')
+		        ))
 		  WHERE tenant_id = $1 AND id = $2`,
-		tenantID, identityID, connectorName, targetName, targetID)
+		tenantID, identityID, connectorName, targetName, targetID, deploymentRoute)
 	return err
 }
 

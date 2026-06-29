@@ -20,9 +20,11 @@ import (
 	"trstctl.com/trstctl/internal/connector/azurekv"
 	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
 	"trstctl.com/trstctl/internal/connector/elasticsearch"
+	"trstctl.com/trstctl/internal/connector/javakeystore"
 	"trstctl.com/trstctl/internal/connector/kemp"
 	"trstctl.com/trstctl/internal/connector/kemp/kemptest"
 	"trstctl.com/trstctl/internal/connector/mysql"
+	"trstctl.com/trstctl/internal/connector/nginx"
 	"trstctl.com/trstctl/internal/connector/postgresql"
 	"trstctl.com/trstctl/internal/connector/rabbitmq"
 	"trstctl.com/trstctl/internal/connector/tomcat"
@@ -312,6 +314,116 @@ func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing delivered catalog connector receipts for %+v; got %s", want, deliveries.Raw)
+	}
+}
+
+func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
+	const (
+		nginxCertPath = "/etc/nginx/tls/fullchain.pem"
+		nginxKeyPath  = "/etc/nginx/tls/privkey.pem"
+		javaStorePath = "/opt/payments/tls/payments.p12"
+		kempToken     = "cap-life-05-kemp-token"
+		kempVS        = "vs-cap-life-05-443"
+	)
+
+	nginxOps := connector.NewMemoryOps()
+	javaOps := connector.NewMemoryOps()
+	kempSrv := kemptest.New(kempToken)
+	defer kempSrv.Close()
+
+	reg := connector.NewRegistry(func(name string) connector.Ops {
+		switch name {
+		case "nginx":
+			return nginxOps
+		case "java-keystore":
+			return javaOps
+		case "kemp":
+			return connector.NewHTTPOps(kempSrv.Client())
+		default:
+			return nil
+		}
+	})
+	reg.Register(nginx.New(nginxCertPath, nginxKeyPath))
+	reg.Register(javakeystore.New(javaStorePath, "changeit", "payments"))
+	reg.Register(kemp.New(kempSrv.URL(), []byte(kempToken)))
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ConnectorRegistry = reg
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload",
+		"name": "cap-life-05-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name      string
+		connector string
+		route     string
+	}{
+		{name: "cap-life-05-nginx.served.test", connector: "nginx", route: "edge/nginx/payments"},
+		{name: "cap-life-05-java.served.test", connector: "java-keystore", route: "payments-keystore"},
+		{name: "cap-life-05-kemp.served.test", connector: "kemp", route: kempVS},
+	} {
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, map[string]any{
+			"owner_id":      owner.ID,
+			"identity_name": tc.name,
+			"reason":        "cap-life-05 automated endpoint push",
+			"target": map[string]any{
+				"name":      "cap-life-05/" + tc.connector + "/" + tc.name,
+				"connector": tc.connector,
+				"config": map[string]any{
+					"target":         tc.route,
+					"credential_ref": "secret://connectors/" + tc.connector + "/cap-life-05",
+				},
+			},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s endpoint binding: status %d body %s", tc.connector, status, body)
+		}
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain endpoint binding pushes: %v", err)
+	}
+
+	nginxCert, ok := nginxOps.File(nginxCertPath)
+	if !ok || !bytes.Contains(nginxCert, []byte("BEGIN CERTIFICATE")) {
+		t.Fatalf("nginx connector did not receive an issued certificate")
+	}
+	nginxKey, ok := nginxOps.File(nginxKeyPath)
+	if !ok || !bytes.Contains(nginxKey, []byte("BEGIN PRIVATE KEY")) {
+		t.Fatalf("nginx connector did not receive the private key")
+	}
+	javaStore, ok := javaOps.File(javaStorePath)
+	if !ok || len(javaStore) == 0 {
+		t.Fatalf("java-keystore connector did not write a keystore")
+	}
+	kempBinding, ok := kempSrv.Binding(kempVS)
+	if !ok || len(kempBinding.Certificate) == 0 || len(kempBinding.PrivateKey) == 0 {
+		t.Fatalf("Kemp connector did not bind the issued credential: %+v ok=%v", kempBinding, ok)
+	}
+
+	deliveries := connectorDeliveries(t, h, tok)
+	delivered := map[string]bool{}
+	for _, got := range deliveries.Items {
+		if got.Status == "delivered" && got.Reason == "native_delivered" && got.Fingerprint != "" {
+			delivered[got.Connector] = true
+		}
+	}
+	for _, want := range []string{"nginx", "java-keystore", "kemp"} {
+		if !delivered[want] {
+			t.Fatalf("missing delivered CAP-LIFE-05 receipt for %s; got %s", want, deliveries.Raw)
+		}
 	}
 }
 

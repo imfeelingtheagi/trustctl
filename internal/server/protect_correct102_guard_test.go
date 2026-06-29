@@ -13,9 +13,9 @@ import (
 // Confirmed strength, two halves:
 //
 //  1. Profile gating runs BEFORE signing on the served issuance path. In
-//     internal/server/issuance.go, mintServedLeaf calls enforceProfile (which
-//     validates the request against the bound certificate profile and fails closed)
-//     BEFORE it calls d.issue (the signer/CA hook). An out-of-profile request is
+//     internal/server/issuance.go, mintServedLeafMaterial calls enforceProfile
+//     (which validates the request against the bound certificate profile and fails
+//     closed) BEFORE it calls d.issue (the signer/CA hook). An out-of-profile request is
 //     therefore rejected before any signature is produced.
 //
 //  2. ACME's AcceptAll challenge validator is test-only. AcceptAll accepts every
@@ -26,12 +26,12 @@ import (
 //
 // Both halves are ANCHOR-LOCKS over the real source (PG-free, no signer, no network):
 // half 1 reads issuance.go and asserts the call ORDER (enforceProfile precedes the
-// d.issue signer call within mintServedLeaf); half 2 walks the entire module and
+// d.issue signer call within mintServedLeafMaterial); half 2 walks the entire module and
 // asserts every file that mentions AcceptAll is a _test.go file. A future edit that
 // signs before validating, or that wires AcceptAll into a production file, turns this
 // guard RED.
 
-// mintServedLeafSource returns the body of the mintServedLeaf function from
+// mintServedLeafSource returns the body of the mintServedLeafMaterial function from
 // issuance.go, so the order check is scoped to the served mint and not the whole file.
 func mintServedLeafSource(t *testing.T) string {
 	t.Helper()
@@ -40,12 +40,12 @@ func mintServedLeafSource(t *testing.T) string {
 		t.Fatalf("CORRECT-102 anchor: cannot read issuance.go: %v", err)
 	}
 	body := string(src)
-	const sig = "func (d *issuanceDispatcher) mintServedLeaf("
+	const sig = "func (d *issuanceDispatcher) mintServedLeafMaterial("
 	start := strings.Index(body, sig)
 	if start < 0 {
-		t.Fatalf("CORRECT-102 anchor: mintServedLeaf no longer exists in issuance.go (the served issuance seam moved); re-point this guard")
+		t.Fatalf("CORRECT-102 anchor: mintServedLeafMaterial no longer exists in issuance.go (the served issuance seam moved); re-point this guard")
 	}
-	// The next top-level func declaration bounds mintServedLeaf's body.
+	// The next top-level func declaration bounds mintServedLeafMaterial's body.
 	rest := body[start+len(sig):]
 	if end := strings.Index(rest, "\nfunc "); end >= 0 {
 		return body[start : start+len(sig)+end]
@@ -58,11 +58,11 @@ func TestProtectCORRECT102_ProfileValidatedBeforeSigning(t *testing.T) {
 
 	enforceIdx := strings.Index(fn, "d.enforceProfile(")
 	if enforceIdx < 0 {
-		t.Fatalf("CORRECT-102: mintServedLeaf no longer calls d.enforceProfile; profile gating before signing is no longer present")
+		t.Fatalf("CORRECT-102: mintServedLeafMaterial no longer calls d.enforceProfile; profile gating before signing is no longer present")
 	}
 	signIdx := strings.Index(fn, "d.issue(")
 	if signIdx < 0 {
-		t.Fatalf("CORRECT-102: mintServedLeaf no longer calls d.issue (the signer/CA hook); re-point this guard")
+		t.Fatalf("CORRECT-102: mintServedLeafMaterial no longer calls d.issue (the signer/CA hook); re-point this guard")
 	}
 	if enforceIdx >= signIdx {
 		t.Fatalf("CORRECT-102: profile validation (enforceProfile @%d) no longer precedes signing (d.issue @%d) in mintServedLeaf; the served path can now sign before validating the profile (fail-open regression)", enforceIdx, signIdx)
@@ -71,7 +71,7 @@ func TestProtectCORRECT102_ProfileValidatedBeforeSigning(t *testing.T) {
 	// Lock the fail-closed contract of enforceProfile itself: a configured-but-
 	// unresolved profile must deny rather than silently mint.
 	if !strings.Contains(fn, "leafProfile, err := d.enforceProfile(") {
-		t.Errorf("CORRECT-102: mintServedLeaf no longer binds enforceProfile's error return; a profile-validation failure may no longer reject the mint")
+		t.Errorf("CORRECT-102: mintServedLeafMaterial no longer binds enforceProfile's error return; a profile-validation failure may no longer reject the mint")
 	}
 }
 

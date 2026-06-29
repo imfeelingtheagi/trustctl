@@ -31,7 +31,7 @@ never live in the API process. What you can do end to end against the running bi
   connector target, binds the identity to that endpoint, and queues issue/deploy
   work through the outbox. The same leader lifecycle scheduler renews the deployed
   identity later and sends the successor back to the bound endpoint through
-  `connector.deploy`.
+  credential-bearing `connector.deploy` work.
 - **Expiry-alert notification delivery**: the leader lifecycle scheduler honors the
   configured alert window, writes `notification.expiry` outbox work, stamps
   `alerted_at` in the same transaction so one certificate does not spam, and the
@@ -43,11 +43,14 @@ never live in the API process. What you can do end to end against the running bi
 - **Deployment connector target mutation** for the shipped connector set is served
   through the outbox when an operator wires a native `ConnectorRegistry` into the
   running binary, or when a provenance-verified signed WASM connector plugin owns
-  the connector name. A direct `connector.deploy` payload that carries `cert_pem`
-  and `key_pem` is delivered at-least-once to the registered connector and records
-  a `delivered` or `failed` receipt. A lifecycle transition that contains only
-  routing metadata still records an `unrouted` receipt instead of pretending it
-  deployed bytes the control plane no longer has.
+  the connector name. Endpoint-binding issue and renewal flows now create
+  credential-bearing `connector.deploy` payloads while the generated key is still in
+  memory, then wipe the exported process buffer after the intent is recorded. Those
+  payloads carry `cert_pem` and `key_pem`, are delivered at-least-once to the
+  registered connector, and record `delivered` or `failed` receipts without
+  returning PEM/key bytes. A later
+  metadata-only operator deploy action still records an `unrouted` receipt instead
+  of pretending it deployed bytes the control plane no longer has.
   The shipped connector set is 24 connectors: nginx, Apache, Caddy, Envoy, IIS,
   HAProxy, F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix,
   Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager, Java keystore,

@@ -568,6 +568,7 @@ type IdentityConnectorTargetBound struct {
 	TargetID   string `json:"target_id"`
 	Connector  string `json:"connector"`
 	Target     string `json:"target"`
+	Route      string `json:"route,omitempty"`
 }
 
 // LifecycleRotationRecorded is the payload of lifecycle.rotation.recorded.
@@ -1347,7 +1348,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if pl.IdentityID == "" || pl.TargetID == "" || pl.Connector == "" || pl.Target == "" {
 			return fmt.Errorf("projections: %s requires identity_id, target_id, connector, and target", e.Type)
 		}
-		return p.store.BindIdentityDeploymentTargetTx(ctx, tx, e.TenantID, pl.IdentityID, pl.TargetID, pl.Connector, pl.Target)
+		return p.store.BindIdentityDeploymentTargetTx(ctx, tx, e.TenantID, pl.IdentityID, pl.TargetID, pl.Connector, pl.Target, pl.Route)
 	case EventLifecycleRotationRecorded:
 		var pl LifecycleRotationRecorded
 		if err := decode(e, &pl); err != nil {

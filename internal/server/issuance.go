@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -171,6 +173,12 @@ type transitionTrigger struct {
 	Reason     string `json:"reason"`
 }
 
+type issuedLeafMaterial struct {
+	Certificate store.Certificate
+	CertPEM     []byte
+	KeyPEM      []byte
+}
+
 func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Message) error {
 	var p transitionTrigger
 	if err := json.Unmarshal(m.Payload, &p); err != nil {
@@ -197,13 +205,18 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
-		cert, err := d.mintServedLeaf(ctx, m.TenantID, ident.OwnerID, ident.Name, []string{ident.Name})
+		material, err := d.mintServedLeafMaterial(ctx, m.TenantID, ident.OwnerID, ident.Name, []string{ident.Name})
 		if err != nil {
 			return nil, err
 		}
+		defer secret.Wipe(material.KeyPEM)
+		cert := material.Certificate
 		cert.IssuanceIdempotencyKey = idemKey
 		recorded, err := d.orch.RecordCertificate(ctx, m.TenantID, cert)
 		if err != nil {
+			return nil, err
+		}
+		if err := d.transitionDeployedWithCredential(ctx, m.TenantID, ident, p.Reason, material.CertPEM, material.KeyPEM, recorded.Fingerprint); err != nil {
 			return nil, err
 		}
 		usage.Record(m.TenantID, usage.MeterCertificatesIssued, 1)
@@ -242,20 +255,43 @@ func (d *issuanceDispatcher) completeRecoveredRenewal(ctx context.Context, tenan
 // for the public certificate. The private key is destroyed before returning; the
 // control plane never persists or logs it.
 func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string) (store.Certificate, error) {
+	material, err := d.mintServedLeafMaterial(ctx, tenantID, ownerID, commonName, dnsNames)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	secret.Wipe(material.KeyPEM)
+	return material.Certificate, nil
+}
+
+// mintServedLeafMaterial returns the same inventory certificate as mintServedLeaf
+// plus a transient PEM credential bundle for a connector outbox payload. Callers
+// must wipe KeyPEM after encoding the deployment intent; the key is never written
+// to the event log or read model.
+func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string) (issuedLeafMaterial, error) {
 	if d.issue == nil {
-		return store.Certificate{}, errors.New("server: issuing CA is unavailable")
+		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
 	}
 	if len(dnsNames) == 0 {
 		dnsNames = []string{commonName}
 	}
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
-		return store.Certificate{}, err
+		return issuedLeafMaterial{}, err
 	}
 	defer key.Destroy()
+	keyPEM, err := key.PrivateKeyPEM()
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	keepKeyPEM := false
+	defer func() {
+		if !keepKeyPEM {
+			secret.Wipe(keyPEM)
+		}
+	}()
 	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: commonName, DNSNames: dnsNames}, key)
 	if err != nil {
-		return store.Certificate{}, err
+		return issuedLeafMaterial{}, err
 	}
 	// Enforce the certificate-profile model on the served mint (PKIGOV-002):
 	// when a default profile is configured and resolves for the tenant, validate
@@ -264,19 +300,19 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 	// out-of-profile certificate is never minted on the served path.
 	leafProfile, err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL)
 	if err != nil {
-		return store.Certificate{}, err
+		return issuedLeafMaterial{}, err
 	}
 	leafPEM, err := d.issue(ctx, csrDER, leafTTL, leafProfile)
 	if err != nil {
-		return store.Certificate{}, err
+		return issuedLeafMaterial{}, err
 	}
 	blk, _ := pem.Decode(leafPEM)
 	if blk == nil {
-		return store.Certificate{}, errors.New("server: issued certificate is not PEM")
+		return issuedLeafMaterial{}, errors.New("server: issued certificate is not PEM")
 	}
 	info, err := certinfo.Inspect(blk.Bytes)
 	if err != nil {
-		return store.Certificate{}, err
+		return issuedLeafMaterial{}, err
 	}
 	var ownerPtr *string
 	if ownerID = strings.TrimSpace(ownerID); ownerID != "" {
@@ -284,11 +320,16 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 		ownerPtr = &owner
 	}
 	nb, na := info.NotBefore, info.NotAfter
-	return store.Certificate{
-		CAID: IssuingCAID(), OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
-		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
-		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-		Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+	keepKeyPEM = true
+	return issuedLeafMaterial{
+		Certificate: store.Certificate{
+			CAID: IssuingCAID(), OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
+			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
+			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
+			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+		},
+		CertPEM: append([]byte(nil), leafPEM...),
+		KeyPEM:  keyPEM,
 	}, nil
 }
 
@@ -351,6 +392,9 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, err
 		}
+		var deployCertPEM, deployKeyPEM []byte
+		deployFingerprint := ""
+		defer func() { secret.Wipe(deployKeyPEM) }()
 		for _, old := range certs {
 			if run.PredecessorFingerprint == "" {
 				run.PredecessorFingerprint = old.Fingerprint
@@ -363,24 +407,30 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			if len(dnsNames) > 0 {
 				commonName = dnsNames[0]
 			}
-			successor, err := d.mintServedLeaf(ctx, m.TenantID, ident.OwnerID, commonName, dnsNames)
+			material, err := d.mintServedLeafMaterial(ctx, m.TenantID, ident.OwnerID, commonName, dnsNames)
 			if err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
 			}
+			successor := material.Certificate
 			successor.IssuanceIdempotencyKey = idemKey
 			recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
 			if err != nil {
+				secret.Wipe(material.KeyPEM)
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, fmt.Errorf("server: record renewal successor: %w", err)
 			}
+			secret.Wipe(deployKeyPEM)
+			deployCertPEM = material.CertPEM
+			deployKeyPEM = material.KeyPEM
+			deployFingerprint = recorded.Fingerprint
 			run.SuccessorFingerprint = recorded.Fingerprint
 		}
 		reason := p.Reason
 		if reason == "" {
 			reason = "renewal completed"
 		}
-		if err := d.orch.Transition(ctx, m.TenantID, p.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+		if err := d.transitionDeployedWithCredential(ctx, m.TenantID, ident, reason, deployCertPEM, deployKeyPEM, deployFingerprint); err != nil {
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, fmt.Errorf("server: complete renewal transition: %w", err)
 		}
@@ -555,6 +605,53 @@ func (d *issuanceDispatcher) ensureTenantCRL(ctx context.Context, tenantID strin
 	return d.ensureCRL(ctx, tenantID)
 }
 
+func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Context, tenantID string, ident store.Identity, reason string, certPEM, keyPEM []byte, fingerprint string) error {
+	connName, target := deploymentRoutingAttrs(ident.Attributes)
+	if target == "" {
+		target = ident.Name
+	}
+	state, err := d.orch.State(ctx, tenantID, ident.ID)
+	if err != nil {
+		return err
+	}
+	if connName == "" || len(certPEM) == 0 || len(keyPEM) == 0 {
+		if state == orchestrator.StateRenewing {
+			return d.orch.Transition(ctx, tenantID, ident.ID, orchestrator.StateDeployed, reason)
+		}
+		return nil
+	}
+	payload, err := connector.EncodeIdentityDeploy(connName, ident.ID, connector.Deployment{
+		Target: target, CertPEM: certPEM, KeyPEM: keyPEM, Fingerprint: fingerprint,
+	})
+	if err != nil {
+		return err
+	}
+	switch state {
+	case orchestrator.StateIssued, orchestrator.StateRenewing:
+		return d.orch.TransitionWithSideEffectPayload(ctx, tenantID, ident.ID, orchestrator.StateDeployed, reason, payload)
+	case orchestrator.StateDeployed:
+		return d.enqueueCredentialDeploy(ctx, tenantID, ident.ID, fingerprint, payload)
+	default:
+		return nil
+	}
+}
+
+func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenantID, identityID, fingerprint string, payload []byte) error {
+	if d.outbox == nil || d.store == nil || identityID == "" || fingerprint == "" {
+		return nil
+	}
+	idemKey := "credential-deploy:" + identityID + ":" + fingerprint
+	return d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := d.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID:       tenantID,
+			Destination:    "connector.deploy",
+			IdempotencyKey: idemKey,
+			Payload:        payload,
+		})
+		return err
+	})
+}
+
 // handleDeploy processes a connector.deploy outbox entry (the side effect of an
 // issued→deployed lifecycle transition, or a direct connector deployment payload).
 // Every attempt records a tenant-scoped, event-sourced delivery receipt before the
@@ -668,7 +765,11 @@ type rotationRunEvidence struct {
 func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchestrator.Message) (connector.DeployPayload, *string, string, error) {
 	var p connector.DeployPayload
 	if err := json.Unmarshal(m.Payload, &p); err == nil && (p.Connector != "" || p.Target != "" || p.Fingerprint != "" || len(p.CertPEM) > 0 || len(p.KeyPEM) > 0) {
-		return p, nil, "direct connector deploy payload", nil
+		var identityID *string
+		if id := strings.TrimSpace(p.IdentityID); id != "" {
+			identityID = &id
+		}
+		return p, identityID, "direct connector deploy payload", nil
 	}
 	var trig transitionTrigger
 	if err := json.Unmarshal(m.Payload, &trig); err != nil {
@@ -704,7 +805,7 @@ func deploymentRoutingAttrs(raw json.RawMessage) (string, string) {
 		return "", ""
 	}
 	connectorName := firstStringAttr(attrs, "connector", "deployment_connector", "connector_name")
-	target := firstStringAttr(attrs, "target", "deployment_target", "deployment_target_id", "deployment_location")
+	target := firstStringAttr(attrs, "deployment_route", "target", "deployment_target", "deployment_target_id", "deployment_location")
 	return connectorName, target
 }
 

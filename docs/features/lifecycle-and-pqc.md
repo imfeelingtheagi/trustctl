@@ -67,9 +67,11 @@ startup.
 automated enrollment -> provision -> renewal -> endpoint-bind. It creates the
 X.509 identity for an existing owner, provisions or references the connector target,
 binds the route onto the identity, queues issue and deploy intents through the outbox,
-and leaves renewal on the same scheduler-driven `ca.renew` path. The response contains
-only the identity, target, and queued intent names; certificate/key bytes are never
-returned from this route.
+and leaves renewal on the same scheduler-driven `ca.renew` path. The issuer creates the
+credential-bearing deploy payload while the generated key is still in memory, so web
+servers, keystores, and load balancers receive the certificate/key bundle through the
+registered connector without returning PEM bytes from the API response. The response
+contains only the identity, target, and queued intent names.
 
 ### Crypto-agility (F16)
 

@@ -45,6 +45,22 @@ func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox) *Orchestrator
 // transaction updates the identity's status and enqueues any outbox side effect,
 // so the external call is recorded with the state change (AN-6).
 func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID string, to State, reason string) error {
+	return o.transition(ctx, tenantID, identityID, to, reason, nil)
+}
+
+// TransitionWithSideEffectPayload moves an identity through the normal lifecycle
+// state machine but stores payload as the outbox body for transitions that have a
+// side effect. It is used when the event must remain metadata-only while the
+// external call needs transient bytes, such as a freshly issued private key for a
+// connector deployment.
+func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tenantID, identityID string, to State, reason string, payload []byte) error {
+	if len(payload) == 0 {
+		return o.Transition(ctx, tenantID, identityID, to, reason)
+	}
+	return o.transition(ctx, tenantID, identityID, to, reason, payload)
+}
+
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte) error {
 	ident, err := o.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
 		return fmt.Errorf("orchestrator: load identity %s: %w", identityID, err)
@@ -59,6 +75,10 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 	payload, err := json.Marshal(transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason})
 	if err != nil {
 		return err
+	}
+	outboxPayload := payload
+	if len(sideEffectPayload) > 0 {
+		outboxPayload = sideEffectPayload
 	}
 	ev, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, Data: payload})
 	if err != nil {
@@ -81,7 +101,7 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 				TenantID:       tenantID,
 				Destination:    dest,
 				IdempotencyKey: ev.ID,
-				Payload:        payload,
+				Payload:        outboxPayload,
 			}); err != nil {
 				return err
 			}

@@ -65,6 +65,9 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 			"to":     to,
 			"reason": reason,
 		})
+		if to == "deployed" && status == http.StatusConflict && strings.Contains(string(body), "deployed") {
+			return
+		}
 		if status != http.StatusOK {
 			t.Fatalf("transition %s: status %d body %s", to, status, body)
 		}
@@ -183,6 +186,9 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 			"to":     to,
 			"reason": reason,
 		})
+		if to == "deployed" && status == http.StatusConflict && strings.Contains(string(body), "deployed") {
+			return
+		}
 		if status != http.StatusOK {
 			t.Fatalf("transition %s: status %d body %s", to, status, body)
 		}
@@ -466,8 +472,8 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 	if err := json.Unmarshal(body, &binding); err != nil {
 		t.Fatalf("decode endpoint binding: %v (%s)", err, body)
 	}
-	if binding.Identity.ID == "" || binding.Identity.Status != "deployed" {
-		t.Fatalf("binding identity = %+v, want queued through deployed", binding.Identity)
+	if binding.Identity.ID == "" || binding.Identity.Status != "issued" {
+		t.Fatalf("binding identity = %+v, want issued before outbox deployment", binding.Identity)
 	}
 	if binding.Target.ID == "" || binding.Target.Name != "edge/prod/cap-life-01" || binding.Target.Connector != "nginx" {
 		t.Fatalf("binding target = %+v", binding.Target)
@@ -494,6 +500,10 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 	first := connectorDeliveriesForIdentity(t, h, tok, binding.Identity.ID)
 	if len(first.Items) != 1 || first.Items[0].Connector != "nginx" || first.Items[0].Target != "edge/prod/cap-life-01" || first.Items[0].Fingerprint != certs[0].Fingerprint {
 		t.Fatalf("initial delivery receipt = %+v raw=%s cert=%s", first.Items, first.Raw, certs[0].Fingerprint)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+binding.Identity.ID, tok, nil)
+	if status != http.StatusOK || !jsonContains(t, body, `"status":"deployed"`) {
+		t.Fatalf("deployed identity after endpoint binding drain: status %d body %s", status, body)
 	}
 
 	queued, err := h.srv.RunLifecycleOnce(t.Context())

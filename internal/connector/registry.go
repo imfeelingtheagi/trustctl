@@ -10,6 +10,7 @@ import (
 // DeployPayload is the JSON body of a "connector.deploy" outbox message: which
 // connector deploys what, where. Key material is []byte (AN-8).
 type DeployPayload struct {
+	IdentityID  string `json:"identity_id,omitempty"`
 	Connector   string `json:"connector"`
 	Target      string `json:"target"`
 	CertPEM     []byte `json:"cert_pem"`
@@ -21,7 +22,15 @@ type DeployPayload struct {
 // connector. The orchestrator enqueues it on the outbox in the same transaction
 // as the lifecycle state change (AN-6).
 func EncodeDeploy(connectorName string, dep Deployment) ([]byte, error) {
+	return EncodeIdentityDeploy(connectorName, "", dep)
+}
+
+// EncodeIdentityDeploy builds an outbox payload tied to an identity lifecycle
+// deployment. The identity_id is routing evidence only; connector implementations
+// still receive only the Deployment.
+func EncodeIdentityDeploy(connectorName, identityID string, dep Deployment) ([]byte, error) {
 	return json.Marshal(DeployPayload{
+		IdentityID:  identityID,
 		Connector:   connectorName,
 		Target:      dep.Target,
 		CertPEM:     dep.CertPEM,

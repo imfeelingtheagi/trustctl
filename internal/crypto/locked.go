@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"runtime"
@@ -107,6 +108,24 @@ func (l *LockedSigner) Algorithm() Algorithm { return l.algorithm }
 
 // Public returns the public key.
 func (l *LockedSigner) Public() PublicKey { return l.public }
+
+// PrivateKeyPEM exports the locked key as PKCS#8 PEM for a transient edge handoff,
+// such as a connector deployment payload. The caller owns the returned []byte and
+// must wipe it after the handoff is durably recorded or fails. Long-lived custody
+// remains the locked buffer; this method exists for endpoints that require the
+// certificate's private key to land on the target.
+func (l *LockedSigner) PrivateKeyPEM() ([]byte, error) {
+	der := l.der.Bytes()
+	if der == nil {
+		return nil, errors.New("crypto: locked key has been destroyed")
+	}
+	out := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	if out == nil {
+		return nil, errors.New("crypto: encode private key PEM")
+	}
+	runtime.KeepAlive(l.der)
+	return out, nil
+}
 
 // SignDigest signs digest with the locked private key, materializing the key in
 // the clear only for the single signature and explicitly zeroizing it before

@@ -341,8 +341,25 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if reason == "" {
 			reason = "connector target deploy"
 		}
-		if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+		state, err := a.orch.State(ctx, tenantID, req.IdentityID)
+		if err != nil {
 			return 0, nil, err
+		}
+		switch state {
+		case orchestrator.StateRequested:
+			if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateIssued, reason); err != nil {
+				return 0, nil, err
+			}
+		case orchestrator.StateIssued, orchestrator.StateRenewing:
+			if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+				return 0, nil, err
+			}
+		case orchestrator.StateDeployed:
+			// Already converged by the issuer's credential-bearing deploy path.
+		default:
+			if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+				return 0, nil, err
+			}
 		}
 		identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
 		if err != nil {
@@ -429,9 +446,6 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 			reason = "endpoint binding automation"
 		}
 		if err := a.orch.Transition(ctx, tenantID, identity.ID, orchestrator.StateIssued, reason); err != nil {
-			return 0, nil, err
-		}
-		if err := a.orch.Transition(ctx, tenantID, identity.ID, orchestrator.StateDeployed, reason); err != nil {
 			return 0, nil, err
 		}
 		identity, err = a.store.GetIdentity(ctx, tenantID, identity.ID)
