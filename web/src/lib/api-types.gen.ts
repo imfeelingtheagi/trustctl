@@ -2668,6 +2668,17 @@ export interface ScaleUnitEconomics {
   postgres_gib_30_day: number;
 }
 
+export interface SecretApproval {
+  action: "rotate" | "recover" | "delete";
+  approvals: number;
+  approver: string;
+  resource: string;
+}
+
+export interface SecretApprovalRequest {
+  action: "rotate" | "recover" | "delete";
+}
+
 export interface SecretImportRequest {
   prefix?: string;
   values: Record<string, unknown>;

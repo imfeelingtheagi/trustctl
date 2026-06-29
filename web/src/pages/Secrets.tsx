@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2, X } from "lucide-react";
+import { Copy, Eye, KeyRound, Loader2, LogIn, PlayCircle, RefreshCw, RotateCw, Share2, ShieldCheck, Trash2, X } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -16,6 +16,7 @@ import {
   type KubernetesSecretOperator,
   type MachineLoginResponse,
   type PKISecret,
+  type SecretApprovalAction,
   type SecretMeta,
   type SecretRepositoryScanPosture,
   type SecretScan,
@@ -31,6 +32,19 @@ import {
   type TransitSignature,
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+
+type SecretApprovalQueueItem = {
+  id: string;
+  name: string;
+  action: SecretApprovalAction;
+  openedAt: string;
+  status: "pending" | "approved" | "completed";
+  approvals?: number;
+  approver?: string;
+  error?: string;
+};
+
+type Translate = ReturnType<typeof useTranslation>["t"];
 
 export function Secrets() {
   const { t } = useTranslation();
@@ -60,6 +74,8 @@ export function Secrets() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [approvalQueue, setApprovalQueue] = useState<SecretApprovalQueueItem[]>([]);
+  const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
 
   const [accessName, setAccessName] = useState("");
   const [accessResult, setAccessResult] = useState<{ name: string; version?: number } | null>(null);
@@ -154,9 +170,7 @@ export function Secrets() {
           ? api.thirdPartySecretScanning().catch(() => null)
           : Promise.resolve<ThirdPartySecretScanPosture | null>(null);
       const syncCatalogPromise =
-        typeof api.secretSyncTargets === "function"
-          ? api.secretSyncTargets().catch(() => null)
-          : Promise.resolve<SecretSyncTargetCatalog | null>(null);
+        typeof api.secretSyncTargets === "function" ? api.secretSyncTargets().catch(() => null) : Promise.resolve<SecretSyncTargetCatalog | null>(null);
       const operatorPosturePromise =
         typeof api.kubernetesSecretOperator === "function"
           ? api.kubernetesSecretOperator().catch(() => null)
@@ -233,6 +247,98 @@ export function Secrets() {
     [revealBusy],
   );
 
+  function queueSecretApproval(action: SecretApprovalAction, name: string, err: unknown): boolean {
+    const message = apiProblemMessage(err, t("secrets.approvals.requiredFallback"));
+    if (!(err instanceof ApiError) || err.status !== 403 || !/dual control/i.test(message)) return false;
+    const id = secretApprovalQueueID(action, name);
+    setApprovalQueue((current) => {
+      const existing = current.find((item) => item.id === id);
+      return [
+        {
+          ...existing,
+          id,
+          name,
+          action,
+          openedAt: existing?.openedAt ?? new Date().toISOString(),
+          status: "pending",
+          error: message,
+        },
+        ...current.filter((item) => item.id !== id),
+      ];
+    });
+    return true;
+  }
+
+  function updateApprovalQueueItem(id: string, patch: Partial<SecretApprovalQueueItem>) {
+    setApprovalQueue((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function canRetryApproval(item: SecretApprovalQueueItem): boolean {
+    if (item.status === "completed") return false;
+    if (item.action === "rotate") return rotateName === item.name && rotateValue.trim() !== "";
+    if (item.action === "delete") return deleteName === item.name && deleteConfirm === item.name;
+    return false;
+  }
+
+  async function approveSecretApproval(item: SecretApprovalQueueItem) {
+    const busyKey = `${item.id}:approve`;
+    setApprovalBusy(busyKey);
+    try {
+      const approval = await api.approveSecretChange(item.name, item.action);
+      updateApprovalQueueItem(item.id, {
+        status: "approved",
+        approvals: approval.approvals,
+        approver: approval.approver,
+        error: undefined,
+      });
+      setNotice(t("secrets.approvals.approvedNotice", { approver: approval.approver, action: secretApprovalActionLabel(item.action, t), name: item.name }));
+    } catch (err) {
+      updateApprovalQueueItem(item.id, { error: apiProblemMessage(err, t("secrets.approvals.approveFailed")) });
+    } finally {
+      setApprovalBusy(null);
+    }
+  }
+
+  async function retrySecretApproval(item: SecretApprovalQueueItem) {
+    const busyKey = `${item.id}:retry`;
+    setApprovalBusy(busyKey);
+    try {
+      if (item.action === "rotate") {
+        if (rotateName !== item.name || rotateValue.trim() === "") {
+          throw new Error(t("secrets.approvals.rotateRetryNeedsForm", { name: item.name }));
+        }
+        const meta = await api.rotateSecret(item.name, { name: item.name, value: rotateValue });
+        setItems((current) => mergeMeta(current, [meta]));
+        setRotateName("");
+        setRotateValue("");
+        setRotateError(null);
+        updateApprovalQueueItem(item.id, { status: "completed", error: undefined });
+        setNotice(t("secrets.approvals.rotatedAfterApproval", { name: meta.name, version: meta.version ?? "" }));
+        return;
+      }
+      if (item.action === "delete") {
+        if (deleteName !== item.name || deleteConfirm !== item.name) {
+          throw new Error(t("secrets.approvals.deleteRetryNeedsForm", { name: item.name }));
+        }
+        await api.deleteSecret(item.name);
+        setItems((current) => current.filter((secret) => secret.name !== item.name));
+        setDeleteName("");
+        setDeleteConfirm("");
+        setDeleteError(null);
+        updateApprovalQueueItem(item.id, { status: "completed", error: undefined });
+        setNotice(t("secrets.approvals.deletedAfterApproval", { name: item.name }));
+        return;
+      }
+      throw new Error(t("secrets.approvals.recoverRetryUnsupported"));
+    } catch (err) {
+      if (!queueSecretApproval(item.action, item.name, err)) {
+        updateApprovalQueueItem(item.id, { error: apiProblemMessage(err, t("secrets.approvals.retryFailed")) });
+      }
+    } finally {
+      setApprovalBusy(null);
+    }
+  }
+
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCreateError(null);
@@ -269,14 +375,19 @@ export function Secrets() {
     setRotateError(null);
     setNotice(null);
     setRotateBusy(true);
+    const pendingName = rotateName;
     try {
-      const meta = await api.rotateSecret(rotateName, { name: rotateName, value: rotateValue });
+      const meta = await api.rotateSecret(pendingName, { name: pendingName, value: rotateValue });
       setItems((current) => mergeMeta(current, [meta]));
       setRotateName("");
       setRotateValue("");
       setNotice(`Secret ${meta.name} rotated to version ${meta.version}. The replacement value was not rendered.`);
     } catch (err) {
-      setRotateError(apiProblemMessage(err, "Could not rotate secret"));
+      if (queueSecretApproval("rotate", pendingName, err)) {
+        setRotateError(t("secrets.approvals.rotatePending"));
+      } else {
+        setRotateError(apiProblemMessage(err, "Could not rotate secret"));
+      }
     } finally {
       setRotateBusy(false);
     }
@@ -287,14 +398,19 @@ export function Secrets() {
     setDeleteError(null);
     setNotice(null);
     setDeleteBusy(true);
+    const pendingName = deleteName;
     try {
-      await api.deleteSecret(deleteName);
-      setItems((current) => current.filter((item) => item.name !== deleteName));
-      setNotice(`Secret ${deleteName} deleted from the native store.`);
+      await api.deleteSecret(pendingName);
+      setItems((current) => current.filter((item) => item.name !== pendingName));
+      setNotice(`Secret ${pendingName} deleted from the native store.`);
       setDeleteName("");
       setDeleteConfirm("");
     } catch (err) {
-      setDeleteError(apiProblemMessage(err, "Could not delete secret"));
+      if (queueSecretApproval("delete", pendingName, err)) {
+        setDeleteError(t("secrets.approvals.deletePending"));
+      } else {
+        setDeleteError(apiProblemMessage(err, "Could not delete secret"));
+      }
     } finally {
       setDeleteBusy(false);
     }
@@ -806,6 +922,13 @@ export function Secrets() {
           </Button>
         </form>
         {deleteError && <ErrorState title="Delete failed">{deleteError}</ErrorState>}
+        <SecretApprovalQueue
+          items={approvalQueue}
+          busyKey={approvalBusy}
+          canRetry={canRetryApproval}
+          onApprove={(item) => void approveSecretApproval(item)}
+          onRetry={(item) => void retrySecretApproval(item)}
+        />
       </section>
 
       <section aria-labelledby="developer-heading" className="grid gap-4 border-y border-border py-4">
@@ -949,10 +1072,6 @@ export function Secrets() {
             Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
           </p>
         </div>
-        <UnavailableState title="Secret-change approvals aren't in the console yet">
-          Request/approve state for sensitive secret mutations is not available in the console yet. This page exposes the one-time share path and no fake
-          approval queue.
-        </UnavailableState>
         <div className="grid gap-4 xl:grid-cols-2">
           <form aria-label="Create one-time share" onSubmit={(event) => void submitShare(event)} className="grid content-start gap-3">
             <label className="grid gap-1 text-sm">
@@ -1092,7 +1211,11 @@ export function Secrets() {
         >
           <label className="grid gap-1 text-sm">
             <span className="font-medium">{t("secrets.thirdPartyScan.provider")}</span>
-            <select className="rounded-md border border-input bg-background px-3 py-2" value={thirdPartyProvider} onChange={(event) => setThirdPartyProvider(event.target.value)}>
+            <select
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={thirdPartyProvider}
+              onChange={(event) => setThirdPartyProvider(event.target.value)}
+            >
               {(thirdPartyPosture?.providers ?? defaultThirdPartyProviders()).map((provider) => (
                 <option key={provider.id} value={provider.id}>
                   {provider.name}
@@ -1883,13 +2006,123 @@ function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretScanPostu
   );
 }
 
+function SecretApprovalQueue({
+  items,
+  busyKey,
+  canRetry,
+  onApprove,
+  onRetry,
+}: {
+  items: SecretApprovalQueueItem[];
+  busyKey: string | null;
+  canRetry: (item: SecretApprovalQueueItem) => boolean;
+  onApprove: (item: SecretApprovalQueueItem) => void;
+  onRetry: (item: SecretApprovalQueueItem) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="ui-panel grid gap-3 p-comfortable">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-title font-semibold">{t("secrets.approvals.heading")}</h3>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.approvals.description")}</p>
+        </div>
+        <span className="rounded-control border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">{t("secrets.approvals.badge")}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="rounded-control border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">{t("secrets.approvals.empty")}</p>
+      ) : (
+        <div className="grid gap-2" role="list" aria-label={t("secrets.approvals.listLabel")}>
+          {items.map((item) => {
+            const approveBusy = busyKey === `${item.id}:approve`;
+            const retryBusy = busyKey === `${item.id}:retry`;
+            const retryReady = canRetry(item);
+            const actionLabel = secretApprovalActionLabel(item.action, t);
+            return (
+              <article key={item.id} role="listitem" className="grid gap-3 rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">
+                      {actionLabel} - {item.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("secrets.approvals.openedStatus", { openedAt: formatDate(item.openedAt), status: secretApprovalStatusLabel(item, t) })}
+                    </p>
+                  </div>
+                  <span className="rounded-control border border-border px-2 py-1 text-xs font-semibold text-muted-foreground">{item.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    aria-label={t("secrets.approvals.approveAction", { action: actionLabel, name: item.name })}
+                    disabled={approveBusy || retryBusy || item.status === "completed"}
+                    onClick={() => onApprove(item)}
+                  >
+                    {approveBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />}
+                    {t("secrets.approvals.approve")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={approveBusy || retryBusy || !retryReady}
+                    aria-label={t("secrets.approvals.retryAction", { action: actionLabel, name: item.name })}
+                    onClick={() => onRetry(item)}
+                  >
+                    {retryBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <PlayCircle className="h-4 w-4" aria-hidden="true" />}
+                    {t("secrets.approvals.retry")}
+                  </Button>
+                </div>
+                {item.error && <ErrorState title={t("secrets.approvals.errorTitle")}>{item.error}</ErrorState>}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function defaultThirdPartyProviders(): ThirdPartySecretScanPosture["providers"] {
   return [
     { id: "cicd_log", name: "CI/CD logs", artifact_kinds: ["ci_cd_log"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
-    { id: "container_registry", name: "Container registry exports", artifact_kinds: ["container_registry_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+    {
+      id: "container_registry",
+      name: "Container registry exports",
+      artifact_kinds: ["container_registry_export"],
+      ingest_mode: "",
+      secret_handling: "",
+      outbox_mode: "",
+    },
     { id: "slack", name: "Slack exports", artifact_kinds: ["slack_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
     { id: "jira", name: "Jira exports", artifact_kinds: ["jira_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
   ];
+}
+
+function secretApprovalQueueID(action: SecretApprovalAction, name: string): string {
+  return `${action}:${name}`;
+}
+
+function secretApprovalActionLabel(action: SecretApprovalAction, t: Translate): string {
+  switch (action) {
+    case "rotate":
+      return t("secrets.approvals.actionRotate");
+    case "recover":
+      return t("secrets.approvals.actionRecover");
+    case "delete":
+      return t("secrets.approvals.actionDelete");
+  }
+}
+
+function secretApprovalStatusLabel(item: SecretApprovalQueueItem, t: Translate): string {
+  if (item.status === "completed") return t("secrets.approvals.statusCompleted");
+  if (item.status === "approved") {
+    if (item.approver && item.approvals != null) return t("secrets.approvals.statusApprovedWithCount", { approver: item.approver, count: item.approvals });
+    if (item.approver) return t("secrets.approvals.statusApprovedBy", { approver: item.approver });
+    return t("secrets.approvals.statusApproved");
+  }
+  return item.approvals != null ? t("secrets.approvals.statusCount", { count: item.approvals }) : t("secrets.approvals.statusAwaiting");
 }
 
 function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): SecretMeta[] {

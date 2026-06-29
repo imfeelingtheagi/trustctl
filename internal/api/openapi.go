@@ -338,6 +338,13 @@ func componentSchemas() map[string]*Schema {
 		"resource": str(), "action": {Type: "string", Enum: []string{"issue", "revoke"}},
 		"approver": str(), "approvals": {Type: "integer"},
 	}, "resource", "action", "approver", "approvals")
+	secretApprovalReq := object(map[string]*Schema{
+		"action": {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
+	}, "action")
+	secretApproval := object(map[string]*Schema{
+		"resource": str(), "action": {Type: "string", Enum: []string{"rotate", "recover", "delete"}},
+		"approver": str(), "approvals": {Type: "integer"},
+	}, "resource", "action", "approver", "approvals")
 	breakglassBundle := object(map[string]*Schema{
 		"request_id": str(),
 		"subject":    str(),
@@ -2508,6 +2515,8 @@ func componentSchemas() map[string]*Schema {
 		"BulkRevokeResult":                      bulkRevokeResult,
 		"ApprovalRequest":                       approvalReq,
 		"Approval":                              approval,
+		"SecretApprovalRequest":                 secretApprovalReq,
+		"SecretApproval":                        secretApproval,
 		"BreakglassBundle":                      breakglassBundle,
 		"BreakglassReconcileRequest":            breakglassReconcileReq,
 		"BreakglassReconcileResponse":           breakglassReconcileResp,

@@ -3822,6 +3822,25 @@ ScaleUnitEconomics = TypedDict(
     total=False,
 )
 
+SecretApproval = TypedDict(
+    'SecretApproval',
+    {
+        'action': str,
+        'approvals': int,
+        'approver': str,
+        'resource': str,
+    },
+    total=False,
+)
+
+SecretApprovalRequest = TypedDict(
+    'SecretApprovalRequest',
+    {
+        'action': str,
+    },
+    total=False,
+)
+
 SecretImportRequest = TypedDict(
     'SecretImportRequest',
     {

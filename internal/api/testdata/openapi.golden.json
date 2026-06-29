@@ -10197,6 +10197,50 @@
         ],
         "type": "object"
       },
+      "SecretApproval": {
+        "properties": {
+          "action": {
+            "enum": [
+              "rotate",
+              "recover",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "approvals": {
+            "type": "integer"
+          },
+          "approver": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "action",
+          "approver",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "SecretApprovalRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "rotate",
+              "recover",
+              "delete"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
       "SecretImportRequest": {
         "properties": {
           "prefix": {
@@ -21971,7 +22015,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ApprovalRequest"
+                "$ref": "#/components/schemas/SecretApprovalRequest"
               }
             }
           },
@@ -21982,7 +22026,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Approval"
+                  "$ref": "#/components/schemas/SecretApproval"
                 }
               }
             },

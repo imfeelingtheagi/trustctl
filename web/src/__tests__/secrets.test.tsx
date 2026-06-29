@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     getSecret: vi.fn(),
     rotateSecret: vi.fn(),
     deleteSecret: vi.fn(),
+    approveSecretChange: vi.fn(),
     issuePKISecret: vi.fn(),
     machineLogin: vi.fn(),
     createShare: vi.fn(),
@@ -254,6 +255,12 @@ describe("secrets surface", () => {
     apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
     apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
     apiMock.deleteSecret.mockResolvedValue(undefined);
+    apiMock.approveSecretChange.mockResolvedValue({
+      resource: "secret:app/db/password",
+      action: "rotate",
+      approver: "bob",
+      approvals: 2,
+    });
     apiMock.issuePKISecret.mockResolvedValue({
       serial: "pki-01",
       certificate: "-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----",
@@ -358,8 +365,9 @@ describe("secrets surface", () => {
     expect(screen.getByText(/Rollback-safe static rotation is available for configured backends/i)).toBeInTheDocument();
     expect(screen.getByText("Auth-method administration isn't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText("Secret-change approvals aren't in the console yet")).toBeInTheDocument();
-    expect(screen.getByText(/Request\/approve state for sensitive secret mutations is not available in the console yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Secret-change approvals")).toBeInTheDocument();
+    expect(screen.getByText("No pending secret changes captured in this browser session.")).toBeInTheDocument();
+    expect(screen.queryByText("Secret-change approvals aren't in the console yet")).not.toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
     await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
@@ -417,6 +425,75 @@ describe("secrets surface", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("queues denied secret changes for distinct approval and retry completion", async () => {
+    const user = userEvent.setup();
+    apiMock.rotateSecret
+      .mockRejectedValueOnce(
+        new ApiError(403, JSON.stringify({ detail: "dual control: this action has not been approved by the required number of distinct approvers" })),
+      )
+      .mockResolvedValueOnce({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
+    apiMock.deleteSecret
+      .mockRejectedValueOnce(
+        new ApiError(403, JSON.stringify({ detail: "dual control: this action has not been approved by the required number of distinct approvers" })),
+      )
+      .mockResolvedValueOnce(undefined);
+    apiMock.approveSecretChange
+      .mockResolvedValueOnce({ resource: "secret:app/db/password", action: "rotate", approver: "bob", approvals: 2 })
+      .mockResolvedValueOnce({ resource: "secret:app/db/password", action: "delete", approver: "carol", approvals: 2 });
+
+    renderSecrets();
+    await screen.findByText("app/db/password");
+
+    await user.click(within(screen.getAllByRole("row", { name: /app\/db\/password/i })[0]).getByRole("button", { name: /prepare rotate/i }));
+    const rotateForm = within(screen.getByRole("form", { name: "Rotate secret" }));
+    await user.type(rotateForm.getByLabelText("Replacement value"), "approval-rotate-value");
+    await user.click(rotateForm.getByRole("button", { name: /rotate secret/i }));
+
+    await waitFor(() =>
+      expect(apiMock.rotateSecret).toHaveBeenNthCalledWith(1, "app/db/password", {
+        name: "app/db/password",
+        value: "approval-rotate-value",
+      }),
+    );
+    expect(await screen.findByText("Rotation is waiting for secret-change approval.")).toBeInTheDocument();
+    expect(screen.getByText("Rotate/update - app/db/password")).toBeInTheDocument();
+
+    let approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
+    await user.click(within(approvalList).getByRole("button", { name: /approve rotate\/update for app\/db\/password/i }));
+    await waitFor(() => expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(1, "app/db/password", "rotate"));
+    expect(await screen.findByText(/bob approved Rotate\/update for app\/db\/password/i)).toBeInTheDocument();
+
+    approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
+    await user.click(within(approvalList).getByRole("button", { name: /retry rotate\/update for app\/db\/password/i }));
+    await waitFor(() => expect(apiMock.rotateSecret).toHaveBeenCalledTimes(2));
+    expect(apiMock.rotateSecret).toHaveBeenLastCalledWith("app/db/password", {
+      name: "app/db/password",
+      value: "approval-rotate-value",
+    });
+    expect(await screen.findByText(/rotated to version 4 after approval/i)).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("approval-rotate-value")).not.toBeInTheDocument();
+
+    await user.click(within(screen.getAllByRole("row", { name: /app\/db\/password/i })[0]).getByRole("button", { name: /prepare delete/i }));
+    const deleteForm = within(screen.getByRole("form", { name: "Delete secret" }));
+    await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
+    await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));
+
+    await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenNthCalledWith(1, "app/db/password"));
+    expect(await screen.findByText("Delete is waiting for secret-change approval.")).toBeInTheDocument();
+    expect(screen.getByText("Delete - app/db/password")).toBeInTheDocument();
+
+    approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
+    await user.click(within(approvalList).getByRole("button", { name: /approve delete for app\/db\/password/i }));
+    await waitFor(() => expect(apiMock.approveSecretChange).toHaveBeenNthCalledWith(2, "app/db/password", "delete"));
+    expect(await screen.findByText(/carol approved Delete for app\/db\/password/i)).toBeInTheDocument();
+
+    approvalList = screen.getByRole("list", { name: "Pending secret-change approvals" });
+    await user.click(within(approvalList).getByRole("button", { name: /retry delete for app\/db\/password/i }));
+    await waitFor(() => expect(apiMock.deleteSecret).toHaveBeenCalledTimes(2));
+    expect(apiMock.deleteSecret).toHaveBeenLastCalledWith("app/db/password");
+    expect(await screen.findByText(/deleted after approval/i)).toBeInTheDocument();
   });
 
   it("shows developer snippets and runs an access test without rendering the value", async () => {

@@ -2306,6 +2306,130 @@ export const messages = {
     defaultMessage: "no",
     description: "Short value showing custom rules were not used for a secret scan.",
   },
+  "secrets.approvals.heading": {
+    defaultMessage: "Secret-change approvals",
+    description: "Heading for the secret-change approval queue.",
+  },
+  "secrets.approvals.description": {
+    defaultMessage: "Denied rotate/update/delete requests appear here for distinct approver review.",
+    description: "Description for the secret-change approval queue.",
+  },
+  "secrets.approvals.badge": {
+    defaultMessage: "Dual control",
+    description: "Badge label for the secret-change approval queue.",
+  },
+  "secrets.approvals.empty": {
+    defaultMessage: "No pending secret changes captured in this browser session.",
+    description: "Empty-state message for the secret-change approval queue.",
+  },
+  "secrets.approvals.listLabel": {
+    defaultMessage: "Pending secret-change approvals",
+    description: "Accessible label for the secret-change approval list.",
+  },
+  "secrets.approvals.errorTitle": {
+    defaultMessage: "Approval state",
+    description: "Error-state title inside one pending secret-change approval row.",
+  },
+  "secrets.approvals.actionRotate": {
+    defaultMessage: "Rotate/update",
+    description: "Secret-change approval action label for a rotation/update.",
+  },
+  "secrets.approvals.actionRecover": {
+    defaultMessage: "Recover",
+    description: "Secret-change approval action label for a recovery.",
+  },
+  "secrets.approvals.actionDelete": {
+    defaultMessage: "Delete",
+    description: "Secret-change approval action label for a deletion.",
+  },
+  "secrets.approvals.openedStatus": {
+    defaultMessage: "Opened {openedAt} - {status}",
+    description: "Timestamp and current status for one pending secret-change approval row.",
+  },
+  "secrets.approvals.statusCompleted": {
+    defaultMessage: "completed",
+    description: "Status text for a completed secret-change approval.",
+  },
+  "secrets.approvals.statusApproved": {
+    defaultMessage: "approved",
+    description: "Status text for an approved secret-change approval.",
+  },
+  "secrets.approvals.statusApprovedBy": {
+    defaultMessage: "approved by {approver}",
+    description: "Status text for an approved secret-change approval with approver name.",
+  },
+  "secrets.approvals.statusApprovedWithCount": {
+    defaultMessage: "approved by {approver} ({count} approvals recorded)",
+    description: "Status text for an approved secret-change approval with approver name and count.",
+  },
+  "secrets.approvals.statusCount": {
+    defaultMessage: "{count} approvals recorded",
+    description: "Status text for a pending secret-change approval with a known approval count.",
+  },
+  "secrets.approvals.statusAwaiting": {
+    defaultMessage: "awaiting distinct approval",
+    description: "Status text for a secret-change approval awaiting approval.",
+  },
+  "secrets.approvals.approve": {
+    defaultMessage: "Approve",
+    description: "Button label for approving a secret-change request.",
+  },
+  "secrets.approvals.retry": {
+    defaultMessage: "Retry",
+    description: "Button label for retrying an approved secret-change request.",
+  },
+  "secrets.approvals.approveAction": {
+    defaultMessage: "Approve {action} for {name}",
+    description: "Accessible label for approving a secret-change request.",
+  },
+  "secrets.approvals.retryAction": {
+    defaultMessage: "Retry {action} for {name}",
+    description: "Accessible label for retrying an approved secret-change request.",
+  },
+  "secrets.approvals.requiredFallback": {
+    defaultMessage: "Secret change requires dual-control approval",
+    description: "Fallback error text when a secret change is denied for missing approval.",
+  },
+  "secrets.approvals.approvedNotice": {
+    defaultMessage: "{approver} approved {action} for {name}. Retry the change to complete it.",
+    description: "Success notice after recording a secret-change approval.",
+  },
+  "secrets.approvals.approveFailed": {
+    defaultMessage: "Could not approve secret change",
+    description: "Fallback error when approval recording fails.",
+  },
+  "secrets.approvals.retryFailed": {
+    defaultMessage: "Could not retry approved secret change",
+    description: "Fallback error when retrying an approved secret change fails.",
+  },
+  "secrets.approvals.rotateRetryNeedsForm": {
+    defaultMessage: "Keep the rotation form on {name} with a replacement value before retrying.",
+    description: "Validation error shown when a rotate retry lacks the current replacement value.",
+  },
+  "secrets.approvals.deleteRetryNeedsForm": {
+    defaultMessage: "Confirm {name} in the delete form before retrying.",
+    description: "Validation error shown when a delete retry lacks the delete confirmation.",
+  },
+  "secrets.approvals.recoverRetryUnsupported": {
+    defaultMessage: "Recover approval is recorded; retry recovery through the recover endpoint.",
+    description: "Fallback for recovery approvals not retried by this console form.",
+  },
+  "secrets.approvals.rotatePending": {
+    defaultMessage: "Rotation is waiting for secret-change approval.",
+    description: "Inline error when a rotate request opens a secret-change approval.",
+  },
+  "secrets.approvals.deletePending": {
+    defaultMessage: "Delete is waiting for secret-change approval.",
+    description: "Inline error when a delete request opens a secret-change approval.",
+  },
+  "secrets.approvals.rotatedAfterApproval": {
+    defaultMessage: "Secret {name} rotated to version {version} after approval.",
+    description: "Success notice after a secret rotate retry completes.",
+  },
+  "secrets.approvals.deletedAfterApproval": {
+    defaultMessage: "Secret {name} deleted after approval.",
+    description: "Success notice after a secret delete retry completes.",
+  },
   "secrets.sync.catalogCaption": {
     defaultMessage: "Secret sync provider catalog",
     description: "Accessible caption for the secret-sync provider catalog table.",
@@ -2471,8 +2595,7 @@ export const messages = {
     description: "Heading for native Kubernetes CSR support posture on the Workloads page.",
   },
   "workloads.kubernetesCSR.description": {
-    defaultMessage:
-      "The agent signs approved native Kubernetes CSRs through the configured trstctl issue path and writes only CSR status back to the cluster.",
+    defaultMessage: "The agent signs approved native Kubernetes CSRs through the configured trstctl issue path and writes only CSR status back to the cluster.",
     description: "Description for native Kubernetes CSR controller posture.",
   },
   "workloads.kubernetesCSR.errorTitle": {
@@ -3207,8 +3330,7 @@ const esESCatalog = {
   "notifications.channels.configured": "configurado",
   "notifications.channels.unconfigured": "sin configurar",
   "notifications.routing.heading": "Políticas de enrutamiento",
-  "notifications.routing.description":
-    "Asigna niveles de severidad a canales configurados, define propietario y previsualiza la cadencia del resumen.",
+  "notifications.routing.description": "Asigna niveles de severidad a canales configurados, define propietario y previsualiza la cadencia del resumen.",
   "notifications.routing.loadError": "No se pudieron cargar las políticas de enrutamiento de notificaciones",
   "notifications.routing.createError": "No se pudo crear la política de enrutamiento de notificaciones",
   "notifications.routing.testError": "No se pudo encolar la prueba del canal de notificación",
@@ -3380,6 +3502,37 @@ const esESCatalog = {
   "secrets.scan.customRulesPlaceholder": "/etc/trstctl/gitleaks-rules.toml",
   "secrets.scan.customRulesYes": "sí",
   "secrets.scan.customRulesNo": "no",
+  "secrets.approvals.heading": "Aprobaciones de cambios de secretos",
+  "secrets.approvals.description": "Las solicitudes de rotación, actualización o eliminación denegadas aparecen aquí para revisión por un aprobador distinto.",
+  "secrets.approvals.badge": "Doble control",
+  "secrets.approvals.empty": "No hay cambios de secretos pendientes capturados en esta sesión del navegador.",
+  "secrets.approvals.listLabel": "Aprobaciones pendientes de cambios de secretos",
+  "secrets.approvals.errorTitle": "Estado de aprobación",
+  "secrets.approvals.actionRotate": "Rotar/actualizar",
+  "secrets.approvals.actionRecover": "Recuperar",
+  "secrets.approvals.actionDelete": "Eliminar",
+  "secrets.approvals.openedStatus": "Abierto {openedAt} - {status}",
+  "secrets.approvals.statusCompleted": "completado",
+  "secrets.approvals.statusApproved": "aprobado",
+  "secrets.approvals.statusApprovedBy": "aprobado por {approver}",
+  "secrets.approvals.statusApprovedWithCount": "aprobado por {approver} ({count} aprobaciones registradas)",
+  "secrets.approvals.statusCount": "{count} aprobaciones registradas",
+  "secrets.approvals.statusAwaiting": "esperando aprobación distinta",
+  "secrets.approvals.approve": "Aprobar",
+  "secrets.approvals.retry": "Reintentar",
+  "secrets.approvals.approveAction": "Aprobar {action} para {name}",
+  "secrets.approvals.retryAction": "Reintentar {action} para {name}",
+  "secrets.approvals.requiredFallback": "El cambio de secreto requiere aprobación de doble control",
+  "secrets.approvals.approvedNotice": "{approver} aprobó {action} para {name}. Reintenta el cambio para completarlo.",
+  "secrets.approvals.approveFailed": "No se pudo aprobar el cambio de secreto",
+  "secrets.approvals.retryFailed": "No se pudo reintentar el cambio de secreto aprobado",
+  "secrets.approvals.rotateRetryNeedsForm": "Mantén el formulario de rotación en {name} con un valor de reemplazo antes de reintentar.",
+  "secrets.approvals.deleteRetryNeedsForm": "Confirma {name} en el formulario de eliminación antes de reintentar.",
+  "secrets.approvals.recoverRetryUnsupported": "La aprobación de recuperación está registrada; reintenta la recuperación mediante el endpoint de recuperación.",
+  "secrets.approvals.rotatePending": "La rotación espera aprobación de cambio de secreto.",
+  "secrets.approvals.deletePending": "La eliminación espera aprobación de cambio de secreto.",
+  "secrets.approvals.rotatedAfterApproval": "Secreto {name} rotado a la versión {version} después de la aprobación.",
+  "secrets.approvals.deletedAfterApproval": "Secreto {name} eliminado después de la aprobación.",
   "secrets.sync.catalogCaption": "Catálogo de proveedores de sincronización de secretos",
   "secrets.sync.configuredCount": "{count} configurados",
   "secrets.sync.target": "Destino",
@@ -3436,7 +3589,8 @@ const esESCatalog = {
   "workloads.kubernetesCSR.statusFallback": "certificatesigningrequests/status: update, patch",
   "workloads.kubernetesCSR.residuals": "Residuales",
   "apiExplorer.title": "Explorador de API",
-  "apiExplorer.description": "Selecciona una operación del contrato, crea una clave de prueba de corta duración, ejecuta la solicitud e inspecciona la respuesta.",
+  "apiExplorer.description":
+    "Selecciona una operación del contrato, crea una clave de prueba de corta duración, ejecuta la solicitud e inspecciona la respuesta.",
   "apiExplorer.back": "Hub de integración",
   "apiExplorer.loading": "Cargando operaciones del contrato.",
   "apiExplorer.loadFailed": "No se pudieron cargar las operaciones del contrato.",

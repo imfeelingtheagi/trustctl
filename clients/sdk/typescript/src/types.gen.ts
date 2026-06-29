@@ -5797,6 +5797,17 @@ export interface components {
             jetstream_gib_30_day: number;
             postgres_gib_30_day: number;
         };
+        SecretApproval: {
+            /** @enum {string} */
+            action: "rotate" | "recover" | "delete";
+            approvals: number;
+            approver: string;
+            resource: string;
+        };
+        SecretApprovalRequest: {
+            /** @enum {string} */
+            action: "rotate" | "recover" | "delete";
+        };
         SecretImportRequest: {
             prefix?: string;
             values: Record<string, never>;
@@ -13613,7 +13624,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ApprovalRequest"];
+                "application/json": components["schemas"]["SecretApprovalRequest"];
             };
         };
         responses: {
@@ -13623,7 +13634,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Approval"];
+                    "application/json": components["schemas"]["SecretApproval"];
                 };
             };
             /** @description client error */

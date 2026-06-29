@@ -193,6 +193,8 @@ import type {
   ServiceNowTicketRequest,
   SecretMeta,
   SecretMetaList,
+  SecretApproval as GenSecretApproval,
+  SecretApprovalRequest as GenSecretApprovalRequest,
   DynamicLease,
   DynamicLeaseRequest,
   DynamicLeaseRenewRequest,
@@ -259,6 +261,8 @@ export type CredentialRisk = GenCredentialRisk;
 export type ContextualRiskPriorities = GenContextualRiskPriorities;
 export type ContextualRiskPriority = GenContextualRiskPriority;
 export type Approval = GenApproval;
+export type SecretApproval = GenSecretApproval;
+export type SecretApprovalAction = GenSecretApprovalRequest["action"];
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
 export type IssueCertificateInput = {
@@ -891,6 +895,7 @@ export interface Api {
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
   deleteSecret(name: string): Promise<void>;
+  approveSecretChange(name: string, action: SecretApprovalAction): Promise<SecretApproval>;
   secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
   thirdPartySecretScanning(): Promise<ThirdPartySecretScanPosture>;
@@ -1116,6 +1121,7 @@ export const api: Api = {
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
   rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
   deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  approveSecretChange: (name, action) => mutate<SecretApproval>("POST", `/api/v1/secrets/store/approvals/${encodeURIComponent(name)}`, { action }),
   secretRepositoryScanning: () => req<SecretRepositoryScanPosture>("/api/v1/secrets/scans/repositories"),
   receiveSecretRepositoryWebhook: (provider, input) =>
     mutate<SecretRepositoryWebhookReceipt>("POST", `/api/v1/secrets/scans/repositories/${encodeURIComponent(provider)}/webhook`, input),
@@ -1153,8 +1159,7 @@ export const api: Api = {
   updateNotificationRoutingPolicy: (id, input) =>
     mutate<NotificationRoutingPolicy>("PUT", `/api/v1/notification-routing-policies/${encodeURIComponent(id)}`, input),
   deleteNotificationRoutingPolicy: (id) => mutate<void>("DELETE", `/api/v1/notification-routing-policies/${encodeURIComponent(id)}`),
-  testNotificationChannel: (id, input) =>
-    mutate<NotificationChannelTest>("POST", `/api/v1/notification-channels/${encodeURIComponent(id)}/test`, input),
+  testNotificationChannel: (id, input) => mutate<NotificationChannelTest>("POST", `/api/v1/notification-channels/${encodeURIComponent(id)}/test`, input),
   markNotificationRead: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/read`),
   requeueNotification: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/requeue`),
 };

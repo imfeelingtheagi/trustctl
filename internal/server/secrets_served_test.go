@@ -794,6 +794,41 @@ func TestServedSecretChangeRequiresDualControlApproval(t *testing.T) {
 	if rv.Value != "dual-v2" || rv.Version != 2 {
 		t.Fatalf("approved rotate result: value=%q version=%d, want dual-v2/2", rv.Value, rv.Version)
 	}
+
+	status, body = secretsReqKey(t, h, http.MethodDelete, "/api/v1/secrets/store/db/password", requester, "sec08-delete-denied", nil)
+	if status != http.StatusForbidden {
+		t.Fatalf("delete before approvals status = %d body %s, want 403", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store/approvals/db/password", approverA, "sec08-delete-approval-bob",
+		map[string]any{"action": "delete"})
+	if status != http.StatusOK {
+		t.Fatalf("first delete approval: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &approval); err != nil {
+		t.Fatalf("decode first delete approval: %v (%s)", err, body)
+	}
+	if approval.Resource != "secret:db/password" || approval.Action != "delete" || approval.Approver != "bob" || approval.Approvals != 1 {
+		t.Fatalf("first delete approval response = %+v", approval)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store/approvals/db/password", approverB, "sec08-delete-approval-carol",
+		map[string]any{"action": "delete"})
+	if status != http.StatusOK {
+		t.Fatalf("second delete approval: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &approval); err != nil {
+		t.Fatalf("decode second delete approval: %v (%s)", err, body)
+	}
+	if approval.Action != "delete" || approval.Approver != "carol" || approval.Approvals != 2 {
+		t.Fatalf("second delete approval response = %+v", approval)
+	}
+	status, body = secretsReqKey(t, h, http.MethodDelete, "/api/v1/secrets/store/db/password", requester, "sec08-delete-approved", nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("delete after approvals: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", requester, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("read after approved delete: status %d body %s, want 404", status, body)
+	}
 	if h.logContains(t, "dual-v1") || h.logContains(t, "dual-v2") {
 		t.Error("event log leaked a dual-control secret value (AN-8)")
 	}
