@@ -55,6 +55,7 @@ secret injection:
 | `identities`                      | `create` · `list` · `get` · `transition` · `approve`                                                                                                                     |
 | `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
 | `revocation`                      | `crls`                                                                                                                                                                   |
+| `kubernetes`                      | `csr`                                                                                                                                                                    |
 | `workloads`                       | `attested-issuance`                                                                                                                                                      |
 | `broker agent-identities`         | `issue`                                                                                                                                                                  |
 | `ephemeral`                       | `issue` · `api-keys issue` · `approve`                                                                                                                                   |
@@ -365,6 +366,9 @@ trstctl-cli secrets syncs targets
 
 # Inspect the Kubernetes SecretSync CRD, Secret projection, and reload posture.
 trstctl-cli secrets kubernetes-operator
+
+# Inspect native Kubernetes CertificateSigningRequest support, signer names, and RBAC.
+trstctl-cli kubernetes csr
 
 # Run a Gitleaks code scan from CI and record redacted findings in discovery/graph.
 cat > secret-scan.json <<'JSON'

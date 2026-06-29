@@ -1964,6 +1964,37 @@ IssuerRequest = TypedDict(
     total=False,
 )
 
+KubernetesCSRSupport = TypedDict(
+    'KubernetesCSRSupport',
+    {
+        'api_group': str,
+        'api_version': str,
+        'architecture_controls': list[str],
+        'capability': str,
+        'controller_flow': list[str],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'rbac_rules': list[dict[str, Any]],
+        'recommended_next_actions': list[str],
+        'residuals': list[str],
+        'resource': str,
+        'served': bool,
+        'signer_names': list[str],
+        'status_fields': list[str],
+    },
+    total=False,
+)
+
+KubernetesCSRSupportRule = TypedDict(
+    'KubernetesCSRSupportRule',
+    {
+        'api_group': str,
+        'resource': str,
+        'verbs': list[str],
+    },
+    total=False,
+)
+
 KubernetesSecretOperator = TypedDict(
     'KubernetesSecretOperator',
     {

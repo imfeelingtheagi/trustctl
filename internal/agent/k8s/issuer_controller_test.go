@@ -23,11 +23,13 @@ type fakeIssuerAPI struct {
 	issuers             []map[string]any
 	certificateRequests []map[string]any
 	certificates        []map[string]any
+	kubernetesCSRs      []map[string]any
 
 	clusterIssuerStatus map[string]map[string]any
 	issuerStatus        map[string]map[string]any
 	requestStatus       map[string]map[string]any
 	certificateStatus   map[string]map[string]any
+	kubernetesCSRStatus map[string]map[string]any
 	secrets             map[string]map[string]any
 }
 
@@ -37,6 +39,7 @@ func newFakeIssuerAPI() *fakeIssuerAPI {
 		issuerStatus:        map[string]map[string]any{},
 		requestStatus:       map[string]map[string]any{},
 		certificateStatus:   map[string]map[string]any{},
+		kubernetesCSRStatus: map[string]map[string]any{},
 		secrets:             map[string]map[string]any{},
 	}
 }
@@ -84,6 +87,18 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			var obj map[string]any
 			_ = json.Unmarshal(body, &obj)
 			f.requestStatus[name] = obj
+			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodGet && path == "/apis/certificates.k8s.io/v1/certificatesigningrequests":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"apiVersion": "certificates.k8s.io/v1",
+				"kind":       "CertificateSigningRequestList",
+				"items":      f.kubernetesCSRs,
+			})
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/certificates.k8s.io/v1/certificatesigningrequests/") && strings.HasSuffix(path, "/status"):
+			name := nameBeforeStatus(path)
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.kubernetesCSRStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -175,6 +190,25 @@ func trstctlCertificate(name, namespace, secretName string) map[string]any {
 			},
 		},
 	}
+}
+
+func kubernetesCSR(name, signerName string, approved bool) map[string]any {
+	csr := map[string]any{
+		"apiVersion": "certificates.k8s.io/v1",
+		"kind":       "CertificateSigningRequest",
+		"metadata":   map[string]any{"name": name, "resourceVersion": "20"},
+		"spec": map[string]any{
+			"signerName": signerName,
+			"request":    "",
+			"usages":     []any{"digital signature", "key encipherment", "server auth"},
+		},
+	}
+	if approved {
+		csr["status"] = map[string]any{"conditions": []any{
+			map[string]any{"type": "Approved", "status": "True", "reason": "trstctl.test"},
+		}}
+	}
+	return csr
 }
 
 // TestIssuerControllerSignsRequestsBackedByClusterIssuer is the DIST-01
@@ -322,5 +356,39 @@ func TestIssuerControllerServesNativeCertificateCRDCAPK8S02(t *testing.T) {
 	keyPEM := decodeSecretData(t, secretObj, "tls.key")
 	if err := crypto.VerifyCertKeyMatchPEM(certPEM, keyPEM); err != nil {
 		t.Fatalf("Secret/web-tls certificate and key do not match: %v", err)
+	}
+}
+
+func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	api.kubernetesCSRs = []map[string]any{func() map[string]any {
+		csr := kubernetesCSR("native-csr", "trstctl.com/trstctl", true)
+		csr["spec"].(map[string]any)["request"] = csrDERRequestField(t)
+		return csr
+	}()}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.KubernetesCSRsSigned != 1 {
+		t.Fatalf("KubernetesCSRsSigned = %d, want 1", result.KubernetesCSRsSigned)
+	}
+
+	ready, cert := readyCondition(t, api.kubernetesCSRStatus["native-csr"])
+	if ready != "True" {
+		t.Fatalf("CertificateSigningRequest Ready = %q, want True", ready)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(cert)
+	if err != nil {
+		t.Fatalf("status.certificate is not base64: %v", err)
+	}
+	if block, _ := pem.Decode(decoded); block == nil || block.Type != "CERTIFICATE" {
+		t.Fatalf("status.certificate does not contain a PEM certificate")
 	}
 }

@@ -46,6 +46,21 @@ func csrRequestField(t *testing.T) string {
 	return base64.StdEncoding.EncodeToString(pemCSR)
 }
 
+// csrDERRequestField builds the base64-of-DER CSR Kubernetes stores in
+// CertificateSigningRequest.spec.request.
+func csrDERRequestField(t *testing.T) string {
+	t.Helper()
+	id, err := mtls.GenerateAgentKey("workload.svc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := id.CSR()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(der)
+}
+
 // fakeCertManager serves the CertificateRequest list and records status writes.
 type fakeCertManager struct {
 	mu        sync.Mutex

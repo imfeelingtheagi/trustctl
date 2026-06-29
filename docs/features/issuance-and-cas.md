@@ -69,8 +69,13 @@ delivery without losing the fact that an external issuance happened.
 For Kubernetes-native issuance, trstctl ships `Issuer`, `ClusterIssuer`, and
 `Certificate` CRDs in the `trstctl.com` API group. The Kubernetes agent reconciles
 those resources, marks issuers Ready, signs cert-manager `CertificateRequest`s
-only when the request points at an existing trstctl issuer resource, and can also
-fulfil a trstctl-native `Certificate` directly into a Kubernetes TLS Secret.
+only when the request points at an existing trstctl issuer resource, signs approved
+native Kubernetes `CertificateSigningRequest`s from the `certificates.k8s.io/v1`
+API, and can also fulfil a trstctl-native `Certificate` directly into a Kubernetes
+TLS Secret. The read-only posture endpoint
+`GET /api/v1/kubernetes/certificate-signing-requests` and CLI command
+`trstctl-cli kubernetes csr` report the served CAP-K8S-04 surface, supported
+signer names, required RBAC, and residuals.
 
 A cert-manager `Certificate` can reference:
 
@@ -105,9 +110,16 @@ a Kubernetes Secret file. For cert-manager, cert-manager writes the normal
 `kubernetes.io/tls` Secret for the workload. For a trstctl-native `Certificate`,
 the agent generates the workload key locally, writes `Secret/<secretName>`, wipes
 transient key buffers after the Secret write, and marks the `Certificate` Ready.
-CI proves the cert-manager path against a real `kind` cluster with real
-cert-manager installed, and the served controller acceptance proves the native
-path: `Certificate` -> local CSR -> trstctl signer -> TLS `Secret`.
+For a native Kubernetes `CertificateSigningRequest`, Kubernetes or a separate
+approver must set `Approved`; the trstctl agent never approves requests itself.
+The agent accepts `spec.signerName` values such as `trstctl.com/trstctl` or
+`trstctl.com/<issuer-name>`, optionally disambiguated with the annotations
+`trstctl.com/issuer-name`, `trstctl.com/issuer-kind`, and
+`trstctl.com/issuer-group`. It writes only `status.certificate` and a Ready
+condition to the CSR status subresource. CI proves the cert-manager path against
+a real `kind` cluster with real cert-manager installed, and served controller
+acceptance proves both the trstctl-native path (`Certificate` -> local CSR ->
+trstctl signer -> TLS `Secret`) and CAP-K8S-04 native CSR support.
 
 ### Running your own CA hierarchy (F48)
 

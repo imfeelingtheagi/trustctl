@@ -1157,14 +1157,21 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
 - **Kubernetes certificate CRDs.** The Kubernetes agent ships a real trstctl
   `Issuer`/`ClusterIssuer`/`Certificate` controller. It marks trstctl issuer
   resources Ready, signs matching cert-manager `CertificateRequest`s through a
-  served trstctl issuance endpoint using a mounted API token, and also fulfils a
-  trstctl-native `Certificate` directly into a `kubernetes.io/tls` Secret. The
-  cert-manager path is proven in CI on `kind` with real cert-manager from
-  `Certificate` to TLS `Secret`; the native path is proven by the served
-  controller acceptance test from trstctl `Certificate` to local CSR, signer,
-  Secret, and Ready status. It is still a small poll-based controller rather than
-  an informer/work-queue controller; that is an operational efficiency tradeoff,
-  not a functional gap.
+  served trstctl issuance endpoint using a mounted API token, signs approved
+  native Kubernetes `CertificateSigningRequest`s from `certificates.k8s.io/v1`,
+  and also fulfils a trstctl-native `Certificate` directly into a
+  `kubernetes.io/tls` Secret. `GET
+  /api/v1/kubernetes/certificate-signing-requests` and `trstctl-cli kubernetes
+  csr` expose the CAP-K8S-04 posture, supported signer names, RBAC, status
+  fields, and residuals. The cert-manager path is proven in CI on `kind` with
+  real cert-manager from `Certificate` to TLS `Secret`; the native trstctl path is
+  proven by the served controller acceptance test from trstctl `Certificate` to
+  local CSR, signer, Secret, and Ready status; native Kubernetes CSR support is
+  proven by a controller test that writes `status.certificate` and Ready=True
+  only after Kubernetes approval. It is still a small poll-based controller
+  rather than an informer/work-queue controller, and CSR approval policy remains a
+  Kubernetes approver responsibility; those are operational/governance
+  boundaries, not missing signing functionality.
 - **Multi-replica HA.** The Helm chart runs the control plane **multi-replica by
   default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
   pod anti-affinity), and running >1 replica is **safe**: **leader election** (a

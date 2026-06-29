@@ -5170,6 +5170,116 @@
         ],
         "type": "object"
       },
+      "KubernetesCSRSupport": {
+        "properties": {
+          "api_group": {
+            "type": "string"
+          },
+          "api_version": {
+            "type": "string"
+          },
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "controller_flow": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rbac_rules": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesCSRSupportRule"
+            },
+            "type": "array"
+          },
+          "recommended_next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "signer_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "api_group",
+          "api_version",
+          "resource",
+          "signer_names",
+          "controller_flow",
+          "rbac_rules",
+          "status_fields",
+          "architecture_controls",
+          "evidence_refs",
+          "residuals",
+          "recommended_next_actions"
+        ],
+        "type": "object"
+      },
+      "KubernetesCSRSupportRule": {
+        "properties": {
+          "api_group": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "verbs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "api_group",
+          "resource",
+          "verbs"
+        ],
+        "type": "object"
+      },
       "KubernetesSecretOperator": {
         "properties": {
           "architecture_controls": {
@@ -17272,6 +17382,53 @@
         ],
         "summary": "Queue a ServiceNow ITSM ticket through the outbox",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/kubernetes/certificate-signing-requests": {
+      "get": {
+        "operationId": "getKubernetesCSRSupport",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesCSRSupport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get native Kubernetes CertificateSigningRequest support",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/lifecycle/endpoint-bindings": {

@@ -78,6 +78,7 @@ var commandTable = []Command{
 	{Name: []string{"acme", "dns-01", "providers"}, Method: "GET", Path: "/api/v1/acme/dns-01/providers", Summary: "List served ACME DNS-01 provider coverage"},
 	{Name: []string{"external-cas", "list"}, Method: "GET", Path: "/api/v1/external-cas", Summary: "List configured upstream CA integrations"},
 	{Name: []string{"external-cas", "issue"}, Method: "POST", Path: "/api/v1/external-cas/{id}/issue", Body: bodyFile, Summary: "Issue a certificate through an upstream CA integration"},
+	{Name: []string{"kubernetes", "csr"}, Method: "GET", Path: "/api/v1/kubernetes/certificate-signing-requests", Summary: "Show native Kubernetes CertificateSigningRequest support"},
 
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},

@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    kubernetesCSRSupport: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  return { ...actual, api: { ...actual.api, ...apiMock } };
+});
 
 function renderWorkloads() {
   return render(
@@ -12,10 +23,17 @@ function renderWorkloads() {
 }
 
 describe("workload identity disclosure surface", () => {
-  it("renders dynamic lease controls with expiry visualization and no fixture lease rows", () => {
+  beforeEach(() => {
+    apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
+  });
+
+  it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {
     renderWorkloads();
 
     expect(screen.getByRole("heading", { name: "Workload identity" })).toBeInTheDocument();
+    expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
+    expect(screen.getByText("trstctl.com/trstctl")).toBeInTheDocument();
+    expect(screen.getByText("certificatesigningrequests/status: update, patch")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ephemeral credential leases" })).toBeInTheDocument();
     expect(screen.getByText("00:00 issued")).toBeInTheDocument();
     expect(screen.getByText("00:45 renew window")).toBeInTheDocument();
@@ -34,9 +52,10 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
   });
 
-  it("renders attested SVID controls without token leakage or fixture rows", () => {
+  it("renders attested SVID controls without token leakage or fixture rows", async () => {
     renderWorkloads();
 
+    expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
     expect(screen.getByLabelText("Attestation method")).toHaveValue("k8s_sat");
@@ -52,9 +71,10 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
   });
 
-  it("renders scoped AI-agent broker controls as metadata-only", () => {
+  it("renders scoped AI-agent broker controls as metadata-only", async () => {
     renderWorkloads();
 
+    expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(screen.getByText("AI-agent / NHI broker")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue broker identity" })).toBeInTheDocument();
     expect(screen.getByLabelText("Agent ID")).toHaveValue("agent-build-1");
@@ -69,3 +89,25 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByRole("button", { name: /approve agent|mint token/i })).not.toBeInTheDocument();
   });
 });
+
+function kubernetesCSRSupportFixture() {
+  return {
+    capability: "CAP-K8S-04",
+    served: true,
+    generated_at: "2026-06-28T12:00:00Z",
+    api_group: "certificates.k8s.io",
+    api_version: "certificates.k8s.io/v1",
+    resource: "certificatesigningrequests",
+    signer_names: ["trstctl.com/trstctl"],
+    controller_flow: ["controller lists native Kubernetes CSRs"],
+    rbac_rules: [
+      { api_group: "certificates.k8s.io", resource: "certificatesigningrequests", verbs: ["get", "list", "watch"] },
+      { api_group: "certificates.k8s.io", resource: "certificatesigningrequests/status", verbs: ["update", "patch"] },
+    ],
+    status_fields: ["status.certificate"],
+    architecture_controls: ["only approved CertificateSigningRequests are signed"],
+    evidence_refs: ["internal/agent/k8s/certificate_signing_request.go"],
+    residuals: ["poll-based controller"],
+    recommended_next_actions: ["move reconciliation to informer-backed queues"],
+  };
+}

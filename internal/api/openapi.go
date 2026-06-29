@@ -1903,6 +1903,25 @@ func componentSchemas() map[string]*Schema {
 		"residuals":                {Type: "array", Items: str()},
 		"recommended_next_actions": {Type: "array", Items: str()},
 	}, "capability", "served", "generated_at", "crds", "sync_flow", "reload_workloads", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
+	kubernetesCSRSupportRule := object(map[string]*Schema{
+		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()},
+	}, "api_group", "resource", "verbs")
+	kubernetesCSRSupport := object(map[string]*Schema{
+		"capability":               str(),
+		"served":                   {Type: "boolean"},
+		"generated_at":             timestamp(),
+		"api_group":                str(),
+		"api_version":              str(),
+		"resource":                 str(),
+		"signer_names":             {Type: "array", Items: str()},
+		"controller_flow":          {Type: "array", Items: str()},
+		"rbac_rules":               {Type: "array", Items: ref("KubernetesCSRSupportRule")},
+		"status_fields":            {Type: "array", Items: str()},
+		"architecture_controls":    {Type: "array", Items: str()},
+		"evidence_refs":            {Type: "array", Items: str()},
+		"residuals":                {Type: "array", Items: str()},
+		"recommended_next_actions": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "api_group", "api_version", "resource", "signer_names", "controller_flow", "rbac_rules", "status_fields", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
 	}, "path")
@@ -2392,6 +2411,8 @@ func componentSchemas() map[string]*Schema {
 		"SecretSyncTargetCatalog":               secretSyncTargetCatalog,
 		"KubernetesSecretOperatorCRD":           kubernetesSecretOperatorCRD,
 		"KubernetesSecretOperator":              kubernetesSecretOperator,
+		"KubernetesCSRSupportRule":              kubernetesCSRSupportRule,
+		"KubernetesCSRSupport":                  kubernetesCSRSupport,
 		"SecretScanRequest":                     secretScanReq,
 		"SecretScanFinding":                     secretScanFinding,
 		"SecretScan":                            secretScan,

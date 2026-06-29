@@ -98,7 +98,32 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    The token used by the agent lives in a mounted Kubernetes Secret file, not in
    command-line arguments.
 
-5. **Use SPIRE when it is already your workload identity plane.** Configure trstctl
+5. **Use native Kubernetes CertificateSigningRequests when you want the built-in
+   API.** A Kubernetes client can create a `certificates.k8s.io/v1`
+   `CertificateSigningRequest` with `spec.signerName: trstctl.com/trstctl` (or
+   `trstctl.com/<issuer-name>`). Kubernetes or a separate approver must mark the
+   CSR `Approved`; the trstctl agent only signs approved requests and writes
+   `status.certificate` plus Ready=True.
+
+   ```yaml
+   apiVersion: certificates.k8s.io/v1
+   kind: CertificateSigningRequest
+   metadata:
+     name: web
+   spec:
+     signerName: trstctl.com/trstctl
+     request: <base64-der-csr>
+     usages:
+       - digital signature
+       - key encipherment
+       - server auth
+   ```
+
+   You should see `trstctl-cli kubernetes csr` report CAP-K8S-04 as served,
+   including the status-only RBAC rules. After approval, the CSR status contains
+   the issued certificate chain; no workload private key crosses into trstctl.
+
+6. **Use SPIRE when it is already your workload identity plane.** Configure trstctl
    as SPIRE's upstream authority: build or package
    `trstctl-spire-upstream-authority` into the SPIRE server image, mount the trstctl
    API token as a file, and point SPIRE at the served CA authority:
@@ -123,7 +148,7 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    intermediate plus the trstctl root. You should see SPIRE continue minting normal
    X.509-SVIDs, but their chain now ends at the trstctl CA you govern and audit.
 
-6. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
+7. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
    presents its selectors (e.g. `k8s:ns:default`, `k8s:sa:web`) over the socket; the
    server matches them against registration entries and returns an SVID plus the
    trust bundle. With a stock client this is a `FetchX509SVID` call for mTLS or a
@@ -133,14 +158,14 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    separate signing service, that expires in minutes, not months. The wire details are in
    [Workload identity](../features/workload-identity.md).
 
-7. **Confirm there is no static secret to steal.** Because the SVID is short-lived
+8. **Confirm there is no static secret to steal.** Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,
    and even a captured credential is useless within minutes. A `NeedsRotation` helper
    flags an SVID for renewal once it is half-expired, so the workload renews itself.
    You should see SVIDs rotating on their own with no secret material at rest in the
    pod spec.
 
-8. **See the workloads land in inventory and the graph.** Each attested identity and
+9. **See the workloads land in inventory and the graph.** Each attested identity and
    its credential are recorded, so you can find them like any other credential:
 
    ```sh

@@ -27,8 +27,8 @@ type k8sOptions struct {
 
 // runKubernetes runs the agent as a DaemonSet pod: it bootstraps its identity,
 // publishes it into a Kubernetes Secret, and (when configured) reconciles
-// trstctl Issuer/ClusterIssuer/Certificate resources plus cert-manager
-// CertificateRequests.
+// trstctl Issuer/ClusterIssuer/Certificate resources, cert-manager
+// CertificateRequests, and native Kubernetes CertificateSigningRequests.
 func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	client, err := k8s.InCluster()
 	if err != nil {
@@ -129,9 +129,9 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 			if issuerController != nil {
 				result, err := issuerController.Reconcile(ctx, client.Namespace())
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager issuer-controller reconcile:", err)
+					fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes issuer-controller reconcile:", err)
 				} else {
-					total += result.SignedRequests + result.NativeCertificatesIssued
+					total += result.SignedRequests + result.NativeCertificatesIssued + result.KubernetesCSRsSigned
 				}
 			}
 			if total > 0 {

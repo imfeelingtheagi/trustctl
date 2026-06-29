@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Ban, Plus, RefreshCw } from "lucide-react";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type Attestation, type AttestedSVID, type BrokerAgentIdentity, type DynamicLease } from "@/lib/api";
+import { api, ApiError, type Attestation, type AttestedSVID, type BrokerAgentIdentity, type DynamicLease, type KubernetesCSRSupport } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
 type BrokerIdentityRow = Pick<BrokerAgentIdentity, "agent_id" | "certificate_id" | "credential_id" | "node_id" | "not_after" | "scopes" | "subject"> & {
@@ -14,16 +15,37 @@ type BrokerIdentityRow = Pick<BrokerAgentIdentity, "agent_id" | "certificate_id"
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
 
 export function Workloads() {
+  const { t } = useTranslation();
   const [provider, setProvider] = useState("postgresql");
   const [role, setRole] = useState("readonly-reporting");
   const [ttlSeconds, setTtlSeconds] = useState(1200);
   const [leases, setLeases] = useState<DynamicLease[]>([]);
   const [brokerIdentities, setBrokerIdentities] = useState<BrokerIdentityRow[]>([]);
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
+  const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationError, setAttestationError] = useState<string | null>(null);
+  const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .kubernetesCSRSupport()
+      .then((support) => {
+        if (cancelled) return;
+        setCSRSupport(support);
+        setCSRSupportError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setCSRSupportError(apiProblemMessage(err, t("workloads.kubernetesCSR.errorFallback")));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   function upsertLease(lease: DynamicLease) {
     const metadata = leaseMetadataOnly(lease);
@@ -132,6 +154,76 @@ export function Workloads() {
         title="Workload identity"
         description="Short-lived identities for software workloads (services, pods, jobs): SPIFFE/SVID workload certificates, just-in-time (JIT) leases, and broker identities. Raw key material stays out of the browser — you see lease metadata here."
       />
+
+      <section aria-labelledby="kubernetes-csr-heading" className="grid gap-3 border-y border-border py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="kubernetes-csr-heading" className="text-title font-semibold">
+              {t("workloads.kubernetesCSR.heading")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.kubernetesCSR.description")}</p>
+          </div>
+          <StatusBadge vocabulary="certificate" value={csrSupport?.served ? "active" : "pending"} />
+        </div>
+        {csrSupportError && <ErrorState title={t("workloads.kubernetesCSR.errorTitle")}>{csrSupportError}</ErrorState>}
+        <div className="ui-panel grid gap-4 p-comfortable">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.capability")}</p>
+              <p className="mt-1 font-mono text-sm">{csrSupport?.capability ?? "CAP-K8S-04"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.apiGroup")}</p>
+              <p className="mt-1 font-mono text-sm">{csrSupport?.api_version ?? "certificates.k8s.io/v1"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.resource")}</p>
+              <p className="mt-1 font-mono text-sm">{csrSupport?.resource ?? "certificatesigningrequests"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.kubernetesCSR.generated")}</p>
+              <p className="mt-1 text-sm">{csrSupport ? formatDate(csrSupport.generated_at) : t("workloads.kubernetesCSR.loading")}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.signerNames")}</h3>
+              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                {(csrSupport?.signer_names ?? ["trstctl.com/trstctl"]).map((name) => (
+                  <li key={name} className="font-mono text-xs">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.controllerControls")}</h3>
+              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                {(csrSupport?.architecture_controls ?? ["only approved CertificateSigningRequests are signed"]).slice(0, 4).map((control) => (
+                  <li key={control}>{control}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.kubernetesCSR.rbac")}</h3>
+              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                {(csrSupport?.rbac_rules ?? []).map((rule) => (
+                  <li key={`${rule.api_group}:${rule.resource}`} className="font-mono text-xs">
+                    {rule.resource}: {rule.verbs.join(", ")}
+                  </li>
+                ))}
+                {!csrSupport && <li className="font-mono text-xs">{t("workloads.kubernetesCSR.statusFallback")}</li>}
+              </ul>
+            </div>
+          </div>
+          {csrSupport?.residuals?.length ? (
+            <div className="rounded-md border border-border p-3 text-sm">
+              <p className="font-semibold">{t("workloads.kubernetesCSR.residuals")}</p>
+              <p className="mt-1 text-muted-foreground">{csrSupport.residuals.join("; ")}</p>
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
         <div>

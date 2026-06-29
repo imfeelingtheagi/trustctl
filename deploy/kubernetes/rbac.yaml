@@ -6,11 +6,10 @@ metadata:
   labels:
     app.kubernetes.io/name: trstctl-agent
 ---
-# The agent writes TLS Secrets, acts as a cert-manager external issuer, and
-# fulfils trstctl-native Certificate resources. It reads CertificateRequests,
-# updates their status, reads trstctl Issuer/ClusterIssuer/Certificate resources,
-# and updates their status. Least privilege — no delete, no access to unrelated
-# resources.
+# The agent writes TLS Secrets, acts as a cert-manager external issuer, fulfils
+# trstctl-native Certificate resources, and signs approved native Kubernetes
+# CertificateSigningRequests. It reads requests and updates only their status.
+# Least privilege — no delete, no private key reads, no unrelated resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -26,6 +25,12 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["cert-manager.io"]
     resources: ["certificaterequests/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["certificatesigningrequests"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["certificatesigningrequests/status"]
     verbs: ["update", "patch"]
   - apiGroups: ["trstctl.com"]
     resources: ["issuers", "clusterissuers", "certificates"]

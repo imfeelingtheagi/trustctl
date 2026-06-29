@@ -131,6 +131,22 @@ func TestManifestsDeclareTrstctlIssuerAndCertificateCRDs(t *testing.T) {
 	}
 }
 
+func TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates(t *testing.T) {
+	role := clusterRole(t)
+	for _, tc := range []struct {
+		group    string
+		resource string
+		verbs    []string
+	}{
+		{group: "certificates.k8s.io", resource: "certificatesigningrequests", verbs: []string{"get", "list", "watch"}},
+		{group: "certificates.k8s.io", resource: "certificatesigningrequests/status", verbs: []string{"update", "patch"}},
+	} {
+		if !hasClusterRoleRule(role, tc.group, tc.resource, tc.verbs...) {
+			t.Fatalf("ClusterRole missing %s %s verbs %v for CAP-K8S-04 native Kubernetes CSR support", tc.group, tc.resource, tc.verbs)
+		}
+	}
+}
+
 // TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trstctl-agent
 // image in --k8s mode under the dedicated service account.
 func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
@@ -482,6 +498,37 @@ func daemonSet(t *testing.T) map[string]any {
 	}
 	t.Fatal("no DaemonSet found")
 	return nil
+}
+
+func clusterRole(t *testing.T) map[string]any {
+	t.Helper()
+	for _, d := range docs(t) {
+		if d["kind"] == "ClusterRole" {
+			return d
+		}
+	}
+	t.Fatal("no ClusterRole found")
+	return nil
+}
+
+func hasClusterRoleRule(role map[string]any, group, resource string, verbs ...string) bool {
+	for _, rule := range asMaps(role["rules"]) {
+		if !contains(asStringSlice(rule["apiGroups"]), group) || !contains(asStringSlice(rule["resources"]), resource) {
+			continue
+		}
+		gotVerbs := asStringSlice(rule["verbs"])
+		all := true
+		for _, verb := range verbs {
+			if !contains(gotVerbs, verb) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
 }
 
 // manifestFlagNames extracts long-flag names (without leading dashes, without

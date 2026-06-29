@@ -8,6 +8,7 @@ import { Workloads } from "@/pages/Workloads";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    kubernetesCSRSupport: vi.fn(),
     issueBrokerAgentIdentity: vi.fn(),
     issueAttestedSVID: vi.fn(),
     issueDynamicLease: vi.fn(),
@@ -33,6 +34,7 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.kubernetesCSRSupport.mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.issueBrokerAgentIdentity.mockResolvedValue({
       agent_id: "agent-build-1",
       subject: "spiffe://tenant/ai/build-agent",
@@ -108,3 +110,25 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
     expect(source).not.toMatch(/const\s+brokerRows/);
   });
 });
+
+function kubernetesCSRSupportFixture() {
+  return {
+    capability: "CAP-K8S-04",
+    served: true,
+    generated_at: "2026-06-28T12:00:00Z",
+    api_group: "certificates.k8s.io",
+    api_version: "certificates.k8s.io/v1",
+    resource: "certificatesigningrequests",
+    signer_names: ["trstctl.com/trstctl"],
+    controller_flow: ["controller lists native Kubernetes CSRs"],
+    rbac_rules: [
+      { api_group: "certificates.k8s.io", resource: "certificatesigningrequests", verbs: ["get", "list", "watch"] },
+      { api_group: "certificates.k8s.io", resource: "certificatesigningrequests/status", verbs: ["update", "patch"] },
+    ],
+    status_fields: ["status.certificate"],
+    architecture_controls: ["only approved CertificateSigningRequests are signed"],
+    evidence_refs: ["internal/agent/k8s/certificate_signing_request.go"],
+    residuals: ["poll-based controller"],
+    recommended_next_actions: ["move reconciliation to informer-backed queues"],
+  };
+}

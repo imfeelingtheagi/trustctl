@@ -2054,6 +2054,63 @@ export const messages = {
     defaultMessage: "Residuals",
     description: "Label for repository secret scanning known residual shortfalls.",
   },
+  "workloads.kubernetesCSR.heading": {
+    defaultMessage: "Kubernetes CertificateSigningRequest controller",
+    description: "Heading for native Kubernetes CSR support posture on the Workloads page.",
+  },
+  "workloads.kubernetesCSR.description": {
+    defaultMessage:
+      "The agent signs approved native Kubernetes CSRs through the configured trstctl issue path and writes only CSR status back to the cluster.",
+    description: "Description for native Kubernetes CSR controller posture.",
+  },
+  "workloads.kubernetesCSR.errorTitle": {
+    defaultMessage: "Kubernetes CSR support unavailable",
+    description: "Error title when the native Kubernetes CSR posture endpoint cannot be loaded.",
+  },
+  "workloads.kubernetesCSR.errorFallback": {
+    defaultMessage: "Could not load Kubernetes CSR support",
+    description: "Fallback error text for the native Kubernetes CSR posture endpoint.",
+  },
+  "workloads.kubernetesCSR.capability": {
+    defaultMessage: "Capability",
+    description: "Summary label for a capability identifier.",
+  },
+  "workloads.kubernetesCSR.apiGroup": {
+    defaultMessage: "API group",
+    description: "Summary label for a Kubernetes API group.",
+  },
+  "workloads.kubernetesCSR.resource": {
+    defaultMessage: "Resource",
+    description: "Summary label for a Kubernetes resource.",
+  },
+  "workloads.kubernetesCSR.generated": {
+    defaultMessage: "Generated",
+    description: "Summary label for report generation time.",
+  },
+  "workloads.kubernetesCSR.loading": {
+    defaultMessage: "Loading",
+    description: "Placeholder while the native Kubernetes CSR posture is loading.",
+  },
+  "workloads.kubernetesCSR.signerNames": {
+    defaultMessage: "Signer names",
+    description: "Heading for supported native Kubernetes CSR signer names.",
+  },
+  "workloads.kubernetesCSR.controllerControls": {
+    defaultMessage: "Controller controls",
+    description: "Heading for native Kubernetes CSR controller safeguards.",
+  },
+  "workloads.kubernetesCSR.rbac": {
+    defaultMessage: "Kubernetes RBAC",
+    description: "Heading for native Kubernetes CSR RBAC posture.",
+  },
+  "workloads.kubernetesCSR.statusFallback": {
+    defaultMessage: "certificatesigningrequests/status: update, patch",
+    description: "Fallback RBAC row for the native Kubernetes CSR status subresource.",
+  },
+  "workloads.kubernetesCSR.residuals": {
+    defaultMessage: "Residuals",
+    description: "Heading for native Kubernetes CSR residual shortfalls.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
@@ -2655,6 +2712,21 @@ const esESCatalog = {
   "secrets.repoScan.eventFlow": "Flujo de eventos",
   "secrets.repoScan.releaseGates": "Gates de release",
   "secrets.repoScan.residuals": "Residuales",
+  "workloads.kubernetesCSR.heading": "Controlador CertificateSigningRequest de Kubernetes",
+  "workloads.kubernetesCSR.description":
+    "El agente firma CSR nativas aprobadas de Kubernetes mediante la ruta configurada de emisión de trstctl y escribe solo el estado de la CSR en el clúster.",
+  "workloads.kubernetesCSR.errorTitle": "Soporte de CSR de Kubernetes no disponible",
+  "workloads.kubernetesCSR.errorFallback": "No se pudo cargar el soporte de CSR de Kubernetes",
+  "workloads.kubernetesCSR.capability": "Capacidad",
+  "workloads.kubernetesCSR.apiGroup": "Grupo API",
+  "workloads.kubernetesCSR.resource": "Recurso",
+  "workloads.kubernetesCSR.generated": "Generado",
+  "workloads.kubernetesCSR.loading": "Cargando",
+  "workloads.kubernetesCSR.signerNames": "Nombres de firmante",
+  "workloads.kubernetesCSR.controllerControls": "Controles del controlador",
+  "workloads.kubernetesCSR.rbac": "RBAC de Kubernetes",
+  "workloads.kubernetesCSR.statusFallback": "certificatesigningrequests/status: update, patch",
+  "workloads.kubernetesCSR.residuals": "Residuales",
 } satisfies Record<MessageKey, string>;
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {

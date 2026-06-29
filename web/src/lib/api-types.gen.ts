@@ -1354,6 +1354,29 @@ export interface IssuerRequest {
   public_key?: string;
 }
 
+export interface KubernetesCSRSupport {
+  api_group: string;
+  api_version: string;
+  architecture_controls: string[];
+  capability: string;
+  controller_flow: string[];
+  evidence_refs: string[];
+  generated_at: string;
+  rbac_rules: KubernetesCSRSupportRule[];
+  recommended_next_actions: string[];
+  residuals: string[];
+  resource: string;
+  served: boolean;
+  signer_names: string[];
+  status_fields: string[];
+}
+
+export interface KubernetesCSRSupportRule {
+  api_group: string;
+  resource: string;
+  verbs: string[];
+}
+
 export interface KubernetesSecretOperator {
   architecture_controls: string[];
   capability: string;

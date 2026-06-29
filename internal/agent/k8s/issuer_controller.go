@@ -24,6 +24,7 @@ type IssuerReconcileResult struct {
 	IssuersReady             int
 	SignedRequests           int
 	NativeCertificatesIssued int
+	KubernetesCSRsSigned     int
 }
 
 // IssuerController is the trstctl Kubernetes CRD controller. It marks trstctl
@@ -61,8 +62,9 @@ func nativeCertificateCollectionPath(namespace string) string {
 
 // Reconcile makes trstctl Issuer/ClusterIssuer resources Ready, signs every
 // pending cert-manager CertificateRequest in namespace whose issuerRef points at
-// one of those resources, and issues every pending trstctl-native Certificate in
-// namespace into its requested TLS Secret.
+// one of those resources, issues every pending trstctl-native Certificate in
+// namespace into its requested TLS Secret, and signs approved native Kubernetes
+// CertificateSigningRequests whose signerName maps to a trstctl issuer.
 func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (IssuerReconcileResult, error) {
 	var result IssuerReconcileResult
 
@@ -89,6 +91,12 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 		return result, err
 	}
 	result.NativeCertificatesIssued = nativeIssued
+
+	kubernetesCSRs, err := c.reconcileKubernetesCSRs(ctx, issuers, clusterIssuers)
+	if err != nil {
+		return result, err
+	}
+	result.KubernetesCSRsSigned = kubernetesCSRs
 	return result, nil
 }
 
