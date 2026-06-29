@@ -3098,6 +3098,58 @@
         ],
         "type": "object"
       },
+      "EndpointBinding": {
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "queued_lifecycle_intents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "renewal_intent": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/DeploymentTarget"
+          }
+        },
+        "required": [
+          "identity",
+          "target",
+          "queued_lifecycle_intents",
+          "renewal_intent"
+        ],
+        "type": "object"
+      },
+      "EndpointBindingRequest": {
+        "properties": {
+          "identity_name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/DeploymentTargetRequest"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "identity_name"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "enroll_path": {
@@ -13515,6 +13567,63 @@
         ],
         "summary": "Queue a ServiceNow ITSM ticket through the outbox",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/lifecycle/endpoint-bindings": {
+      "post": {
+        "operationId": "createEndpointBinding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointBindingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointBinding"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an automated enrollment-to-endpoint binding",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/lifecycle/rotation-runs": {

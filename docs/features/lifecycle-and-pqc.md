@@ -59,6 +59,14 @@ operator-wired notification channels. It is integration-tested against real Post
 NATS, the signer process, and a signed webhook sink; `lifecycle.renew_before` and
 `lifecycle.alert_before` are parsed and validated at startup.
 
+`POST /api/v1/lifecycle/endpoint-bindings` is the served end-to-end path for
+automated enrollment -> provision -> renewal -> endpoint-bind. It creates the
+X.509 identity for an existing owner, provisions or references the connector target,
+binds the route onto the identity, queues issue and deploy intents through the outbox,
+and leaves renewal on the same scheduler-driven `ca.renew` path. The response contains
+only the identity, target, and queued intent names; certificate/key bytes are never
+returned from this route.
+
 ### Crypto-agility (F16)
 
 Crypto-agility is an *architecture* property, and in trstctl it's non-negotiable: all

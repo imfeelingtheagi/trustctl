@@ -57,6 +57,8 @@ import type {
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
+  EndpointBinding,
+  EndpointBindingRequest,
   CredentialRiskList,
   DiscoveryFinding,
   DiscoveryFindingList,
@@ -691,6 +693,7 @@ export interface Api {
   connectorCatalog(): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
+  createEndpointBinding(input: EndpointBindingRequest): Promise<EndpointBinding>;
   bindIdentityConnectorTarget(id: string, input: IdentityConnectorTargetRequest): Promise<Identity>;
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
   deployConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<Identity>;
@@ -859,6 +862,7 @@ export const api: Api = {
   connectorCatalog: () => req<ConnectorCatalog>("/api/v1/connectors/catalog"),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),
+  createEndpointBinding: (input) => mutate<EndpointBinding>("POST", "/api/v1/lifecycle/endpoint-bindings", input),
   bindIdentityConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/connector-target`, input),
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
   deployConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input),

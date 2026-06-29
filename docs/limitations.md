@@ -26,6 +26,12 @@ never live in the API process. What you can do end to end against the running bi
   `lifecycle.rotation.recorded` runs, and both are readable through the API, CLI,
   and console. The receipt is routing/status metadata only: no private key or secret
   bytes are returned.
+- **Automated endpoint binding lifecycle**: `POST /api/v1/lifecycle/endpoint-bindings`
+  creates the X.509 identity for an existing owner, provisions or references the
+  connector target, binds the identity to that endpoint, and queues issue/deploy
+  work through the outbox. The same leader lifecycle scheduler renews the deployed
+  identity later and sends the successor back to the bound endpoint through
+  `connector.deploy`.
 - **Expiry-alert notification delivery**: the leader lifecycle scheduler honors the
   configured alert window, writes `notification.expiry` outbox work, stamps
   `alerted_at` in the same transaction so one certificate does not spam, and the

@@ -111,6 +111,13 @@ binding are immutable events (`deployment_target.upserted`,
 `deployment_target.deleted`, `identity.connector_target_bound`) projected into the read
 model, so disaster recovery rebuilds the same deployment routing from the event log.
 
+For a one-call lifecycle workflow, `POST /api/v1/lifecycle/endpoint-bindings`
+creates or reuses the deployment target, creates the X.509 identity for an existing
+owner, binds that identity to the target, and queues the normal `ca.issue` and
+`connector.deploy` lifecycle intents. Scheduled renewal remains the same leader-only
+`ca.renew` path, so the renewed successor is delivered back to the same endpoint
+binding and produces a second connector receipt.
+
 Connectors themselves are wired at process composition time: register the trusted
 in-process connectors you need, give each one the narrow `Ops` implementation it is
 allowed to use, and pass that registry to `server.Build`. The same served outbox worker

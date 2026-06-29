@@ -90,22 +90,32 @@ deployment happen on their own.
    sandbox are covered in
    [Deployment connectors](../features/deployment-connectors.md).
 
-   Create the tenant target first, bind the identity to it, then deploy through the
-   normal lifecycle path:
+   Use the endpoint-binding lifecycle API to create the identity, provision the
+   tenant target, bind the route, and queue issue/deploy work in one idempotent
+   mutation:
 
    ```sh
-   trstctl connector target create \
-     --name edge/prod/payments \
-     --connector nginx \
-     --config-json '{"credential_ref":"secret://connectors/nginx/edge","host":"edge-1.internal"}'
-
-   trstctl connector target bind --identity "$IDENTITY_ID" --target "$TARGET_ID"
-   trstctl connector target deploy --identity "$IDENTITY_ID" --target "$TARGET_ID"
+   curl -sS -X POST "$TRSTCTL_URL/api/v1/lifecycle/endpoint-bindings" \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: fleet-edge-payments-1" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "owner_id": "'"$OWNER_ID"'",
+       "identity_name": "payments.example.com",
+       "target": {
+         "name": "edge/prod/payments",
+         "connector": "nginx",
+         "config": {
+           "credential_ref": "secret://connectors/nginx/edge",
+           "host": "edge-1.internal"
+         }
+       }
+     }'
    ```
 
    The same flow is served in the console under **Deployment connectors** and over
-   REST at `/api/v1/connectors/targets`. The target stores non-secret metadata and
-   credential references only. Actual target mutation still moves through
+   REST at `/api/v1/lifecycle/endpoint-bindings`. The target stores non-secret
+   metadata and credential references only. Actual target mutation still moves through
    `connector.deploy` outbox work; if no native registry or signed plugin owns the
    connector, the binary records an `unrouted` receipt instead of pretending delivery
    happened.

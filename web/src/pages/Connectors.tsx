@@ -19,6 +19,8 @@ export function Connectors() {
   const [targetConfig, setTargetConfig] = useState('{"credential_ref":"connector-credential-ref","host":"edge-1.internal"}');
   const [selectedTarget, setSelectedTarget] = useState("");
   const [selectedIdentity, setSelectedIdentity] = useState("");
+  const [bindingOwnerID, setBindingOwnerID] = useState("");
+  const [bindingIdentityName, setBindingIdentityName] = useState("payments.example.test");
   const [reason, setReason] = useState("operator requested deployment");
 
   const refresh = () =>
@@ -58,6 +60,25 @@ export function Connectors() {
       const created = await api.createConnectorTarget({ name: targetName.trim(), connector: connectorName.trim(), config });
       setActionResult(`target:${created.id}`);
       setSelectedTarget(created.id);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const createEndpointBinding = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const config = JSON.parse(targetConfig) as Record<string, unknown>;
+      const binding = await api.createEndpointBinding({
+        owner_id: bindingOwnerID.trim(),
+        identity_name: bindingIdentityName.trim(),
+        reason,
+        target: { name: targetName.trim(), connector: connectorName.trim(), config },
+      });
+      setActionResult(`endpoint-binding:${binding.identity.status}:${binding.renewal_intent}`);
+      setSelectedTarget(binding.target.id);
+      setSelectedIdentity(binding.identity.id);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -128,6 +149,20 @@ export function Connectors() {
             </label>
             <button className="ui-button md:col-span-2" type="submit">
               Create target
+            </button>
+          </form>
+
+          <form aria-label="Create endpoint binding" className="ui-panel grid gap-3 md:grid-cols-3 md:items-end" onSubmit={createEndpointBinding}>
+            <label className="grid gap-1 text-sm">
+              Owner ID
+              <input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Identity DNS name
+              <input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
+            </label>
+            <button className="ui-button" type="submit">
+              Bind and enroll
             </button>
           </form>
 

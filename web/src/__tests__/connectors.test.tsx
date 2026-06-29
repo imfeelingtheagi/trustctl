@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     connectorTargets: vi.fn(),
     identities: vi.fn(),
     createConnectorTarget: vi.fn(),
+    createEndpointBinding: vi.fn(),
     bindIdentityConnectorTarget: vi.fn(),
     testConnectorTarget: vi.fn(),
     deployConnectorTarget: vi.fn(),
@@ -129,6 +130,12 @@ describe("connector deployment disclosure surface", () => {
       config: {},
       created_at: "2026-06-20T00:00:00Z",
     });
+    apiMock.createEndpointBinding.mockReset().mockResolvedValue({
+      identity: { id: "identity-bound", status: "deployed" },
+      target: { id: "target-created", name: "edge/prod/payments", connector: "nginx" },
+      queued_lifecycle_intents: ["ca.issue", "connector.deploy"],
+      renewal_intent: "ca.renew",
+    });
     apiMock.bindIdentityConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "issued" });
     apiMock.testConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.test", status: "test_succeeded" });
     apiMock.deployConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "deployed" });
@@ -180,6 +187,7 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bind and enroll" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
   });
@@ -195,6 +203,21 @@ describe("connector deployment disclosure surface", () => {
         name: "edge/prod/payments",
         connector: "nginx",
         config: { credential_ref: "connector-credential-ref", host: "edge-1.internal" },
+      }),
+    );
+
+    await user.type(screen.getByLabelText("Owner ID"), "owner-1");
+    await user.click(screen.getByRole("button", { name: "Bind and enroll" }));
+    await waitFor(() =>
+      expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({
+        owner_id: "owner-1",
+        identity_name: "payments.example.test",
+        reason: "operator requested deployment",
+        target: {
+          name: "edge/prod/payments",
+          connector: "nginx",
+          config: { credential_ref: "connector-credential-ref", host: "edge-1.internal" },
+        },
       }),
     );
 

@@ -409,6 +409,130 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	}
 }
 
+func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+	})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write",
+		"identities:read", "identities:write",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload",
+		"name": "cap-life-01-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, "cap-life-01-bind", map[string]any{
+		"owner_id":      owner.ID,
+		"identity_name": "cap-life-01.served.test",
+		"reason":        "CAP-LIFE-01 endpoint lifecycle automation",
+		"target": map[string]any{
+			"name":      "edge/prod/cap-life-01",
+			"connector": "nginx",
+			"config": map[string]any{
+				"credential_ref": "secret://connectors/nginx/cap-life-01",
+				"host":           "edge-1.internal",
+				"reload":         "systemctl reload nginx",
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create endpoint binding automation: status %d body %s", status, body)
+	}
+	var binding struct {
+		Identity struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"identity"`
+		Target struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			Connector string `json:"connector"`
+		} `json:"target"`
+		Queued        []string `json:"queued_lifecycle_intents"`
+		RenewalIntent string   `json:"renewal_intent"`
+	}
+	if err := json.Unmarshal(body, &binding); err != nil {
+		t.Fatalf("decode endpoint binding: %v (%s)", err, body)
+	}
+	if binding.Identity.ID == "" || binding.Identity.Status != "deployed" {
+		t.Fatalf("binding identity = %+v, want queued through deployed", binding.Identity)
+	}
+	if binding.Target.ID == "" || binding.Target.Name != "edge/prod/cap-life-01" || binding.Target.Connector != "nginx" {
+		t.Fatalf("binding target = %+v", binding.Target)
+	}
+	for _, want := range []string{"ca.issue", "connector.deploy"} {
+		if !containsLifecycleIntent(binding.Queued, want) {
+			t.Fatalf("queued intents = %+v, missing %s", binding.Queued, want)
+		}
+	}
+	if binding.RenewalIntent != "ca.renew" {
+		t.Fatalf("renewal_intent = %q, want ca.renew", binding.RenewalIntent)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain initial issue/deploy: %v", err)
+	}
+	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, "cap-life-01.served.test")
+	if err != nil {
+		t.Fatalf("load issued certs: %v", err)
+	}
+	if len(certs) != 1 || certs[0].Fingerprint == "" {
+		t.Fatalf("issued certs after endpoint binding = %+v", certs)
+	}
+	first := connectorDeliveriesForIdentity(t, h, tok, binding.Identity.ID)
+	if len(first.Items) != 1 || first.Items[0].Connector != "nginx" || first.Items[0].Target != "edge/prod/cap-life-01" || first.Items[0].Fingerprint != certs[0].Fingerprint {
+		t.Fatalf("initial delivery receipt = %+v raw=%s cert=%s", first.Items, first.Raw, certs[0].Fingerprint)
+	}
+
+	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	if err != nil {
+		t.Fatalf("run lifecycle scheduler: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("scheduled renewals = %d, want 1", queued)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain renewal/deploy: %v", err)
+	}
+	runs := rotationRunsForIdentity(t, h, tok, binding.Identity.ID)
+	if len(runs.Items) != 1 || runs.Items[0].Status != "succeeded" || runs.Items[0].SuccessorFingerprint == "" || runs.Items[0].RollbackRef == "" {
+		t.Fatalf("rotation run = %+v raw=%s", runs.Items, runs.Raw)
+	}
+	afterRenew := connectorDeliveriesForIdentity(t, h, tok, binding.Identity.ID)
+	if len(afterRenew.Items) != 2 {
+		t.Fatalf("delivery receipts after renewal = %d, want 2 (%s)", len(afterRenew.Items), afterRenew.Raw)
+	}
+	if !deliveryFingerprintsContain(afterRenew, runs.Items[0].SuccessorFingerprint) {
+		t.Fatalf("no delivery receipt binds renewal successor %s: %+v", runs.Items[0].SuccessorFingerprint, afterRenew.Items)
+	}
+
+	for _, eventType := range []string{
+		"deployment_target.upserted",
+		"identity.created",
+		"identity.connector_target_bound",
+		"identity.issued",
+		"identity.deployed",
+		"connector.delivery.recorded",
+		"lifecycle.rotation.recorded",
+	} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event", eventType)
+		}
+	}
+}
+
 type connectorDeliveryList struct {
 	Raw   []byte
 	Items []struct {
@@ -421,6 +545,24 @@ type connectorDeliveryList struct {
 		Reason      string `json:"reason"`
 		Detail      string `json:"detail"`
 	} `json:"items"`
+}
+
+func containsLifecycleIntent(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+
+func deliveryFingerprintsContain(deliveries connectorDeliveryList, fingerprint string) bool {
+	for _, item := range deliveries.Items {
+		if item.Fingerprint == fingerprint {
+			return true
+		}
+	}
+	return false
 }
 
 func jsonContains(t *testing.T, raw []byte, needle string) bool {

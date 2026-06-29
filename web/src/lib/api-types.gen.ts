@@ -830,6 +830,21 @@ export interface EditionsInfo {
   tier: "community" | "enterprise" | "provider";
 }
 
+export interface EndpointBinding {
+  identity: Identity;
+  queued_lifecycle_intents: string[];
+  renewal_intent: string;
+  target: DeploymentTarget;
+}
+
+export interface EndpointBindingRequest {
+  identity_name: string;
+  owner_id: string;
+  reason?: string;
+  target?: DeploymentTargetRequest;
+  target_id?: string;
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;

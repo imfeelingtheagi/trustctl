@@ -674,6 +674,19 @@ func componentSchemas() map[string]*Schema {
 	identityConnectorTargetReq := object(map[string]*Schema{
 		"target_id": uuid(),
 	}, "target_id")
+	endpointBindingReq := object(map[string]*Schema{
+		"owner_id":      uuid(),
+		"identity_name": str(),
+		"target_id":     uuid(),
+		"target":        ref("DeploymentTargetRequest"),
+		"reason":        str(),
+	}, "owner_id", "identity_name")
+	endpointBinding := object(map[string]*Schema{
+		"identity":                 ref("Identity"),
+		"target":                   ref("DeploymentTarget"),
+		"queued_lifecycle_intents": {Type: "array", Items: str()},
+		"renewal_intent":           str(),
+	}, "identity", "target", "queued_lifecycle_intents", "renewal_intent")
 	connectorTargetActionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(),
 	}, "identity_id")
@@ -1478,6 +1491,8 @@ func componentSchemas() map[string]*Schema {
 		"DeploymentTarget":                      deploymentTarget,
 		"DeploymentTargetList":                  list("DeploymentTarget"),
 		"IdentityConnectorTargetRequest":        identityConnectorTargetReq,
+		"EndpointBindingRequest":                endpointBindingReq,
+		"EndpointBinding":                       endpointBinding,
 		"ConnectorTargetActionRequest":          connectorTargetActionReq,
 		"ConnectorDelivery":                     connectorDelivery,
 		"ConnectorDeliveryList":                 list("ConnectorDelivery"),

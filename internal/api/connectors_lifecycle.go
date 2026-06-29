@@ -41,6 +41,21 @@ type identityConnectorTargetRequest struct {
 	TargetID string `json:"target_id"`
 }
 
+type endpointBindingRequest struct {
+	OwnerID      string                   `json:"owner_id"`
+	IdentityName string                   `json:"identity_name"`
+	TargetID     string                   `json:"target_id"`
+	Target       *deploymentTargetRequest `json:"target"`
+	Reason       string                   `json:"reason"`
+}
+
+type endpointBindingResponse struct {
+	Identity               identityResponse         `json:"identity"`
+	Target                 deploymentTargetResponse `json:"target"`
+	QueuedLifecycleIntents []string                 `json:"queued_lifecycle_intents"`
+	RenewalIntent          string                   `json:"renewal_intent"`
+}
+
 type connectorTargetActionRequest struct {
 	IdentityID string `json:"identity_id"`
 	Reason     string `json:"reason"`
@@ -382,6 +397,56 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+//trstctl:mutation
+func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		req, err := decodeEndpointBindingRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
+			return 0, nil, err
+		}
+		target, err := a.endpointBindingTarget(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		identity, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
+			Kind:    store.KindX509Certificate,
+			Name:    req.IdentityName,
+			OwnerID: req.OwnerID,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		identity, err = a.orch.BindIdentityDeploymentTarget(ctx, tenantID, identity.ID, target)
+		if err != nil {
+			return 0, nil, err
+		}
+		reason := req.Reason
+		if reason == "" {
+			reason = "endpoint binding automation"
+		}
+		if err := a.orch.Transition(ctx, tenantID, identity.ID, orchestrator.StateIssued, reason); err != nil {
+			return 0, nil, err
+		}
+		if err := a.orch.Transition(ctx, tenantID, identity.ID, orchestrator.StateDeployed, reason); err != nil {
+			return 0, nil, err
+		}
+		identity, err = a.store.GetIdentity(ctx, tenantID, identity.ID)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, endpointBindingResponse{
+			Identity:               toIdentityResponse(identity),
+			Target:                 toDeploymentTargetResponse(target),
+			QueuedLifecycleIntents: []string{"ca.issue", "connector.deploy"},
+			RenewalIntent:          "ca.renew",
+		}, nil
+	})
+}
+
 func (a *API) listOutboxCircuits(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
@@ -435,6 +500,91 @@ func decodeDeploymentTargetRequest(r *http.Request) (deploymentTargetRequest, er
 	var cfg any
 	if err := json.Unmarshal(req.Config, &cfg); err != nil {
 		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be valid JSON")
+	}
+	if _, ok := cfg.(map[string]any); !ok {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	return req, nil
+}
+
+func decodeEndpointBindingRequest(r *http.Request) (endpointBindingRequest, error) {
+	var raw json.RawMessage
+	if err := decodeJSON(r, &raw); err != nil {
+		return endpointBindingRequest{}, errWithStatus(http.StatusBadRequest, err)
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "request body must be a JSON object")
+	}
+	if targetRaw, ok := obj["target"]; ok && len(targetRaw) > 0 && string(targetRaw) != "null" {
+		var targetObj map[string]json.RawMessage
+		if err := json.Unmarshal(targetRaw, &targetObj); err != nil || targetObj == nil {
+			return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "target must be a JSON object")
+		}
+		if containsInlineSecret(targetObj) {
+			return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "connector targets accept credential references, not inline secret values")
+		}
+	}
+	var req endpointBindingRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "invalid endpoint binding request")
+	}
+	req.OwnerID = strings.TrimSpace(req.OwnerID)
+	req.IdentityName = strings.TrimSpace(req.IdentityName)
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.OwnerID == "" {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "owner_id is required")
+	}
+	if req.IdentityName == "" {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "identity_name is required")
+	}
+	if req.TargetID != "" && req.Target != nil {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "provide target_id or target, not both")
+	}
+	if req.TargetID == "" && req.Target == nil {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "target_id or target is required")
+	}
+	if req.Target != nil {
+		target, err := validateDeploymentTargetRequest(*req.Target)
+		if err != nil {
+			return endpointBindingRequest{}, err
+		}
+		req.Target = &target
+	}
+	return req, nil
+}
+
+func (a *API) endpointBindingTarget(ctx context.Context, tenantID string, req endpointBindingRequest) (store.DeploymentTarget, error) {
+	if req.TargetID != "" {
+		return a.store.GetDeploymentTarget(ctx, tenantID, req.TargetID)
+	}
+	return a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
+		Name: req.Target.Name, Type: req.Target.Connector, Config: req.Target.Config,
+	})
+}
+
+func validateDeploymentTargetRequest(req deploymentTargetRequest) (deploymentTargetRequest, error) {
+	req.Name = strings.TrimSpace(req.Name)
+	req.Connector = strings.TrimSpace(req.Connector)
+	if req.Name == "" {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "name is required")
+	}
+	if req.Connector == "" {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector is required")
+	}
+	if !servedConnectorName(req.Connector) {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector must name a served connector catalog entry")
+	}
+	if len(req.Config) == 0 {
+		req.Config = json.RawMessage("{}")
+	}
+	var cfg any
+	if err := json.Unmarshal(req.Config, &cfg); err != nil {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be valid JSON")
+	}
+	if containsInlineSecret(cfg) {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector targets accept credential references, not inline secret values")
 	}
 	if _, ok := cfg.(map[string]any); !ok {
 		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be a JSON object")

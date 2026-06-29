@@ -4040,27 +4040,31 @@
       "phase": "P1",
       "priority": 29,
       "served_state": "served",
-      "backend_status": "manual transitions plus served ARI-first lifecycle renewal scheduler with outbox-driven ca.renew and rotation evidence",
-      "current_frontend_mapping": "partial UI: identity actions and coverage ledger disclose served lifecycle automation; dedicated scheduler console remains target UI",
+      "backend_status": "served endpoint-binding automation plus ARI-first lifecycle renewal scheduler with outbox-driven issue/deploy/ca.renew and rotation evidence",
+      "current_frontend_mapping": "served UI: Connectors can create endpoint bindings; identity actions and coverage ledger disclose served lifecycle automation",
       "target_gui_mapping": "Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials.",
-      "acceptance_test": "Served integration test proves ARI-window renewal queues ca.renew and records rotation evidence when the fixed renew_before threshold would not fire.",
+      "acceptance_test": "Served integration tests prove endpoint-binding automation queues issue/deploy, drains connector receipts, and later ARI-window renewal queues ca.renew and records rotation evidence.",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
       ],
       "source_backend": [
         "internal/server/server.go",
         "internal/store/connector_lifecycle.go",
+        "internal/api/connectors_lifecycle.go",
         "internal/protocols/ari",
+        "/api/v1/lifecycle/endpoint-bindings",
         "/api/v1/identities/{id}/transitions"
       ],
       "source_frontend": [
-        "web/src/pages/Identities.tsx"
+        "web/src/pages/Identities.tsx",
+        "web/src/pages/Connectors.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub; CLM-01 wires the served scheduler to consume ARI windows before the fixed renew_before fallback. Test evidence: internal/server/journey_delivery_served_test.go covers issue -> deploy -> ARI-window renewal -> outbox ca.renew -> rotation evidence; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search.",
+      "notes": "Closed by /coverage feature-map hub, CLM-01, and CAP-LIFE-01. CLM-01 wires the served scheduler to consume ARI windows before the fixed renew_before fallback. CAP-LIFE-01 adds /api/v1/lifecycle/endpoint-bindings for one-call owner-scoped X.509 identity creation, connector target provisioning, endpoint binding, issue/deploy outbox queueing, and renewal back to the same bound target. Test evidence: TestServedEndpointBindingAutomationCAPLIFE01 and TestServedLifecycleSchedulerUsesARIWindowForRenewal in internal/server/journey_delivery_served_test.go; web/src/__tests__/connectors.test.tsx covers the console action.",
       "api_surface": [
         "listIdentities",
         "transitionIdentity",
+        "createEndpointBinding",
         "searchAudit",
         "listRotationRuns",
         "getRotationRun"
@@ -4070,6 +4074,7 @@
         "identities list",
         "identities transition",
         "audit events",
+        "lifecycle endpoint-bindings create",
         "lifecycle rotation-runs list",
         "lifecycle rotation-runs get"
       ],
@@ -4078,18 +4083,19 @@
         "served": {
           "evidence": [
             "served_state=served",
-            "backend_status=manual transitions plus served ARI-first lifecycle renewal scheduler with outbox-driven ca.renew and rotation evidence"
+            "backend_status=served endpoint-binding automation plus ARI-first lifecycle renewal scheduler with outbox-driven issue/deploy/ca.renew and rotation evidence"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial UI: identity actions and coverage ledger disclose served lifecycle automation; dedicated scheduler console remains target UI",
+            "current_frontend_mapping: served UI: Connectors can create endpoint bindings; identity actions and coverage ledger disclose served lifecycle automation",
             "target_gui_mapping: Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
             "web/src/App.tsx",
-            "web/src/pages/Identities.tsx"
+            "web/src/pages/Identities.tsx",
+            "web/src/pages/Connectors.tsx"
           ]
         },
         "cli": {
@@ -4097,6 +4103,7 @@
             "CLI command: identities list",
             "CLI command: identities transition",
             "CLI command: audit events",
+            "CLI command: lifecycle endpoint-bindings create",
             "CLI command: lifecycle rotation-runs list",
             "CLI command: lifecycle rotation-runs get"
           ],
@@ -4109,6 +4116,7 @@
           "evidence": [
             "OpenAPI operationId: listIdentities",
             "OpenAPI operationId: transitionIdentity",
+            "OpenAPI operationId: createEndpointBinding",
             "OpenAPI operationId: searchAudit",
             "OpenAPI operationId: listRotationRuns",
             "OpenAPI operationId: getRotationRun"
@@ -4122,7 +4130,7 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served integration test proves ARI-window renewal queues ca.renew and records rotation evidence when the fixed renew_before threshold would not fire.",
+            "acceptance_test: Served integration tests prove endpoint-binding automation queues issue/deploy, drains connector receipts, and later ARI-window renewal queues ca.renew and records rotation evidence.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -4143,7 +4151,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listIdentities, transitionIdentity, searchAudit",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listIdentities, transitionIdentity, createEndpointBinding, searchAudit, listRotationRuns, getRotationRun",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4156,7 +4164,7 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: listIdentities, transitionIdentity, searchAudit",
+            "mutating served surface requires audit/event evidence: transitionIdentity and createEndpointBinding emit identity/deployment-target lifecycle events and outbox intents; searchAudit exposes signed audit evidence.",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": [
