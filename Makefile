@@ -89,12 +89,12 @@ build: ## Build all binaries into ./bin
 airgap-bundle: ## Build an offline install bundle (requires VERSION=vX.Y.Z; docker unless TRSTCTL_AIRGAP_SKIP_IMAGES=1)
 	@scripts/airgap-bundle.sh
 
-# GOFIPS140 value for the FIPS-capable build. `latest` selects the newest FIPS
-# 140-3 Go Cryptographic Module bundled with the toolchain; an operator pinning a
-# specific validated module version overrides it (e.g. GOFIPS140=v1.0.0). Note the
-# Go toolchain rejects GOFIPS140=on — the valid values are off|latest|inprocess|
-# certified|vX.Y.Z — so the FIPS-*capable* build uses `latest` here.
-GOFIPS140 ?= latest
+# GOFIPS140 value for the regulated FIPS-capable build. The default pins the
+# audited Go FIPS module selector used in the product evidence profile; operators
+# can override it only when their evidence pack names the replacement selector.
+# The Go toolchain rejects GOFIPS140=on — valid values are off|latest|inprocess|
+# certified|vX.Y.Z — so approved deployments use a concrete vX.Y.Z selector.
+GOFIPS140 ?= v1.0.0
 # CGO must stay disabled for the FIPS build too; the Go FIPS module is pure-Go and
 # needs no C toolchain (unlike the old GOEXPERIMENT=boringcrypto path).
 GO_BUILD_FIPS := GOFIPS140=$(GOFIPS140) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'

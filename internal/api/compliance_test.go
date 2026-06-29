@@ -39,6 +39,18 @@ func TestParseComplianceFrameworkAcceptsCAAuditPostureFrameworks(t *testing.T) {
 	}
 }
 
+func TestFIPSComplianceFrameworkAliasesResolveToEvidencePackFramework(t *testing.T) {
+	for _, raw := range []string{"fips-140", "fips-140-2", "fips-140-3", "fips140", "fips"} {
+		got, err := api.ParseComplianceFramework(raw)
+		if err != nil {
+			t.Fatalf("ParseComplianceFramework(%q): %v", raw, err)
+		}
+		if got != api.ComplianceFIPS140 {
+			t.Fatalf("ParseComplianceFramework(%q) = %q, want %q", raw, got, api.ComplianceFIPS140)
+		}
+	}
+}
+
 func TestComplianceEvidencePackRouteIsHiddenWhenUnlicensed(t *testing.T) {
 	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver())
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/compliance/evidence-packs/soc2", nil)

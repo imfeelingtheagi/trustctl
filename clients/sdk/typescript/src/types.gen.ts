@@ -4230,6 +4230,48 @@ export interface components {
             items: components["schemas"]["ExternalCA"][];
             next_cursor?: string;
         };
+        FIPSAlgorithmMode: {
+            algorithm: string;
+            approved: boolean;
+            mode: string;
+            module_boundary: string;
+            use: string;
+        };
+        FIPSCustodyValidationCertificate: {
+            boundary: string;
+            certificate_ref: string;
+            provider: string;
+            required_for_approved_mode: boolean;
+            status: string;
+            validation_scope: string;
+        };
+        FIPSNonFIPSFence: {
+            action: string;
+            algorithms: string[];
+            evidence_ref: string;
+            reason: string;
+            status_under_fips: string;
+            surface: string;
+        };
+        FIPSRegulatedDeploymentProfile: {
+            approved_algorithms: components["schemas"]["FIPSAlgorithmMode"][];
+            build_target?: string;
+            capability_id: string;
+            crypto_boundary?: string;
+            evidence_refs?: string[];
+            go_fips_module?: string;
+            go_fips_module_selector: string;
+            hsm_kms_validation_certificates: components["schemas"]["FIPSCustodyValidationCertificate"][];
+            module_active?: boolean;
+            non_fips_fences: components["schemas"]["FIPSNonFIPSFence"][];
+            operator_required_artifacts?: string[];
+            product_certification_residual?: string;
+            product_certification_status?: string;
+            profile_id: string;
+            runtime_assertions?: string[];
+            self_test_passed?: boolean;
+            standard: string;
+        };
         FIPSStatus: {
             build_target?: string;
             capability_id?: string;
@@ -4238,6 +4280,7 @@ export interface components {
             module?: string;
             module_active: boolean;
             product_certification_residual?: string;
+            regulated_deployment_profile?: components["schemas"]["FIPSRegulatedDeploymentProfile"];
             required: boolean;
             runtime_activation?: string[];
             self_test_passed: boolean;

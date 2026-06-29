@@ -953,7 +953,8 @@ jobs:
           check-latest: true
           cache: true
 
-      # Builds all three binaries with GOFIPS140=latest and self-verifies the
+      # Builds all three binaries with the pinned regulated selector
+      # GOFIPS140=v1.0.0 and self-verifies the
       # control plane reports `crypto.fips.module_active: true` (fails the job
       # otherwise — a build whose module is inactive is not FIPS-capable).
       - name: FIPS-capable build (+ verify module active)
@@ -964,7 +965,7 @@ jobs:
       # covered by the default build/test job above.
       - name: FIPS power-on self-test suite (module active)
         env:
-          GOFIPS140: latest
+          GOFIPS140: v1.0.0
         run: go test ./internal/crypto/ -run 'TestPowerOnSelfTest|TestSelfTestKAT|TestFIPSStatus' -count=1 -v
 
   windows:

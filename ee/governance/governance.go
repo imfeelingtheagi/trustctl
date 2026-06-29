@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
 )
@@ -50,11 +51,12 @@ type Posture struct {
 
 // Report is a compliance evidence pack.
 type Report struct {
-	Framework        string    `json:"framework"`
-	Controls         []Control `json:"controls"`
-	Posture          Posture   `json:"posture"`
-	ProductEvidences []string  `json:"product_evidences"`
-	OperatorAttests  []string  `json:"operator_attests"`
+	Framework        string                                     `json:"framework"`
+	Controls         []Control                                  `json:"controls"`
+	Posture          Posture                                    `json:"posture"`
+	ProductEvidences []string                                   `json:"product_evidences"`
+	OperatorAttests  []string                                   `json:"operator_attests"`
+	FIPSProfile      *compliance.FIPSRegulatedDeploymentProfile `json:"fips_regulated_deployment_profile,omitempty"`
 }
 
 // Reporter generates and signs reports.
@@ -72,12 +74,25 @@ func New(tenantID string, signer crypto.DigestSigner) *Reporter {
 // deterministic over the same inputs (reproducible).
 func (r *Reporter) Generate(fw Framework, audit []auditsink.Record, cbom *graph.Graph) (Report, error) {
 	p := posture(cbom)
+	var fipsProfile *compliance.FIPSRegulatedDeploymentProfile
+	if fw == FIPS140 {
+		status, err := crypto.PowerOnSelfTest(false)
+		if err != nil {
+			return Report{}, fmt.Errorf("governance: fips power-on self-test: %w", err)
+		}
+		profile := compliance.RegulatedFIPSDeploymentProfile(status)
+		if err := compliance.ValidateFIPSRegulatedDeploymentProfile(profile); err != nil {
+			return Report{}, fmt.Errorf("governance: fips regulated deployment profile invalid: %w", err)
+		}
+		fipsProfile = &profile
+	}
 	return Report{
 		Framework:        string(fw),
 		Controls:         controlsFor(fw, p, len(audit) > 0),
 		Posture:          p,
 		ProductEvidences: productEvidencesFor(fw),
 		OperatorAttests:  operatorAttestsFor(fw),
+		FIPSProfile:      fipsProfile,
 	}, nil
 }
 
@@ -134,6 +149,24 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 				Title:    "All product cryptography enters through the audited crypto boundary",
 				Status:   "evidenced",
 				Evidence: []string{"internal/crypto boundary", "architecture linter", "isolated signing service"},
+			},
+			Control{
+				ID:       "fips-140-approved-algorithm-profile",
+				Title:    "Approved-mode algorithms and modes are enumerated for the regulated deployment profile",
+				Status:   "evidenced",
+				Evidence: []string{"regulated FIPS deployment profile", "approved algorithm/mode allowlist", "Go FIPS module selector pin"},
+			},
+			Control{
+				ID:       "fips-140-non-fips-pqc-fence",
+				Title:    "PQC, hybrid, and Ed25519 paths are fenced out of approved-mode FIPS claims",
+				Status:   "evidenced",
+				Evidence: []string{"non-FIPS fence list", "internal/crypto/pqc boundary caveat", "approved-mode algorithm decision"},
+			},
+			Control{
+				ID:       "fips-140-hsm-kms-validation-records",
+				Title:    "External key-custody boundaries name required HSM/KMS validation certificate records",
+				Status:   "evidenced",
+				Evidence: []string{"HSM/KMS validation certificate requirements", "operator attestation", "deployment-specific key custody boundary"},
 			},
 			Control{
 				ID:       "fips-140-cmvp-certificate-residual",
@@ -260,6 +293,9 @@ func productEvidencesFor(fw Framework) []string {
 			"FIPS-capable build and fail-closed POST evidence",
 			"crypto boundary routes product cryptography through the Go FIPS module when active",
 			"CI fips-capable build artifact verification",
+			"regulated FIPS deployment profile with pinned Go module selector",
+			"approved algorithm/mode allowlist and non-FIPS PQC fence",
+			"HSM/KMS validation certificate requirement records",
 		)
 	}
 	if fw == CommonCriteria {
@@ -301,6 +337,8 @@ func operatorAttestsFor(fw Framework) []string {
 			"NIST CMVP certificate number for the deployed validated module",
 			"approved FIPS deployment configuration",
 			"external module validation scope and vendor certificate",
+			"HSM/KMS CMVP certificate references for each configured external key-custody boundary",
+			"operator confirmation that PQC, hybrid, and Ed25519 paths are outside approved-mode FIPS issuance unless backed by a validated module",
 		)
 	}
 	if fw == CommonCriteria {

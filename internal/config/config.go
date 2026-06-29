@@ -2611,7 +2611,7 @@ func validateGovernanceConfig(c *Config) []error {
 		errs = append(errs, errors.New("ca.governance_mode=regulated requires revocation publication: set at least one of ca.crl_distribution_points or ca.ocsp_servers so issued certificates carry a status pointer"))
 	}
 	if c.CA.RequireFIPS && !fipsActive() {
-		errs = append(errs, errors.New("ca.governance_mode=regulated with ca.require_fips=true requires the FIPS 140-3 module to be active: build with GOFIPS140=latest (make fips-build) or run with GODEBUG=fips140=on"))
+		errs = append(errs, errors.New("ca.governance_mode=regulated with ca.require_fips=true requires the FIPS 140-3 module to be active: build with GOFIPS140=v1.0.0 (make fips-build) or run with GODEBUG=fips140=on"))
 	}
 	return errs
 }

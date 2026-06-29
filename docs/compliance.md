@@ -236,19 +236,21 @@ Cryptographic Module enabled routes all of trstctl's cryptography through that
 module:
 
 ```sh
-make fips-build      # builds bin/<binary>-fips with GOFIPS140=latest
+make fips-build      # builds bin/<binary>-fips with GOFIPS140=v1.0.0
 ```
 
-`make fips-build` sets `GOFIPS140=latest` (the toolchain rejects `GOFIPS140=on`;
-the valid values are `off|latest|inprocess|certified|vX.Y.Z`), builds all three
-binaries, and **verifies the produced binary actually has the module active** —
+`make fips-build` sets the pinned regulated selector `GOFIPS140=v1.0.0` (the
+toolchain rejects `GOFIPS140=on`; the valid values are
+`off|latest|inprocess|certified|vX.Y.Z`), builds all three binaries, and
+**verifies the produced binary actually has the module active** —
 `bin/trstctl-fips --check-config` reports `crypto.fips.module_active: true`, and
 the build fails if it does not. Because trstctl's entire cryptographic surface
-enters through one single crypto boundary, when the module is
-active every signature, hash, and AEAD trstctl performs runs inside the validated
-Go Cryptographic Module. A CI job (`fips-capable build (GOFIPS140)`) builds and
-verifies this on every change. The same module can also be turned on at runtime for
-a standard build via `GODEBUG=fips140=on`.
+enters through one single crypto boundary, when the module is active every
+signature, hash, and AEAD trstctl performs runs inside the validated Go
+Cryptographic Module. A CI job (`fips-capable build (GOFIPS140)`) builds and
+verifies this on every change. The same module can also be turned on at runtime
+for a standard build via `GODEBUG=fips140=on`. `GOFIPS140=latest` remains an
+explicit compatibility-test override; it is not the regulated evidence selector.
 
 The served platform posture is visible on `GET /api/v1/editions` and the web
 console's **Platform** page. The response includes the live POST booleans
@@ -256,6 +258,30 @@ console's **Platform** page. The response includes the live POST booleans
 `standard: FIPS 140-3`, `module: Go Cryptographic Module`, `build_target: make
 fips-build`, `ci_gate: fips-capable build (GOFIPS140)`, the `internal/crypto`
 boundary, and the external product-certification residual.
+
+The same response includes a `regulated_deployment_profile`:
+
+- `go_fips_module_selector: v1.0.0` pins the regulated build selector.
+- `approved_algorithms` enumerates the approved-mode algorithm/mode set trstctl
+  uses through the Go module: ECDSA with SHA-2, RSA with PSS/PKCS#1 v1.5 and
+  SHA-2, AES-256-GCM, and SHA-2 digests.
+- `non_fips_fences` explicitly keeps CIRCL PQC paths (ML-DSA, ML-KEM, SLH-DSA),
+  Ed25519, and hybrid TLS/key profiles out of approved-mode FIPS claims unless a
+  deployment routes those operations through a separately validated module.
+- `hsm_kms_validation_certificates` records the certificate references an auditor
+  needs for each external key-custody boundary: the Go module, AWS KMS/CloudHSM,
+  Azure Managed HSM, Google Cloud KMS/Cloud HSM, and PKCS#11 HSM deployments.
+  These are operator-attached certificate records, not invented by trstctl.
+- `operator_required_artifacts` names the remaining lab/operator evidence:
+  module certificate reference, approved configuration, external HSM/KMS
+  certificates, signed evidence-pack export, and release manifest.
+
+Enterprise governance packages and signs the same profile from
+`GET /api/v1/compliance/evidence-packs/fips-140`. The signed export is an
+offline-verifiable evidence pack: it proves the trstctl artifact and tenant
+posture it describes, while still leaving the product CMVP certificate,
+deployment-approved configuration, and external module certificates as explicit
+operator/lab artifacts.
 
 **Power-on self-test, fail-closed.** A FIPS deployment runs trstctl with `--fips`
 (or `TRSTCTL_FIPS=1`). At startup, before the control plane serves any request,

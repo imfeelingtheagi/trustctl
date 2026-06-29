@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/license"
 )
@@ -18,18 +19,19 @@ import (
 type editionsTestResponse struct {
 	license.Info
 	FIPS struct {
-		ModuleActive                 bool     `json:"module_active"`
-		Required                     bool     `json:"required"`
-		SelfTestPassed               bool     `json:"self_test_passed"`
-		CapabilityID                 string   `json:"capability_id"`
-		ValidatedModulePath          bool     `json:"validated_module_path"`
-		Standard                     string   `json:"standard"`
-		Module                       string   `json:"module"`
-		BuildTarget                  string   `json:"build_target"`
-		RuntimeActivation            []string `json:"runtime_activation"`
-		CIGate                       string   `json:"ci_gate"`
-		CryptoBoundary               string   `json:"crypto_boundary"`
-		ProductCertificationResidual string   `json:"product_certification_residual"`
+		ModuleActive                 bool                                      `json:"module_active"`
+		Required                     bool                                      `json:"required"`
+		SelfTestPassed               bool                                      `json:"self_test_passed"`
+		CapabilityID                 string                                    `json:"capability_id"`
+		ValidatedModulePath          bool                                      `json:"validated_module_path"`
+		Standard                     string                                    `json:"standard"`
+		Module                       string                                    `json:"module"`
+		BuildTarget                  string                                    `json:"build_target"`
+		RuntimeActivation            []string                                  `json:"runtime_activation"`
+		CIGate                       string                                    `json:"ci_gate"`
+		CryptoBoundary               string                                    `json:"crypto_boundary"`
+		ProductCertificationResidual string                                    `json:"product_certification_residual"`
+		RegulatedDeploymentProfile   compliance.FIPSRegulatedDeploymentProfile `json:"regulated_deployment_profile"`
 	} `json:"fips"`
 }
 
@@ -66,6 +68,7 @@ func TestEditionsEndpointServesCAPKEY03ValidatedModulePath(t *testing.T) {
 		"FIPS 140-3",
 		"Go Cryptographic Module",
 		"make fips-build",
+		"GOFIPS140=" + compliance.DefaultFIPSGoModuleSelector,
 		"fips-capable build (GOFIPS140)",
 	} {
 		if !fipsPostureContains(got.FIPS, want) {
@@ -78,6 +81,17 @@ func TestEditionsEndpointServesCAPKEY03ValidatedModulePath(t *testing.T) {
 	residual := strings.ToLower(got.FIPS.ProductCertificationResidual)
 	if !strings.Contains(residual, "product nist cmvp certificate") || !strings.Contains(residual, "external residual") {
 		t.Fatalf("served FIPS posture must keep product CMVP certification as an external residual, got %q", got.FIPS.ProductCertificationResidual)
+	}
+	if err := compliance.ValidateFIPSRegulatedDeploymentProfile(got.FIPS.RegulatedDeploymentProfile); err != nil {
+		t.Fatalf("served FIPS regulated deployment profile is not auditor-usable: %v", err)
+	}
+	if got.FIPS.RegulatedDeploymentProfile.GoFIPSModuleSelector != compliance.DefaultFIPSGoModuleSelector {
+		t.Fatalf("served FIPS profile selector=%q, want %q", got.FIPS.RegulatedDeploymentProfile.GoFIPSModuleSelector, compliance.DefaultFIPSGoModuleSelector)
+	}
+	for _, alg := range []crypto.Algorithm{crypto.MLDSA65, crypto.MLKEM768, crypto.SLHDSA128s, crypto.Ed25519} {
+		if compliance.FIPSApprovedUnderRegulatedProfile(alg) {
+			t.Fatalf("%s must be fenced out of the served regulated FIPS profile", alg)
+		}
 	}
 }
 
@@ -120,18 +134,19 @@ func getCanonicalEditions(t *testing.T, h http.Handler, out *editionsTestRespons
 }
 
 func fipsPostureContains(fips struct {
-	ModuleActive                 bool     `json:"module_active"`
-	Required                     bool     `json:"required"`
-	SelfTestPassed               bool     `json:"self_test_passed"`
-	CapabilityID                 string   `json:"capability_id"`
-	ValidatedModulePath          bool     `json:"validated_module_path"`
-	Standard                     string   `json:"standard"`
-	Module                       string   `json:"module"`
-	BuildTarget                  string   `json:"build_target"`
-	RuntimeActivation            []string `json:"runtime_activation"`
-	CIGate                       string   `json:"ci_gate"`
-	CryptoBoundary               string   `json:"crypto_boundary"`
-	ProductCertificationResidual string   `json:"product_certification_residual"`
+	ModuleActive                 bool                                      `json:"module_active"`
+	Required                     bool                                      `json:"required"`
+	SelfTestPassed               bool                                      `json:"self_test_passed"`
+	CapabilityID                 string                                    `json:"capability_id"`
+	ValidatedModulePath          bool                                      `json:"validated_module_path"`
+	Standard                     string                                    `json:"standard"`
+	Module                       string                                    `json:"module"`
+	BuildTarget                  string                                    `json:"build_target"`
+	RuntimeActivation            []string                                  `json:"runtime_activation"`
+	CIGate                       string                                    `json:"ci_gate"`
+	CryptoBoundary               string                                    `json:"crypto_boundary"`
+	ProductCertificationResidual string                                    `json:"product_certification_residual"`
+	RegulatedDeploymentProfile   compliance.FIPSRegulatedDeploymentProfile `json:"regulated_deployment_profile"`
 }, want string) bool {
 	lowWant := strings.ToLower(want)
 	for _, candidate := range append([]string{

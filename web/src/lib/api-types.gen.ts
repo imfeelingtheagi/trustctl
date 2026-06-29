@@ -1150,6 +1150,52 @@ export interface ExternalCAList {
   next_cursor?: string;
 }
 
+export interface FIPSAlgorithmMode {
+  algorithm: string;
+  approved: boolean;
+  mode: string;
+  module_boundary: string;
+  use: string;
+}
+
+export interface FIPSCustodyValidationCertificate {
+  boundary: string;
+  certificate_ref: string;
+  provider: string;
+  required_for_approved_mode: boolean;
+  status: string;
+  validation_scope: string;
+}
+
+export interface FIPSNonFIPSFence {
+  action: string;
+  algorithms: string[];
+  evidence_ref: string;
+  reason: string;
+  status_under_fips: string;
+  surface: string;
+}
+
+export interface FIPSRegulatedDeploymentProfile {
+  approved_algorithms: FIPSAlgorithmMode[];
+  build_target?: string;
+  capability_id: string;
+  crypto_boundary?: string;
+  evidence_refs?: string[];
+  go_fips_module?: string;
+  go_fips_module_selector: string;
+  hsm_kms_validation_certificates: FIPSCustodyValidationCertificate[];
+  module_active?: boolean;
+  non_fips_fences: FIPSNonFIPSFence[];
+  operator_required_artifacts?: string[];
+  product_certification_residual?: string;
+  product_certification_status?: string;
+  profile_id: string;
+  runtime_assertions?: string[];
+  self_test_passed?: boolean;
+  standard: string;
+}
+
 export interface FIPSStatus {
   build_target?: string;
   capability_id?: string;
@@ -1158,6 +1204,7 @@ export interface FIPSStatus {
   module?: string;
   module_active: boolean;
   product_certification_residual?: string;
+  regulated_deployment_profile?: FIPSRegulatedDeploymentProfile;
   required: boolean;
   runtime_activation?: string[];
   self_test_passed: boolean;

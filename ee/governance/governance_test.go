@@ -3,9 +3,11 @@ package governance
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
 )
@@ -148,7 +150,7 @@ func TestFIPSAndCommonCriteriaReportSeparatesEvidenceFromExternalValidation(t *t
 			framework:       FIPS140,
 			evidenced:       "fips-140-module-post",
 			residual:        "fips-140-cmvp-certificate-residual",
-			productEvidence: "FIPS-capable build and fail-closed POST evidence",
+			productEvidence: "regulated FIPS deployment profile with pinned Go module selector",
 			operatorAttest:  "NIST CMVP certificate number for the deployed validated module",
 		},
 		{
@@ -173,6 +175,73 @@ func TestFIPSAndCommonCriteriaReportSeparatesEvidenceFromExternalValidation(t *t
 		}
 		if !contains(rep.OperatorAttests, tc.operatorAttest) {
 			t.Fatalf("%s operator attestation missing %q: %+v", tc.framework, tc.operatorAttest, rep.OperatorAttests)
+		}
+		if tc.framework == FIPS140 {
+			mustHaveControl(t, rep.Controls, "fips-140-approved-algorithm-profile", "evidenced")
+			mustHaveControl(t, rep.Controls, "fips-140-non-fips-pqc-fence", "evidenced")
+			mustHaveControl(t, rep.Controls, "fips-140-hsm-kms-validation-records", "evidenced")
+			if rep.FIPSProfile == nil {
+				t.Fatal("FIPS report missing regulated deployment profile")
+			}
+			if err := compliance.ValidateFIPSRegulatedDeploymentProfile(*rep.FIPSProfile); err != nil {
+				t.Fatalf("FIPS report profile is invalid: %v", err)
+			}
+			if rep.FIPSProfile.GoFIPSModuleSelector != compliance.DefaultFIPSGoModuleSelector {
+				t.Fatalf("FIPS report module selector=%q, want %q", rep.FIPSProfile.GoFIPSModuleSelector, compliance.DefaultFIPSGoModuleSelector)
+			}
+		}
+	}
+}
+
+func TestFIPSEvidencePackCarriesRegulatedDeploymentProfile(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	rep, err := New("t1", caKey).Generate(FIPS140, auditFixture(), cbom())
+	if err != nil {
+		t.Fatalf("Generate(%s): %v", FIPS140, err)
+	}
+	if rep.FIPSProfile == nil {
+		t.Fatal("FIPS report missing regulated deployment profile")
+	}
+	for _, family := range []string{"ML-DSA", "ML-KEM", "SLH-DSA", "Ed25519"} {
+		if !fipsProfileFenceContains(rep.FIPSProfile, family) {
+			t.Fatalf("FIPS profile missing non-FIPS fence for %s: %+v", family, rep.FIPSProfile.NonFIPSFences)
+		}
+	}
+	for _, provider := range []string{"AWS KMS / AWS CloudHSM", "Azure Key Vault Managed HSM", "Google Cloud KMS / Cloud HSM", "PKCS#11 HSM"} {
+		if !fipsProfileCertificateContains(rep.FIPSProfile, provider) {
+			t.Fatalf("FIPS profile missing HSM/KMS validation certificate requirement for %s: %+v", provider, rep.FIPSProfile.HSMKMSValidationCertificates)
+		}
+	}
+	if compliance.FIPSApprovedUnderRegulatedProfile(crypto.MLDSA65) || compliance.FIPSApprovedUnderRegulatedProfile(crypto.Ed25519) {
+		t.Fatal("regulated FIPS profile approved a fenced algorithm")
+	}
+}
+
+func TestFIPSSignedExportIncludesRegulatedDeploymentProfile(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	r := New("t1", caKey)
+	rep, err := r.Generate(FIPS140, auditFixture(), cbom())
+	if err != nil {
+		t.Fatalf("Generate(%s): %v", FIPS140, err)
+	}
+	signed, err := r.Export(rep)
+	if err != nil {
+		t.Fatalf("Export(%s): %v", FIPS140, err)
+	}
+	manifest, err := Verify(signed, caKey.Public().DER)
+	if err != nil {
+		t.Fatalf("Verify(%s): %v", FIPS140, err)
+	}
+	for _, want := range []string{
+		`"fips_regulated_deployment_profile"`,
+		`"go_fips_module_selector":"` + compliance.DefaultFIPSGoModuleSelector + `"`,
+		`"non_fips_fences"`,
+		`"hsm_kms_validation_certificates"`,
+	} {
+		if !bytes.Contains(manifest, []byte(want)) {
+			t.Fatalf("signed FIPS evidence pack manifest missing %s: %s", want, manifest)
 		}
 	}
 }
@@ -213,6 +282,26 @@ func TestSignedExportVerifiesAndDetectsTamper(t *testing.T) {
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func fipsProfileFenceContains(profile *compliance.FIPSRegulatedDeploymentProfile, want string) bool {
+	for _, fence := range profile.NonFIPSFences {
+		for _, alg := range fence.Algorithms {
+			if strings.Contains(alg, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func fipsProfileCertificateContains(profile *compliance.FIPSRegulatedDeploymentProfile, provider string) bool {
+	for _, cert := range profile.HSMKMSValidationCertificates {
+		if cert.Provider == provider && cert.CertificateRef != "" && cert.ValidationScope != "" {
 			return true
 		}
 	}

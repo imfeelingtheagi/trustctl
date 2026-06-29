@@ -1672,6 +1672,68 @@ ExternalCAList = TypedDict(
     total=False,
 )
 
+FIPSAlgorithmMode = TypedDict(
+    'FIPSAlgorithmMode',
+    {
+        'algorithm': str,
+        'approved': bool,
+        'mode': str,
+        'module_boundary': str,
+        'use': str,
+    },
+    total=False,
+)
+
+FIPSCustodyValidationCertificate = TypedDict(
+    'FIPSCustodyValidationCertificate',
+    {
+        'boundary': str,
+        'certificate_ref': str,
+        'provider': str,
+        'required_for_approved_mode': bool,
+        'status': str,
+        'validation_scope': str,
+    },
+    total=False,
+)
+
+FIPSNonFIPSFence = TypedDict(
+    'FIPSNonFIPSFence',
+    {
+        'action': str,
+        'algorithms': list[str],
+        'evidence_ref': str,
+        'reason': str,
+        'status_under_fips': str,
+        'surface': str,
+    },
+    total=False,
+)
+
+FIPSRegulatedDeploymentProfile = TypedDict(
+    'FIPSRegulatedDeploymentProfile',
+    {
+        'approved_algorithms': list[dict[str, Any]],
+        'build_target': str,
+        'capability_id': str,
+        'crypto_boundary': str,
+        'evidence_refs': list[str],
+        'go_fips_module': str,
+        'go_fips_module_selector': str,
+        'hsm_kms_validation_certificates': list[dict[str, Any]],
+        'module_active': bool,
+        'non_fips_fences': list[dict[str, Any]],
+        'operator_required_artifacts': list[str],
+        'product_certification_residual': str,
+        'product_certification_status': str,
+        'profile_id': str,
+        'runtime_assertions': list[str],
+        'self_test_passed': bool,
+        'standard': str,
+    },
+    total=False,
+)
+
 FIPSStatus = TypedDict(
     'FIPSStatus',
     {
@@ -1682,6 +1744,7 @@ FIPSStatus = TypedDict(
         'module': str,
         'module_active': bool,
         'product_certification_residual': str,
+        'regulated_deployment_profile': dict[str, Any],
         'required': bool,
         'runtime_activation': list[str],
         'self_test_passed': bool,

@@ -380,6 +380,48 @@ func componentSchemas() map[string]*Schema {
 		"licensed": {Type: "boolean"},
 		"mode":     {Type: "string", Enum: featureModes},
 	}, "name", "tier", "licensed", "mode")
+	fipsAlgorithmMode := object(map[string]*Schema{
+		"algorithm":       str(),
+		"mode":            str(),
+		"use":             str(),
+		"module_boundary": str(),
+		"approved":        {Type: "boolean"},
+	}, "algorithm", "mode", "use", "module_boundary", "approved")
+	fipsNonFIPSFence := object(map[string]*Schema{
+		"surface":           str(),
+		"algorithms":        {Type: "array", Items: str()},
+		"status_under_fips": str(),
+		"reason":            str(),
+		"action":            str(),
+		"evidence_ref":      str(),
+	}, "surface", "algorithms", "status_under_fips", "reason", "action", "evidence_ref")
+	fipsCustodyValidationCertificate := object(map[string]*Schema{
+		"provider":                   str(),
+		"boundary":                   str(),
+		"certificate_ref":            str(),
+		"validation_scope":           str(),
+		"status":                     str(),
+		"required_for_approved_mode": {Type: "boolean"},
+	}, "provider", "boundary", "certificate_ref", "validation_scope", "status", "required_for_approved_mode")
+	fipsRegulatedDeploymentProfile := object(map[string]*Schema{
+		"profile_id":                      str(),
+		"capability_id":                   str(),
+		"standard":                        str(),
+		"go_fips_module":                  str(),
+		"go_fips_module_selector":         str(),
+		"build_target":                    str(),
+		"runtime_assertions":              {Type: "array", Items: str()},
+		"module_active":                   {Type: "boolean"},
+		"self_test_passed":                {Type: "boolean"},
+		"crypto_boundary":                 str(),
+		"product_certification_status":    str(),
+		"product_certification_residual":  str(),
+		"approved_algorithms":             {Type: "array", Items: ref("FIPSAlgorithmMode")},
+		"non_fips_fences":                 {Type: "array", Items: ref("FIPSNonFIPSFence")},
+		"hsm_kms_validation_certificates": {Type: "array", Items: ref("FIPSCustodyValidationCertificate")},
+		"operator_required_artifacts":     {Type: "array", Items: str()},
+		"evidence_refs":                   {Type: "array", Items: str()},
+	}, "profile_id", "capability_id", "standard", "go_fips_module_selector", "approved_algorithms", "non_fips_fences", "hsm_kms_validation_certificates")
 	fipsStatus := object(map[string]*Schema{
 		"module_active":                  {Type: "boolean"},
 		"required":                       {Type: "boolean"},
@@ -393,6 +435,7 @@ func componentSchemas() map[string]*Schema {
 		"ci_gate":                        str(),
 		"crypto_boundary":                str(),
 		"product_certification_residual": str(),
+		"regulated_deployment_profile":   ref("FIPSRegulatedDeploymentProfile"),
 	}, "module_active", "required", "self_test_passed")
 	editionsInfo := object(map[string]*Schema{
 		"tier":         {Type: "string", Enum: editionTiers},
@@ -2587,6 +2630,10 @@ func componentSchemas() map[string]*Schema {
 		"MCPToolCall":                           mcpToolCall,
 		"MCPToolResult":                         mcpToolResult,
 		"EditionFeature":                        editionFeature,
+		"FIPSAlgorithmMode":                     fipsAlgorithmMode,
+		"FIPSNonFIPSFence":                      fipsNonFIPSFence,
+		"FIPSCustodyValidationCertificate":      fipsCustodyValidationCertificate,
+		"FIPSRegulatedDeploymentProfile":        fipsRegulatedDeploymentProfile,
 		"FIPSStatus":                            fipsStatus,
 		"EditionsInfo":                          editionsInfo,
 	}

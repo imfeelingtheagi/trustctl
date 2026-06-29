@@ -14,11 +14,12 @@ import (
 // boundary-agnostic functions rather than importing crypto/fips140 itself.
 //
 // What "FIPS-capable" means here, precisely. Go 1.24+ ships a FIPS 140-3 Go
-// Cryptographic Module: building with GOFIPS140=latest (or running any build with
-// GODEBUG=fips140=on) routes the standard library's crypto/* through that
-// validated module and makes fips140.Enabled() report true. trstctl's whole
-// crypto surface enters through this one package (AN-3), so when the module is
-// active every signature, hash, and AEAD trstctl performs runs inside it.
+// Cryptographic Module: building with the pinned regulated selector
+// GOFIPS140=v1.0.0 (or running any build with GODEBUG=fips140=on) routes the
+// standard library's crypto/* through that validated module and makes
+// fips140.Enabled() report true. trstctl's whole crypto surface enters through
+// this one package (AN-3), so when the module is active every signature, hash,
+// and AEAD trstctl performs runs inside it.
 //
 // This is FIPS-*capable*: it uses the Go Cryptographic Module, which has a CMVP
 // validation. The trstctl *product's* own NIST CMVP certificate is a separate,
@@ -34,7 +35,7 @@ import (
 // with GOFIPS140 and GODEBUG=fips140=on was not set. It is the fail-closed signal:
 // a deployment that must be FIPS-validated refuses to start in a non-FIPS build
 // rather than silently issuing credentials with an unvalidated module.
-var ErrFIPSRequiredButInactive = errors.New("crypto: FIPS mode required but the FIPS cryptographic module is not active (build with GOFIPS140=latest or run with GODEBUG=fips140=on)")
+var ErrFIPSRequiredButInactive = errors.New("crypto: FIPS mode required but the FIPS cryptographic module is not active (build with GOFIPS140=v1.0.0 or run with GODEBUG=fips140=on)")
 
 // ErrSelfTestFailed is returned when the boundary's known-answer self-test does
 // not reproduce — a sign/verify round-trip through the live backend fails. It

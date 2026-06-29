@@ -4391,6 +4391,181 @@
         ],
         "type": "object"
       },
+      "FIPSAlgorithmMode": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "module_boundary": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "algorithm",
+          "mode",
+          "use",
+          "module_boundary",
+          "approved"
+        ],
+        "type": "object"
+      },
+      "FIPSCustodyValidationCertificate": {
+        "properties": {
+          "boundary": {
+            "type": "string"
+          },
+          "certificate_ref": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "required_for_approved_mode": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "validation_scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "boundary",
+          "certificate_ref",
+          "validation_scope",
+          "status",
+          "required_for_approved_mode"
+        ],
+        "type": "object"
+      },
+      "FIPSNonFIPSFence": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "algorithms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_ref": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status_under_fips": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "algorithms",
+          "status_under_fips",
+          "reason",
+          "action",
+          "evidence_ref"
+        ],
+        "type": "object"
+      },
+      "FIPSRegulatedDeploymentProfile": {
+        "properties": {
+          "approved_algorithms": {
+            "items": {
+              "$ref": "#/components/schemas/FIPSAlgorithmMode"
+            },
+            "type": "array"
+          },
+          "build_target": {
+            "type": "string"
+          },
+          "capability_id": {
+            "type": "string"
+          },
+          "crypto_boundary": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "go_fips_module": {
+            "type": "string"
+          },
+          "go_fips_module_selector": {
+            "type": "string"
+          },
+          "hsm_kms_validation_certificates": {
+            "items": {
+              "$ref": "#/components/schemas/FIPSCustodyValidationCertificate"
+            },
+            "type": "array"
+          },
+          "module_active": {
+            "type": "boolean"
+          },
+          "non_fips_fences": {
+            "items": {
+              "$ref": "#/components/schemas/FIPSNonFIPSFence"
+            },
+            "type": "array"
+          },
+          "operator_required_artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "product_certification_residual": {
+            "type": "string"
+          },
+          "product_certification_status": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "runtime_assertions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "self_test_passed": {
+            "type": "boolean"
+          },
+          "standard": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_id",
+          "capability_id",
+          "standard",
+          "go_fips_module_selector",
+          "approved_algorithms",
+          "non_fips_fences",
+          "hsm_kms_validation_certificates"
+        ],
+        "type": "object"
+      },
       "FIPSStatus": {
         "properties": {
           "build_target": {
@@ -4413,6 +4588,9 @@
           },
           "product_certification_residual": {
             "type": "string"
+          },
+          "regulated_deployment_profile": {
+            "$ref": "#/components/schemas/FIPSRegulatedDeploymentProfile"
           },
           "required": {
             "type": "boolean"

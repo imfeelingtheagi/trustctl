@@ -1231,7 +1231,7 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 
 	makefile := read(t, "../Makefile")
 	for _, want := range []string{
-		"GOFIPS140 ?= latest",
+		"GOFIPS140 ?= v1.0.0",
 		"fips-build:",
 		"crypto.fips.module_active: true",
 		"product NIST CMVP certificate is a separate, external process",
@@ -1245,7 +1245,7 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 		"fips-build:",
 		"name: fips-capable build (GOFIPS140)",
 		"make fips-build",
-		"GOFIPS140: latest",
+		"GOFIPS140: v1.0.0",
 		"TestPowerOnSelfTest|TestSelfTestKAT|TestFIPSStatus",
 	} {
 		if !strings.Contains(ci, want) {

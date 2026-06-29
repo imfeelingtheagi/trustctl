@@ -2217,7 +2217,7 @@ func repoHasFIPSBuildTarget(t *testing.T) bool {
 	t.Helper()
 	makefile := read(t, "../Makefile")
 	fips := read(t, "../internal/crypto/fips.go")
-	for _, want := range []string{"GOFIPS140 ?= latest", "fips-build:", "crypto.fips.module_active: true"} {
+	for _, want := range []string{"GOFIPS140 ?= v1.0.0", "fips-build:", "crypto.fips.module_active: true"} {
 		if !strings.Contains(makefile, want) {
 			return false
 		}

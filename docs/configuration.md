@@ -655,7 +655,7 @@ actionable error naming the field to set:
   `ca.crl_distribution_points` or `ca.ocsp_servers` — so issued leaves carry a
   status pointer (composing with the served-leaf profile);
 - and, when `ca.require_fips=true` is declared, the **FIPS 140-3 module is active**
-  (the binary was built with `GOFIPS140=latest` / `make fips-build`, or run with
+  (the binary was built with `GOFIPS140=v1.0.0` / `make fips-build`, or run with
   `GODEBUG=fips140=on`).
 
 A **complete** regulated config boots normally. The default posture
@@ -665,7 +665,7 @@ single-node deployments are unaffected.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_CA_GOVERNANCE_MODE` | `standard` | `standard` (or unset): the controls are independent. `regulated`: fail startup unless the policy gate, four-eyes dual control, a bound default profile, revocation publication, and any declared FIPS requirement are **all** present together. |
-| `TRSTCTL_CA_REQUIRE_FIPS` | `false` | In `regulated` mode, additionally require the FIPS 140-3 module to be active (build with `GOFIPS140=latest` or run with `GODEBUG=fips140=on`); otherwise startup fails closed. Ignored outside regulated mode. |
+| `TRSTCTL_CA_REQUIRE_FIPS` | `false` | In `regulated` mode, additionally require the FIPS 140-3 module to be active (build with `GOFIPS140=v1.0.0` or run with `GODEBUG=fips140=on`); otherwise startup fails closed. Ignored outside regulated mode. |
 
 ## Served AI surface and model adapter
 

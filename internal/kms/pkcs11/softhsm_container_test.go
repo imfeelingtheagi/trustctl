@@ -18,6 +18,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repo root: %v", err)
 	}
+	goModCache := hostGoModCache(t)
 	image := "trstctl-softhsm-go:kms-03"
 	if out, err := exec.Command("docker", "image", "inspect", image).CombinedOutput(); err != nil {
 		build := exec.Command("docker", "build", "-t", image, filepath.Join("testdata", "softhsm"))
@@ -29,7 +30,7 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	script := strings.Join([]string{
 		"set -euo pipefail",
 		"export PATH=/usr/local/go/bin:$PATH",
-		"mkdir -p /tmp/softhsm/tokens /tmp/gocache /tmp/gomodcache",
+		"mkdir -p /tmp/softhsm/tokens /tmp/gocache",
 		"cat >/tmp/softhsm/softhsm2.conf <<'EOF'",
 		"directories.tokendir = /tmp/softhsm/tokens",
 		"objectstore.backend = file",
@@ -42,13 +43,14 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 		"test -n \"$TRSTCTL_SOFTHSM_MODULE\"",
 		"export TRSTCTL_SOFTHSM_TOKEN_LABEL=trstctl-kms03",
 		"export TRSTCTL_SOFTHSM_USER_PIN=987654",
-		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run TestSoftHSMRealBindingGenerateSign -count=1 -v",
+		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run TestSoftHSMRealBindingGenerateSign -count=1 -v",
 	}, "\n")
 
 	args := []string{
 		"run", "--rm",
 		"-e", "TRSTCTL_SOFTHSM_INNER=1",
 		"-v", repoRoot + ":/work:ro",
+		"-v", goModCache + ":/gomodcache:ro",
 		"-w", "/work",
 		image,
 		"bash", "-lc", script,
@@ -60,6 +62,26 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	if !strings.Contains(string(out), "SOFTHSM_PKCS11_OK") {
 		t.Fatalf("SoftHSM integration did not report success:\n%s", out)
 	}
+}
+
+func hostGoModCache(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	if err != nil {
+		t.Skipf("go env GOMODCACHE is required for the offline SoftHSM module cache mount: %v", err)
+	}
+	cache := strings.TrimSpace(string(out))
+	if cache == "" {
+		t.Skip("go env GOMODCACHE returned an empty path")
+	}
+	info, err := os.Stat(cache)
+	if err != nil {
+		t.Skipf("GOMODCACHE %s is not available for the SoftHSM container mount: %v", cache, err)
+	}
+	if !info.IsDir() {
+		t.Skipf("GOMODCACHE %s is not a directory", cache)
+	}
+	return cache
 }
 
 func requireDockerForSoftHSM(t *testing.T) {
