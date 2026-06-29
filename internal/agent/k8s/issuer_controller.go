@@ -12,22 +12,26 @@ const (
 	// cert-manager external issuer CRDs.
 	DefaultIssuerGroup = "trstctl.com"
 
-	trstctlAPIVersion = "trstctl.com/v1alpha1"
-	issuersPlural     = "issuers"
-	clusterPlural     = "clusterissuers"
+	trstctlAPIVersion  = "trstctl.com/v1alpha1"
+	issuersPlural      = "issuers"
+	clusterPlural      = "clusterissuers"
+	certificatesPlural = "certificates"
 )
 
 // IssuerReconcileResult summarizes one external-issuer controller reconcile.
 type IssuerReconcileResult struct {
-	ClusterIssuersReady int
-	IssuersReady        int
-	SignedRequests      int
+	ClusterIssuersReady      int
+	IssuersReady             int
+	SignedRequests           int
+	NativeCertificatesIssued int
 }
 
-// IssuerController is a cert-manager external issuer controller for trstctl
-// Issuer and ClusterIssuer resources. It intentionally follows the repository's
-// dependency-free Kubernetes pattern: direct JSON/HTTPS API calls with the
-// service-account token instead of client-go/controller-runtime.
+// IssuerController is the trstctl Kubernetes CRD controller. It marks trstctl
+// Issuer and ClusterIssuer resources Ready, signs cert-manager CertificateRequests,
+// and fulfils trstctl-native Certificate resources into TLS Secrets. It
+// intentionally follows the repository's dependency-free Kubernetes pattern:
+// direct JSON/HTTPS API calls with the service-account token instead of
+// client-go/controller-runtime.
 type IssuerController struct {
 	client *Client
 	signer Signer
@@ -51,9 +55,14 @@ func clusterIssuerCollectionPath() string {
 	return fmt.Sprintf("/apis/%s/%s", trstctlAPIVersion, clusterPlural)
 }
 
-// Reconcile makes trstctl Issuer/ClusterIssuer resources Ready and signs every
+func nativeCertificateCollectionPath(namespace string) string {
+	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", trstctlAPIVersion, namespace, certificatesPlural)
+}
+
+// Reconcile makes trstctl Issuer/ClusterIssuer resources Ready, signs every
 // pending cert-manager CertificateRequest in namespace whose issuerRef points at
-// one of those resources.
+// one of those resources, and issues every pending trstctl-native Certificate in
+// namespace into its requested TLS Secret.
 func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (IssuerReconcileResult, error) {
 	var result IssuerReconcileResult
 
@@ -74,6 +83,12 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 		return result, err
 	}
 	result.SignedRequests = signed
+
+	nativeIssued, err := c.reconcileNativeCertificates(ctx, namespace, issuers, clusterIssuers)
+	if err != nil {
+		return result, err
+	}
+	result.NativeCertificatesIssued = nativeIssued
 	return result, nil
 }
 

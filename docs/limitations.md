@@ -1064,13 +1064,17 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   control-plane install (ingress/service wiring, generated secrets,
   default-deny `NetworkPolicy`, cross-pod signer mTLS) the **Helm chart**
   (`deploy/helm/trstctl`) remains the richer, recommended path.
-- **cert-manager external issuer.** The Kubernetes agent ships a real trstctl
-  `Issuer`/`ClusterIssuer` controller for cert-manager. It marks the trstctl
-  issuer resources Ready, signs matching `CertificateRequest`s through a served
-  trstctl issuance endpoint using a mounted API token, and is proven in CI on
-  `kind` with real cert-manager from `Certificate` to TLS `Secret`. It is still a
-  small poll-based controller rather than an informer/work-queue controller; that
-  is an operational efficiency tradeoff, not a functional gap.
+- **Kubernetes certificate CRDs.** The Kubernetes agent ships a real trstctl
+  `Issuer`/`ClusterIssuer`/`Certificate` controller. It marks trstctl issuer
+  resources Ready, signs matching cert-manager `CertificateRequest`s through a
+  served trstctl issuance endpoint using a mounted API token, and also fulfils a
+  trstctl-native `Certificate` directly into a `kubernetes.io/tls` Secret. The
+  cert-manager path is proven in CI on `kind` with real cert-manager from
+  `Certificate` to TLS `Secret`; the native path is proven by the served
+  controller acceptance test from trstctl `Certificate` to local CSR, signer,
+  Secret, and Ready status. It is still a small poll-based controller rather than
+  an informer/work-queue controller; that is an operational efficiency tradeoff,
+  not a functional gap.
 - **Multi-replica HA.** The Helm chart runs the control plane **multi-replica by
   default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
   pod anti-affinity), and running >1 replica is **safe**: **leader election** (a

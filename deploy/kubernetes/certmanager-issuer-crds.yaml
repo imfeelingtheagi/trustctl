@@ -67,6 +67,116 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  name: certificates.trstctl.com
+  labels:
+    app.kubernetes.io/name: trstctl-kubernetes-issuer
+    app.kubernetes.io/part-of: trstctl
+spec:
+  group: trstctl.com
+  scope: Namespaced
+  names:
+    kind: Certificate
+    plural: certificates
+    singular: certificate
+    shortNames: ["trstcert"]
+    categories: ["trstctl"]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Secret
+          type: string
+          jsonPath: .spec.secretName
+        - name: Issuer
+          type: string
+          jsonPath: .spec.issuerRef.name
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: ["secretName", "issuerRef"]
+              properties:
+                secretName:
+                  type: string
+                  description: Kubernetes TLS Secret that receives tls.crt and tls.key.
+                commonName:
+                  type: string
+                  description: Optional X.509 subject common name.
+                dnsNames:
+                  type: array
+                  items:
+                    type: string
+                  description: DNS subject alternative names requested in the CSR.
+                ipAddresses:
+                  type: array
+                  items:
+                    type: string
+                  description: IP subject alternative names requested in the CSR.
+                uris:
+                  type: array
+                  items:
+                    type: string
+                  description: URI subject alternative names requested in the CSR.
+                emailAddresses:
+                  type: array
+                  items:
+                    type: string
+                  description: Email subject alternative names requested in the CSR.
+                keyAlgorithm:
+                  type: string
+                  enum: ["RSA-2048", "RSA-3072", "RSA-4096", "ECDSA-P256", "ECDSA-P384", "ECDSA-P521"]
+                  description: Local workload key algorithm; defaults to ECDSA-P256.
+                privateKey:
+                  type: object
+                  properties:
+                    algorithm:
+                      type: string
+                      enum: ["RSA-2048", "RSA-3072", "RSA-4096", "ECDSA-P256", "ECDSA-P384", "ECDSA-P521"]
+                      description: cert-manager-style alias for keyAlgorithm.
+                issuerRef:
+                  type: object
+                  required: ["name"]
+                  properties:
+                    name:
+                      type: string
+                    kind:
+                      type: string
+                      enum: ["Issuer", "ClusterIssuer"]
+                      default: "Issuer"
+                    group:
+                      type: string
+                      default: "trstctl.com"
+            status:
+              type: object
+              properties:
+                secretName:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: ["type", "status"]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: clusterissuers.trstctl.com
   labels:
     app.kubernetes.io/name: trstctl-cert-manager-issuer

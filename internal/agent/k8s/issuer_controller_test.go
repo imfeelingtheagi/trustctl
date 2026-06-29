@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 type fakeIssuerAPI struct {
@@ -21,10 +22,13 @@ type fakeIssuerAPI struct {
 	clusterIssuers      []map[string]any
 	issuers             []map[string]any
 	certificateRequests []map[string]any
+	certificates        []map[string]any
 
 	clusterIssuerStatus map[string]map[string]any
 	issuerStatus        map[string]map[string]any
 	requestStatus       map[string]map[string]any
+	certificateStatus   map[string]map[string]any
+	secrets             map[string]map[string]any
 }
 
 func newFakeIssuerAPI() *fakeIssuerAPI {
@@ -32,6 +36,8 @@ func newFakeIssuerAPI() *fakeIssuerAPI {
 		clusterIssuerStatus: map[string]map[string]any{},
 		issuerStatus:        map[string]map[string]any{},
 		requestStatus:       map[string]map[string]any{},
+		certificateStatus:   map[string]map[string]any{},
+		secrets:             map[string]map[string]any{},
 	}
 }
 
@@ -79,6 +85,47 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			_ = json.Unmarshal(body, &obj)
 			f.requestStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"apiVersion": "trstctl.com/v1alpha1",
+				"kind":       "CertificateList",
+				"items":      f.certificates,
+			})
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates/") && strings.HasSuffix(path, "/status"):
+			name := nameBeforeStatus(path)
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.certificateStatus[name] = obj
+			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/namespaces/apps/secrets/"):
+			parts := strings.Split(strings.Trim(path, "/"), "/")
+			name := parts[len(parts)-1]
+			obj := f.secrets[name]
+			if obj == nil {
+				http.Error(w, `{"kind":"Status","code":404}`, http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodPost && path == "/api/v1/namespaces/apps/secrets":
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			meta, _ := obj["metadata"].(map[string]any)
+			name, _ := meta["name"].(string)
+			if f.secrets[name] != nil {
+				http.Error(w, `{"kind":"Status","code":409}`, http.StatusConflict)
+				return
+			}
+			meta["resourceVersion"] = "1"
+			f.secrets[name] = obj
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/api/v1/namespaces/apps/secrets/"):
+			parts := strings.Split(strings.Trim(path, "/"), "/")
+			name := parts[len(parts)-1]
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.secrets[name] = obj
+			_ = json.NewEncoder(w).Encode(obj)
 		default:
 			http.Error(w, "unexpected "+r.Method+" "+path, http.StatusNotImplemented)
 		}
@@ -108,6 +155,25 @@ func trstctlIssuer(name, namespace string) map[string]any {
 		"kind":       "Issuer",
 		"metadata":   map[string]any{"name": name, "namespace": namespace, "resourceVersion": "11"},
 		"spec":       map[string]any{"signerURL": "https://trstctl.trstctl.svc/api/v1/issue"},
+	}
+}
+
+func trstctlCertificate(name, namespace, secretName string) map[string]any {
+	return map[string]any{
+		"apiVersion": "trstctl.com/v1alpha1",
+		"kind":       "Certificate",
+		"metadata":   map[string]any{"name": name, "namespace": namespace, "resourceVersion": "12"},
+		"spec": map[string]any{
+			"secretName":   secretName,
+			"commonName":   "web.apps.svc.cluster.local",
+			"dnsNames":     []any{"web.apps.svc.cluster.local", "web.apps"},
+			"keyAlgorithm": string(crypto.ECDSAP256),
+			"issuerRef": map[string]any{
+				"name":  "trstctl",
+				"kind":  "ClusterIssuer",
+				"group": "trstctl.com",
+			},
+		},
 	}
 }
 
@@ -209,5 +275,52 @@ func TestIssuerControllerSupportsNamespacedIssuer(t *testing.T) {
 	}
 	if api.requestStatus["team-leaf"] == nil {
 		t.Fatal("namespaced Issuer request was not signed")
+	}
+}
+
+func TestIssuerControllerServesNativeCertificateCRDCAPK8S02(t *testing.T) {
+	baseSigner, _ := caSigner(t)
+	var gotCSR []byte
+	signer := k8s.SignerFunc(func(ctx context.Context, csrDER []byte) ([]byte, error) {
+		gotCSR = append([]byte(nil), csrDER...)
+		return baseSigner.Sign(ctx, csrDER)
+	})
+	api := newFakeIssuerAPI()
+	api.clusterIssuers = []map[string]any{trstctlClusterIssuer("trstctl")}
+	api.certificates = []map[string]any{trstctlCertificate("web", "apps", "web-tls")}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.NativeCertificatesIssued != 1 {
+		t.Fatalf("NativeCertificatesIssued = %d, want 1", result.NativeCertificatesIssued)
+	}
+	if len(gotCSR) == 0 {
+		t.Fatal("native Certificate reconcile did not send a CSR to the signer")
+	}
+	info, err := crypto.InspectCSR(gotCSR)
+	if err != nil {
+		t.Fatalf("native Certificate CSR invalid: %v", err)
+	}
+	if info.CommonName != "web.apps.svc.cluster.local" || len(info.DNSNames) != 2 {
+		t.Fatalf("CSR subject/SANs = CN %q DNS %v, want native Certificate spec values", info.CommonName, info.DNSNames)
+	}
+
+	ready, _ := readyCondition(t, api.certificateStatus["web"])
+	if ready != "True" {
+		t.Fatalf("native Certificate Ready = %q, want True", ready)
+	}
+	secretObj := api.secrets["web-tls"]
+	if secretObj == nil {
+		t.Fatal("native Certificate reconcile did not create Secret/web-tls")
+	}
+	certPEM := decodeSecretData(t, secretObj, "tls.crt")
+	keyPEM := decodeSecretData(t, secretObj, "tls.key")
+	if err := crypto.VerifyCertKeyMatchPEM(certPEM, keyPEM); err != nil {
+		t.Fatalf("Secret/web-tls certificate and key do not match: %v", err)
 	}
 }

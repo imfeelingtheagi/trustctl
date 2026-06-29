@@ -77,7 +77,7 @@ func TestManifestsDeclareTheDaemonSetAndItsRBAC(t *testing.T) {
 	}
 }
 
-func TestManifestsDeclareCertManagerExternalIssuerCRDs(t *testing.T) {
+func TestManifestsDeclareTrstctlIssuerAndCertificateCRDs(t *testing.T) {
 	crds := map[string]map[string]any{}
 	for _, d := range docs(t) {
 		if d["kind"] != "CustomResourceDefinition" {
@@ -93,6 +93,7 @@ func TestManifestsDeclareCertManagerExternalIssuerCRDs(t *testing.T) {
 	}{
 		{name: "issuers.trstctl.com", scope: "Namespaced", kind: "Issuer"},
 		{name: "clusterissuers.trstctl.com", scope: "Cluster", kind: "ClusterIssuer"},
+		{name: "certificates.trstctl.com", scope: "Namespaced", kind: "Certificate"},
 	} {
 		crd := crds[tc.name]
 		if crd == nil {
@@ -114,6 +115,18 @@ func TestManifestsDeclareCertManagerExternalIssuerCRDs(t *testing.T) {
 		subresources, _ := versions[0]["subresources"].(map[string]any)
 		if _, ok := subresources["status"]; !ok {
 			t.Errorf("%s does not enable the status subresource", tc.name)
+		}
+		if tc.kind == "Certificate" {
+			schema := versions[0]["schema"].(map[string]any)
+			openapi := schema["openAPIV3Schema"].(map[string]any)
+			properties := openapi["properties"].(map[string]any)
+			spec := properties["spec"].(map[string]any)
+			required := asStringSlice(spec["required"])
+			for _, want := range []string{"secretName", "issuerRef"} {
+				if !contains(required, want) {
+					t.Errorf("%s spec.required missing %q: %v", tc.name, want, required)
+				}
+			}
 		}
 	}
 }

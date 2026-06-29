@@ -3,8 +3,9 @@
 The trstctl agent runs as a **DaemonSet** (one pod per node). It installs
 certificates into Kubernetes **Secrets** and acts as a **cert-manager external
 issuer**. It ships trstctl `Issuer` and `ClusterIssuer` CRDs, marks them Ready,
-and signs cert-manager `CertificateRequest`s through a served trstctl issuance
-endpoint.
+signs cert-manager `CertificateRequest`s through a served trstctl issuance
+endpoint, and fulfils trstctl-native `Certificate` CRDs directly into TLS
+Secrets.
 
 The agent talks to the Kubernetes API server directly over its JSON/HTTPS wire
 protocol, authenticating with the pod's service-account token and trusting the
@@ -89,7 +90,8 @@ certificates.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
 validated in tests. The `ClusterRole` grants least privilege: write Secrets, and
-read `CertificateRequest`s plus update their status — nothing else.
+read `CertificateRequest`s plus trstctl `Issuer`/`ClusterIssuer`/`Certificate`
+resources and update their status — nothing else.
 
 The DaemonSet runs `trstctl-agent --k8s`, which:
 
@@ -99,7 +101,8 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
 3. if `--cert-manager-controller`, `--bridge-signer-url`, and
    `--bridge-signer-token-file` are set, reconciles trstctl `Issuer` and
    `ClusterIssuer` CRDs, marks them Ready, signs matching cert-manager
-   `CertificateRequest`s, and writes the result back to cert-manager status.
+   `CertificateRequest`s, fulfils trstctl-native `Certificate` resources into
+   their requested TLS Secrets, and writes status back to the owning resource.
 
 For node-level certificate inventory, add read-only hostPath mounts for the public
 certificate directories you want to enumerate and pass
@@ -156,13 +159,47 @@ the configured signer URL, and sets the request `Ready=True` with the issued
 certificate. cert-manager then writes `Secret/web-tls`. Only a CSR crosses the
 wire to the control plane — never a private key.
 
+## trstctl native Certificate API
+
+If you do not want cert-manager to own the workload object, create a trstctl
+`Certificate` directly. The agent verifies the referenced trstctl `Issuer` or
+`ClusterIssuer` exists, generates the workload key locally, forwards only the CSR
+to the served trstctl issuance endpoint, writes `Secret/<secretName>` as a
+`kubernetes.io/tls` Secret, and marks the `Certificate` Ready.
+
+```yaml
+apiVersion: trstctl.com/v1alpha1
+kind: Certificate
+metadata:
+  name: web
+  namespace: apps
+spec:
+  secretName: web-tls
+  commonName: web.apps.svc.cluster.local
+  dnsNames:
+    - web.apps.svc.cluster.local
+    - web.apps
+  keyAlgorithm: ECDSA-P256
+  issuerRef:
+    name: trstctl
+    kind: ClusterIssuer
+    group: trstctl.com
+```
+
+The private key is generated inside the agent process, carried as `[]byte`, wiped
+after the Kubernetes Secret write, and never sent to the control plane. The
+served controller test proves the path: `Certificate` -> local CSR -> trstctl
+signer -> `Secret` -> `Certificate.status.conditions[Ready=True]`.
+
 ## End-to-end test
 
 `test/e2e/kubernetes` exercises the secret destination, the legacy raw
 `CertificateRequest` bridge, and the full cert-manager
 `Certificate` -> trstctl `ClusterIssuer` -> `Secret` flow against a real API
-server. CI runs it on a `kind` cluster with cert-manager installed (the
-`kubernetes / kind e2e` job). The agent uses its restricted service-account token
+server. The unit acceptance suite also exercises the trstctl-native
+`Certificate` -> local CSR -> `Secret` flow through the same controller. CI runs
+the kind path with cert-manager installed (the `kubernetes / kind e2e` job). The
+agent uses its restricted service-account token
 (`K8S_TOKEN`); fixtures and verification use an admin token (`K8S_ADMIN_TOKEN`),
 because the agent service account is least-privilege and cannot create
 cert-manager resources. Locally:

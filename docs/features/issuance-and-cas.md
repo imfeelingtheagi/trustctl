@@ -64,13 +64,15 @@ returns the cached certificate response and the upstream CA is not asked to sign
 If the process crashes after recording the outbox intent, the outbox worker can resume
 delivery without losing the fact that an external issuance happened.
 
-### Kubernetes cert-manager external issuer
+### Kubernetes CRD-native issuance
 
-For Kubernetes-native issuance, trstctl ships cert-manager external issuer CRDs:
-`Issuer` and `ClusterIssuer` in the `trstctl.com` API group. The Kubernetes agent
-reconciles those resources, marks them Ready, and signs cert-manager
-`CertificateRequest`s only when the request points at an existing trstctl issuer
-resource. A cert-manager `Certificate` can therefore reference:
+For Kubernetes-native issuance, trstctl ships `Issuer`, `ClusterIssuer`, and
+`Certificate` CRDs in the `trstctl.com` API group. The Kubernetes agent reconciles
+those resources, marks issuers Ready, signs cert-manager `CertificateRequest`s
+only when the request points at an existing trstctl issuer resource, and can also
+fulfil a trstctl-native `Certificate` directly into a Kubernetes TLS Secret.
+
+A cert-manager `Certificate` can reference:
 
 ```yaml
 issuerRef:
@@ -79,12 +81,33 @@ issuerRef:
   group: trstctl.com
 ```
 
-The agent forwards only the CSR to the configured served trstctl issue endpoint,
-adds a stable `Idempotency-Key`, and authenticates with an API token mounted from a
-Kubernetes Secret file. cert-manager then writes the normal `kubernetes.io/tls`
-Secret for the workload. CI proves this against a real `kind` cluster with real
-cert-manager installed: `Certificate` -> `CertificateRequest` -> trstctl
-`ClusterIssuer` -> TLS `Secret`.
+Or a workload can use trstctl's native API directly:
+
+```yaml
+apiVersion: trstctl.com/v1alpha1
+kind: Certificate
+metadata:
+  name: web
+  namespace: apps
+spec:
+  secretName: web-tls
+  dnsNames:
+    - web.apps.svc.cluster.local
+  issuerRef:
+    name: trstctl
+    kind: ClusterIssuer
+    group: trstctl.com
+```
+
+The agent forwards only a CSR to the configured served trstctl issue endpoint,
+adds a stable `Idempotency-Key`, and authenticates with an API token mounted from
+a Kubernetes Secret file. For cert-manager, cert-manager writes the normal
+`kubernetes.io/tls` Secret for the workload. For a trstctl-native `Certificate`,
+the agent generates the workload key locally, writes `Secret/<secretName>`, wipes
+transient key buffers after the Secret write, and marks the `Certificate` Ready.
+CI proves the cert-manager path against a real `kind` cluster with real
+cert-manager installed, and the served controller acceptance proves the native
+path: `Certificate` -> local CSR -> trstctl signer -> TLS `Secret`.
 
 ### Running your own CA hierarchy (F48)
 
