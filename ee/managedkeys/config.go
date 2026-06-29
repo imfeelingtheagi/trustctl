@@ -13,6 +13,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/kms/awskms"
+	"trstctl.com/trstctl/internal/kms/azurekv"
+	"trstctl.com/trstctl/internal/kms/gcpkms"
 	"trstctl.com/trstctl/internal/kms/pkcs11"
 	"trstctl.com/trstctl/internal/server"
 )
@@ -46,6 +48,10 @@ func CustodyFromConfig(_ context.Context, cfg config.ManagedKeys, guard *egress.
 	switch provider {
 	case config.ManagedKeyProviderAWS:
 		return awsManagedKeyCustodyFromConfig(cfg.AWS, guard)
+	case config.ManagedKeyProviderAzureKeyVault:
+		return azureManagedKeyCustodyFromConfig(cfg.Azure, guard)
+	case config.ManagedKeyProviderGCPKMS:
+		return gcpManagedKeyCustodyFromConfig(cfg.GCP, guard)
 	case config.ManagedKeyProviderPKCS11:
 		return pkcs11ManagedKeyCustodyFromConfig(cfg.PKCS11)
 	default:
@@ -77,6 +83,40 @@ func awsManagedKeyCustodyFromConfig(cfg config.ManagedKeysAWSKMS, guard *egress.
 		SecretAccessKey: secretAccessKey,
 		SessionToken:    sessionToken,
 	}, opts...), nil
+}
+
+func azureManagedKeyCustodyFromConfig(cfg config.ManagedKeysAzureKV, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
+	token, wipeToken, err := managedKeySecretBytes("managed_keys.azure.bearer_token", cfg.BearerToken, cfg.BearerTokenFile)
+	if err != nil {
+		return nil, err
+	}
+	defer wipeToken()
+
+	opts := []azurekv.Option{}
+	if cfg.Endpoint != "" {
+		opts = append(opts, azurekv.WithEndpoint(cfg.Endpoint))
+	}
+	if guard != nil && guard.Enabled() {
+		opts = append(opts, azurekv.WithHTTPClient(guard.Client(30*time.Second)))
+	}
+	return azurekv.New(cfg.VaultURL, azurekv.Credentials{BearerToken: token}, opts...), nil
+}
+
+func gcpManagedKeyCustodyFromConfig(cfg config.ManagedKeysGCPKMS, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
+	token, wipeToken, err := managedKeySecretBytes("managed_keys.gcp.bearer_token", cfg.BearerToken, cfg.BearerTokenFile)
+	if err != nil {
+		return nil, err
+	}
+	defer wipeToken()
+
+	opts := []gcpkms.Option{}
+	if cfg.Endpoint != "" {
+		opts = append(opts, gcpkms.WithEndpoint(cfg.Endpoint))
+	}
+	if guard != nil && guard.Enabled() {
+		opts = append(opts, gcpkms.WithHTTPClient(guard.Client(30*time.Second)))
+	}
+	return gcpkms.New(cfg.Parent, gcpkms.Credentials{BearerToken: token}, opts...), nil
 }
 
 func pkcs11ManagedKeyCustodyFromConfig(cfg config.ManagedKeysPKCS11HSM) (crypto.RemoteKeyLifecycle, error) {

@@ -471,20 +471,22 @@ readable by the pod's `fsGroup`, and all parent directories reject group/world
 writes. Unsafe restored files fail startup instead of silently weakening key
 custody.
 
-## Managed-key custody (AWS KMS and PKCS#11 HSMs)
+## Managed-key custody (AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSMs)
 
 The managed-key lifecycle is off by default. When enabled, the control plane exposes
 `/api/v1/managed-keys` for keys whose private material is born in and stays inside an
-external custodian. The served custody providers are AWS KMS and PKCS#11 HSM modules
-such as SoftHSM, nShield, and Luna. AWS KMS uses the official AWS SDK v2 KMS client,
-with the SDK HTTP client option pointed at LocalStack, a VPC endpoint, or regional AWS
-as configured. PKCS#11 uses a cgo-enabled build to open the native module, log in to a
-named token, and generate non-extractable signing keys on the token.
+external custodian. The served custody providers are AWS KMS, Azure Key Vault /
+Managed HSM, GCP Cloud KMS, and PKCS#11 HSM modules such as SoftHSM, nShield, and
+Luna. AWS KMS uses the official AWS SDK v2 KMS client, with the SDK HTTP client
+option pointed at LocalStack, a VPC endpoint, or regional AWS as configured. Azure
+and GCP use their data-plane KMS APIs over bounded HTTP clients with startup-supplied
+bearer tokens. PKCS#11 uses a cgo-enabled build to open the native module, log in to
+a named token, and generate non-extractable signing keys on the token.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables the served managed-key lifecycle. When false, the routes fail closed with `501`. |
-| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws` or `pkcs11`. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
+| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
 | `TRSTCTL_MANAGED_KEYS_AWS_REGION` | unset | AWS region for KMS, for example `us-east-1`. Required when enabled. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override, used for LocalStack, VPC endpoints, or partitions. Leave unset for regional AWS KMS. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID` | unset | AWS access key id. Required for the current served AWS KMS backend. |
@@ -492,6 +494,14 @@ named token, and generate non-extractable signing keys on the token.
 | `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE` | unset | File containing the AWS secret access key. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
 | `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN` | unset | Optional temporary session token. |
 | `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE` | unset | Optional file containing the temporary session token. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL` | unset | Azure Key Vault or Managed HSM vault URL, for example `https://trstctl-prod.managedhsm.azure.net`. Required when provider is `azure-key-vault`. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override for private endpoints or tests. Leave unset for the vault URL. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN` | unset | Azure AD access token supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE` | unset | File containing the Azure bearer token. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
+| `TRSTCTL_MANAGED_KEYS_GCP_PARENT` | unset | GCP Cloud KMS key-ring resource, for example `projects/P/locations/L/keyRings/R`. Required when provider is `gcp-kms`. |
+| `TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override for private service endpoints or tests. Leave unset for `https://cloudkms.googleapis.com/v1`. |
+| `TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN` | unset | GCP OAuth2 access token supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE` | unset | File containing the GCP bearer token. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH` | unset | Native PKCS#11 module path, for example `libsofthsm2.so`, nShield `cknfast`, or Luna `Cryptoki`. Required when provider is `pkcs11`. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL` | unset | Initialized token label to log in to. Required when provider is `pkcs11`. |
 | `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN` | unset | PKCS#11 user PIN supplied from the environment as bytes at startup. Prefer the file variant for production. |
@@ -519,6 +529,28 @@ managed_keys:
     region: us-east-1
     access_key_id: AKIA...
     secret_access_key_file: /etc/trstctl/aws-kms-secret-access-key
+```
+
+Example Azure Key Vault HSM shape:
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: azure-key-vault
+  azure:
+    vault_url: https://trstctl-prod.managedhsm.azure.net
+    bearer_token_file: /etc/trstctl/azure-kv-token
+```
+
+Example GCP Cloud KMS shape:
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: gcp-kms
+  gcp:
+    parent: projects/prod/locations/us/keyRings/trstctl
+    bearer_token_file: /etc/trstctl/gcp-kms-token
 ```
 
 Example PKCS#11 HSM shape:

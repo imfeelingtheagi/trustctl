@@ -478,7 +478,7 @@ export function CAHierarchy() {
               Managed key custody
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              AWS KMS and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.
+              AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.
             </p>
           </div>
         </div>

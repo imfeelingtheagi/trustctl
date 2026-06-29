@@ -223,9 +223,10 @@ provide the module path, token label, and user PIN through operator-managed secr
 configuration. Other hardware families still use the same backend contract, with
 their own provider maturity and device setup requirements.
 
-The managed-key lifecycle is now served for AWS KMS custody and PKCS#11 HSM custody.
-When `managed_keys.enabled` is true and `managed_keys.provider` is `aws` or
-`pkcs11`, the running control plane exposes:
+The managed-key lifecycle is now served for AWS KMS, Azure Key Vault / Managed HSM,
+GCP Cloud KMS, and PKCS#11 HSM custody. When `managed_keys.enabled` is true and
+`managed_keys.provider` is `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`, the
+running control plane exposes:
 
 - `POST /api/v1/managed-keys` to create a KMS-resident signing key;
 - `POST /api/v1/managed-keys/rotate` to mint a successor key;
@@ -293,10 +294,11 @@ external CA registry API, each of which calls the one issuance path with an
   reference path; for production, point the CA at an HSM/KMS backend so the key is
   never in the control-plane's memory. See [configuration](../configuration.md) for
   `TRSTCTL_SIGNER_MODE` and CA custody.
-- **Hardware bindings vary in maturity.** AWS KMS and PKCS#11 managed keys are served
-  through the same managed-key API; AWS is LocalStack-proven and PKCS#11 is
-  SoftHSM/cgo-proven. Confirm any other device family or vendor module you depend on
-  before relying on it ([limitations](../limitations.md)).
+- **Hardware bindings vary in maturity.** AWS KMS, Azure Key Vault HSM, GCP Cloud
+  KMS, and PKCS#11 managed keys are served through the same managed-key API; AWS is
+  LocalStack-proven, Azure/GCP have remote-lifecycle API doubles plus served API
+  acceptance coverage, and PKCS#11 is SoftHSM/cgo-proven. Confirm any vendor module
+  or cloud policy shape you depend on before relying on it ([limitations](../limitations.md)).
 - **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**
   Certificates discovered from another CA can still be inventoried and risk-scored, but
   renewing them requires a configured issuer path that can replace that outside

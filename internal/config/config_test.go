@@ -182,6 +182,64 @@ func TestManagedKeyPKCS11EnvAndValidation(t *testing.T) {
 	}
 }
 
+func TestManagedKeyCloudKMSEnvAndValidation(t *testing.T) {
+	azureEnv := map[string]string{
+		"TRSTCTL_MANAGED_KEYS_ENABLED":                 "true",
+		"TRSTCTL_MANAGED_KEYS_PROVIDER":                "azure-key-vault",
+		"TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL":         "https://trstctl-prod.managedhsm.azure.net",
+		"TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT":          "https://private.azure.local",
+		"TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN":      "azure-token",
+		"TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE": "",
+	}
+	cfg, err := Load(func(k string) string { return azureEnv[k] })
+	if err != nil {
+		t.Fatalf("Load Azure managed-key config: %v", err)
+	}
+	if !cfg.ManagedKeys.Enabled || cfg.ManagedKeys.Provider != ManagedKeyProviderAzureKeyVault {
+		t.Fatalf("Azure managed-key provider not enabled: %+v", cfg.ManagedKeys)
+	}
+	if got := cfg.ManagedKeys.Azure; got.VaultURL != "https://trstctl-prod.managedhsm.azure.net" || got.Endpoint != "https://private.azure.local" || string(got.BearerToken) != "azure-token" {
+		t.Fatalf("Azure managed-key env config not applied: %+v", got)
+	}
+
+	gcpEnv := map[string]string{
+		"TRSTCTL_MANAGED_KEYS_ENABLED":               "true",
+		"TRSTCTL_MANAGED_KEYS_PROVIDER":              "gcp-kms",
+		"TRSTCTL_MANAGED_KEYS_GCP_PARENT":            "projects/p/locations/us/keyRings/trstctl",
+		"TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT":          "https://cloudkms-private.googleapis.com/v1",
+		"TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN":      "gcp-token",
+		"TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE": "",
+	}
+	cfg, err = Load(func(k string) string { return gcpEnv[k] })
+	if err != nil {
+		t.Fatalf("Load GCP managed-key config: %v", err)
+	}
+	if !cfg.ManagedKeys.Enabled || cfg.ManagedKeys.Provider != ManagedKeyProviderGCPKMS {
+		t.Fatalf("GCP managed-key provider not enabled: %+v", cfg.ManagedKeys)
+	}
+	if got := cfg.ManagedKeys.GCP; got.Parent != "projects/p/locations/us/keyRings/trstctl" || got.Endpoint != "https://cloudkms-private.googleapis.com/v1" || string(got.BearerToken) != "gcp-token" {
+		t.Fatalf("GCP managed-key env config not applied: %+v", got)
+	}
+
+	c := Default()
+	c.ManagedKeys.Enabled = true
+	c.ManagedKeys.Provider = ManagedKeyProviderAzureKeyVault
+	c.ManagedKeys.Azure.VaultURL = "https://trstctl-prod.managedhsm.azure.net"
+	c.ManagedKeys.Azure.BearerTokenFile = "/etc/trstctl/azure-kv-token"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid Azure managed-key config rejected: %v", err)
+	}
+
+	c = Default()
+	c.ManagedKeys.Enabled = true
+	c.ManagedKeys.Provider = ManagedKeyProviderGCPKMS
+	c.ManagedKeys.GCP.Parent = "projects/p/locations/us/keyRings/trstctl"
+	c.ManagedKeys.GCP.BearerTokenFile = "/etc/trstctl/gcp-kms-token"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid GCP managed-key config rejected: %v", err)
+	}
+}
+
 func TestValidateRejectsBadValues(t *testing.T) {
 	cases := map[string]func(*Config){
 		"postgres mode":        func(c *Config) { c.Postgres.Mode = "weird" },
@@ -242,6 +300,40 @@ func TestValidateRejectsBadValues(t *testing.T) {
 			c.ManagedKeys.AWS.Region = "us-east-1"
 			c.ManagedKeys.AWS.AccessKeyID = "test"
 			c.ManagedKeys.AWS.SecretAccessKey = []byte("test")
+		},
+		"azure managed keys missing vault": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderAzureKeyVault
+			c.ManagedKeys.Azure.BearerToken = []byte("token")
+		},
+		"azure managed keys missing token": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderAzureKeyVault
+			c.ManagedKeys.Azure.VaultURL = "https://trstctl-prod.managedhsm.azure.net"
+		},
+		"azure managed keys bad endpoint": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderAzureKeyVault
+			c.ManagedKeys.Azure.VaultURL = "https://trstctl-prod.managedhsm.azure.net"
+			c.ManagedKeys.Azure.BearerToken = []byte("token")
+			c.ManagedKeys.Azure.Endpoint = "private.azure.local"
+		},
+		"gcp managed keys missing parent": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderGCPKMS
+			c.ManagedKeys.GCP.BearerToken = []byte("token")
+		},
+		"gcp managed keys missing token": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderGCPKMS
+			c.ManagedKeys.GCP.Parent = "projects/p/locations/us/keyRings/trstctl"
+		},
+		"gcp managed keys bad endpoint": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderGCPKMS
+			c.ManagedKeys.GCP.Parent = "projects/p/locations/us/keyRings/trstctl"
+			c.ManagedKeys.GCP.BearerToken = []byte("token")
+			c.ManagedKeys.GCP.Endpoint = "cloudkms-private.googleapis.com/v1"
 		},
 		"pkcs11 managed keys missing module": func(c *Config) {
 			c.ManagedKeys.Enabled = true

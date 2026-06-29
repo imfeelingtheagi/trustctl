@@ -116,6 +116,14 @@ const (
 	// engine/plugin registry; this is the same compile-time interface pattern as
 	// crypto.Signer, Java JCA, OpenSSL ENGINE, and PKCS#11.
 	ManagedKeyProviderAWS = "aws"
+	// ManagedKeyProviderAzureKeyVault selects Azure Key Vault / Managed HSM for
+	// served managed-key custody. The bearer token is supplied at startup and the
+	// private key stays inside Azure.
+	ManagedKeyProviderAzureKeyVault = "azure-key-vault"
+	// ManagedKeyProviderGCPKMS selects Google Cloud KMS for served managed-key
+	// custody. The bearer token is supplied at startup and the private key stays
+	// inside Cloud KMS.
+	ManagedKeyProviderGCPKMS = "gcp-kms"
 	// ManagedKeyProviderPKCS11 selects a local PKCS#11 HSM module (SoftHSM,
 	// nShield, Luna, or another standards-compliant token) for served managed-key
 	// custody. The module is opened only by the managed-key backend package.
@@ -129,6 +137,8 @@ type ManagedKeys struct {
 	Enabled  bool                 `json:"enabled,omitempty"`
 	Provider string               `json:"provider,omitempty"`
 	AWS      ManagedKeysAWSKMS    `json:"aws,omitempty"`
+	Azure    ManagedKeysAzureKV   `json:"azure,omitempty"`
+	GCP      ManagedKeysGCPKMS    `json:"gcp,omitempty"`
 	PKCS11   ManagedKeysPKCS11HSM `json:"pkcs11,omitempty"`
 }
 
@@ -144,6 +154,25 @@ type ManagedKeysAWSKMS struct {
 	SecretAccessKeyFile string `json:"secret_access_key_file,omitempty"`
 	SessionToken        []byte `json:"session_token,omitempty"`
 	SessionTokenFile    string `json:"session_token_file,omitempty"`
+}
+
+// ManagedKeysAzureKV configures Azure Key Vault / Managed HSM custody for managed
+// keys. The bearer token is a short-lived AAD access token minted outside trstctl
+// and kept as bytes until the HTTP authorization edge.
+type ManagedKeysAzureKV struct {
+	VaultURL        string `json:"vault_url,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	BearerToken     []byte `json:"bearer_token,omitempty"`
+	BearerTokenFile string `json:"bearer_token_file,omitempty"`
+}
+
+// ManagedKeysGCPKMS configures Google Cloud KMS custody for managed keys. Parent
+// is the key ring resource, for example projects/P/locations/L/keyRings/R.
+type ManagedKeysGCPKMS struct {
+	Parent          string `json:"parent,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	BearerToken     []byte `json:"bearer_token,omitempty"`
+	BearerTokenFile string `json:"bearer_token_file,omitempty"`
 }
 
 // ManagedKeysPKCS11HSM configures a local PKCS#11 module for managed-key custody.
@@ -1682,6 +1711,14 @@ func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE", &m.AWS.SecretAccessKeyFile)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN", &m.AWS.SessionToken)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE", &m.AWS.SessionTokenFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL", &m.Azure.VaultURL)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT", &m.Azure.Endpoint)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN", &m.Azure.BearerToken)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE", &m.Azure.BearerTokenFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_PARENT", &m.GCP.Parent)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT", &m.GCP.Endpoint)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN", &m.GCP.BearerToken)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_BEARER_TOKEN_FILE", &m.GCP.BearerTokenFile)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", &m.PKCS11.ModulePath)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL", &m.PKCS11.TokenLabel)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN", &m.PKCS11.UserPIN)
@@ -2330,6 +2367,28 @@ func validateManagedKeys(m ManagedKeys) []error {
 				errs = append(errs, fmt.Errorf("managed_keys.aws.endpoint %q must be an absolute http(s) URL", m.AWS.Endpoint))
 			}
 		}
+	case ManagedKeyProviderAzureKeyVault:
+		if strings.TrimSpace(m.Azure.VaultURL) == "" {
+			errs = append(errs, errors.New("managed_keys.azure.vault_url is required when managed-key custody uses Azure Key Vault HSM"))
+		} else if !isHTTPURL(m.Azure.VaultURL) {
+			errs = append(errs, fmt.Errorf("managed_keys.azure.vault_url %q must be an absolute http(s) URL", m.Azure.VaultURL))
+		}
+		if len(m.Azure.BearerToken) == 0 && strings.TrimSpace(m.Azure.BearerTokenFile) == "" {
+			errs = append(errs, errors.New("managed_keys.azure.bearer_token or managed_keys.azure.bearer_token_file is required when managed-key custody uses Azure Key Vault HSM"))
+		}
+		if m.Azure.Endpoint != "" && !isHTTPURL(m.Azure.Endpoint) {
+			errs = append(errs, fmt.Errorf("managed_keys.azure.endpoint %q must be an absolute http(s) URL", m.Azure.Endpoint))
+		}
+	case ManagedKeyProviderGCPKMS:
+		if strings.TrimSpace(m.GCP.Parent) == "" {
+			errs = append(errs, errors.New("managed_keys.gcp.parent is required when managed-key custody uses GCP Cloud KMS"))
+		}
+		if len(m.GCP.BearerToken) == 0 && strings.TrimSpace(m.GCP.BearerTokenFile) == "" {
+			errs = append(errs, errors.New("managed_keys.gcp.bearer_token or managed_keys.gcp.bearer_token_file is required when managed-key custody uses GCP Cloud KMS"))
+		}
+		if m.GCP.Endpoint != "" && !isHTTPURL(m.GCP.Endpoint) {
+			errs = append(errs, fmt.Errorf("managed_keys.gcp.endpoint %q must be an absolute http(s) URL", m.GCP.Endpoint))
+		}
 	case ManagedKeyProviderPKCS11:
 		if strings.TrimSpace(m.PKCS11.ModulePath) == "" {
 			errs = append(errs, errors.New("managed_keys.pkcs11.module_path is required when managed-key custody uses PKCS#11"))
@@ -2341,9 +2400,14 @@ func validateManagedKeys(m ManagedKeys) []error {
 			errs = append(errs, errors.New("managed_keys.pkcs11.user_pin or managed_keys.pkcs11.user_pin_file is required when managed-key custody uses PKCS#11"))
 		}
 	default:
-		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q or %q)", m.Provider, ManagedKeyProviderAWS, ManagedKeyProviderPKCS11))
+		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q, %q, %q, or %q)", m.Provider, ManagedKeyProviderAWS, ManagedKeyProviderAzureKeyVault, ManagedKeyProviderGCPKMS, ManagedKeyProviderPKCS11))
 	}
 	return errs
+}
+
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme != "" && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http")
 }
 
 func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {

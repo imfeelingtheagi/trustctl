@@ -999,8 +999,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.aws.kms.and.pkcs.11.hsm.keys.stay.inside.t.ddc4f88a79",
-    defaultMessage: "AWS KMS and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.",
+    key: "source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b",
+    defaultMessage: "AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.",
     sources: [
       "src/pages/CAHierarchy.tsx:480",
     ],

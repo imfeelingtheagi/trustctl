@@ -2061,10 +2061,10 @@
       "phase": "P2",
       "priority": 54,
       "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; SoftHSM native binding remains cgo-proven",
-      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
+      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; SoftHSM native binding remains cgo-proven",
+      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
-      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
+      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"],
       "source_backend": [
         "internal/api/managedkeys.go",
@@ -2076,9 +2076,12 @@
         "internal/kms",
         "internal/crypto/backend.go",
         "internal/kms/pkcs11/pkcs11_lifecycle.go",
+        "internal/kms/azurekv/azurekv_lifecycle.go",
+        "internal/kms/gcpkms/gcpkms_lifecycle.go",
         "internal/kms/pkcs11/session_cgo.go",
         "internal/kms/pkcs11/session_nocgo.go",
-        "internal/kms/pkcs11/softhsm_real_test.go"
+        "internal/kms/pkcs11/softhsm_real_test.go",
+        "internal/server/managedkeys_cloudkms_served_test.go"
       ],
       "source_frontend": ["web/src/pages/CAHierarchy.tsx", "web/src/__tests__/ca_hierarchy.test.tsx"],
       "status": "closed",
@@ -2099,7 +2102,7 @@
         "served": {
           "evidence": [
             "Managed-key custody is wired into the served production composition when managed_keys.enabled=true.",
-            "managed_keys.provider supports aws and pkcs11; PKCS#11 opens the configured module/token in cgo-enabled builds and static builds fail closed.",
+            "managed_keys.provider supports aws, azure-key-vault, gcp-kms, and pkcs11; Azure/GCP use startup-supplied bearer tokens, and PKCS#11 opens the configured module/token in cgo-enabled builds while static builds fail closed.",
             "The routes fail closed when no KMS/HSM backend is configured and serve generate/rotate/revoke/zeroize when one is configured."
           ],
           "refs": [
@@ -2113,7 +2116,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/CAHierarchy.tsx"]
@@ -2132,7 +2135,9 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present.",
+            "acceptance_test: Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present.",
+            "TestServedCloudKMSManagedKeyLifecycleCAPKEY02 proves CAP-KEY-02 through the assembled control-plane handler and opaque Azure/GCP KMS key handles.",
+            "TestRemoteKeyLifecycle in the Azure and GCP packages proves both cloud KMS backends implement crypto.RemoteKeyLifecycle without exporting key bytes.",
             "TestServedPKCS11ManagedKeyLifecycleCAPKEY01 proves CAP-KEY-01 through the assembled control-plane handler and opaque PKCS#11 object handles.",
             "TestPKCS11RemoteKeyLifecycle proves the PKCS#11 backend implements crypto.RemoteKeyLifecycle and fails closed after revoke/zeroize.",
             "KMS-03 acceptance: TestPKCS11SoftHSMContainerGenerateSign initializes a SoftHSM token in Docker and runs the cgo-tagged real binding conformance test.",

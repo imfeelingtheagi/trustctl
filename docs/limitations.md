@@ -927,21 +927,25 @@ issuance gate uses — before the provider is ever called, so no single operator
 rotate, disable, or destroy a managed key. The surface is served only when a KMS/HSM
 custody backend is configured; otherwise the routes fail closed.
 
-AWS KMS and PKCS#11 HSM custody are both wired into that served path through
-`managed_keys` configuration. The AWS backend uses the official AWS SDK v2 KMS
-client. The acceptance suite starts LocalStack, generates a KMS-resident RSA-2048
-managed key through the real API, rotates it, zeroizes the successor, and revokes a
-second key; when standard `AWS_*` credentials are present, the same test also runs
-against real AWS KMS. The PKCS#11 backend opens a native module in cgo-enabled builds
-and logs into the configured token. The served CAP-KEY-01 test drives
-generate/rotate/revoke/zeroize through the running API using a SoftHSM-shaped
-PKCS#11 session; the native acceptance initializes a SoftHSM token in a container,
-creates a sensitive non-extractable RSA-2048 signing key on the token, signs through
-the module, and verifies the public key through the same backend conformance harness
-used by software and cloud KMS backends. Static no-cgo builds fail closed if
-`provider: pkcs11` is selected. Startup config remains static and provider-selected:
-it does not load runtime crypto plugins or let policy choose provider algorithms at
-request time.
+AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM custody are
+wired into that served path through `managed_keys` configuration. The AWS backend
+uses the official AWS SDK v2 KMS client. The acceptance suite starts LocalStack,
+generates a KMS-resident RSA-2048 managed key through the real API, rotates it,
+zeroizes the successor, and revokes a second key; when standard `AWS_*` credentials
+are present, the same test also runs against real AWS KMS. Azure and GCP use their
+cloud KMS data-plane APIs with startup-supplied bearer tokens; provider lifecycle
+tests prove generate/rotate/revoke/zeroize against faithful in-memory HTTP doubles,
+and the served CAP-KEY-02 test drives both providers through the managed-key API
+with opaque Azure key ids and GCP cryptoKeyVersion names. The PKCS#11 backend opens a
+native module in cgo-enabled builds and logs into the configured token. The served
+CAP-KEY-01 test drives generate/rotate/revoke/zeroize through the running API using a
+SoftHSM-shaped PKCS#11 session; the native acceptance initializes a SoftHSM token in
+a container, creates a sensitive non-extractable RSA-2048 signing key on the token,
+signs through the module, and verifies the public key through the same backend
+conformance harness used by software and cloud KMS backends. Static no-cgo builds
+fail closed if `provider: pkcs11` is selected. Startup config remains static and
+provider-selected: it does not load runtime crypto plugins or let policy choose
+provider algorithms at request time.
 
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import
