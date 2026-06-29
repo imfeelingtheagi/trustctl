@@ -202,6 +202,9 @@ import type {
   SecretRepositoryWebhookRequest,
   SecretScan,
   SecretScanRequest,
+  ThirdPartySecretScanIngestRequest,
+  ThirdPartySecretScanPosture,
+  ThirdPartySecretScanReceipt,
   SecretSync,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
@@ -401,6 +404,9 @@ export type {
   SecretRepositoryWebhookRequest,
   SecretScan,
   SecretScanRequest,
+  ThirdPartySecretScanIngestRequest,
+  ThirdPartySecretScanPosture,
+  ThirdPartySecretScanReceipt,
   SecretSync,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
@@ -871,6 +877,8 @@ export interface Api {
   deleteSecret(name: string): Promise<void>;
   secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
+  thirdPartySecretScanning(): Promise<ThirdPartySecretScanPosture>;
+  ingestThirdPartySecretScan(provider: string, input: ThirdPartySecretScanIngestRequest): Promise<ThirdPartySecretScanReceipt>;
   scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
@@ -1088,6 +1096,9 @@ export const api: Api = {
   secretRepositoryScanning: () => req<SecretRepositoryScanPosture>("/api/v1/secrets/scans/repositories"),
   receiveSecretRepositoryWebhook: (provider, input) =>
     mutate<SecretRepositoryWebhookReceipt>("POST", `/api/v1/secrets/scans/repositories/${encodeURIComponent(provider)}/webhook`, input),
+  thirdPartySecretScanning: () => req<ThirdPartySecretScanPosture>("/api/v1/secrets/scans/third-party"),
+  ingestThirdPartySecretScan: (provider, input) =>
+    mutate<ThirdPartySecretScanReceipt>("POST", `/api/v1/secrets/scans/third-party/${encodeURIComponent(provider)}/ingest`, input),
   scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),

@@ -199,6 +199,54 @@ type secretRepoScanPostureResponse struct {
 	ArchitectureControls []string                         `json:"architecture_controls"`
 }
 
+type thirdPartySecretScanProviderResponse struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	ArtifactKinds  []string `json:"artifact_kinds"`
+	IngestMode     string   `json:"ingest_mode"`
+	SecretHandling string   `json:"secret_handling"`
+	OutboxMode     string   `json:"outbox_mode"`
+}
+
+type thirdPartySecretScanIngestRequest struct {
+	Source        string `json:"source"`
+	ArtifactPath  string `json:"artifact_path"`
+	ArtifactKind  string `json:"artifact_kind,omitempty"`
+	Event         string `json:"event,omitempty"`
+	CredentialRef string `json:"credential_ref,omitempty"`
+}
+
+type thirdPartySecretScanReceipt struct {
+	Capability        string `json:"capability"`
+	Provider          string `json:"provider"`
+	Source            string `json:"source"`
+	SourceID          string `json:"source_id"`
+	RunID             string `json:"run_id"`
+	Queued            bool   `json:"queued"`
+	Status            string `json:"status"`
+	OutboxDestination string `json:"outbox_destination"`
+	Scanner           string `json:"scanner"`
+	DiscoveryRunPath  string `json:"discovery_run_path"`
+}
+
+type thirdPartySecretScanPostureResponse struct {
+	Capability           string                                 `json:"capability"`
+	Served               bool                                   `json:"served"`
+	GeneratedAt          string                                 `json:"generated_at"`
+	Providers            []thirdPartySecretScanProviderResponse `json:"providers"`
+	IngestPaths          []string                               `json:"ingest_paths"`
+	QueueModel           string                                 `json:"queue_model"`
+	Scanner              string                                 `json:"scanner"`
+	MinimumRulesActive   int                                    `json:"minimum_rules_active"`
+	RedactionModel       string                                 `json:"redaction_model"`
+	EventFlow            []string                               `json:"event_flow"`
+	ReleaseGates         []secretRepoScanGateResponse           `json:"release_gates"`
+	OperatorActions      []string                               `json:"operator_actions"`
+	Residuals            []string                               `json:"residuals"`
+	EvidenceRefs         []string                               `json:"evidence_refs"`
+	ArchitectureControls []string                               `json:"architecture_controls"`
+}
+
 // secretsService is the assembled served secrets surface. It owns the per-request
 // construction of the tenant-scoped frameworks (AN-1) and the dynamic lease engines.
 // One-time share links are durable rows in PostgreSQL, not process memory, so valid
@@ -991,6 +1039,72 @@ func (a *API) secretRepoScanPosture(w http.ResponseWriter, _ *http.Request) {
 	a.writeJSON(w, http.StatusOK, buildSecretRepoScanPosture(time.Now().UTC().Format(time.RFC3339)))
 }
 
+func (a *API) thirdPartySecretScanPosture(w http.ResponseWriter, _ *http.Request) {
+	a.writeJSON(w, http.StatusOK, buildThirdPartySecretScanPosture(time.Now().UTC().Format(time.RFC3339)))
+}
+
+// ingestThirdPartySecretScan is the normalized CAP-SCAN-04 ingress for CI/CD logs,
+// container-registry exports, Slack exports, and Jira exports. It records only
+// metadata and an artifact path; the discovery.run worker performs the scan.
+//
+//trstctl:mutation
+func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	provider := secretscan.NormalizeThirdPartyProvider(r.PathValue("provider"))
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.secrets == nil {
+			return 0, nil, secretsDisabledProblem()
+		}
+		if a.orch == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "third-party secret scan queue is not configured")
+		}
+		if provider == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "provider must be cicd_log, container_registry, slack, or jira")
+		}
+		var req thirdPartySecretScanIngestRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		cfg, err := thirdPartySecretScanConfig(provider, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		body, err := json.Marshal(cfg)
+		if err != nil {
+			return 0, nil, err
+		}
+		sourceID := thirdPartySecretScanSourceID(tenantID, cfg)
+		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
+			ID:     sourceID,
+			Kind:   secretscan.ThirdPartySourceKind,
+			Name:   thirdPartySecretScanSourceName(cfg),
+			Config: body,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		run, err := a.orch.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+			SourceID: src.ID,
+			DryRun:   false,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, thirdPartySecretScanReceipt{
+			Capability:        "CAP-SCAN-04",
+			Provider:          cfg.Provider,
+			Source:            cfg.Source,
+			SourceID:          src.ID,
+			RunID:             run.ID,
+			Queued:            true,
+			Status:            run.Status,
+			OutboxDestination: "discovery.run",
+			Scanner:           "gitleaks " + secretscan.GitleaksPinnedVersion,
+			DiscoveryRunPath:  "/api/v1/discovery/runs/" + run.ID,
+		}, nil
+	})
+}
+
 // receiveSecretRepoWebhook is the normalized GitHub/GitLab/Bitbucket realtime
 // repository secret-scan ingress. It does not clone or call providers inline:
 // the mutation records a tenant-scoped discovery source/run and the existing
@@ -1052,6 +1166,86 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 			DiscoveryRunPath:  "/api/v1/discovery/runs/" + run.ID,
 		}, nil
 	})
+}
+
+func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPostureResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	providers := []thirdPartySecretScanProviderResponse{
+		{
+			ID:             secretscan.ThirdPartyProviderCICDLog,
+			Name:           "CI/CD logs",
+			ArtifactKinds:  []string{"ci_cd_log", "job_trace", "workflow_log", "build_artifact"},
+			IngestMode:     "POST normalized CI/CD log artifact metadata and artifact_path to queue a secret_third_party discovery run",
+			SecretHandling: "raw log lines stay in the artifact path; persisted findings contain only rule, file, line, fingerprint, and credential_ref",
+			OutboxMode:     "artifact scan is discovery.run outbox work, never inline request handling",
+		},
+		{
+			ID:             secretscan.ThirdPartyProviderContainerRegistry,
+			Name:           "Container registry exports",
+			ArtifactKinds:  []string{"container_registry_export", "image_config", "layer_tree", "sbom"},
+			IngestMode:     "POST registry export metadata and artifact_path to queue Gitleaks over exported image/layer/config material",
+			SecretHandling: "registry tokens and matched values stay outside events; only redacted leaked-secret evidence is recorded",
+			OutboxMode:     "artifact scan is discovery.run outbox work, never inline request handling",
+		},
+		{
+			ID:             secretscan.ThirdPartyProviderSlack,
+			Name:           "Slack exports",
+			ArtifactKinds:  []string{"slack_export", "channel_export", "message_export"},
+			IngestMode:     "POST Slack export metadata and artifact_path to queue redacted scanning of exported messages/files",
+			SecretHandling: "Slack message text remains in the export artifact; trstctl stores metadata-only findings",
+			OutboxMode:     "artifact scan is discovery.run outbox work, never inline request handling",
+		},
+		{
+			ID:             secretscan.ThirdPartyProviderJira,
+			Name:           "Jira exports",
+			ArtifactKinds:  []string{"jira_export", "issue_export", "attachment_export"},
+			IngestMode:     "POST Jira export metadata and artifact_path to queue redacted scanning of issues and attachments",
+			SecretHandling: "Jira issue text and attachments remain in the export artifact; trstctl stores metadata-only findings",
+			OutboxMode:     "artifact scan is discovery.run outbox work, never inline request handling",
+		},
+	}
+	return thirdPartySecretScanPostureResponse{
+		Capability:         "CAP-SCAN-04",
+		Served:             true,
+		GeneratedAt:        generatedAt,
+		Providers:          providers,
+		IngestPaths:        []string{"/api/v1/secrets/scans/third-party/cicd_log/ingest", "/api/v1/secrets/scans/third-party/container_registry/ingest", "/api/v1/secrets/scans/third-party/slack/ingest", "/api/v1/secrets/scans/third-party/jira/ingest"},
+		QueueModel:         "authenticated ingest records a tenant-scoped secret_third_party discovery source/run and the discovery.run outbox worker performs artifact scanning",
+		Scanner:            "gitleaks " + secretscan.GitleaksPinnedVersion,
+		MinimumRulesActive: secretscan.GitleaksMinRulesActive,
+		RedactionModel:     "scanner runs with redaction; parser drops secret/match fields and persists only rule, file, line, fingerprint, provider, source, and credential_ref",
+		EventFlow: []string{
+			"discovery.source.upserted",
+			"discovery.run.queued",
+			"discovery.run.started",
+			"discovery.finding.recorded",
+			"discovery.run.completed",
+		},
+		ReleaseGates: []secretRepoScanGateResponse{
+			{ID: "third-party-ingest-contract", Command: "go test ./internal/server -run TestServedThirdPartySecretScanningCAPSCAN04EndToEnd", Artifact: "third-party-secret-scan-contract", Required: true},
+			{ID: "redaction-regression", Command: "go test ./internal/secretscan -run TestParseGitleaksDropsSecret", Artifact: "redaction transcript", Required: true},
+			{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
+		},
+		OperatorActions: []string{
+			"export CI/CD job logs, container registry layer/config material, Slack messages, or Jira issues to a tenant-local artifact path",
+			"submit only artifact_path and metadata through the authenticated ingest route; do not inline secret-bearing log/chat text",
+			"route redacted leaked-secret findings into discovery, graph, risk, and incident workflows",
+		},
+		Residuals: []string{
+			"native Slack/Jira/registry API polling is not yet implemented; operators provide exported artifacts or callbacks",
+			"provider signature verification and export-chain integrity checks remain architecture follow-ups",
+			"artifact retention, deletion, and access controls are operator-owned outside the trstctl database",
+		},
+		EvidenceRefs: []string{
+			"internal/api/secrets.go",
+			"internal/server/discovery.go",
+			"internal/secretscan/thirdparty.go",
+			"docs/features/secrets.md",
+		},
+		ArchitectureControls: []string{"AN-1", "AN-2", "AN-5", "AN-6", "AN-7", "AN-8"},
+	}
 }
 
 func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureResponse {
@@ -1176,6 +1370,32 @@ func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (se
 	}, nil
 }
 
+func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestRequest) (secretscan.ThirdPartyScanConfig, error) {
+	source := strings.TrimSpace(req.Source)
+	artifactPath := strings.TrimSpace(req.ArtifactPath)
+	if source == "" {
+		source = repositoryNameFromTarget(artifactPath)
+	}
+	if source == "" {
+		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "source is required")
+	}
+	if artifactPath == "" {
+		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "artifact_path is required")
+	}
+	artifactKind := strings.TrimSpace(req.ArtifactKind)
+	if artifactKind == "" {
+		artifactKind = secretscan.ThirdPartyArtifactKind(provider)
+	}
+	return secretscan.ThirdPartyScanConfig{
+		Provider:      provider,
+		Source:        source,
+		ArtifactPath:  artifactPath,
+		ArtifactKind:  artifactKind,
+		Event:         strings.TrimSpace(req.Event),
+		CredentialRef: strings.TrimSpace(req.CredentialRef),
+	}, nil
+}
+
 func repositoryNameFromTarget(target string) string {
 	target = strings.TrimRight(strings.TrimSpace(target), "/")
 	if target == "" {
@@ -1187,16 +1407,30 @@ func repositoryNameFromTarget(target string) string {
 }
 
 var secretRepoSourceNamespace = gouuid.MustParse("6eb35ad2-cbda-5a23-ae77-8e6ff69881f0")
+var thirdPartySecretScanSourceNamespace = gouuid.MustParse("d673a652-8366-52ab-8a58-b1f0d1d17193")
 
 func secretRepoSourceID(tenantID string, cfg secretscan.RepositoryScanConfig) string {
 	key := strings.Join([]string{tenantID, cfg.Provider, cfg.Repository, cfg.Ref}, "\x00")
 	return gouuid.NewSHA1(secretRepoSourceNamespace, []byte(key)).String()
 }
 
+func thirdPartySecretScanSourceID(tenantID string, cfg secretscan.ThirdPartyScanConfig) string {
+	key := strings.Join([]string{tenantID, cfg.Provider, cfg.Source, cfg.Event, cfg.ArtifactPath}, "\x00")
+	return gouuid.NewSHA1(thirdPartySecretScanSourceNamespace, []byte(key)).String()
+}
+
 func secretRepoSourceName(cfg secretscan.RepositoryScanConfig) string {
 	name := "secret-repo:" + cfg.Provider + ":" + cfg.Repository
 	if cfg.Ref != "" {
 		name += ":" + cfg.Ref
+	}
+	return name
+}
+
+func thirdPartySecretScanSourceName(cfg secretscan.ThirdPartyScanConfig) string {
+	name := "secret-third-party:" + cfg.Provider + ":" + cfg.Source
+	if cfg.Event != "" {
+		name += ":" + cfg.Event
 	}
 	return name
 }

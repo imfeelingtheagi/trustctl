@@ -2819,6 +2819,54 @@ export interface TenantWriteFence {
   scope: string;
 }
 
+export interface ThirdPartySecretScanIngestRequest {
+  artifact_kind?: string;
+  artifact_path: string;
+  credential_ref?: string;
+  event?: string;
+  source: string;
+}
+
+export interface ThirdPartySecretScanPosture {
+  architecture_controls: string[];
+  capability: string;
+  event_flow: string[];
+  evidence_refs: string[];
+  generated_at: string;
+  ingest_paths: string[];
+  minimum_rules_active: number;
+  operator_actions: string[];
+  providers: ThirdPartySecretScanProvider[];
+  queue_model: string;
+  redaction_model: string;
+  release_gates: SecretRepositoryScanGate[];
+  residuals: string[];
+  scanner: string;
+  served: boolean;
+}
+
+export interface ThirdPartySecretScanProvider {
+  artifact_kinds: string[];
+  id: string;
+  ingest_mode: string;
+  name: string;
+  outbox_mode: string;
+  secret_handling: string;
+}
+
+export interface ThirdPartySecretScanReceipt {
+  capability: string;
+  discovery_run_path: string;
+  outbox_destination: string;
+  provider: string;
+  queued: boolean;
+  run_id: string;
+  scanner: string;
+  source: string;
+  source_id: string;
+  status: string;
+}
+
 export interface TransitCiphertext {
   ciphertext: string;
   version: number;

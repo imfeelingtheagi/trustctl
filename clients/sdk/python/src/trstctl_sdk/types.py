@@ -4053,6 +4053,70 @@ TenantWriteFence = TypedDict(
     total=False,
 )
 
+ThirdPartySecretScanIngestRequest = TypedDict(
+    'ThirdPartySecretScanIngestRequest',
+    {
+        'artifact_kind': str,
+        'artifact_path': str,
+        'credential_ref': str,
+        'event': str,
+        'source': str,
+    },
+    total=False,
+)
+
+ThirdPartySecretScanPosture = TypedDict(
+    'ThirdPartySecretScanPosture',
+    {
+        'architecture_controls': list[str],
+        'capability': str,
+        'event_flow': list[str],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'ingest_paths': list[str],
+        'minimum_rules_active': int,
+        'operator_actions': list[str],
+        'providers': list[dict[str, Any]],
+        'queue_model': str,
+        'redaction_model': str,
+        'release_gates': list[dict[str, Any]],
+        'residuals': list[str],
+        'scanner': str,
+        'served': bool,
+    },
+    total=False,
+)
+
+ThirdPartySecretScanProvider = TypedDict(
+    'ThirdPartySecretScanProvider',
+    {
+        'artifact_kinds': list[str],
+        'id': str,
+        'ingest_mode': str,
+        'name': str,
+        'outbox_mode': str,
+        'secret_handling': str,
+    },
+    total=False,
+)
+
+ThirdPartySecretScanReceipt = TypedDict(
+    'ThirdPartySecretScanReceipt',
+    {
+        'capability': str,
+        'discovery_run_path': str,
+        'outbox_destination': str,
+        'provider': str,
+        'queued': bool,
+        'run_id': str,
+        'scanner': str,
+        'source': str,
+        'source_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
 TransitCiphertext = TypedDict(
     'TransitCiphertext',
     {

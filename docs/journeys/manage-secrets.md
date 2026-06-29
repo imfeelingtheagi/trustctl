@@ -362,12 +362,22 @@ Be precise here (see [Current limitations](../limitations.md) and
    trstctl-cli secrets scans pre-commit install --repo .
    trstctl-cli secrets scans staged-diff --repo . --base origin/main --head HEAD --advisory
 
+   trstctl-cli secrets scans third-party
+   cat > third-party-scan.json <<'JSON'
+   {"source":"acme/slack","artifact_path":"/var/lib/trstctl/exports/slack.jsonl","event":"message_export"}
+   JSON
+   trstctl-cli --idempotency-key third-party-scan-1 \
+     secrets scans third-party ingest slack -f third-party-scan.json
+
    curl -fksS "https://localhost:8443/api/v1/discovery/findings?run_id=<run-id>" \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 
    -> the served scan response shows the `run_id`, `mode`, `capabilities`,
    `rules_active`, and redacted findings. Deep mode scans full Git history with
+   additive custom rules. Third-party artifact mode covers CI logs, container
+   registry metadata, Slack exports, and Jira exports through artifact-path ingest;
+   native provider polling and signature validation remain documented shortfalls.
    default Gitleaks rules plus additive custom `[[rules]]` fragments. The local
    staged-diff scanner needs no server, scans only staged Git blobs or the head side
    of an explicit CI diff, and also drops the raw secret value.

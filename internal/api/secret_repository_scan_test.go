@@ -79,15 +79,83 @@ func TestServedRepoSecretScanningCAPSCAN01(t *testing.T) {
 	}
 }
 
+func TestServedThirdPartySecretScanningCAPSCAN04(t *testing.T) {
+	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/secrets/scans/third-party", nil)
+	req.Header.Set("X-Tenant-ID", "11111111-1111-1111-1111-111111111111")
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("third-party scanning status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Capability         string `json:"capability"`
+		Served             bool   `json:"served"`
+		Scanner            string `json:"scanner"`
+		MinimumRulesActive int    `json:"minimum_rules_active"`
+		Providers          []struct {
+			ID            string   `json:"id"`
+			ArtifactKinds []string `json:"artifact_kinds"`
+			IngestMode    string   `json:"ingest_mode"`
+			OutboxMode    string   `json:"outbox_mode"`
+		} `json:"providers"`
+		IngestPaths          []string `json:"ingest_paths"`
+		EventFlow            []string `json:"event_flow"`
+		ArchitectureControls []string `json:"architecture_controls"`
+		Residuals            []string `json:"residuals"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode third-party scanning posture: %v", err)
+	}
+	if got.Capability != "CAP-SCAN-04" || !got.Served {
+		t.Fatalf("capability/served = %q/%v, want CAP-SCAN-04/true", got.Capability, got.Served)
+	}
+	if got.MinimumRulesActive < 140 || got.Scanner == "" {
+		t.Fatalf("scanner posture = %q/%d, want pinned scanner with 140+ rule floor", got.Scanner, got.MinimumRulesActive)
+	}
+	for _, want := range []string{"cicd_log", "container_registry", "slack", "jira"} {
+		if !thirdPartyProviderListed(got.Providers, want) {
+			t.Fatalf("providers missing %q: %+v", want, got.Providers)
+		}
+		if !containsString(got.IngestPaths, "/api/v1/secrets/scans/third-party/"+want+"/ingest") {
+			t.Fatalf("ingest paths missing %q: %+v", want, got.IngestPaths)
+		}
+	}
+	for _, want := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !containsString(got.EventFlow, want) {
+			t.Fatalf("event flow missing %q: %+v", want, got.EventFlow)
+		}
+	}
+	for _, want := range []string{"AN-2", "AN-5", "AN-6", "AN-8"} {
+		if !containsString(got.ArchitectureControls, want) {
+			t.Fatalf("architecture controls missing %q: %+v", want, got.ArchitectureControls)
+		}
+	}
+	if len(got.Residuals) == 0 {
+		t.Fatalf("posture must expose residual shortfalls: %+v", got)
+	}
+}
+
 func TestRepoSecretScanWebhookRouteIsGuardedMutation(t *testing.T) {
 	routes := api.New(nil, nil, nil).Routes()
 	posture := findAPIRoute(routes, http.MethodGet, "/api/v1/secrets/scans/repositories")
 	webhook := findAPIRoute(routes, http.MethodPost, "/api/v1/secrets/scans/repositories/{provider}/webhook")
+	thirdPartyPosture := findAPIRoute(routes, http.MethodGet, "/api/v1/secrets/scans/third-party")
+	thirdPartyIngest := findAPIRoute(routes, http.MethodPost, "/api/v1/secrets/scans/third-party/{provider}/ingest")
 	if posture.OperationID != "getSecretRepositoryScanning" || posture.Permission == "" || posture.Mutation {
 		t.Fatalf("posture route = %+v, want read route with permission", posture)
 	}
 	if webhook.OperationID != "receiveSecretRepositoryWebhook" || webhook.Permission == "" || !webhook.Mutation {
 		t.Fatalf("webhook route = %+v, want guarded mutation", webhook)
+	}
+	if thirdPartyPosture.OperationID != "getThirdPartySecretScanning" || thirdPartyPosture.Permission == "" || thirdPartyPosture.Mutation {
+		t.Fatalf("third-party posture route = %+v, want read route with permission", thirdPartyPosture)
+	}
+	if thirdPartyIngest.OperationID != "ingestThirdPartySecretScan" || thirdPartyIngest.Permission == "" || !thirdPartyIngest.Mutation {
+		t.Fatalf("third-party ingest route = %+v, want guarded mutation", thirdPartyIngest)
 	}
 }
 
@@ -111,6 +179,20 @@ func gateRequired(gates []struct {
 }, want string) bool {
 	for _, g := range gates {
 		if g.ID == want && g.Required {
+			return true
+		}
+	}
+	return false
+}
+
+func thirdPartyProviderListed(providers []struct {
+	ID            string   `json:"id"`
+	ArtifactKinds []string `json:"artifact_kinds"`
+	IngestMode    string   `json:"ingest_mode"`
+	OutboxMode    string   `json:"outbox_mode"`
+}, want string) bool {
+	for _, p := range providers {
+		if p.ID == want && len(p.ArtifactKinds) > 0 && p.IngestMode != "" && p.OutboxMode != "" {
 			return true
 		}
 	}

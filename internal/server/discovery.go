@@ -220,6 +220,9 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	if src.Kind == secretscan.RepositorySourceKind {
 		return d.executeSecretRepositoryDiscoveryRun(ctx, tenantID, src, run)
 	}
+	if src.Kind == secretscan.ThirdPartySourceKind {
+		return d.executeThirdPartySecretDiscoveryRun(ctx, tenantID, src, run)
+	}
 	rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
 	if err != nil {
 		return rep, "", "", err
@@ -1216,6 +1219,85 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 	}
 	if rep.Discovered == 0 && rep.Failed == 0 {
 		msg = "secret repository scan completed with no findings"
+	}
+	return rep, status, msg, nil
+}
+
+func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	if d.secretRepoScanner == nil {
+		return netscan.Report{}, "failed", "third-party secret scanner is not configured", nil
+	}
+	var cfg secretscan.ThirdPartyScanConfig
+	if err := json.Unmarshal(src.Config, &cfg); err != nil {
+		return netscan.Report{}, "", "", fmt.Errorf("decode third-party secret source config: %w", err)
+	}
+	cfg.Provider = secretscan.NormalizeThirdPartyProvider(cfg.Provider)
+	if cfg.Provider == "" {
+		return netscan.Report{}, "failed", "third-party secret scan provider is unsupported", nil
+	}
+	target, err := secretscan.PrepareThirdPartyTarget(cfg)
+	if err != nil {
+		if errors.Is(err, secretscan.ErrThirdPartyTargetRequired) {
+			return netscan.Report{}, "failed", err.Error(), nil
+		}
+		return netscan.Report{}, "", "", err
+	}
+	defer target.Cleanup()
+	report, err := d.secretRepoScanner.Scan(ctx, target.Path)
+	if err != nil {
+		return netscan.Report{}, "", "", err
+	}
+	rep := netscan.Report{Targets: len(report.Findings)}
+	for _, f := range report.Findings {
+		f.RuleID = strings.TrimSpace(f.RuleID)
+		f.File = strings.TrimSpace(f.File)
+		if f.RuleID == "" || f.File == "" {
+			rep.Failed++
+			continue
+		}
+		ref := f.CredentialRef
+		if ref == "" {
+			ref = f.RuleID + "@" + f.File
+		}
+		meta, err := json.Marshal(map[string]any{
+			"capability":     "CAP-SCAN-04",
+			"scanner":        report.Scanner,
+			"engine_version": report.EngineVersion,
+			"rules_active":   report.RulesActive,
+			"provider":       cfg.Provider,
+			"source":         cfg.Source,
+			"artifact_kind":  cfg.ArtifactKind,
+			"event":          cfg.Event,
+			"mode":           target.Mode,
+			"rule_id":        f.RuleID,
+			"file":           f.File,
+			"line":           f.Line,
+		})
+		if err != nil {
+			return rep, "", "", err
+		}
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+			RunID:       run.ID,
+			SourceID:    src.ID,
+			Kind:        "leaked_secret",
+			Ref:         ref,
+			Provenance:  secretscan.ThirdPartySourceKind + ":" + cfg.Provider + ":" + cfg.Source + ":" + f.File,
+			Fingerprint: firstNonEmpty(f.Fingerprint, ref),
+			RiskScore:   95,
+			Metadata:    json.RawMessage(meta),
+		}); err != nil {
+			return rep, "", "", err
+		}
+		rep.Discovered++
+	}
+	status := "succeeded"
+	msg := ""
+	if rep.Failed > 0 {
+		status = "partial"
+		msg = "some third-party secret findings were rejected"
+	}
+	if rep.Discovered == 0 && rep.Failed == 0 {
+		msg = "third-party secret scan completed with no findings"
 	}
 	return rep, status, msg, nil
 }

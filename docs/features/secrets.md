@@ -439,6 +439,30 @@ trstctl-cli --idempotency-key repo-scan-push-1 \
   secrets scans repositories webhook github -f repo-webhook.json
 ```
 
+For third-party artifacts, CAP-SCAN-04 is served through
+`GET /api/v1/secrets/scans/third-party` and
+`POST /api/v1/secrets/scans/third-party/{provider}/ingest`. The supported
+providers are `cicd_log`, `container_registry`, `slack`, and `jira`. The request
+names a source and an operator-owned `artifact_path`; trstctl queues a
+tenant-scoped `secret_third_party` discovery run and scans the artifact with the
+same pinned Gitleaks runner. Raw CI logs, registry exports, chat transcripts, and
+issue exports stay outside trstctl storage. Discovery events and findings record
+only provider, artifact kind, rule id, file, line, scanner version, and
+credential-ref metadata.
+
+```bash
+trstctl-cli secrets scans third-party
+cat > third-party-scan.json <<'JSON'
+{"source":"acme/slack","artifact_path":"/var/lib/trstctl/exports/slack.jsonl","event":"message_export"}
+JSON
+trstctl-cli --idempotency-key third-party-scan-1 \
+  secrets scans third-party ingest slack -f third-party-scan.json
+```
+
+Native Slack/Jira/container-registry API polling, provider signature validation, and
+provider-native annotations are tracked as architecture shortfalls rather than
+counted as served behavior.
+
 **Secret sharing** creates one-time, self-destructing shares with durable server-side
 state. `POST /api/v1/secrets/shares` returns the bearer token once, but PostgreSQL
 stores only `SHA-256(token)` plus the envelope-encrypted value in `secret_shares`.
@@ -542,12 +566,17 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   Parameter Store, webhook.
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
+  `GET /api/v1/secrets/scans/third-party`,
+  `POST /api/v1/secrets/scans/third-party/{provider}/ingest`,
   `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans repositories`,
-  `trstctl-cli secrets scans repositories webhook`, `trstctl-cli secrets scans run`,
+  `trstctl-cli secrets scans repositories webhook`,
+  `trstctl-cli secrets scans third-party`,
+  `trstctl-cli secrets scans third-party ingest`, `trstctl-cli secrets scans run`,
   `trstctl-cli secrets scans staged-diff`,
   `trstctl-cli secrets scans pre-commit install`, Gitleaks `v8.27.2`, `213` default
   rules active, workspace and full-Git-history modes, additive custom `[[rules]]`
-  fragments, redacted findings only.
+  fragments, CI-log/container-registry/Slack/Jira artifact ingress, redacted findings
+  only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 

@@ -77,7 +77,7 @@ secret injection:
 | `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
 | `secrets rotations`               | `run`                                                                                                                                                                    |
 | `secrets syncs`                   | `run` · `targets`                                                                                                                                                       |
-| `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `run` · `staged-diff`                                                                                    |
+| `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `run` · `staged-diff`                                             |
 | `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
 | `secrets approvals`               | `approve`                                                                                                                                                                |
 | `secrets`                         | `login` · `pki` · `kubernetes-operator`                                                                                                                                  |
@@ -398,6 +398,14 @@ cat > repo-webhook.json <<'JSON'
 {"repository":"acme/payments","checkout_path":".","ref":"refs/heads/main","event":"push"}
 JSON
 trstctl-cli --idempotency-key repo-scan-1 secrets scans repositories webhook github -f repo-webhook.json
+
+# Inspect CI-log, container-registry, Slack, and Jira artifact scanning posture,
+# then queue a redacted third-party artifact scan through the discovery outbox.
+trstctl-cli secrets scans third-party
+cat > third-party-scan.json <<'JSON'
+{"source":"acme/slack","artifact_path":"/var/lib/trstctl/exports/slack.jsonl","event":"message_export"}
+JSON
+trstctl-cli --idempotency-key third-party-scan-1 secrets scans third-party ingest slack -f third-party-scan.json
 
 # Create a transit AEAD key, encrypt data, rotate, and rewrap to the newest version.
 cat > transit-key.json <<'JSON'

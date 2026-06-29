@@ -5509,18 +5509,18 @@
       "phase": "P2",
       "priority": 76,
       "served_state": "served",
-      "backend_status": "served-api-cli-gitleaks-repo-webhook-precommit-staged-diff-deep-history-custom-rules",
-      "current_frontend_mapping": "operate: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run, including CAP-SCAN-03 workspace or full Git-history mode, additive custom rules, and response capabilities; CAP-SCAN-01 repository posture covers GitHub/GitLab/Bitbucket webhook ingress through GET /api/v1/secrets/scans/repositories and POST /api/v1/secrets/scans/repositories/{provider}/webhook; CAP-SCAN-02 staged-diff and pre-commit workflows are CLI-local guardrails.",
+      "backend_status": "served-api-cli-gitleaks-repo-webhook-precommit-staged-diff-deep-history-custom-rules-third-party-artifact-ingest",
+      "current_frontend_mapping": "operate: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run, including CAP-SCAN-03 workspace or full Git-history mode, additive custom rules, and response capabilities; CAP-SCAN-01 repository posture covers GitHub/GitLab/Bitbucket webhook ingress through GET /api/v1/secrets/scans/repositories and POST /api/v1/secrets/scans/repositories/{provider}/webhook; CAP-SCAN-02 staged-diff and pre-commit workflows are CLI-local guardrails; CAP-SCAN-04 third-party artifact posture and ingest cover CI/CD logs, container registries, Slack, and Jira through GET /api/v1/secrets/scans/third-party and POST /api/v1/secrets/scans/third-party/{provider}/ingest.",
       "target_gui_mapping": "Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling.",
       "acceptance_test": "UI proves finding snippets are redacted and actions require proper scope.",
       "source_docs": ["docs/features/secrets.md"],
       "source_backend": ["internal/secretscan", "internal/api/secrets.go", "internal/server/secrets.go"],
       "source_frontend": ["web/src/pages/Secrets.tsx"],
       "status": "closed",
-      "notes": "COMPETE-046 adds CAP-SCAN-01 repository realtime ingress: provider posture, authenticated normalized GitHub/GitLab/Bitbucket webhook queueing into discovery.run outbox, and served worker execution against checkout_path or public/local clone_url. COMPETE-047 adds CAP-SCAN-02 local guardrails: staged Git blob scanning, base/head CI diff scanning, and pre-commit hook installation through the CLI without requiring a server. COMPETE-048 adds CAP-SCAN-03 full Git-history deep scans through the served API/CLI/UI using Gitleaks git --log-opts --all, additive custom [[rules]] fragments that extend defaults, response capability metadata, OpenAPI/SDK contracts, and execution tests. Native provider signature verification, private credential_ref clone resolution, provider-native check annotations, and central ingest for local CAP-SCAN-02 JSON remain documented architecture shortfalls rather than counted as served.",
-      "api_surface": ["getSecretRepositoryScanning", "receiveSecretRepositoryWebhook", "scanSecrets"],
+      "notes": "COMPETE-046 adds CAP-SCAN-01 repository realtime ingress: provider posture, authenticated normalized GitHub/GitLab/Bitbucket webhook queueing into discovery.run outbox, and served worker execution against checkout_path or public/local clone_url. COMPETE-047 adds CAP-SCAN-02 local guardrails: staged Git blob scanning, base/head CI diff scanning, and pre-commit hook installation through the CLI without requiring a server. COMPETE-048 adds CAP-SCAN-03 full Git-history deep scans through the served API/CLI/UI using Gitleaks git --log-opts --all, additive custom [[rules]] fragments that extend defaults, response capability metadata, OpenAPI/SDK contracts, and execution tests. COMPETE-068 adds CAP-SCAN-04 third-party artifact ingest for CI/CD logs, container registries, Slack, and Jira through served API/CLI/UI paths backed by discovery.run outbox execution. Native provider signature verification, private credential_ref clone resolution, provider-native check annotations, central ingest for local CAP-SCAN-02 JSON, native Slack/Jira/container-registry API polling, and artifact retention automation remain documented architecture shortfalls rather than counted as served.",
+      "api_surface": ["getSecretRepositoryScanning", "receiveSecretRepositoryWebhook", "getThirdPartySecretScanning", "ingestThirdPartySecretScan", "scanSecrets"],
       "api_na": "",
-      "cli_surface": ["secrets scans pre-commit install", "secrets scans repositories", "secrets scans repositories webhook", "secrets scans run", "secrets scans staged-diff"],
+      "cli_surface": ["secrets scans pre-commit install", "secrets scans repositories", "secrets scans repositories webhook", "secrets scans third-party", "secrets scans third-party ingest", "secrets scans run", "secrets scans staged-diff"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -5528,31 +5528,34 @@
             "scanSecrets invokes the pinned Gitleaks binary through POST /api/v1/secrets/scans, parses only redacted rule/file/line metadata, and records findings through discovery events.",
             "scanSecrets supports CAP-SCAN-03 by passing mode=git_history and custom_rules_path into the Gitleaks runner, which executes git-history scans with --log-opts --all, keeps the default 213-rule floor active, and adds custom [[rules]] fragments through a default-extending wrapper config.",
             "receiveSecretRepositoryWebhook accepts normalized GitHub/GitLab/Bitbucket repository events, upserts a secret_repo discovery source, and queues discovery.run outbox work for Gitleaks execution.",
+            "ingestThirdPartySecretScan accepts CI/CD log, container-registry, Slack, and Jira artifact paths, upserts a secret_third_party discovery source, and queues discovery.run outbox work for pinned Gitleaks execution without storing raw artifacts.",
             "secrets scans staged-diff materializes only staged Git blobs or the head side of an explicit base/head diff into a temporary scan tree before invoking the same pinned Gitleaks runner.",
             "secrets scans pre-commit install writes an executable pre-commit hook that blocks on the staged-diff scanner by default.",
             "The served scan response reports the pinned default 213-rule Gitleaks ruleset, satisfying the 140+ rule floor."
           ],
-          "refs": ["internal/api/secrets.go", "internal/secretscan/gitdiff.go", "internal/secretscan/gitleaks.go", "internal/secretscan/repository.go", "internal/orchestrator/discovery.go", "internal/server/discovery.go"]
+          "refs": ["internal/api/secrets.go", "internal/secretscan/gitdiff.go", "internal/secretscan/gitleaks.go", "internal/secretscan/repository.go", "internal/secretscan/thirdparty.go", "internal/orchestrator/discovery.go", "internal/server/discovery.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - Gitleaks scan execution and CAP-SCAN-01 repository posture are visible with provider, webhook path, event-flow, release-gate, and residual-shortfall metadata; the scan form exposes workspace versus Git-history mode, custom rules path, and returned scan capabilities.",
+            "current_frontend_mapping: operate: Secrets at /secrets - Gitleaks scan execution, CAP-SCAN-01 repository posture, and CAP-SCAN-04 third-party artifact posture are visible with provider, ingest path, event-flow, release-gate, and residual-shortfall metadata; the scan forms expose workspace versus Git-history mode, custom rules path, third-party source/artifact/event inputs, and returned scan capabilities.",
             "target_gui_mapping: Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling."
           ],
           "refs": ["web/src/pages/Secrets.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry and accepts mode=git_history/custom_rules_path in its JSON body; trstctl-cli secrets scans repositories reads CAP-SCAN-01 posture; trstctl-cli secrets scans repositories webhook queues provider events; trstctl-cli secrets scans staged-diff runs local staged or base/head diff scans without --server; trstctl-cli secrets scans pre-commit install writes the local hook."],
+          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry and accepts mode=git_history/custom_rules_path in its JSON body; trstctl-cli secrets scans repositories reads CAP-SCAN-01 posture; trstctl-cli secrets scans repositories webhook queues provider events; trstctl-cli secrets scans third-party reads CAP-SCAN-04 posture; trstctl-cli secrets scans third-party ingest queues CI/CD log, container-registry, Slack, or Jira artifact scans; trstctl-cli secrets scans staged-diff runs local staged or base/head diff scans without --server; trstctl-cli secrets scans pre-commit install writes the local hook."],
           "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
-          "evidence": ["OpenAPI operationIds getSecretRepositoryScanning, receiveSecretRepositoryWebhook, and scanSecrets are registered with SecretRepositoryScanPosture, SecretRepositoryWebhookRequest/Receipt, and SecretScan schemas; SecretScanRequest includes mode and custom_rules_path, and SecretScan includes mode, custom_rules, and capabilities."],
+          "evidence": ["OpenAPI operationIds getSecretRepositoryScanning, receiveSecretRepositoryWebhook, getThirdPartySecretScanning, ingestThirdPartySecretScan, and scanSecrets are registered with SecretRepositoryScanPosture, SecretRepositoryWebhookRequest/Receipt, ThirdPartySecretScanPosture, ThirdPartySecretScanIngestRequest/Receipt, and SecretScan schemas; SecretScanRequest includes mode and custom_rules_path, and SecretScan includes mode, custom_rules, and capabilities."],
           "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json", "clients/sdk/openapi.json", "web/src/lib/api-types.gen.ts", "clients/sdk/typescript/src/types.gen.ts", "clients/sdk/python/src/trstctl_sdk/types.py"]
         },
         "test": {
           "evidence": [
             "TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01 queues a GitHub repository event through the served API, dispatches the discovery.run outbox worker, and records a redacted leaked-secret discovery finding.",
             "TestServedRepoSecretScanningCAPSCAN01 proves the CAP-SCAN-01 posture reports GitHub/GitLab/Bitbucket providers, webhook paths, release gates, event flow, and AN controls.",
+            "TestServedThirdPartySecretScanningCAPSCAN04 proves the CAP-SCAN-04 posture reports CI/CD log, container-registry, Slack, and Jira providers plus ingest paths, release gates, event flow, and AN controls.",
+            "TestServedThirdPartySecretScanningCAPSCAN04EndToEnd queues all four third-party providers through the served API, dispatches discovery.run outbox work, and records redacted leaked-secret findings without the raw artifact secret.",
             "TestServedGitleaksScanDetectsPlantedSecret plants a Slack token, drives POST /api/v1/secrets/scans against the real Gitleaks binary, asserts 140+ active rules, and proves discovery/graph visibility without leaking the value.",
             "TestServedDeepSecretScanCAPSCAN03UsesHistoryAndCustomRules drives POST /api/v1/secrets/scans with mode=git_history and custom_rules_path, proves the scanner receives those options, checks response capabilities, and verifies redacted discovery output.",
             "Gitleaks runner tests prove deep mode uses the git-history command with --log-opts --all, wraps custom rules with [extend] useDefault = true, and rejects allowlist/disabled-rule fragments.",
@@ -5563,6 +5566,7 @@
           ],
           "refs": [
             "internal/server/secret_repository_scan_served_test.go",
+            "internal/server/secret_third_party_scan_served_test.go",
             "internal/api/secret_repository_scan_test.go",
             "internal/server/secrets_scan_served_test.go",
             "internal/cli/cli_test.go",
@@ -5576,12 +5580,12 @@
           "refs": ["docs/features/secrets.md", "docs/journeys/manage-secrets.md", "docs/configuration.md", "docs/cli.md"]
         },
         "rbac": {
-          "evidence": ["The feature authz manifest maps GET /api/v1/secrets/scans/repositories to secrets:read, POST /api/v1/secrets/scans/repositories/{provider}/webhook and POST /api/v1/secrets/scans to secrets:write; discovery/graph reads remain guarded by discovery:read and graph:read."],
+          "evidence": ["The feature authz manifest maps GET /api/v1/secrets/scans/repositories and GET /api/v1/secrets/scans/third-party to secrets:read, POST /api/v1/secrets/scans/repositories/{provider}/webhook, POST /api/v1/secrets/scans/third-party/{provider}/ingest, and POST /api/v1/secrets/scans to secrets:write; discovery/graph reads remain guarded by discovery:read and graph:read."],
           "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go", "internal/server/secrets_scan_served_test.go"]
         },
         "audit": {
-          "evidence": ["Served scans and repository webhook runs record discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events without the secret value."],
-          "refs": ["internal/orchestrator/discovery.go", "internal/server/secrets_scan_served_test.go", "internal/server/secret_repository_scan_served_test.go"]
+          "evidence": ["Served scans, repository webhook runs, and third-party artifact runs record discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events without the secret value."],
+          "refs": ["internal/orchestrator/discovery.go", "internal/server/secrets_scan_served_test.go", "internal/server/secret_repository_scan_served_test.go", "internal/server/secret_third_party_scan_served_test.go"]
         },
         "telemetry": {
           "evidence": ["The scan handler emits the low-cardinality feature observer signal secrets/scan with outcome and duration."],

@@ -2524,6 +2524,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/scans/third-party": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report CI/CD, registry, Slack, and Jira secret-scanning posture */
+        get: operations["getThirdPartySecretScanning"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/scans/third-party/{provider}/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a third-party artifact secret scan */
+        post: operations["ingestThirdPartySecretScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/shares": {
         parameters: {
             query?: never;
@@ -5838,6 +5872,52 @@ export interface components {
             id: string;
             mechanism: string;
             scope: string;
+        };
+        ThirdPartySecretScanIngestRequest: {
+            artifact_kind?: string;
+            artifact_path: string;
+            credential_ref?: string;
+            event?: string;
+            source: string;
+        };
+        ThirdPartySecretScanPosture: {
+            architecture_controls: string[];
+            capability: string;
+            event_flow: string[];
+            evidence_refs: string[];
+            generated_at: string;
+            ingest_paths: string[];
+            minimum_rules_active: number;
+            operator_actions: string[];
+            providers: components["schemas"]["ThirdPartySecretScanProvider"][];
+            queue_model: string;
+            redaction_model: string;
+            release_gates: components["schemas"]["SecretRepositoryScanGate"][];
+            residuals: string[];
+            scanner: string;
+            served: boolean;
+        };
+        ThirdPartySecretScanProvider: {
+            artifact_kinds: string[];
+            id: string;
+            ingest_mode: string;
+            name: string;
+            outbox_mode: string;
+            secret_handling: string;
+        };
+        ThirdPartySecretScanReceipt: {
+            capability: string;
+            discovery_run_path: string;
+            outbox_destination: string;
+            provider: string;
+            queued: boolean;
+            /** Format: uuid */
+            run_id: string;
+            scanner: string;
+            source: string;
+            /** Format: uuid */
+            source_id: string;
+            status: string;
         };
         TransitCiphertext: {
             ciphertext: string;
@@ -12882,6 +12962,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretRepositoryWebhookReceipt"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getThirdPartySecretScanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThirdPartySecretScanPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    ingestThirdPartySecretScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description cicd_log, container_registry, slack, or jira */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThirdPartySecretScanIngestRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThirdPartySecretScanReceipt"];
                 };
             };
             /** @description client error */

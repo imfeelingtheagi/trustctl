@@ -27,6 +27,8 @@ const { apiMock } = vi.hoisted(() => ({
     rewrapTransit: vi.fn(),
     signTransit: vi.fn(),
     secretRepositoryScanning: vi.fn(),
+    thirdPartySecretScanning: vi.fn(),
+    ingestThirdPartySecretScan: vi.fn(),
     secretSyncTargets: vi.fn(),
     kubernetesSecretOperator: vi.fn(),
     scanSecrets: vi.fn(),
@@ -101,6 +103,67 @@ function repoScanPostureFixture() {
     operator_actions: ["install provider webhooks"],
     residuals: ["native provider signature verification remains a follow-up"],
     evidence_refs: ["internal/api/secrets.go"],
+    architecture_controls: ["AN-2", "AN-5", "AN-6", "AN-8"],
+  };
+}
+
+function thirdPartyScanPostureFixture() {
+  return {
+    capability: "CAP-SCAN-04",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    scanner: "gitleaks v8.27.2",
+    minimum_rules_active: 140,
+    providers: [
+      {
+        id: "cicd_log",
+        name: "CI/CD logs",
+        artifact_kinds: ["workflow log", "job trace"],
+        ingest_mode: "artifact path queues secret_third_party discovery",
+        secret_handling: "raw logs stay outside trstctl; redacted metadata only",
+        outbox_mode: "discovery.run outbox",
+      },
+      {
+        id: "container_registry",
+        name: "Container registries",
+        artifact_kinds: ["manifest", "layer metadata"],
+        ingest_mode: "artifact path queues secret_third_party discovery",
+        secret_handling: "raw registry artifacts stay outside trstctl",
+        outbox_mode: "discovery.run outbox",
+      },
+      {
+        id: "slack",
+        name: "Slack",
+        artifact_kinds: ["export jsonl", "message transcript"],
+        ingest_mode: "artifact path queues secret_third_party discovery",
+        secret_handling: "raw chat exports stay outside trstctl",
+        outbox_mode: "discovery.run outbox",
+      },
+      {
+        id: "jira",
+        name: "Jira",
+        artifact_kinds: ["issue export", "attachment manifest"],
+        ingest_mode: "artifact path queues secret_third_party discovery",
+        secret_handling: "raw issue exports stay outside trstctl",
+        outbox_mode: "discovery.run outbox",
+      },
+    ],
+    ingest_paths: [
+      "/api/v1/secrets/scans/third-party/cicd_log/ingest",
+      "/api/v1/secrets/scans/third-party/container_registry/ingest",
+      "/api/v1/secrets/scans/third-party/slack/ingest",
+      "/api/v1/secrets/scans/third-party/jira/ingest",
+    ],
+    queue_model: "artifact-path ingest records a tenant-scoped discovery run",
+    redaction_model: "rule/file/line and credential_ref only",
+    event_flow: ["discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"],
+    release_gates: [
+      { id: "third-party-artifact-contract", command: "go test", artifact: "cap-scan-04-contract", required: true },
+      { id: "architecture-lint", command: "make lint test", artifact: "local gate transcript", required: true },
+    ],
+    operator_actions: ["export CI log, registry, Slack, or Jira artifacts to a scanner-readable path"],
+    residuals: ["native provider API polling and signature verification remain follow-ups"],
+    evidence_refs: ["internal/api/secrets.go", "internal/server/discovery.go"],
     architecture_controls: ["AN-2", "AN-5", "AN-6", "AN-8"],
   };
 }
@@ -180,6 +243,19 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
       ],
     });
     apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
+    apiMock.thirdPartySecretScanning.mockResolvedValue(thirdPartyScanPostureFixture());
+    apiMock.ingestThirdPartySecretScan.mockResolvedValue({
+      capability: "CAP-SCAN-04",
+      provider: "slack",
+      source: "acme/slack",
+      source_id: "secret-third-party:slack:acme-slack",
+      run_id: "66666666-6666-6666-6666-666666666666",
+      queued: true,
+      status: "queued",
+      outbox_destination: "discovery.run",
+      scanner: "gitleaks v8.27.2",
+      discovery_run_path: "/api/v1/discovery/runs/66666666-6666-6666-6666-666666666666",
+    });
     apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
     apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.scanSecrets.mockResolvedValue({
@@ -216,9 +292,11 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
 
     await screen.findByText("app/db/password");
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
+    await waitFor(() => expect(apiMock.thirdPartySecretScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.secretSyncTargets).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
+    expect(screen.getByText("CAP-SCAN-04")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-03")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
     expect(screen.getByText("TrstctlSecretSync - served")).toBeInTheDocument();
@@ -233,6 +311,22 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("GitLab")).toBeInTheDocument();
     expect(screen.getByText("Bitbucket")).toBeInTheDocument();
+    expect(screen.getAllByText("Slack").length).toBeGreaterThan(0);
+    expect(screen.getByText("/api/v1/secrets/scans/third-party/slack/ingest")).toBeInTheDocument();
+    const thirdPartyForm = within(screen.getByRole("form", { name: "Queue third-party secret scan" }));
+    await user.selectOptions(thirdPartyForm.getByLabelText("External source"), "slack");
+    await user.type(thirdPartyForm.getByLabelText("Source ref"), "acme/slack");
+    await user.type(thirdPartyForm.getByLabelText("Artifact path"), "/var/lib/trstctl/exports/slack.jsonl");
+    await user.type(thirdPartyForm.getByLabelText("Event"), "message_export");
+    await user.click(thirdPartyForm.getByRole("button", { name: /queue scan/i }));
+    await waitFor(() =>
+      expect(apiMock.ingestThirdPartySecretScan).toHaveBeenCalledWith("slack", {
+        source: "acme/slack",
+        artifact_path: "/var/lib/trstctl/exports/slack.jsonl",
+        event: "message_export",
+      }),
+    );
+    expect(await screen.findByText(/slack scan queued as run 66666666-6666-6666-6666-666666666666/i)).toBeInTheDocument();
     const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
     await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
     await user.click(scanForm.getByRole("button", { name: /run scan/i }));

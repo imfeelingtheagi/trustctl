@@ -300,6 +300,14 @@ remaining integration work.
   graph** and **risk scoring** read APIs are already served (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`), and the **AI/RCA/MCP** surface is served behind
   `ai.enable_api`; they are not part of this not-yet-served bucket.
+- **Third-party secret scanning:** CI/CD log, container-registry, Slack, and Jira
+  artifact scanning is served through
+  `/api/v1/secrets/scans/third-party/{provider}/ingest` and the matching CLI. The
+  served contract intentionally accepts an operator-owned `artifact_path`; raw logs,
+  registry metadata, chat exports, and issue exports stay outside trstctl storage,
+  while discovery stores only redacted rule/file/line/provider metadata. Native
+  provider API polling, provider signature verification, artifact retention
+  automation, and provider-native annotations remain architecture shortfalls.
 - **React console scale work:** the console itself is served (see "The React web
   console" below). What remains not yet served of the original F12 epic is cursor
   pagination and list virtualization for very large tables.

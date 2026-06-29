@@ -21,6 +21,8 @@ import {
   type SecretScan,
   type SecretSync,
   type SecretSyncTargetCatalog,
+  type ThirdPartySecretScanPosture,
+  type ThirdPartySecretScanReceipt,
   type SecretValue,
   type ShareToken,
   type ShareValue,
@@ -121,6 +123,14 @@ export function Secrets() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<SecretScan | null>(null);
   const [repoScanPosture, setRepoScanPosture] = useState<SecretRepositoryScanPosture | null>(null);
+  const [thirdPartyPosture, setThirdPartyPosture] = useState<ThirdPartySecretScanPosture | null>(null);
+  const [thirdPartyProvider, setThirdPartyProvider] = useState("cicd_log");
+  const [thirdPartySource, setThirdPartySource] = useState("");
+  const [thirdPartyArtifactPath, setThirdPartyArtifactPath] = useState("");
+  const [thirdPartyEvent, setThirdPartyEvent] = useState("");
+  const [thirdPartyBusy, setThirdPartyBusy] = useState(false);
+  const [thirdPartyError, setThirdPartyError] = useState<string | null>(null);
+  const [thirdPartyReceipt, setThirdPartyReceipt] = useState<ThirdPartySecretScanReceipt | null>(null);
 
   const [syncName, setSyncName] = useState("");
   const [syncTarget, setSyncTarget] = useState("");
@@ -139,6 +149,10 @@ export function Secrets() {
         typeof api.secretRepositoryScanning === "function"
           ? api.secretRepositoryScanning().catch(() => null)
           : Promise.resolve<SecretRepositoryScanPosture | null>(null);
+      const thirdPartyPosturePromise =
+        typeof api.thirdPartySecretScanning === "function"
+          ? api.thirdPartySecretScanning().catch(() => null)
+          : Promise.resolve<ThirdPartySecretScanPosture | null>(null);
       const syncCatalogPromise =
         typeof api.secretSyncTargets === "function"
           ? api.secretSyncTargets().catch(() => null)
@@ -147,9 +161,10 @@ export function Secrets() {
         typeof api.kubernetesSecretOperator === "function"
           ? api.kubernetesSecretOperator().catch(() => null)
           : Promise.resolve<KubernetesSecretOperator | null>(null);
-      const [page, posture, catalog, operator] = await Promise.all([
+      const [page, posture, thirdParty, catalog, operator] = await Promise.all([
         api.secretPage({ limit: 20, cursor }),
         posturePromise,
+        thirdPartyPosturePromise,
         syncCatalogPromise,
         operatorPosturePromise,
       ]);
@@ -158,6 +173,7 @@ export function Secrets() {
       setAccessName((current) => current || page.items[0]?.name || "");
       setSyncName((current) => current || page.items[0]?.name || "");
       if (posture) setRepoScanPosture(posture);
+      if (thirdParty) setThirdPartyPosture(thirdParty);
       if (catalog) {
         setSyncCatalog(catalog);
       }
@@ -528,6 +544,28 @@ export function Secrets() {
       setScanError(apiProblemMessage(err, "Could not run secret scan"));
     } finally {
       setScanBusy(false);
+    }
+  }
+
+  async function submitThirdPartySecretScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setThirdPartyError(null);
+    setThirdPartyBusy(true);
+    try {
+      const source = thirdPartySource.trim();
+      const artifactPath = thirdPartyArtifactPath.trim();
+      if (!source) throw new Error("Source is required");
+      if (!artifactPath) throw new Error("Artifact path is required");
+      const receipt = await api.ingestThirdPartySecretScan(thirdPartyProvider, {
+        source,
+        artifact_path: artifactPath,
+        ...(thirdPartyEvent.trim() ? { event: thirdPartyEvent.trim() } : {}),
+      });
+      setThirdPartyReceipt(receipt);
+    } catch (err) {
+      setThirdPartyError(apiProblemMessage(err, "Could not queue third-party secret scan"));
+    } finally {
+      setThirdPartyBusy(false);
     }
   }
 
@@ -1046,6 +1084,62 @@ export function Secrets() {
           {/* CAP-SCAN-01 source anchor: repository secret scanning is served by REST, CLI, outbox, and Gitleaks worker paths */}
         </div>
         {repoScanPosture && <RepositoryScanPosture posture={repoScanPosture} />}
+        {thirdPartyPosture && <ThirdPartyScanPosture posture={thirdPartyPosture} />}
+        <form
+          aria-label={t("secrets.thirdPartyScan.form")}
+          onSubmit={(event) => void submitThirdPartySecretScan(event)}
+          className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+        >
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">{t("secrets.thirdPartyScan.provider")}</span>
+            <select className="rounded-md border border-input bg-background px-3 py-2" value={thirdPartyProvider} onChange={(event) => setThirdPartyProvider(event.target.value)}>
+              {(thirdPartyPosture?.providers ?? defaultThirdPartyProviders()).map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">{t("secrets.thirdPartyScan.source")}</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={thirdPartySource}
+              onChange={(event) => setThirdPartySource(event.target.value)}
+              placeholder={t("secrets.thirdPartyScan.sourcePlaceholder")}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">{t("secrets.thirdPartyScan.artifactPath")}</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={thirdPartyArtifactPath}
+              onChange={(event) => setThirdPartyArtifactPath(event.target.value)}
+              placeholder={t("secrets.thirdPartyScan.artifactPlaceholder")}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">{t("secrets.thirdPartyScan.event")}</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={thirdPartyEvent}
+              onChange={(event) => setThirdPartyEvent(event.target.value)}
+              placeholder={t("secrets.thirdPartyScan.eventPlaceholder")}
+            />
+          </label>
+          <Button type="submit" className="self-end" disabled={thirdPartyBusy || Boolean(loadError)}>
+            {thirdPartyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            {thirdPartyBusy ? t("secrets.thirdPartyScan.queueing") : t("secrets.thirdPartyScan.queue")}
+          </Button>
+        </form>
+        {thirdPartyError && <ErrorState title={t("secrets.thirdPartyScan.errorTitle")}>{thirdPartyError}</ErrorState>}
+        {thirdPartyReceipt && (
+          <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
+            {t("secrets.thirdPartyScan.accepted", { provider: thirdPartyReceipt.provider, run: thirdPartyReceipt.run_id })}
+          </p>
+        )}
         {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
         <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
         <form
@@ -1725,6 +1819,77 @@ function RepositoryScanPosture({ posture }: { posture: SecretRepositoryScanPostu
       </dl>
     </div>
   );
+}
+
+function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretScanPosture }) {
+  const { t } = useTranslation();
+  return (
+    <div className="ui-panel grid gap-3 p-comfortable text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
+        <span className="font-medium">{posture.served ? t("secrets.thirdPartyScan.active") : t("secrets.thirdPartyScan.unavailable")}</span>
+        <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="ui-table min-w-[52rem]">
+          <caption className="sr-only">{t("secrets.thirdPartyScan.providerCaption")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("secrets.repoScan.provider")}</th>
+              <th scope="col">{t("secrets.thirdPartyScan.artifactKinds")}</th>
+              <th scope="col">{t("secrets.repoScan.ingress")}</th>
+              <th scope="col">{t("secrets.repoScan.outbox")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {posture.providers.map((provider) => (
+              <tr key={provider.id} className="align-top">
+                <td className="font-medium">{provider.name}</td>
+                <td>{provider.artifact_kinds.join(", ")}</td>
+                <td>{provider.ingest_mode}</td>
+                <td>{provider.outbox_mode}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl className="grid gap-3 md:grid-cols-2">
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.thirdPartyScan.ingestPaths")}</dt>
+          <dd className="mt-1 grid gap-1 font-mono text-xs">
+            {posture.ingest_paths.map((path) => (
+              <span key={path}>{path}</span>
+            ))}
+          </dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.eventFlow")}</dt>
+          <dd className="mt-1 grid gap-1 font-mono text-xs">
+            {posture.event_flow.map((event) => (
+              <span key={event}>{event}</span>
+            ))}
+          </dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.releaseGates")}</dt>
+          <dd className="mt-1">{posture.release_gates.map((gate) => gate.id).join(", ")}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.residuals")}</dt>
+          <dd className="mt-1">{posture.residuals.join(" ")}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function defaultThirdPartyProviders(): ThirdPartySecretScanPosture["providers"] {
+  return [
+    { id: "cicd_log", name: "CI/CD logs", artifact_kinds: ["ci_cd_log"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+    { id: "container_registry", name: "Container registry exports", artifact_kinds: ["container_registry_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+    { id: "slack", name: "Slack exports", artifact_kinds: ["slack_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+    { id: "jira", name: "Jira exports", artifact_kinds: ["jira_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
+  ];
 }
 
 function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): SecretMeta[] {

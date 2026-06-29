@@ -1997,6 +1997,36 @@ func componentSchemas() map[string]*Schema {
 		"run_id": uuid(), "queued": {Type: "boolean"}, "status": str(),
 		"outbox_destination": str(), "scanner": str(), "discovery_run_path": str(),
 	}, "capability", "provider", "repository", "source_id", "run_id", "queued", "status", "outbox_destination", "scanner", "discovery_run_path")
+	thirdPartySecretScanProvider := object(map[string]*Schema{
+		"id": str(), "name": str(),
+		"artifact_kinds":  {Type: "array", Items: str()},
+		"ingest_mode":     str(),
+		"secret_handling": str(),
+		"outbox_mode":     str(),
+	}, "id", "name", "artifact_kinds", "ingest_mode", "secret_handling", "outbox_mode")
+	thirdPartySecretScanPosture := object(map[string]*Schema{
+		"capability": str(), "served": {Type: "boolean"}, "generated_at": str(),
+		"providers":             {Type: "array", Items: ref("ThirdPartySecretScanProvider")},
+		"ingest_paths":          {Type: "array", Items: str()},
+		"queue_model":           str(),
+		"scanner":               str(),
+		"minimum_rules_active":  {Type: "integer"},
+		"redaction_model":       str(),
+		"event_flow":            {Type: "array", Items: str()},
+		"release_gates":         {Type: "array", Items: ref("SecretRepositoryScanGate")},
+		"operator_actions":      {Type: "array", Items: str()},
+		"residuals":             {Type: "array", Items: str()},
+		"evidence_refs":         {Type: "array", Items: str()},
+		"architecture_controls": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "providers", "ingest_paths", "queue_model", "scanner", "minimum_rules_active", "redaction_model", "event_flow", "release_gates", "operator_actions", "residuals", "evidence_refs", "architecture_controls")
+	thirdPartySecretScanIngestReq := object(map[string]*Schema{
+		"source": str(), "artifact_path": str(), "artifact_kind": str(), "event": str(), "credential_ref": str(),
+	}, "source", "artifact_path")
+	thirdPartySecretScanReceipt := object(map[string]*Schema{
+		"capability": str(), "provider": str(), "source": str(), "source_id": uuid(),
+		"run_id": uuid(), "queued": {Type: "boolean"}, "status": str(),
+		"outbox_destination": str(), "scanner": str(), "discovery_run_path": str(),
+	}, "capability", "provider", "source", "source_id", "run_id", "queued", "status", "outbox_destination", "scanner", "discovery_run_path")
 	dynamicLeaseRenewReq := object(map[string]*Schema{
 		"extend_seconds": {Type: "integer"},
 	}, "extend_seconds")
@@ -2451,6 +2481,10 @@ func componentSchemas() map[string]*Schema {
 		"SecretRepositoryScanPosture":           secretRepoPosture,
 		"SecretRepositoryWebhookRequest":        secretRepoWebhookReq,
 		"SecretRepositoryWebhookReceipt":        secretRepoWebhookReceipt,
+		"ThirdPartySecretScanProvider":          thirdPartySecretScanProvider,
+		"ThirdPartySecretScanPosture":           thirdPartySecretScanPosture,
+		"ThirdPartySecretScanIngestRequest":     thirdPartySecretScanIngestReq,
+		"ThirdPartySecretScanReceipt":           thirdPartySecretScanReceipt,
 		"DynamicLeaseRequest":                   dynamicLeaseReq,
 		"DynamicLeaseRenewRequest":              dynamicLeaseRenewReq,
 		"DynamicLease":                          dynamicLease,

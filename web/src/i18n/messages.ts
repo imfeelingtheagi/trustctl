@@ -2122,6 +2122,74 @@ export const messages = {
     defaultMessage: "Residuals",
     description: "Label for repository secret scanning known residual shortfalls.",
   },
+  "secrets.thirdPartyScan.active": {
+    defaultMessage: "Third-party artifact scanning active",
+    description: "Status text when CAP-SCAN-04 third-party artifact secret scanning is served.",
+  },
+  "secrets.thirdPartyScan.unavailable": {
+    defaultMessage: "Third-party artifact scanning unavailable",
+    description: "Status text when CAP-SCAN-04 third-party artifact secret scanning is not served.",
+  },
+  "secrets.thirdPartyScan.providerCaption": {
+    defaultMessage: "Third-party secret scanning providers",
+    description: "Accessible caption for the CAP-SCAN-04 provider table.",
+  },
+  "secrets.thirdPartyScan.artifactKinds": {
+    defaultMessage: "Artifact kinds",
+    description: "CAP-SCAN-04 provider table header for supported artifact kinds.",
+  },
+  "secrets.thirdPartyScan.ingestPaths": {
+    defaultMessage: "Ingest paths",
+    description: "Label for CAP-SCAN-04 ingest path list.",
+  },
+  "secrets.thirdPartyScan.form": {
+    defaultMessage: "Queue third-party secret scan",
+    description: "Accessible label for the CAP-SCAN-04 ingest form.",
+  },
+  "secrets.thirdPartyScan.provider": {
+    defaultMessage: "External source",
+    description: "Label for CAP-SCAN-04 provider select.",
+  },
+  "secrets.thirdPartyScan.source": {
+    defaultMessage: "Source ref",
+    description: "Label for CAP-SCAN-04 source reference input.",
+  },
+  "secrets.thirdPartyScan.sourcePlaceholder": {
+    defaultMessage: "github-actions/payments#982",
+    description: "Placeholder for CAP-SCAN-04 source reference.",
+  },
+  "secrets.thirdPartyScan.artifactPath": {
+    defaultMessage: "Artifact path",
+    description: "Label for CAP-SCAN-04 artifact path input.",
+  },
+  "secrets.thirdPartyScan.artifactPlaceholder": {
+    defaultMessage: "/var/lib/trstctl/exports/slack.jsonl",
+    description: "Placeholder for CAP-SCAN-04 artifact path.",
+  },
+  "secrets.thirdPartyScan.event": {
+    defaultMessage: "Event",
+    description: "Label for optional CAP-SCAN-04 event input.",
+  },
+  "secrets.thirdPartyScan.eventPlaceholder": {
+    defaultMessage: "workflow_run",
+    description: "Placeholder for optional CAP-SCAN-04 event input.",
+  },
+  "secrets.thirdPartyScan.queueing": {
+    defaultMessage: "Queueing",
+    description: "Button label while CAP-SCAN-04 ingest is in flight.",
+  },
+  "secrets.thirdPartyScan.queue": {
+    defaultMessage: "Queue scan",
+    description: "Button label for CAP-SCAN-04 ingest.",
+  },
+  "secrets.thirdPartyScan.errorTitle": {
+    defaultMessage: "Third-party scan failed",
+    description: "Error title for CAP-SCAN-04 ingest failure.",
+  },
+  "secrets.thirdPartyScan.accepted": {
+    defaultMessage: "{provider} scan queued as run {run}",
+    description: "Success status after CAP-SCAN-04 ingest is accepted.",
+  },
   "workloads.kubernetesCSR.heading": {
     defaultMessage: "Kubernetes CertificateSigningRequest controller",
     description: "Heading for native Kubernetes CSR support posture on the Workloads page.",
@@ -2797,6 +2865,23 @@ const esESCatalog = {
   "secrets.repoScan.eventFlow": "Flujo de eventos",
   "secrets.repoScan.releaseGates": "Gates de release",
   "secrets.repoScan.residuals": "Residuales",
+  "secrets.thirdPartyScan.active": "Escaneo de artefactos externos activo",
+  "secrets.thirdPartyScan.unavailable": "Escaneo de artefactos externos no disponible",
+  "secrets.thirdPartyScan.providerCaption": "Proveedores de escaneo de secretos externos",
+  "secrets.thirdPartyScan.artifactKinds": "Tipos de artefacto",
+  "secrets.thirdPartyScan.ingestPaths": "Rutas de ingreso",
+  "secrets.thirdPartyScan.form": "Encolar escaneo de secretos externos",
+  "secrets.thirdPartyScan.provider": "Fuente externa",
+  "secrets.thirdPartyScan.source": "Referencia de origen",
+  "secrets.thirdPartyScan.sourcePlaceholder": "github-actions/pagos#982",
+  "secrets.thirdPartyScan.artifactPath": "Ruta del artefacto",
+  "secrets.thirdPartyScan.artifactPlaceholder": "/var/lib/trstctl/exports/slack.jsonl",
+  "secrets.thirdPartyScan.event": "Evento",
+  "secrets.thirdPartyScan.eventPlaceholder": "workflow_run",
+  "secrets.thirdPartyScan.queueing": "Encolando",
+  "secrets.thirdPartyScan.queue": "Encolar escaneo",
+  "secrets.thirdPartyScan.errorTitle": "Falló el escaneo externo",
+  "secrets.thirdPartyScan.accepted": "Escaneo de {provider} encolado como run {run}",
   "workloads.kubernetesCSR.heading": "Controlador CertificateSigningRequest de Kubernetes",
   "workloads.kubernetesCSR.description":
     "El agente firma CSR nativas aprobadas de Kubernetes mediante la ruta configurada de emisión de trstctl y escribe solo el estado de la CSR en el clúster.",

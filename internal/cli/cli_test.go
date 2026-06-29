@@ -615,6 +615,35 @@ func TestSecretRepositoryScanCommandsMapToServedRoutes(t *testing.T) {
 	}
 }
 
+func TestThirdPartySecretScanCommandsMapToServedRoutes(t *testing.T) {
+	var posture capture
+	postureSrv := mockServer(t, 200, `{"capability":"CAP-SCAN-04","served":true}`, &posture)
+	code, _, _ := run(t, []string{"secrets", "scans", "third-party"}, cli.Env{Server: postureSrv.URL, HTTPClient: postureSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("posture exit = %d", code)
+	}
+	if posture.Method != "GET" || posture.Path != "/api/v1/secrets/scans/third-party" {
+		t.Errorf("posture request = %s %s", posture.Method, posture.Path)
+	}
+
+	var ingest capture
+	ingestSrv := mockServer(t, 202, `{"capability":"CAP-SCAN-04","queued":true}`, &ingest)
+	body := `{"source":"acme/slack","artifact_path":"/tmp/slack-export.jsonl"}`
+	code, _, _ = run(t, []string{"secrets", "scans", "third-party", "ingest", "slack", "-f", "-"}, cli.Env{Server: ingestSrv.URL, HTTPClient: ingestSrv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("ingest exit = %d", code)
+	}
+	if ingest.Method != "POST" || ingest.Path != "/api/v1/secrets/scans/third-party/slack/ingest" {
+		t.Errorf("ingest request = %s %s", ingest.Method, ingest.Path)
+	}
+	if strings.TrimSpace(string(ingest.Body)) != body {
+		t.Errorf("ingest body = %q, want %q", ingest.Body, body)
+	}
+	if ingest.Header.Get("Idempotency-Key") == "" {
+		t.Error("third-party ingest mutation should send an Idempotency-Key")
+	}
+}
+
 func TestSecretScanStagedDiffRunsLocallyWithoutServerAndRedacts(t *testing.T) {
 	repo := initCLIGitRepo(t)
 	writeCLIGitFile(t, repo, "app.env", "API_KEY=abc123-secret-value\n")
