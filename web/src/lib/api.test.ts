@@ -754,6 +754,80 @@ describe("revocation CRL distribution contract", () => {
   });
 });
 
+describe("scale orchestration contract", () => {
+  it("fetches CAP-SCALE-01 orchestration posture from the served route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-SCALE-01",
+        served: true,
+        generated_at: "2026-06-29T00:00:00Z",
+        target_credential_bands: [
+          { id: "SCALE-1M", managed_credential: "1,000,000 managed credentials", capacity_tier: "CAP-LARGE", topology: "multi-replica enterprise" },
+        ],
+        selected_capacity_tier: {
+          id: "CAP-LARGE",
+          name: "multi-replica enterprise",
+          tenants: 250,
+          managed_credentials: 1000000,
+          events_per_day: 10000000,
+          postgres_gib_30_day: 700,
+          jetstream_gib_30_day: 1200,
+          control_plane_cpu: "16 vCPU",
+          control_plane_memory_gib: 32,
+          signer_cpu: "6 vCPU",
+          signer_memory_gib: 8,
+          estimated_monthly_cost_usd: 14500,
+          estimated_cost_per_credential_usd: 0.0145,
+          notes: "External HA PostgreSQL and JetStream.",
+        },
+        hot_path_slos: [],
+        execution_lanes: [
+          {
+            id: "scale-signer",
+            subsystem: "signer",
+            worker_pool: "signer",
+            queue: "signer",
+            bulkhead_env: ["TRSTCTL_SIGNER_WORKERS"],
+            failure_mode: "reject",
+            external_side_effect: "signature",
+            replay_source: "events",
+            scale_trigger: "p95",
+            hot_path_slo: "PERF-SLO-007",
+            operator_control: "scale signer",
+            backpressure_signal: "queue saturation",
+            measurement: "perf live signer.rpc",
+            architecture_invariant: "AN-3/AN-4/AN-7/AN-8",
+          },
+        ],
+        shard_plan: [],
+        backpressure_policy: [],
+        release_gates: [
+          { id: "perf-live", command: "scripts/perf/run-local.sh --profile live", artifact: "scripts/perf/artifacts/live-load-baseline.json", required: true },
+        ],
+        operator_actions: ["run perf-live"],
+        residuals: ["customer pricing is operator-specific"],
+        evidence_refs: ["internal/perf/contract.go"],
+        measurement_artifacts: ["scripts/perf/artifacts/live-load-baseline.json"],
+        estimated_daily_event_load: 10000000,
+        estimated_monthly_cost_usd: 14500,
+        unit_economics: { estimated_cost_per_credential_usd: 0.0145, postgres_gib_30_day: 700, jetstream_gib_30_day: 1200, events_per_day: 10000000 },
+        tenant_isolation: { storage_enforcement: "RLS", query_rule: "tenant filter", evidence_refs: [] },
+        datastore: { postgres: "external HA PostgreSQL", jetstream: "external JetStream", rls: "tenant_id", outbox: "transactional outbox" },
+        signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
+        projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "events" },
+      }),
+    );
+
+    const result = await api.scaleOrchestration();
+
+    expect(result.capability).toBe("CAP-SCALE-01");
+    expect(result.selected_capacity_tier.managed_credentials).toBe(1000000);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/scale/orchestration");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+  });
+});
+
 describe("response integration dispatch contract", () => {
   it("dispatches response integrations with idempotency", async () => {
     mockFetch(

@@ -84,6 +84,7 @@ secret injection:
 | `transit` | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify` |
 | `managed-keys` | `generate` · `rotate` · `revoke` · `zeroize` |
 | `code-signing` | `sign` · `keyless` |
+| `scale` | `orchestration` |
 | `run` | child process with fetched secrets injected into its environment |
 
 Plus `version`.

@@ -75,3 +75,9 @@ The scheduled captured-soak artifact is valid only when:
 - The induced leak substitute step used `scripts/perf/soak.sh --selftest-fail` and
   failed as expected.
 - The trend report has `summary.ok: true`.
+
+The same capacity denominator is served through
+`GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`. That
+CAP-SCALE-01 posture chooses the 1M-credit `CAP-LARGE` tier, names the 100k/250k/1M
+credential bands, and exposes the execution lanes, sharding plan, release gates, and
+operator residuals without claiming a specific customer infrastructure SKU.

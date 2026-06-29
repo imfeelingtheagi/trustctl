@@ -3314,6 +3314,195 @@ SSHTrustRolloutRequest = TypedDict(
     total=False,
 )
 
+ScaleBackpressureRule = TypedDict(
+    'ScaleBackpressureRule',
+    {
+        'applies_to': str,
+        'id': str,
+        'limit': str,
+        'reject_mode': str,
+        'signal': str,
+    },
+    total=False,
+)
+
+ScaleBand = TypedDict(
+    'ScaleBand',
+    {
+        'capacity_tier': str,
+        'id': str,
+        'managed_credential': str,
+        'topology': str,
+    },
+    total=False,
+)
+
+ScaleCapacityTier = TypedDict(
+    'ScaleCapacityTier',
+    {
+        'control_plane_cpu': str,
+        'control_plane_memory_gib': int,
+        'estimated_cost_per_credential_usd': float,
+        'estimated_monthly_cost_usd': int,
+        'events_per_day': int,
+        'id': str,
+        'jetstream_gib_30_day': float,
+        'managed_credentials': int,
+        'name': str,
+        'notes': str,
+        'postgres_gib_30_day': float,
+        'signer_cpu': str,
+        'signer_memory_gib': int,
+        'tenants': int,
+    },
+    total=False,
+)
+
+ScaleDatastorePosture = TypedDict(
+    'ScaleDatastorePosture',
+    {
+        'jetstream': str,
+        'outbox': str,
+        'postgres': str,
+        'rls': str,
+    },
+    total=False,
+)
+
+ScaleExecutionLane = TypedDict(
+    'ScaleExecutionLane',
+    {
+        'architecture_invariant': str,
+        'backpressure_signal': str,
+        'bulkhead_env': list[str],
+        'external_side_effect': str,
+        'failure_mode': str,
+        'hot_path_slo': str,
+        'id': str,
+        'measurement': str,
+        'operator_control': str,
+        'queue': str,
+        'replay_source': str,
+        'scale_trigger': str,
+        'subsystem': str,
+        'worker_pool': str,
+    },
+    total=False,
+)
+
+ScaleHotPathSLO = TypedDict(
+    'ScaleHotPathSLO',
+    {
+        'benchmark': str,
+        'capacity_ref': str,
+        'error_budget_percent': float,
+        'hot_path': str,
+        'id': str,
+        'max_projection_lag_events': int,
+        'max_queue_saturation': float,
+        'min_throughput_per_second': float,
+        'owner': str,
+        'p50_ms': float,
+        'p95_ms': float,
+        'p99_ms': float,
+        'surface': str,
+    },
+    total=False,
+)
+
+ScaleOrchestrationPlan = TypedDict(
+    'ScaleOrchestrationPlan',
+    {
+        'backpressure_policy': list[dict[str, Any]],
+        'capability': str,
+        'datastore': dict[str, Any],
+        'estimated_daily_event_load': int,
+        'estimated_monthly_cost_usd': int,
+        'evidence_refs': list[str],
+        'execution_lanes': list[dict[str, Any]],
+        'generated_at': str,
+        'hot_path_slos': list[dict[str, Any]],
+        'measurement_artifacts': list[str],
+        'operator_actions': list[str],
+        'projection_replay': dict[str, Any],
+        'release_gates': list[dict[str, Any]],
+        'residuals': list[str],
+        'selected_capacity_tier': dict[str, Any],
+        'served': bool,
+        'shard_plan': list[dict[str, Any]],
+        'signer': dict[str, Any],
+        'target_credential_bands': list[dict[str, Any]],
+        'tenant_isolation': dict[str, Any],
+        'unit_economics': dict[str, Any],
+    },
+    total=False,
+)
+
+ScaleProjectionPosture = TypedDict(
+    'ScaleProjectionPosture',
+    {
+        'max_lag_events': int,
+        'rebuild_source': str,
+        'replay_floor_events_per_second': int,
+    },
+    total=False,
+)
+
+ScaleReleaseGate = TypedDict(
+    'ScaleReleaseGate',
+    {
+        'artifact': str,
+        'command': str,
+        'id': str,
+        'required': bool,
+    },
+    total=False,
+)
+
+ScaleShardPlan = TypedDict(
+    'ScaleShardPlan',
+    {
+        'applies_to': str,
+        'id': str,
+        'max_shard_count': int,
+        'partition_key': str,
+        'publication_surface': str,
+        'target_shard_size': int,
+    },
+    total=False,
+)
+
+ScaleSignerPosture = TypedDict(
+    'ScaleSignerPosture',
+    {
+        'process_model': str,
+        'scaling': str,
+        'transport': str,
+    },
+    total=False,
+)
+
+ScaleTenantIsolation = TypedDict(
+    'ScaleTenantIsolation',
+    {
+        'evidence_refs': list[str],
+        'query_rule': str,
+        'storage_enforcement': str,
+    },
+    total=False,
+)
+
+ScaleUnitEconomics = TypedDict(
+    'ScaleUnitEconomics',
+    {
+        'estimated_cost_per_credential_usd': float,
+        'events_per_day': int,
+        'jetstream_gib_30_day': float,
+        'postgres_gib_30_day': float,
+    },
+    total=False,
+)
+
 SecretImportRequest = TypedDict(
     'SecretImportRequest',
     {

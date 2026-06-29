@@ -189,6 +189,52 @@ func TestPerfLiveLoadGateFailsInjectedRuntimeBreaches(t *testing.T) {
 	}
 }
 
+func TestScaleOrchestrationPlanCoversHundredKToMillionCredentials(t *testing.T) {
+	plan := ScaleOrchestration("2026-06-29T00:00:00Z")
+	if plan.Capability != "CAP-SCALE-01" || !plan.Served {
+		t.Fatalf("capability/served = %q/%v, want CAP-SCALE-01/true", plan.Capability, plan.Served)
+	}
+	if plan.SelectedCapacityTier.ID != "CAP-LARGE" || plan.SelectedCapacityTier.ManagedCredentials < 1_000_000 {
+		t.Fatalf("selected tier = %+v, want CAP-LARGE for 1M+ credentials", plan.SelectedCapacityTier)
+	}
+	if len(plan.HotPathSLOs) != len(HotPaths()) {
+		t.Fatalf("hot path SLOs = %d, want %d", len(plan.HotPathSLOs), len(HotPaths()))
+	}
+	for _, want := range []string{"SCALE-100K", "SCALE-1M"} {
+		found := false
+		for _, band := range plan.TargetCredentialBands {
+			found = found || band.ID == want
+		}
+		if !found {
+			t.Fatalf("missing credential band %s in %+v", want, plan.TargetCredentialBands)
+		}
+	}
+	for _, want := range []string{"scale-issue", "scale-signer", "scale-projections"} {
+		found := false
+		for _, lane := range plan.ExecutionLanes {
+			if lane.ID != want {
+				continue
+			}
+			found = true
+			if len(lane.BulkheadEnv) == 0 || lane.BackpressureSignal == "" || lane.HotPathSLO == "" {
+				t.Fatalf("lane %s missing bulkhead/backpressure/SLO evidence: %+v", want, lane)
+			}
+		}
+		if !found {
+			t.Fatalf("missing execution lane %s", want)
+		}
+	}
+	for _, want := range []string{MeasurementArtifact, LiveMeasurementArtifact} {
+		found := false
+		for _, artifact := range plan.MeasurementArtifacts {
+			found = found || artifact == want
+		}
+		if !found {
+			t.Fatalf("missing measurement artifact %s in %+v", want, plan.MeasurementArtifacts)
+		}
+	}
+}
+
 func containsFailure(failures []string, substr string) bool {
 	for _, failure := range failures {
 		if strings.Contains(failure, substr) {

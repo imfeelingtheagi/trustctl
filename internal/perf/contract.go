@@ -38,6 +38,113 @@ type CapacityTier struct {
 	Notes                      string  `json:"notes"`
 }
 
+// ScaleOrchestrationPlan turns the measured SLO and capacity denominators into a
+// served execution plan for high-volume estates. It carries only product posture
+// and tuning guidance, never tenant inventory rows or credential material.
+type ScaleOrchestrationPlan struct {
+	Capability              string                 `json:"capability"`
+	Served                  bool                   `json:"served"`
+	GeneratedAt             string                 `json:"generated_at"`
+	TargetCredentialBands   []ScaleBand            `json:"target_credential_bands"`
+	SelectedCapacityTier    CapacityTier           `json:"selected_capacity_tier"`
+	HotPathSLOs             []HotPathSLO           `json:"hot_path_slos"`
+	ExecutionLanes          []ExecutionLane        `json:"execution_lanes"`
+	ShardPlan               []ShardPlan            `json:"shard_plan"`
+	BackpressurePolicy      []BackpressureRule     `json:"backpressure_policy"`
+	ReleaseGates            []ScaleReleaseGate     `json:"release_gates"`
+	OperatorActions         []string               `json:"operator_actions"`
+	Residuals               []string               `json:"residuals"`
+	EvidenceRefs            []string               `json:"evidence_refs"`
+	MeasurementArtifacts    []string               `json:"measurement_artifacts"`
+	EstimatedDailyEventLoad int                    `json:"estimated_daily_event_load"`
+	EstimatedMonthlyCostUSD int                    `json:"estimated_monthly_cost_usd"`
+	UnitEconomics           ScaleUnitEconomics     `json:"unit_economics"`
+	TenantIsolation         ScaleTenantIsolation   `json:"tenant_isolation"`
+	Datastore               ScaleDatastorePosture  `json:"datastore"`
+	Signer                  ScaleSignerPosture     `json:"signer"`
+	ProjectionReplay        ScaleProjectionPosture `json:"projection_replay"`
+}
+
+type ScaleBand struct {
+	ID                string `json:"id"`
+	ManagedCredential string `json:"managed_credential"`
+	CapacityTier      string `json:"capacity_tier"`
+	Topology          string `json:"topology"`
+}
+
+type ExecutionLane struct {
+	ID                    string   `json:"id"`
+	Subsystem             string   `json:"subsystem"`
+	WorkerPool            string   `json:"worker_pool"`
+	Queue                 string   `json:"queue"`
+	BulkheadEnv           []string `json:"bulkhead_env"`
+	FailureMode           string   `json:"failure_mode"`
+	ExternalSideEffect    string   `json:"external_side_effect"`
+	ReplaySource          string   `json:"replay_source"`
+	ScaleTrigger          string   `json:"scale_trigger"`
+	HotPathSLO            string   `json:"hot_path_slo"`
+	OperatorControl       string   `json:"operator_control"`
+	BackpressureSignal    string   `json:"backpressure_signal"`
+	Measurement           string   `json:"measurement"`
+	ArchitectureInvariant string   `json:"architecture_invariant"`
+}
+
+type ShardPlan struct {
+	ID                 string `json:"id"`
+	AppliesTo          string `json:"applies_to"`
+	PartitionKey       string `json:"partition_key"`
+	TargetShardSize    int    `json:"target_shard_size"`
+	MaxShardCount      int    `json:"max_shard_count"`
+	PublicationSurface string `json:"publication_surface"`
+}
+
+type BackpressureRule struct {
+	ID         string `json:"id"`
+	AppliesTo  string `json:"applies_to"`
+	Limit      string `json:"limit"`
+	RejectMode string `json:"reject_mode"`
+	Signal     string `json:"signal"`
+}
+
+type ScaleReleaseGate struct {
+	ID       string `json:"id"`
+	Command  string `json:"command"`
+	Artifact string `json:"artifact"`
+	Required bool   `json:"required"`
+}
+
+type ScaleUnitEconomics struct {
+	EstimatedCostPerCredentialUSD float64 `json:"estimated_cost_per_credential_usd"`
+	PostgresGiB30Day              float64 `json:"postgres_gib_30_day"`
+	JetStreamGiB30Day             float64 `json:"jetstream_gib_30_day"`
+	EventsPerDay                  int     `json:"events_per_day"`
+}
+
+type ScaleTenantIsolation struct {
+	StorageEnforcement string   `json:"storage_enforcement"`
+	QueryRule          string   `json:"query_rule"`
+	EvidenceRefs       []string `json:"evidence_refs"`
+}
+
+type ScaleDatastorePosture struct {
+	Postgres  string `json:"postgres"`
+	JetStream string `json:"jetstream"`
+	RLS       string `json:"rls"`
+	Outbox    string `json:"outbox"`
+}
+
+type ScaleSignerPosture struct {
+	ProcessModel string `json:"process_model"`
+	Transport    string `json:"transport"`
+	Scaling      string `json:"scaling"`
+}
+
+type ScaleProjectionPosture struct {
+	ReplayFloorEventsPerSecond int    `json:"replay_floor_events_per_second"`
+	MaxLagEvents               int    `json:"max_lag_events"`
+	RebuildSource              string `json:"rebuild_source"`
+}
+
 const (
 	MeasurementArtifact     = "scripts/perf/artifacts/smoke-baseline.json"
 	LiveMeasurementArtifact = "scripts/perf/artifacts/live-load-baseline.json"
@@ -115,6 +222,88 @@ var capacityTiers = []CapacityTier{
 	},
 }
 
+var scaleBands = []ScaleBand{
+	{ID: "SCALE-100K", ManagedCredential: "100,000 managed credentials", CapacityTier: "CAP-MEDIUM", Topology: "external PostgreSQL and JetStream with at least two control-plane replicas and isolated signer capacity"},
+	{ID: "SCALE-250K", ManagedCredential: "250,000 managed credentials", CapacityTier: "CAP-MEDIUM", Topology: "external datastore production tier; split connector and read-query lanes before adding tenants"},
+	{ID: "SCALE-1M", ManagedCredential: "1,000,000 managed credentials", CapacityTier: "CAP-LARGE", Topology: "multi-replica enterprise tier with signer scaled separately from control-plane API workers"},
+}
+
+var scaleExecutionLanes = []ExecutionLane{
+	{
+		ID: "scale-issue", Subsystem: "issuance", WorkerPool: "lifecycle issue/deploy workers", Queue: "bounded lifecycle queue",
+		BulkheadEnv: []string{"TRSTCTL_BULKHEAD_LIFECYCLE_WORKERS", "TRSTCTL_BULKHEAD_LIFECYCLE_QUEUE"},
+		FailureMode: "full queue rejects before signer work starts", ExternalSideEffect: "connector delivery intent is written through the outbox",
+		ReplaySource: "events log", ScaleTrigger: "issuance p95, signer saturation, or queue saturation exceeds SLO",
+		HotPathSLO: "PERF-SLO-001", OperatorControl: "increase lifecycle workers or split connector targets before raising signer concurrency",
+		BackpressureSignal: "queue saturation and HTTP 429/structured problem response", Measurement: "perf live api.issuance",
+		ArchitectureInvariant: "AN-2/AN-5/AN-6/AN-7",
+	},
+	{
+		ID: "scale-inventory", Subsystem: "inventory/read API", WorkerPool: "read/query workers", Queue: "bounded read query queue",
+		BulkheadEnv: []string{"TRSTCTL_BULKHEAD_QUERY_WORKERS", "TRSTCTL_BULKHEAD_QUERY_QUEUE"},
+		FailureMode: "large scans reject fast instead of starving mutation paths", ExternalSideEffect: "none",
+		ReplaySource: "projection tables rebuilt from events", ScaleTrigger: "inventory p95 or projection lag exceeds SLO",
+		HotPathSLO: "PERF-SLO-002", OperatorControl: "raise read replicas or page size discipline before widening result sets",
+		BackpressureSignal: "read queue saturation and projection lag", Measurement: "perf live api.inventory",
+		ArchitectureInvariant: "AN-1/AN-2/AN-7",
+	},
+	{
+		ID: "scale-risk-graph", Subsystem: "graph/risk", WorkerPool: "heavy read-query workers", Queue: "bounded graph/risk queue",
+		BulkheadEnv: []string{"TRSTCTL_BULKHEAD_QUERY_WORKERS", "TRSTCTL_BULKHEAD_QUERY_QUEUE"},
+		FailureMode: "expensive graph/risk jobs cannot starve certificate or agent APIs", ExternalSideEffect: "none",
+		ReplaySource: "credential graph projection", ScaleTrigger: "graph/risk p99 exceeds SLO or hot partition appears",
+		HotPathSLO: "PERF-SLO-003", OperatorControl: "increase read capacity, shard graph export jobs, and precompute heavy tenant views",
+		BackpressureSignal: "queue saturation and graph query latency", Measurement: "perf live api.graph_risk",
+		ArchitectureInvariant: "AN-1/AN-2/AN-7",
+	},
+	{
+		ID: "scale-revocation", Subsystem: "revocation distribution", WorkerPool: "revocation publication workers", Queue: "bounded revocation queue",
+		BulkheadEnv: []string{"TRSTCTL_BULKHEAD_REVOCATION_WORKERS", "TRSTCTL_BULKHEAD_REVOCATION_QUEUE"},
+		FailureMode: "revocation publication is isolated from issuance and read APIs", ExternalSideEffect: "CRL/OCSP publication artifacts are event-projected",
+		ReplaySource: "certificate.revoked and ca.crl.published events", ScaleTrigger: "OCSP/CRL p95, shard count, or delta cadence exceeds SLO",
+		HotPathSLO: "PERF-SLO-006", OperatorControl: "serve partitioned CRLs and tune CDN/ingress outside the control plane",
+		BackpressureSignal: "revocation queue saturation and stale next_update", Measurement: "perf live revocation.ocsp_crl",
+		ArchitectureInvariant: "AN-2/AN-7",
+	},
+	{
+		ID: "scale-signer", Subsystem: "signer", WorkerPool: "isolated signer process pool", Queue: "signer RPC backlog",
+		BulkheadEnv: []string{"TRSTCTL_SIGNER_WORKERS", "TRSTCTL_SIGNER_QUEUE"},
+		FailureMode: "signer saturation does not import SQL or HTTP into the signer process", ExternalSideEffect: "signature only; orchestrator records state outside signer",
+		ReplaySource: "orchestrator idempotency and events", ScaleTrigger: "signer p95 or CPU headroom becomes limiting resource",
+		HotPathSLO: "PERF-SLO-007", OperatorControl: "scale signer replicas or HSM partitions separately from control-plane API workers",
+		BackpressureSignal: "signer queue saturation and gRPC timeout rate", Measurement: "perf live signer.rpc",
+		ArchitectureInvariant: "AN-3/AN-4/AN-7/AN-8",
+	},
+	{
+		ID: "scale-projections", Subsystem: "event replay/projections", WorkerPool: "projection workers", Queue: "JetStream consumer backlog",
+		BulkheadEnv: []string{"TRSTCTL_PROJECTION_WORKERS", "TRSTCTL_PROJECTION_QUEUE"},
+		FailureMode: "read models fall behind visibly instead of mutating read tables directly", ExternalSideEffect: "none",
+		ReplaySource: "append-only event log", ScaleTrigger: "projection lag or rebuild window exceeds recovery objective",
+		HotPathSLO: "PERF-SLO-008", OperatorControl: "increase projection workers, split consumers, or reduce hot tenant batch size",
+		BackpressureSignal: "consumer lag and replay throughput", Measurement: "perf live spine.projection_replay",
+		ArchitectureInvariant: "AN-2/AN-7",
+	},
+}
+
+var scaleShardPlan = []ShardPlan{
+	{ID: "inventory-pages", AppliesTo: "certificate and NHI inventory", PartitionKey: "tenant_id plus cursor/id order", TargetShardSize: 1000, MaxShardCount: 0, PublicationSurface: "/api/v1/certificates and /api/v1/nhi/inventory"},
+	{ID: "crl-shards", AppliesTo: "revoked serial distribution", PartitionKey: "tenant_id plus serial hash", TargetShardSize: 100000, MaxShardCount: 1024, PublicationSurface: "/crl/{tenant}/manifest.json, /shards/{index}, and /delta/{base}"},
+	{ID: "projection-batches", AppliesTo: "event replay and read-model rebuild", PartitionKey: "tenant_id plus event sequence", TargetShardSize: 50000, MaxShardCount: 0, PublicationSurface: "projection workers and recovery runbooks"},
+}
+
+var scaleBackpressure = []BackpressureRule{
+	{ID: "queue-saturation", AppliesTo: "all bounded worker queues", Limit: "80% queue saturation, 70% for signer", RejectMode: "structured 429/problem response before accepting new work", Signal: "queue_saturation in perf and metrics"},
+	{ID: "projection-lag", AppliesTo: "read-model rebuild and replay", Limit: "25 events for normal hot paths, 50 events for projection replay", RejectMode: "surface stale read posture and hold bulk fanout", Signal: "projection_lag_events"},
+	{ID: "outbox-delivery", AppliesTo: "connectors, upstream CAs, notifications, webhooks", Limit: "destination circuit opens after repeated delivery failures", RejectMode: "record dead-letter/circuit state and keep mutation committed", Signal: "outbox circuit status"},
+}
+
+var scaleReleaseGates = []ScaleReleaseGate{
+	{ID: "perf-smoke", Command: "scripts/perf/run-local.sh --profile smoke", Artifact: MeasurementArtifact, Required: true},
+	{ID: "perf-live", Command: "scripts/perf/run-local.sh --profile live", Artifact: LiveMeasurementArtifact, Required: true},
+	{ID: "soak", Command: "scripts/perf/soak.sh --in <series.json> --out <report.json>", Artifact: "soak-trend.json", Required: true},
+	{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
+}
+
 func HotPaths() []HotPathSLO {
 	out := make([]HotPathSLO, len(hotPathSLOs))
 	copy(out, hotPathSLOs)
@@ -124,5 +313,90 @@ func HotPaths() []HotPathSLO {
 func CapacityTiers() []CapacityTier {
 	out := make([]CapacityTier, len(capacityTiers))
 	copy(out, capacityTiers)
+	return out
+}
+
+func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	large := capacityTierByID("CAP-LARGE")
+	return ScaleOrchestrationPlan{
+		Capability:              "CAP-SCALE-01",
+		Served:                  true,
+		GeneratedAt:             generatedAt,
+		TargetCredentialBands:   append([]ScaleBand(nil), scaleBands...),
+		SelectedCapacityTier:    large,
+		HotPathSLOs:             HotPaths(),
+		ExecutionLanes:          copyExecutionLanes(scaleExecutionLanes),
+		ShardPlan:               append([]ShardPlan(nil), scaleShardPlan...),
+		BackpressurePolicy:      append([]BackpressureRule(nil), scaleBackpressure...),
+		ReleaseGates:            append([]ScaleReleaseGate(nil), scaleReleaseGates...),
+		EstimatedDailyEventLoad: large.EventsPerDay,
+		EstimatedMonthlyCostUSD: large.EstimatedMonthlyCostUSD,
+		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact},
+		UnitEconomics: ScaleUnitEconomics{
+			EstimatedCostPerCredentialUSD: large.EstimatedCostPerCredential,
+			PostgresGiB30Day:              large.PostgresGiB30Day,
+			JetStreamGiB30Day:             large.JetStreamGiB30Day,
+			EventsPerDay:                  large.EventsPerDay,
+		},
+		TenantIsolation: ScaleTenantIsolation{
+			StorageEnforcement: "every table carries tenant_id and PostgreSQL RLS enforces isolation below the API",
+			QueryRule:          "repository queries must filter on tenant_id and the architecture linter fails unsafe paths",
+			EvidenceRefs:       []string{"CLAUDE.md: AN-1", "tools/trstctllint", "internal/store/migrations"},
+		},
+		Datastore: ScaleDatastorePosture{
+			Postgres:  "external HA PostgreSQL for CAP-MEDIUM and CAP-LARGE; no SQLite path",
+			JetStream: "NATS JetStream is the source-of-truth event log with external cluster for production",
+			RLS:       "tenant_id is enforced at storage layer",
+			Outbox:    "external calls run through transactional outbox workers",
+		},
+		Signer: ScaleSignerPosture{
+			ProcessModel: "separate signer process, never in-process with the control plane",
+			Transport:    "gRPC over UDS for single-node or mTLS across nodes",
+			Scaling:      "scale signer CPU/HSM partitions separately from control-plane API replicas",
+		},
+		ProjectionReplay: ScaleProjectionPosture{
+			ReplayFloorEventsPerSecond: 500,
+			MaxLagEvents:               50,
+			RebuildSource:              "append-only events log",
+		},
+		OperatorActions: []string{
+			"run perf-live and soak gates against the chosen datastore, signer placement, and connector mix before production launch",
+			"move tenants above 250k credentials to CAP-LARGE topology before increasing issuer fanout",
+			"watch projection lag, signer saturation, outbox circuit state, and revocation next_update freshness during bulk rotation",
+			"use sharded/delta CRLs and external ingress/CDN distribution for high-churn revocation lanes",
+		},
+		Residuals: []string{
+			"customer infrastructure pricing and exact datastore SKU are operator-specific",
+			"external relying-party adoption of CRL shard and delta URLs depends on customer CDP/AIA rollout",
+			"remote GitHub-hosted matrix behavior is not proven by this local served endpoint",
+		},
+		EvidenceRefs: []string{
+			"internal/perf/contract.go",
+			"internal/perf/live.go",
+			"docs/performance.md",
+			"docs/performance-capacity.md",
+			"scripts/perf/artifacts/live-load-baseline.json",
+		},
+	}
+}
+
+func capacityTierByID(id string) CapacityTier {
+	for _, tier := range capacityTiers {
+		if tier.ID == id {
+			return tier
+		}
+	}
+	return CapacityTier{}
+}
+
+func copyExecutionLanes(in []ExecutionLane) []ExecutionLane {
+	out := make([]ExecutionLane, len(in))
+	copy(out, in)
+	for i := range out {
+		out[i].BulkheadEnv = append([]string(nil), out[i].BulkheadEnv...)
+	}
 	return out
 }

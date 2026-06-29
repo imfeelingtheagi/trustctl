@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     editions: vi.fn(),
     enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
+    scaleOrchestration: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
@@ -139,6 +140,67 @@ describe("WIRE-12 Platform served admin surface", () => {
       event_type: "tenant.registered",
       mutation_path: "/api/v1/managed-offering/tenants",
     });
+    apiMock.scaleOrchestration.mockResolvedValue({
+      capability: "CAP-SCALE-01",
+      served: true,
+      generated_at: "2026-06-29T00:00:00Z",
+      target_credential_bands: [
+        { id: "SCALE-100K", managed_credential: "100,000 managed credentials", capacity_tier: "CAP-MEDIUM", topology: "external datastore production" },
+        { id: "SCALE-1M", managed_credential: "1,000,000 managed credentials", capacity_tier: "CAP-LARGE", topology: "multi-replica enterprise" },
+      ],
+      selected_capacity_tier: {
+        id: "CAP-LARGE",
+        name: "multi-replica enterprise",
+        tenants: 250,
+        managed_credentials: 1000000,
+        events_per_day: 10000000,
+        postgres_gib_30_day: 700,
+        jetstream_gib_30_day: 1200,
+        control_plane_cpu: "16 vCPU",
+        control_plane_memory_gib: 32,
+        signer_cpu: "6 vCPU",
+        signer_memory_gib: 8,
+        estimated_monthly_cost_usd: 14500,
+        estimated_cost_per_credential_usd: 0.0145,
+        notes: "External HA PostgreSQL and JetStream.",
+      },
+      hot_path_slos: [],
+      execution_lanes: [
+        {
+          id: "scale-issue",
+          subsystem: "issuance",
+          worker_pool: "lifecycle issue/deploy workers",
+          queue: "bounded lifecycle queue",
+          bulkhead_env: ["TRSTCTL_BULKHEAD_LIFECYCLE_WORKERS", "TRSTCTL_BULKHEAD_LIFECYCLE_QUEUE"],
+          failure_mode: "full queue rejects before signer work starts",
+          external_side_effect: "connector intent through outbox",
+          replay_source: "events log",
+          scale_trigger: "issuance p95",
+          hot_path_slo: "PERF-SLO-001",
+          operator_control: "increase lifecycle workers",
+          backpressure_signal: "queue saturation",
+          measurement: "perf live api.issuance",
+          architecture_invariant: "AN-2/AN-5/AN-6/AN-7",
+        },
+      ],
+      shard_plan: [],
+      backpressure_policy: [],
+      release_gates: [
+        { id: "perf-live", command: "scripts/perf/run-local.sh --profile live", artifact: "scripts/perf/artifacts/live-load-baseline.json", required: true },
+        { id: "soak", command: "scripts/perf/soak.sh --in <series.json>", artifact: "soak-trend.json", required: true },
+      ],
+      operator_actions: ["run perf-live"],
+      residuals: ["customer infrastructure pricing is operator-specific"],
+      evidence_refs: ["internal/perf/contract.go"],
+      measurement_artifacts: ["scripts/perf/artifacts/smoke-baseline.json", "scripts/perf/artifacts/live-load-baseline.json"],
+      estimated_daily_event_load: 10000000,
+      estimated_monthly_cost_usd: 14500,
+      unit_economics: { estimated_cost_per_credential_usd: 0.0145, postgres_gib_30_day: 700, jetstream_gib_30_day: 1200, events_per_day: 10000000 },
+      tenant_isolation: { storage_enforcement: "RLS", query_rule: "tenant_id filter", evidence_refs: ["CLAUDE.md: AN-1"] },
+      datastore: { postgres: "external HA PostgreSQL", jetstream: "external JetStream", rls: "tenant_id", outbox: "transactional outbox" },
+      signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
+      projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "append-only event log" },
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -153,6 +215,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.editions).toHaveBeenCalledTimes(1);
     expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
 
     expect(screen.getByText("tenant-platform")).toBeInTheDocument();
     expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);
@@ -172,6 +235,9 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
     expect(screen.getByText("managed_provider")).toBeInTheDocument();
     expect(screen.getByText("provider plane enabled")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
+    expect(screen.getByText("perf-live")).toBeInTheDocument();
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Plugin SDK and capability sandbox" })).not.toBeInTheDocument();

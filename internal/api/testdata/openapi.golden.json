@@ -8719,6 +8719,526 @@
         ],
         "type": "object"
       },
+      "ScaleBackpressureRule": {
+        "properties": {
+          "applies_to": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "string"
+          },
+          "reject_mode": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "applies_to",
+          "limit",
+          "reject_mode",
+          "signal"
+        ],
+        "type": "object"
+      },
+      "ScaleBand": {
+        "properties": {
+          "capacity_tier": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "managed_credential": {
+            "type": "string"
+          },
+          "topology": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "managed_credential",
+          "capacity_tier",
+          "topology"
+        ],
+        "type": "object"
+      },
+      "ScaleCapacityTier": {
+        "properties": {
+          "control_plane_cpu": {
+            "type": "string"
+          },
+          "control_plane_memory_gib": {
+            "type": "integer"
+          },
+          "estimated_cost_per_credential_usd": {
+            "type": "number"
+          },
+          "estimated_monthly_cost_usd": {
+            "type": "integer"
+          },
+          "events_per_day": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "jetstream_gib_30_day": {
+            "type": "number"
+          },
+          "managed_credentials": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "postgres_gib_30_day": {
+            "type": "number"
+          },
+          "signer_cpu": {
+            "type": "string"
+          },
+          "signer_memory_gib": {
+            "type": "integer"
+          },
+          "tenants": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tenants",
+          "managed_credentials",
+          "events_per_day",
+          "postgres_gib_30_day",
+          "jetstream_gib_30_day",
+          "control_plane_cpu",
+          "control_plane_memory_gib",
+          "signer_cpu",
+          "signer_memory_gib",
+          "estimated_monthly_cost_usd",
+          "estimated_cost_per_credential_usd",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "ScaleDatastorePosture": {
+        "properties": {
+          "jetstream": {
+            "type": "string"
+          },
+          "outbox": {
+            "type": "string"
+          },
+          "postgres": {
+            "type": "string"
+          },
+          "rls": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "postgres",
+          "jetstream",
+          "rls",
+          "outbox"
+        ],
+        "type": "object"
+      },
+      "ScaleExecutionLane": {
+        "properties": {
+          "architecture_invariant": {
+            "type": "string"
+          },
+          "backpressure_signal": {
+            "type": "string"
+          },
+          "bulkhead_env": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "external_side_effect": {
+            "type": "string"
+          },
+          "failure_mode": {
+            "type": "string"
+          },
+          "hot_path_slo": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "measurement": {
+            "type": "string"
+          },
+          "operator_control": {
+            "type": "string"
+          },
+          "queue": {
+            "type": "string"
+          },
+          "replay_source": {
+            "type": "string"
+          },
+          "scale_trigger": {
+            "type": "string"
+          },
+          "subsystem": {
+            "type": "string"
+          },
+          "worker_pool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subsystem",
+          "worker_pool",
+          "queue",
+          "bulkhead_env",
+          "failure_mode",
+          "external_side_effect",
+          "replay_source",
+          "scale_trigger",
+          "hot_path_slo",
+          "operator_control",
+          "backpressure_signal",
+          "measurement",
+          "architecture_invariant"
+        ],
+        "type": "object"
+      },
+      "ScaleHotPathSLO": {
+        "properties": {
+          "benchmark": {
+            "type": "string"
+          },
+          "capacity_ref": {
+            "type": "string"
+          },
+          "error_budget_percent": {
+            "type": "number"
+          },
+          "hot_path": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_projection_lag_events": {
+            "type": "integer"
+          },
+          "max_queue_saturation": {
+            "type": "number"
+          },
+          "min_throughput_per_second": {
+            "type": "number"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "p50_ms": {
+            "type": "number"
+          },
+          "p95_ms": {
+            "type": "number"
+          },
+          "p99_ms": {
+            "type": "number"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "hot_path",
+          "surface",
+          "owner",
+          "benchmark",
+          "p50_ms",
+          "p95_ms",
+          "p99_ms",
+          "min_throughput_per_second",
+          "error_budget_percent",
+          "max_queue_saturation",
+          "max_projection_lag_events",
+          "capacity_ref"
+        ],
+        "type": "object"
+      },
+      "ScaleOrchestrationPlan": {
+        "properties": {
+          "backpressure_policy": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleBackpressureRule"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "datastore": {
+            "$ref": "#/components/schemas/ScaleDatastorePosture"
+          },
+          "estimated_daily_event_load": {
+            "type": "integer"
+          },
+          "estimated_monthly_cost_usd": {
+            "type": "integer"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleExecutionLane"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hot_path_slos": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleHotPathSLO"
+            },
+            "type": "array"
+          },
+          "measurement_artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operator_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "projection_replay": {
+            "$ref": "#/components/schemas/ScaleProjectionPosture"
+          },
+          "release_gates": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleReleaseGate"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "selected_capacity_tier": {
+            "$ref": "#/components/schemas/ScaleCapacityTier"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "shard_plan": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleShardPlan"
+            },
+            "type": "array"
+          },
+          "signer": {
+            "$ref": "#/components/schemas/ScaleSignerPosture"
+          },
+          "target_credential_bands": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleBand"
+            },
+            "type": "array"
+          },
+          "tenant_isolation": {
+            "$ref": "#/components/schemas/ScaleTenantIsolation"
+          },
+          "unit_economics": {
+            "$ref": "#/components/schemas/ScaleUnitEconomics"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "target_credential_bands",
+          "selected_capacity_tier",
+          "hot_path_slos",
+          "execution_lanes",
+          "shard_plan",
+          "backpressure_policy",
+          "release_gates",
+          "operator_actions",
+          "residuals",
+          "evidence_refs",
+          "measurement_artifacts",
+          "estimated_daily_event_load",
+          "estimated_monthly_cost_usd",
+          "unit_economics",
+          "tenant_isolation",
+          "datastore",
+          "signer",
+          "projection_replay"
+        ],
+        "type": "object"
+      },
+      "ScaleProjectionPosture": {
+        "properties": {
+          "max_lag_events": {
+            "type": "integer"
+          },
+          "rebuild_source": {
+            "type": "string"
+          },
+          "replay_floor_events_per_second": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "replay_floor_events_per_second",
+          "max_lag_events",
+          "rebuild_source"
+        ],
+        "type": "object"
+      },
+      "ScaleReleaseGate": {
+        "properties": {
+          "artifact": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "command",
+          "artifact",
+          "required"
+        ],
+        "type": "object"
+      },
+      "ScaleShardPlan": {
+        "properties": {
+          "applies_to": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_shard_count": {
+            "type": "integer"
+          },
+          "partition_key": {
+            "type": "string"
+          },
+          "publication_surface": {
+            "type": "string"
+          },
+          "target_shard_size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "applies_to",
+          "partition_key",
+          "target_shard_size",
+          "max_shard_count",
+          "publication_surface"
+        ],
+        "type": "object"
+      },
+      "ScaleSignerPosture": {
+        "properties": {
+          "process_model": {
+            "type": "string"
+          },
+          "scaling": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "process_model",
+          "transport",
+          "scaling"
+        ],
+        "type": "object"
+      },
+      "ScaleTenantIsolation": {
+        "properties": {
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "query_rule": {
+            "type": "string"
+          },
+          "storage_enforcement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "storage_enforcement",
+          "query_rule",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "ScaleUnitEconomics": {
+        "properties": {
+          "estimated_cost_per_credential_usd": {
+            "type": "number"
+          },
+          "events_per_day": {
+            "type": "integer"
+          },
+          "jetstream_gib_30_day": {
+            "type": "number"
+          },
+          "postgres_gib_30_day": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "estimated_cost_per_credential_usd",
+          "postgres_gib_30_day",
+          "jetstream_gib_30_day",
+          "events_per_day"
+        ],
+        "type": "object"
+      },
       "SecretImportRequest": {
         "properties": {
           "prefix": {
@@ -18327,6 +18847,53 @@
         ],
         "summary": "Rank credentials by composite risk score",
         "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/scale/orchestration": {
+      "get": {
+        "operationId": "getScaleOrchestration",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScaleOrchestrationPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "High-volume orchestration posture for 100k-1M+ credentials",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/secrets/leases": {

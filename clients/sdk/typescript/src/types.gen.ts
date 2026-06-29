@@ -2252,6 +2252,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scale/orchestration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** High-volume orchestration posture for 100k-1M+ credentials */
+        get: operations["getScaleOrchestration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/leases": {
         parameters: {
             query?: never;
@@ -5201,6 +5218,131 @@ export interface components {
             /** @enum {string} */
             status: "planned" | "validating" | "health_passed" | "rolled_back" | "failed";
             target_hosts: string[];
+        };
+        ScaleBackpressureRule: {
+            applies_to: string;
+            id: string;
+            limit: string;
+            reject_mode: string;
+            signal: string;
+        };
+        ScaleBand: {
+            capacity_tier: string;
+            id: string;
+            managed_credential: string;
+            topology: string;
+        };
+        ScaleCapacityTier: {
+            control_plane_cpu: string;
+            control_plane_memory_gib: number;
+            estimated_cost_per_credential_usd: number;
+            estimated_monthly_cost_usd: number;
+            events_per_day: number;
+            id: string;
+            jetstream_gib_30_day: number;
+            managed_credentials: number;
+            name: string;
+            notes: string;
+            postgres_gib_30_day: number;
+            signer_cpu: string;
+            signer_memory_gib: number;
+            tenants: number;
+        };
+        ScaleDatastorePosture: {
+            jetstream: string;
+            outbox: string;
+            postgres: string;
+            rls: string;
+        };
+        ScaleExecutionLane: {
+            architecture_invariant: string;
+            backpressure_signal: string;
+            bulkhead_env: string[];
+            external_side_effect: string;
+            failure_mode: string;
+            hot_path_slo: string;
+            id: string;
+            measurement: string;
+            operator_control: string;
+            queue: string;
+            replay_source: string;
+            scale_trigger: string;
+            subsystem: string;
+            worker_pool: string;
+        };
+        ScaleHotPathSLO: {
+            benchmark: string;
+            capacity_ref: string;
+            error_budget_percent: number;
+            hot_path: string;
+            id: string;
+            max_projection_lag_events: number;
+            max_queue_saturation: number;
+            min_throughput_per_second: number;
+            owner: string;
+            p50_ms: number;
+            p95_ms: number;
+            p99_ms: number;
+            surface: string;
+        };
+        ScaleOrchestrationPlan: {
+            backpressure_policy: components["schemas"]["ScaleBackpressureRule"][];
+            capability: string;
+            datastore: components["schemas"]["ScaleDatastorePosture"];
+            estimated_daily_event_load: number;
+            estimated_monthly_cost_usd: number;
+            evidence_refs: string[];
+            execution_lanes: components["schemas"]["ScaleExecutionLane"][];
+            /** Format: date-time */
+            generated_at: string;
+            hot_path_slos: components["schemas"]["ScaleHotPathSLO"][];
+            measurement_artifacts: string[];
+            operator_actions: string[];
+            projection_replay: components["schemas"]["ScaleProjectionPosture"];
+            release_gates: components["schemas"]["ScaleReleaseGate"][];
+            residuals: string[];
+            selected_capacity_tier: components["schemas"]["ScaleCapacityTier"];
+            served: boolean;
+            shard_plan: components["schemas"]["ScaleShardPlan"][];
+            signer: components["schemas"]["ScaleSignerPosture"];
+            target_credential_bands: components["schemas"]["ScaleBand"][];
+            tenant_isolation: components["schemas"]["ScaleTenantIsolation"];
+            unit_economics: components["schemas"]["ScaleUnitEconomics"];
+        };
+        ScaleProjectionPosture: {
+            max_lag_events: number;
+            rebuild_source: string;
+            replay_floor_events_per_second: number;
+        };
+        ScaleReleaseGate: {
+            artifact: string;
+            command: string;
+            id: string;
+            required: boolean;
+        };
+        ScaleShardPlan: {
+            applies_to: string;
+            id: string;
+            max_shard_count: number;
+            partition_key: string;
+            publication_surface: string;
+            target_shard_size: number;
+        };
+        ScaleSignerPosture: {
+            process_model: string;
+            scaling: string;
+            transport: string;
+        };
+        ScaleTenantIsolation: {
+            evidence_refs: string[];
+            query_rule: string;
+            storage_enforcement: string;
+        };
+        ScaleUnitEconomics: {
+            estimated_cost_per_credential_usd: number;
+            events_per_day: number;
+            jetstream_gib_30_day: number;
+            postgres_gib_30_day: number;
         };
         SecretImportRequest: {
             prefix?: string;
@@ -11697,6 +11839,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CredentialRiskList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getScaleOrchestration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScaleOrchestrationPlan"];
                 };
             };
             /** @description client error */

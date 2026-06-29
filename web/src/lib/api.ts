@@ -137,6 +137,7 @@ import type {
   ManagedOfferingStatus,
   ManagedTenant,
   ManagedTenantProvisionRequest,
+  ScaleOrchestrationPlan,
   Member,
   MemberList,
   MemberRequest,
@@ -323,6 +324,7 @@ export type {
   ManagedOfferingStatus,
   ManagedTenant,
   ManagedTenantProvisionRequest,
+  ScaleOrchestrationPlan,
   Member,
   MemberList,
   MemberRequest,
@@ -710,6 +712,7 @@ export interface Api {
   editions(): Promise<EditionsInfo>;
   enterpriseSupportStatus(): Promise<EnterpriseSupportStatus>;
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
+  scaleOrchestration(): Promise<ScaleOrchestrationPlan>;
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
@@ -876,6 +879,7 @@ export const api: Api = {
   editions: () => req<EditionsInfo>("/api/v1/editions"),
   enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
+  scaleOrchestration: () => req<ScaleOrchestrationPlan>("/api/v1/scale/orchestration"),
   provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
   certificatePage: (options) => {
     const qs = new URLSearchParams();

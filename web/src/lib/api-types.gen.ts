@@ -2300,6 +2300,143 @@ export interface SSHTrustRolloutRequest {
   target_hosts: string[];
 }
 
+export interface ScaleBackpressureRule {
+  applies_to: string;
+  id: string;
+  limit: string;
+  reject_mode: string;
+  signal: string;
+}
+
+export interface ScaleBand {
+  capacity_tier: string;
+  id: string;
+  managed_credential: string;
+  topology: string;
+}
+
+export interface ScaleCapacityTier {
+  control_plane_cpu: string;
+  control_plane_memory_gib: number;
+  estimated_cost_per_credential_usd: number;
+  estimated_monthly_cost_usd: number;
+  events_per_day: number;
+  id: string;
+  jetstream_gib_30_day: number;
+  managed_credentials: number;
+  name: string;
+  notes: string;
+  postgres_gib_30_day: number;
+  signer_cpu: string;
+  signer_memory_gib: number;
+  tenants: number;
+}
+
+export interface ScaleDatastorePosture {
+  jetstream: string;
+  outbox: string;
+  postgres: string;
+  rls: string;
+}
+
+export interface ScaleExecutionLane {
+  architecture_invariant: string;
+  backpressure_signal: string;
+  bulkhead_env: string[];
+  external_side_effect: string;
+  failure_mode: string;
+  hot_path_slo: string;
+  id: string;
+  measurement: string;
+  operator_control: string;
+  queue: string;
+  replay_source: string;
+  scale_trigger: string;
+  subsystem: string;
+  worker_pool: string;
+}
+
+export interface ScaleHotPathSLO {
+  benchmark: string;
+  capacity_ref: string;
+  error_budget_percent: number;
+  hot_path: string;
+  id: string;
+  max_projection_lag_events: number;
+  max_queue_saturation: number;
+  min_throughput_per_second: number;
+  owner: string;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  surface: string;
+}
+
+export interface ScaleOrchestrationPlan {
+  backpressure_policy: ScaleBackpressureRule[];
+  capability: string;
+  datastore: ScaleDatastorePosture;
+  estimated_daily_event_load: number;
+  estimated_monthly_cost_usd: number;
+  evidence_refs: string[];
+  execution_lanes: ScaleExecutionLane[];
+  generated_at: string;
+  hot_path_slos: ScaleHotPathSLO[];
+  measurement_artifacts: string[];
+  operator_actions: string[];
+  projection_replay: ScaleProjectionPosture;
+  release_gates: ScaleReleaseGate[];
+  residuals: string[];
+  selected_capacity_tier: ScaleCapacityTier;
+  served: boolean;
+  shard_plan: ScaleShardPlan[];
+  signer: ScaleSignerPosture;
+  target_credential_bands: ScaleBand[];
+  tenant_isolation: ScaleTenantIsolation;
+  unit_economics: ScaleUnitEconomics;
+}
+
+export interface ScaleProjectionPosture {
+  max_lag_events: number;
+  rebuild_source: string;
+  replay_floor_events_per_second: number;
+}
+
+export interface ScaleReleaseGate {
+  artifact: string;
+  command: string;
+  id: string;
+  required: boolean;
+}
+
+export interface ScaleShardPlan {
+  applies_to: string;
+  id: string;
+  max_shard_count: number;
+  partition_key: string;
+  publication_surface: string;
+  target_shard_size: number;
+}
+
+export interface ScaleSignerPosture {
+  process_model: string;
+  scaling: string;
+  transport: string;
+}
+
+export interface ScaleTenantIsolation {
+  evidence_refs: string[];
+  query_rule: string;
+  storage_enforcement: string;
+}
+
+export interface ScaleUnitEconomics {
+  estimated_cost_per_credential_usd: number;
+  events_per_day: number;
+  jetstream_gib_30_day: number;
+  postgres_gib_30_day: number;
+}
+
 export interface SecretImportRequest {
   prefix?: string;
   values: Record<string, unknown>;

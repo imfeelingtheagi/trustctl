@@ -446,6 +446,130 @@ func componentSchemas() map[string]*Schema {
 		"professional_services": {Type: "array", Items: ref("EnterpriseProfessionalService")},
 		"evidence_refs":         {Type: "array", Items: str()},
 	}, "served", "capability", "tier", "license_state", "support_mode", "license_feature", "contract_boundary", "support_tiers", "sla_targets", "professional_services", "evidence_refs")
+	scaleBand := object(map[string]*Schema{
+		"id":                 str(),
+		"managed_credential": str(),
+		"capacity_tier":      str(),
+		"topology":           str(),
+	}, "id", "managed_credential", "capacity_tier", "topology")
+	scaleExecutionLane := object(map[string]*Schema{
+		"id":                     str(),
+		"subsystem":              str(),
+		"worker_pool":            str(),
+		"queue":                  str(),
+		"bulkhead_env":           {Type: "array", Items: str()},
+		"failure_mode":           str(),
+		"external_side_effect":   str(),
+		"replay_source":          str(),
+		"scale_trigger":          str(),
+		"hot_path_slo":           str(),
+		"operator_control":       str(),
+		"backpressure_signal":    str(),
+		"measurement":            str(),
+		"architecture_invariant": str(),
+	}, "id", "subsystem", "worker_pool", "queue", "bulkhead_env", "failure_mode", "external_side_effect", "replay_source", "scale_trigger", "hot_path_slo", "operator_control", "backpressure_signal", "measurement", "architecture_invariant")
+	scaleShardPlan := object(map[string]*Schema{
+		"id":                  str(),
+		"applies_to":          str(),
+		"partition_key":       str(),
+		"target_shard_size":   {Type: "integer"},
+		"max_shard_count":     {Type: "integer"},
+		"publication_surface": str(),
+	}, "id", "applies_to", "partition_key", "target_shard_size", "max_shard_count", "publication_surface")
+	scaleBackpressureRule := object(map[string]*Schema{
+		"id":          str(),
+		"applies_to":  str(),
+		"limit":       str(),
+		"reject_mode": str(),
+		"signal":      str(),
+	}, "id", "applies_to", "limit", "reject_mode", "signal")
+	scaleReleaseGate := object(map[string]*Schema{
+		"id":       str(),
+		"command":  str(),
+		"artifact": str(),
+		"required": {Type: "boolean"},
+	}, "id", "command", "artifact", "required")
+	scaleUnitEconomics := object(map[string]*Schema{
+		"estimated_cost_per_credential_usd": {Type: "number"},
+		"postgres_gib_30_day":               {Type: "number"},
+		"jetstream_gib_30_day":              {Type: "number"},
+		"events_per_day":                    {Type: "integer"},
+	}, "estimated_cost_per_credential_usd", "postgres_gib_30_day", "jetstream_gib_30_day", "events_per_day")
+	scaleTenantIsolation := object(map[string]*Schema{
+		"storage_enforcement": str(),
+		"query_rule":          str(),
+		"evidence_refs":       {Type: "array", Items: str()},
+	}, "storage_enforcement", "query_rule", "evidence_refs")
+	scaleDatastorePosture := object(map[string]*Schema{
+		"postgres":  str(),
+		"jetstream": str(),
+		"rls":       str(),
+		"outbox":    str(),
+	}, "postgres", "jetstream", "rls", "outbox")
+	scaleSignerPosture := object(map[string]*Schema{
+		"process_model": str(),
+		"transport":     str(),
+		"scaling":       str(),
+	}, "process_model", "transport", "scaling")
+	scaleProjectionPosture := object(map[string]*Schema{
+		"replay_floor_events_per_second": {Type: "integer"},
+		"max_lag_events":                 {Type: "integer"},
+		"rebuild_source":                 str(),
+	}, "replay_floor_events_per_second", "max_lag_events", "rebuild_source")
+	scaleHotPathSLO := object(map[string]*Schema{
+		"id":                        str(),
+		"hot_path":                  str(),
+		"surface":                   str(),
+		"owner":                     str(),
+		"benchmark":                 str(),
+		"p50_ms":                    {Type: "number"},
+		"p95_ms":                    {Type: "number"},
+		"p99_ms":                    {Type: "number"},
+		"min_throughput_per_second": {Type: "number"},
+		"error_budget_percent":      {Type: "number"},
+		"max_queue_saturation":      {Type: "number"},
+		"max_projection_lag_events": {Type: "integer"},
+		"capacity_ref":              str(),
+	}, "id", "hot_path", "surface", "owner", "benchmark", "p50_ms", "p95_ms", "p99_ms", "min_throughput_per_second", "error_budget_percent", "max_queue_saturation", "max_projection_lag_events", "capacity_ref")
+	scaleCapacityTier := object(map[string]*Schema{
+		"id":                                str(),
+		"name":                              str(),
+		"tenants":                           {Type: "integer"},
+		"managed_credentials":               {Type: "integer"},
+		"events_per_day":                    {Type: "integer"},
+		"postgres_gib_30_day":               {Type: "number"},
+		"jetstream_gib_30_day":              {Type: "number"},
+		"control_plane_cpu":                 str(),
+		"control_plane_memory_gib":          {Type: "integer"},
+		"signer_cpu":                        str(),
+		"signer_memory_gib":                 {Type: "integer"},
+		"estimated_monthly_cost_usd":        {Type: "integer"},
+		"estimated_cost_per_credential_usd": {Type: "number"},
+		"notes":                             str(),
+	}, "id", "name", "tenants", "managed_credentials", "events_per_day", "postgres_gib_30_day", "jetstream_gib_30_day", "control_plane_cpu", "control_plane_memory_gib", "signer_cpu", "signer_memory_gib", "estimated_monthly_cost_usd", "estimated_cost_per_credential_usd", "notes")
+	scaleOrchestrationPlan := object(map[string]*Schema{
+		"capability":                 str(),
+		"served":                     {Type: "boolean"},
+		"generated_at":               timestamp(),
+		"target_credential_bands":    {Type: "array", Items: ref("ScaleBand")},
+		"selected_capacity_tier":     ref("ScaleCapacityTier"),
+		"hot_path_slos":              {Type: "array", Items: ref("ScaleHotPathSLO")},
+		"execution_lanes":            {Type: "array", Items: ref("ScaleExecutionLane")},
+		"shard_plan":                 {Type: "array", Items: ref("ScaleShardPlan")},
+		"backpressure_policy":        {Type: "array", Items: ref("ScaleBackpressureRule")},
+		"release_gates":              {Type: "array", Items: ref("ScaleReleaseGate")},
+		"operator_actions":           {Type: "array", Items: str()},
+		"residuals":                  {Type: "array", Items: str()},
+		"evidence_refs":              {Type: "array", Items: str()},
+		"measurement_artifacts":      {Type: "array", Items: str()},
+		"estimated_daily_event_load": {Type: "integer"},
+		"estimated_monthly_cost_usd": {Type: "integer"},
+		"unit_economics":             ref("ScaleUnitEconomics"),
+		"tenant_isolation":           ref("ScaleTenantIsolation"),
+		"datastore":                  ref("ScaleDatastorePosture"),
+		"signer":                     ref("ScaleSignerPosture"),
+		"projection_replay":          ref("ScaleProjectionPosture"),
+	}, "capability", "served", "generated_at", "target_credential_bands", "selected_capacity_tier", "hot_path_slos", "execution_lanes", "shard_plan", "backpressure_policy", "release_gates", "operator_actions", "residuals", "evidence_refs", "measurement_artifacts", "estimated_daily_event_load", "estimated_monthly_cost_usd", "unit_economics", "tenant_isolation", "datastore", "signer", "projection_replay")
 	managedTenantReq := object(map[string]*Schema{
 		"tenant_id":      uuid(),
 		"name":           str(),
@@ -1832,6 +1956,19 @@ func componentSchemas() map[string]*Schema {
 		"EnterpriseSupportSLATarget":            enterpriseSupportSLATarget,
 		"EnterpriseProfessionalService":         enterpriseProfessionalService,
 		"ManagedOfferingStatus":                 managedOfferingStatus,
+		"ScaleOrchestrationPlan":                scaleOrchestrationPlan,
+		"ScaleBand":                             scaleBand,
+		"ScaleExecutionLane":                    scaleExecutionLane,
+		"ScaleShardPlan":                        scaleShardPlan,
+		"ScaleBackpressureRule":                 scaleBackpressureRule,
+		"ScaleReleaseGate":                      scaleReleaseGate,
+		"ScaleUnitEconomics":                    scaleUnitEconomics,
+		"ScaleTenantIsolation":                  scaleTenantIsolation,
+		"ScaleDatastorePosture":                 scaleDatastorePosture,
+		"ScaleSignerPosture":                    scaleSignerPosture,
+		"ScaleProjectionPosture":                scaleProjectionPosture,
+		"ScaleHotPathSLO":                       scaleHotPathSLO,
+		"ScaleCapacityTier":                     scaleCapacityTier,
 		"ManagedTenantProvisionRequest":         managedTenantReq,
 		"ManagedTenant":                         managedTenant,
 		"NHIReviewItemRequest":                  nhiReviewItemReq,

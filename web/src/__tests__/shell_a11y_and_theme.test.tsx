@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     editions: vi.fn(),
     enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
+    scaleOrchestration: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
@@ -197,6 +198,66 @@ describe("app shell accessibility and theme", () => {
       idempotency_required: true,
       event_type: "tenant.registered",
       mutation_path: "/api/v1/managed-offering/tenants",
+    });
+    apiMock.scaleOrchestration.mockResolvedValue({
+      capability: "CAP-SCALE-01",
+      served: true,
+      generated_at: "2026-06-29T00:00:00Z",
+      target_credential_bands: [
+        { id: "SCALE-100K", managed_credential: "100,000 managed credentials", capacity_tier: "CAP-MEDIUM", topology: "external datastore production" },
+        { id: "SCALE-1M", managed_credential: "1,000,000 managed credentials", capacity_tier: "CAP-LARGE", topology: "multi-replica enterprise" },
+      ],
+      selected_capacity_tier: {
+        id: "CAP-LARGE",
+        name: "multi-replica enterprise",
+        tenants: 250,
+        managed_credentials: 1000000,
+        events_per_day: 10000000,
+        postgres_gib_30_day: 700,
+        jetstream_gib_30_day: 1200,
+        control_plane_cpu: "16 vCPU",
+        control_plane_memory_gib: 32,
+        signer_cpu: "6 vCPU",
+        signer_memory_gib: 8,
+        estimated_monthly_cost_usd: 14500,
+        estimated_cost_per_credential_usd: 0.0145,
+        notes: "External HA PostgreSQL and JetStream.",
+      },
+      hot_path_slos: [],
+      execution_lanes: [
+        {
+          id: "scale-signer",
+          subsystem: "signer",
+          worker_pool: "isolated signer process pool",
+          queue: "signer RPC backlog",
+          bulkhead_env: ["TRSTCTL_SIGNER_WORKERS", "TRSTCTL_SIGNER_QUEUE"],
+          failure_mode: "signer saturation does not import SQL or HTTP",
+          external_side_effect: "signature only",
+          replay_source: "orchestrator idempotency and events",
+          scale_trigger: "signer p95",
+          hot_path_slo: "PERF-SLO-007",
+          operator_control: "scale signer separately",
+          backpressure_signal: "signer queue saturation",
+          measurement: "perf live signer.rpc",
+          architecture_invariant: "AN-3/AN-4/AN-7/AN-8",
+        },
+      ],
+      shard_plan: [],
+      backpressure_policy: [],
+      release_gates: [
+        { id: "perf-live", command: "scripts/perf/run-local.sh --profile live", artifact: "scripts/perf/artifacts/live-load-baseline.json", required: true },
+      ],
+      operator_actions: ["run perf-live"],
+      residuals: ["customer infrastructure pricing is operator-specific"],
+      evidence_refs: ["internal/perf/contract.go"],
+      measurement_artifacts: ["scripts/perf/artifacts/smoke-baseline.json", "scripts/perf/artifacts/live-load-baseline.json"],
+      estimated_daily_event_load: 10000000,
+      estimated_monthly_cost_usd: 14500,
+      unit_economics: { estimated_cost_per_credential_usd: 0.0145, postgres_gib_30_day: 700, jetstream_gib_30_day: 1200, events_per_day: 10000000 },
+      tenant_isolation: { storage_enforcement: "RLS", query_rule: "tenant_id filter", evidence_refs: ["CLAUDE.md: AN-1"] },
+      datastore: { postgres: "external HA PostgreSQL", jetstream: "external JetStream", rls: "tenant_id", outbox: "transactional outbox" },
+      signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
+      projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "append-only event log" },
     });
     apiMock.upsertMember.mockResolvedValue({
       tenant_id: "t1",
@@ -387,13 +448,7 @@ describe("app shell accessibility and theme", () => {
     await screen.findByText("u@example.test");
     const nav = screen.getByRole("navigation", { name: /Primary/i });
 
-    for (const group of [
-      "Issue & renew",
-      "Discover & inventory",
-      "Approve & respond",
-      "Monitor posture",
-      "Administer",
-    ]) {
+    for (const group of ["Issue & renew", "Discover & inventory", "Approve & respond", "Monitor posture", "Administer"]) {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
 
@@ -410,10 +465,7 @@ describe("app shell accessibility and theme", () => {
     const taskList = within(nav).getByRole("list", { name: "Needs action worklists" });
 
     expect(within(nav).getByText("Needs action")).toBeInTheDocument();
-    expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist/i })).toHaveAttribute(
-      "href",
-      "/certificates?expiry=30d",
-    );
+    expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist/i })).toHaveAttribute("href", "/certificates?expiry=30d");
     expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox/i })).toHaveAttribute(
       "href",
       "/approvals?status=pending",

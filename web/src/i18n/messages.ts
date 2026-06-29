@@ -1596,6 +1596,98 @@ export const messages = {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
   },
+  "platform.scale.heading": {
+    defaultMessage: "Scale orchestration",
+    description: "Heading for the high-volume orchestration posture panel.",
+  },
+  "platform.scale.served": {
+    defaultMessage: "CAP-SCALE-01 active",
+    description: "Badge showing that the scale orchestration capability is active.",
+  },
+  "platform.scale.unavailable": {
+    defaultMessage: "scale unavailable",
+    description: "Badge shown when scale orchestration posture is unavailable.",
+  },
+  "platform.scale.selectedTier": {
+    defaultMessage: "Selected tier",
+    description: "Metric label for the selected capacity tier.",
+  },
+  "platform.scale.credentialsCount": {
+    defaultMessage: "{count} credentials",
+    description: "Credential count within the selected capacity tier.",
+  },
+  "platform.scale.eventsPerDay": {
+    defaultMessage: "Events/day",
+    description: "Metric label for estimated daily event volume.",
+  },
+  "platform.scale.monthlyCost": {
+    defaultMessage: "Monthly cost model",
+    description: "Metric label for estimated monthly operating cost.",
+  },
+  "platform.scale.unitCost": {
+    defaultMessage: "Unit cost",
+    description: "Metric label for cost per managed credential.",
+  },
+  "platform.scale.credentialUnit": {
+    defaultMessage: "credential",
+    description: "Unit label for cost per managed credential.",
+  },
+  "platform.scale.signerModel": {
+    defaultMessage: "Signer model",
+    description: "Metric label for the signing service process posture.",
+  },
+  "platform.scale.projectionFloor": {
+    defaultMessage: "Projection floor",
+    description: "Metric label for projection replay floor and lag.",
+  },
+  "platform.scale.projectionFloorValue": {
+    defaultMessage: "{rate} events/sec · lag ≤ {lag}",
+    description: "Projection replay throughput and maximum lag summary.",
+  },
+  "platform.scale.executionCaption": {
+    defaultMessage: "Scale execution lane table",
+    description: "Accessible caption for scale execution lanes.",
+  },
+  "platform.scale.lane": {
+    defaultMessage: "Lane",
+    description: "Scale execution lane table column.",
+  },
+  "platform.scale.bulkhead": {
+    defaultMessage: "Bulkhead",
+    description: "Scale execution lane bulkhead table column.",
+  },
+  "platform.scale.signal": {
+    defaultMessage: "Signal",
+    description: "Scale execution lane backpressure signal table column.",
+  },
+  "platform.scale.slo": {
+    defaultMessage: "SLO",
+    description: "Scale execution lane SLO table column.",
+  },
+  "platform.scale.releaseCaption": {
+    defaultMessage: "Scale release gate table",
+    description: "Accessible caption for scale release gates.",
+  },
+  "platform.scale.gate": {
+    defaultMessage: "Gate",
+    description: "Scale release gate table column.",
+  },
+  "platform.scale.artifact": {
+    defaultMessage: "Artifact",
+    description: "Scale release gate artifact table column.",
+  },
+  "platform.scale.bandCaption": {
+    defaultMessage: "Scale credential band table",
+    description: "Accessible caption for scale credential bands.",
+  },
+  "platform.scale.band": {
+    defaultMessage: "Band",
+    description: "Scale credential band table column.",
+  },
+  "platform.scale.tier": {
+    defaultMessage: "Tier",
+    description: "Scale credential band tier table column.",
+  },
   "protocols.dns01.heading": {
     defaultMessage: "DNS-01 providers",
     description: "Heading for the ACME DNS-01 provider catalog section.",
@@ -2136,6 +2228,29 @@ const esESCatalog = {
   "incidents.response.jiraPlaceholder": "https://jira.example",
   "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
+  "platform.scale.heading": "Orquestación de escala",
+  "platform.scale.served": "CAP-SCALE-01 activo",
+  "platform.scale.unavailable": "escala no disponible",
+  "platform.scale.selectedTier": "Tier seleccionado",
+  "platform.scale.credentialsCount": "{count} credenciales",
+  "platform.scale.eventsPerDay": "Eventos/día",
+  "platform.scale.monthlyCost": "Modelo de costo mensual",
+  "platform.scale.unitCost": "Costo unitario",
+  "platform.scale.credentialUnit": "credencial",
+  "platform.scale.signerModel": "Modelo de firmante",
+  "platform.scale.projectionFloor": "Piso de proyección",
+  "platform.scale.projectionFloorValue": "{rate} eventos/s · retraso ≤ {lag}",
+  "platform.scale.executionCaption": "Tabla de carriles de ejecución de escala",
+  "platform.scale.lane": "Carril",
+  "platform.scale.bulkhead": "Bulkhead",
+  "platform.scale.signal": "Señal",
+  "platform.scale.slo": "SLO",
+  "platform.scale.releaseCaption": "Tabla de gates de release de escala",
+  "platform.scale.gate": "Gate",
+  "platform.scale.artifact": "Artefacto",
+  "platform.scale.bandCaption": "Tabla de bandas de credenciales de escala",
+  "platform.scale.band": "Banda",
+  "platform.scale.tier": "Tier",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",
   "protocols.dns01.provider": "Proveedor",

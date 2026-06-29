@@ -206,6 +206,30 @@ boots the same binary composition used by production tests (PostgreSQL, NATS Jet
 and the separate signer process) and proves the Provider license gate, tenant projection,
 event metadata, and idempotent replay.
 
+### High-volume orchestration (CAP-SCALE-01)
+
+trstctl serves a scale-orchestration posture for 100,000 to 1,000,000+ managed
+credentials. `GET /api/v1/scale/orchestration` and
+`trstctl-cli scale orchestration` expose the same plan:
+
+- credential bands for 100k, 250k, and 1M managed credentials;
+- the selected `CAP-LARGE` tier from the committed capacity model;
+- hot-path SLOs, release gates, and required measurement artifacts;
+- execution lanes for issuance, inventory, graph/risk, revocation, signer, and
+  projection replay;
+- the bounded queues, bulkhead environment knobs, backpressure signals, replay source,
+  and AN-* architecture invariant for each lane;
+- the shard plan for inventory pages, CRL shards, and projection batches;
+- explicit residuals for customer infrastructure pricing, external relying-party CRL
+  adoption, and remote CI behavior.
+
+This endpoint is read-only and guarded by `access:read`. It does not count a vendor SKU
+or customer CDN as product-owned serving evidence. Instead it turns the already committed
+performance and capacity denominator into an operator-visible execution plan tied to
+`scripts/perf/artifacts/smoke-baseline.json`,
+`scripts/perf/artifacts/live-load-baseline.json`, and the soak gate. The Platform page
+renders the same plan with the served lane/gate/band tables.
+
 ### Enterprise support, SLAs, and professional services (CAP-MODEL-04)
 
 trstctl serves an Enterprise support posture endpoint so an operator can inspect the

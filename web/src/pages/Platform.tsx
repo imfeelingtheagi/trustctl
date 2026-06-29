@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Building2, Headphones, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
+import { Building2, Gauge, Headphones, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
   type APIToken,
@@ -14,6 +15,7 @@ import {
   type Member,
   type OIDCMappingStatus,
   type RoleList,
+  type ScaleOrchestrationPlan,
 } from "@/lib/api";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
@@ -35,6 +37,7 @@ function browserTransport(): { label: string; detail: string; warning?: string }
 
 export function Platform() {
   const { user, preview } = useAuth();
+  const { t } = useTranslation();
   const transport = browserTransport();
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
   const [roles, setRoles] = useState<RoleList | null>(null);
@@ -42,6 +45,7 @@ export function Platform() {
   const [editions, setEditions] = useState<EditionsInfo | null>(null);
   const [enterpriseSupport, setEnterpriseSupport] = useState<EnterpriseSupportStatus | null>(null);
   const [managedOffering, setManagedOffering] = useState<ManagedOfferingStatus | null>(null);
+  const [scaleOrchestration, setScaleOrchestration] = useState<ScaleOrchestrationPlan | null>(null);
   const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [tokens, setTokens] = useState<APIToken[]>([]);
@@ -71,7 +75,7 @@ export function Platform() {
     setAccessLoading(true);
     setAccessError(null);
     try {
-      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, supportStatus, managedStatus] = await Promise.all([
+      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, supportStatus, managedStatus, scaleStatus] = await Promise.all([
         api.accessRoles(),
         api.oidcMappingStatus(),
         api.members({ includeOffboarded: true, limit: 50 }),
@@ -79,12 +83,14 @@ export function Platform() {
         api.editions(),
         api.enterpriseSupportStatus(),
         api.managedOfferingStatus(),
+        api.scaleOrchestration(),
       ]);
       setRoles(roleCatalog);
       setOIDC(oidcStatus);
       setEditions(editionInfo);
       setEnterpriseSupport(supportStatus);
       setManagedOffering(managedStatus);
+      setScaleOrchestration(scaleStatus);
       setMembers(memberPage.items ?? []);
       setTokens(tokenPage.items ?? []);
     } catch (err) {
@@ -335,6 +341,134 @@ export function Platform() {
           Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
         </p>
         {/* TRACE-014 source anchor: served worker */}
+      </section>
+
+      <section className="ui-panel p-comfortable" aria-labelledby="scale-orchestration-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-status-success" aria-hidden="true" />
+            <h2 id="scale-orchestration-heading" className="text-title font-semibold">
+              {t("platform.scale.heading")}
+            </h2>
+          </div>
+          <span className={scaleServedClass(scaleOrchestration?.served)}>
+            {scaleOrchestration?.served ? t("platform.scale.served") : t("platform.scale.unavailable")}
+          </span>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.5fr)_minmax(0,1fr)]">
+          <dl className="grid content-start gap-2 text-sm">
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.scale.selectedTier")}</dt>
+              <dd>
+                {scaleOrchestration?.selected_capacity_tier?.id ?? "-"} ·{" "}
+                {t("platform.scale.credentialsCount", { count: formatNumber(scaleOrchestration?.selected_capacity_tier?.managed_credentials) })}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.scale.eventsPerDay")}</dt>
+              <dd>{formatNumber(scaleOrchestration?.estimated_daily_event_load)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.scale.monthlyCost")}</dt>
+              <dd>{formatCurrency(scaleOrchestration?.estimated_monthly_cost_usd)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.scale.unitCost")}</dt>
+              <dd>{formatUnitCost(scaleOrchestration?.unit_economics?.estimated_cost_per_credential_usd, t("platform.scale.credentialUnit"))}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.scale.signerModel")}</dt>
+              <dd>{scaleOrchestration?.signer?.process_model ?? "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.scale.projectionFloor")}</dt>
+              <dd>
+                {t("platform.scale.projectionFloorValue", {
+                  rate: formatNumber(scaleOrchestration?.projection_replay?.replay_floor_events_per_second),
+                  lag: formatNumber(scaleOrchestration?.projection_replay?.max_lag_events),
+                })}
+              </dd>
+            </div>
+          </dl>
+          <div className="grid gap-4">
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[44rem]">
+                <caption className="sr-only">{t("platform.scale.executionCaption")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("platform.scale.lane")}</th>
+                    <th scope="col">{t("platform.scale.bulkhead")}</th>
+                    <th scope="col">{t("platform.scale.signal")}</th>
+                    <th scope="col">{t("platform.scale.slo")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(scaleOrchestration?.execution_lanes ?? []).slice(0, 6).map((lane) => (
+                    <tr key={lane.id} className="align-top">
+                      <td>
+                        <span className="font-medium">{lane.subsystem}</span>
+                        <span className="mt-1 block font-mono text-xs text-muted-foreground">{lane.id}</span>
+                      </td>
+                      <td className="font-mono text-xs">{lane.bulkhead_env.join(", ")}</td>
+                      <td>{lane.backpressure_signal}</td>
+                      <td>{lane.hot_path_slo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[28rem]">
+                  <caption className="sr-only">{t("platform.scale.releaseCaption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("platform.scale.gate")}</th>
+                      <th scope="col">{t("platform.scale.artifact")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(scaleOrchestration?.release_gates ?? []).map((gate) => (
+                      <tr key={gate.id}>
+                        <td className="font-medium">{gate.id}</td>
+                        <td className="font-mono text-xs">{gate.artifact}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[28rem]">
+                  <caption className="sr-only">{t("platform.scale.bandCaption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("platform.scale.band")}</th>
+                      <th scope="col">{t("platform.scale.tier")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(scaleOrchestration?.target_credential_bands ?? []).map((band) => (
+                      <tr key={band.id}>
+                        <td>
+                          <span className="font-medium">{band.managed_credential}</span>
+                          <span className="mt-1 block font-mono text-xs text-muted-foreground">{band.id}</span>
+                        </td>
+                        <td>{band.capacity_tier}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="grid gap-2 text-sm md:grid-cols-2">
+              {(scaleOrchestration?.residuals ?? []).slice(0, 2).map((residual) => (
+                <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
+                  {residual}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="ui-panel p-comfortable" aria-labelledby="enterprise-support-heading">
@@ -709,7 +843,6 @@ export function Platform() {
           </div>
         </div>
       </section>
-
     </section>
   );
 }
@@ -726,6 +859,27 @@ function formatDate(value?: string): string {
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) return value;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
+
+function formatNumber(value?: number): string {
+  if (value == null || Number.isNaN(value)) return "-";
+  return new Intl.NumberFormat().format(value);
+}
+
+function formatCurrency(value?: number): string {
+  if (value == null || Number.isNaN(value)) return "-";
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+}
+
+function formatUnitCost(value: number | undefined, unitLabel: string): string {
+  if (value == null || Number.isNaN(value)) return "-";
+  const formatted = new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(value);
+  return `${formatted} / ${unitLabel}`;
 }
 
 function editionStateLabel(state?: EditionsInfo["state"]): string {
@@ -785,4 +939,9 @@ function providerPlaneClass(mode?: ManagedOfferingStatus["provider_plane_mode"])
   if (mode === "enabled") return `${base} border-status-success/30 bg-status-success/10 text-status-success`;
   if (mode === "read_only") return `${base} border-status-warning/30 bg-status-warning/10 text-status-warning`;
   return `${base} border-border bg-muted text-muted-foreground`;
+}
+
+function scaleServedClass(served?: boolean): string {
+  const base = "rounded-control border px-2 py-1 text-xs font-medium";
+  return served ? `${base} border-status-success/30 bg-status-success/10 text-status-success` : `${base} border-border bg-muted text-muted-foreground`;
 }
