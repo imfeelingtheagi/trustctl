@@ -471,19 +471,20 @@ readable by the pod's `fsGroup`, and all parent directories reject group/world
 writes. Unsafe restored files fail startup instead of silently weakening key
 custody.
 
-## Managed-key custody (AWS KMS)
+## Managed-key custody (AWS KMS and PKCS#11 HSMs)
 
 The managed-key lifecycle is off by default. When enabled, the control plane exposes
 `/api/v1/managed-keys` for keys whose private material is born in and stays inside an
-external custodian. The current served cloud backend is AWS KMS; LocalStack is used for
-offline acceptance tests, and the same config can point at real AWS KMS in production.
-The AWS backend uses the official AWS SDK v2 KMS client, with the SDK HTTP client
-option pointed at LocalStack, a VPC endpoint, or regional AWS as configured.
+external custodian. The served custody providers are AWS KMS and PKCS#11 HSM modules
+such as SoftHSM, nShield, and Luna. AWS KMS uses the official AWS SDK v2 KMS client,
+with the SDK HTTP client option pointed at LocalStack, a VPC endpoint, or regional AWS
+as configured. PKCS#11 uses a cgo-enabled build to open the native module, log in to a
+named token, and generate non-extractable signing keys on the token.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables the served managed-key lifecycle. When false, the routes fail closed with `501`. |
-| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
+| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws` or `pkcs11`. The provider is selected at startup and injected into the control plane; it is not a runtime plugin engine. |
 | `TRSTCTL_MANAGED_KEYS_AWS_REGION` | unset | AWS region for KMS, for example `us-east-1`. Required when enabled. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute `http(s)` endpoint override, used for LocalStack, VPC endpoints, or partitions. Leave unset for regional AWS KMS. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID` | unset | AWS access key id. Required for the current served AWS KMS backend. |
@@ -491,6 +492,11 @@ option pointed at LocalStack, a VPC endpoint, or regional AWS as configured.
 | `TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE` | unset | File containing the AWS secret access key. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
 | `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN` | unset | Optional temporary session token. |
 | `TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE` | unset | Optional file containing the temporary session token. |
+| `TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH` | unset | Native PKCS#11 module path, for example `libsofthsm2.so`, nShield `cknfast`, or Luna `Cryptoki`. Required when provider is `pkcs11`. |
+| `TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL` | unset | Initialized token label to log in to. Required when provider is `pkcs11`. |
+| `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN` | unset | PKCS#11 user PIN supplied from the environment as bytes at startup. Prefer the file variant for production. |
+| `TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN_FILE` | unset | File containing the PKCS#11 user PIN. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
+| `TRSTCTL_MANAGED_KEYS_PKCS11_KEY_LABEL_PREFIX` | `trstctl-pkcs11` | Label prefix for generated token objects. |
 
 Example LocalStack configuration:
 
@@ -515,8 +521,25 @@ managed_keys:
     secret_access_key_file: /etc/trstctl/aws-kms-secret-access-key
 ```
 
+Example PKCS#11 HSM shape:
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: pkcs11
+  pkcs11:
+    module_path: /usr/lib/softhsm/libsofthsm2.so
+    token_label: trstctl-prod
+    user_pin_file: /etc/trstctl/pkcs11-user-pin
+    key_label_prefix: trstctl-ca
+```
+
+Static no-cgo builds fail closed if `provider: pkcs11` is selected. Build the
+managed-key package with cgo enabled for local HSM custody so the native module can
+be loaded.
+
 After startup, operators with `keys:write` can call `POST /api/v1/managed-keys` to
-generate a KMS-resident signing key, then rotate, revoke, or zeroize it through the
+generate an HSM/KMS-resident signing key, then rotate, revoke, or zeroize it through the
 matching served routes and `trstctl managed-keys` CLI commands. Requests are
 tenant-scoped, require `Idempotency-Key`, and emit immutable lifecycle events that
 contain key id, version, algorithm, state, and public key only.

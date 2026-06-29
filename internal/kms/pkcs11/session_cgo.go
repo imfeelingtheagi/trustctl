@@ -34,11 +34,19 @@ type moduleSession struct {
 	session  p11.SessionHandle
 	label    string
 	closed   bool
-	handles  map[string]p11.ObjectHandle
+	handles  map[string]objectPair
 	sequence atomic.Uint64
 }
 
 var _ Session = (*moduleSession)(nil)
+var _ LifecycleSession = (*moduleSession)(nil)
+
+type objectPair struct {
+	public   p11.ObjectHandle
+	private  p11.ObjectHandle
+	revoked  bool
+	zeroized bool
+}
 
 // OpenModuleSession opens, initializes, and logs into a real PKCS#11 module.
 // This is the KMS-03 real-binding path: compile-time Go interface injection in
@@ -89,7 +97,7 @@ func OpenModuleSession(cfg ModuleConfig) (Session, error) {
 		ctx:     ctx,
 		session: sh,
 		label:   label,
-		handles: make(map[string]p11.ObjectHandle),
+		handles: make(map[string]objectPair),
 	}, nil
 }
 
@@ -172,7 +180,7 @@ func (s *moduleSession) GenerateKey(alg crypto.Algorithm) (string, []byte, error
 		return "", nil, err
 	}
 	handle := hex.EncodeToString(keyID)
-	s.handles[handle] = priv
+	s.handles[handle] = objectPair{public: pub, private: priv}
 	return handle, der, nil
 }
 
@@ -208,11 +216,17 @@ func (s *moduleSession) SignDigest(handle string, digest []byte, opts crypto.Sig
 	if s.closed {
 		return nil, errors.New("pkcs11: session is closed")
 	}
-	priv, ok := s.handles[handle]
+	pair, ok := s.handles[handle]
 	if !ok {
 		return nil, fmt.Errorf("pkcs11: unknown object handle %q", handle)
 	}
-	if err := s.ctx.SignInit(s.session, []*p11.Mechanism{p11.NewMechanism(p11.CKM_RSA_PKCS, nil)}, priv); err != nil {
+	if pair.revoked {
+		return nil, fmt.Errorf("pkcs11: object handle %q is revoked", handle)
+	}
+	if pair.zeroized {
+		return nil, fmt.Errorf("pkcs11: object handle %q is zeroized", handle)
+	}
+	if err := s.ctx.SignInit(s.session, []*p11.Mechanism{p11.NewMechanism(p11.CKM_RSA_PKCS, nil)}, pair.private); err != nil {
 		return nil, fmt.Errorf("pkcs11: sign init: %w", err)
 	}
 	sig, err := s.ctx.Sign(s.session, digestInfo)
@@ -220,6 +234,53 @@ func (s *moduleSession) SignDigest(handle string, digest []byte, opts crypto.Sig
 		return nil, fmt.Errorf("pkcs11: sign digest: %w", err)
 	}
 	return sig, nil
+}
+
+func (s *moduleSession) RevokeKey(handle string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return errors.New("pkcs11: session is closed")
+	}
+	pair, ok := s.handles[handle]
+	if !ok {
+		return fmt.Errorf("pkcs11: unknown object handle %q", handle)
+	}
+	if pair.zeroized {
+		return fmt.Errorf("pkcs11: object handle %q is zeroized", handle)
+	}
+	if err := s.ctx.SetAttributeValue(s.session, pair.private, []*p11.Attribute{
+		p11.NewAttribute(p11.CKA_SIGN, false),
+	}); err != nil {
+		return fmt.Errorf("pkcs11: disable signing for %q: %w", handle, err)
+	}
+	pair.revoked = true
+	s.handles[handle] = pair
+	return nil
+}
+
+func (s *moduleSession) ZeroizeKey(handle string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return errors.New("pkcs11: session is closed")
+	}
+	pair, ok := s.handles[handle]
+	if !ok {
+		return fmt.Errorf("pkcs11: unknown object handle %q", handle)
+	}
+	for _, obj := range []p11.ObjectHandle{pair.private, pair.public} {
+		if obj == 0 {
+			continue
+		}
+		if err := s.ctx.DestroyObject(s.session, obj); err != nil && !isPKCS11Error(err, p11.CKR_OBJECT_HANDLE_INVALID) {
+			return fmt.Errorf("pkcs11: destroy object for %q: %w", handle, err)
+		}
+	}
+	pair.zeroized = true
+	s.handles[handle] = pair
+	delete(s.handles, handle)
+	return nil
 }
 
 func rsaDigestInfo(hash crypto.Hash, digest []byte) ([]byte, error) {

@@ -2061,22 +2061,26 @@
       "phase": "P2",
       "priority": 54,
       "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers generate/rotate/revoke/zeroize; PKCS#11 has a real SoftHSM-proven native binding",
-      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus served managed-key custody disclosure without key bytes; coverage ledger: /coverage",
+      "backend_status": "served AWS SDK v2-backed AWS KMS and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; SoftHSM native binding remains cgo-proven",
+      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
-      "acceptance_test": "Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
+      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"],
       "source_backend": [
         "internal/api/managedkeys.go",
         "internal/server/managedkeys.go",
         "ee/managedkeys/config.go",
+        "internal/config/config.go",
         "internal/server/managedkeys_seam_test.go",
+        "internal/server/managedkeys_pkcs11_served_test.go",
         "internal/kms",
         "internal/crypto/backend.go",
+        "internal/kms/pkcs11/pkcs11_lifecycle.go",
         "internal/kms/pkcs11/session_cgo.go",
+        "internal/kms/pkcs11/session_nocgo.go",
         "internal/kms/pkcs11/softhsm_real_test.go"
       ],
-      "source_frontend": [],
+      "source_frontend": ["web/src/pages/CAHierarchy.tsx", "web/src/__tests__/ca_hierarchy.test.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
@@ -2095,21 +2099,24 @@
         "served": {
           "evidence": [
             "Managed-key custody is wired into the served production composition when managed_keys.enabled=true.",
+            "managed_keys.provider supports aws and pkcs11; PKCS#11 opens the configured module/token in cgo-enabled builds and static builds fail closed.",
             "The routes fail closed when no KMS/HSM backend is configured and serve generate/rotate/revoke/zeroize when one is configured."
           ],
           "refs": [
             "internal/api/managedkeys.go",
             "internal/server/managedkeys.go",
             "ee/managedkeys/config.go",
+            "internal/config/config.go",
+            "internal/kms/pkcs11/pkcs11_lifecycle.go",
             "internal/server/server.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus served managed-key custody disclosure without key bytes; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/CAHierarchy.tsx"]
         },
         "cli": {
           "evidence": [
@@ -2125,7 +2132,9 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present.",
+            "acceptance_test: Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present.",
+            "TestServedPKCS11ManagedKeyLifecycleCAPKEY01 proves CAP-KEY-01 through the assembled control-plane handler and opaque PKCS#11 object handles.",
+            "TestPKCS11RemoteKeyLifecycle proves the PKCS#11 backend implements crypto.RemoteKeyLifecycle and fails closed after revoke/zeroize.",
             "KMS-03 acceptance: TestPKCS11SoftHSMContainerGenerateSign initializes a SoftHSM token in Docker and runs the cgo-tagged real binding conformance test.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
@@ -2133,6 +2142,8 @@
           "refs": [
             "ee/managedkeys/managedkeys_test.go",
             "internal/server/managedkeys_seam_test.go",
+            "internal/server/managedkeys_pkcs11_served_test.go",
+            "internal/kms/pkcs11/pkcs11_test.go",
             "internal/kms/pkcs11/softhsm_container_test.go",
             "internal/kms/pkcs11/session_cgo.go",
             "internal/featureparity/feature_facet_coverage_test.go",

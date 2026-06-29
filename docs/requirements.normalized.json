@@ -417,10 +417,10 @@
       "requirement_text": "trstctl shall provide HSM integration.",
       "owner": "Issuance and CAs",
       "priority": "P2",
-      "acceptance_criteria": "Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
+      "acceptance_criteria": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers generate/rotate/revoke/zeroize; PKCS#11 has a real SoftHSM-proven native binding",
+      "backend_status": "served AWS SDK v2-backed AWS KMS and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; SoftHSM native binding remains cgo-proven",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/configuration.md",

@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/kms/awskms"
+	"trstctl.com/trstctl/internal/kms/pkcs11"
 	"trstctl.com/trstctl/internal/server"
 )
 
@@ -45,6 +46,8 @@ func CustodyFromConfig(_ context.Context, cfg config.ManagedKeys, guard *egress.
 	switch provider {
 	case config.ManagedKeyProviderAWS:
 		return awsManagedKeyCustodyFromConfig(cfg.AWS, guard)
+	case config.ManagedKeyProviderPKCS11:
+		return pkcs11ManagedKeyCustodyFromConfig(cfg.PKCS11)
 	default:
 		return nil, fmt.Errorf("managed-key custody provider %q is not supported", cfg.Provider)
 	}
@@ -74,6 +77,25 @@ func awsManagedKeyCustodyFromConfig(cfg config.ManagedKeysAWSKMS, guard *egress.
 		SecretAccessKey: secretAccessKey,
 		SessionToken:    sessionToken,
 	}, opts...), nil
+}
+
+func pkcs11ManagedKeyCustodyFromConfig(cfg config.ManagedKeysPKCS11HSM) (crypto.RemoteKeyLifecycle, error) {
+	userPIN, wipePIN, err := managedKeySecretBytes("managed_keys.pkcs11.user_pin", cfg.UserPIN, cfg.UserPINFile)
+	if err != nil {
+		return nil, err
+	}
+	defer wipePIN()
+
+	session, err := pkcs11.OpenModuleSession(pkcs11.ModuleConfig{
+		ModulePath:     cfg.ModulePath,
+		TokenLabel:     cfg.TokenLabel,
+		UserPIN:        userPIN,
+		KeyLabelPrefix: cfg.KeyLabelPrefix,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pkcs11.New(session), nil
 }
 
 func managedKeySecretBytes(name string, inline []byte, file string) ([]byte, func(), error) {

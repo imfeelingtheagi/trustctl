@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     issuers: vi.fn(),
     createIssuer: vi.fn(),
     externalCAs: vi.fn(),
+    caDiscoveryInventory: vi.fn(),
     profiles: vi.fn(),
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
@@ -55,6 +56,15 @@ describe("C10-1 issuer catalog and connection tests", () => {
       issuer({ id: "missing-upstream", name: "Unregistered External" }),
     ]);
     apiMock.profiles.mockResolvedValue([]);
+    apiMock.caDiscoveryInventory.mockResolvedValue({
+      items: [],
+      summary: {
+        public_count: 0,
+        private_count: 0,
+        external_registry_count: 0,
+        authority_count: 0,
+      },
+    });
     apiMock.externalCAs.mockResolvedValue([{ id: "acme-prod", name: "ACME", type: "ACME", status: "available" }]);
     apiMock.createIssuer.mockResolvedValue(issuer({ id: "created-acme", name: "Created ACME" }));
     apiMock.createCACeremony.mockResolvedValue({

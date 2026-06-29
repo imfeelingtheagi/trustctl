@@ -145,6 +145,43 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 }
 
+func TestManagedKeyPKCS11EnvAndValidation(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_MANAGED_KEYS_ENABLED":                    "true",
+		"TRSTCTL_MANAGED_KEYS_PROVIDER":                   "pkcs11",
+		"TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH":         "/usr/lib/softhsm/libsofthsm2.so",
+		"TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL":         "trstctl-prod",
+		"TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN":            "123456",
+		"TRSTCTL_MANAGED_KEYS_PKCS11_KEY_LABEL_PREFIX":    "trstctl-ca",
+		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                 "",
+		"TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID":          "",
+		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY":      "",
+		"TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE": "",
+		"TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN":          "",
+		"TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE":     "",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load PKCS#11 managed-key config: %v", err)
+	}
+	if !cfg.ManagedKeys.Enabled || cfg.ManagedKeys.Provider != ManagedKeyProviderPKCS11 {
+		t.Fatalf("PKCS#11 managed-key provider not enabled: %+v", cfg.ManagedKeys)
+	}
+	if got := cfg.ManagedKeys.PKCS11; got.ModulePath != "/usr/lib/softhsm/libsofthsm2.so" || got.TokenLabel != "trstctl-prod" || string(got.UserPIN) != "123456" || got.KeyLabelPrefix != "trstctl-ca" {
+		t.Fatalf("PKCS#11 managed-key env config not applied: %+v", got)
+	}
+
+	c := Default()
+	c.ManagedKeys.Enabled = true
+	c.ManagedKeys.Provider = ManagedKeyProviderPKCS11
+	c.ManagedKeys.PKCS11.ModulePath = "/usr/lib/softhsm/libsofthsm2.so"
+	c.ManagedKeys.PKCS11.TokenLabel = "trstctl-prod"
+	c.ManagedKeys.PKCS11.UserPINFile = "/etc/trstctl/pkcs11-pin"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid PKCS#11 managed-key config rejected: %v", err)
+	}
+}
+
 func TestValidateRejectsBadValues(t *testing.T) {
 	cases := map[string]func(*Config){
 		"postgres mode":        func(c *Config) { c.Postgres.Mode = "weird" },
@@ -205,6 +242,24 @@ func TestValidateRejectsBadValues(t *testing.T) {
 			c.ManagedKeys.AWS.Region = "us-east-1"
 			c.ManagedKeys.AWS.AccessKeyID = "test"
 			c.ManagedKeys.AWS.SecretAccessKey = []byte("test")
+		},
+		"pkcs11 managed keys missing module": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderPKCS11
+			c.ManagedKeys.PKCS11.TokenLabel = "trstctl-prod"
+			c.ManagedKeys.PKCS11.UserPIN = []byte("123456")
+		},
+		"pkcs11 managed keys missing token": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderPKCS11
+			c.ManagedKeys.PKCS11.ModulePath = "/usr/lib/softhsm/libsofthsm2.so"
+			c.ManagedKeys.PKCS11.UserPIN = []byte("123456")
+		},
+		"pkcs11 managed keys missing pin": func(c *Config) {
+			c.ManagedKeys.Enabled = true
+			c.ManagedKeys.Provider = ManagedKeyProviderPKCS11
+			c.ManagedKeys.PKCS11.ModulePath = "/usr/lib/softhsm/libsofthsm2.so"
+			c.ManagedKeys.PKCS11.TokenLabel = "trstctl-prod"
 		},
 	}
 	for name, mutate := range cases {

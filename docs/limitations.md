@@ -927,21 +927,21 @@ issuance gate uses — before the provider is ever called, so no single operator
 rotate, disable, or destroy a managed key. The surface is served only when a KMS/HSM
 custody backend is configured; otherwise the routes fail closed.
 
-For cloud custody, AWS KMS is wired into that served path through `managed_keys`
-configuration. The backend uses the official AWS SDK v2 KMS client. The acceptance
-suite starts LocalStack, generates a KMS-resident RSA-2048 managed key through the
-real API, rotates it, zeroizes the successor, and revokes a second key; when standard
-`AWS_*` credentials are present, the same test also runs against real AWS KMS. The
-current startup config is static and provider-selected: it does not load runtime
-crypto plugins or let policy choose provider algorithms at request time.
-
-For local HSMs, the PKCS#11 backend has a real native binding in addition to the
-injected unit-test seam. The CI acceptance initializes a SoftHSM token in a
-container, creates a sensitive non-extractable RSA-2048 signing key on the token,
-signs through the module, and verifies the public key through the same backend
-conformance harness used by software and cloud KMS backends. The static default
-build keeps cgo disabled; PKCS#11 deployments opt into the cgo build and module
-configuration explicitly.
+AWS KMS and PKCS#11 HSM custody are both wired into that served path through
+`managed_keys` configuration. The AWS backend uses the official AWS SDK v2 KMS
+client. The acceptance suite starts LocalStack, generates a KMS-resident RSA-2048
+managed key through the real API, rotates it, zeroizes the successor, and revokes a
+second key; when standard `AWS_*` credentials are present, the same test also runs
+against real AWS KMS. The PKCS#11 backend opens a native module in cgo-enabled builds
+and logs into the configured token. The served CAP-KEY-01 test drives
+generate/rotate/revoke/zeroize through the running API using a SoftHSM-shaped
+PKCS#11 session; the native acceptance initializes a SoftHSM token in a container,
+creates a sensitive non-extractable RSA-2048 signing key on the token, signs through
+the module, and verifies the public key through the same backend conformance harness
+used by software and cloud KMS backends. Static no-cgo builds fail closed if
+`provider: pkcs11` is selected. Startup config remains static and provider-selected:
+it does not load runtime crypto plugins or let policy choose provider algorithms at
+request time.
 
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import

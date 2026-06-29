@@ -293,7 +293,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/ca-hierarchy"],
     component: "CAHierarchy",
     kind: "observe",
-    evidence: "HSM/KMS custody metadata preview plus library-tier disclosure without key bytes",
+    evidence: "served AWS KMS and PKCS#11 HSM custody metadata/actions without key bytes",
   },
   {
     featureId: "F27",

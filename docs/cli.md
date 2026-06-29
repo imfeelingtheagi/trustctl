@@ -287,7 +287,7 @@ trstctl-cli secrets leases get <lease-id>
 printf '{"extend_seconds":900}' | trstctl-cli --idempotency-key lease-renew-1 secrets leases renew <lease-id> -f -
 trstctl-cli --idempotency-key lease-revoke-1 secrets leases revoke <lease-id>
 
-# Generate and retire an AWS KMS-backed managed key after managed_keys is enabled.
+# Generate and retire an HSM/KMS-backed managed key after managed_keys is enabled.
 cat > managed-key.json <<'JSON'
 {"algorithm":"RSA-2048"}
 JSON

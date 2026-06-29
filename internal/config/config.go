@@ -116,15 +116,20 @@ const (
 	// engine/plugin registry; this is the same compile-time interface pattern as
 	// crypto.Signer, Java JCA, OpenSSL ENGINE, and PKCS#11.
 	ManagedKeyProviderAWS = "aws"
+	// ManagedKeyProviderPKCS11 selects a local PKCS#11 HSM module (SoftHSM,
+	// nShield, Luna, or another standards-compliant token) for served managed-key
+	// custody. The module is opened only by the managed-key backend package.
+	ManagedKeyProviderPKCS11 = "pkcs11"
 )
 
 // ManagedKeys configures the served BYOK/HSM managed-key lifecycle. Off by default:
 // when disabled, /api/v1/managed-keys/* remains registered but fails closed with
 // 501 until an operator supplies a custody backend.
 type ManagedKeys struct {
-	Enabled  bool              `json:"enabled,omitempty"`
-	Provider string            `json:"provider,omitempty"`
-	AWS      ManagedKeysAWSKMS `json:"aws,omitempty"`
+	Enabled  bool                 `json:"enabled,omitempty"`
+	Provider string               `json:"provider,omitempty"`
+	AWS      ManagedKeysAWSKMS    `json:"aws,omitempty"`
+	PKCS11   ManagedKeysPKCS11HSM `json:"pkcs11,omitempty"`
 }
 
 // ManagedKeysAWSKMS configures AWS KMS custody for managed keys. Secret credential
@@ -139,6 +144,17 @@ type ManagedKeysAWSKMS struct {
 	SecretAccessKeyFile string `json:"secret_access_key_file,omitempty"`
 	SessionToken        []byte `json:"session_token,omitempty"`
 	SessionTokenFile    string `json:"session_token_file,omitempty"`
+}
+
+// ManagedKeysPKCS11HSM configures a local PKCS#11 module for managed-key custody.
+// UserPIN is []byte or file-backed because it authenticates the HSM session; it is
+// wiped after startup wiring reads it.
+type ManagedKeysPKCS11HSM struct {
+	ModulePath     string `json:"module_path,omitempty"`
+	TokenLabel     string `json:"token_label,omitempty"`
+	UserPIN        []byte `json:"user_pin,omitempty"`
+	UserPINFile    string `json:"user_pin_file,omitempty"`
+	KeyLabelPrefix string `json:"key_label_prefix,omitempty"`
 }
 
 // HA configures the multi-replica high-availability behavior of the control plane
@@ -1582,15 +1598,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_GITLEAKS_BIN", &c.Secrets.GitleaksBin)
-	setBool(getenv, "TRSTCTL_MANAGED_KEYS_ENABLED", &c.ManagedKeys.Enabled)
-	setString(getenv, "TRSTCTL_MANAGED_KEYS_PROVIDER", &c.ManagedKeys.Provider)
-	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_REGION", &c.ManagedKeys.AWS.Region)
-	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT", &c.ManagedKeys.AWS.Endpoint)
-	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID", &c.ManagedKeys.AWS.AccessKeyID)
-	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY", &c.ManagedKeys.AWS.SecretAccessKey)
-	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE", &c.ManagedKeys.AWS.SecretAccessKeyFile)
-	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN", &c.ManagedKeys.AWS.SessionToken)
-	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE", &c.ManagedKeys.AWS.SessionTokenFile)
+	applyManagedKeysEnv(getenv, &c.ManagedKeys)
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). OFF by default (fail
 	// closed). The AI model stays air-gapped/opt-in regardless of these flags.
 	setBool(getenv, "TRSTCTL_AI_ENABLE_API", &c.AI.EnableAPI)
@@ -1662,6 +1670,23 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	if peer.ID != "" || peer.Region != "" || peer.NATSURL != "" {
 		c.Federation.Peers = []FederationPeer{peer}
 	}
+}
+
+func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
+	setBool(getenv, "TRSTCTL_MANAGED_KEYS_ENABLED", &m.Enabled)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_PROVIDER", &m.Provider)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_REGION", &m.AWS.Region)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT", &m.AWS.Endpoint)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID", &m.AWS.AccessKeyID)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY", &m.AWS.SecretAccessKey)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY_FILE", &m.AWS.SecretAccessKeyFile)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN", &m.AWS.SessionToken)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_SESSION_TOKEN_FILE", &m.AWS.SessionTokenFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_MODULE_PATH", &m.PKCS11.ModulePath)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_TOKEN_LABEL", &m.PKCS11.TokenLabel)
+	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN", &m.PKCS11.UserPIN)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_USER_PIN_FILE", &m.PKCS11.UserPINFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_PKCS11_KEY_LABEL_PREFIX", &m.PKCS11.KeyLabelPrefix)
 }
 
 // applyAuthEnv overlays browser-auth environment knobs. The structured
@@ -2305,8 +2330,18 @@ func validateManagedKeys(m ManagedKeys) []error {
 				errs = append(errs, fmt.Errorf("managed_keys.aws.endpoint %q must be an absolute http(s) URL", m.AWS.Endpoint))
 			}
 		}
+	case ManagedKeyProviderPKCS11:
+		if strings.TrimSpace(m.PKCS11.ModulePath) == "" {
+			errs = append(errs, errors.New("managed_keys.pkcs11.module_path is required when managed-key custody uses PKCS#11"))
+		}
+		if strings.TrimSpace(m.PKCS11.TokenLabel) == "" {
+			errs = append(errs, errors.New("managed_keys.pkcs11.token_label is required when managed-key custody uses PKCS#11"))
+		}
+		if len(m.PKCS11.UserPIN) == 0 && strings.TrimSpace(m.PKCS11.UserPINFile) == "" {
+			errs = append(errs, errors.New("managed_keys.pkcs11.user_pin or managed_keys.pkcs11.user_pin_file is required when managed-key custody uses PKCS#11"))
+		}
 	default:
-		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q)", m.Provider, ManagedKeyProviderAWS))
+		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q or %q)", m.Provider, ManagedKeyProviderAWS, ManagedKeyProviderPKCS11))
 	}
 	return errs
 }
