@@ -362,6 +362,12 @@ cat > secret-scan.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f secret-scan.json
 
+# Scan full Git history with the default 213-rule floor plus additive custom rules.
+cat > deep-secret-scan.json <<'JSON'
+{"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
+JSON
+trstctl-cli --idempotency-key secret-scan-deep-1 secrets scans run -f deep-secret-scan.json
+
 # Block local commits on staged Git blobs without requiring a running control plane.
 trstctl-cli secrets scans staged-diff --repo .
 trstctl-cli secrets scans pre-commit install --repo .

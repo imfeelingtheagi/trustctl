@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -133,6 +134,10 @@ type SecretsBackend struct {
 // process and redacted report file.
 type SecretScanner interface {
 	Scan(ctx context.Context, path string) (secretscan.Report, error)
+}
+
+type SecretScannerWithOptions interface {
+	ScanWithOptions(ctx context.Context, path string, opts secretscan.ScanOptions) (secretscan.Report, error)
 }
 
 type secretRepoScanProviderResponse struct {
@@ -335,7 +340,9 @@ type secretSyncResponse struct {
 }
 
 type secretScanRequest struct {
-	Path string `json:"path"`
+	Path            string `json:"path"`
+	Mode            string `json:"mode,omitempty"`
+	CustomRulesPath string `json:"custom_rules_path,omitempty"`
 }
 
 type secretScanFindingResponse struct {
@@ -349,6 +356,9 @@ type secretScanResponse struct {
 	RunID         string                      `json:"run_id"`
 	Scanner       string                      `json:"scanner"`
 	EngineVersion string                      `json:"engine_version"`
+	Mode          string                      `json:"mode"`
+	CustomRules   bool                        `json:"custom_rules"`
+	Capabilities  []string                    `json:"capabilities"`
 	RulesActive   int                         `json:"rules_active"`
 	FindingsCount int                         `json:"findings_count"`
 	Findings      []secretScanFindingResponse `json:"findings"`
@@ -700,13 +710,20 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(req.Path) == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "path is required")
 		}
+		mode, err := secretscan.NormalizeScanMode(req.Mode)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		opts := secretscan.ScanOptions{Mode: mode, CustomRulesPath: req.CustomRulesPath}
 
 		start := time.Now()
-		report, err := a.secrets.be.SecretScanner.Scan(ctx, req.Path)
+		report, err := runSecretScanner(ctx, a.secrets.be.SecretScanner, req.Path, opts)
 		a.observeFeature("secrets", "scan", start, err)
 		if err != nil {
 			switch {
 			case errors.Is(err, secretscan.ErrInvalidScanTarget):
+				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			case errors.Is(err, secretscan.ErrInvalidScanMode), errors.Is(err, secretscan.ErrInvalidCustomRules):
 				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 			case errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
 				return 0, nil, errStatus(http.StatusServiceUnavailable, "gitleaks binary is not configured")
@@ -726,15 +743,37 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if report.Mode == "" {
+			report.Mode = mode
+		}
+		if len(report.Capabilities) == 0 {
+			report.Capabilities = secretscan.ScanCapabilities(report.Mode, report.CustomRules || strings.TrimSpace(req.CustomRulesPath) != "")
+		}
 		return http.StatusCreated, secretScanResponse{
 			RunID:         run.ID,
 			Scanner:       report.Scanner,
 			EngineVersion: report.EngineVersion,
+			Mode:          report.Mode,
+			CustomRules:   report.CustomRules || strings.TrimSpace(req.CustomRulesPath) != "",
+			Capabilities:  report.Capabilities,
 			RulesActive:   report.RulesActive,
 			FindingsCount: len(findings),
 			Findings:      findings,
 		}, nil
 	})
+}
+
+func runSecretScanner(ctx context.Context, scanner SecretScanner, path string, opts secretscan.ScanOptions) (secretscan.Report, error) {
+	if withOptions, ok := scanner.(SecretScannerWithOptions); ok {
+		return withOptions.ScanWithOptions(ctx, path, opts)
+	}
+	if opts.Mode != "" && opts.Mode != secretscan.ScanModeWorkspace {
+		return secretscan.Report{}, fmt.Errorf("%w: scanner does not support %s", secretscan.ErrInvalidScanMode, opts.Mode)
+	}
+	if strings.TrimSpace(opts.CustomRulesPath) != "" {
+		return secretscan.Report{}, fmt.Errorf("%w: scanner does not support custom rules", secretscan.ErrInvalidCustomRules)
+	}
+	return scanner.Scan(ctx, path)
 }
 
 func discoveryFindingsFromSecretScan(report secretscan.Report) ([]store.DiscoveryFinding, []secretScanFindingResponse, error) {

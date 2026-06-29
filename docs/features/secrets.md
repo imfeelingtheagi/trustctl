@@ -363,11 +363,24 @@ cat > secret-scan.json <<'JSON'
 {"path":"."}
 JSON
 trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
+
+cat > deep-secret-scan.json <<'JSON'
+{"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
+JSON
+trstctl-cli --idempotency-key ci-secret-scan-deep-1 secrets scans run -f deep-secret-scan.json
 ```
 
 The returned `run_id` can be inspected with `GET /api/v1/discovery/findings?run_id=...`
 or the graph view. TruffleHog JSON ingestion remains available for offline import and
 contract tests, but the served scanner path uses Gitleaks as the execution engine.
+CAP-SCAN-03 is the deep mode: `mode:"git_history"` invokes the Gitleaks Git-history
+scanner with `--log-opts --all`, keeps redaction on, and still enforces the
+140-rule floor from the pinned 213-rule default ruleset. `custom_rules_path` points
+to an additive `[[rules]]` TOML fragment. trstctl wraps that fragment with
+`[extend] useDefault = true`, rejects allowlists or disabled-rule overrides, and
+returns `mode`, `custom_rules`, and `capabilities` so CI can prove full-history,
+entropy, pattern, 100+ default-rule, and custom-rule coverage without storing a
+secret value.
 
 For local developer guardrails, CAP-SCAN-02 runs without a control-plane server. The
 CLI materializes only staged Git blobs, or only the head-side files from an explicit
@@ -517,7 +530,8 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   `trstctl-cli secrets scans repositories webhook`, `trstctl-cli secrets scans run`,
   `trstctl-cli secrets scans staged-diff`,
   `trstctl-cli secrets scans pre-commit install`, Gitleaks `v8.27.2`, `213` default
-  rules active, redacted findings only.
+  rules active, workspace and full-Git-history modes, additive custom `[[rules]]`
+  fragments, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 

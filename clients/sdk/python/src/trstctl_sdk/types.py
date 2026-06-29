@@ -3723,9 +3723,12 @@ SecretRotationRequest = TypedDict(
 SecretScan = TypedDict(
     'SecretScan',
     {
+        'capabilities': list[str],
+        'custom_rules': bool,
         'engine_version': str,
         'findings': list[dict[str, Any]],
         'findings_count': int,
+        'mode': str,
         'rules_active': int,
         'run_id': str,
         'scanner': str,
@@ -3747,6 +3750,8 @@ SecretScanFinding = TypedDict(
 SecretScanRequest = TypedDict(
     'SecretScanRequest',
     {
+        'custom_rules_path': str,
+        'mode': str,
         'path': str,
     },
     total=False,

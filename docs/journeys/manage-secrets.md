@@ -337,6 +337,11 @@ Be precise here (see [Current limitations](../limitations.md) and
    JSON
    trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
 
+   cat > deep-secret-scan.json <<'JSON'
+   {"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
+   JSON
+   trstctl-cli --idempotency-key ci-secret-scan-deep-1 secrets scans run -f deep-secret-scan.json
+
    trstctl-cli secrets scans staged-diff --repo .
    trstctl-cli secrets scans pre-commit install --repo .
    trstctl-cli secrets scans staged-diff --repo . --base origin/main --head HEAD --advisory
@@ -345,9 +350,11 @@ Be precise here (see [Current limitations](../limitations.md) and
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 
-   -> the served scan response shows the `run_id`, `rules_active`, and redacted
-   findings. The local staged-diff scanner needs no server, scans only staged Git
-   blobs or the head side of an explicit CI diff, and also drops the raw secret value.
+   -> the served scan response shows the `run_id`, `mode`, `capabilities`,
+   `rules_active`, and redacted findings. Deep mode scans full Git history with
+   default Gitleaks rules plus additive custom `[[rules]]` fragments. The local
+   staged-diff scanner needs no server, scans only staged Git blobs or the head side
+   of an explicit CI diff, and also drops the raw secret value.
 
 13. Know the edges before you rely on them. Transit encryption-as-a-service is now
     served through `/api/v1/transit/*` and `trstctl-cli transit`, and KMIP is served

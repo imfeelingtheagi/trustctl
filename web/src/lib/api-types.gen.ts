@@ -2591,9 +2591,12 @@ export interface SecretRotationRequest {
 }
 
 export interface SecretScan {
+  capabilities: string[];
+  custom_rules: boolean;
   engine_version: string;
   findings: SecretScanFinding[];
   findings_count: number;
+  mode: string;
   rules_active: number;
   run_id: string;
   scanner: string;
@@ -2607,6 +2610,8 @@ export interface SecretScanFinding {
 }
 
 export interface SecretScanRequest {
+  custom_rules_path?: string;
+  mode?: string;
   path: string;
 }
 

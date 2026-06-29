@@ -9826,6 +9826,15 @@
       },
       "SecretScan": {
         "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "custom_rules": {
+            "type": "boolean"
+          },
           "engine_version": {
             "type": "string"
           },
@@ -9837,6 +9846,9 @@
           },
           "findings_count": {
             "type": "integer"
+          },
+          "mode": {
+            "type": "string"
           },
           "rules_active": {
             "type": "integer"
@@ -9853,6 +9865,9 @@
           "run_id",
           "scanner",
           "engine_version",
+          "mode",
+          "custom_rules",
+          "capabilities",
           "rules_active",
           "findings_count",
           "findings"
@@ -9884,6 +9899,12 @@
       },
       "SecretScanRequest": {
         "properties": {
+          "custom_rules_path": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
           "path": {
             "type": "string"
           }

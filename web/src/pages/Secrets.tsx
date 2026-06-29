@@ -113,6 +113,8 @@ export function Secrets() {
   const [transitSignature, setTransitSignature] = useState<TransitSignature | null>(null);
 
   const [scanPath, setScanPath] = useState("");
+  const [scanMode, setScanMode] = useState<"workspace" | "git_history">("workspace");
+  const [scanCustomRulesPath, setScanCustomRulesPath] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<SecretScan | null>(null);
@@ -496,7 +498,8 @@ export function Secrets() {
     try {
       const path = scanPath.trim();
       if (!path) throw new Error("Path is required");
-      setScanResult(await api.scanSecrets({ path }));
+      const customRulesPath = scanCustomRulesPath.trim();
+      setScanResult(await api.scanSecrets({ path, mode: scanMode, ...(customRulesPath ? { custom_rules_path: customRulesPath } : {}) }));
     } catch (err) {
       setScanError(apiProblemMessage(err, "Could not run secret scan"));
     } finally {
@@ -1021,7 +1024,11 @@ export function Secrets() {
         {repoScanPosture && <RepositoryScanPosture posture={repoScanPosture} />}
         {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
         <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
-        <form aria-label="Run secret scan" onSubmit={(event) => void submitSecretScan(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <form
+          aria-label="Run secret scan"
+          onSubmit={(event) => void submitSecretScan(event)}
+          className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto]"
+        >
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Path</span>
             <input
@@ -1032,6 +1039,26 @@ export function Secrets() {
               required
             />
           </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">{t("secrets.scan.mode")}</span>
+            <select
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={scanMode}
+              onChange={(event) => setScanMode(event.target.value as "workspace" | "git_history")}
+            >
+              <option value="workspace">{t("secrets.scan.modeWorkspace")}</option>
+              <option value="git_history">{t("secrets.scan.modeGitHistory")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">{t("secrets.scan.customRules")}</span>
+            <input
+              className="rounded-md border border-input bg-background px-3 py-2"
+              value={scanCustomRulesPath}
+              onChange={(event) => setScanCustomRulesPath(event.target.value)}
+              placeholder={t("secrets.scan.customRulesPlaceholder")}
+            />
+          </label>
           <Button type="submit" className="self-end" disabled={scanBusy || Boolean(loadError)}>
             {scanBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
             Run scan
@@ -1040,7 +1067,7 @@ export function Secrets() {
         {scanError && <ErrorState title="Secret scan failed">{scanError}</ErrorState>}
         {scanResult && (
           <div className="ui-panel grid gap-3 p-comfortable text-sm">
-            <dl className="grid gap-2 md:grid-cols-4">
+            <dl className="grid gap-2 md:grid-cols-6">
               <div>
                 <dt className="font-medium text-muted-foreground">Run ID</dt>
                 <dd className="break-all font-mono text-xs">{scanResult.run_id}</dd>
@@ -1048,6 +1075,14 @@ export function Secrets() {
               <div>
                 <dt className="font-medium text-muted-foreground">Scanner</dt>
                 <dd>{scanResult.scanner}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("secrets.scan.mode")}</dt>
+                <dd>{scanResult.mode}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">{t("secrets.scan.customRules")}</dt>
+                <dd>{scanResult.custom_rules ? t("secrets.scan.customRulesYes") : t("secrets.scan.customRulesNo")}</dd>
               </div>
               <div>
                 <dt className="font-medium text-muted-foreground">Rules</dt>
@@ -1058,6 +1093,15 @@ export function Secrets() {
                 <dd>{scanResult.findings_count}</dd>
               </div>
             </dl>
+            {scanResult.capabilities.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {scanResult.capabilities.map((capability) => (
+                  <span key={capability} className="rounded-control border border-border px-2 py-1 text-xs text-muted-foreground">
+                    {capability}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="ui-table min-w-[48rem]">
                 <caption className="sr-only">Secret scan findings</caption>

@@ -5539,9 +5539,12 @@ export interface components {
             provider: string;
         };
         SecretScan: {
+            capabilities: string[];
+            custom_rules: boolean;
             engine_version: string;
             findings: components["schemas"]["SecretScanFinding"][];
             findings_count: number;
+            mode: string;
             rules_active: number;
             /** Format: uuid */
             run_id: string;
@@ -5554,6 +5557,8 @@ export interface components {
             rule_id: string;
         };
         SecretScanRequest: {
+            custom_rules_path?: string;
+            mode?: string;
             path: string;
         };
         SecretSync: {

@@ -1846,6 +1846,34 @@ export const messages = {
       "Repository events and scans can create redacted findings here. Use the discovery workflow to review them until scan-specific actions are added.",
     description: "Unavailable-state body for scan finding triage workflows that are not served yet.",
   },
+  "secrets.scan.mode": {
+    defaultMessage: "Mode",
+    description: "Label for selecting workspace or Git-history secret-scan mode.",
+  },
+  "secrets.scan.modeWorkspace": {
+    defaultMessage: "Workspace",
+    description: "Secret-scan mode label for scanning the current workspace filesystem.",
+  },
+  "secrets.scan.modeGitHistory": {
+    defaultMessage: "Git history",
+    description: "Secret-scan mode label for scanning full Git history.",
+  },
+  "secrets.scan.customRules": {
+    defaultMessage: "Custom rules",
+    description: "Label for additive custom Gitleaks rule fragments.",
+  },
+  "secrets.scan.customRulesPlaceholder": {
+    defaultMessage: "/etc/trstctl/gitleaks-rules.toml",
+    description: "Placeholder path for an additive custom Gitleaks rules file.",
+  },
+  "secrets.scan.customRulesYes": {
+    defaultMessage: "yes",
+    description: "Short value showing custom rules were used for a secret scan.",
+  },
+  "secrets.scan.customRulesNo": {
+    defaultMessage: "no",
+    description: "Short value showing custom rules were not used for a secret scan.",
+  },
   "secrets.repoScan.active": {
     defaultMessage: "Realtime repository ingress active",
     description: "Status text when repository secret scanning ingress is served.",
@@ -2443,6 +2471,13 @@ const esESCatalog = {
   "secrets.scan.triageLibraryOnlyTitle": "La revisión de hallazgos del escaneo aún no está disponible",
   "secrets.scan.triageLibraryOnlyBody":
     "Los eventos de repositorio y los escaneos pueden crear hallazgos redactados aquí. Usa el flujo de descubrimiento para revisarlos hasta que se agreguen acciones específicas de escaneo.",
+  "secrets.scan.mode": "Modo",
+  "secrets.scan.modeWorkspace": "Espacio de trabajo",
+  "secrets.scan.modeGitHistory": "Historial Git",
+  "secrets.scan.customRules": "Reglas personalizadas",
+  "secrets.scan.customRulesPlaceholder": "/etc/trstctl/gitleaks-rules.toml",
+  "secrets.scan.customRulesYes": "sí",
+  "secrets.scan.customRulesNo": "no",
   "secrets.repoScan.active": "Ingreso de repositorios en tiempo real activo",
   "secrets.repoScan.unavailable": "Ingreso de repositorios no disponible",
   "secrets.repoScan.ruleFloor": "{scanner} con {rules}+ reglas requeridas",

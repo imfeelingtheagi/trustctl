@@ -180,6 +180,9 @@ describe("secrets surface", () => {
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
       engine_version: "8.18.2",
+      mode: "workspace",
+      custom_rules: false,
+      capabilities: ["pattern-rules", "entropy-rules", "default-rules-100-plus", "workspace"],
       rules_active: 121,
       findings_count: 1,
       findings: [{ rule_id: "generic-api-key", file: "config/ci.yml", line: 42, credential_ref: "sha256:6e5a...91bb" }],
@@ -320,8 +323,9 @@ describe("secrets surface", () => {
     const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
     await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
     await user.click(scanForm.getByRole("button", { name: /run scan/i }));
-    await waitFor(() => expect(apiMock.scanSecrets).toHaveBeenCalledWith({ path: "github.com/example/payments" }));
+    await waitFor(() => expect(apiMock.scanSecrets).toHaveBeenCalledWith({ path: "github.com/example/payments", mode: "workspace" }));
     expect(await screen.findByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
+    expect(screen.getByText("entropy-rules")).toBeInTheDocument();
     expect(screen.getByText("generic-api-key")).toBeInTheDocument();
     expect(screen.getByText("config/ci.yml")).toBeInTheDocument();
     expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
