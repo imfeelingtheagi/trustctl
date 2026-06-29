@@ -1217,6 +1217,7 @@ export interface MachineLoginResponse {
 
 export interface ManagedKey {
   algorithm: string;
+  extractable?: boolean;
   key_id: string;
   public_der?: string;
   state: string;

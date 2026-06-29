@@ -4550,6 +4550,9 @@
           "algorithm": {
             "type": "string"
           },
+          "extractable": {
+            "type": "boolean"
+          },
           "key_id": {
             "type": "string"
           },

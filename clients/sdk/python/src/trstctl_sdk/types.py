@@ -1785,6 +1785,7 @@ ManagedKey = TypedDict(
     'ManagedKey',
     {
         'algorithm': str,
+        'extractable': bool,
         'key_id': str,
         'public_der': str,
         'state': str,

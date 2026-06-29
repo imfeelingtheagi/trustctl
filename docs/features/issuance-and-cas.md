@@ -228,7 +228,8 @@ GCP Cloud KMS, and PKCS#11 HSM custody. When `managed_keys.enabled` is true and
 `managed_keys.provider` is `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`, the
 running control plane exposes:
 
-- `POST /api/v1/managed-keys` to create a KMS-resident signing key;
+- `POST /api/v1/managed-keys` to create a KMS/HSM-resident, non-extractable signing
+  key (`extractable: false` in the response; no private material is returned);
 - `POST /api/v1/managed-keys/rotate` to mint a successor key;
 - `POST /api/v1/managed-keys/revoke` to disable the current key at the provider;
 - `POST /api/v1/managed-keys/zeroize` to schedule provider-side destruction.

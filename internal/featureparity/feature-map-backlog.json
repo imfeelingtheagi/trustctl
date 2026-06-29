@@ -2061,10 +2061,10 @@
       "phase": "P2",
       "priority": 54,
       "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; served CAP-KEY-03 posture is exposed on /api/v1/editions and Platform with the FIPS 140-3 Go Cryptographic Module build path and external product CMVP residual; SoftHSM native binding remains cgo-proven",
-      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; Platform at /platform - served FIPS module path, make fips-build target, CI gate, and product CMVP residual; coverage ledger: /coverage",
+      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; served CAP-KEY-04 acceptance covers in-HSM non-extractable generation with extractable=false and no private material returned; served CAP-KEY-03 posture is exposed on /api/v1/editions and Platform with the FIPS 140-3 Go Cryptographic Module build path and external product CMVP residual; SoftHSM native binding remains cgo-proven",
+      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes, including extractable=false; Platform at /platform - served FIPS module path, make fips-build target, CI gate, and product CMVP residual; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
-      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves the canonical editions route serves the FIPS validated-module path and external product CMVP residual. UI never exposes key material and displays only public metadata/health/posture for configured backends.",
+      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. TestServedInHSMNonExtractableGenerationCAPKEY04 proves the generate route returns only public metadata plus extractable=false for an opaque HSM handle. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves the canonical editions route serves the FIPS validated-module path and external product CMVP residual. UI never exposes key material and displays only public metadata/health/posture for configured backends.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/compliance.md", "docs/limitations.md"],
       "source_backend": [
         "internal/api/managedkeys.go",
@@ -2108,6 +2108,7 @@
             "Managed-key custody is wired into the served production composition when managed_keys.enabled=true.",
             "managed_keys.provider supports aws, azure-key-vault, gcp-kms, and pkcs11; Azure/GCP use startup-supplied bearer tokens, and PKCS#11 opens the configured module/token in cgo-enabled builds while static builds fail closed.",
             "The routes fail closed when no KMS/HSM backend is configured and serve generate/rotate/revoke/zeroize when one is configured.",
+            "POST /api/v1/managed-keys generates a provider-held key and returns only an opaque handle, public DER, state, version, and extractable=false.",
             "GET /api/v1/editions serves the CAP-KEY-03 FIPS 140-3 Go Cryptographic Module path, build target, CI gate, AN-3 crypto boundary, live POST booleans, and external product CMVP residual."
           ],
           "refs": [
@@ -2123,7 +2124,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; Platform at /platform - served FIPS module path, make fips-build target, CI gate, and product CMVP residual; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes, including extractable=false; Platform at /platform - served FIPS module path, make fips-build target, CI gate, and product CMVP residual; coverage ledger: /coverage",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/CAHierarchy.tsx", "web/src/pages/Platform.tsx"]
@@ -2137,6 +2138,7 @@
         "api": {
           "evidence": [
             "OpenAPI includes the managed-key lifecycle routes and key-material-free response schemas.",
+            "ManagedKey includes extractable=false so generated clients and the console can display non-extractable custody without exposing private material.",
             "OpenAPI operation getEditions includes additive FIPS posture fields for the validated-module path without making product certification a required claim."
           ],
           "refs": ["internal/api/api.go", "internal/api/managedkeys.go", "internal/api/editions.go", "internal/api/openapi.go"]
@@ -2144,6 +2146,7 @@
         "test": {
           "evidence": [
             "acceptance_test: Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present.",
+            "TestServedInHSMNonExtractableGenerationCAPKEY04 proves CAP-KEY-04 through served generation of an opaque PKCS#11 object handle, extractable=false, and a response allowlist that excludes private/secret/PEM material.",
             "TestServedCloudKMSManagedKeyLifecycleCAPKEY02 proves CAP-KEY-02 through the assembled control-plane handler and opaque Azure/GCP KMS key handles.",
             "TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves CAP-KEY-03 through the canonical served editions route and keeps the product NIST CMVP certificate as an external residual.",
             "TestRemoteKeyLifecycle in the Azure and GCP packages proves both cloud KMS backends implement crypto.RemoteKeyLifecycle without exporting key bytes.",

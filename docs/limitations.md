@@ -925,7 +925,9 @@ immutable events; the three **destructive** transitions (rotate/revoke/zeroize) 
 a **distinct-approver dual-control approval** — the same four-eyes machinery the
 issuance gate uses — before the provider is ever called, so no single operator can
 rotate, disable, or destroy a managed key. The surface is served only when a KMS/HSM
-custody backend is configured; otherwise the routes fail closed.
+custody backend is configured; otherwise the routes fail closed. Generate returns an
+opaque provider handle, public DER, lifecycle state, and `extractable: false`; it never
+returns private-key bytes, PEM, or provider secrets.
 
 AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, and PKCS#11 HSM custody are
 wired into that served path through `managed_keys` configuration. The AWS backend

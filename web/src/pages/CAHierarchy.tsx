@@ -1261,6 +1261,7 @@ function ManagedKeyPanel({
         <KeyValue label="Version" value={`Version ${managedKey.version}`} />
         <KeyValue label="State" value={managedKey.state} />
         <KeyValue label="Public DER" value={managedKey.public_der ? `${managedKey.public_der.length} bytes` : "-"} />
+        <KeyValue label="Extractable" value={managedKey.extractable ? "Yes" : "No"} />
       </dl>
     </section>
   );

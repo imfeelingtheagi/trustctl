@@ -3768,6 +3768,7 @@ export interface components {
         };
         ManagedKey: {
             algorithm: string;
+            extractable?: boolean;
             key_id: string;
             /** Format: byte */
             public_der?: string;

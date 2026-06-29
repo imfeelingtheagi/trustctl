@@ -24,9 +24,10 @@ type servedPKCS11Session struct {
 }
 
 type servedPKCS11Key struct {
-	signer   *crypto.LockedSigner
-	revoked  bool
-	zeroized bool
+	signer         *crypto.LockedSigner
+	nonExtractable bool
+	revoked        bool
+	zeroized       bool
 }
 
 func newServedPKCS11Session() *servedPKCS11Session {
@@ -42,7 +43,7 @@ func (s *servedPKCS11Session) GenerateKey(alg crypto.Algorithm) (string, []byte,
 	defer s.mu.Unlock()
 	s.seq++
 	handle := "pkcs11://slot/0/object/" + hex.EncodeToString([]byte{byte(s.seq)})
-	s.keys[handle] = &servedPKCS11Key{signer: signer}
+	s.keys[handle] = &servedPKCS11Key{signer: signer, nonExtractable: true}
 	return handle, signer.Public().DER, nil
 }
 
@@ -239,6 +240,52 @@ func TestServedPKCS11ManagedKeyLifecycleCAPKEY01(t *testing.T) {
 	}
 }
 
+// TestServedInHSMNonExtractableGenerationCAPKEY04 proves CAP-KEY-04 through the
+// served generate verb: the private key is born behind an HSM object handle, the
+// handler returns only public/key identity metadata, and the HSM-shaped session
+// records the private object as non-extractable.
+func TestServedInHSMNonExtractableGenerationCAPKEY04(t *testing.T) {
+	session := newServedPKCS11Session()
+	t.Cleanup(func() { _ = session.Close() })
+	backend := pkcs11.New(session)
+	var lifecycle crypto.RemoteKeyLifecycle = backend
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
+			if md.Log == nil || md.Idempotency == nil {
+				t.Fatal("managed-key PKCS#11 factory did not receive event log and idempotency spine")
+			}
+			return newServedPKCS11ManagedKeys(lifecycle), nil
+		}
+	})
+	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "hsm-operator", []string{
+		string(authz.KeysRead), string(authz.KeysWrite),
+	})
+
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", token, "pkcs11-key-generate-cap-key-04", map[string]string{
+		"algorithm": string(crypto.RSA2048),
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("PKCS#11 managed-key generate = %d, want 201; body=%s", code, body)
+	}
+	generated := decodeManagedKey(t, body)
+	if !strings.HasPrefix(generated.KeyID, "pkcs11://") {
+		t.Fatalf("PKCS#11 managed key id = %q, want opaque HSM object handle", generated.KeyID)
+	}
+	if generated.Extractable {
+		t.Fatalf("served generated HSM key %q reported extractable=true", generated.KeyID)
+	}
+	assertManagedKeyResponseHasNoPrivateMaterial(t, body)
+
+	session.mu.Lock()
+	key := session.keys[generated.KeyID]
+	nonExtractable := key != nil && key.nonExtractable
+	session.mu.Unlock()
+	if !nonExtractable {
+		t.Fatalf("served generated HSM key %q was not recorded as non-extractable", generated.KeyID)
+	}
+}
+
 func decodeManagedKey(t *testing.T, body []byte) api.ManagedKey {
 	t.Helper()
 	var key api.ManagedKey
@@ -246,4 +293,34 @@ func decodeManagedKey(t *testing.T, body []byte) api.ManagedKey {
 		t.Fatalf("decode managed key: %v body=%s", err, body)
 	}
 	return key
+}
+
+func assertManagedKeyResponseHasNoPrivateMaterial(t *testing.T, body []byte) {
+	t.Helper()
+	low := strings.ToLower(string(body))
+	for _, forbidden := range []string{"private", "secret", "pem", "begin "} {
+		if strings.Contains(low, forbidden) {
+			t.Fatalf("managed-key response exposed private material marker %q: %s", forbidden, body)
+		}
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		t.Fatalf("decode managed-key response fields: %v", err)
+	}
+	allowed := map[string]bool{
+		"key_id":      true,
+		"algorithm":   true,
+		"version":     true,
+		"state":       true,
+		"public_der":  true,
+		"extractable": true,
+	}
+	if _, ok := fields["extractable"]; !ok {
+		t.Fatalf("managed-key response must explicitly report extractable=false: %s", body)
+	}
+	for field := range fields {
+		if !allowed[field] {
+			t.Fatalf("managed-key response included non-public field %q: %s", field, body)
+		}
+	}
 }

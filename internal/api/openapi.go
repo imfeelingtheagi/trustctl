@@ -1313,7 +1313,8 @@ func componentSchemas() map[string]*Schema {
 	}, "key_id")
 	managedKey := object(map[string]*Schema{
 		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": str(),
-		"public_der": {Type: "string", Format: "byte"},
+		"public_der":  {Type: "string", Format: "byte"},
+		"extractable": {Type: "boolean"},
 	}, "key_id", "algorithm", "version", "state")
 	secretValue := object(map[string]*Schema{
 		"name": str(), "value": str(), "version": {Type: "integer"},

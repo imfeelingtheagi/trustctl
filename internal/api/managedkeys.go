@@ -24,11 +24,12 @@ import (
 // managed-key implementation. Core API owns this DTO so the route handlers do not
 // link the EE service package.
 type ManagedKey struct {
-	KeyID     string           `json:"key_id"`
-	Algorithm crypto.Algorithm `json:"algorithm"`
-	Version   int              `json:"version"`
-	State     string           `json:"state"`
-	PublicDER []byte           `json:"public_der,omitempty"`
+	KeyID       string           `json:"key_id"`
+	Algorithm   crypto.Algorithm `json:"algorithm"`
+	Version     int              `json:"version"`
+	State       string           `json:"state"`
+	PublicDER   []byte           `json:"public_der,omitempty"`
+	Extractable bool             `json:"extractable"`
 }
 
 var (
@@ -81,20 +82,22 @@ type managedKeyActionRequest struct {
 // managedKeyResponse is the public view of a managed key: identity, algorithm,
 // version, state, and PKIX public key — never the private material.
 type managedKeyResponse struct {
-	KeyID     string `json:"key_id"`
-	Algorithm string `json:"algorithm"`
-	Version   int    `json:"version"`
-	State     string `json:"state"`
-	PublicDER []byte `json:"public_der,omitempty"`
+	KeyID       string `json:"key_id"`
+	Algorithm   string `json:"algorithm"`
+	Version     int    `json:"version"`
+	State       string `json:"state"`
+	PublicDER   []byte `json:"public_der,omitempty"`
+	Extractable bool   `json:"extractable"`
 }
 
 func toManagedKeyResponse(r ManagedKey) managedKeyResponse {
 	return managedKeyResponse{
-		KeyID:     r.KeyID,
-		Algorithm: string(r.Algorithm),
-		Version:   r.Version,
-		State:     string(r.State),
-		PublicDER: r.PublicDER,
+		KeyID:       r.KeyID,
+		Algorithm:   string(r.Algorithm),
+		Version:     r.Version,
+		State:       string(r.State),
+		PublicDER:   r.PublicDER,
+		Extractable: r.Extractable,
 	}
 }
 
