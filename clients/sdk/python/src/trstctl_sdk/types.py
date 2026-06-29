@@ -741,6 +741,52 @@ CRLDistributionShard = TypedDict(
     total=False,
 )
 
+CTLogSubmission = TypedDict(
+    'CTLogSubmission',
+    {
+        'capability': str,
+        'logs': list[dict[str, Any]],
+        'queued': int,
+        'residuals': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+CTLogSubmissionLog = TypedDict(
+    'CTLogSubmissionLog',
+    {
+        'certificate_queued': bool,
+        'certificate_submission_id': str,
+        'log_url': str,
+        'precertificate_queued': bool,
+        'precertificate_submission_id': str,
+    },
+    total=False,
+)
+
+CTLogSubmissionNote = TypedDict(
+    'CTLogSubmissionNote',
+    {
+        'code': str,
+        'detail': str,
+    },
+    total=False,
+)
+
+CTLogSubmissionRequest = TypedDict(
+    'CTLogSubmissionRequest',
+    {
+        'allow_private_endpoint': bool,
+        'certificate_pem': str,
+        'chain_pem': list[str],
+        'logs': list[str],
+        'operator_correlation_ref': str,
+        'precertificate_pem': str,
+        'submission_profile': str,
+    },
+    total=False,
+)
+
 Certificate = TypedDict(
     'Certificate',
     {

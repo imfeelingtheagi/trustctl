@@ -423,6 +423,7 @@ type Server struct {
 	handler   http.Handler
 	transit   *transitpkg.Service
 	codeSign  *servedCodeSigningService
+	ctSubmit  *servedCTSubmissionService
 	kmip      KMIPRuntime
 	// complianceSigner is a generated locked key used only when the deployment did
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
@@ -844,6 +845,14 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	} else if cs != nil {
 		s.codeSign = cs
 		defaults = append(defaults, api.WithCodeSigning(cs))
+	}
+	if d.Store != nil && d.Log != nil && s.outbox != nil {
+		ctSubmit, err := newServedCTSubmissionService(d.Store, d.Log, s.outbox)
+		if err != nil {
+			return nil, nil, fmt.Errorf("server: configure CT submission: %w", err)
+		}
+		s.ctSubmit = ctSubmit
+		defaults = append(defaults, api.WithCTSubmission(ctSubmit))
 	}
 	if hierarchySvc := s.buildCAHierarchyService(d); hierarchySvc != nil {
 		defaults = append(defaults, api.WithCAHierarchy(hierarchySvc))

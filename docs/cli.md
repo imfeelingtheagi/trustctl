@@ -54,7 +54,7 @@ secret injection:
 | `external-cas`                    | `list` · `issue`                                                                                                                                                         |
 | `identities`                      | `create` · `list` · `get` · `transition` · `approve`                                                                                                                     |
 | `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
-| `revocation`                      | `crls`                                                                                                                                                                   |
+| `revocation`                      | `crls` · `ct-submit`                                                                                                                                                     |
 | `kubernetes`                      | `csr`                                                                                                                                                                    |
 | `workloads`                       | `attested-issuance`                                                                                                                                                      |
 | `broker agent-identities`         | `issue`                                                                                                                                                                  |
@@ -191,6 +191,9 @@ trstctl-cli certificates list --limit 50
 
 # Show full, sharded, and delta CRL distribution artifacts for the tenant.
 trstctl-cli revocation crls
+
+# Queue a precertificate and final certificate for RFC 6962 CT log submission.
+trstctl-cli revocation ct-submit -f ct-submission.json
 
 # Show the regional HA issuance posture and write fences.
 trstctl-cli scale ha-issuance

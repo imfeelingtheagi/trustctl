@@ -101,7 +101,7 @@ export const extractedMessages = [
     key: "source.30.90d.f8499e46ac",
     defaultMessage: "30-90d",
     sources: [
-      "src/pages/Certificates.tsx:34",
+      "src/pages/Certificates.tsx:35",
     ],
   },
   {
@@ -150,7 +150,7 @@ export const extractedMessages = [
     key: "source.7.30d.425b95671a",
     defaultMessage: "7-30d",
     sources: [
-      "src/pages/Certificates.tsx:33",
+      "src/pages/Certificates.tsx:34",
     ],
   },
   {
@@ -172,7 +172,7 @@ export const extractedMessages = [
     defaultMessage: "<7d",
     sources: [
       "src/lib/demoData.ts:28",
-      "src/pages/Certificates.tsx:32",
+      "src/pages/Certificates.tsx:33",
     ],
   },
   {
@@ -372,7 +372,7 @@ export const extractedMessages = [
     key: "source.add.certificate.6fa2cfd67c",
     defaultMessage: "Add certificate",
     sources: [
-      "src/pages/Certificates.tsx:519",
+      "src/pages/Certificates.tsx:702",
     ],
   },
   {
@@ -513,7 +513,7 @@ export const extractedMessages = [
     key: "source.all.a52ace420f",
     defaultMessage: "All",
     sources: [
-      "src/pages/Certificates.tsx:31",
+      "src/pages/Certificates.tsx:32",
       "src/pages/Notifications.tsx:145",
     ],
   },
@@ -521,14 +521,14 @@ export const extractedMessages = [
     key: "source.all.environments.f19ac5a6af",
     defaultMessage: "All environments",
     sources: [
-      "src/pages/Certificates.tsx:682",
+      "src/pages/Certificates.tsx:881",
     ],
   },
   {
     key: "source.all.issuers.ab00116bbe",
     defaultMessage: "All issuers",
     sources: [
-      "src/pages/Certificates.tsx:634",
+      "src/pages/Certificates.tsx:833",
     ],
   },
   {
@@ -544,7 +544,7 @@ export const extractedMessages = [
     key: "source.all.profiles.18f6aff3fe",
     defaultMessage: "All profiles",
     sources: [
-      "src/pages/Certificates.tsx:650",
+      "src/pages/Certificates.tsx:849",
     ],
   },
   {
@@ -559,7 +559,7 @@ export const extractedMessages = [
     key: "source.all.teams.bf65fc89ca",
     defaultMessage: "All teams",
     sources: [
-      "src/pages/Certificates.tsx:666",
+      "src/pages/Certificates.tsx:865",
     ],
   },
   {
@@ -739,7 +739,7 @@ export const extractedMessages = [
     key: "source.array.9d11074609",
     defaultMessage: "): Array",
     sources: [
-      "src/pages/Certificates.tsx:848",
+      "src/pages/Certificates.tsx:1047",
     ],
   },
   {
@@ -1046,7 +1046,9 @@ export const extractedMessages = [
     defaultMessage: "-----BEGIN CERTIFICATE-----",
     sources: [
       "src/pages/CAHierarchy.tsx:1078",
-      "src/pages/Certificates.tsx:532",
+      "src/pages/Certificates.tsx:332",
+      "src/pages/Certificates.tsx:343",
+      "src/pages/Certificates.tsx:715",
     ],
   },
   {
@@ -1411,14 +1413,14 @@ export const extractedMessages = [
     key: "source.certificate.details.fccff74faf",
     defaultMessage: "Certificate details",
     sources: [
-      "src/pages/Certificates.tsx:755",
+      "src/pages/Certificates.tsx:954",
     ],
   },
   {
     key: "source.certificate.pem.85627425ca",
     defaultMessage: "Certificate PEM",
     sources: [
-      "src/pages/Certificates.tsx:524",
+      "src/pages/Certificates.tsx:707",
     ],
   },
   {
@@ -1446,7 +1448,7 @@ export const extractedMessages = [
     key: "source.certificateprofile.c.13d397eeee",
     defaultMessage: "certificateProfile(c) ||",
     sources: [
-      "src/pages/Certificates.tsx:864",
+      "src/pages/Certificates.tsx:1063",
     ],
   },
   {
@@ -1455,7 +1457,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Assistant.tsx:14",
       "src/pages/CAHierarchy.tsx:1299",
-      "src/pages/Certificates.tsx:503",
+      "src/pages/Certificates.tsx:686",
     ],
   },
   {
@@ -1469,7 +1471,7 @@ export const extractedMessages = [
     key: "source.certificateteamlabel.c.ownerbyid.c80e3166f7",
     defaultMessage: "certificateTeamLabel(c, ownerByID) ||",
     sources: [
-      "src/pages/Certificates.tsx:869",
+      "src/pages/Certificates.tsx:1068",
     ],
   },
   {
@@ -1626,7 +1628,7 @@ export const extractedMessages = [
     key: "source.cluster.service.path.f9947d11c2",
     defaultMessage: "cluster/service/path",
     sources: [
-      "src/pages/Certificates.tsx:562",
+      "src/pages/Certificates.tsx:745",
     ],
   },
   {
@@ -1810,7 +1812,7 @@ export const extractedMessages = [
     key: "source.connect.an.issuer.c155ecb073",
     defaultMessage: "Connect an issuer",
     sources: [
-      "src/pages/Certificates.tsx:594",
+      "src/pages/Certificates.tsx:777",
       "src/pages/Wizard.tsx:139",
     ],
   },
@@ -1980,7 +1982,7 @@ export const extractedMessages = [
     key: "source.could.not.ingest.certificate.f876a7f9c6",
     defaultMessage: "Could not ingest certificate",
     sources: [
-      "src/pages/Certificates.tsx:567",
+      "src/pages/Certificates.tsx:750",
     ],
   },
   {
@@ -1994,14 +1996,14 @@ export const extractedMessages = [
     key: "source.could.not.load.certificate.details.7999752b96",
     defaultMessage: "Could not load certificate details",
     sources: [
-      "src/pages/Certificates.tsx:761",
+      "src/pages/Certificates.tsx:960",
     ],
   },
   {
     key: "source.could.not.load.certificates.21ae8e6e19",
     defaultMessage: "Could not load certificates",
     sources: [
-      "src/pages/Certificates.tsx:587",
+      "src/pages/Certificates.tsx:770",
     ],
   },
   {
@@ -2543,8 +2545,8 @@ export const extractedMessages = [
     key: "source.deployment.location.5a9f62f9fc",
     defaultMessage: "Deployment location",
     sources: [
-      "src/pages/Certificates.tsx:555",
-      "src/pages/Certificates.tsx:815",
+      "src/pages/Certificates.tsx:1014",
+      "src/pages/Certificates.tsx:738",
     ],
   },
   {
@@ -3042,7 +3044,7 @@ export const extractedMessages = [
     key: "source.environment.filter.3495eee74d",
     defaultMessage: "Environment filter",
     sources: [
-      "src/pages/Certificates.tsx:674",
+      "src/pages/Certificates.tsx:873",
     ],
   },
   {
@@ -3385,7 +3387,7 @@ export const extractedMessages = [
     key: "source.fingerprint.ba7af0b704",
     defaultMessage: "Fingerprint",
     sources: [
-      "src/pages/Certificates.tsx:785",
+      "src/pages/Certificates.tsx:984",
       "src/pages/Connectors.tsx:311",
       "src/pages/Discovery.tsx:661",
       "src/pages/Identities.tsx:921",
@@ -4106,7 +4108,7 @@ export const extractedMessages = [
     key: "source.issue.first.certificate.4d8af98e7d",
     defaultMessage: "Issue first certificate",
     sources: [
-      "src/pages/Certificates.tsx:593",
+      "src/pages/Certificates.tsx:776",
     ],
   },
   {
@@ -4157,7 +4159,7 @@ export const extractedMessages = [
     defaultMessage: "Issuer",
     sources: [
       "src/components/GraphView.tsx:24",
-      "src/pages/Certificates.tsx:769",
+      "src/pages/Certificates.tsx:968",
       "src/pages/Identities.tsx:1114",
       "src/pages/Incidents.tsx:1091",
     ],
@@ -4180,7 +4182,7 @@ export const extractedMessages = [
     key: "source.issuer.filter.32db997051",
     defaultMessage: "Issuer filter",
     sources: [
-      "src/pages/Certificates.tsx:626",
+      "src/pages/Certificates.tsx:825",
     ],
   },
   {
@@ -4243,7 +4245,7 @@ export const extractedMessages = [
     key: "source.key.algorithm.36da451ea3",
     defaultMessage: "Key algorithm",
     sources: [
-      "src/pages/Certificates.tsx:777",
+      "src/pages/Certificates.tsx:976",
     ],
   },
   {
@@ -4535,14 +4537,14 @@ export const extractedMessages = [
     key: "source.loading.certificate.details.a52129b338",
     defaultMessage: "Loading certificate details...",
     sources: [
-      "src/pages/Certificates.tsx:759",
+      "src/pages/Certificates.tsx:958",
     ],
   },
   {
     key: "source.loading.certificates.3ed54a94d8",
     defaultMessage: "Loading certificates...",
     sources: [
-      "src/pages/Certificates.tsx:585",
+      "src/pages/Certificates.tsx:768",
     ],
   },
   {
@@ -4902,7 +4904,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:694",
+      "src/lib/api.ts:698",
     ],
   },
   {
@@ -4995,48 +4997,45 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
+      "src/lib/api.ts:1001",
       "src/lib/api.ts:1002",
       "src/lib/api.ts:1003",
-      "src/lib/api.ts:1004",
-      "src/lib/api.ts:1005",
-      "src/lib/api.ts:1006",
-      "src/lib/api.ts:1007",
+      "src/lib/api.ts:1008",
       "src/lib/api.ts:1009",
       "src/lib/api.ts:1010",
       "src/lib/api.ts:1011",
       "src/lib/api.ts:1012",
       "src/lib/api.ts:1013",
+      "src/lib/api.ts:1015",
+      "src/lib/api.ts:1016",
       "src/lib/api.ts:1017",
       "src/lib/api.ts:1018",
-      "src/lib/api.ts:1020",
-      "src/lib/api.ts:1022",
-      "src/lib/api.ts:1025",
+      "src/lib/api.ts:1019",
+      "src/lib/api.ts:1023",
+      "src/lib/api.ts:1024",
       "src/lib/api.ts:1026",
-      "src/lib/api.ts:1027",
-      "src/lib/api.ts:1029",
-      "src/lib/api.ts:1038",
-      "src/lib/api.ts:1049",
-      "src/lib/api.ts:1050",
-      "src/lib/api.ts:1051",
-      "src/lib/api.ts:1053",
-      "src/lib/api.ts:1054",
+      "src/lib/api.ts:1028",
+      "src/lib/api.ts:1031",
+      "src/lib/api.ts:1032",
+      "src/lib/api.ts:1033",
+      "src/lib/api.ts:1035",
+      "src/lib/api.ts:1044",
       "src/lib/api.ts:1055",
       "src/lib/api.ts:1056",
-      "src/lib/api.ts:1069",
-      "src/lib/api.ts:1070",
-      "src/lib/api.ts:1079",
-      "src/lib/api.ts:1080",
-      "src/lib/api.ts:1081",
-      "src/lib/api.ts:1083",
+      "src/lib/api.ts:1057",
+      "src/lib/api.ts:1059",
+      "src/lib/api.ts:1060",
+      "src/lib/api.ts:1061",
+      "src/lib/api.ts:1062",
+      "src/lib/api.ts:1075",
+      "src/lib/api.ts:1076",
       "src/lib/api.ts:1085",
       "src/lib/api.ts:1086",
-      "src/lib/api.ts:1090",
+      "src/lib/api.ts:1087",
+      "src/lib/api.ts:1089",
+      "src/lib/api.ts:1091",
       "src/lib/api.ts:1092",
-      "src/lib/api.ts:1093",
-      "src/lib/api.ts:1094",
-      "src/lib/api.ts:1095",
       "src/lib/api.ts:1096",
-      "src/lib/api.ts:1097",
       "src/lib/api.ts:1098",
       "src/lib/api.ts:1099",
       "src/lib/api.ts:1100",
@@ -5048,37 +5047,41 @@ export const extractedMessages = [
       "src/lib/api.ts:1106",
       "src/lib/api.ts:1107",
       "src/lib/api.ts:1108",
+      "src/lib/api.ts:1109",
+      "src/lib/api.ts:1110",
       "src/lib/api.ts:1111",
       "src/lib/api.ts:1112",
-      "src/lib/api.ts:907",
-      "src/lib/api.ts:921",
-      "src/lib/api.ts:923",
-      "src/lib/api.ts:925",
-      "src/lib/api.ts:933",
-      "src/lib/api.ts:936",
-      "src/lib/api.ts:937",
-      "src/lib/api.ts:938",
-      "src/lib/api.ts:949",
-      "src/lib/api.ts:951",
-      "src/lib/api.ts:953",
-      "src/lib/api.ts:956",
-      "src/lib/api.ts:968",
-      "src/lib/api.ts:969",
-      "src/lib/api.ts:970",
-      "src/lib/api.ts:971",
-      "src/lib/api.ts:972",
-      "src/lib/api.ts:973",
+      "src/lib/api.ts:1113",
+      "src/lib/api.ts:1114",
+      "src/lib/api.ts:1117",
+      "src/lib/api.ts:1118",
+      "src/lib/api.ts:912",
+      "src/lib/api.ts:924",
+      "src/lib/api.ts:927",
+      "src/lib/api.ts:929",
+      "src/lib/api.ts:931",
+      "src/lib/api.ts:939",
+      "src/lib/api.ts:942",
+      "src/lib/api.ts:943",
+      "src/lib/api.ts:944",
+      "src/lib/api.ts:955",
+      "src/lib/api.ts:957",
+      "src/lib/api.ts:959",
+      "src/lib/api.ts:962",
+      "src/lib/api.ts:974",
+      "src/lib/api.ts:975",
       "src/lib/api.ts:976",
       "src/lib/api.ts:977",
       "src/lib/api.ts:978",
+      "src/lib/api.ts:979",
       "src/lib/api.ts:982",
-      "src/lib/api.ts:986",
-      "src/lib/api.ts:990",
-      "src/lib/api.ts:991",
+      "src/lib/api.ts:983",
+      "src/lib/api.ts:984",
+      "src/lib/api.ts:988",
       "src/lib/api.ts:992",
-      "src/lib/api.ts:995",
       "src/lib/api.ts:996",
       "src/lib/api.ts:997",
+      "src/lib/api.ts:998",
     ],
   },
   {
@@ -5297,14 +5300,14 @@ export const extractedMessages = [
     key: "source.no.certificates.match.your.search.490fc6134d",
     defaultMessage: "No certificates match your search.",
     sources: [
-      "src/pages/Certificates.tsx:724",
+      "src/pages/Certificates.tsx:923",
     ],
   },
   {
     key: "source.no.certificates.yet.f1e2ab559a",
     defaultMessage: "No certificates yet",
     sources: [
-      "src/pages/Certificates.tsx:592",
+      "src/pages/Certificates.tsx:775",
     ],
   },
   {
@@ -5543,7 +5546,7 @@ export const extractedMessages = [
     key: "source.no.more.certificate.pages.e8cec79bea",
     defaultMessage: "No more certificate pages.",
     sources: [
-      "src/pages/Certificates.tsx:747",
+      "src/pages/Certificates.tsx:946",
     ],
   },
   {
@@ -6046,7 +6049,7 @@ export const extractedMessages = [
     key: "source.optional.ec91fdd925",
     defaultMessage: "optional",
     sources: [
-      "src/pages/Certificates.tsx:543",
+      "src/pages/Certificates.tsx:726",
       "src/pages/Incidents.tsx:445",
       "src/pages/Incidents.tsx:854",
     ],
@@ -6083,7 +6086,7 @@ export const extractedMessages = [
     key: "source.owner.4b1b8aa360",
     defaultMessage: "Owner",
     sources: [
-      "src/pages/Certificates.tsx:819",
+      "src/pages/Certificates.tsx:1018",
       "src/pages/Identities.tsx:1106",
       "src/pages/Privacy.tsx:191",
       "src/pages/Risk.tsx:690",
@@ -6093,7 +6096,7 @@ export const extractedMessages = [
     key: "source.owner.id.1611f5e055",
     defaultMessage: "Owner ID",
     sources: [
-      "src/pages/Certificates.tsx:536",
+      "src/pages/Certificates.tsx:719",
       "src/pages/Connectors.tsx:156",
     ],
   },
@@ -6144,7 +6147,7 @@ export const extractedMessages = [
     key: "source.page.size.bd69e66e00",
     defaultMessage: "Page size",
     sources: [
-      "src/pages/Certificates.tsx:708",
+      "src/pages/Certificates.tsx:907",
     ],
   },
   {
@@ -6165,7 +6168,7 @@ export const extractedMessages = [
     key: "source.paste.a.public.certificate.pem.private.key.14181b4990",
     defaultMessage: "Paste a public certificate PEM. Private keys do not belong in this form.",
     sources: [
-      "src/pages/Certificates.tsx:522",
+      "src/pages/Certificates.tsx:705",
     ],
   },
   {
@@ -6180,14 +6183,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:704",
+      "src/lib/api.ts:708",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:628",
+      "src/lib/api.ts:632",
     ],
   },
   {
@@ -6216,7 +6219,7 @@ export const extractedMessages = [
     key: "source.pem.is.required.0a8b6ce9cc",
     defaultMessage: "PEM is required.",
     sources: [
-      "src/pages/Certificates.tsx:420",
+      "src/pages/Certificates.tsx:572",
     ],
   },
   {
@@ -6359,10 +6362,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1042",
-      "src/lib/api.ts:1044",
-      "src/lib/api.ts:1045",
-      "src/lib/api.ts:1047",
+      "src/lib/api.ts:1048",
+      "src/lib/api.ts:1050",
+      "src/lib/api.ts:1051",
+      "src/lib/api.ts:1053",
     ],
   },
   {
@@ -6565,7 +6568,7 @@ export const extractedMessages = [
     key: "source.profile.filter.d447429270",
     defaultMessage: "Profile filter",
     sources: [
-      "src/pages/Certificates.tsx:642",
+      "src/pages/Certificates.tsx:841",
     ],
   },
   {
@@ -6614,7 +6617,7 @@ export const extractedMessages = [
       "src/lib/bulk.ts:10",
       "src/lib/search.ts:98",
       "src/lib/useResource.ts:10",
-      "src/pages/Certificates.tsx:78",
+      "src/pages/Certificates.tsx:94",
       "src/pages/Dashboard.tsx:24",
       "src/pages/Owners.tsx:22",
       "src/pages/Policy.tsx:861",
@@ -6625,7 +6628,7 @@ export const extractedMessages = [
     defaultMessage: "): Promise",
     sources: [
       "src/lib/bulk.ts:10",
-      "src/pages/Certificates.tsx:78",
+      "src/pages/Certificates.tsx:94",
     ],
   },
   {
@@ -7063,7 +7066,7 @@ export const extractedMessages = [
     key: "source.renewal.history.771f739290",
     defaultMessage: "Renewal history",
     sources: [
-      "src/pages/Certificates.tsx:831",
+      "src/pages/Certificates.tsx:1030",
     ],
   },
   {
@@ -7127,79 +7130,79 @@ export const extractedMessages = [
     defaultMessage: "req",
     sources: [
       "src/lib/api.ts:1000",
-      "src/lib/api.ts:1001",
-      "src/lib/api.ts:1014",
-      "src/lib/api.ts:1015",
-      "src/lib/api.ts:1016",
-      "src/lib/api.ts:1019",
+      "src/lib/api.ts:1004",
+      "src/lib/api.ts:1005",
+      "src/lib/api.ts:1006",
+      "src/lib/api.ts:1007",
+      "src/lib/api.ts:1020",
       "src/lib/api.ts:1021",
-      "src/lib/api.ts:1024",
-      "src/lib/api.ts:1028",
+      "src/lib/api.ts:1022",
+      "src/lib/api.ts:1025",
+      "src/lib/api.ts:1027",
       "src/lib/api.ts:1030",
-      "src/lib/api.ts:1031",
-      "src/lib/api.ts:1032",
-      "src/lib/api.ts:1033",
       "src/lib/api.ts:1034",
-      "src/lib/api.ts:1035",
       "src/lib/api.ts:1036",
       "src/lib/api.ts:1037",
+      "src/lib/api.ts:1038",
       "src/lib/api.ts:1039",
       "src/lib/api.ts:1040",
       "src/lib/api.ts:1041",
+      "src/lib/api.ts:1042",
       "src/lib/api.ts:1043",
+      "src/lib/api.ts:1045",
       "src/lib/api.ts:1046",
-      "src/lib/api.ts:1048",
+      "src/lib/api.ts:1047",
+      "src/lib/api.ts:1049",
       "src/lib/api.ts:1052",
-      "src/lib/api.ts:1077",
-      "src/lib/api.ts:1082",
-      "src/lib/api.ts:1087",
+      "src/lib/api.ts:1054",
+      "src/lib/api.ts:1058",
+      "src/lib/api.ts:1083",
       "src/lib/api.ts:1088",
-      "src/lib/api.ts:1089",
-      "src/lib/api.ts:1091",
-      "src/lib/api.ts:1109",
-      "src/lib/api.ts:1110",
-      "src/lib/api.ts:900",
-      "src/lib/api.ts:901",
-      "src/lib/api.ts:902",
-      "src/lib/api.ts:903",
-      "src/lib/api.ts:904",
+      "src/lib/api.ts:1093",
+      "src/lib/api.ts:1094",
+      "src/lib/api.ts:1095",
+      "src/lib/api.ts:1097",
+      "src/lib/api.ts:1115",
+      "src/lib/api.ts:1116",
       "src/lib/api.ts:905",
       "src/lib/api.ts:906",
-      "src/lib/api.ts:917",
-      "src/lib/api.ts:918",
-      "src/lib/api.ts:919",
-      "src/lib/api.ts:920",
+      "src/lib/api.ts:907",
+      "src/lib/api.ts:908",
+      "src/lib/api.ts:909",
+      "src/lib/api.ts:910",
+      "src/lib/api.ts:911",
       "src/lib/api.ts:922",
-      "src/lib/api.ts:924",
+      "src/lib/api.ts:923",
+      "src/lib/api.ts:925",
       "src/lib/api.ts:926",
-      "src/lib/api.ts:927",
       "src/lib/api.ts:928",
-      "src/lib/api.ts:929",
       "src/lib/api.ts:930",
-      "src/lib/api.ts:931",
       "src/lib/api.ts:932",
+      "src/lib/api.ts:933",
       "src/lib/api.ts:934",
       "src/lib/api.ts:935",
-      "src/lib/api.ts:948",
-      "src/lib/api.ts:950",
-      "src/lib/api.ts:952",
+      "src/lib/api.ts:936",
+      "src/lib/api.ts:937",
+      "src/lib/api.ts:938",
+      "src/lib/api.ts:940",
+      "src/lib/api.ts:941",
       "src/lib/api.ts:954",
-      "src/lib/api.ts:955",
-      "src/lib/api.ts:957",
-      "src/lib/api.ts:966",
-      "src/lib/api.ts:967",
-      "src/lib/api.ts:974",
-      "src/lib/api.ts:975",
-      "src/lib/api.ts:979",
+      "src/lib/api.ts:956",
+      "src/lib/api.ts:958",
+      "src/lib/api.ts:960",
+      "src/lib/api.ts:961",
+      "src/lib/api.ts:963",
+      "src/lib/api.ts:972",
+      "src/lib/api.ts:973",
       "src/lib/api.ts:980",
       "src/lib/api.ts:981",
-      "src/lib/api.ts:983",
       "src/lib/api.ts:985",
+      "src/lib/api.ts:986",
       "src/lib/api.ts:987",
       "src/lib/api.ts:989",
-      "src/lib/api.ts:994",
-      "src/lib/api.ts:998",
-      "src/lib/api.ts:999",
+      "src/lib/api.ts:991",
+      "src/lib/api.ts:993",
+      "src/lib/api.ts:995",
     ],
   },
   {
@@ -7300,7 +7303,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:673",
+      "src/lib/api.ts:677",
     ],
   },
   {
@@ -7427,7 +7430,7 @@ export const extractedMessages = [
     key: "source.revocation.reason.b11670420f",
     defaultMessage: "Revocation reason",
     sources: [
-      "src/pages/Certificates.tsx:805",
+      "src/pages/Certificates.tsx:1004",
     ],
   },
   {
@@ -7475,7 +7478,7 @@ export const extractedMessages = [
     key: "source.revoked.at.144e77bcf0",
     defaultMessage: "Revoked at",
     sources: [
-      "src/pages/Certificates.tsx:801",
+      "src/pages/Certificates.tsx:1000",
     ],
   },
   {
@@ -7778,7 +7781,7 @@ export const extractedMessages = [
     key: "source.sans.7a15c9b7f6",
     defaultMessage: "SANs",
     sources: [
-      "src/pages/Certificates.tsx:773",
+      "src/pages/Certificates.tsx:972",
     ],
   },
   {
@@ -7889,7 +7892,7 @@ export const extractedMessages = [
     key: "source.search.loaded.rows.40443863a0",
     defaultMessage: "Search loaded rows",
     sources: [
-      "src/pages/Certificates.tsx:614",
+      "src/pages/Certificates.tsx:813",
     ],
   },
   {
@@ -8158,7 +8161,7 @@ export const extractedMessages = [
     key: "source.serial.8ea0949377",
     defaultMessage: "Serial",
     sources: [
-      "src/pages/Certificates.tsx:781",
+      "src/pages/Certificates.tsx:980",
       "src/pages/SSHTrust.tsx:318",
     ],
   },
@@ -8166,7 +8169,7 @@ export const extractedMessages = [
     key: "source.server.expiry.filter.129321a4ff",
     defaultMessage: "Server expiry filter",
     sources: [
-      "src/pages/Certificates.tsx:691",
+      "src/pages/Certificates.tsx:890",
     ],
   },
   {
@@ -8449,8 +8452,8 @@ export const extractedMessages = [
     key: "source.source.0e570ca6fa",
     defaultMessage: "Source",
     sources: [
-      "src/pages/Certificates.tsx:546",
-      "src/pages/Certificates.tsx:811",
+      "src/pages/Certificates.tsx:1010",
+      "src/pages/Certificates.tsx:729",
       "src/pages/Discovery.tsx:224",
       "src/pages/Discovery.tsx:353",
       "src/pages/Discovery.tsx:593",
@@ -8568,7 +8571,7 @@ export const extractedMessages = [
     key: "source.start.with.a.profile.bound.request.or.conn.19cdbff548",
     defaultMessage: "Start with a profile-bound request, or connect an issuer before the first certificate is minted.",
     sources: [
-      "src/pages/Certificates.tsx:595",
+      "src/pages/Certificates.tsx:778",
     ],
   },
   {
@@ -8585,7 +8588,7 @@ export const extractedMessages = [
     defaultMessage: "Status",
     sources: [
       "src/pages/Agents.tsx:226",
-      "src/pages/Certificates.tsx:795",
+      "src/pages/Certificates.tsx:994",
       "src/pages/Connectors.tsx:306",
       "src/pages/Discovery.tsx:624",
       "src/pages/Identities.tsx:1090",
@@ -8628,7 +8631,7 @@ export const extractedMessages = [
       "src/pages/Assistant.tsx:347",
       "src/pages/Assistant.tsx:403",
       "src/pages/Assistant.tsx:458",
-      "src/pages/Certificates.tsx:765",
+      "src/pages/Certificates.tsx:964",
       "src/pages/Platform.tsx:217",
       "src/pages/Platform.tsx:832",
       "src/pages/Platform.tsx:858",
@@ -8652,7 +8655,7 @@ export const extractedMessages = [
     key: "source.subject.issuer.serial.fingerprint.eebaa0ce37",
     defaultMessage: "Subject, issuer, serial, fingerprint…",
     sources: [
-      "src/pages/Certificates.tsx:622",
+      "src/pages/Certificates.tsx:821",
     ],
   },
   {
@@ -8800,7 +8803,7 @@ export const extractedMessages = [
     key: "source.team.filter.f485fa9dcf",
     defaultMessage: "Team filter",
     sources: [
-      "src/pages/Certificates.tsx:658",
+      "src/pages/Certificates.tsx:857",
     ],
   },
   {
@@ -9298,7 +9301,7 @@ export const extractedMessages = [
     key: "source.validity.9c3050e867",
     defaultMessage: "Validity",
     sources: [
-      "src/pages/Certificates.tsx:789",
+      "src/pages/Certificates.tsx:988",
     ],
   },
   {

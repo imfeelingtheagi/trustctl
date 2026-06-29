@@ -503,6 +503,36 @@ export interface CRLDistributionShard {
   url: string;
 }
 
+export interface CTLogSubmission {
+  capability: string;
+  logs: CTLogSubmissionLog[];
+  queued: number;
+  residuals?: CTLogSubmissionNote[];
+}
+
+export interface CTLogSubmissionLog {
+  certificate_queued: boolean;
+  certificate_submission_id?: string;
+  log_url: string;
+  precertificate_queued: boolean;
+  precertificate_submission_id?: string;
+}
+
+export interface CTLogSubmissionNote {
+  code: string;
+  detail: string;
+}
+
+export interface CTLogSubmissionRequest {
+  allow_private_endpoint?: boolean;
+  certificate_pem: string;
+  chain_pem?: string[];
+  logs: string[];
+  operator_correlation_ref?: string;
+  precertificate_pem?: string;
+  submission_profile?: string;
+}
+
 export interface Certificate {
   created_at?: string;
   deployment_location?: string;

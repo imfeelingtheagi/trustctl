@@ -81,6 +81,7 @@ type API struct {
 	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	transit                 TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
 	codeSigning             CodeSigningService
+	ctSubmission            CTSubmissionService
 	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	cbom                    CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
@@ -137,6 +138,7 @@ type config struct {
 	managedKeys             ManagedKeyService
 	transit                 TransitService
 	codeSigning             CodeSigningService
+	ctSubmission            CTSubmissionService
 	secrets                 *secretsService
 	ai                      *aiSurface
 	cbom                    CBOMService
@@ -368,6 +370,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		managedKeys:             cfg.managedKeys,
 		transit:                 cfg.transit,
 		codeSigning:             cfg.codeSigning,
+		ctSubmission:            cfg.ctSubmission,
 		secrets:                 cfg.secrets,
 		ai:                      cfg.ai,
 		cbom:                    cfg.cbom,
@@ -834,6 +837,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/health", opID: "getCertificateHealth", summary: "Get estate-wide certificate expiry and source health", handler: a.getCertificateHealth, resSchema: "CertificateHealthDashboard", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/revocation/crls", opID: "listCRLDistributions", summary: "List published full, sharded, and delta CRL distribution artifacts", handler: a.listCRLDistributions, resSchema: "CRLDistributionList", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/revocation/ct-submissions", opID: "submitCertificateTransparency", summary: "Queue precertificate and certificate submission to Certificate Transparency logs", handler: a.submitCertificateTransparency, reqSchema: "CTLogSubmissionRequest", resSchema: "CTLogSubmission", successCode: "202", mutation: true, perm: authz.CertsWrite},
 		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: idPath, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
 
 		{method: "POST", path: "/api/v1/discovery/sources", opID: "createDiscoverySource", summary: "Create a discovery source", handler: a.createDiscoverySource, reqSchema: "DiscoverySourceRequest", resSchema: "DiscoverySource", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},

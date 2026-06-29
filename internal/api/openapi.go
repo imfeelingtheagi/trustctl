@@ -757,6 +757,32 @@ func componentSchemas() map[string]*Schema {
 		"next_update":       timestamp(),
 		"revoked_count":     {Type: "integer"},
 	}, "tenant_id", "ca_id", "full_url", "full_number", "shard_count", "shards", "this_update", "next_update", "revoked_count")
+	ctLogSubmissionReq := object(map[string]*Schema{
+		"certificate_pem":          str(),
+		"precertificate_pem":       str(),
+		"chain_pem":                {Type: "array", Items: str()},
+		"logs":                     {Type: "array", Items: str()},
+		"allow_private_endpoint":   {Type: "boolean"},
+		"submission_profile":       str(),
+		"operator_correlation_ref": str(),
+	}, "certificate_pem", "logs")
+	ctLogSubmissionLog := object(map[string]*Schema{
+		"log_url":                      str(),
+		"precertificate_queued":        {Type: "boolean"},
+		"certificate_queued":           {Type: "boolean"},
+		"precertificate_submission_id": uuid(),
+		"certificate_submission_id":    uuid(),
+	}, "log_url", "precertificate_queued", "certificate_queued")
+	ctLogSubmissionNote := object(map[string]*Schema{
+		"code":   str(),
+		"detail": str(),
+	}, "code", "detail")
+	ctLogSubmission := object(map[string]*Schema{
+		"capability": str(),
+		"queued":     {Type: "integer"},
+		"logs":       {Type: "array", Items: ref("CTLogSubmissionLog")},
+		"residuals":  {Type: "array", Items: ref("CTLogSubmissionNote")},
+	}, "capability", "queued", "logs")
 
 	discoverySourceKinds := []string{"network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", "nhi_cross_surface", "oauth_grant", "service_account", "nhi_behavior", "credential_compromise", "k8s_ingress_gateway"}
 	discoverySource := object(map[string]*Schema{
@@ -2206,6 +2232,10 @@ func componentSchemas() map[string]*Schema {
 		"CRLDistributionShard":                  crlDistributionShard,
 		"CRLDistribution":                       crlDistribution,
 		"CRLDistributionList":                   list("CRLDistribution"),
+		"CTLogSubmissionRequest":                ctLogSubmissionReq,
+		"CTLogSubmissionLog":                    ctLogSubmissionLog,
+		"CTLogSubmissionNote":                   ctLogSubmissionNote,
+		"CTLogSubmission":                       ctLogSubmission,
 		"DiscoverySource":                       discoverySource,
 		"DiscoverySourceRequest":                discoverySourceReq,
 		"DiscoverySourceList":                   list("DiscoverySource"),

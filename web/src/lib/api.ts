@@ -55,6 +55,8 @@ import type {
   CertificateList,
   CRLDistribution,
   CRLDistributionList,
+  CTLogSubmission,
+  CTLogSubmissionRequest,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -229,6 +231,8 @@ export type Certificate = GenCertificate;
 export type CertificateHealthDashboard = GenCertificateHealthDashboard;
 export type CertificatePage = CertificateList;
 export type CertificateIngestRequest = CertificateIngest;
+export type CTSubmission = CTLogSubmission;
+export type CTSubmissionRequest = CTLogSubmissionRequest;
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -735,6 +739,7 @@ export interface Api {
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   certificateHealth(): Promise<CertificateHealthDashboard>;
   crlDistributions(): Promise<CRLDistributionList>;
+  submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
@@ -916,6 +921,7 @@ export const api: Api = {
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
   certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
+  submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),

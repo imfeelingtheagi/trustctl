@@ -2252,6 +2252,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/ct-submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue precertificate and certificate submission to Certificate Transparency logs */
+        post: operations["submitCertificateTransparency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/contextual-priorities": {
         parameters: {
             query?: never;
@@ -3436,6 +3453,34 @@ export interface components {
             index: number;
             revoked_count: number;
             url: string;
+        };
+        CTLogSubmission: {
+            capability: string;
+            logs: components["schemas"]["CTLogSubmissionLog"][];
+            queued: number;
+            residuals?: components["schemas"]["CTLogSubmissionNote"][];
+        };
+        CTLogSubmissionLog: {
+            certificate_queued: boolean;
+            /** Format: uuid */
+            certificate_submission_id?: string;
+            log_url: string;
+            precertificate_queued: boolean;
+            /** Format: uuid */
+            precertificate_submission_id?: string;
+        };
+        CTLogSubmissionNote: {
+            code: string;
+            detail: string;
+        };
+        CTLogSubmissionRequest: {
+            allow_private_endpoint?: boolean;
+            certificate_pem: string;
+            chain_pem?: string[];
+            logs: string[];
+            operator_correlation_ref?: string;
+            precertificate_pem?: string;
+            submission_profile?: string;
         };
         Certificate: {
             /** Format: date-time */
@@ -12185,6 +12230,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CRLDistributionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    submitCertificateTransparency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CTLogSubmissionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CTLogSubmission"];
                 };
             };
             /** @description client error */

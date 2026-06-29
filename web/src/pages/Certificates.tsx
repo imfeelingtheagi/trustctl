@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Activity, AlertTriangle, FilePlus2, Layers3, PlugZap, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, FilePlus2, Layers3, PlugZap, Send, ShieldCheck } from "lucide-react";
 import {
   ApiError,
   UnauthorizedError,
@@ -9,6 +9,7 @@ import {
   type CertificateHealthDashboard,
   type ConnectorDelivery,
   type CRLDistribution,
+  type CTSubmission,
   type Owner,
   type RotationRun,
 } from "@/lib/api";
@@ -69,6 +70,21 @@ function formatDate(value?: string): string {
 
 function formatCount(value: number): string {
   return formatNumberPolicy(value);
+}
+
+function splitCertificateLines(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function splitPEMBlocks(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  const matches = trimmed.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+  if (matches?.length) return matches.map((item) => item.trim());
+  return splitCertificateLines(trimmed);
 }
 
 /** Run a secondary data fetch so it can never crash the primary inventory:
@@ -257,6 +273,133 @@ function CRLDistributionPanel({ distributions }: { distributions: CRLDistributio
   );
 }
 
+function CTSubmissionPanel({
+  loading,
+  error,
+  result,
+  certificatePEM,
+  precertificatePEM,
+  chainPEM,
+  logs,
+  allowPrivate,
+  onCertificatePEM,
+  onPrecertificatePEM,
+  onChainPEM,
+  onLogs,
+  onAllowPrivate,
+  onSubmit,
+}: {
+  loading: boolean;
+  error: Notice | null;
+  result: CTSubmission | null;
+  certificatePEM: string;
+  precertificatePEM: string;
+  chainPEM: string;
+  logs: string;
+  allowPrivate: boolean;
+  onCertificatePEM: (value: string) => void;
+  onPrecertificatePEM: (value: string) => void;
+  onChainPEM: (value: string) => void;
+  onLogs: (value: string) => void;
+  onAllowPrivate: (value: boolean) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="ct-submission-heading" className="border-y border-border py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="ct-submission-heading" className="text-base font-semibold">
+            {t("certificates.ct.heading")}
+          </h2>
+        </div>
+        {result && (
+          <span className="inline-flex min-h-8 items-center gap-2 rounded-md border border-status-success/40 bg-status-success/10 px-2.5 text-sm font-medium text-status-success">
+            {t("certificates.ct.queuedBadge", { capability: result.capability, queued: formatCount(result.queued) })}
+          </span>
+        )}
+      </div>
+      <form onSubmit={onSubmit} className="mt-4 grid gap-3">
+        <div className="grid gap-3 lg:grid-cols-2">
+          <label className="grid gap-1 text-sm font-medium" htmlFor="ct-certificate-pem">
+            {t("certificates.ct.certificatePEM")}
+            <textarea
+              id="ct-certificate-pem"
+              value={certificatePEM}
+              onChange={(event) => onCertificatePEM(event.target.value)}
+              rows={6}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              placeholder="-----BEGIN CERTIFICATE-----"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium" htmlFor="ct-precertificate-pem">
+            {t("certificates.ct.precertificatePEM")}
+            <textarea
+              id="ct-precertificate-pem"
+              value={precertificatePEM}
+              onChange={(event) => onPrecertificatePEM(event.target.value)}
+              rows={6}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              placeholder="-----BEGIN CERTIFICATE-----"
+            />
+          </label>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">
+          <label className="grid gap-1 text-sm font-medium" htmlFor="ct-chain-pem">
+            {t("certificates.ct.chainPEM")}
+            <textarea
+              id="ct-chain-pem"
+              value={chainPEM}
+              onChange={(event) => onChainPEM(event.target.value)}
+              rows={4}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              placeholder={t("certificates.ct.chainPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
+            {t("certificates.ct.logs")}
+            <textarea
+              id="ct-log-urls"
+              value={logs}
+              onChange={(event) => onLogs(event.target.value)}
+              rows={4}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              placeholder={t("certificates.ct.logsPlaceholder")}
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label className="inline-flex items-center gap-2 text-sm font-medium" htmlFor="ct-allow-private">
+            <input
+              id="ct-allow-private"
+              type="checkbox"
+              checked={allowPrivate}
+              onChange={(event) => onAllowPrivate(event.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            {t("certificates.ct.allowPrivate")}
+          </label>
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+          >
+            <Send className="h-4 w-4" aria-hidden="true" />
+            {loading ? t("certificates.ct.queueing") : t("certificates.ct.queue")}
+          </button>
+        </div>
+      </form>
+      {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
+      {error?.kind === "error" && <ErrorState title={t("certificates.ct.errorTitle")}>{error.message}</ErrorState>}
+      {result && (
+        <p role="status" className="mt-3 text-sm text-status-success">
+          {t(result.logs.length === 1 ? "certificates.ct.acceptedOne" : "certificates.ct.acceptedMany", { count: formatCount(result.logs.length) })}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function HealthStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border border-border px-3 py-2">
@@ -267,6 +410,7 @@ function HealthStat({ label, value }: { label: string; value: number }) {
 }
 
 export function Certificates() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
@@ -298,6 +442,14 @@ export function Certificates() {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
   const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
+  const [ctCertificatePEM, setCTCertificatePEM] = useState("");
+  const [ctPrecertificatePEM, setCTPrecertificatePEM] = useState("");
+  const [ctChainPEM, setCTChainPEM] = useState("");
+  const [ctLogs, setCTLogs] = useState("");
+  const [ctAllowPrivate, setCTAllowPrivate] = useState(false);
+  const [ctLoading, setCTLoading] = useState(false);
+  const [ctError, setCTError] = useState<Notice | null>(null);
+  const [ctResult, setCTResult] = useState<CTSubmission | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -440,6 +592,37 @@ export function Certificates() {
       setIngestError(noticeForError(err, "ingest a certificate"));
     } finally {
       setIngestLoading(false);
+    }
+  }
+
+  async function submitCT(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCTError(null);
+    setCTResult(null);
+    const logs = splitCertificateLines(ctLogs);
+    if (!ctCertificatePEM.trim()) {
+      setCTError({ kind: "error", message: t("certificates.ct.errorCertificateRequired") });
+      return;
+    }
+    if (logs.length === 0) {
+      setCTError({ kind: "error", message: t("certificates.ct.errorLogRequired") });
+      return;
+    }
+    setCTLoading(true);
+    try {
+      setCTResult(
+        await api.submitCertificateTransparency({
+          certificate_pem: ctCertificatePEM,
+          precertificate_pem: ctPrecertificatePEM.trim() || undefined,
+          chain_pem: splitPEMBlocks(ctChainPEM),
+          logs,
+          allow_private_endpoint: ctAllowPrivate || undefined,
+        }),
+      );
+    } catch (err) {
+      setCTError(noticeForError(err, t("certificates.ct.action")));
+    } finally {
+      setCTLoading(false);
     }
   }
 
@@ -602,6 +785,22 @@ export function Certificates() {
           <div className="mb-6 grid gap-4">
             {health && <CertificateHealthPanel health={health} />}
             <CRLDistributionPanel distributions={crlDistributions} />
+            <CTSubmissionPanel
+              loading={ctLoading}
+              error={ctError}
+              result={ctResult}
+              certificatePEM={ctCertificatePEM}
+              precertificatePEM={ctPrecertificatePEM}
+              chainPEM={ctChainPEM}
+              logs={ctLogs}
+              allowPrivate={ctAllowPrivate}
+              onCertificatePEM={setCTCertificatePEM}
+              onPrecertificatePEM={setCTPrecertificatePEM}
+              onChainPEM={setCTChainPEM}
+              onLogs={setCTLogs}
+              onAllowPrivate={setCTAllowPrivate}
+              onSubmit={submitCT}
+            />
             <CertificatesDashboard certificates={certificates} risks={risks} />
             <div className="grid gap-4 lg:grid-cols-2">
               <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />

@@ -162,7 +162,9 @@ never live in the API process. What you can do end to end against the running bi
   per-profile RA material, and per-device rate limiting.
 - **Revocation hardening:** RFC 5280 named revocation reasons, bulk revoke routes,
   delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching, and
-  CRL ETag / `If-None-Match` caching are served on the revocation surface.
+  CRL ETag / `If-None-Match` caching are served on the revocation surface. CT
+  precertificate/final-certificate submission is served through
+  `POST /api/v1/revocation/ct-submissions` and the `ct.submit` outbox worker.
 - **NHI decommissioning:** `POST /api/v1/nhi/decommission` and `trstctl-cli nhi
   decommission` resolve departure, vendor-term, and inactivity signals to
   tenant-local managed NHIs, then drive event-sourced lifecycle revoke/retire
@@ -949,6 +951,14 @@ revocation status automatically. Existing leaf certificates keep the URLs they w
 issued with until reissued. trstctl revocation is now
 both authoritative in the product's own inventory/records **and** publishable to
 external relying parties over served OCSP/CRL.
+
+CT log submission is served as an outbound side effect, not as an
+inline API call: the API validates public certificate PEM and CT log URLs, records
+`ct.submit` outbox rows in the tenant transaction, and the worker posts RFC 6962
+`add-pre-chain` / `add-chain` requests. Public HTTPS logs are required by default;
+`allow_private_endpoint` is an explicit operator/test escape hatch. trstctl records
+queued and delivered events, but final inclusion and SCT acceptance remain external CT
+log facts.
 
 ## Single sign-on
 

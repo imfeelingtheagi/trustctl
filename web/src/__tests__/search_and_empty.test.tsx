@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     certificateHealth: vi.fn(),
     getCertificate: vi.fn(),
     ingestCertificate: vi.fn(),
+    submitCertificateTransparency: vi.fn(),
   },
 }));
 
@@ -37,6 +38,7 @@ describe("inventory search", () => {
     apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
+    apiMock.submitCertificateTransparency.mockReset();
   });
 
   it("filters the certificate inventory as you type", async () => {
@@ -132,6 +134,7 @@ describe("guiding empty states", () => {
     apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
+    apiMock.submitCertificateTransparency.mockReset();
   });
 
   it("guides a fresh install to issue a certificate or connect an issuer when the inventory is empty", async () => {
@@ -172,6 +175,7 @@ describe("certificate inventory gap closure", () => {
     apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
+    apiMock.submitCertificateTransparency.mockReset();
   });
 
   it("loads server-side pages, applies expiring_before, and reaches the no-more-pages state", async () => {
@@ -326,6 +330,47 @@ describe("certificate inventory gap closure", () => {
     );
     expect(await screen.findByText("CN=new.example.com")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/ingested CN=new.example.com/i);
+  });
+
+  it("queues Certificate Transparency precert and certificate submission from the served console", async () => {
+    apiMock.certificatePage.mockResolvedValue({
+      items: [{ id: "c1", subject: "CN=ct-submit.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" }],
+    });
+    apiMock.submitCertificateTransparency.mockResolvedValue({
+      capability: "CAP-REV-06",
+      queued: 2,
+      logs: [
+        {
+          log_url: "https://ct.example.com",
+          precertificate_queued: true,
+          certificate_queued: true,
+          precertificate_submission_id: "11111111-1111-1111-1111-111111111111",
+          certificate_submission_id: "22222222-2222-2222-2222-222222222222",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    const certPEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----";
+    const precertPEM = "-----BEGIN CERTIFICATE-----\nMIIC\n-----END CERTIFICATE-----";
+    renderCerts();
+
+    expect(await screen.findByRole("heading", { name: "Certificate Transparency" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Certificate PEM"), certPEM);
+    await user.type(screen.getByLabelText("Precertificate PEM"), precertPEM);
+    await user.type(screen.getByLabelText("CT logs"), "https://ct.example.com");
+    await user.click(screen.getByRole("button", { name: /queue ct submission/i }));
+
+    await waitFor(() =>
+      expect(apiMock.submitCertificateTransparency).toHaveBeenCalledWith({
+        certificate_pem: certPEM,
+        precertificate_pem: precertPEM,
+        chain_pem: [],
+        logs: ["https://ct.example.com"],
+        allow_private_endpoint: undefined,
+      }),
+    );
+    expect(await screen.findByText("CAP-REV-06 queued 2")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("1 log target accepted.");
   });
 
   it("surfaces problem+json detail when ingest rejects invalid PEM", async () => {

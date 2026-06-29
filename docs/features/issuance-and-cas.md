@@ -240,7 +240,13 @@ CRL serving returns weak ETag validators and honors `If-None-Match` with `304 No
 Modified`, so relying parties do not refetch an unchanged CRL. Operators and automation
 can read the same distribution state through `GET /api/v1/revocation/crls` or
 `trstctl-cli revocation crls`; the Certificates console shows the current full CRL,
-shards, delta base, and freshness window.
+shards, delta base, and freshness window. Certificate Transparency submission is also
+served: `POST /api/v1/revocation/ct-submissions`,
+`trstctl-cli revocation ct-submit`, and the Certificates console queue a
+precertificate and final certificate to configured RFC 6962 CT logs through the outbox.
+The API records `ct.submission.queued`, the worker performs `add-pre-chain` and
+`add-chain`, and successful delivery records `ct.submission.delivered`; CT inclusion
+proof remains the external log's responsibility.
 
 ### Where the private key lives: HSM/KMS (F26)
 

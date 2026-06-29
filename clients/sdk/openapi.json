@@ -1840,6 +1840,112 @@
         ],
         "type": "object"
       },
+      "CTLogSubmission": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/CTLogSubmissionLog"
+            },
+            "type": "array"
+          },
+          "queued": {
+            "type": "integer"
+          },
+          "residuals": {
+            "items": {
+              "$ref": "#/components/schemas/CTLogSubmissionNote"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "queued",
+          "logs"
+        ],
+        "type": "object"
+      },
+      "CTLogSubmissionLog": {
+        "properties": {
+          "certificate_queued": {
+            "type": "boolean"
+          },
+          "certificate_submission_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "log_url": {
+            "type": "string"
+          },
+          "precertificate_queued": {
+            "type": "boolean"
+          },
+          "precertificate_submission_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "log_url",
+          "precertificate_queued",
+          "certificate_queued"
+        ],
+        "type": "object"
+      },
+      "CTLogSubmissionNote": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "CTLogSubmissionRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "chain_pem": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operator_correlation_ref": {
+            "type": "string"
+          },
+          "precertificate_pem": {
+            "type": "string"
+          },
+          "submission_profile": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_pem",
+          "logs"
+        ],
+        "type": "object"
+      },
       "Certificate": {
         "properties": {
           "created_at": {
@@ -19865,6 +19971,63 @@
         ],
         "summary": "List published full, sharded, and delta CRL distribution artifacts",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/revocation/ct-submissions": {
+      "post": {
+        "operationId": "submitCertificateTransparency",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CTLogSubmissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CTLogSubmission"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue precertificate and certificate submission to Certificate Transparency logs",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/risk/contextual-priorities": {

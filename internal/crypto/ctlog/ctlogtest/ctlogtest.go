@@ -13,10 +13,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -31,6 +33,14 @@ const (
 type LogEntry struct {
 	LeafInput []byte
 	ExtraData []byte
+}
+
+// Submission is one CT add-chain or add-pre-chain request accepted by Server.
+// Chain carries the decoded DER certificates exactly as the CT log received them.
+type Submission struct {
+	Endpoint string
+	Chain    [][]byte
+	Headers  http.Header
 }
 
 // IssueCert builds a real end-entity certificate for the given common name and
@@ -128,8 +138,10 @@ func GetEntriesBody(entries ...LogEntry) []byte {
 
 // Server is a faithful CT log serving get-sth and get-entries over HTTP.
 type Server struct {
-	httptest *httptest.Server
-	entries  []LogEntry
+	httptest   *httptest.Server
+	entries    []LogEntry
+	mu         sync.Mutex
+	submission []Submission
 }
 
 // NewServer starts a CT log whose tree contains the given entries in order.
@@ -138,6 +150,8 @@ func NewServer(entries ...LogEntry) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ct/v1/get-sth", s.getSTH)
 	mux.HandleFunc("/ct/v1/get-entries", s.getEntries)
+	mux.HandleFunc("/ct/v1/add-pre-chain", s.addPreChain)
+	mux.HandleFunc("/ct/v1/add-chain", s.addChain)
 	s.httptest = httptest.NewServer(mux)
 	return s
 }
@@ -147,6 +161,16 @@ func (s *Server) URL() string { return s.httptest.URL }
 
 // Close shuts the log down.
 func (s *Server) Close() { s.httptest.Close() }
+
+// PrecertSubmissions returns all accepted add-pre-chain requests.
+func (s *Server) PrecertSubmissions() []Submission {
+	return s.submissionsFor("/ct/v1/add-pre-chain")
+}
+
+// CertSubmissions returns all accepted add-chain requests.
+func (s *Server) CertSubmissions() []Submission {
+	return s.submissionsFor("/ct/v1/add-chain")
+}
 
 func (s *Server) getSTH(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, map[string]any{
@@ -181,6 +205,73 @@ func (s *Server) getEntries(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, out)
+}
+
+func (s *Server) addPreChain(w http.ResponseWriter, r *http.Request) {
+	s.addChainLike(w, r, "/ct/v1/add-pre-chain")
+}
+
+func (s *Server) addChain(w http.ResponseWriter, r *http.Request) {
+	s.addChainLike(w, r, "/ct/v1/add-chain")
+}
+
+func (s *Server) addChainLike(w http.ResponseWriter, r *http.Request, endpoint string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	defer func() { _ = r.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+	if err != nil {
+		http.Error(w, "read body", http.StatusBadRequest)
+		return
+	}
+	var in struct {
+		Chain []string `json:"chain"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil || len(in.Chain) == 0 {
+		http.Error(w, "bad chain", http.StatusBadRequest)
+		return
+	}
+	sub := Submission{Endpoint: endpoint, Headers: r.Header.Clone()}
+	for _, encoded := range in.Chain {
+		der, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil || len(der) == 0 {
+			http.Error(w, "bad chain entry", http.StatusBadRequest)
+			return
+		}
+		sub.Chain = append(sub.Chain, append([]byte(nil), der...))
+	}
+	s.mu.Lock()
+	s.submission = append(s.submission, sub)
+	s.mu.Unlock()
+	writeJSON(w, map[string]any{
+		"sct_version": 0,
+		"id":          base64.StdEncoding.EncodeToString([]byte("ctlogtest-log-id")),
+		"timestamp":   timestampMillis(),
+		"extensions":  "",
+		"signature":   base64.StdEncoding.EncodeToString([]byte("ctlogtest-sct-signature")),
+	})
+}
+
+func (s *Server) submissionsFor(endpoint string) []Submission {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Submission
+	for _, sub := range s.submission {
+		if sub.Endpoint == endpoint {
+			out = append(out, cloneSubmission(sub))
+		}
+	}
+	return out
+}
+
+func cloneSubmission(in Submission) Submission {
+	out := Submission{Endpoint: in.Endpoint, Headers: in.Headers.Clone()}
+	for _, der := range in.Chain {
+		out.Chain = append(out.Chain, append([]byte(nil), der...))
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

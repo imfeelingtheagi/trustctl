@@ -252,6 +252,74 @@ export const messages = {
     defaultMessage: "next {date}",
     description: "CRL distribution row label for the next-update timestamp.",
   },
+  "certificates.ct.heading": {
+    defaultMessage: "Certificate Transparency",
+    description: "Heading for the Certificate Transparency submission panel.",
+  },
+  "certificates.ct.queuedBadge": {
+    defaultMessage: "{capability} queued {queued}",
+    description: "Badge summarizing queued Certificate Transparency submissions.",
+  },
+  "certificates.ct.certificatePEM": {
+    defaultMessage: "Certificate PEM",
+    description: "Label for the final certificate PEM field in the CT submission form.",
+  },
+  "certificates.ct.precertificatePEM": {
+    defaultMessage: "Precertificate PEM",
+    description: "Label for the precertificate PEM field in the CT submission form.",
+  },
+  "certificates.ct.chainPEM": {
+    defaultMessage: "Issuer chain PEM",
+    description: "Label for the issuer chain PEM field in the CT submission form.",
+  },
+  "certificates.ct.chainPlaceholder": {
+    defaultMessage: "optional",
+    description: "Placeholder for the optional issuer chain PEM field in the CT submission form.",
+  },
+  "certificates.ct.logs": {
+    defaultMessage: "CT logs",
+    description: "Label for CT log URL input.",
+  },
+  "certificates.ct.logsPlaceholder": {
+    defaultMessage: "https://ct.example.com",
+    description: "Placeholder CT log URL in the CT submission form.",
+  },
+  "certificates.ct.allowPrivate": {
+    defaultMessage: "Allow private log endpoint",
+    description: "Checkbox label for allowing a private CT log endpoint.",
+  },
+  "certificates.ct.queueing": {
+    defaultMessage: "Queueing...",
+    description: "Busy button label while a CT submission is queueing.",
+  },
+  "certificates.ct.queue": {
+    defaultMessage: "Queue CT submission",
+    description: "Submit button label for the CT submission form.",
+  },
+  "certificates.ct.errorTitle": {
+    defaultMessage: "Could not queue CT submission",
+    description: "Error-state heading for a failed CT submission.",
+  },
+  "certificates.ct.acceptedOne": {
+    defaultMessage: "{count} log target accepted.",
+    description: "Success status when one CT log target accepted the queued submission.",
+  },
+  "certificates.ct.acceptedMany": {
+    defaultMessage: "{count} log targets accepted.",
+    description: "Success status when multiple CT log targets accepted the queued submission.",
+  },
+  "certificates.ct.errorCertificateRequired": {
+    defaultMessage: "Certificate PEM is required.",
+    description: "Validation error when the CT submission form has no certificate PEM.",
+  },
+  "certificates.ct.errorLogRequired": {
+    defaultMessage: "At least one CT log is required.",
+    description: "Validation error when the CT submission form has no CT log URL.",
+  },
+  "certificates.ct.action": {
+    defaultMessage: "queue Certificate Transparency submission",
+    description: "Action phrase used in CT submission error messages.",
+  },
   "nav.group.overview": {
     defaultMessage: "Overview",
     description: "Primary navigation group.",
@@ -2253,6 +2321,23 @@ const esESCatalog = {
   "certificates.crl.plannedCount": "{count} planificados",
   "certificates.crl.deltaBase": "base #{base}",
   "certificates.crl.nextUpdate": "siguiente {date}",
+  "certificates.ct.heading": "Transparencia de certificados",
+  "certificates.ct.queuedBadge": "{capability} en cola {queued}",
+  "certificates.ct.certificatePEM": "PEM del certificado",
+  "certificates.ct.precertificatePEM": "PEM del precertificado",
+  "certificates.ct.chainPEM": "PEM de la cadena emisora",
+  "certificates.ct.chainPlaceholder": "opcional",
+  "certificates.ct.logs": "Logs CT",
+  "certificates.ct.logsPlaceholder": "https://ct.example.com",
+  "certificates.ct.allowPrivate": "Permitir endpoint privado de log",
+  "certificates.ct.queueing": "Encolando...",
+  "certificates.ct.queue": "Encolar envío CT",
+  "certificates.ct.errorTitle": "No se pudo encolar el envío CT",
+  "certificates.ct.acceptedOne": "{count} destino de log aceptado.",
+  "certificates.ct.acceptedMany": "{count} destinos de log aceptados.",
+  "certificates.ct.errorCertificateRequired": "El PEM del certificado es obligatorio.",
+  "certificates.ct.errorLogRequired": "Se requiere al menos un log CT.",
+  "certificates.ct.action": "encolar envío de Transparencia de certificados",
   "nav.group.overview": "Resumen",
   "nav.group.inventoryDiscovery": "Descubrir e inventariar",
   "nav.group.issuanceCas": "Emitir y renovar",
