@@ -1392,6 +1392,47 @@ export interface NHIInventoryItem {
   tenant_id: string;
 }
 
+export interface NHIOverPrivilegeFinding {
+  display_name: string;
+  evidence_refs: string[];
+  finding_types: string[];
+  granted_scopes: string[];
+  inventory_id: string;
+  kind: string;
+  last_used_at?: string;
+  owner_id?: string;
+  recommendation: string;
+  recommended_scopes: string[];
+  ref?: string;
+  risk_score: number;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+  unused_ratio: number;
+  unused_scopes: string[];
+  used_scopes: string[];
+}
+
+export interface NHIOverPrivilegePosture {
+  capability: string;
+  coverage: string[];
+  findings: NHIOverPrivilegeFinding[];
+  generated_at: string;
+  summary: NHIOverPrivilegeSummary;
+}
+
+export interface NHIOverPrivilegeSummary {
+  critical: number;
+  high: number;
+  least_privilege_plans: number;
+  low: number;
+  medium: number;
+  overprivileged: number;
+  total_analyzed: number;
+  unused_grants: number;
+  wildcard_grants: number;
+}
+
 export interface NHIReviewCampaign {
   certified_count: number;
   completed_at?: string;

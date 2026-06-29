@@ -20,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphReachable: vi.fn(),
     graphQuery: vi.fn(),
     risk: vi.fn(),
+    nhiOverPrivilegePosture: vi.fn(),
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
     identities: vi.fn(),
@@ -52,6 +53,7 @@ describe("operational console surface", () => {
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
+    apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
   });
@@ -458,11 +460,39 @@ describe("operational console surface", () => {
         components: { age: 0.97, rotation: 0.3, privilege: 0.2, exposure: 0.1, owner: 0, sensitivity: 0.1 },
       }),
     ]);
+    apiMock.nhiOverPrivilegePosture.mockResolvedValue({
+      ...emptyNHIOverPrivilegePosture(),
+      summary: { total_analyzed: 2, overprivileged: 1, critical: 0, high: 1, medium: 0, low: 0, least_privilege_plans: 1, unused_grants: 2, wildcard_grants: 1 },
+      findings: [
+        {
+          inventory_id: "finding/oauth-1",
+          kind: "oauth_app",
+          source: "discovery_finding",
+          display_name: "legacy-github-app",
+          status: "open",
+          severity: "high",
+          risk_score: 82,
+          finding_types: ["unused_grants", "usage_driven_scope_delta"],
+          granted_scopes: ["repo", "admin:org", "workflow"],
+          used_scopes: ["repo"],
+          unused_scopes: ["admin:org", "workflow"],
+          recommended_scopes: ["repo"],
+          unused_ratio: 0.67,
+          recommendation: "Remove unused grants admin:org, workflow; keep observed least-privilege grants repo.",
+          evidence_refs: ["inventory:finding/oauth-1", "metadata:granted_permissions", "metadata:observed_permissions"],
+        },
+      ],
+    });
     const user = userEvent.setup();
     renderAt("/risk");
 
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
+    await waitFor(() => expect(apiMock.nhiOverPrivilegePosture).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("heading", { name: "NHI over-privilege" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-01: 1 over-privileged of 2 usage-backed NHIs; 2 unused grants/)).toBeInTheDocument();
+    expect(screen.getByText("legacy-github-app")).toBeInTheDocument();
+    expect(screen.getByText("admin:org, workflow")).toBeInTheDocument();
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);
@@ -540,6 +570,16 @@ describe("operational console surface", () => {
 
 function riskRow(overrides: Partial<ReturnType<typeof riskRowBase>> = {}) {
   return { ...riskRowBase(), ...overrides, components: { ...riskRowBase().components, ...overrides.components } };
+}
+
+function emptyNHIOverPrivilegePosture() {
+  return {
+    capability: "CAP-POST-01",
+    generated_at: "2026-06-29T00:00:00Z",
+    coverage: ["managed_identities", "discovery_findings", "usage_driven_scope_delta", "least_privilege_recommendations"],
+    summary: { total_analyzed: 0, overprivileged: 0, critical: 0, high: 0, medium: 0, low: 0, least_privilege_plans: 0, unused_grants: 0, wildcard_grants: 0 },
+    findings: [],
+  };
 }
 
 function riskRowBase() {

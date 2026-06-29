@@ -1752,6 +1752,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/overprivilege": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List over-privileged NHIs with usage-driven least-privilege recommendations */
+        get: operations["listNHIOverPrivilegePosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -4021,6 +4038,48 @@ export interface components {
             status: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        NHIOverPrivilegeFinding: {
+            display_name: string;
+            evidence_refs: string[];
+            finding_types: string[];
+            granted_scopes: string[];
+            inventory_id: string;
+            kind: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            recommendation: string;
+            recommended_scopes: string[];
+            ref?: string;
+            risk_score: number;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            status: string;
+            unused_ratio: number;
+            unused_scopes: string[];
+            used_scopes: string[];
+        };
+        NHIOverPrivilegePosture: {
+            capability: string;
+            coverage: string[];
+            findings: components["schemas"]["NHIOverPrivilegeFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            summary: components["schemas"]["NHIOverPrivilegeSummary"];
+        };
+        NHIOverPrivilegeSummary: {
+            critical: number;
+            high: number;
+            least_privilege_plans: number;
+            low: number;
+            medium: number;
+            overprivileged: number;
+            total_analyzed: number;
+            unused_grants: number;
+            wildcard_grants: number;
         };
         NHIReviewCampaign: {
             certified_count: number;
@@ -9607,6 +9666,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIInventory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIOverPrivilegePosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIOverPrivilegePosture"];
                 };
             };
             /** @description client error */

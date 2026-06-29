@@ -840,6 +840,46 @@ export const messages = {
     defaultMessage: "High risk",
     description: "Dashboard stat label for high-risk non-human identities.",
   },
+  "risk.nhiOverprivilege.heading": {
+    defaultMessage: "NHI over-privilege",
+    description: "Risk page section heading for NHI over-privilege posture.",
+  },
+  "risk.nhiOverprivilege.summary": {
+    defaultMessage: "CAP-POST-01: {overprivileged} over-privileged of {total} usage-backed NHIs; {unused} unused grants.",
+    description: "Risk page summary for NHI over-privilege posture.",
+  },
+  "risk.nhiOverprivilege.loading": {
+    defaultMessage: "Loading NHI posture.",
+    description: "Loading text for NHI over-privilege posture.",
+  },
+  "risk.nhiOverprivilege.unavailableTitle": {
+    defaultMessage: "NHI posture unavailable",
+    description: "Error title when NHI over-privilege posture cannot be loaded.",
+  },
+  "risk.nhiOverprivilege.empty": {
+    defaultMessage: "No usage-backed excessive scope detected.",
+    description: "Empty-state text for NHI over-privilege posture.",
+  },
+  "risk.nhiOverprivilege.caption": {
+    defaultMessage: "NHI over-privilege recommendations",
+    description: "Accessible caption for the NHI over-privilege recommendations table.",
+  },
+  "risk.nhiOverprivilege.nhi": {
+    defaultMessage: "NHI",
+    description: "NHI over-privilege table column for the identity.",
+  },
+  "risk.nhiOverprivilege.severity": {
+    defaultMessage: "Severity",
+    description: "NHI over-privilege table column for severity.",
+  },
+  "risk.nhiOverprivilege.unusedGrants": {
+    defaultMessage: "Unused grants",
+    description: "NHI over-privilege table column for unused grants.",
+  },
+  "risk.nhiOverprivilege.recommendation": {
+    defaultMessage: "Least-privilege recommendation",
+    description: "NHI over-privilege table column for the right-sizing recommendation.",
+  },
   "identities.decommission.ariaLabel": {
     defaultMessage: "NHI decommission",
     description: "Accessible label for the NHI decommission form on the identities page.",
@@ -1281,6 +1321,16 @@ const esESCatalog = {
   "nhi.inventory.description": "cada identidad de máquina por tipo, con una lente de riesgo común",
   "nhi.inventory.total": "Identidades totales",
   "nhi.inventory.highRisk": "Riesgo alto",
+  "risk.nhiOverprivilege.heading": "Sobreprivilegio de NHI",
+  "risk.nhiOverprivilege.summary": "CAP-POST-01: {overprivileged} sobreprivilegiadas de {total} NHI con uso observado; {unused} permisos sin uso.",
+  "risk.nhiOverprivilege.loading": "Cargando postura de NHI.",
+  "risk.nhiOverprivilege.unavailableTitle": "Postura de NHI no disponible",
+  "risk.nhiOverprivilege.empty": "No se detectó alcance excesivo respaldado por uso.",
+  "risk.nhiOverprivilege.caption": "Recomendaciones de sobreprivilegio de NHI",
+  "risk.nhiOverprivilege.nhi": "NHI",
+  "risk.nhiOverprivilege.severity": "Severidad",
+  "risk.nhiOverprivilege.unusedGrants": "Permisos sin uso",
+  "risk.nhiOverprivilege.recommendation": "Recomendación de privilegio mínimo",
   "identities.decommission.ariaLabel": "Retiro de NHI",
   "identities.decommission.signal": "Señal",
   "identities.decommission.subject": "Sujeto",

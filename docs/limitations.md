@@ -152,6 +152,11 @@ never live in the API process. What you can do end to end against the running bi
   decommission` resolve departure, vendor-term, and inactivity signals to
   tenant-local managed NHIs, then drive event-sourced lifecycle revoke/retire
   transitions with per-item evidence.
+- **NHI over-privilege posture:** `GET /api/v1/nhi/posture/overprivilege` and
+  `trstctl-cli nhi posture overprivilege` compare granted scopes/permissions/roles
+  with observed usage metadata from the unified NHI inventory and return
+  least-privilege right-sizing recommendations. Rows without usage evidence are not
+  classified as usage-driven excessive scope.
 - **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served notification

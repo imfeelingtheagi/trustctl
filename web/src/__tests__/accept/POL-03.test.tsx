@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
     risk: vi.fn(),
+    nhiOverPrivilegePosture: vi.fn(),
     identities: vi.fn(),
     profiles: vi.fn(),
     createIdentity: vi.fn(),
@@ -37,6 +38,13 @@ describe("POL-03 polish fixes", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
+    apiMock.nhiOverPrivilegePosture.mockResolvedValue({
+      capability: "CAP-POST-01",
+      generated_at: "2026-06-29T00:00:00Z",
+      coverage: ["managed_identities", "discovery_findings", "usage_driven_scope_delta", "least_privilege_recommendations"],
+      summary: { total_analyzed: 0, overprivileged: 0, critical: 0, high: 0, medium: 0, low: 0, least_privilege_plans: 0, unused_grants: 0, wildcard_grants: 0 },
+      findings: [],
+    });
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });
     apiMock.profiles.mockResolvedValue([{ id: "prof-1", name: "web-server", version: 2, active: true }]);
   });

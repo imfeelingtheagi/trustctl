@@ -2034,6 +2034,59 @@ NHIInventoryItem = TypedDict(
     total=False,
 )
 
+NHIOverPrivilegeFinding = TypedDict(
+    'NHIOverPrivilegeFinding',
+    {
+        'display_name': str,
+        'evidence_refs': list[str],
+        'finding_types': list[str],
+        'granted_scopes': list[str],
+        'inventory_id': str,
+        'kind': str,
+        'last_used_at': str,
+        'owner_id': str,
+        'recommendation': str,
+        'recommended_scopes': list[str],
+        'ref': str,
+        'risk_score': int,
+        'severity': str,
+        'source': str,
+        'status': str,
+        'unused_ratio': float,
+        'unused_scopes': list[str],
+        'used_scopes': list[str],
+    },
+    total=False,
+)
+
+NHIOverPrivilegePosture = TypedDict(
+    'NHIOverPrivilegePosture',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIOverPrivilegeSummary = TypedDict(
+    'NHIOverPrivilegeSummary',
+    {
+        'critical': int,
+        'high': int,
+        'least_privilege_plans': int,
+        'low': int,
+        'medium': int,
+        'overprivileged': int,
+        'total_analyzed': int,
+        'unused_grants': int,
+        'wildcard_grants': int,
+    },
+    total=False,
+)
+
 NHIReviewCampaign = TypedDict(
     'NHIReviewCampaign',
     {

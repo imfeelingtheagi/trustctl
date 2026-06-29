@@ -129,6 +129,7 @@ import type {
   NHIDecommissionResponse,
   NHIInventory,
   NHIInventoryItem,
+  NHIOverPrivilegePosture,
   OwnershipAttribution,
   OwnershipAttributionItem,
   NHIReviewCampaign,
@@ -295,6 +296,7 @@ export type {
   NHIDecommissionResponse,
   NHIInventory,
   NHIInventoryItem,
+  NHIOverPrivilegePosture,
   OwnershipAttribution,
   OwnershipAttributionItem,
   NHIReviewCampaign,
@@ -685,6 +687,7 @@ export interface Api {
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
   nhiInventory(): Promise<NHIInventory>;
+  nhiOverPrivilegePosture(): Promise<NHIOverPrivilegePosture>;
   decommissionNHI(input: NHIDecommissionRequest): Promise<NHIDecommissionResponse>;
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
@@ -844,6 +847,7 @@ export const api: Api = {
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   nhiInventory: () => req<NHIInventory>("/api/v1/nhi/inventory"),
+  nhiOverPrivilegePosture: () => req<NHIOverPrivilegePosture>("/api/v1/nhi/posture/overprivilege"),
   decommissionNHI: (input) => mutate<NHIDecommissionResponse>("POST", "/api/v1/nhi/decommission", input),
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),

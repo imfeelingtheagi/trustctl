@@ -677,6 +677,23 @@ describe("certificate inventory contract", () => {
 });
 
 describe("risk query contract", () => {
+  it("fetches NHI over-privilege posture from the served CAP-POST-01 route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-POST-01",
+        generated_at: "2026-06-29T00:00:00Z",
+        coverage: ["managed_identities", "discovery_findings", "usage_driven_scope_delta", "least_privilege_recommendations"],
+        summary: { total_analyzed: 0, overprivileged: 0, critical: 0, high: 0, medium: 0, low: 0, least_privilege_plans: 0, unused_grants: 0, wildcard_grants: 0 },
+        findings: [],
+      }),
+    );
+
+    await api.nhiOverPrivilegePosture();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/overprivilege");
+  });
+
   it("does not pin risk to score and sends only requested server-side filters", async () => {
     mockFetch(200, JSON.stringify({ credentials: [] }));
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { api, type CredentialRisk, type RiskQuery } from "@/lib/api";
+import { api, type CredentialRisk, type NHIOverPrivilegePosture, type RiskQuery } from "@/lib/api";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { RiskPosture } from "@/components/risk/posture";
 import { riskBand } from "@/lib/statusVocab";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const privilegeLabel = ["Low", "Standard", "High", "Critical"];
 const sensitivityLabel = ["Public", "Internal", "Confidential", "Restricted"];
@@ -51,6 +52,9 @@ export function Risk() {
   const [owner, setOwner] = useState(searchParams.get("owner") ?? "");
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [nhiPosture, setNHIPosture] = useState<NHIOverPrivilegePosture | null>(null);
+  const [nhiPostureLoading, setNHIPostureLoading] = useState(true);
+  const [nhiPostureError, setNHIPostureError] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const ignoredCount = (data?.length ?? 0) - certRows.length;
   const rows = useMemo(() => {
@@ -84,6 +88,29 @@ export function Risk() {
       active = false;
     };
   }, [query]);
+
+  useEffect(() => {
+    let active = true;
+    setNHIPostureLoading(true);
+    setNHIPostureError(null);
+    api
+      .nhiOverPrivilegePosture()
+      .then((posture) => {
+        if (!active) return;
+        setNHIPosture(posture);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNHIPosture(null);
+        setNHIPostureError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setNHIPostureLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function applySort(next: DataGridSort) {
     const columnId = next.columnId as RiskSortColumn;
@@ -156,6 +183,7 @@ export function Risk() {
       />
 
       <RiskPosture risks={data ?? []} />
+      <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
           Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.
@@ -210,6 +238,74 @@ export function Risk() {
           </h2>
           <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
         </section>
+      )}
+    </section>
+  );
+}
+
+function NHIOverPrivilegePanel({ posture, loading, error }: { posture: NHIOverPrivilegePosture | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const topFindings = posture?.findings?.slice(0, 5) ?? [];
+  return (
+    <section aria-labelledby="nhi-overprivilege-heading" className="mb-4 border-y border-border py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="nhi-overprivilege-heading" className="text-title font-semibold">
+            {t("risk.nhiOverprivilege.heading")}
+          </h2>
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiOverprivilege.summary", {
+                overprivileged: posture.summary.overprivileged,
+                total: posture.summary.total_analyzed,
+                unused: posture.summary.unused_grants,
+              })}
+            </p>
+          )}
+        </div>
+        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : "low"} />}
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiOverprivilege.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.nhiOverprivilege.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && posture && topFindings.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiOverprivilege.empty")}</p>
+      )}
+      {!loading && !error && topFindings.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[56rem]">
+            <caption className="sr-only">{t("risk.nhiOverprivilege.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.nhiOverprivilege.nhi")}</th>
+                <th scope="col">{t("risk.nhiOverprivilege.severity")}</th>
+                <th scope="col">{t("risk.nhiOverprivilege.unusedGrants")}</th>
+                <th scope="col">{t("risk.nhiOverprivilege.recommendation")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topFindings.map((finding) => (
+                <tr key={finding.inventory_id}>
+                  <td>
+                    <p className="font-medium">{finding.display_name}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {finding.kind} · {finding.source}
+                    </p>
+                  </td>
+                  <td>
+                    <StatusBadge vocabulary="risk" value={finding.severity} />
+                  </td>
+                  <td>{finding.unused_scopes.join(", ")}</td>
+                  <td>{finding.recommendation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

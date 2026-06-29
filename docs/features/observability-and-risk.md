@@ -50,6 +50,16 @@ you can filter by minimum score, privilege class, or owner.
 **Status: served** — `GET /api/v1/risk/credentials` and the `risk credentials` CLI
 command are live.
 
+NHI over-privilege posture (CAP-POST-01) is served by
+`GET /api/v1/nhi/posture/overprivilege` and
+`trstctl-cli nhi posture overprivilege`. It reads the same unified NHI inventory as
+the dashboard, compares granted scopes/permissions/roles with observed usage metadata,
+and returns only usage-backed excessive-scope findings. Each finding includes unused
+grants, the observed least-privilege recommendation to keep, severity, evidence
+references, and the source row (`identity`, `access_api_token`, or
+`discovery_finding`). Rows with grants but no usage evidence remain unclassified rather
+than being counted as a category meet.
+
 ### Certificate Transparency monitoring (F17)
 
 Every certificate a public CA issues is recorded in public, append-only **CT logs**
@@ -140,9 +150,13 @@ Risk scoring is live — find your riskiest credentials:
 ```sh
 # the rotate-this-first list: high-privilege, score >= 50
 trstctl-cli risk credentials --min_score 50 --privilege high --sort score
+
+# usage-backed NHI over-privilege and least-privilege right-sizing
+trstctl-cli nhi posture overprivilege
 ```
 
-That maps to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`.
+Those map to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`
+and `GET /api/v1/nhi/posture/overprivilege`.
 CT monitoring and drift detection are driven through the served Discovery API:
 
 ```sh
@@ -213,7 +227,7 @@ The response contains `items` and `migration_progress`. A non-empty
 
 | Capability | Status today |
 |---|---|
-| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `risk` CLI |
+| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/nhi/posture/overprivilege`, `risk` CLI, NHI posture CLI |
 | CT monitoring (F17) | **Partially served** — Discovery `ct_log` source/run/finding execution plus outbox-backed alerts; dedicated CT dashboard/watchlist UI not served |
 | Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |

@@ -1282,18 +1282,18 @@
       "phase": "P0",
       "priority": 8,
       "served_state": "served",
-      "backend_status": "served",
-      "current_frontend_mapping": "basic: Risk page lists scores; coverage ledger: /coverage",
+      "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture",
+      "current_frontend_mapping": "served: Risk page lists certificate scores and CAP-POST-01 NHI over-privilege findings with least-privilege recommendations; coverage ledger: /coverage",
       "target_gui_mapping": "Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time.",
-      "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, and navigation from risk row to graph/audit/certificate evidence.",
+      "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, and the CAP-POST-01 over-privilege panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations.",
       "source_docs": ["docs/features/observability-and-risk.md"],
-      "source_backend": ["/api/v1/risk/credentials"],
+      "source_backend": ["/api/v1/risk/credentials", "/api/v1/nhi/posture/overprivilege"],
       "source_frontend": ["web/src/pages/Risk.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listRiskScores"],
+      "notes": "Closed by /coverage feature-map hub. COMPETE-035 update serves CAP-POST-01 through GET /api/v1/nhi/posture/overprivilege and CLI nhi posture overprivilege: the read path analyzes unified NHI inventory rows with both granted and observed usage metadata, detects unused grants/admin breadth, and returns least-privilege keep/remove recommendations without classifying rows that lack usage evidence.",
+      "api_surface": ["listRiskScores", "listNHIOverPrivilegePosture"],
       "api_na": "",
-      "cli_surface": ["risk credentials"],
+      "cli_surface": ["risk credentials", "nhi posture overprivilege"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -1301,26 +1301,29 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: basic: Risk page lists scores; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Risk page lists certificate scores and CAP-POST-01 NHI over-privilege findings with least-privilege recommendations; coverage ledger: /coverage",
             "target_gui_mapping: Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Risk.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: risk credentials"],
+          "evidence": ["CLI command: risk credentials", "CLI command: nhi posture overprivilege"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listRiskScores"],
+          "evidence": ["OpenAPI operationId: listRiskScores", "OpenAPI operationId: listNHIOverPrivilegePosture"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest covers risk ranking, factor explanation, empty state, filtering, and navigation from risk row to graph/audit/certificate evidence.",
+            "acceptance_test: Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, and the CAP-POST-01 over-privilege panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations.",
+            "TestServedNHIOverPrivilegeCAPPOST01EndToEnd proves CAP-POST-01 over the served API path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/nhi_posture_served_test.go",
+            "web/src/__tests__/operations_surface.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -1332,7 +1335,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores, listNHIOverPrivilegePosture",
+            "listNHIOverPrivilegePosture requires nhi:read and reports only non-secret scope/usage metadata from the unified NHI inventory.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -1344,10 +1348,10 @@
           ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F19; current mapping is basic: Risk page lists scores; coverage ledger: /coverage."
+          "na": "N/A: no mutating served audit path is claimed for F19; risk scoring and NHI over-privilege posture are read-only computations over tenant-scoped inventory rows."
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.", "NHI posture findings include total analyzed, overprivileged, unused grant, wildcard/admin, severity, and recommendation counts for operator-visible posture."],
           "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
