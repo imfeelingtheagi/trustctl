@@ -9,7 +9,7 @@ import (
 )
 
 func TestCRDIsValid(t *testing.T) {
-	var crd struct {
+	type crdDoc struct {
 		APIVersion string `yaml:"apiVersion"`
 		Kind       string `yaml:"kind"`
 		Spec       struct {
@@ -29,17 +29,39 @@ func TestCRDIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := yaml.Unmarshal(b, &crd); err != nil {
-		t.Fatalf("crd.yaml is not valid YAML: %v", err)
+	dec := yaml.NewDecoder(strings.NewReader(string(b)))
+	crds := map[string]crdDoc{}
+	for {
+		var crd crdDoc
+		if err := dec.Decode(&crd); err != nil {
+			break
+		}
+		if crd.Kind == "" {
+			continue
+		}
+		if crd.Kind != "CustomResourceDefinition" {
+			t.Errorf("kind = %q", crd.Kind)
+			continue
+		}
+		crds[crd.Spec.Names.Kind] = crd
 	}
-	if crd.Kind != "CustomResourceDefinition" {
-		t.Errorf("kind = %q", crd.Kind)
-	}
-	if crd.Spec.Group != "trstctl.com" || crd.Spec.Names.Kind != "TrstctlControlPlane" {
-		t.Errorf("CRD group/kind = %q/%q", crd.Spec.Group, crd.Spec.Names.Kind)
-	}
-	if len(crd.Spec.Versions) == 0 || !crd.Spec.Versions[0].Served || !crd.Spec.Versions[0].Storage {
-		t.Error("CRD has no served+stored version")
+	for _, want := range []struct {
+		kind   string
+		plural string
+	}{
+		{kind: "TrstctlControlPlane", plural: "trstctlcontrolplanes"},
+		{kind: "TrstctlSecretSync", plural: "trstctlsecretsyncs"},
+	} {
+		crd, ok := crds[want.kind]
+		if !ok {
+			t.Fatalf("crd.yaml missing %s", want.kind)
+		}
+		if crd.Spec.Group != "trstctl.com" || crd.Spec.Names.Plural != want.plural {
+			t.Errorf("%s group/plural = %q/%q", want.kind, crd.Spec.Group, crd.Spec.Names.Plural)
+		}
+		if len(crd.Spec.Versions) == 0 || !crd.Spec.Versions[0].Served || !crd.Spec.Versions[0].Storage {
+			t.Errorf("%s CRD has no served+stored version", want.kind)
+		}
 	}
 }
 
@@ -165,6 +187,9 @@ func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 			}
 			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "coordination.k8s.io") {
 				t.Error("operator.yaml ClusterRole does not grant rules on coordination.k8s.io Leases for leader election")
+			}
+			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "") {
+				t.Error("operator.yaml ClusterRole does not grant rules on core/v1 Secrets for TrstctlSecretSync projection")
 			}
 		}
 	}

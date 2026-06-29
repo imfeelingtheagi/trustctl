@@ -331,6 +331,17 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the response returns only metadata and delivery flags; it never echoes the secret
    value.
 
+   For Kubernetes clusters, inspect the operator posture before relying on CRD-driven
+   delivery:
+
+   ```sh
+   trstctl-cli secrets kubernetes-operator
+   ```
+
+   -> the response names the `TrstctlSecretSync` CRD, the Kubernetes workload kinds
+   that auto-reload through a pod-template annotation, and the residual operator
+   limits that remain Helm-owned.
+
 12. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
     on the control-plane host and set `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary.
     The served scan uses the pinned default rule set (`213` rules), redacts the match,

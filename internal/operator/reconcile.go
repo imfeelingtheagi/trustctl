@@ -14,6 +14,7 @@ import (
 const (
 	tcpAPIGroupVersion = "trstctl.com/v1alpha1"
 	tcpPlural          = "trstctlcontrolplanes"
+	tssPlural          = "trstctlsecretsyncs"
 	deploymentsGroup   = "apps/v1"
 )
 
@@ -184,11 +185,16 @@ type Reconciler struct {
 	// deploymentName is the name of the control-plane Deployment the operator
 	// manages for a given TrstctlControlPlane (derived from the CR name).
 	deploymentSuffix string
+	secretResolver   SecretResolver
 }
 
 // NewReconciler returns a Reconciler using client for all API access.
 func NewReconciler(client *Client) *Reconciler {
-	return &Reconciler{client: client, deploymentSuffix: "-control-plane"}
+	return &Reconciler{
+		client:           client,
+		deploymentSuffix: "-control-plane",
+		secretResolver:   NewHTTPSecretResolver(client, nil),
+	}
 }
 
 // deploymentName is the control-plane Deployment name the operator manages for

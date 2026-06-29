@@ -79,7 +79,7 @@ secret injection:
 | `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `run` · `staged-diff`                                                                                    |
 | `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
 | `secrets approvals`               | `approve`                                                                                                                                                                |
-| `secrets`                         | `login` · `pki`                                                                                                                                                          |
+| `secrets`                         | `login` · `pki` · `kubernetes-operator`                                                                                                                                  |
 | `transit keys`                    | `create` · `rotate`                                                                                                                                                      |
 | `transit`                         | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`                                                                                                            |
 | `managed-keys`                    | `generate` · `rotate` · `revoke` · `zeroize`                                                                                                                             |
@@ -358,6 +358,9 @@ trstctl-cli --idempotency-key secret-sync-1 secrets syncs run -f secret-sync.jso
 
 # Discover supported and configured target IDs before choosing the target field.
 trstctl-cli secrets syncs targets
+
+# Inspect the Kubernetes SecretSync CRD, Secret projection, and reload posture.
+trstctl-cli secrets kubernetes-operator
 
 # Run a Gitleaks code scan from CI and record redacted findings in discovery/graph.
 cat > secret-scan.json <<'JSON'

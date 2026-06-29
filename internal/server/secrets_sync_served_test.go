@@ -123,6 +123,33 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 		t.Fatalf("catalog capability = %q, want CAP-SECR-03", catalog.Capability)
 	}
 
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/kubernetes-operator", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("kubernetes operator posture: status %d body %s", status, body)
+	}
+	var operatorPosture struct {
+		Capability      string   `json:"capability"`
+		Served          bool     `json:"served"`
+		ReloadWorkloads []string `json:"reload_workloads"`
+		CRDs            []struct {
+			Kind   string   `json:"kind"`
+			Plural string   `json:"plural"`
+			Status string   `json:"status"`
+			Owns   []string `json:"owns"`
+		} `json:"crds"`
+		EvidenceRefs []string `json:"evidence_refs"`
+	}
+	if err := json.Unmarshal(body, &operatorPosture); err != nil {
+		t.Fatalf("decode kubernetes operator posture: %v (%s)", err, body)
+	}
+	if operatorPosture.Capability != "CAP-SECR-04" || !operatorPosture.Served {
+		t.Fatalf("kubernetes operator posture = %+v, want served CAP-SECR-04", operatorPosture)
+	}
+	assertKubernetesOperatorPosture(t, operatorPosture)
+	if strings.Contains(string(body), "sync-v1") || strings.Contains(string(body), "github-token") {
+		t.Fatalf("kubernetes operator posture leaked secret material: %s", body)
+	}
+
 	syncCases := []struct {
 		target string
 		remote string
@@ -183,6 +210,48 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 	if h.logContains(t, "sync-v1") {
 		t.Fatal("secret sync event log leaked the synced secret value")
 	}
+}
+
+func assertKubernetesOperatorPosture(t *testing.T, posture struct {
+	Capability      string   `json:"capability"`
+	Served          bool     `json:"served"`
+	ReloadWorkloads []string `json:"reload_workloads"`
+	CRDs            []struct {
+		Kind   string   `json:"kind"`
+		Plural string   `json:"plural"`
+		Status string   `json:"status"`
+		Owns   []string `json:"owns"`
+	} `json:"crds"`
+	EvidenceRefs []string `json:"evidence_refs"`
+}) {
+	t.Helper()
+	requireString(t, posture.ReloadWorkloads, "Deployment", "operator reload workloads")
+	requireString(t, posture.ReloadWorkloads, "StatefulSet", "operator reload workloads")
+	requireString(t, posture.ReloadWorkloads, "DaemonSet", "operator reload workloads")
+	requireString(t, posture.EvidenceRefs, "internal/operator/secretsync.go", "operator evidence refs")
+	requireString(t, posture.EvidenceRefs, "deploy/operator/crd.yaml", "operator evidence refs")
+	for _, crd := range posture.CRDs {
+		if crd.Kind != "TrstctlSecretSync" {
+			continue
+		}
+		if crd.Plural != "trstctlsecretsyncs" || crd.Status != "served" {
+			t.Fatalf("TrstctlSecretSync CRD = %+v, want served trstctlsecretsyncs", crd)
+		}
+		requireString(t, crd.Owns, "Kubernetes Secret data", "TrstctlSecretSync ownership")
+		requireString(t, crd.Owns, "status.contentHash", "TrstctlSecretSync ownership")
+		return
+	}
+	t.Fatalf("operator posture missing TrstctlSecretSync CRD: %+v", posture.CRDs)
+}
+
+func requireString(t *testing.T, haystack []string, needle, label string) {
+	t.Helper()
+	for _, got := range haystack {
+		if got == needle {
+			return
+		}
+	}
+	t.Fatalf("%s missing %q from %v", label, needle, haystack)
 }
 
 func assertCatalogTargetsConfigured(t *testing.T, targets []struct {

@@ -88,6 +88,7 @@ import type {
   GraphReachable,
   GraphResponse,
   ITSMTicket,
+  KubernetesSecretOperator,
   FleetReissuanceActionRequest,
   FleetReissuanceEvidence,
   FleetReissuanceRequest,
@@ -323,6 +324,7 @@ export type {
   RemediationPlaybookRunList,
   RemediationPlaybookRunRequest,
   ITSMTicket,
+  KubernetesSecretOperator,
   MachineLoginRequest,
   MachineLoginResponse,
   ManagedKey,
@@ -862,6 +864,7 @@ export interface Api {
   scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
+  kubernetesSecretOperator(): Promise<KubernetesSecretOperator>;
   issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
@@ -1075,6 +1078,7 @@ export const api: Api = {
   scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
+  kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),
   issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),

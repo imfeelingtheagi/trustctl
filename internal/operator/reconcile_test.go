@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -48,25 +49,35 @@ type fakeCluster struct {
 
 	// tcps is the TrstctlControlPlane list the operator reconciles.
 	tcps []map[string]any
+	// secretSyncs is the TrstctlSecretSync list the operator reconciles.
+	secretSyncs []map[string]any
 	// deployments maps name -> the live Deployment object (nil => 404, i.e. it
 	// does not exist yet).
 	deployments map[string]map[string]any
+	// secrets maps name -> the live Kubernetes Secret object.
+	secrets map[string]map[string]any
 	// leases maps name -> coordination.k8s.io Lease object for leader election.
 	leases map[string]map[string]any
 
 	// Recorded effects:
-	created      []map[string]any          // Deployment POST bodies
-	patched      map[string][]byte         // Deployment name -> strategic-merge-patch body
-	statusSet    map[string]map[string]any // CR name -> status patch
-	leasePatches int
+	created         []map[string]any          // Deployment POST bodies
+	patched         map[string][]byte         // Deployment name -> strategic-merge-patch body
+	statusSet       map[string]map[string]any // CR name -> status patch
+	createdSecrets  []map[string]any          // Secret POST bodies
+	patchedSecrets  map[string][]byte         // Secret name -> merge-patch body
+	secretStatusSet map[string]map[string]any
+	leasePatches    int
 }
 
 func newFakeCluster() *fakeCluster {
 	return &fakeCluster{
-		deployments: map[string]map[string]any{},
-		leases:      map[string]map[string]any{},
-		patched:     map[string][]byte{},
-		statusSet:   map[string]map[string]any{},
+		deployments:     map[string]map[string]any{},
+		secrets:         map[string]map[string]any{},
+		leases:          map[string]map[string]any{},
+		patched:         map[string][]byte{},
+		statusSet:       map[string]map[string]any{},
+		patchedSecrets:  map[string][]byte{},
+		secretStatusSet: map[string]map[string]any{},
 	}
 }
 
@@ -84,6 +95,12 @@ func (f *fakeCluster) handler() http.Handler {
 				"apiVersion": tcpAPIGroupVersion, "kind": "TrstctlControlPlaneList", "items": f.tcps,
 			})
 
+		// List TrstctlSecretSyncs.
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/"+tssPlural):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"apiVersion": tcpAPIGroupVersion, "kind": "TrstctlSecretSyncList", "items": f.secretSyncs,
+			})
+
 		// Patch a TrstctlControlPlane status subresource.
 		case r.Method == http.MethodPatch && strings.HasSuffix(path, "/status") && strings.Contains(path, "/"+tcpPlural+"/"):
 			name := tcpNameFromStatusPath(path)
@@ -93,6 +110,53 @@ func (f *fakeCluster) handler() http.Handler {
 			f.statusSet[name] = st
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(obj)
+
+		// Patch a TrstctlSecretSync status subresource.
+		case r.Method == http.MethodPatch && strings.HasSuffix(path, "/status") && strings.Contains(path, "/"+tssPlural+"/"):
+			name := tcpNameFromStatusPath(path)
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			st, _ := obj["status"].(map[string]any)
+			f.secretStatusSet[name] = st
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(obj)
+
+		// Get a Kubernetes Secret (404 when it does not exist).
+		case r.Method == http.MethodGet && strings.Contains(path, "/api/v1/namespaces/") && strings.Contains(path, "/secrets/"):
+			name := lastSegment(path)
+			obj, ok := f.secrets[name]
+			if !ok {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(obj)
+
+		// Create a Kubernetes Secret.
+		case r.Method == http.MethodPost && strings.HasSuffix(path, "/secrets"):
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.createdSecrets = append(f.createdSecrets, obj)
+			if meta, _ := obj["metadata"].(map[string]any); meta != nil {
+				if name, _ := meta["name"].(string); name != "" {
+					f.secrets[name] = obj
+				}
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(obj)
+
+		// Patch a Kubernetes Secret.
+		case r.Method == http.MethodPatch && strings.Contains(path, "/api/v1/namespaces/") && strings.Contains(path, "/secrets/"):
+			name := lastSegment(path)
+			f.patchedSecrets[name] = body
+			var patch map[string]any
+			_ = json.Unmarshal(body, &patch)
+			if live, ok := f.secrets[name]; ok {
+				mergeMap(live, patch)
+			} else {
+				f.secrets[name] = patch
+			}
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(f.secrets[name])
 
 		// Get a Deployment (404 when it does not exist).
 		case r.Method == http.MethodGet && strings.Contains(path, "/deployments/"):
@@ -122,6 +186,11 @@ func (f *fakeCluster) handler() http.Handler {
 		case r.Method == http.MethodPatch && strings.Contains(path, "/deployments/"):
 			name := lastSegment(path)
 			f.patched[name] = body
+			var patch map[string]any
+			_ = json.Unmarshal(body, &patch)
+			if live, ok := f.deployments[name]; ok {
+				mergeMap(live, patch)
+			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"metadata":{"name":"` + name + `"}}`))
 
@@ -236,6 +305,34 @@ func tcpObjectFullConfig(name string) map[string]any {
 	return obj
 }
 
+func secretSyncObjectFixture(name string) map[string]any {
+	return map[string]any{
+		"apiVersion": tcpAPIGroupVersion,
+		"kind":       "TrstctlSecretSync",
+		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system"},
+		"spec": map[string]any{
+			"controlPlane": map[string]any{
+				"url":      "https://trstctl.example",
+				"tenantID": "tenant-a",
+				"tokenSecretRef": map[string]any{
+					"name": "trstctl-secret-sync-token",
+					"key":  "token",
+				},
+			},
+			"target": map[string]any{"name": "payments-db", "type": "Opaque"},
+			"data": []any{
+				map[string]any{"key": "password", "remoteRef": map[string]any{"name": "sync/source"}},
+				map[string]any{"key": "api-key", "remoteRef": map[string]any{"name": "sync/api-key"}},
+			},
+			"reload": map[string]any{
+				"workloads": []any{
+					map[string]any{"kind": "Deployment", "name": "payments-api"},
+				},
+			},
+		},
+	}
+}
+
 func liveDeployment(name string, replicas int, image string) map[string]any {
 	configHash := ControlPlaneSpec{Replicas: replicas, Image: image}.desiredConfigHash()
 	return map[string]any{
@@ -257,6 +354,32 @@ func liveDeployment(name string, replicas int, image string) map[string]any {
 			},
 		},
 	}
+}
+
+func liveReloadDeployment(name string) map[string]any {
+	return map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system"},
+		"spec": map[string]any{
+			"template": map[string]any{
+				"metadata": map[string]any{"annotations": map[string]any{}},
+				"spec": map[string]any{
+					"containers": []any{map[string]any{"name": "app", "image": "example/payments:v1"}},
+				},
+			},
+		},
+	}
+}
+
+type mapSecretResolver map[string][]byte
+
+func (m mapSecretResolver) ResolveSecret(_ context.Context, _ string, _ SecretSyncSpec, remoteName string) ([]byte, error) {
+	value, ok := m[remoteName]
+	if !ok {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return append([]byte(nil), value...), nil
 }
 
 // reconcilerForCluster wires a Reconciler to a fake cluster's httptest server.
@@ -360,6 +483,95 @@ func TestReconcileCreatesFullControlPlaneConfig(t *testing.T) {
 		if !hasVolume(created, volume) {
 			t.Errorf("full sidecar config should render volume %q", volume)
 		}
+	}
+}
+
+// TestReconcileTrstctlSecretSyncCreatesSecretAndReloadsWorkloadCAPSECR04 proves
+// CAP-SECR-04: a TrstctlSecretSync CRD resolves trstctl secret references, writes
+// a Kubernetes Secret with base64 data, annotates an opted-in workload's pod
+// template with the content hash for auto-reload, updates status, and converges
+// idempotently until the source value rotates.
+func TestReconcileTrstctlSecretSyncCreatesSecretAndReloadsWorkloadCAPSECR04(t *testing.T) {
+	f := newFakeCluster()
+	f.secretSyncs = []map[string]any{secretSyncObjectFixture("payments-db")}
+	f.deployments["payments-api"] = liveReloadDeployment("payments-api")
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+
+	resolver := mapSecretResolver{
+		"sync/source":  []byte("sync-v1"),
+		"sync/api-key": []byte("api-key-v1"),
+	}
+	r := reconcilerForCluster(srv)
+	r.secretResolver = resolver
+	actions, err := r.ReconcileSecretSyncNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("secret sync reconcile: %v", err)
+	}
+	if actions["payments-db"] != ActionCreate {
+		t.Fatalf("secret sync action = %q, want %q", actions["payments-db"], ActionCreate)
+	}
+	if len(f.createdSecrets) != 1 {
+		t.Fatalf("created Secrets = %d, want 1", len(f.createdSecrets))
+	}
+	created := f.createdSecrets[0]
+	if name := secretName(t, created); name != "payments-db" {
+		t.Fatalf("created Secret name = %q, want payments-db", name)
+	}
+	if got := secretDataValue(t, created, "password"); got != "sync-v1" {
+		t.Fatalf("created Secret password = %q, want sync-v1", got)
+	}
+	if got := secretDataValue(t, created, "api-key"); got != "api-key-v1" {
+		t.Fatalf("created Secret api-key = %q, want api-key-v1", got)
+	}
+	if strings.Contains(string(mustJSON(t, created)), "sync-v1") || strings.Contains(string(mustJSON(t, created)), "api-key-v1") {
+		t.Fatal("Kubernetes Secret write body leaked raw secret value instead of base64 data")
+	}
+	hash := secretAnnotation(t, created, kubernetesSecretHashAnnotation)
+	if hash == "" {
+		t.Fatal("created Secret missing content-hash annotation")
+	}
+	if got := deploymentTemplateAnnotation(t, f.deployments["payments-api"], kubernetesSecretHashAnnotation); got != hash {
+		t.Fatalf("reload annotation = %q, want content hash %q", got, hash)
+	}
+	if st := f.secretStatusSet["payments-db"]; st["phase"] != "Ready" || st["targetSecret"] != "payments-db" {
+		t.Fatalf("secret sync status = %+v, want Ready payments-db", st)
+	}
+
+	f.createdSecrets = nil
+	f.patchedSecrets = map[string][]byte{}
+	f.patched = map[string][]byte{}
+	actions, err = r.ReconcileSecretSyncNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("second secret sync reconcile: %v", err)
+	}
+	if actions["payments-db"] != ActionNone {
+		t.Fatalf("second secret sync action = %q, want %q", actions["payments-db"], ActionNone)
+	}
+	if len(f.createdSecrets) != 0 || len(f.patchedSecrets) != 0 || len(f.patched) != 0 {
+		t.Fatalf("idempotent reconcile mutated cluster: createdSecrets=%d patchedSecrets=%d workloadPatches=%d", len(f.createdSecrets), len(f.patchedSecrets), len(f.patched))
+	}
+
+	resolver["sync/source"] = []byte("sync-v2")
+	actions, err = r.ReconcileSecretSyncNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("rotated secret sync reconcile: %v", err)
+	}
+	if actions["payments-db"] != ActionUpdate {
+		t.Fatalf("rotated secret sync action = %q, want %q", actions["payments-db"], ActionUpdate)
+	}
+	if _, ok := f.patchedSecrets["payments-db"]; !ok {
+		t.Fatal("rotated source did not patch the Kubernetes Secret")
+	}
+	if got := secretDataValue(t, f.secrets["payments-db"], "password"); got != "sync-v2" {
+		t.Fatalf("patched Secret password = %q, want sync-v2", got)
+	}
+	newHash := secretAnnotation(t, f.secrets["payments-db"], kubernetesSecretHashAnnotation)
+	if newHash == "" || newHash == hash {
+		t.Fatalf("rotated content hash = %q, want changed from %q", newHash, hash)
+	}
+	if got := deploymentTemplateAnnotation(t, f.deployments["payments-api"], kubernetesSecretHashAnnotation); got != newHash {
+		t.Fatalf("rotated reload annotation = %q, want %q", got, newHash)
 	}
 }
 
@@ -594,4 +806,49 @@ func hasVolume(obj map[string]any, name string) bool {
 		}
 	}
 	return false
+}
+
+func secretName(t *testing.T, obj map[string]any) string {
+	t.Helper()
+	meta, _ := obj["metadata"].(map[string]any)
+	name, _ := meta["name"].(string)
+	return name
+}
+
+func secretAnnotation(t *testing.T, obj map[string]any, key string) string {
+	t.Helper()
+	meta, _ := obj["metadata"].(map[string]any)
+	annotations, _ := meta["annotations"].(map[string]any)
+	value, _ := annotations[key].(string)
+	return value
+}
+
+func secretDataValue(t *testing.T, obj map[string]any, key string) string {
+	t.Helper()
+	data, _ := obj["data"].(map[string]any)
+	encoded, _ := data[key].(string)
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode Secret data[%s]: %v", key, err)
+	}
+	return string(raw)
+}
+
+func deploymentTemplateAnnotation(t *testing.T, obj map[string]any, key string) string {
+	t.Helper()
+	spec, _ := obj["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	meta, _ := tmpl["metadata"].(map[string]any)
+	annotations, _ := meta["annotations"].(map[string]any)
+	value, _ := annotations[key].(string)
+	return value
+}
+
+func mustJSON(t *testing.T, obj any) []byte {
+	t.Helper()
+	data, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

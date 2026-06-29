@@ -28,6 +28,7 @@ const { apiMock } = vi.hoisted(() => ({
     signTransit: vi.fn(),
     secretRepositoryScanning: vi.fn(),
     secretSyncTargets: vi.fn(),
+    kubernetesSecretOperator: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -136,6 +137,32 @@ function syncTargetCatalogFixture() {
   };
 }
 
+function kubernetesSecretOperatorFixture() {
+  return {
+    capability: "CAP-SECR-04",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    crds: [
+      {
+        kind: "TrstctlSecretSync",
+        api_group: "trstctl.com",
+        api_version: "trstctl.com/v1alpha1",
+        plural: "trstctlsecretsyncs",
+        status: "served",
+        owns: ["Kubernetes Secret data", "status.contentHash"],
+        evidence_ref: "deploy/operator/crd.yaml",
+      },
+    ],
+    sync_flow: ["resolve through served secret store", "write Kubernetes Secret", "patch workload templates"],
+    reload_workloads: ["Deployment", "StatefulSet", "DaemonSet"],
+    secret_handling: "operator reads resolved values as bytes and reports metadata only",
+    architecture_controls: ["control-plane token from Secret reference"],
+    evidence_refs: ["internal/operator/secretsync.go", "deploy/operator/crd.yaml"],
+    residuals: ["operator still uses a polling reconcile loop rather than a shared informer/workqueue controller"],
+    recommended_next_actions: ["move to informer-backed queues"],
+  };
+}
+
 describe("WIRE-09 secret scanning and sync wiring", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -154,6 +181,7 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     });
     apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
     apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
+    apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -189,8 +217,12 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     await screen.findByText("app/db/password");
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.secretSyncTargets).toHaveBeenCalled());
+    await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-03")).toBeInTheDocument();
+    expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
+    expect(screen.getByText("TrstctlSecretSync - served")).toBeInTheDocument();
+    expect(screen.getByText("DaemonSet")).toBeInTheDocument();
     expect(screen.getByText("AWS Secrets Manager")).toBeInTheDocument();
     expect(screen.getByText("GCP Secret Manager")).toBeInTheDocument();
     expect(screen.getByText("Azure Key Vault")).toBeInTheDocument();

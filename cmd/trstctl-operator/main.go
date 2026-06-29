@@ -1,11 +1,13 @@
 // Command trstctl-operator is the trstctl Kubernetes Operator.
 //
-// It watches TrstctlControlPlane custom resources (group trstctl.com,
-// deploy/operator/crd.yaml) and reconciles each one's declared desired state —
-// the control-plane replica count and image — into a managed control-plane
-// Deployment, then writes the observed phase back to the resource's status. The
-// reconcile is level-based (read the world → diff against the spec → converge),
-// so a missed change is corrected on the next poll.
+// It watches TrstctlControlPlane and TrstctlSecretSync custom resources (group
+// trstctl.com, deploy/operator/crd.yaml). It reconciles each control-plane
+// resource's declared desired state into a managed control-plane Deployment, and
+// each secret-sync resource into a Kubernetes Secret plus pod-template content
+// hash annotations for opted-in workload reload, then writes the observed phase
+// back to the resource status. The reconcile is level-based (read the world →
+// diff against the spec → converge), so a missed change is corrected on the next
+// poll.
 //
 // It speaks the Kubernetes API directly over JSON-over-HTTPS with no client-go /
 // controller-runtime dependency (none is in go.mod). TLS trust to the API server
@@ -15,8 +17,9 @@
 // runs via an entrypoint override (the same packaging the agent uses, OPS-002).
 //
 // Maturity is documented honestly in deploy/operator/doc.go: this is a small,
-// functional reconcile loop that owns the Deployment and its runtime config;
-// Services, ingress, and NetworkPolicy remain the Helm chart's richer path.
+// functional reconcile loop that owns the Deployment, its runtime config, and
+// TrstctlSecretSync projections; Services, ingress, and NetworkPolicy remain the
+// Helm chart's richer path.
 package main
 
 import (

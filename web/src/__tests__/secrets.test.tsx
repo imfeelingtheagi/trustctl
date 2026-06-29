@@ -27,6 +27,7 @@ const { apiMock } = vi.hoisted(() => ({
     signTransit: vi.fn(),
     secretRepositoryScanning: vi.fn(),
     secretSyncTargets: vi.fn(),
+    kubernetesSecretOperator: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -135,6 +136,41 @@ function syncTargetCatalogFixture() {
   };
 }
 
+function kubernetesSecretOperatorFixture() {
+  return {
+    capability: "CAP-SECR-04",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    crds: [
+      {
+        kind: "TrstctlSecretSync",
+        api_group: "trstctl.com",
+        api_version: "trstctl.com/v1alpha1",
+        plural: "trstctlsecretsyncs",
+        status: "served",
+        owns: ["Kubernetes Secret data", "status.contentHash"],
+        evidence_ref: "deploy/operator/crd.yaml",
+      },
+      {
+        kind: "TrstctlControlPlane",
+        api_group: "trstctl.com",
+        api_version: "trstctl.com/v1alpha1",
+        plural: "trstctlcontrolplanes",
+        status: "served",
+        owns: ["control-plane Deployment"],
+        evidence_ref: "deploy/operator/crd.yaml",
+      },
+    ],
+    sync_flow: ["resolve through served secret store", "write Kubernetes Secret", "patch workload templates"],
+    reload_workloads: ["Deployment", "StatefulSet", "DaemonSet"],
+    secret_handling: "operator reads resolved values as bytes and reports metadata only",
+    architecture_controls: ["control-plane token from Secret reference"],
+    evidence_refs: ["internal/operator/secretsync.go", "deploy/operator/crd.yaml"],
+    residuals: ["operator still uses a polling reconcile loop rather than a shared informer/workqueue controller"],
+    recommended_next_actions: ["move to informer-backed queues"],
+  };
+}
+
 describe("secrets surface", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -210,6 +246,7 @@ describe("secrets surface", () => {
     apiMock.signTransit.mockResolvedValue({ signature: "signature-base64", public_der: "public-der-base64" });
     apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
     apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
+    apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -248,6 +285,10 @@ describe("secrets surface", () => {
     expect(screen.getByText("Secret-change approvals aren't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/Request\/approve state for sensitive secret mutations is not available in the console yet/i)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
+    await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
+    expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
+    expect(screen.getByText("TrstctlSecretSync - served")).toBeInTheDocument();
+    expect(screen.getByText("StatefulSet")).toBeInTheDocument();
 
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
     expect(screen.getByText("No secret metadata matches the current search.")).toBeInTheDocument();

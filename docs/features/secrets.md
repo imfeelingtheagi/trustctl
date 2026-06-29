@@ -314,6 +314,15 @@ Kubernetes Secrets. Terraform/OpenTofu and arbitrary webhook targets remain avai
 through the generic JSON/webhook pusher shape until a deeper provider-specific API is
 configured.
 
+`GET /api/v1/secrets/kubernetes-operator` and `trstctl-cli secrets
+kubernetes-operator` expose the served CAP-SECR-04 operator posture. The
+`TrstctlSecretSync` CRD declares the target Kubernetes Secret, the trstctl secret
+references to resolve, and the `Deployment`, `StatefulSet`, or `DaemonSet` workloads
+that should reload through a pod-template hash annotation. The operator resolves
+values through the served secret store, writes Kubernetes `Secret.data`, records
+`status.phase`, `status.contentHash`, and `status.reloadedWorkloads`, and reports
+metadata only.
+
 ### The auth-method framework (F58)
 
 Before a workload can read a secret, it has to authenticate _to_ trstctl. The auth-method

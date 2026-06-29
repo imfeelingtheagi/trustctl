@@ -9,7 +9,11 @@
 // against the actual state, and CONVERGES it (creates the Deployment when it is
 // missing, patches it when replica count, image, PostgreSQL/NATS env, sidecar
 // signer wiring, or operator-owned config has drifted, does nothing when it
-// already matches), then writes the observed phase back to the resource status.
+// already matches). It also reconciles TrstctlSecretSync custom resources into
+// Kubernetes Secrets, resolves source values through the served trstctl secret
+// API, and patches opted-in Deployments/StatefulSets/DaemonSets with a content
+// hash annotation so Kubernetes rolls pods after a secret changes. It writes the
+// observed phase back to each resource status.
 // It is level-based (poll, diff, act), so a missed change is corrected on the
 // next reconcile. When deployed with two replicas, cmd/trstctl-operator uses a
 // real coordination.k8s.io Lease so exactly one replica reconciles while the
@@ -28,8 +32,9 @@
 // owns the managed control-plane Deployment and the runtime config that fits in
 // that Deployment: replicas, image, PostgreSQL DSN Secret reference, NATS URL /
 // replica knobs, sidecar-signer socket/volumes, and managed-key provider enablement.
-// It does NOT yet manage Services, ingress, NetworkPolicy, Secret creation, or
-// the cross-pod isolated-signer Service topology, and it is not a full
+// It also owns the TrstctlSecretSync projection path: CRD -> Kubernetes Secret ->
+// workload reload annotation. It does NOT yet manage Services, ingress,
+// NetworkPolicy, or the cross-pod isolated-signer Service topology, and it is not a full
 // informer/work-queue controller (it polls). For a complete, production-shaped
 // control-plane install — ingress/service wiring, default-deny NetworkPolicy,
 // secret generation, and cross-pod signer mTLS — the Helm chart

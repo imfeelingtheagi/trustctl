@@ -13,6 +13,7 @@ import {
   ApiError,
   type DynamicLease,
   type EphemeralAPIKey,
+  type KubernetesSecretOperator,
   type MachineLoginResponse,
   type PKISecret,
   type SecretMeta,
@@ -128,6 +129,7 @@ export function Secrets() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<SecretSync | null>(null);
   const [syncCatalog, setSyncCatalog] = useState<SecretSyncTargetCatalog | null>(null);
+  const [operatorPosture, setOperatorPosture] = useState<KubernetesSecretOperator | null>(null);
 
   async function load(cursor?: string) {
     setLoadError(null);
@@ -141,7 +143,16 @@ export function Secrets() {
         typeof api.secretSyncTargets === "function"
           ? api.secretSyncTargets().catch(() => null)
           : Promise.resolve<SecretSyncTargetCatalog | null>(null);
-      const [page, posture, catalog] = await Promise.all([api.secretPage({ limit: 20, cursor }), posturePromise, syncCatalogPromise]);
+      const operatorPosturePromise =
+        typeof api.kubernetesSecretOperator === "function"
+          ? api.kubernetesSecretOperator().catch(() => null)
+          : Promise.resolve<KubernetesSecretOperator | null>(null);
+      const [page, posture, catalog, operator] = await Promise.all([
+        api.secretPage({ limit: 20, cursor }),
+        posturePromise,
+        syncCatalogPromise,
+        operatorPosturePromise,
+      ]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
       setAccessName((current) => current || page.items[0]?.name || "");
@@ -149,6 +160,9 @@ export function Secrets() {
       if (posture) setRepoScanPosture(posture);
       if (catalog) {
         setSyncCatalog(catalog);
+      }
+      if (operator) {
+        setOperatorPosture(operator);
       }
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
@@ -1435,6 +1449,44 @@ export function Secrets() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+        {operatorPosture && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{operatorPosture.capability}</span>
+              <span className="text-muted-foreground">{t("secrets.sync.operatorCoverage")}</span>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.operatorCRDs")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {operatorPosture.crds.map((crd) => (
+                    <span key={crd.kind} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
+                      {crd.kind} - {crd.status}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.operatorReloadWorkloads")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {operatorPosture.reload_workloads.map((kind) => (
+                    <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
+                      {kind}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="max-w-3xl text-sm text-muted-foreground">{operatorPosture.secret_handling}</p>
+            {operatorPosture.residuals.length > 0 && (
+              <ul className="grid gap-1 text-xs text-muted-foreground">
+                {operatorPosture.residuals.slice(0, 2).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         <form

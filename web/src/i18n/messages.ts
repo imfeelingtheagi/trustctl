@@ -1906,6 +1906,18 @@ export const messages = {
     defaultMessage: "available",
     description: "Secret-sync target is supported but not configured.",
   },
+  "secrets.sync.operatorCoverage": {
+    defaultMessage: "Kubernetes operator CRD sync and reload coverage",
+    description: "Summary label for the Kubernetes SecretSync operator posture panel.",
+  },
+  "secrets.sync.operatorCRDs": {
+    defaultMessage: "Custom resources",
+    description: "Heading for Kubernetes SecretSync operator CRDs.",
+  },
+  "secrets.sync.operatorReloadWorkloads": {
+    defaultMessage: "Auto-reload workloads",
+    description: "Heading for workload kinds the Kubernetes SecretSync operator can reload.",
+  },
   "secrets.repoScan.active": {
     defaultMessage: "Realtime repository ingress active",
     description: "Status text when repository secret scanning ingress is served.",
@@ -2518,6 +2530,9 @@ const esESCatalog = {
   "secrets.sync.delivery": "Entrega",
   "secrets.sync.configured": "configurado",
   "secrets.sync.available": "disponible",
+  "secrets.sync.operatorCoverage": "Cobertura de sincronización y recarga del operador de Kubernetes por CRD",
+  "secrets.sync.operatorCRDs": "Recursos personalizados",
+  "secrets.sync.operatorReloadWorkloads": "Cargas de trabajo con recarga automática",
   "secrets.repoScan.active": "Ingreso de repositorios en tiempo real activo",
   "secrets.repoScan.unavailable": "Ingreso de repositorios no disponible",
   "secrets.repoScan.ruleFloor": "{scanner} con {rules}+ reglas requeridas",

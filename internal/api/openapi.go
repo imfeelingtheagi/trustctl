@@ -1840,6 +1840,28 @@ func componentSchemas() map[string]*Schema {
 		"evidence_refs":      {Type: "array", Items: str()},
 		"residuals":          {Type: "array", Items: str()},
 	}, "capability", "served", "generated_at", "targets", "configured_targets", "outbox_mode", "evidence_refs", "residuals")
+	kubernetesSecretOperatorCRD := object(map[string]*Schema{
+		"kind":         str(),
+		"api_group":    str(),
+		"api_version":  str(),
+		"plural":       str(),
+		"status":       str(),
+		"owns":         {Type: "array", Items: str()},
+		"evidence_ref": str(),
+	}, "kind", "api_group", "api_version", "plural", "status", "owns", "evidence_ref")
+	kubernetesSecretOperator := object(map[string]*Schema{
+		"capability":               str(),
+		"served":                   {Type: "boolean"},
+		"generated_at":             timestamp(),
+		"crds":                     {Type: "array", Items: ref("KubernetesSecretOperatorCRD")},
+		"sync_flow":                {Type: "array", Items: str()},
+		"reload_workloads":         {Type: "array", Items: str()},
+		"secret_handling":          str(),
+		"architecture_controls":    {Type: "array", Items: str()},
+		"evidence_refs":            {Type: "array", Items: str()},
+		"residuals":                {Type: "array", Items: str()},
+		"recommended_next_actions": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "crds", "sync_flow", "reload_workloads", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
 	}, "path")
@@ -2323,6 +2345,8 @@ func componentSchemas() map[string]*Schema {
 		"SecretSync":                            secretSync,
 		"SecretSyncTarget":                      secretSyncTarget,
 		"SecretSyncTargetCatalog":               secretSyncTargetCatalog,
+		"KubernetesSecretOperatorCRD":           kubernetesSecretOperatorCRD,
+		"KubernetesSecretOperator":              kubernetesSecretOperator,
 		"SecretScanRequest":                     secretScanReq,
 		"SecretScanFinding":                     secretScanFinding,
 		"SecretScan":                            secretScan,

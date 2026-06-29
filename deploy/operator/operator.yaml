@@ -8,9 +8,9 @@
 # image to build and `image:` below resolves to a real, built, signed artifact.
 #
 # What it does: it reconciles TrstctlControlPlane custom resources (crd.yaml)
-# into a managed control-plane Deployment, keeping that Deployment's replica
-# count, image, PostgreSQL/NATS config, and sidecar-signer wiring matching each
-# resource's spec, and writes the observed phase back to the resource status.
+# into a managed control-plane Deployment, and TrstctlSecretSync resources into
+# Kubernetes Secrets with pod-template hash annotations for opted-in workload
+# reload. It writes observed phase back to each resource status.
 # Scope/maturity is documented in doc.go: Services, ingress, NetworkPolicy, and
 # cross-pod isolated-signer Services remain the Helm chart's richer path.
 #
@@ -28,20 +28,27 @@ metadata:
   name: trstctl-operator
 # Least privilege: exactly the verbs the reconcile loop exercises today — read
 # TrstctlControlPlane resources, patch their status, create/patch the
-# control-plane Deployment it manages, and coordinate active/passive operator
-# replicas through coordination.k8s.io Lease objects. It does not manage
-# Services, secrets, or NetworkPolicies (the Helm chart does), so it is granted
-# no access to those object families.
+# control-plane Deployment it manages, reconcile TrstctlSecretSync resources into
+# Kubernetes Secret objects, patch opted-in workload templates for reload, and
+# coordinate active/passive operator replicas through coordination.k8s.io Lease
+# objects. It does not manage Services or NetworkPolicies (the Helm chart does),
+# so it is granted no access to those object families.
 rules:
   - apiGroups: ["trstctl.com"]
-    resources: ["trstctlcontrolplanes"]
+    resources: ["trstctlcontrolplanes", "trstctlsecretsyncs"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["trstctl.com"]
-    resources: ["trstctlcontrolplanes/status"]
+    resources: ["trstctlcontrolplanes/status", "trstctlsecretsyncs/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "daemonsets"]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "create", "update", "patch"]

@@ -2286,6 +2286,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/kubernetes-operator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report Kubernetes SecretSync operator coverage */
+        get: operations["getKubernetesSecretOperator"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/leases": {
         parameters: {
             query?: never;
@@ -4289,6 +4306,29 @@ export interface components {
             kind: "x509_ca" | "ssh_ca";
             name: string;
             public_key?: string;
+        };
+        KubernetesSecretOperator: {
+            architecture_controls: string[];
+            capability: string;
+            crds: components["schemas"]["KubernetesSecretOperatorCRD"][];
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            recommended_next_actions: string[];
+            reload_workloads: string[];
+            residuals: string[];
+            secret_handling: string;
+            served: boolean;
+            sync_flow: string[];
+        };
+        KubernetesSecretOperatorCRD: {
+            api_group: string;
+            api_version: string;
+            evidence_ref: string;
+            kind: string;
+            owns: string[];
+            plural: string;
+            status: string;
         };
         MCPToolCall: {
             authority_id?: string;
@@ -12119,6 +12159,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaleOrchestrationPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getKubernetesSecretOperator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesSecretOperator"];
                 };
             };
             /** @description client error */

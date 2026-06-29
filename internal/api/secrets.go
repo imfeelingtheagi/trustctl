@@ -364,6 +364,30 @@ type secretSyncTargetCatalogResponse struct {
 
 const secretSyncTargetSecretHandling = "sealed outbox value is unsealed only for the delivery attempt; response and audit contain metadata only"
 
+type kubernetesSecretOperatorCRDResponse struct {
+	Kind        string   `json:"kind"`
+	APIGroup    string   `json:"api_group"`
+	APIVersion  string   `json:"api_version"`
+	Plural      string   `json:"plural"`
+	Status      string   `json:"status"`
+	Owns        []string `json:"owns"`
+	EvidenceRef string   `json:"evidence_ref"`
+}
+
+type kubernetesSecretOperatorResponse struct {
+	Capability             string                                `json:"capability"`
+	Served                 bool                                  `json:"served"`
+	GeneratedAt            string                                `json:"generated_at"`
+	CRDs                   []kubernetesSecretOperatorCRDResponse `json:"crds"`
+	SyncFlow               []string                              `json:"sync_flow"`
+	ReloadWorkloads        []string                              `json:"reload_workloads"`
+	SecretHandling         string                                `json:"secret_handling"`
+	ArchitectureControls   []string                              `json:"architecture_controls"`
+	EvidenceRefs           []string                              `json:"evidence_refs"`
+	Residuals              []string                              `json:"residuals"`
+	RecommendedNextActions []string                              `json:"recommended_next_actions"`
+}
+
 type secretScanRequest struct {
 	Path            string `json:"path"`
 	Mode            string `json:"mode,omitempty"`
@@ -764,6 +788,79 @@ func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]bool
 		Residuals: []string{
 			"operator must configure endpoint credentials for each active target",
 			"large rollout orchestration and rollback receipts are separate remediation tracks",
+		},
+	}
+}
+
+func (a *API) kubernetesSecretOperator(w http.ResponseWriter, _ *http.Request) {
+	a.writeJSON(w, http.StatusOK, buildKubernetesSecretOperator(time.Now().UTC().Format(time.RFC3339)))
+}
+
+func buildKubernetesSecretOperator(generatedAt string) kubernetesSecretOperatorResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	return kubernetesSecretOperatorResponse{
+		Capability:  "CAP-SECR-04",
+		Served:      true,
+		GeneratedAt: generatedAt,
+		CRDs: []kubernetesSecretOperatorCRDResponse{
+			{
+				Kind:       "TrstctlSecretSync",
+				APIGroup:   "trstctl.com",
+				APIVersion: "trstctl.com/v1alpha1",
+				Plural:     "trstctlsecretsyncs",
+				Status:     "served",
+				Owns: []string{
+					"Kubernetes Secret data",
+					"status.phase",
+					"status.targetSecret",
+					"status.contentHash",
+					"status.reloadedWorkloads",
+				},
+				EvidenceRef: "deploy/operator/crd.yaml",
+			},
+			{
+				Kind:       "TrstctlControlPlane",
+				APIGroup:   "trstctl.com",
+				APIVersion: "trstctl.com/v1alpha1",
+				Plural:     "trstctlcontrolplanes",
+				Status:     "served",
+				Owns: []string{
+					"control-plane Deployment",
+					"status.phase",
+				},
+				EvidenceRef: "deploy/operator/crd.yaml",
+			},
+		},
+		SyncFlow: []string{
+			"TrstctlSecretSync.spec.data remoteRef.name resolves through GET /api/v1/secrets/store/{name}?resolve=true",
+			"operator writes a Kubernetes Secret with base64 data and trstctl.com/secret-sync-hash metadata",
+			"operator records status.phase, targetSecret, syncedKeys, contentHash, and reloadedWorkloads",
+		},
+		ReloadWorkloads: []string{"Deployment", "StatefulSet", "DaemonSet"},
+		SecretHandling:  "operator reads resolved values as bytes, writes only Kubernetes Secret data, wipes resolved buffers, and reports metadata only",
+		ArchitectureControls: []string{
+			"control-plane token is read from a Kubernetes Secret reference",
+			"CRD reconciliation is namespace-scoped and idempotent",
+			"workload reload is a pod-template annotation patch, not a pod delete",
+		},
+		EvidenceRefs: []string{
+			"internal/operator/secretsync.go",
+			"internal/operator/reconcile_test.go",
+			"deploy/operator/crd.yaml",
+			"deploy/operator/operator.yaml",
+			"internal/server/secrets_sync_served_test.go",
+		},
+		Residuals: []string{
+			"operator still uses a polling reconcile loop rather than a shared informer/workqueue controller",
+			"Helm still owns service, ingress, network policy, and signer deployment topology",
+			"operator status reports last reconciliation state but not a durable per-delivery history",
+		},
+		RecommendedNextActions: []string{
+			"move the polling loop to informer-backed watch queues before very large cluster counts",
+			"add drift/remediation receipts for every reload patch",
+			"publish Helm examples for isolated signer and NetworkPolicy defaults",
 		},
 	}
 }

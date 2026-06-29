@@ -1964,6 +1964,38 @@ IssuerRequest = TypedDict(
     total=False,
 )
 
+KubernetesSecretOperator = TypedDict(
+    'KubernetesSecretOperator',
+    {
+        'architecture_controls': list[str],
+        'capability': str,
+        'crds': list[dict[str, Any]],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'recommended_next_actions': list[str],
+        'reload_workloads': list[str],
+        'residuals': list[str],
+        'secret_handling': str,
+        'served': bool,
+        'sync_flow': list[str],
+    },
+    total=False,
+)
+
+KubernetesSecretOperatorCRD = TypedDict(
+    'KubernetesSecretOperatorCRD',
+    {
+        'api_group': str,
+        'api_version': str,
+        'evidence_ref': str,
+        'kind': str,
+        'owns': list[str],
+        'plural': str,
+        'status': str,
+    },
+    total=False,
+)
+
 MCPToolCall = TypedDict(
     'MCPToolCall',
     {

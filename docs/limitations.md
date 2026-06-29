@@ -503,10 +503,14 @@ writing a new token file and restarting the control plane so the new hash is loa
   AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
   CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
   Kubernetes Secrets. `GET /api/v1/secrets/syncs/targets` shows the built-in catalog
-  and which targets are configured. Terraform Cloud/OpenTofu and arbitrary webhook
-  targets still use the generic JSON/webhook pusher shape until those providers receive
-  deeper first-class APIs. If a target is not configured, the route returns `503` and
-  does not attempt an external call.
+  and which targets are configured. `GET /api/v1/secrets/kubernetes-operator` and
+  `trstctl-cli secrets kubernetes-operator` show the CAP-SECR-04 SecretSync controller
+  posture: `TrstctlSecretSync` reconciles trstctl secret references into Kubernetes
+  `Secret.data`, records status, and patches `Deployment`, `StatefulSet`, or
+  `DaemonSet` pod-template annotations for reload. Terraform Cloud/OpenTofu and
+  arbitrary webhook targets still use the generic JSON/webhook pusher shape until
+  those providers receive deeper first-class APIs. If a target is not configured, the
+  route returns `503` and does not attempt an external call.
 - **Transit/KMIP (F66) — served, with a narrow first KMIP profile.**
   The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`
   command group for tenant-scoped key create/rotate, encrypt/decrypt, rewrap,
@@ -1124,19 +1128,25 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   the `trstctl-operator` binary (it rides inside the same multi-binary
   control-plane image and is run by `deploy/operator/operator.yaml` via an
   entrypoint override) reconciles `TrstctlControlPlane` custom resources into a
-  managed control-plane Deployment. The **Helm chart** remains the richer path
-  for the full production install. The operator keeps the managed Deployment's
-  replica count, image, PostgreSQL DSN Secret reference, NATS URL/replica knobs, sidecar-signer
-  socket/volumes, and managed-key provider enablement matching each resource's
-  `spec`, and writing the observed phase back to the resource status. It is a
-  real, level-based reconcile loop (poll, diff, converge), not a stub; it speaks
-  the Kubernetes API directly (no client-go/controller-runtime). The shipped
-  operator manifest runs **two replicas** and `--leader-elect`; the replicas
-  coordinate with a real `coordination.k8s.io` Lease so exactly one reconciles
-  while the other remains a hot follower. It is still focused: it does **not** yet
-  manage Services, ingress, `NetworkPolicy`, Secret creation, or the cross-pod
-  isolated-signer Service topology. For a complete, production-shaped
-  control-plane install (ingress/service wiring, generated secrets,
+  managed control-plane Deployment. Its manifest documents the postgresql dsn secret,
+  nats url, sidecar-signer, leader-elect, and coordination.k8s.io controls that keep
+  that reconcile path bounded. It also reconciles `TrstctlSecretSync` custom resources
+  into Kubernetes Secrets plus reload annotations for opted-in
+  `Deployment`, `StatefulSet`, and `DaemonSet` workloads. The **Helm chart** remains
+  the richer path for the full production install. The operator keeps the managed
+  Deployment's replica count, image, PostgreSQL DSN Secret reference, NATS
+  URL/replica knobs, sidecar-signer socket/volumes, and managed-key provider
+  enablement matching each resource's `spec`, and writes the observed phase back to
+  resource status. For SecretSync resources, it resolves values through the served
+  secret-store API, writes `Secret.data`, records `status.contentHash`, and patches
+  pod-template annotations instead of deleting pods. It is a real, level-based
+  reconcile loop (poll, diff, converge), not a stub; it speaks the Kubernetes API
+  directly (no client-go/controller-runtime). The shipped operator manifest runs
+  **two replicas** and `--leader-elect`; the replicas coordinate with a real
+  `coordination.k8s.io` Lease so exactly one reconciles while the other remains a hot
+  follower. It is still focused: it does **not** yet manage Services, ingress,
+  `NetworkPolicy`, or the cross-pod isolated-signer Service topology. For a complete,
+  production-shaped control-plane install (ingress/service wiring, generated secrets,
   default-deny `NetworkPolicy`, cross-pod signer mTLS) the **Helm chart**
   (`deploy/helm/trstctl`) remains the richer, recommended path.
 - **Kubernetes certificate CRDs.** The Kubernetes agent ships a real trstctl

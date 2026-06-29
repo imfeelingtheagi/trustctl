@@ -1354,6 +1354,30 @@ export interface IssuerRequest {
   public_key?: string;
 }
 
+export interface KubernetesSecretOperator {
+  architecture_controls: string[];
+  capability: string;
+  crds: KubernetesSecretOperatorCRD[];
+  evidence_refs: string[];
+  generated_at: string;
+  recommended_next_actions: string[];
+  reload_workloads: string[];
+  residuals: string[];
+  secret_handling: string;
+  served: boolean;
+  sync_flow: string[];
+}
+
+export interface KubernetesSecretOperatorCRD {
+  api_group: string;
+  api_version: string;
+  evidence_ref: string;
+  kind: string;
+  owns: string[];
+  plural: string;
+  status: string;
+}
+
 export interface MCPToolCall {
   authority_id?: string;
   csr_pem?: string;

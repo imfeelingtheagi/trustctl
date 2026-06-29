@@ -5168,6 +5168,117 @@
         ],
         "type": "object"
       },
+      "KubernetesSecretOperator": {
+        "properties": {
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "crds": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesSecretOperatorCRD"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recommended_next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reload_workloads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "sync_flow": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "crds",
+          "sync_flow",
+          "reload_workloads",
+          "secret_handling",
+          "architecture_controls",
+          "evidence_refs",
+          "residuals",
+          "recommended_next_actions"
+        ],
+        "type": "object"
+      },
+      "KubernetesSecretOperatorCRD": {
+        "properties": {
+          "api_group": {
+            "type": "string"
+          },
+          "api_version": {
+            "type": "string"
+          },
+          "evidence_ref": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "owns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "plural": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "api_group",
+          "api_version",
+          "plural",
+          "status",
+          "owns",
+          "evidence_ref"
+        ],
+        "type": "object"
+      },
       "MCPToolCall": {
         "properties": {
           "authority_id": {
@@ -19528,6 +19639,53 @@
         ],
         "summary": "High-volume orchestration posture for 100k-1M+ credentials",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/secrets/kubernetes-operator": {
+      "get": {
+        "operationId": "getKubernetesSecretOperator",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesSecretOperator"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report Kubernetes SecretSync operator coverage",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/leases": {
