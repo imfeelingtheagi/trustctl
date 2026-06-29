@@ -960,7 +960,10 @@ key-encryption file by default. See the
 [disaster recovery](disaster-recovery.md). The remaining external residual is the
 **product NIST CMVP certificate** (see
 [compliance → FIPS](compliance.md#fips-cryptography--a-fips-capable-build-path)),
-a lab process software cannot perform.
+a lab process software cannot perform. The validated-module path itself is served:
+`GET /api/v1/editions` and the Platform page expose the live FIPS POST booleans,
+`make fips-build` build target, `fips-capable build (GOFIPS140)` CI gate, and
+`internal/crypto` boundary as the CAP-KEY-03 operator posture.
 
 **Signer UDS peer-uid is Linux-only.** The signing service's
 Unix-domain-socket listener authenticates the connecting process's uid via

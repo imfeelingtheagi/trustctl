@@ -1401,9 +1401,18 @@ ExternalCAList = TypedDict(
 FIPSStatus = TypedDict(
     'FIPSStatus',
     {
+        'build_target': str,
+        'capability_id': str,
+        'ci_gate': str,
+        'crypto_boundary': str,
+        'module': str,
         'module_active': bool,
+        'product_certification_residual': str,
         'required': bool,
+        'runtime_activation': list[str],
         'self_test_passed': bool,
+        'standard': str,
+        'validated_module_path': bool,
     },
     total=False,
 )

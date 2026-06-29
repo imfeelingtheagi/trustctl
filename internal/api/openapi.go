@@ -374,9 +374,18 @@ func componentSchemas() map[string]*Schema {
 		"mode":     {Type: "string", Enum: featureModes},
 	}, "name", "tier", "licensed", "mode")
 	fipsStatus := object(map[string]*Schema{
-		"module_active":    {Type: "boolean"},
-		"required":         {Type: "boolean"},
-		"self_test_passed": {Type: "boolean"},
+		"module_active":                  {Type: "boolean"},
+		"required":                       {Type: "boolean"},
+		"self_test_passed":               {Type: "boolean"},
+		"capability_id":                  str(),
+		"validated_module_path":          {Type: "boolean"},
+		"standard":                       str(),
+		"module":                         str(),
+		"build_target":                   str(),
+		"runtime_activation":             {Type: "array", Items: str()},
+		"ci_gate":                        str(),
+		"crypto_boundary":                str(),
+		"product_certification_residual": str(),
 	}, "module_active", "required", "self_test_passed")
 	editionsInfo := object(map[string]*Schema{
 		"tier":         {Type: "string", Enum: editionTiers},

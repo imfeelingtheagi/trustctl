@@ -477,6 +477,15 @@ export interface FIPSStatus {
   module_active: boolean;
   required: boolean;
   self_test_passed: boolean;
+  capability_id?: string;
+  validated_module_path?: boolean;
+  standard?: string;
+  module?: string;
+  build_target?: string;
+  runtime_activation?: string[];
+  ci_gate?: string;
+  crypto_boundary?: string;
+  product_certification_residual?: string;
 }
 
 export interface EditionsInfo {

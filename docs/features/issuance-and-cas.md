@@ -242,6 +242,12 @@ PKCS#11 path through a served SoftHSM-shaped lifecycle harness, and runs the nat
 SoftHSM module conformance test when Docker/cgo are available. The same AWS test runs
 against real AWS KMS when standard `AWS_*` credentials are present.
 
+The same key-management posture includes the served CAP-KEY-03 FIPS path:
+`GET /api/v1/editions` and the Platform page expose the live FIPS POST booleans,
+`make fips-build` build target, `fips-capable build (GOFIPS140)` CI gate, and
+`internal/crypto` boundary while keeping the trstctl product NIST CMVP certificate
+as the external lab-certification residual.
+
 ## Use it
 
 Issue and govern through the served API and CLI. Profiles are live today:

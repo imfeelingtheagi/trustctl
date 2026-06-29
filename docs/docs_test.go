@@ -2208,54 +2208,56 @@ func TestPluginHostDisclosedAsLibraryOnly(t *testing.T) {
 	}
 }
 
-// repoHasFIPSBuildTarget reports whether the repository defines any FIPS-validated
-// build path — a boringcrypto build target, a GOEXPERIMENT=boringcrypto invocation,
-// or a //go:build boringcrypto-tagged file. Today none exists (PKIGOV-007): the
-// default build uses Go's standard crypto, not a CMVP-validated module. When a
-// future change adds a validated-module build target (EXC-CRYPTO-01), this flips
-// true, forcing the "no FIPS build" disclosure to be retired.
+// repoHasFIPSBuildTarget reports whether the repository defines the served
+// FIPS-capable validated-module build path: GOFIPS140, a fips-build target, a
+// check-config assertion that the module is active, and the AN-3 FIPS posture
+// boundary. ELI5: it is not enough to mention FIPS in docs; the build must make a
+// binary and prove the binary is actually running through the Go FIPS module.
 func repoHasFIPSBuildTarget(t *testing.T) bool {
 	t.Helper()
-	for _, f := range []string{"../Makefile", "../go.mod"} {
-		b, err := os.ReadFile(filepath.FromSlash(f))
-		if err != nil {
-			continue
-		}
-		s := strings.ToLower(string(b))
-		if strings.Contains(s, "boringcrypto") || strings.Contains(s, "goexperiment=boringcrypto") {
-			return true
+	makefile := read(t, "../Makefile")
+	fips := read(t, "../internal/crypto/fips.go")
+	for _, want := range []string{"GOFIPS140 ?= latest", "fips-build:", "crypto.fips.module_active: true"} {
+		if !strings.Contains(makefile, want) {
+			return false
 		}
 	}
-	// A build-tagged FIPS source file anywhere under internal/crypto would also count.
-	matches, _ := filepath.Glob(filepath.FromSlash("../internal/crypto/*fips*.go"))
-	return len(matches) > 0
+	for _, want := range []string{"crypto/fips140", "func PowerOnSelfTest(", "ErrFIPSRequiredButInactive"} {
+		if !strings.Contains(fips, want) {
+			return false
+		}
+	}
+	return true
 }
 
-// TestFIPSBuildDisclosedAsUnavailable is the reality-bound disclosure for
-// PKIGOV-007: there is no FIPS-validated build path today. While the repo has no
-// boringcrypto/validated-module target, compliance.md must disclose FIPS as not
-// available and link EXC-CRYPTO-01; if a future change adds a validated build
-// target, the stale "not available" disclosure must be retired.
-func TestFIPSBuildDisclosedAsUnavailable(t *testing.T) {
+// TestFIPSBuildDisclosedAsServed is the reality-bound disclosure for CAP-KEY-03:
+// trstctl serves a FIPS-capable validated-module path, but it must never imply that
+// the trstctl product itself already has a NIST CMVP certificate. ELI5: the code
+// can prove "this binary uses a validated module"; a lab still has to certify the
+// product package/configuration.
+func TestFIPSBuildDisclosedAsServed(t *testing.T) {
 	comp := read(t, "compliance.md")
 	low := strings.ToLower(comp)
 
-	if repoHasFIPSBuildTarget(t) {
-		if strings.Contains(low, "no fips-validated build path today") {
-			t.Error("a FIPS build target appears to exist now, but compliance.md still says none does — update the disclosure (EXC-CRYPTO-01 closed)")
-		}
-		return
+	if !repoHasFIPSBuildTarget(t) {
+		t.Fatal("repository no longer has the FIPS-capable validated-module build target; compliance.md must not claim CAP-KEY-03 is served")
 	}
-	for _, m := range []string{"no fips-validated build path", "boringcrypto"} {
+	if strings.Contains(low, "no fips-validated build path today") {
+		t.Error("compliance.md still says there is no FIPS-validated build path even though make fips-build is served")
+	}
+	for _, m := range []string{"fips-capable build path", "make fips-build", "go cryptographic module", "--fips", "fails closed"} {
 		if !strings.Contains(low, m) {
-			t.Errorf("compliance.md must disclose FIPS as unavailable (missing marker %q)", m)
+			t.Errorf("compliance.md must disclose the served FIPS path (missing marker %q)", m)
 		}
 	}
-	if !strings.Contains(comp, "EXC-CRYPTO-01") {
-		t.Error("compliance.md must link the regulated-controls epic EXC-CRYPTO-01 for the FIPS build")
+	for _, m := range []string{"NIST CMVP certificate is a separate, external process", "Explicitly not claimed:"} {
+		if !strings.Contains(comp, m) {
+			t.Errorf("compliance.md must keep product certification separate from the served module path (missing marker %q)", m)
+		}
 	}
-	if !strings.Contains(comp, "PKIGOV-007") {
-		t.Error("compliance.md should cite PKIGOV-007 in the FIPS disclosure so the finding is traceable")
+	lim := read(t, "limitations.md")
+	if !strings.Contains(strings.ToLower(lim), "product nist cmvp certificate") {
+		t.Error("limitations.md must keep the product NIST CMVP certificate listed as the external residual")
 	}
 }
 

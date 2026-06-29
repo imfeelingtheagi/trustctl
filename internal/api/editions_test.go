@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,9 +18,18 @@ import (
 type editionsTestResponse struct {
 	license.Info
 	FIPS struct {
-		ModuleActive   bool `json:"module_active"`
-		Required       bool `json:"required"`
-		SelfTestPassed bool `json:"self_test_passed"`
+		ModuleActive                 bool     `json:"module_active"`
+		Required                     bool     `json:"required"`
+		SelfTestPassed               bool     `json:"self_test_passed"`
+		CapabilityID                 string   `json:"capability_id"`
+		ValidatedModulePath          bool     `json:"validated_module_path"`
+		Standard                     string   `json:"standard"`
+		Module                       string   `json:"module"`
+		BuildTarget                  string   `json:"build_target"`
+		RuntimeActivation            []string `json:"runtime_activation"`
+		CIGate                       string   `json:"ci_gate"`
+		CryptoBoundary               string   `json:"crypto_boundary"`
+		ProductCertificationResidual string   `json:"product_certification_residual"`
 	} `json:"fips"`
 }
 
@@ -39,6 +49,35 @@ func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
 	}
 	if !got.FIPS.SelfTestPassed {
 		t.Fatal("editions posture must report the crypto power-on self-test result")
+	}
+}
+
+func TestEditionsEndpointServesCAPKEY03ValidatedModulePath(t *testing.T) {
+	var got editionsTestResponse
+	getCanonicalEditions(t, api.New(nil, nil, nil), &got)
+
+	if got.FIPS.CapabilityID != "CAP-KEY-03" {
+		t.Fatalf("fips.capability_id=%q, want CAP-KEY-03", got.FIPS.CapabilityID)
+	}
+	if !got.FIPS.ValidatedModulePath {
+		t.Fatalf("fips.validated_module_path=false; FIPS validated-module path is not served: %+v", got.FIPS)
+	}
+	for _, want := range []string{
+		"FIPS 140-3",
+		"Go Cryptographic Module",
+		"make fips-build",
+		"fips-capable build (GOFIPS140)",
+	} {
+		if !fipsPostureContains(got.FIPS, want) {
+			t.Fatalf("served FIPS posture missing %q: %+v", want, got.FIPS)
+		}
+	}
+	if !fipsPostureContains(got.FIPS, "internal/crypto") {
+		t.Fatalf("served FIPS posture must identify the AN-3 crypto boundary: %+v", got.FIPS)
+	}
+	residual := strings.ToLower(got.FIPS.ProductCertificationResidual)
+	if !strings.Contains(residual, "product nist cmvp certificate") || !strings.Contains(residual, "external residual") {
+		t.Fatalf("served FIPS posture must keep product CMVP certification as an external residual, got %q", got.FIPS.ProductCertificationResidual)
 	}
 }
 
@@ -66,6 +105,48 @@ func getEditions(t *testing.T, h http.Handler, out *editionsTestResponse) {
 	if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
 		t.Fatalf("decode editions response: %v", err)
 	}
+}
+
+func getCanonicalEditions(t *testing.T, h http.Handler, out *editionsTestResponse) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/editions", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/editions = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
+		t.Fatalf("decode editions response: %v", err)
+	}
+}
+
+func fipsPostureContains(fips struct {
+	ModuleActive                 bool     `json:"module_active"`
+	Required                     bool     `json:"required"`
+	SelfTestPassed               bool     `json:"self_test_passed"`
+	CapabilityID                 string   `json:"capability_id"`
+	ValidatedModulePath          bool     `json:"validated_module_path"`
+	Standard                     string   `json:"standard"`
+	Module                       string   `json:"module"`
+	BuildTarget                  string   `json:"build_target"`
+	RuntimeActivation            []string `json:"runtime_activation"`
+	CIGate                       string   `json:"ci_gate"`
+	CryptoBoundary               string   `json:"crypto_boundary"`
+	ProductCertificationResidual string   `json:"product_certification_residual"`
+}, want string) bool {
+	lowWant := strings.ToLower(want)
+	for _, candidate := range append([]string{
+		fips.Standard,
+		fips.Module,
+		fips.BuildTarget,
+		fips.CIGate,
+		fips.CryptoBoundary,
+		fips.ProductCertificationResidual,
+	}, fips.RuntimeActivation...) {
+		if strings.Contains(strings.ToLower(candidate), lowWant) {
+			return true
+		}
+	}
+	return false
 }
 
 func testLicenseManager(t *testing.T, tier license.Tier) *license.Manager {

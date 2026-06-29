@@ -206,6 +206,13 @@ Go Cryptographic Module. A CI job (`fips-capable build (GOFIPS140)`) builds and
 verifies this on every change. The same module can also be turned on at runtime for
 a standard build via `GODEBUG=fips140=on`.
 
+The served platform posture is visible on `GET /api/v1/editions` and the web
+console's **Platform** page. The response includes the live POST booleans
+(`module_active`, `required`, `self_test_passed`) plus the CAP-KEY-03 path details:
+`standard: FIPS 140-3`, `module: Go Cryptographic Module`, `build_target: make
+fips-build`, `ci_gate: fips-capable build (GOFIPS140)`, the `internal/crypto`
+boundary, and the external product-certification residual.
+
 **Power-on self-test, fail-closed.** A FIPS deployment runs trstctl with `--fips`
 (or `TRSTCTL_FIPS=1`). At startup, before the control plane serves any request,
 trstctl runs a cryptographic power-on self-test (POST): a known-answer

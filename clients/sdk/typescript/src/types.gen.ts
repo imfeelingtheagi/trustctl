@@ -3496,9 +3496,18 @@ export interface components {
             next_cursor?: string;
         };
         FIPSStatus: {
+            build_target?: string;
+            capability_id?: string;
+            ci_gate?: string;
+            crypto_boundary?: string;
+            module?: string;
             module_active: boolean;
+            product_certification_residual?: string;
             required: boolean;
+            runtime_activation?: string[];
             self_test_passed: boolean;
+            standard?: string;
+            validated_module_path?: boolean;
         };
         FleetReissuanceActionRequest: {
             reason?: string;

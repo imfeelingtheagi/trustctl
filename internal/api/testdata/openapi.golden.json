@@ -3569,13 +3569,43 @@
       },
       "FIPSStatus": {
         "properties": {
+          "build_target": {
+            "type": "string"
+          },
+          "capability_id": {
+            "type": "string"
+          },
+          "ci_gate": {
+            "type": "string"
+          },
+          "crypto_boundary": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
           "module_active": {
             "type": "boolean"
+          },
+          "product_certification_residual": {
+            "type": "string"
           },
           "required": {
             "type": "boolean"
           },
+          "runtime_activation": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "self_test_passed": {
+            "type": "boolean"
+          },
+          "standard": {
+            "type": "string"
+          },
+          "validated_module_path": {
             "type": "boolean"
           }
         },

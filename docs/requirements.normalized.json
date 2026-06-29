@@ -417,13 +417,14 @@
       "requirement_text": "trstctl shall provide HSM integration.",
       "owner": "Issuance and CAs",
       "priority": "P2",
-      "acceptance_criteria": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
+      "acceptance_criteria": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. The served editions posture proves CAP-KEY-03 by exposing the live FIPS POST, make fips-build target, fips-capable build (GOFIPS140) CI gate, internal/crypto boundary, and product CMVP residual. UI never exposes key material and displays only public metadata/health/posture for configured backends.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; SoftHSM native binding remains cgo-proven",
+      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; served CAP-KEY-03 posture is exposed on /api/v1/editions and Platform with the FIPS 140-3 Go Cryptographic Module build path and external product CMVP residual; SoftHSM native binding remains cgo-proven",
       "source_docs": [
         "docs/features/issuance-and-cas.md",
         "docs/configuration.md",
+        "docs/compliance.md",
         "docs/limitations.md"
       ]
     },

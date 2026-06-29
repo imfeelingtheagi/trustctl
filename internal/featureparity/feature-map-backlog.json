@@ -2061,11 +2061,11 @@
       "phase": "P2",
       "priority": 54,
       "served_state": "served",
-      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; SoftHSM native binding remains cgo-proven",
-      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
+      "backend_status": "served AWS SDK v2-backed AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers AWS generate/rotate/revoke/zeroize; served CAP-KEY-02 acceptance covers Azure/GCP generate/rotate/revoke/zeroize; served CAP-KEY-01 acceptance covers PKCS#11 generate/rotate/revoke/zeroize; served CAP-KEY-03 posture is exposed on /api/v1/editions and Platform with the FIPS 140-3 Go Cryptographic Module build path and external product CMVP residual; SoftHSM native binding remains cgo-proven",
+      "current_frontend_mapping": "disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; Platform at /platform - served FIPS module path, make fips-build target, CI gate, and product CMVP residual; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
-      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
-      "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"],
+      "acceptance_test": "Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present. TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves the canonical editions route serves the FIPS validated-module path and external product CMVP residual. UI never exposes key material and displays only public metadata/health/posture for configured backends.",
+      "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/compliance.md", "docs/limitations.md"],
       "source_backend": [
         "internal/api/managedkeys.go",
         "internal/server/managedkeys.go",
@@ -2081,16 +2081,20 @@
         "internal/kms/pkcs11/session_cgo.go",
         "internal/kms/pkcs11/session_nocgo.go",
         "internal/kms/pkcs11/softhsm_real_test.go",
-        "internal/server/managedkeys_cloudkms_served_test.go"
+        "internal/server/managedkeys_cloudkms_served_test.go",
+        "internal/api/editions.go",
+        "internal/api/editions_test.go",
+        "internal/crypto/fips.go"
       ],
-      "source_frontend": ["web/src/pages/CAHierarchy.tsx", "web/src/__tests__/ca_hierarchy.test.tsx"],
+      "source_frontend": ["web/src/pages/CAHierarchy.tsx", "web/src/pages/Platform.tsx", "web/src/__tests__/ca_hierarchy.test.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
         "generateManagedKey",
         "rotateManagedKey",
         "revokeManagedKey",
-        "zeroizeManagedKey"
+        "zeroizeManagedKey",
+        "getEditions"
       ],
       "cli_surface": [
         "managed-keys generate",
@@ -2103,7 +2107,8 @@
           "evidence": [
             "Managed-key custody is wired into the served production composition when managed_keys.enabled=true.",
             "managed_keys.provider supports aws, azure-key-vault, gcp-kms, and pkcs11; Azure/GCP use startup-supplied bearer tokens, and PKCS#11 opens the configured module/token in cgo-enabled builds while static builds fail closed.",
-            "The routes fail closed when no KMS/HSM backend is configured and serve generate/rotate/revoke/zeroize when one is configured."
+            "The routes fail closed when no KMS/HSM backend is configured and serve generate/rotate/revoke/zeroize when one is configured.",
+            "GET /api/v1/editions serves the CAP-KEY-03 FIPS 140-3 Go Cryptographic Module path, build target, CI gate, AN-3 crypto boundary, live POST booleans, and external product CMVP residual."
           ],
           "refs": [
             "internal/api/managedkeys.go",
@@ -2111,15 +2116,17 @@
             "ee/managedkeys/config.go",
             "internal/config/config.go",
             "internal/kms/pkcs11/pkcs11_lifecycle.go",
+            "internal/api/editions.go",
+            "internal/crypto/fips.go",
             "internal/server/server.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure/action: CAHierarchy at /ca-hierarchy - served AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM custody metadata/actions without key bytes; Platform at /platform - served FIPS module path, make fips-build target, CI gate, and product CMVP residual; coverage ledger: /coverage",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/CAHierarchy.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/CAHierarchy.tsx", "web/src/pages/Platform.tsx"]
         },
         "cli": {
           "evidence": [
@@ -2129,14 +2136,16 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI includes the managed-key lifecycle routes and key-material-free response schemas."
+            "OpenAPI includes the managed-key lifecycle routes and key-material-free response schemas.",
+            "OpenAPI operation getEditions includes additive FIPS posture fields for the validated-module path without making product certification a required claim."
           ],
-          "refs": ["internal/api/api.go", "internal/api/managedkeys.go", "internal/api/openapi.go"]
+          "refs": ["internal/api/api.go", "internal/api/managedkeys.go", "internal/api/editions.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: Served tests generate, rotate, revoke, and zeroize managed keys through the real API against LocalStack AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and a PKCS#11 HSM lifecycle backend; real AWS KMS runs opportunistically when AWS_* credentials are present.",
             "TestServedCloudKMSManagedKeyLifecycleCAPKEY02 proves CAP-KEY-02 through the assembled control-plane handler and opaque Azure/GCP KMS key handles.",
+            "TestEditionsEndpointServesCAPKEY03ValidatedModulePath proves CAP-KEY-03 through the canonical served editions route and keeps the product NIST CMVP certificate as an external residual.",
             "TestRemoteKeyLifecycle in the Azure and GCP packages proves both cloud KMS backends implement crypto.RemoteKeyLifecycle without exporting key bytes.",
             "TestServedPKCS11ManagedKeyLifecycleCAPKEY01 proves CAP-KEY-01 through the assembled control-plane handler and opaque PKCS#11 object handles.",
             "TestPKCS11RemoteKeyLifecycle proves the PKCS#11 backend implements crypto.RemoteKeyLifecycle and fails closed after revoke/zeroize.",
@@ -2148,6 +2157,7 @@
             "ee/managedkeys/managedkeys_test.go",
             "internal/server/managedkeys_seam_test.go",
             "internal/server/managedkeys_pkcs11_served_test.go",
+            "internal/api/editions_test.go",
             "internal/kms/pkcs11/pkcs11_test.go",
             "internal/kms/pkcs11/softhsm_container_test.go",
             "internal/kms/pkcs11/session_cgo.go",
@@ -2157,8 +2167,8 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/issuance-and-cas.md, docs/configuration.md, and docs/limitations.md"],
-          "refs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"]
+          "evidence": ["documented in docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, and docs/limitations.md"],
+          "refs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/compliance.md", "docs/limitations.md"]
         },
         "rbac": {
           "evidence": [

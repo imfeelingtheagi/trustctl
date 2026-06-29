@@ -302,10 +302,22 @@ export function Platform() {
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">FIPS posture</dt>
-              <dd>
-                {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
-                {editions?.fips?.required ? " · required" : ""}
-                {editions?.fips?.self_test_passed ? " · self-test passed" : " · self-test not confirmed"}
+              <dd className="grid gap-1">
+                <span>
+                  {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
+                  {editions?.fips?.required ? " · required" : ""}
+                  {editions?.fips?.self_test_passed ? " · self-test passed" : " · self-test not confirmed"}
+                </span>
+                {editions?.fips?.validated_module_path ? (
+                  <span>
+                    {editions.fips.standard ?? "FIPS 140-3"} · {editions.fips.module ?? "Go Cryptographic Module"} ·{" "}
+                    {editions.fips.build_target ?? "make fips-build"}
+                  </span>
+                ) : null}
+                {editions?.fips?.ci_gate ? <span>{editions.fips.ci_gate}</span> : null}
+                {editions?.fips?.product_certification_residual ? (
+                  <span className="text-muted-foreground">{editions.fips.product_certification_residual}</span>
+                ) : null}
               </dd>
             </div>
           </dl>
