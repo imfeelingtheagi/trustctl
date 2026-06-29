@@ -162,8 +162,10 @@ The operations queue shows issuance, renewal, deployment, and approval work with
 status filters, attempts, verification badges, cancel controls for pending/running work,
 and inline approve/reject actions for dual-control items. The Notifications inbox lists
 all notification rows and dead letters, filters by type/status, marks unread rows read,
-and requeues failed delivery through the served notification API. Global toasts report
-success and failure for these actions.
+requeues failed delivery through the served notification API, and shows the configured
+channel families returned by `GET /api/v1/notification-channels` (email, Slack, Teams,
+SMS, SIEM, and the other supported sinks). Global toasts report success and failure for
+these actions.
 
 ### Integrate hub (`/integrate`)
 

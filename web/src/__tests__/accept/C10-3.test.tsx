@@ -8,6 +8,7 @@ import { Notifications } from "@/pages/Notifications";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     notifications: vi.fn(),
+    notificationChannels: vi.fn(),
     markNotificationRead: vi.fn(),
     requeueNotification: vi.fn(),
   },
@@ -71,6 +72,15 @@ describe("C10-3 notifications inbox", () => {
         items: options?.status === "dead" ? [deadNotification] : [pendingNotification],
       }),
     );
+    apiMock.notificationChannels.mockResolvedValue({
+      items: [
+        { id: "email", label: "Email", category: "smtp", configured: true, delivery: "notification.* outbox fanout" },
+        { id: "slack", label: "Slack", category: "chat", configured: true, delivery: "notification.* outbox fanout" },
+        { id: "msteams", label: "Microsoft Teams", category: "chat", configured: true, delivery: "notification.* outbox fanout" },
+        { id: "sms", label: "SMS", category: "mobile", configured: true, delivery: "notification.* outbox fanout" },
+        { id: "siem", label: "SIEM", category: "security", configured: true, delivery: "notification.* outbox fanout" },
+      ],
+    });
     apiMock.markNotificationRead.mockResolvedValue({ ...pendingNotification, status: "read", read_at: "2026-06-26T10:05:00Z" });
     apiMock.requeueNotification.mockResolvedValue({ ...deadNotification, status: "pending", attempts: 0, last_error: undefined });
   });
@@ -81,12 +91,18 @@ describe("C10-3 notifications inbox", () => {
 
     expect(await screen.findByRole("heading", { name: "Notifications" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100 }));
+    await waitFor(() => expect(apiMock.notificationChannels).toHaveBeenCalled());
+    expect(screen.getByText("Channel coverage")).toBeInTheDocument();
+    expect(screen.getByText("5 configured")).toBeInTheDocument();
+    for (const label of ["Email", "Slack", "Microsoft Teams", "SMS", "SIEM"]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
 
     expect(screen.getByText("1 unread")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Type filter" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Status filter" })).toBeInTheDocument();
 
-    const inboxRow = screen.getByText("payments-api").closest("tr")!;
+    const inboxRow = (await screen.findByText("payments-api")).closest("tr")!;
     expect(within(inboxRow).getByText("certificate.expiring")).toBeInTheDocument();
     expect(within(inboxRow).getByText("Owner: payments-owner@example.test")).toBeInTheDocument();
     expect(within(inboxRow).getByText("Approvers: ra-one@example.test")).toBeInTheDocument();

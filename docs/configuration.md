@@ -147,6 +147,35 @@ How far ahead of expiry trstctl renews and alerts. Values are Go durations.
 | `TRSTCTL_LIFECYCLE_RENEW_BEFORE` | `720h` (30 days) | Renew this far before expiry. |
 | `TRSTCTL_LIFECYCLE_ALERT_BEFORE` | `336h` (14 days) | Alert this far before expiry. |
 
+## Notifications
+
+Notification channels are off until an operator configures them. When enabled, lifecycle
+expiry alerts are written to the `notification.*` outbox first, then delivered by the
+registered channel workers. Tenant self-service channel authoring is not served yet; keep
+channel secrets in operator-managed secret references or files.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_ENABLED` | `false` | Enable SMTP email delivery. |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_SMTP_ADDR` | empty | SMTP relay `host:port`. |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_FROM` | empty | RFC 5322 From address. |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_TO` | empty | Comma-separated recipient addresses. |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_USERNAME` | empty | Optional SMTP username. |
+| `TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD` / `TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD_FILE` | empty | Optional SMTP password as bytes or a file. |
+| `TRSTCTL_NOTIFICATIONS_SLACK_ENABLED` | `false` | Enable Slack incoming-webhook delivery. |
+| `TRSTCTL_NOTIFICATIONS_SLACK_WEBHOOK_URL` | empty | Slack incoming-webhook URL. |
+| `TRSTCTL_NOTIFICATIONS_TEAMS_ENABLED` | `false` | Enable Microsoft Teams incoming-webhook delivery. |
+| `TRSTCTL_NOTIFICATIONS_TEAMS_WEBHOOK_URL` | empty | Teams webhook URL. |
+| `TRSTCTL_NOTIFICATIONS_SMS_ENABLED` | `false` | Enable SMS gateway delivery. |
+| `TRSTCTL_NOTIFICATIONS_SMS_ENDPOINT` | empty | HTTPS endpoint for the operator SMS gateway. |
+| `TRSTCTL_NOTIFICATIONS_SMS_FROM` | empty | Optional sender label or number. |
+| `TRSTCTL_NOTIFICATIONS_SMS_TO` | empty | Comma-separated SMS recipients. |
+| `TRSTCTL_NOTIFICATIONS_SMS_TOKEN` / `TRSTCTL_NOTIFICATIONS_SMS_TOKEN_FILE` | empty | Optional gateway bearer token as bytes or a file. |
+| `TRSTCTL_NOTIFICATIONS_SIEM_ENABLED` | `false` | Enable SIEM collector delivery. |
+| `TRSTCTL_NOTIFICATIONS_SIEM_ENDPOINT` | empty | HTTPS endpoint for the SIEM collector or forwarding gateway. |
+| `TRSTCTL_NOTIFICATIONS_SIEM_TOKEN` / `TRSTCTL_NOTIFICATIONS_SIEM_TOKEN_FILE` | empty | Optional collector bearer token as bytes or a file. |
+| `TRSTCTL_NOTIFICATIONS_SIEM_SOURCE` | `trstctl` | Source label in SIEM events. |
+
 ## Telemetry
 
 Telemetry is **off by default** and never sends anything unless you opt in. When

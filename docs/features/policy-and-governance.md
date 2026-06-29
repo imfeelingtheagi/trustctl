@@ -157,26 +157,27 @@ When something matters — a certificate nearing expiry, a CT-log anomaly — tr
 the right channel. Alerts use **reliable, journaled delivery**: the alert intent is
 written in the same transaction as the triggering change — so a crash can't drop it — and
 a separate dispatcher fans it out to every configured channel, retrying at-least-once if
-one fails. Channels include Slack, Microsoft Teams, email (SMTP), PagerDuty, OpsGenie, and
-HMAC-signed generic webhooks; each satisfies one small interface and passes a conformance
-check, and channel secrets (webhook URLs, routing keys) are held in wipeable memory and
-never logged. HTTP-based channels default to the shared SSRF-safe client and accept only
-public HTTPS endpoints, so an operator-provided callback cannot turn the control plane
-into a request to loopback, RFC1918, or cloud metadata addresses.
+one fails. Channels include email (SMTP), Slack, Microsoft Teams, SMS gateway delivery,
+SIEM collector delivery, PagerDuty, OpsGenie, and HMAC-signed generic webhooks; each
+satisfies one small interface and passes a conformance check, and channel secrets
+(webhook URLs, routing keys, API tokens) are held in wipeable memory where the provider
+API allows it and never logged. HTTP-based channels default to the shared SSRF-safe
+client and accept only public HTTPS endpoints, so an operator-provided callback cannot
+turn the control plane into a request to loopback, RFC1918, or cloud metadata addresses.
 
 **Status: partially served.** Expiry alerts are served by the running binary when an
-operator wires notification channels into the process and sets the lifecycle alert
-window: the leader scheduler writes `notification.expiry` outbox work, stamps the
-certificate as alerted, and includes the owner id/contact plus active approver
-recipients from the tenant-member read model. The outbox dispatcher uses severity and
-threshold-day metadata with the severity-to-channel routing matrix instead of fanning
-every alert to every channel. `EffectiveAlertChannels` resolves the policy-specific
-channel set at dispatch time. A per-(subject, threshold, channel) dedup ledger prevents
-the same expiry threshold for the same credential from being sent to the same channel
-again. Operators can list/get the tenant-scoped notification inbox, inspect the
-owner/approver escalation fields, mark rows read at `/api/v1/notifications/{id}/read`,
-and requeue failed notification dispatches from `/api/v1/notifications/{id}/requeue`
-with idempotency keys.
+operator configures notification channels under `notifications.*` and sets the lifecycle
+alert window: the leader scheduler writes `notification.expiry` outbox work, stamps the
+certificate as alerted, and includes the owner id/contact plus active approver recipients
+from the tenant-member read model. The outbox dispatcher uses severity and threshold-day
+metadata with the severity-to-channel routing matrix instead of fanning every alert to
+every channel. `EffectiveAlertChannels` resolves the policy-specific channel set at
+dispatch time. A per-(subject, threshold, channel) dedup ledger prevents the same expiry
+threshold for the same credential from being sent to the same channel again. Operators can
+list the supported/configured channel families at `/api/v1/notification-channels`,
+list/get the tenant-scoped notification inbox, inspect the owner/approver escalation
+fields, mark rows read at `/api/v1/notifications/{id}/read`, and requeue failed
+notification dispatches from `/api/v1/notifications/{id}/requeue` with idempotency keys.
 Tenant-facing channel CRUD and test delivery remain deployment-time configuration rather
 than served API.
 
@@ -356,8 +357,9 @@ auth:
   /api/v1/compliance/report-schedules`, and `GET
   /api/v1/compliance/report-schedules`; report-schedule delivery is `audit_export`
   only.
-- **Notifications:** Slack, Teams, email, PagerDuty, OpsGenie, webhook (HMAC-signed);
-  HTTP targets are public HTTPS by default; inbox routes are `GET /api/v1/notifications`,
+- **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook
+  (HMAC-signed); HTTP targets are public HTTPS by default; catalog/inbox routes are
+  `GET /api/v1/notification-channels`, `GET /api/v1/notifications`,
   `GET /api/v1/notifications/{id}`, `POST /api/v1/notifications/{id}/read`, and
   `POST /api/v1/notifications/{id}/requeue`.
 - **Compliance frameworks:** PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0.

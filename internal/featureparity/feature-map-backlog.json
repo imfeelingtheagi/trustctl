@@ -6455,39 +6455,41 @@
       "phase": "P2",
       "priority": 80,
       "served_state": "partial",
-      "backend_status": "served expiry-alert runtime plus owner/approver escalation metadata and notification inbox/dead-letter API; channel authoring UI/API pending",
-      "current_frontend_mapping": "served: Notifications at /notifications lists owner/approver escalation, marks read, and requeues dead letters; Policy discloses channel authoring remains deployment-time config; coverage ledger: /coverage",
-      "target_gui_mapping": "Notification channel UI for Slack, Teams, email, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
-      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches a signed webhook through the notification outbox, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
+      "backend_status": "served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, owner/approver escalation metadata, channel catalog, and notification inbox/dead-letter API; channel authoring UI/API pending",
+      "current_frontend_mapping": "served: Notifications at /notifications lists configured channel families, owner/approver escalation, marks read, and requeues dead letters; Policy discloses channel authoring remains deployment-time config; coverage ledger: /coverage",
+      "target_gui_mapping": "Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
+      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, lists configured channels, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
       "source_docs": ["docs/features/policy-and-governance.md"],
       "source_backend": ["internal/notify", "internal/server", "internal/store"],
       "source_frontend": ["web/src/pages/Notifications.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listNotifications", "getNotification", "markNotificationRead", "requeueNotification"],
+      "notes": "CAP-OBS-05 is served for operator-configured email, Slack, Teams, SMS, and SIEM delivery through the notification outbox, with a read-only channel catalog in API/CLI/UI. Tenant channel authoring and test delivery remain explicitly unserved. Verification evidence: focused Go/API/CLI/feature-parity tests, web lint/typecheck/i18n/full Vitest/build, git diff checks, and make lint test passed after implementation.",
+      "api_surface": ["listNotificationChannels", "listNotifications", "getNotification", "markNotificationRead", "requeueNotification"],
       "api_na": "",
-      "cli_surface": ["notifications list", "notifications get", "notifications read", "notifications requeue"],
+      "cli_surface": ["notifications channels", "notifications list", "notifications get", "notifications read", "notifications requeue"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "LifecycleAlertBefore and NotificationChannels in server.Deps wire configured notify channels into the served lifecycle scheduler.",
+            "LifecycleAlertBefore and notifications.* config wire configured notify channels into the served lifecycle scheduler.",
             "RunLifecycleOnce enqueues notification.expiry outbox rows for alertable certificates, and issuanceDispatcher delivers notification.* rows through notify.Dispatcher.",
+            "TestServedMultiChannelAlertingCAPOBS05 proves email, Slack, Teams, SMS, and SIEM receive one outbox-backed expiry alert and the channel catalog reports them configured.",
             "GET /api/v1/notifications lists tenant-scoped notification outbox rows, including failed rows as dead letters; POST /read records an event-sourced read receipt and POST /requeue moves failed notification outbox rows back to pending through the idempotent mutation path.",
             "TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification proves a signer-issued served cert inside the alert window reaches an HMAC-signed webhook sink.",
             "TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04 proves expiry alerts carry owner contact, approver recipients, severity, threshold days, webhook delivery, and inbox visibility."
           ],
-          "refs": ["internal/api/notifications.go", "internal/server/server.go", "internal/server/issuance.go", "internal/server/notifications_served_test.go", "internal/store/lifecycle.go"]
+          "refs": ["internal/api/api.go", "internal/api/notifications.go", "internal/server/run.go", "internal/server/server.go", "internal/server/issuance.go", "internal/server/notifications_served_test.go", "internal/store/lifecycle.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: Notifications at /notifications lists owner/approver escalation, marks read, and requeues dead letters; Policy discloses channel authoring remains deployment-time config; coverage ledger: /coverage",
-            "target_gui_mapping: Notification channel UI for Slack, Teams, email, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery."
+            "current_frontend_mapping: served: Notifications at /notifications lists configured channel families, owner/approver escalation, marks read, and requeues dead letters; Policy discloses channel authoring remains deployment-time config; coverage ledger: /coverage",
+            "target_gui_mapping: Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery."
           ],
           "refs": ["web/src/pages/Notifications.tsx", "web/src/pages/Policy.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
           "evidence": [
+            "notifications channels exposes the read-only supported/configured channel catalog through the CLI.",
             "notifications list/get expose the tenant-scoped notification inbox and dead-letter view through the CLI.",
             "notifications read and notifications requeue call the served mutating endpoints with Idempotency-Key handling."
           ],
@@ -6495,6 +6497,7 @@
         },
         "api": {
           "evidence": [
+            "OpenAPI exposes listNotificationChannels for the read-only supported/configured channel catalog.",
             "OpenAPI exposes listNotifications, getNotification, markNotificationRead, and requeueNotification for the tenant-scoped notification inbox and dead-letter queue.",
             "Channel authoring and test-delivery APIs remain out of scope; configured channels are still deployment-time process configuration."
           ],
@@ -6502,9 +6505,9 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches a signed webhook through the notification outbox, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
-            "Focused served tests drive the running server scheduler, outbox drain, httptest webhook sink, dead-letter list, idempotent requeue, and mark-read projection.",
-            "C10-3 notification inbox UI test renders owner/approver escalation fields and exercises mark-read plus dead-letter requeue.",
+            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, lists configured channels, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
+            "Focused served tests drive the running server scheduler, outbox drain, email/Slack/Teams/SMS/SIEM sinks, httptest webhook sink, dead-letter list, idempotent requeue, and mark-read projection.",
+            "C10-3 notification inbox UI test renders configured channel coverage, owner/approver escalation fields, and exercises mark-read plus dead-letter requeue.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
@@ -6525,7 +6528,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions: listNotifications/getNotification require notifications:read; markNotificationRead/requeueNotification require notifications:write.",
+            "feature authz manifest maps api_surface operations to route permissions: listNotificationChannels/listNotifications/getNotification require notifications:read; markNotificationRead/requeueNotification require notifications:write.",
             "notification inbox read routes require notifications:read; mark-read and requeue require notifications:write and Idempotency-Key.",
             "built-in viewer/mcp/cli/operator roles include the notification read/write split according to their role shape."
           ],

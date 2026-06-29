@@ -2477,6 +2477,28 @@ Notification = TypedDict(
     total=False,
 )
 
+NotificationChannel = TypedDict(
+    'NotificationChannel',
+    {
+        'category': str,
+        'configured': bool,
+        'delivery': str,
+        'description': str,
+        'id': str,
+        'label': str,
+    },
+    total=False,
+)
+
+NotificationChannelList = TypedDict(
+    'NotificationChannelList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 NotificationList = TypedDict(
     'NotificationList',
     {

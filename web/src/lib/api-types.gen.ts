@@ -1731,6 +1731,20 @@ export interface Notification {
   threshold_days?: number;
 }
 
+export interface NotificationChannel {
+  category: string;
+  configured: boolean;
+  delivery: string;
+  description?: string;
+  id: string;
+  label: string;
+}
+
+export interface NotificationChannelList {
+  items: NotificationChannel[];
+  next_cursor?: string;
+}
+
 export interface NotificationList {
   items: Notification[];
   next_cursor?: string;

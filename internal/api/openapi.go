@@ -928,6 +928,14 @@ func componentSchemas() map[string]*Schema {
 		"attempts":              {Type: "integer"}, "last_error": str(), "idempotency_key": str(),
 		"created_at": timestamp(), "delivered_at": timestamp(), "read_at": timestamp(),
 	}, "id", "tenant_id", "destination", "status", "attempts", "created_at")
+	notificationChannel := object(map[string]*Schema{
+		"id":          str(),
+		"label":       str(),
+		"category":    str(),
+		"configured":  {Type: "boolean"},
+		"delivery":    str(),
+		"description": str(),
+	}, "id", "label", "category", "configured", "delivery")
 	outboxCircuit := object(map[string]*Schema{
 		"tenant_id": uuid(), "destination": str(),
 		"state":      {Type: "string", Enum: []string{"closed", "open", "half-open"}},
@@ -1829,6 +1837,8 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorDelivery":                     connectorDelivery,
 		"ConnectorDeliveryList":                 list("ConnectorDelivery"),
 		"AlertRecipient":                        alertRecipient,
+		"NotificationChannel":                   notificationChannel,
+		"NotificationChannelList":               list("NotificationChannel"),
 		"Notification":                          notification,
 		"NotificationList":                      list("Notification"),
 		"OutboxCircuit":                         outboxCircuit,

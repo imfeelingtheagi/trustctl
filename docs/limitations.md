@@ -507,10 +507,11 @@ writing a new token file and restarting the control plane so the new hash is loa
   management) remain future served work.
 - **Notification channel authoring and test delivery (F29) — not yet tenant-served.**
   Expiry-alert dispatch, notification inbox list/get/read, and dead-letter requeue are
-  served when operators wire notification channels into the process, but tenants cannot
-  yet create, edit, list, or test notification channel configuration through the REST
-  API, CLI, or console. Keep channel secrets in operator-managed secret references
-  until that authoring surface is mounted.
+  served when operators configure email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie,
+  or webhook channels at process startup. Tenants can read the channel catalog/status at
+  `/api/v1/notification-channels`, but they cannot yet create, edit, or test
+  notification channel configuration through the REST API, CLI, or console. Keep channel
+  secrets in operator-managed secret references until that authoring surface is mounted.
 
 ## Authorization policy gates and ABAC overlays: served by the binary
 

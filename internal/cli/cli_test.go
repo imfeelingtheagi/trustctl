@@ -725,7 +725,15 @@ func TestNotificationCommandsSendPathsQueriesAndIdempotencyKeys(t *testing.T) {
 	srv := mockServer(t, 200, `{"items":[]}`, &cap)
 	env := cli.Env{Server: srv.URL, HTTPClient: srv.Client(), IdempotencyKey: "notif-cli-idem"}
 
-	code, _, _ := run(t, []string{"notifications", "list", "--status", "dead", "--limit", "10"}, env, "")
+	code, _, _ := run(t, []string{"notifications", "channels"}, env, "")
+	if code != 0 {
+		t.Fatalf("channels exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notification-channels" {
+		t.Errorf("channels request = %s %s", cap.Method, cap.Path)
+	}
+
+	code, _, _ = run(t, []string{"notifications", "list", "--status", "dead", "--limit", "10"}, env, "")
 	if code != 0 {
 		t.Fatalf("list exit = %d", code)
 	}

@@ -6623,6 +6623,53 @@
         ],
         "type": "object"
       },
+      "NotificationChannel": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "delivery": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "category",
+          "configured",
+          "delivery"
+        ],
+        "type": "object"
+      },
+      "NotificationChannelList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationChannel"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "NotificationList": {
         "properties": {
           "items": {
@@ -16097,6 +16144,53 @@
         ],
         "summary": "List long-lived and static NHI credential posture findings",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/notification-channels": {
+      "get": {
+        "operationId": "listNotificationChannels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List supported and configured notification channels",
+        "x-trstctl-permission": "notifications:read"
       }
     },
     "/api/v1/notifications": {

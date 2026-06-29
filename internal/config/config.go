@@ -73,32 +73,33 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server      Server      `json:"server"`
-	Postgres    Postgres    `json:"postgres"`
-	NATS        NATS        `json:"nats"`
-	Log         Log         `json:"log"`
-	Lifecycle   Lifecycle   `json:"lifecycle"`
-	AirGap      AirGap      `json:"air_gap"`
-	Telemetry   Telemetry   `json:"telemetry"`
-	OTLP        OTLP        `json:"otlp"`
-	Audit       Audit       `json:"audit"`
-	Breakglass  Breakglass  `json:"breakglass"`
-	Privacy     Privacy     `json:"privacy"`
-	Backup      Backup      `json:"backup"`
-	License     License     `json:"license"`
-	RateLimit   RateLimit   `json:"rate_limit"`
-	Bulkheads   Bulkheads   `json:"bulkheads"`
-	Migrate     Migrate     `json:"migrate"`
-	Secrets     Secrets     `json:"secrets"`
-	ManagedKeys ManagedKeys `json:"managed_keys"`
-	Signer      Signer      `json:"signer"`
-	CA          CA          `json:"ca"`
-	Protocols   Protocols   `json:"protocols"`
-	Auth        Auth        `json:"auth"`
-	Plugins     Plugins     `json:"plugins"`
-	HA          HA          `json:"ha"`
-	Federation  Federation  `json:"federation"`
-	AI          AI          `json:"ai"`
+	Server        Server        `json:"server"`
+	Postgres      Postgres      `json:"postgres"`
+	NATS          NATS          `json:"nats"`
+	Log           Log           `json:"log"`
+	Lifecycle     Lifecycle     `json:"lifecycle"`
+	Notifications Notifications `json:"notifications"`
+	AirGap        AirGap        `json:"air_gap"`
+	Telemetry     Telemetry     `json:"telemetry"`
+	OTLP          OTLP          `json:"otlp"`
+	Audit         Audit         `json:"audit"`
+	Breakglass    Breakglass    `json:"breakglass"`
+	Privacy       Privacy       `json:"privacy"`
+	Backup        Backup        `json:"backup"`
+	License       License       `json:"license"`
+	RateLimit     RateLimit     `json:"rate_limit"`
+	Bulkheads     Bulkheads     `json:"bulkheads"`
+	Migrate       Migrate       `json:"migrate"`
+	Secrets       Secrets       `json:"secrets"`
+	ManagedKeys   ManagedKeys   `json:"managed_keys"`
+	Signer        Signer        `json:"signer"`
+	CA            CA            `json:"ca"`
+	Protocols     Protocols     `json:"protocols"`
+	Auth          Auth          `json:"auth"`
+	Plugins       Plugins       `json:"plugins"`
+	HA            HA            `json:"ha"`
+	Federation    Federation    `json:"federation"`
+	AI            AI            `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
@@ -885,6 +886,53 @@ func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
 	return time.ParseDuration(l.AlertBefore)
 }
 
+// Notifications configures operator-managed notification sinks. The REST/console
+// channel-authoring surface remains separate; these settings wire the normal binary
+// to concrete outbox consumers at startup.
+type Notifications struct {
+	Slack NotificationWebhook `json:"slack,omitempty"`
+	Teams NotificationWebhook `json:"teams,omitempty"`
+	Email NotificationEmail   `json:"email,omitempty"`
+	SMS   NotificationSMS     `json:"sms,omitempty"`
+	SIEM  NotificationSIEM    `json:"siem,omitempty"`
+}
+
+// NotificationWebhook configures one incoming-webhook-style channel.
+type NotificationWebhook struct {
+	Enabled    bool   `json:"enabled,omitempty"`
+	WebhookURL string `json:"webhook_url,omitempty"`
+}
+
+// NotificationEmail configures the SMTP email channel.
+type NotificationEmail struct {
+	Enabled      bool     `json:"enabled,omitempty"`
+	SMTPAddr     string   `json:"smtp_addr,omitempty"`
+	From         string   `json:"from,omitempty"`
+	To           []string `json:"to,omitempty"`
+	Username     string   `json:"username,omitempty"`
+	Password     []byte   `json:"password,omitempty"`
+	PasswordFile string   `json:"password_file,omitempty"`
+}
+
+// NotificationSMS configures the SMS gateway channel.
+type NotificationSMS struct {
+	Enabled   bool     `json:"enabled,omitempty"`
+	Endpoint  string   `json:"endpoint,omitempty"`
+	From      string   `json:"from,omitempty"`
+	To        []string `json:"to,omitempty"`
+	Token     []byte   `json:"token,omitempty"`
+	TokenFile string   `json:"token_file,omitempty"`
+}
+
+// NotificationSIEM configures the SIEM collector channel.
+type NotificationSIEM struct {
+	Enabled   bool   `json:"enabled,omitempty"`
+	Endpoint  string `json:"endpoint,omitempty"`
+	Token     []byte `json:"token,omitempty"`
+	TokenFile string `json:"token_file,omitempty"`
+	Source    string `json:"source,omitempty"`
+}
+
 // AirGap configures the no-phone-home outbound HTTP guard. When enabled, public
 // destinations are denied unless the operator names an explicit host or CIDR.
 type AirGap struct {
@@ -1592,6 +1640,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_LOG_FORMAT", &c.Log.Format)
 	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setNotificationEnv(getenv, &c.Notifications)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
@@ -1897,6 +1946,31 @@ func setBytes(getenv func(string) string, key string, dst *[]byte) {
 	}
 }
 
+func setNotificationEnv(getenv func(string) string, n *Notifications) {
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SLACK_ENABLED", &n.Slack.Enabled)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SLACK_WEBHOOK_URL", &n.Slack.WebhookURL)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_TEAMS_ENABLED", &n.Teams.Enabled)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_TEAMS_WEBHOOK_URL", &n.Teams.WebhookURL)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_ENABLED", &n.Email.Enabled)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_SMTP_ADDR", &n.Email.SMTPAddr)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_FROM", &n.Email.From)
+	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_TO", &n.Email.To)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_USERNAME", &n.Email.Username)
+	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD", &n.Email.Password)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD_FILE", &n.Email.PasswordFile)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SMS_ENABLED", &n.SMS.Enabled)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SMS_ENDPOINT", &n.SMS.Endpoint)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SMS_FROM", &n.SMS.From)
+	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_SMS_TO", &n.SMS.To)
+	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_SMS_TOKEN", &n.SMS.Token)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SMS_TOKEN_FILE", &n.SMS.TokenFile)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_ENABLED", &n.SIEM.Enabled)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_ENDPOINT", &n.SIEM.Endpoint)
+	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_TOKEN", &n.SIEM.Token)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_TOKEN_FILE", &n.SIEM.TokenFile)
+	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_SOURCE", &n.SIEM.Source)
+}
+
 // setBool overlays a boolean environment variable. A malformed value is ignored
 // (the prior value stands), so a typo can never silently turn telemetry on.
 func setBool(getenv func(string) string, key string, dst *bool) {
@@ -2104,6 +2178,43 @@ func validateLoggingAndLifecycle(c *Config) []error {
 		errs = append(errs, fmt.Errorf("lifecycle.alert_before %q is invalid: %w", c.Lifecycle.AlertBefore, err))
 	} else if d <= 0 {
 		errs = append(errs, errors.New("lifecycle.alert_before must be positive"))
+	}
+	errs = append(errs, validateNotifications(c.Notifications)...)
+	return errs
+}
+
+func validateNotifications(n Notifications) []error {
+	var errs []error
+	if n.Slack.Enabled && strings.TrimSpace(n.Slack.WebhookURL) == "" {
+		errs = append(errs, errors.New("notifications.slack.webhook_url is required when Slack notifications are enabled"))
+	}
+	if n.Teams.Enabled && strings.TrimSpace(n.Teams.WebhookURL) == "" {
+		errs = append(errs, errors.New("notifications.teams.webhook_url is required when Teams notifications are enabled"))
+	}
+	if n.Email.Enabled {
+		if strings.TrimSpace(n.Email.SMTPAddr) == "" {
+			errs = append(errs, errors.New("notifications.email.smtp_addr is required when email notifications are enabled"))
+		}
+		if strings.TrimSpace(n.Email.From) == "" {
+			errs = append(errs, errors.New("notifications.email.from is required when email notifications are enabled"))
+		}
+		if len(n.Email.To) == 0 {
+			errs = append(errs, errors.New("notifications.email.to must name at least one recipient when email notifications are enabled"))
+		}
+		if n.Email.Username != "" && len(n.Email.Password) == 0 && strings.TrimSpace(n.Email.PasswordFile) == "" {
+			errs = append(errs, errors.New("notifications.email.password or password_file is required when email username is set"))
+		}
+	}
+	if n.SMS.Enabled {
+		if strings.TrimSpace(n.SMS.Endpoint) == "" {
+			errs = append(errs, errors.New("notifications.sms.endpoint is required when SMS notifications are enabled"))
+		}
+		if len(n.SMS.To) == 0 {
+			errs = append(errs, errors.New("notifications.sms.to must name at least one recipient when SMS notifications are enabled"))
+		}
+	}
+	if n.SIEM.Enabled && strings.TrimSpace(n.SIEM.Endpoint) == "" {
+		errs = append(errs, errors.New("notifications.siem.endpoint is required when SIEM notifications are enabled"))
 	}
 	return errs
 }

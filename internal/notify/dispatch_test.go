@@ -92,13 +92,14 @@ func TestDispatchAccumulatesErrors(t *testing.T) {
 func TestDispatchRoutesBySeverityPolicy(t *testing.T) {
 	email := &capturingNotifier{name: "email"}
 	slack := &capturingNotifier{name: "slack"}
+	teams := &capturingNotifier{name: "msteams"}
 	pager := &capturingNotifier{name: "pagerduty"}
-	d := notify.NewDispatcher(email, slack, pager)
+	d := notify.NewDispatcher(email, slack, teams, pager)
 	resolver := &routingResolver{policy: notify.RoutingPolicy{
 		TenantID: "t1",
 		ID:       "expiry-policy",
 		ChannelsBySeverity: map[string][]string{
-			notify.AlertSeverityCritical: {"pagerduty", "slack"},
+			notify.AlertSeverityCritical: {"pagerduty", "slack", "teams"},
 			notify.AlertSeverityLow:      {"email"},
 		},
 	}}
@@ -111,24 +112,24 @@ func TestDispatchRoutesBySeverityPolicy(t *testing.T) {
 	if resolver.gotTenantID != "t1" || resolver.gotPolicyID != "expiry-policy" {
 		t.Fatalf("resolver scoped to tenant=%q policy=%q, want t1/expiry-policy", resolver.gotTenantID, resolver.gotPolicyID)
 	}
-	if len(pager.got) != 1 || len(slack.got) != 1 || len(email.got) != 0 {
-		t.Fatalf("critical route: email=%d slack=%d pager=%d, want only slack+pager", len(email.got), len(slack.got), len(pager.got))
+	if len(pager.got) != 1 || len(slack.got) != 1 || len(teams.got) != 1 || len(email.got) != 0 {
+		t.Fatalf("critical route: email=%d slack=%d teams=%d pager=%d, want only slack+teams+pager", len(email.got), len(slack.got), len(teams.got), len(pager.got))
 	}
 
 	payload, _ = json.Marshal(notify.Alert{Kind: notify.KindCertificateExpiry, TenantID: "t1", RoutingPolicyID: "expiry-policy", Severity: notify.AlertSeverityLow})
 	if err := d.Dispatch(context.Background(), payload); err != nil {
 		t.Fatalf("Dispatch low: %v", err)
 	}
-	if len(email.got) != 1 || len(slack.got) != 1 || len(pager.got) != 1 {
-		t.Fatalf("low route: email=%d slack=%d pager=%d, want only email added", len(email.got), len(slack.got), len(pager.got))
+	if len(email.got) != 1 || len(slack.got) != 1 || len(teams.got) != 1 || len(pager.got) != 1 {
+		t.Fatalf("low route: email=%d slack=%d teams=%d pager=%d, want only email added", len(email.got), len(slack.got), len(teams.got), len(pager.got))
 	}
 
 	payload, _ = json.Marshal(notify.Alert{Kind: notify.KindCertificateExpiry, TenantID: "t1", RoutingPolicyID: "expiry-policy", Severity: "operator typo"})
 	if err := d.Dispatch(context.Background(), payload); err != nil {
 		t.Fatalf("Dispatch unknown severity: %v", err)
 	}
-	if len(email.got) != 2 || len(slack.got) != 1 || len(pager.got) != 1 {
-		t.Fatalf("unknown severity route: email=%d slack=%d pager=%d, want safe low-tier fallback", len(email.got), len(slack.got), len(pager.got))
+	if len(email.got) != 2 || len(slack.got) != 1 || len(teams.got) != 1 || len(pager.got) != 1 {
+		t.Fatalf("unknown severity route: email=%d slack=%d teams=%d pager=%d, want safe low-tier fallback", len(email.got), len(slack.got), len(teams.got), len(pager.got))
 	}
 }
 

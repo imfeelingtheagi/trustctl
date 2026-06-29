@@ -24,11 +24,18 @@ import (
 	"trstctl.com/trstctl/internal/leader"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/logging"
+	"trstctl.com/trstctl/internal/notify"
+	notifyemail "trstctl.com/trstctl/internal/notify/email"
+	"trstctl.com/trstctl/internal/notify/siem"
+	"trstctl.com/trstctl/internal/notify/slack"
+	"trstctl.com/trstctl/internal/notify/sms"
+	"trstctl.com/trstctl/internal/notify/teams"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/secrets"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/telemetry"
@@ -347,6 +354,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("break-glass verifier material: %w", err)
 	}
+	notificationChannels, err := notificationChannelsFromConfig(cfg.Notifications)
+	if err != nil {
+		return Deps{}, fmt.Errorf("notifications: %w", err)
+	}
 	telemetryReporter, err := telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("telemetry: %w", err)
@@ -369,6 +380,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		PrivacyRetentionPolicy: privacyRetentionPolicy,
 		LifecycleRenewBefore:   renewBefore,
 		LifecycleAlertBefore:   alertBefore,
+		NotificationChannels:   notificationChannels,
 		Logger:                 logger, RateLimiter: rateLimiter,
 		OTLPExporter:    otlpExporter,
 		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
@@ -467,6 +479,63 @@ func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*observ.OTLPE
 		return nil, err
 	}
 	return exp, nil
+}
+
+func notificationChannelsFromConfig(cfg config.Notifications) ([]notify.Notifier, error) {
+	var channels []notify.Notifier
+	if cfg.Slack.Enabled {
+		channels = append(channels, slack.New(cfg.Slack.WebhookURL))
+	}
+	if cfg.Teams.Enabled {
+		channels = append(channels, teams.New(cfg.Teams.WebhookURL))
+	}
+	if cfg.Email.Enabled {
+		opts := []notifyemail.Option{}
+		if cfg.Email.Username != "" {
+			password, err := notificationSecret(cfg.Email.Password, cfg.Email.PasswordFile, "email password")
+			if err != nil {
+				return nil, err
+			}
+			defer zeroBytes(password)
+			opts = append(opts, notifyemail.WithAuth(cfg.Email.Username, secrettext.String(bytes.TrimSpace(password))))
+		}
+		channels = append(channels, notifyemail.New(cfg.Email.SMTPAddr, cfg.Email.From, cfg.Email.To, opts...))
+	}
+	if cfg.SMS.Enabled {
+		token, err := notificationSecret(cfg.SMS.Token, cfg.SMS.TokenFile, "sms token")
+		if err != nil {
+			return nil, err
+		}
+		defer zeroBytes(token)
+		channels = append(channels, sms.New(cfg.SMS.Endpoint, cfg.SMS.From, cfg.SMS.To, token))
+	}
+	if cfg.SIEM.Enabled {
+		token, err := notificationSecret(cfg.SIEM.Token, cfg.SIEM.TokenFile, "siem token")
+		if err != nil {
+			return nil, err
+		}
+		defer zeroBytes(token)
+		opts := []siem.Option{}
+		if cfg.SIEM.Source != "" {
+			opts = append(opts, siem.WithSource(cfg.SIEM.Source))
+		}
+		channels = append(channels, siem.New(cfg.SIEM.Endpoint, token, opts...))
+	}
+	return channels, nil
+}
+
+func notificationSecret(inline []byte, file, label string) ([]byte, error) {
+	out := append([]byte(nil), inline...)
+	if file == "" {
+		return bytes.TrimSpace(out), nil
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("read notification %s file: %w", label, err)
+	}
+	defer zeroBytes(data)
+	out = append(out[:0], bytes.TrimSpace(data)...)
+	return out, nil
 }
 
 func zeroBytes(b []byte) {

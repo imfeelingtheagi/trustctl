@@ -781,6 +781,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithLicense(d.License),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
+		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),
 	}
 	if d.EnableRemediation {
 		defaults = append(defaults,
@@ -864,6 +865,17 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+func notificationChannelNames(channels []notify.Notifier) []string {
+	names := make([]string, 0, len(channels))
+	for _, ch := range channels {
+		if ch == nil || ch.Name() == "" {
+			continue
+		}
+		names = append(names, ch.Name())
+	}
+	return names
 }
 
 func (s *Server) buildTransitService(d Deps) *transitpkg.Service {

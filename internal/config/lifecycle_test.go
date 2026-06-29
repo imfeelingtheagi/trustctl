@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,5 +59,57 @@ func TestLifecycleRejectsBadDuration(t *testing.T) {
 	cfg.Lifecycle.RenewBefore = "not-a-duration"
 	if err := cfg.Validate(); err == nil {
 		t.Error("Validate accepted an invalid lifecycle.renew_before")
+	}
+}
+
+func TestNotificationChannelEnv(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_NOTIFICATIONS_SLACK_ENABLED":     "true",
+		"TRSTCTL_NOTIFICATIONS_SLACK_WEBHOOK_URL": "https://hooks.slack.example/services/T/B/S",
+		"TRSTCTL_NOTIFICATIONS_TEAMS_ENABLED":     "true",
+		"TRSTCTL_NOTIFICATIONS_TEAMS_WEBHOOK_URL": "https://teams.example/webhook",
+		"TRSTCTL_NOTIFICATIONS_EMAIL_ENABLED":     "true",
+		"TRSTCTL_NOTIFICATIONS_EMAIL_SMTP_ADDR":   "smtp.example:587",
+		"TRSTCTL_NOTIFICATIONS_EMAIL_FROM":        "alerts@example.test",
+		"TRSTCTL_NOTIFICATIONS_EMAIL_TO":          "oncall@example.test, secops@example.test",
+		"TRSTCTL_NOTIFICATIONS_EMAIL_USERNAME":    "smtp-user",
+		"TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD":    "smtp-pass",
+		"TRSTCTL_NOTIFICATIONS_SMS_ENABLED":       "true",
+		"TRSTCTL_NOTIFICATIONS_SMS_ENDPOINT":      "https://sms-gateway.example/alerts",
+		"TRSTCTL_NOTIFICATIONS_SMS_FROM":          "trstctl",
+		"TRSTCTL_NOTIFICATIONS_SMS_TO":            "+15550100,+15550101",
+		"TRSTCTL_NOTIFICATIONS_SMS_TOKEN":         "sms-token",
+		"TRSTCTL_NOTIFICATIONS_SIEM_ENABLED":      "true",
+		"TRSTCTL_NOTIFICATIONS_SIEM_ENDPOINT":     "https://siem.example/collector",
+		"TRSTCTL_NOTIFICATIONS_SIEM_TOKEN":        "siem-token",
+		"TRSTCTL_NOTIFICATIONS_SIEM_SOURCE":       "trstctl-prod",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load notification config: %v", err)
+	}
+	if !cfg.Notifications.Slack.Enabled || cfg.Notifications.Slack.WebhookURL == "" {
+		t.Fatalf("slack notification env not loaded: %+v", cfg.Notifications.Slack)
+	}
+	if !cfg.Notifications.Teams.Enabled || cfg.Notifications.Teams.WebhookURL == "" {
+		t.Fatalf("teams notification env not loaded: %+v", cfg.Notifications.Teams)
+	}
+	if !cfg.Notifications.Email.Enabled || len(cfg.Notifications.Email.To) != 2 || string(cfg.Notifications.Email.Password) != "smtp-pass" {
+		t.Fatalf("email notification env not loaded: %+v", cfg.Notifications.Email)
+	}
+	if !cfg.Notifications.SMS.Enabled || len(cfg.Notifications.SMS.To) != 2 || string(cfg.Notifications.SMS.Token) != "sms-token" {
+		t.Fatalf("sms notification env not loaded: %+v", cfg.Notifications.SMS)
+	}
+	if !cfg.Notifications.SIEM.Enabled || cfg.Notifications.SIEM.Source != "trstctl-prod" || string(cfg.Notifications.SIEM.Token) != "siem-token" {
+		t.Fatalf("siem notification env not loaded: %+v", cfg.Notifications.SIEM)
+	}
+}
+
+func TestNotificationChannelValidation(t *testing.T) {
+	cfg := Default()
+	cfg.Notifications.SMS.Enabled = true
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "notifications.sms.endpoint") || !strings.Contains(err.Error(), "notifications.sms.to") {
+		t.Fatalf("Validate() = %v, want missing SMS endpoint and recipients", err)
 	}
 }

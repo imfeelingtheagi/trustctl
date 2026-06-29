@@ -267,7 +267,14 @@ func cleanChannelNames(in []string) []string {
 }
 
 func normalizeChannelName(name string) string {
-	return strings.ToLower(strings.TrimSpace(name))
+	name = strings.ToLower(strings.TrimSpace(name))
+	compact := strings.NewReplacer(" ", "", "-", "", "_", "").Replace(name)
+	switch compact {
+	case "teams", "microsoftteams", "msftteams", "msteams":
+		return "msteams"
+	default:
+		return name
+	}
 }
 
 // FormatMessage renders an alert as a short human-readable line for chat/email

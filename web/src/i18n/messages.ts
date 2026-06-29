@@ -1232,6 +1232,30 @@ export const messages = {
     defaultMessage: "orphaned",
     description: "Fallback owner-kind label for an unattributed NHI.",
   },
+  "notifications.channels.heading": {
+    defaultMessage: "Channel coverage",
+    description: "Heading for the configured notification channel catalog.",
+  },
+  "notifications.channels.configuredCount": {
+    defaultMessage: "{count} configured",
+    description: "Count of configured notification channel families.",
+  },
+  "notifications.channels.unavailableTitle": {
+    defaultMessage: "Notification channels unavailable",
+    description: "Error title when notification channel status cannot be fetched.",
+  },
+  "notifications.channels.loadError": {
+    defaultMessage: "Could not load notification channels",
+    description: "Fallback error when notification channel status cannot be fetched.",
+  },
+  "notifications.channels.configured": {
+    defaultMessage: "configured",
+    description: "Status badge for a configured notification channel.",
+  },
+  "notifications.channels.unconfigured": {
+    defaultMessage: "unconfigured",
+    description: "Status badge for a notification channel family that is supported but not configured.",
+  },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
@@ -1685,6 +1709,12 @@ const esESCatalog = {
   "owners.attribution.source": "Origen",
   "owners.attribution.unattributed": "Sin atribución",
   "owners.attribution.orphaned": "huérfano",
+  "notifications.channels.heading": "Cobertura de canales",
+  "notifications.channels.configuredCount": "{count} configurados",
+  "notifications.channels.unavailableTitle": "Canales de notificación no disponibles",
+  "notifications.channels.loadError": "No se pudieron cargar los canales de notificación",
+  "notifications.channels.configured": "configurado",
+  "notifications.channels.unconfigured": "sin configurar",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",

@@ -17,6 +17,11 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/notify"
+	notifyemail "trstctl.com/trstctl/internal/notify/email"
+	"trstctl.com/trstctl/internal/notify/siem"
+	"trstctl.com/trstctl/internal/notify/slack"
+	"trstctl.com/trstctl/internal/notify/sms"
+	"trstctl.com/trstctl/internal/notify/teams"
 	"trstctl.com/trstctl/internal/notify/webhook"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -138,6 +143,82 @@ func TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification(t *testing.
 	}
 	if !h.hasEvent(t, "certificate.expiring") {
 		t.Fatal("missing certificate.expiring event")
+	}
+}
+
+func TestServedMultiChannelAlertingCAPOBS05(t *testing.T) {
+	httpSink := newMultiChannelHTTPSink(t)
+	emailSink := &capturingEmailSender{}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.LifecycleAlertBefore = 7 * 24 * time.Hour
+		d.NotificationChannels = []notify.Notifier{
+			notifyemail.New("smtp.example:587", "alerts@example.test", []string{"oncall@example.test"}, notifyemail.WithSender(emailSink)),
+			slack.New(httpSink.URL("/slack"), slack.WithHTTPClient(httpSink.Client())),
+			teams.New(httpSink.URL("/teams"), teams.WithHTTPClient(httpSink.Client())),
+			sms.New(httpSink.URL("/sms"), "trstctl", []string{"+15550100"}, []byte("sms-token"), sms.WithHTTPClient(httpSink.Client())),
+			siem.New(httpSink.URL("/siem"), []byte("siem-token"), siem.WithHTTPClient(httpSink.Client())),
+		}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write",
+		"identities:read", "identities:write",
+		"certs:read", "certs:issue",
+		"notifications:read",
+	)
+
+	cert := seedNearExpiryNotificationCertificate(t, h, tok, "cap-obs-05-multichannel.served.test")
+	if _, err := h.srv.RunLifecycleOnce(t.Context()); err != nil {
+		t.Fatalf("run lifecycle scheduler: %v", err)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain notification outbox: %v", err)
+	}
+
+	if emailSink.deliveries() != 1 {
+		t.Fatalf("email deliveries = %d, want 1", emailSink.deliveries())
+	}
+	for _, path := range []string{"/slack", "/teams", "/sms", "/siem"} {
+		if got := httpSink.Count(path); got != 1 {
+			t.Fatalf("%s deliveries = %d, want 1", path, got)
+		}
+	}
+	var outboxStatus string
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT status
+		   FROM outbox
+		  WHERE tenant_id = $1
+		    AND destination = $2
+		    AND idempotency_key = $3`,
+		h.tenant, notify.DestinationExpiry, "expiry:"+cert.ID).Scan(&outboxStatus); err != nil {
+		t.Fatalf("load notification outbox row: %v", err)
+	}
+	if outboxStatus != "delivered" {
+		t.Fatalf("notification outbox status = %q, want delivered", outboxStatus)
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/notification-channels", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list notification channels: status %d body %s", status, body)
+	}
+	var channels struct {
+		Items []struct {
+			ID         string `json:"id"`
+			Configured bool   `json:"configured"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &channels); err != nil {
+		t.Fatalf("decode channel catalog: %v", err)
+	}
+	configured := map[string]bool{}
+	for _, item := range channels.Items {
+		if item.Configured {
+			configured[item.ID] = true
+		}
+	}
+	for _, want := range []string{"email", "slack", "msteams", "sms", "siem"} {
+		if !configured[want] {
+			t.Fatalf("configured channel catalog = %#v, missing %q", configured, want)
+		}
 	}
 }
 
@@ -396,6 +477,31 @@ type flakyNotificationChannel struct {
 	count int
 }
 
+type capturingEmailSender struct {
+	mu    sync.Mutex
+	count int
+}
+
+func (s *capturingEmailSender) Send(context.Context, string, []string, []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.count++
+	return nil
+}
+
+func (s *capturingEmailSender) deliveries() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.count
+}
+
+type multiChannelHTTPSink struct {
+	srv *httptest.Server
+
+	mu     sync.Mutex
+	counts map[string]int
+}
+
 func (f *flakyNotificationChannel) Name() string { return "email" }
 
 func (f *flakyNotificationChannel) Notify(context.Context, notify.Alert) error {
@@ -412,6 +518,90 @@ func (f *flakyNotificationChannel) deliveries() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.count
+}
+
+func newMultiChannelHTTPSink(t *testing.T) *multiChannelHTTPSink {
+	t.Helper()
+	s := &multiChannelHTTPSink{counts: make(map[string]int)}
+	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.counts[r.URL.Path]++
+		s.mu.Unlock()
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	t.Cleanup(s.srv.Close)
+	return s
+}
+
+func (s *multiChannelHTTPSink) URL(path string) string { return s.srv.URL + path }
+func (s *multiChannelHTTPSink) Client() *http.Client   { return s.srv.Client() }
+
+func (s *multiChannelHTTPSink) Count(path string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.counts[path]
+}
+
+func seedNearExpiryNotificationCertificate(t *testing.T, h *servedHarness, tok, name string) store.Certificate {
+	t.Helper()
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload",
+		"name": name + "-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind":     "x509_certificate",
+		"name":     name,
+		"owner_id": owner.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create identity: status %d body %s", status, body)
+	}
+	var ident struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &ident); err != nil {
+		t.Fatalf("decode identity: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
+		"to":     "issued",
+		"reason": "CAP-OBS-05 initial issue",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("issue transition: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain issue: %v", err)
+	}
+
+	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, name)
+	if err != nil {
+		t.Fatalf("load issued cert: %v", err)
+	}
+	if len(certs) != 1 {
+		t.Fatalf("issued certs = %d, want 1", len(certs))
+	}
+	cert := certs[0]
+	now := time.Now().UTC()
+	notBefore := now.Add(-24 * time.Hour)
+	notAfter := now.Add(72 * time.Hour)
+	cert.NotBefore = &notBefore
+	cert.NotAfter = &notAfter
+	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, cert); err != nil {
+		t.Fatalf("record near-expiry certificate: %v", err)
+	}
+	return cert
 }
 
 func hasAlertRecipient(recipients []notify.AlertRecipient, kind, subject, email string) bool {

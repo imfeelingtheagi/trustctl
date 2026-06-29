@@ -42,6 +42,27 @@ type notificationResponse struct {
 	ReadAt               *time.Time              `json:"read_at,omitempty"`
 }
 
+type notificationChannelResponse struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	Category    string `json:"category"`
+	Configured  bool   `json:"configured"`
+	Delivery    string `json:"delivery"`
+	Description string `json:"description"`
+}
+
+type notificationChannelList struct {
+	Items []notificationChannelResponse `json:"items"`
+}
+
+func (a *API) listNotificationChannels(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.tenant(r); !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	a.writeJSON(w, http.StatusOK, notificationChannelList{Items: notificationChannelCatalog(a.notificationChannels)})
+}
+
 func (a *API) listNotifications(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
@@ -242,5 +263,54 @@ func toNotificationResponse(row store.NotificationOutboxRecord) notificationResp
 		CreatedAt:            row.CreatedAt,
 		DeliveredAt:          row.DeliveredAt,
 		ReadAt:               row.ReadAt,
+	}
+}
+
+func notificationChannelCatalog(configured []string) []notificationChannelResponse {
+	configuredSet := make(map[string]bool, len(configured))
+	for _, name := range configured {
+		id := canonicalNotificationChannelID(name)
+		if id != "" {
+			configuredSet[id] = true
+		}
+	}
+	base := []notificationChannelResponse{
+		{ID: "email", Label: "Email", Category: "smtp", Description: "SMTP email alert delivery"},
+		{ID: "slack", Label: "Slack", Category: "chat", Description: "Slack incoming-webhook alert delivery"},
+		{ID: "msteams", Label: "Microsoft Teams", Category: "chat", Description: "Microsoft Teams incoming-webhook alert delivery"},
+		{ID: "sms", Label: "SMS", Category: "mobile", Description: "SMS gateway alert delivery"},
+		{ID: "siem", Label: "SIEM", Category: "security", Description: "Security-event collector alert delivery"},
+		{ID: "pagerduty", Label: "PagerDuty", Category: "incident", Description: "PagerDuty Events API alert delivery"},
+		{ID: "opsgenie", Label: "OpsGenie", Category: "incident", Description: "OpsGenie alert delivery"},
+		{ID: "webhook", Label: "Webhook", Category: "webhook", Description: "Generic HMAC-signed webhook alert delivery"},
+	}
+	seen := make(map[string]bool, len(base))
+	for i := range base {
+		base[i].Configured = configuredSet[base[i].ID]
+		base[i].Delivery = "notification.* outbox fanout"
+		seen[base[i].ID] = true
+	}
+	for _, name := range configured {
+		id := canonicalNotificationChannelID(name)
+		if id == "" || seen[id] {
+			continue
+		}
+		base = append(base, notificationChannelResponse{
+			ID: id, Label: id, Category: "custom", Configured: true,
+			Delivery: "notification.* outbox fanout", Description: "Custom registered notification sink",
+		})
+		seen[id] = true
+	}
+	return base
+}
+
+func canonicalNotificationChannelID(name string) string {
+	id := strings.ToLower(strings.TrimSpace(name))
+	compact := strings.NewReplacer(" ", "", "-", "", "_", "").Replace(id)
+	switch compact {
+	case "teams", "microsoftteams", "msftteams", "msteams":
+		return "msteams"
+	default:
+		return id
 	}
 }

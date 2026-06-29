@@ -88,6 +88,7 @@ type API struct {
 	complianceEvidence      ComplianceEvidenceService
 	license                 *license.Manager
 	remediation             bool
+	notificationChannels    []string
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	privacyRetentionSource  privacy.RetentionPolicySource
@@ -143,6 +144,7 @@ type config struct {
 	complianceEvidence      ComplianceEvidenceService
 	license                 *license.Manager
 	remediation             bool
+	notificationChannels    []string
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	privacyRetentionSource  privacy.RetentionPolicySource
@@ -216,6 +218,13 @@ func WithLicense(m *license.Manager) Option {
 // dormant mutating surface.
 func WithRemediation() Option {
 	return func(c *config) { c.remediation = true }
+}
+
+// WithNotificationChannels wires the read-only channel catalog with the channel
+// names registered in the running process. It does not expose secrets or make
+// tenant-side authoring claims.
+func WithNotificationChannels(names ...string) Option {
+	return func(c *config) { c.notificationChannels = append([]string(nil), names...) }
 }
 
 // observeFeature emits one per-feature telemetry signal (COVER-009) if an observer is
@@ -366,6 +375,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		complianceEvidence:      cfg.complianceEvidence,
 		license:                 cfg.license,
 		remediation:             cfg.remediation,
+		notificationChannels:    append([]string(nil), cfg.notificationChannels...),
 		outboxCircuits:          cfg.outboxCircuits,
 		featureObserver:         cfg.featureObserver,
 		privacyRetentionPolicy:  policy.WithDefaults(),
@@ -837,6 +847,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/connectors/targets/{id}/rollback", opID: "rollbackConnectorTarget", summary: "Record rollback evidence for a deployment connector target", handler: a.rollbackConnectorTarget, pathParams: idPath, reqSchema: "ConnectorTargetActionRequest", resSchema: "ConnectorDelivery", successCode: "200", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "POST", path: "/api/v1/identities/{id}/connector-target", opID: "bindIdentityConnectorTarget", summary: "Bind an identity to a deployment connector target", handler: a.bindIdentityConnectorTarget, pathParams: idPath, reqSchema: "IdentityConnectorTargetRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "GET", path: "/api/v1/connectors/outbox-circuits", opID: "listOutboxCircuits", summary: "List outbox destination circuit breaker state", handler: a.listOutboxCircuits, resSchema: "OutboxCircuitList", successCode: "200", perm: authz.ConnectorsRead},
+		{method: "GET", path: "/api/v1/notification-channels", opID: "listNotificationChannels", summary: "List supported and configured notification channels", handler: a.listNotificationChannels, resSchema: "NotificationChannelList", successCode: "200", perm: authz.NotificationsRead},
 		{method: "GET", path: "/api/v1/notifications", opID: "listNotifications", summary: "List notification inbox and dead-letter rows", handler: a.listNotifications, query: notificationQuery, resSchema: "NotificationList", successCode: "200", perm: authz.NotificationsRead},
 		{method: "POST", path: "/api/v1/notifications/{id}/read", opID: "markNotificationRead", summary: "Mark a notification as read", handler: a.markNotificationRead, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
 		{method: "POST", path: "/api/v1/notifications/{id}/requeue", opID: "requeueNotification", summary: "Requeue a dead-lettered notification dispatch", handler: a.requeueNotification, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},

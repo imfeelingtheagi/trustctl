@@ -132,6 +132,7 @@ var commandTable = []Command{
 	{Name: []string{"connector", "target", "test"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/test", Body: bodyFile, Summary: "Record a connector target test receipt"},
 	{Name: []string{"connector", "target", "deploy"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/deploy", Body: bodyFile, Summary: "Deploy an identity through a connector target"},
 	{Name: []string{"connector", "target", "rollback"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/rollback", Body: bodyFile, Summary: "Record connector target rollback evidence"},
+	{Name: []string{"notifications", "channels"}, Method: "GET", Path: "/api/v1/notification-channels", Summary: "List supported and configured notification channel families"},
 	{Name: []string{"notifications", "list"}, Method: "GET", Path: "/api/v1/notifications", Query: []string{"limit", "cursor", "status"}, Summary: "List notification inbox and dead-letter rows"},
 	{Name: []string{"notifications", "get"}, Method: "GET", Path: "/api/v1/notifications/{id}", Summary: "Get a notification inbox row"},
 	{Name: []string{"notifications", "read"}, Method: "POST", Path: "/api/v1/notifications/{id}/read", Summary: "Mark a notification as read"},

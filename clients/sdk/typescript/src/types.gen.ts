@@ -1838,6 +1838,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notification-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List supported and configured notification channels */
+        get: operations["listNotificationChannels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -4496,6 +4513,18 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
             threshold_days?: number;
+        };
+        NotificationChannel: {
+            category: string;
+            configured: boolean;
+            delivery: string;
+            description?: string;
+            id: string;
+            label: string;
+        };
+        NotificationChannelList: {
+            items: components["schemas"]["NotificationChannel"][];
+            next_cursor?: string;
         };
         NotificationList: {
             items: components["schemas"]["Notification"][];
@@ -10204,6 +10233,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIStaticPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNotificationChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelList"];
                 };
             };
             /** @description client error */

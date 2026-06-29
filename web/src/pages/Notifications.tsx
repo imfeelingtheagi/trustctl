@@ -8,7 +8,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
-import { api, ApiError, type Notification } from "@/lib/api";
+import { useTranslation } from "@/i18n/I18nProvider";
+import { api, ApiError, type Notification, type NotificationChannel } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
 
 type ActiveTab = "all" | "dead";
@@ -27,26 +28,36 @@ const statusOptions: Array<{ value: "" | NotificationStatus; label: string }> = 
 
 export function Notifications() {
   const { toast } = useToast();
+  const { t } = useTranslation();
+  const channelLoadError = t("notifications.channels.loadError");
   const [activeTab, setActiveTab] = useState<ActiveTab>("all");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<Notice | null>(null);
+  const [channelError, setChannelError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | NotificationStatus>("");
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
+    setChannelError(null);
     try {
-      const result = await api.notifications(activeTab === "dead" ? { limit: 100, status: "dead" } : { limit: 100 });
+      const [result, channelResult] = await Promise.all([
+        api.notifications(activeTab === "dead" ? { limit: 100, status: "dead" } : { limit: 100 }),
+        api.notificationChannels(),
+      ]);
       setNotifications(result.items ?? []);
+      setChannels(channelResult.items ?? []);
     } catch (err) {
       setNotifications([]);
       setError({ title: "Notifications unavailable", detail: errorText(err, "Could not load notifications") });
+      setChannelError(errorText(err, channelLoadError));
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, channelLoadError]);
 
   useEffect(() => {
     setLoading(true);
@@ -121,6 +132,8 @@ export function Notifications() {
 
       {error && <ErrorState title={error.title}>{error.detail}</ErrorState>}
 
+      <ChannelCatalog channels={channels} error={channelError} />
+
       <div className="ui-panel grid gap-3 p-comfortable lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
         <div role="tablist" aria-label="Notification queues" className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border">
           <button
@@ -192,6 +205,44 @@ export function Notifications() {
         />
       )}
     </section>
+  );
+}
+
+function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; error: string | null }) {
+  const { t } = useTranslation();
+  if (error) return <ErrorState title={t("notifications.channels.unavailableTitle")}>{error}</ErrorState>;
+  if (channels.length === 0) return null;
+  const configuredLabel = t("notifications.channels.configured");
+  const unconfiguredLabel = t("notifications.channels.unconfigured");
+  return (
+    <div className="ui-panel grid gap-3 p-comfortable">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">{t("notifications.channels.heading")}</h2>
+        <span className="text-sm text-muted-foreground">
+          {t("notifications.channels.configuredCount", { count: channels.filter((channel) => channel.configured).length })}
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {channels.map((channel) => (
+          <div key={channel.id} className="rounded-control border border-border bg-background p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{channel.label}</p>
+                <p className="truncate text-xs text-muted-foreground">{channel.category}</p>
+              </div>
+              <StatusBadge
+                value={channel.configured ? "configured" : "unconfigured"}
+                label={channel.configured ? configuredLabel : unconfiguredLabel}
+                tone={channel.configured ? "success" : "neutral"}
+              />
+            </div>
+            <p className="mt-2 truncate text-xs text-muted-foreground" title={channel.delivery}>
+              {channel.delivery}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

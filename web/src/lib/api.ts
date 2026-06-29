@@ -146,6 +146,8 @@ import type {
   NHIReviewDecisionRequest,
   NHIReviewItem,
   Notification,
+  NotificationChannel,
+  NotificationChannelList,
   NotificationList,
   OffboardMemberRequest,
   OffboardMemberResponse,
@@ -321,6 +323,8 @@ export type {
   NHIReviewDecisionRequest,
   NHIReviewItem,
   Notification,
+  NotificationChannel,
+  NotificationChannelList,
   NotificationList,
   OffboardMemberRequest,
   OffboardMemberResponse,
@@ -837,6 +841,7 @@ export interface Api {
   signTransit(input: TransitSignRequest): Promise<TransitSignature>;
   verifyTransit(input: TransitVerifyRequest): Promise<TransitVerify>;
   notifications(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): Promise<NotificationList>;
+  notificationChannels(): Promise<NotificationChannelList>;
   markNotificationRead(id: string): Promise<Notification>;
   requeueNotification(id: string): Promise<Notification>;
 }
@@ -1036,6 +1041,7 @@ export const api: Api = {
   signTransit: (input) => mutate<TransitSignature>("POST", "/api/v1/transit/sign", input),
   verifyTransit: (input) => mutate<TransitVerify>("POST", "/api/v1/transit/verify", input),
   notifications: (options) => req<NotificationList>(`/api/v1/notifications${notificationQueryString(options)}`),
+  notificationChannels: () => req<NotificationChannelList>("/api/v1/notification-channels"),
   markNotificationRead: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/read`),
   requeueNotification: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/requeue`),
 };
