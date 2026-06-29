@@ -1476,6 +1476,130 @@ export const messages = {
     defaultMessage: "unconfigured",
     description: "Status badge for a notification channel family that is supported but not configured.",
   },
+  "notifications.routing.heading": {
+    defaultMessage: "Routing policies",
+    description: "Heading for notification routing policy authoring.",
+  },
+  "notifications.routing.description": {
+    defaultMessage: "Map severity tiers to configured channels, assign an owner, and preview the digest cadence.",
+    description: "Description for notification routing policy authoring.",
+  },
+  "notifications.routing.loadError": {
+    defaultMessage: "Could not load notification routing policies",
+    description: "Fallback error when notification routing policies cannot be fetched.",
+  },
+  "notifications.routing.createError": {
+    defaultMessage: "Could not create notification routing policy",
+    description: "Fallback error when notification routing policy creation fails.",
+  },
+  "notifications.routing.testError": {
+    defaultMessage: "Could not queue notification channel test",
+    description: "Fallback error when notification channel test queueing fails.",
+  },
+  "notifications.routing.policyCreated": {
+    defaultMessage: "Routing policy saved",
+    description: "Toast title after saving a notification routing policy.",
+  },
+  "notifications.routing.testQueued": {
+    defaultMessage: "Channel test queued",
+    description: "Toast title after queueing a notification channel test.",
+  },
+  "notifications.routing.name": {
+    defaultMessage: "Policy name",
+    description: "Label for notification routing policy name.",
+  },
+  "notifications.routing.ownerRef": {
+    defaultMessage: "Owner reference",
+    description: "Label for notification routing policy owner reference.",
+  },
+  "notifications.routing.ownerEmail": {
+    defaultMessage: "Owner email",
+    description: "Label for notification routing policy owner email.",
+  },
+  "notifications.routing.digestInterval": {
+    defaultMessage: "Digest interval",
+    description: "Label for notification routing policy digest interval.",
+  },
+  "notifications.routing.intervalOneHour": {
+    defaultMessage: "1 hour",
+    description: "Notification routing digest interval option for one hour.",
+  },
+  "notifications.routing.intervalTwelveHours": {
+    defaultMessage: "12 hours",
+    description: "Notification routing digest interval option for twelve hours.",
+  },
+  "notifications.routing.intervalOneDay": {
+    defaultMessage: "24 hours",
+    description: "Notification routing digest interval option for one day.",
+  },
+  "notifications.routing.intervalSevenDays": {
+    defaultMessage: "7 days",
+    description: "Notification routing digest interval option for seven days.",
+  },
+  "notifications.routing.defaultChannels": {
+    defaultMessage: "Default channels",
+    description: "Label for notification routing default channels.",
+  },
+  "notifications.routing.criticalChannels": {
+    defaultMessage: "Critical channels",
+    description: "Label for critical severity notification channels.",
+  },
+  "notifications.routing.warningChannels": {
+    defaultMessage: "Warning channels",
+    description: "Label for warning severity notification channels.",
+  },
+  "notifications.routing.lowChannels": {
+    defaultMessage: "Low channels",
+    description: "Label for low severity notification channels.",
+  },
+  "notifications.routing.save": {
+    defaultMessage: "Save policy",
+    description: "Submit button for notification routing policy form.",
+  },
+  "notifications.routing.saving": {
+    defaultMessage: "Saving...",
+    description: "Busy state for notification routing policy form.",
+  },
+  "notifications.routing.testHeading": {
+    defaultMessage: "Test delivery",
+    description: "Heading for notification channel test form.",
+  },
+  "notifications.routing.channel": {
+    defaultMessage: "Channel",
+    description: "Label for notification channel selection.",
+  },
+  "notifications.routing.severity": {
+    defaultMessage: "Severity",
+    description: "Label for notification test severity.",
+  },
+  "notifications.routing.testSubject": {
+    defaultMessage: "Test subject",
+    description: "Label for notification test subject.",
+  },
+  "notifications.routing.credentialRef": {
+    defaultMessage: "Credential reference",
+    description: "Label for redacted notification test credential reference.",
+  },
+  "notifications.routing.sendTest": {
+    defaultMessage: "Queue test",
+    description: "Submit button for notification channel test form.",
+  },
+  "notifications.routing.testing": {
+    defaultMessage: "Queueing...",
+    description: "Busy state for notification channel test form.",
+  },
+  "notifications.routing.noPolicies": {
+    defaultMessage: "No routing policies yet.",
+    description: "Empty state for notification routing policy list.",
+  },
+  "notifications.routing.owner": {
+    defaultMessage: "Owner",
+    description: "Label for notification routing policy owner summary.",
+  },
+  "notifications.routing.nextDigest": {
+    defaultMessage: "Next digest",
+    description: "Label for notification routing digest preview summary.",
+  },
   "incidents.playbooks.heading": {
     defaultMessage: "Automated remediation playbooks",
     description: "Heading for the incident remediation playbook section.",
@@ -2897,6 +3021,38 @@ const esESCatalog = {
   "notifications.channels.loadError": "No se pudieron cargar los canales de notificación",
   "notifications.channels.configured": "configurado",
   "notifications.channels.unconfigured": "sin configurar",
+  "notifications.routing.heading": "Políticas de enrutamiento",
+  "notifications.routing.description":
+    "Asigna niveles de severidad a canales configurados, define propietario y previsualiza la cadencia del resumen.",
+  "notifications.routing.loadError": "No se pudieron cargar las políticas de enrutamiento de notificaciones",
+  "notifications.routing.createError": "No se pudo crear la política de enrutamiento de notificaciones",
+  "notifications.routing.testError": "No se pudo encolar la prueba del canal de notificación",
+  "notifications.routing.policyCreated": "Política de enrutamiento guardada",
+  "notifications.routing.testQueued": "Prueba de canal encolada",
+  "notifications.routing.name": "Nombre de política",
+  "notifications.routing.ownerRef": "Referencia de propietario",
+  "notifications.routing.ownerEmail": "Correo de propietario",
+  "notifications.routing.digestInterval": "Intervalo de resumen",
+  "notifications.routing.intervalOneHour": "1 hora",
+  "notifications.routing.intervalTwelveHours": "12 horas",
+  "notifications.routing.intervalOneDay": "24 horas",
+  "notifications.routing.intervalSevenDays": "7 días",
+  "notifications.routing.defaultChannels": "Canales predeterminados",
+  "notifications.routing.criticalChannels": "Canales críticos",
+  "notifications.routing.warningChannels": "Canales de advertencia",
+  "notifications.routing.lowChannels": "Canales bajos",
+  "notifications.routing.save": "Guardar política",
+  "notifications.routing.saving": "Guardando...",
+  "notifications.routing.testHeading": "Prueba de entrega",
+  "notifications.routing.channel": "Canal",
+  "notifications.routing.severity": "Severidad",
+  "notifications.routing.testSubject": "Sujeto de prueba",
+  "notifications.routing.credentialRef": "Referencia de credencial",
+  "notifications.routing.sendTest": "Encolar prueba",
+  "notifications.routing.testing": "Encolando...",
+  "notifications.routing.noPolicies": "Aún no hay políticas de enrutamiento.",
+  "notifications.routing.owner": "Propietario",
+  "notifications.routing.nextDigest": "Próximo resumen",
   "incidents.playbooks.heading": "Playbooks de remediación automatizada",
   "incidents.playbooks.description": "Ejecuta playbooks de revocación, rotación y ajuste de permisos con evidencia auditable y acciones externas en cola.",
   "incidents.playbooks.targetIdentity": "Identidad objetivo",

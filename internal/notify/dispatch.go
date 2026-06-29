@@ -184,6 +184,13 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 	if len(d.channels) == 0 {
 		return nil, nil
 	}
+	if alert.Kind == KindNotificationChannelTest && strings.TrimSpace(alert.TargetChannel) != "" {
+		channels := d.channelsByNameStrict([]string{alert.TargetChannel})
+		if len(channels) == 0 {
+			return nil, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
+		}
+		return channels, nil
+	}
 	var names []string
 	if alert.RoutingPolicyID != "" && d.resolver != nil {
 		policy, ok, err := d.resolver.ResolveNotificationPolicy(ctx, alert.TenantID, alert.RoutingPolicyID)
@@ -198,6 +205,20 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		names = d.defaultPolicy.EffectiveAlertChannels(alert.Severity)
 	}
 	return d.channelsByName(names), nil
+}
+
+func (d *Dispatcher) channelsByNameStrict(names []string) []Notifier {
+	wanted := make(map[string]bool, len(names))
+	for _, name := range names {
+		wanted[normalizeChannelName(name)] = true
+	}
+	var out []Notifier
+	for _, ch := range d.channels {
+		if wanted[normalizeChannelName(ch.Name())] {
+			out = append(out, ch)
+		}
+	}
+	return out
 }
 
 func (d *Dispatcher) channelsByName(names []string) []Notifier {

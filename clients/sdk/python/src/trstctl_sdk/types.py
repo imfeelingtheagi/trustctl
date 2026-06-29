@@ -2744,11 +2744,92 @@ NotificationChannelList = TypedDict(
     total=False,
 )
 
+NotificationChannelTest = TypedDict(
+    'NotificationChannelTest',
+    {
+        'channel_id': str,
+        'credential_ref': str,
+        'destination': str,
+        'idempotency_key': str,
+        'outbox_id': int,
+        'queued_at': str,
+        'secret_handling': str,
+        'status': str,
+    },
+    total=False,
+)
+
+NotificationChannelTestRequest = TypedDict(
+    'NotificationChannelTestRequest',
+    {
+        'credential_ref': str,
+        'detail': str,
+        'owner_email': str,
+        'routing_policy_id': str,
+        'severity': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+NotificationDigestPreview = TypedDict(
+    'NotificationDigestPreview',
+    {
+        'interval_seconds': int,
+        'next_run_at': str,
+        'timezone': str,
+    },
+    total=False,
+)
+
 NotificationList = TypedDict(
     'NotificationList',
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+NotificationRoutingPolicy = TypedDict(
+    'NotificationRoutingPolicy',
+    {
+        'channels_by_severity': dict[str, Any],
+        'created_at': str,
+        'default_channels': list[str],
+        'digest_interval_seconds': int,
+        'digest_preview': dict[str, Any],
+        'digest_timezone': str,
+        'id': str,
+        'name': str,
+        'owner_email': str,
+        'owner_ref': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+NotificationRoutingPolicyList = TypedDict(
+    'NotificationRoutingPolicyList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+NotificationRoutingPolicyRequest = TypedDict(
+    'NotificationRoutingPolicyRequest',
+    {
+        'channels_by_severity': dict[str, Any],
+        'default_channels': list[str],
+        'digest_interval_seconds': int,
+        'digest_timezone': str,
+        'id': str,
+        'name': str,
+        'owner_email': str,
+        'owner_ref': str,
     },
     total=False,
 )

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { RefreshCw, Save, Send } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -9,14 +9,47 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type Notification, type NotificationChannel } from "@/lib/api";
+import { api, ApiError, type Notification, type NotificationChannel, type NotificationChannelTest, type NotificationRoutingPolicy } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
 
 type ActiveTab = "all" | "dead";
 type NotificationStatus = Notification["status"];
+type TestSeverity = "low" | "informational" | "warning" | "critical";
 type Notice = { title: string; detail?: string };
+type PolicyFormState = {
+  name: string;
+  ownerRef: string;
+  ownerEmail: string;
+  digestInterval: string;
+  defaultChannels: string;
+  criticalChannels: string;
+  warningChannels: string;
+  lowChannels: string;
+};
+type TestFormState = {
+  channelId: string;
+  severity: TestSeverity;
+  subject: string;
+  credentialRef: string;
+};
 
 const maxNotificationAttempts = 10;
+const initialPolicyForm: PolicyFormState = {
+  name: "Expiry escalation",
+  ownerRef: "team/platform-security",
+  ownerEmail: "",
+  digestInterval: "86400",
+  defaultChannels: "email",
+  criticalChannels: "slack, webhook",
+  warningChannels: "slack",
+  lowChannels: "email",
+};
+const initialTestForm: TestFormState = {
+  channelId: "",
+  severity: "critical",
+  subject: "Notification channel test",
+  credentialRef: "",
+};
 
 const statusOptions: Array<{ value: "" | NotificationStatus; label: string }> = [
   { value: "", label: "All statuses" },
@@ -25,6 +58,13 @@ const statusOptions: Array<{ value: "" | NotificationStatus; label: string }> = 
   { value: "read", label: "read" },
   { value: "dead", label: "dead" },
 ];
+const digestOptions = [
+  { value: "3600", labelKey: "notifications.routing.intervalOneHour" },
+  { value: "43200", labelKey: "notifications.routing.intervalTwelveHours" },
+  { value: "86400", labelKey: "notifications.routing.intervalOneDay" },
+  { value: "604800", labelKey: "notifications.routing.intervalSevenDays" },
+] as const;
+const testSeverityOptions: TestSeverity[] = ["critical", "warning", "informational", "low"];
 
 export function Notifications() {
   const { toast } = useToast();
@@ -39,19 +79,28 @@ export function Notifications() {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | NotificationStatus>("");
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [policies, setPolicies] = useState<NotificationRoutingPolicy[]>([]);
+  const [policyForm, setPolicyForm] = useState<PolicyFormState>(initialPolicyForm);
+  const [testForm, setTestForm] = useState<TestFormState>(initialTestForm);
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     setChannelError(null);
     try {
-      const [result, channelResult] = await Promise.all([
+      const [result, channelResult, policyResult] = await Promise.all([
         api.notifications(activeTab === "dead" ? { limit: 100, status: "dead" } : { limit: 100 }),
         api.notificationChannels(),
+        api.notificationRoutingPolicies(),
       ]);
       setNotifications(result.items ?? []);
       setChannels(channelResult.items ?? []);
+      setPolicies(policyResult.items ?? []);
     } catch (err) {
       setNotifications([]);
+      setPolicies([]);
       setError({ title: "Notifications unavailable", detail: errorText(err, "Could not load notifications") });
       setChannelError(errorText(err, channelLoadError));
     } finally {
@@ -116,6 +165,58 @@ export function Notifications() {
     }
   }
 
+  async function savePolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPolicyBusy(true);
+    setError(null);
+    try {
+      const created = await api.createNotificationRoutingPolicy({
+        name: policyForm.name.trim(),
+        owner_ref: policyForm.ownerRef.trim() || undefined,
+        owner_email: policyForm.ownerEmail.trim() || undefined,
+        digest_interval_seconds: Number(policyForm.digestInterval),
+        digest_timezone: "UTC",
+        default_channels: splitChannels(policyForm.defaultChannels),
+        channels_by_severity: {
+          critical: splitChannels(policyForm.criticalChannels),
+          warning: splitChannels(policyForm.warningChannels),
+          low: splitChannels(policyForm.lowChannels),
+        },
+      });
+      setPolicies((current) => upsertPolicy(current, created));
+      toast({ kind: "success", title: t("notifications.routing.policyCreated"), description: created.name });
+    } catch (err) {
+      const detail = errorText(err, t("notifications.routing.createError"));
+      setError({ title: t("notifications.routing.createError"), detail });
+      toast({ kind: "error", title: t("notifications.routing.createError"), description: detail });
+    } finally {
+      setPolicyBusy(false);
+    }
+  }
+
+  async function testChannel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const channelId = testForm.channelId || firstConfiguredChannel(channels)?.id || "";
+    if (!channelId) return;
+    setTestBusy(true);
+    setError(null);
+    try {
+      const result = await api.testNotificationChannel(channelId, {
+        severity: testForm.severity,
+        subject: testForm.subject.trim() || undefined,
+        credential_ref: testForm.credentialRef.trim() || undefined,
+      });
+      setTestResult(result);
+      toast({ kind: "success", title: t("notifications.routing.testQueued"), description: `${result.channel_id} #${result.outbox_id}` });
+    } catch (err) {
+      const detail = errorText(err, t("notifications.routing.testError"));
+      setError({ title: t("notifications.routing.testError"), detail });
+      toast({ kind: "error", title: t("notifications.routing.testError"), description: detail });
+    } finally {
+      setTestBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="notifications-heading" className="grid gap-6">
       <PageHeader
@@ -133,6 +234,20 @@ export function Notifications() {
       {error && <ErrorState title={error.title}>{error.detail}</ErrorState>}
 
       <ChannelCatalog channels={channels} error={channelError} />
+
+      <RoutingPolicyAuthoring
+        channels={channels}
+        policies={policies}
+        policyForm={policyForm}
+        testForm={testForm}
+        policyBusy={policyBusy}
+        testBusy={testBusy}
+        testResult={testResult}
+        onPolicyFormChange={setPolicyForm}
+        onTestFormChange={setTestForm}
+        onSavePolicy={(event) => void savePolicy(event)}
+        onTestChannel={(event) => void testChannel(event)}
+      />
 
       <div className="ui-panel grid gap-3 p-comfortable lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
         <div role="tablist" aria-label="Notification queues" className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border">
@@ -243,6 +358,222 @@ function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; 
         ))}
       </div>
     </div>
+  );
+}
+
+function RoutingPolicyAuthoring({
+  channels,
+  policies,
+  policyForm,
+  testForm,
+  policyBusy,
+  testBusy,
+  testResult,
+  onPolicyFormChange,
+  onTestFormChange,
+  onSavePolicy,
+  onTestChannel,
+}: {
+  channels: NotificationChannel[];
+  policies: NotificationRoutingPolicy[];
+  policyForm: PolicyFormState;
+  testForm: TestFormState;
+  policyBusy: boolean;
+  testBusy: boolean;
+  testResult: NotificationChannelTest | null;
+  onPolicyFormChange: (next: PolicyFormState) => void;
+  onTestFormChange: (next: TestFormState) => void;
+  onSavePolicy: (event: FormEvent<HTMLFormElement>) => void;
+  onTestChannel: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const { t } = useTranslation();
+  const configured = channels.filter((channel) => channel.configured);
+  const selectedChannel = testForm.channelId || firstConfiguredChannel(channels)?.id || "";
+  return (
+    <div className="ui-panel grid gap-5 p-comfortable">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid gap-1">
+          <h2 className="text-base font-semibold">{t("notifications.routing.heading")}</h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("notifications.routing.description")}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+        <form className="grid gap-4" onSubmit={onSavePolicy}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextInput
+              label={t("notifications.routing.name")}
+              value={policyForm.name}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, name: value })}
+              required
+            />
+            <TextInput
+              label={t("notifications.routing.ownerEmail")}
+              value={policyForm.ownerEmail}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, ownerEmail: value })}
+              type="email"
+            />
+            <TextInput
+              label={t("notifications.routing.ownerRef")}
+              value={policyForm.ownerRef}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, ownerRef: value })}
+            />
+            <label className="grid gap-2 text-sm font-medium">
+              {t("notifications.routing.digestInterval")}
+              <select
+                value={policyForm.digestInterval}
+                onChange={(event) => onPolicyFormChange({ ...policyForm, digestInterval: event.target.value })}
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+              >
+                {digestOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {t(option.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextInput
+              label={t("notifications.routing.defaultChannels")}
+              value={policyForm.defaultChannels}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, defaultChannels: value })}
+            />
+            <TextInput
+              label={t("notifications.routing.criticalChannels")}
+              value={policyForm.criticalChannels}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, criticalChannels: value })}
+            />
+            <TextInput
+              label={t("notifications.routing.warningChannels")}
+              value={policyForm.warningChannels}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, warningChannels: value })}
+            />
+            <TextInput
+              label={t("notifications.routing.lowChannels")}
+              value={policyForm.lowChannels}
+              onChange={(value) => onPolicyFormChange({ ...policyForm, lowChannels: value })}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {configured.map((channel) => (
+              <StatusBadge key={channel.id} value={channel.id} label={channel.label} tone="success" />
+            ))}
+          </div>
+          <Button type="submit" className="w-fit" disabled={policyBusy}>
+            <Save className="h-4 w-4" aria-hidden="true" />
+            {policyBusy ? t("notifications.routing.saving") : t("notifications.routing.save")}
+          </Button>
+        </form>
+
+        <form className="grid content-start gap-4 rounded-control border border-border bg-background p-4" onSubmit={onTestChannel}>
+          <h3 className="text-sm font-semibold">{t("notifications.routing.testHeading")}</h3>
+          <label className="grid gap-2 text-sm font-medium">
+            {t("notifications.routing.channel")}
+            <select
+              value={selectedChannel}
+              onChange={(event) => onTestFormChange({ ...testForm, channelId: event.target.value })}
+              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            >
+              {configured.map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {channel.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm font-medium">
+            {t("notifications.routing.severity")}
+            <select
+              value={testForm.severity}
+              onChange={(event) => onTestFormChange({ ...testForm, severity: event.target.value as TestSeverity })}
+              className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+            >
+              {testSeverityOptions.map((severity) => (
+                <option key={severity} value={severity}>
+                  {severity}
+                </option>
+              ))}
+            </select>
+          </label>
+          <TextInput
+            label={t("notifications.routing.testSubject")}
+            value={testForm.subject}
+            onChange={(value) => onTestFormChange({ ...testForm, subject: value })}
+          />
+          <TextInput
+            label={t("notifications.routing.credentialRef")}
+            value={testForm.credentialRef}
+            onChange={(value) => onTestFormChange({ ...testForm, credentialRef: value })}
+          />
+          <Button type="submit" className="w-fit" disabled={testBusy || !selectedChannel}>
+            <Send className="h-4 w-4" aria-hidden="true" />
+            {testBusy ? t("notifications.routing.testing") : t("notifications.routing.sendTest")}
+          </Button>
+          {testResult && (
+            <p className="text-sm text-muted-foreground">
+              {testResult.channel_id} #{testResult.outbox_id} - {testResult.credential_ref || testResult.secret_handling}
+            </p>
+          )}
+        </form>
+      </div>
+
+      <div className="grid gap-2">
+        {policies.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("notifications.routing.noPolicies")}</p>
+        ) : (
+          policies.map((policy) => (
+            <div key={policy.id} className="grid gap-2 rounded-control border border-border bg-background p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{policy.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{policy.id}</p>
+                </div>
+                <StatusBadge value="configured" label={joinChannels(policy.default_channels)} tone="neutral" />
+              </div>
+              <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
+                <span>
+                  {t("notifications.routing.owner")}: {policy.owner_email || policy.owner_ref || "-"}
+                </span>
+                <span>
+                  {testSeverityOptions[0]}: {joinChannels(policyChannels(policy, "critical")) || "-"}
+                </span>
+                <span>
+                  {t("notifications.routing.nextDigest")}: {formatDateTime(policy.digest_preview.next_run_at)}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="grid gap-2 text-sm font-medium">
+      {label}
+      <input
+        type={type}
+        value={value}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+      />
+    </label>
   );
 }
 
@@ -367,6 +698,34 @@ function EscalationSummary({ notification }: { notification: Notification }) {
 
 function recipientLabel(recipient: NonNullable<Notification["escalation_recipients"]>[number]): string {
   return recipient.email || recipient.display_name || recipient.subject;
+}
+
+function splitChannels(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinChannels(value: string[] | undefined): string {
+  return (value ?? []).join(", ");
+}
+
+function upsertPolicy(current: NotificationRoutingPolicy[], next: NotificationRoutingPolicy): NotificationRoutingPolicy[] {
+  const found = current.some((policy) => policy.id === next.id);
+  if (!found) return [...current, next].sort((a, b) => a.name.localeCompare(b.name));
+  return current.map((policy) => (policy.id === next.id ? next : policy)).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function firstConfiguredChannel(channels: NotificationChannel[]): NotificationChannel | undefined {
+  return channels.find((channel) => channel.configured);
+}
+
+function policyChannels(policy: NotificationRoutingPolicy, severity: string): string[] {
+  const matrix = policy.channels_by_severity;
+  const value = matrix && typeof matrix === "object" ? matrix[severity] : undefined;
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 function tabClass(active: boolean): string {

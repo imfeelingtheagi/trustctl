@@ -22,6 +22,10 @@ import (
 // CONCURRENTLY-built index) are applied over real data.
 const contentPrefixVersion = 31
 
+var valueChangingMigrationContentHarnesses = map[int]bool{
+	62: true,
+}
+
 // seededContentColumns is the EXPLICIT, version-stable column projection used to
 // checksum each seeded table. It deliberately names only the columns that exist at
 // contentPrefixVersion, so a later additive ADD COLUMN (e.g. outbox.worker_id at
@@ -213,6 +217,48 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 			t.Fatal("expected discovery_findings_triage_status_idx after migration 0051")
 		}
 	})
+
+	t.Run("0062_notification_routing_policy_metadata", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 62)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedNotificationRoutingPolicyMetadataContent(t, ctx, pool)
+
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, notificationRoutingPolicyStableProjectionSQL())
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, notificationRoutingPolicyStableProjectionSQL())
+		if afterCount != beforeCount {
+			t.Fatalf("notification_routing_policies count changed across 0062: before=%d after=%d", beforeCount, afterCount)
+		}
+		if afterChecksum != beforeChecksum {
+			t.Fatalf("notification_routing_policies existing values changed across 0062: before=%s after=%s", beforeChecksum, afterChecksum)
+		}
+
+		var count int
+		var ownerRefOK, ownerEmailOK, digestIntervalOK, digestTimezoneOK bool
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*),
+			       bool_and(owner_ref = ''),
+			       bool_and(owner_email = ''),
+			       bool_and(digest_interval_seconds = 86400),
+			       bool_and(digest_timezone = 'UTC')
+			  FROM notification_routing_policies`).Scan(&count, &ownerRefOK, &ownerEmailOK, &digestIntervalOK, &digestTimezoneOK); err != nil {
+			t.Fatalf("query 0062 default-filled columns: %v", err)
+		}
+		if count != beforeCount || !ownerRefOK || !ownerEmailOK || !digestIntervalOK || !digestTimezoneOK {
+			t.Fatalf("0062 defaults mismatch: count=%d want=%d owner_ref=%t owner_email=%t digest_interval=%t digest_timezone=%t",
+				count, beforeCount, ownerRefOK, ownerEmailOK, digestIntervalOK, digestTimezoneOK)
+		}
+	})
 }
 
 // TestFutureValueChangingMigrationsRequireContentHarness is the SCHEMA-002 tripwire
@@ -224,6 +270,9 @@ func TestFutureValueChangingMigrationsRequireContentHarness(t *testing.T) {
 	valueChanging := regexp.MustCompile(`(?is)\binsert\s+into\b.+\bselect\b|\balter\s+table\b.+\badd\s+column\b.+\bdefault\b`)
 	for _, m := range orderedMigrationFiles(t) {
 		if m.version <= 51 {
+			continue
+		}
+		if valueChangingMigrationContentHarnesses[m.version] {
 			continue
 		}
 		if valueChanging.MatchString(stripSQLLineComments(m.body)) {
@@ -485,6 +534,61 @@ func discoveryFindingStableProjectionSQL() string {
 		       metadata::text,
 		       discovered_at::text
 		  FROM discovery_findings
+		 ORDER BY tenant_id, id`
+}
+
+func seedNotificationRoutingPolicyMetadataContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID           string
+		id                 string
+		name               string
+		channelsBySeverity string
+		defaultChannels    string
+		createdAt          string
+		updatedAt          string
+	}{
+		{
+			tenantID:           tenantA,
+			id:                 uuid(tenantA, 62),
+			name:               "critical-escalation",
+			channelsBySeverity: `{"critical":["slack","webhook"],"warning":["email"]}`,
+			defaultChannels:    `["email"]`,
+			createdAt:          "2026-01-06T03:04:05Z",
+			updatedAt:          "2026-01-06T03:04:06Z",
+		},
+		{
+			tenantID:           tenantB,
+			id:                 uuid(tenantB, 62),
+			name:               "low-signal-digest",
+			channelsBySeverity: `{"low":["email"]}`,
+			defaultChannels:    `["webhook"]`,
+			createdAt:          "2026-01-07T03:04:05Z",
+			updatedAt:          "2026-01-07T03:04:06Z",
+		},
+	}
+	for _, r := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO notification_routing_policies (
+			    id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at
+			)
+			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz, $7::timestamptz)`,
+			r.id, r.tenantID, r.name, r.channelsBySeverity, r.defaultChannels, r.createdAt, r.updatedAt); err != nil {
+			t.Fatalf("seed notification routing policy %s/%s: %v", r.tenantID, r.name, err)
+		}
+	}
+}
+
+func notificationRoutingPolicyStableProjectionSQL() string {
+	return `
+		SELECT id::text,
+		       tenant_id::text,
+		       name,
+		       channels_by_severity::text,
+		       default_channels::text,
+		       created_at::text,
+		       updated_at::text
+		  FROM notification_routing_policies
 		 ORDER BY tenant_id, id`
 }
 

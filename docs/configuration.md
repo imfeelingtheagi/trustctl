@@ -151,8 +151,9 @@ How far ahead of expiry trstctl renews and alerts. Values are Go durations.
 
 Notification channels are off until an operator configures them. When enabled, lifecycle
 expiry alerts are written to the `notification.*` outbox first, then delivered by the
-registered channel workers. Tenant self-service channel authoring is not served yet; keep
-channel secrets in operator-managed secret references or files.
+registered channel workers. Tenant-scoped routing policy authoring and channel-test
+delivery are served from the console; channel secrets remain in operator-managed secret
+references or files.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

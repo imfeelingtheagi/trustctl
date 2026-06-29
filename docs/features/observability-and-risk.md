@@ -164,8 +164,9 @@ The overview dashboard surfaces a severity-ranked **alert center** projected fro
 risk and certificate-expiry events, and the `/risk` screen renders a **risk-posture**
 summary (counts by band, orphaned credentials, average composite score) above the
 scored-credential grid. There is no dedicated alerts endpoint — the center is a projection
-of events the backend already serves, and notification *channel* configuration and scheduled
-digests are not served. See [The web console](../web-console.md).
+of events the backend already serves. The `/notifications` console serves routing policy
+authoring and channel-test delivery; scheduled digest delivery remains outside the served
+workflow. See [The web console](../web-console.md).
 
 ## Use it
 

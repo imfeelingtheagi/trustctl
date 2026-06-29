@@ -787,6 +787,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),
+		api.WithNotificationOutbox(s.outbox),
 	}
 	if d.EnableRemediation {
 		defaults = append(defaults,

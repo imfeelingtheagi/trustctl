@@ -26,6 +26,8 @@ const (
 	// DestinationResponse carries incident-response integration alerts (CAP-REM-03)
 	// through the same outbox-backed notification fanout as expiry, CT, and drift.
 	DestinationResponse = "notification.response"
+	// DestinationTest carries operator-requested channel test alerts.
+	DestinationTest = "notification.test"
 )
 
 // Alert kinds.
@@ -43,6 +45,8 @@ const (
 	// KindResponseIntegration marks an operator-dispatched incident/remediation
 	// response packet for chat notification integrations.
 	KindResponseIntegration = "response.integration"
+	// KindNotificationChannelTest marks an operator-requested channel test.
+	KindNotificationChannelTest = "notification.channel_test"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing
@@ -74,6 +78,7 @@ type Alert struct {
 	Detail               string           `json:"detail,omitempty"`
 	Severity             string           `json:"severity,omitempty"`
 	RoutingPolicyID      string           `json:"routing_policy_id,omitempty"`
+	TargetChannel        string           `json:"target_channel,omitempty"`
 	ThresholdDays        *int             `json:"threshold_days,omitempty"`
 	OwnerID              string           `json:"owner_id,omitempty"`
 	OwnerName            string           `json:"owner_name,omitempty"`

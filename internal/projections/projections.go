@@ -18,71 +18,73 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered                 = "tenant.registered"
-	EventTenantOffboarded                 = "tenant.offboarded"
-	EventOwnerCreated                     = "owner.created"
-	EventOwnerUpdated                     = "owner.updated"
-	EventOwnerDeleted                     = "owner.deleted"
-	EventIssuerCreated                    = "issuer.created"
-	EventIdentityCreated                  = "identity.created"
-	EventIdentityIssued                   = "identity.issued"
-	EventIdentityDeployed                 = "identity.deployed"
-	EventIdentityRevoked                  = "identity.revoked"
-	EventIdentityRenewing                 = "identity.renewing"
-	EventIdentityRenewed                  = "identity.renewed"
-	EventIdentityRetired                  = "identity.retired"
-	EventCertificateRecorded              = "certificate.recorded"
-	EventCertificateRevoked               = "certificate.revoked"
-	EventCertificateSuperseded            = "certificate.superseded"
-	EventCAIssuedCertificate              = "ca.certificate.issued"
-	EventCACertificateRevoked             = "ca.certificate.revoked"
-	EventCACeremonyStarted                = "ca.ceremony.started"
-	EventCACeremonyApproved               = "ca.ceremony.approved"
-	EventCARootCreated                    = "ca.root.created"
-	EventCAAuthorityImported              = "ca.authority.imported"
-	EventCAIntermediateCreated            = "ca.intermediate.created"
-	EventCAIntermediateCSRIssued          = "ca.intermediate_csr.issued"
-	EventCAEndEntityIssued                = "ca.endentity.issued"
-	EventCRLPublished                     = "ca.crl.published"
-	EventOCSPResponderRotated             = "ca.ocsp_responder.rotated"
-	EventAgentHeartbeat                   = "agent.heartbeat"
-	EventAgentCertRenewed                 = "agent.cert.renewed"
-	EventAgentCertRevoked                 = "agent.cert.revoked"
-	EventProfileCreated                   = "profile.created"
-	EventProfileUpdated                   = "profile.updated"
-	EventDiscoverySourceUpserted          = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted        = "discovery.schedule.upserted"
-	EventDiscoveryRunQueued               = "discovery.run.queued"
-	EventDiscoveryRunStarted              = "discovery.run.started"
-	EventDiscoveryFindingRecorded         = "discovery.finding.recorded"
-	EventDiscoveryFindingTriageChanged    = "discovery.finding.triage_changed"
-	EventDiscoveryRunCompleted            = "discovery.run.completed"
-	EventComplianceReportScheduleUpserted = "compliance.report_schedule.upserted"
-	EventNotificationRead                 = "notification.read"
-	EventNotificationThresholdDelivered   = "notification.threshold.delivered"
-	EventCBOMAssetObserved                = "cbom.asset.observed"
-	EventPQCMigrationStarted              = "pqc.migration.started"
-	EventPQCMigrationAssetCompleted       = "pqc.migration.asset_completed"
-	EventPQCMigrationRollbackCompleted    = "pqc.migration.rollback_completed"
-	EventDeploymentTargetUpserted         = "deployment_target.upserted"
-	EventDeploymentTargetDeleted          = "deployment_target.deleted"
-	EventIdentityConnectorTargetBound     = "identity.connector_target_bound"
-	EventConnectorDeliveryRecorded        = "connector.delivery.recorded"
-	EventLifecycleRotationRecorded        = "lifecycle.rotation.recorded"
-	EventIncidentExecutionRecorded        = "incident.execution.recorded"
-	EventIncidentFleetReissuanceRecorded  = "incident.fleet_reissuance.recorded"
-	EventRemediationPlaybookRunRecorded   = "remediation.playbook_run.recorded"
-	EventResponseIntegrationDispatched    = "response.integration.dispatched"
-	EventPrivacySubjectErased             = "privacy.subject.erased"
-	EventPrivacyRetentionEnforced         = "privacy.retention.enforced"
-	EventTenantMemberUpserted             = "tenant.member.upserted"
-	EventTenantMemberOffboarded           = "tenant.member.offboarded"
-	EventAPITokenCreated                  = "api_token.created"
-	EventAPITokenRevoked                  = "api_token.revoked"
-	EventPAMSessionStarted                = "pam.session.started"
-	EventPAMSessionExpired                = "pam.session.expired"
-	EventNHIAccessReviewCampaignStarted   = "nhi.access_review.campaign.started"
-	EventNHIAccessReviewItemDecided       = "nhi.access_review.item.decided"
+	EventTenantRegistered                  = "tenant.registered"
+	EventTenantOffboarded                  = "tenant.offboarded"
+	EventOwnerCreated                      = "owner.created"
+	EventOwnerUpdated                      = "owner.updated"
+	EventOwnerDeleted                      = "owner.deleted"
+	EventIssuerCreated                     = "issuer.created"
+	EventIdentityCreated                   = "identity.created"
+	EventIdentityIssued                    = "identity.issued"
+	EventIdentityDeployed                  = "identity.deployed"
+	EventIdentityRevoked                   = "identity.revoked"
+	EventIdentityRenewing                  = "identity.renewing"
+	EventIdentityRenewed                   = "identity.renewed"
+	EventIdentityRetired                   = "identity.retired"
+	EventCertificateRecorded               = "certificate.recorded"
+	EventCertificateRevoked                = "certificate.revoked"
+	EventCertificateSuperseded             = "certificate.superseded"
+	EventCAIssuedCertificate               = "ca.certificate.issued"
+	EventCACertificateRevoked              = "ca.certificate.revoked"
+	EventCACeremonyStarted                 = "ca.ceremony.started"
+	EventCACeremonyApproved                = "ca.ceremony.approved"
+	EventCARootCreated                     = "ca.root.created"
+	EventCAAuthorityImported               = "ca.authority.imported"
+	EventCAIntermediateCreated             = "ca.intermediate.created"
+	EventCAIntermediateCSRIssued           = "ca.intermediate_csr.issued"
+	EventCAEndEntityIssued                 = "ca.endentity.issued"
+	EventCRLPublished                      = "ca.crl.published"
+	EventOCSPResponderRotated              = "ca.ocsp_responder.rotated"
+	EventAgentHeartbeat                    = "agent.heartbeat"
+	EventAgentCertRenewed                  = "agent.cert.renewed"
+	EventAgentCertRevoked                  = "agent.cert.revoked"
+	EventProfileCreated                    = "profile.created"
+	EventProfileUpdated                    = "profile.updated"
+	EventDiscoverySourceUpserted           = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted         = "discovery.schedule.upserted"
+	EventDiscoveryRunQueued                = "discovery.run.queued"
+	EventDiscoveryRunStarted               = "discovery.run.started"
+	EventDiscoveryFindingRecorded          = "discovery.finding.recorded"
+	EventDiscoveryFindingTriageChanged     = "discovery.finding.triage_changed"
+	EventDiscoveryRunCompleted             = "discovery.run.completed"
+	EventComplianceReportScheduleUpserted  = "compliance.report_schedule.upserted"
+	EventNotificationRead                  = "notification.read"
+	EventNotificationRoutingPolicyUpserted = "notification.routing_policy.upserted"
+	EventNotificationRoutingPolicyDeleted  = "notification.routing_policy.deleted"
+	EventNotificationThresholdDelivered    = "notification.threshold.delivered"
+	EventCBOMAssetObserved                 = "cbom.asset.observed"
+	EventPQCMigrationStarted               = "pqc.migration.started"
+	EventPQCMigrationAssetCompleted        = "pqc.migration.asset_completed"
+	EventPQCMigrationRollbackCompleted     = "pqc.migration.rollback_completed"
+	EventDeploymentTargetUpserted          = "deployment_target.upserted"
+	EventDeploymentTargetDeleted           = "deployment_target.deleted"
+	EventIdentityConnectorTargetBound      = "identity.connector_target_bound"
+	EventConnectorDeliveryRecorded         = "connector.delivery.recorded"
+	EventLifecycleRotationRecorded         = "lifecycle.rotation.recorded"
+	EventIncidentExecutionRecorded         = "incident.execution.recorded"
+	EventIncidentFleetReissuanceRecorded   = "incident.fleet_reissuance.recorded"
+	EventRemediationPlaybookRunRecorded    = "remediation.playbook_run.recorded"
+	EventResponseIntegrationDispatched     = "response.integration.dispatched"
+	EventPrivacySubjectErased              = "privacy.subject.erased"
+	EventPrivacyRetentionEnforced          = "privacy.retention.enforced"
+	EventTenantMemberUpserted              = "tenant.member.upserted"
+	EventTenantMemberOffboarded            = "tenant.member.offboarded"
+	EventAPITokenCreated                   = "api_token.created"
+	EventAPITokenRevoked                   = "api_token.revoked"
+	EventPAMSessionStarted                 = "pam.session.started"
+	EventPAMSessionExpired                 = "pam.session.expired"
+	EventNHIAccessReviewCampaignStarted    = "nhi.access_review.campaign.started"
+	EventNHIAccessReviewItemDecided        = "nhi.access_review.item.decided"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -467,6 +469,26 @@ type NotificationThresholdDelivered struct {
 	ThresholdDays int       `json:"threshold_days"`
 	Channel       string    `json:"channel"`
 	SentAt        time.Time `json:"sent_at,omitempty"`
+}
+
+// NotificationRoutingPolicyUpserted is the payload of
+// notification.routing_policy.upserted. It stores channel names and operator
+// metadata only; channel credentials stay in configured notifier backends.
+type NotificationRoutingPolicyUpserted struct {
+	ID                 string              `json:"id"`
+	Name               string              `json:"name"`
+	ChannelsBySeverity map[string][]string `json:"channels_by_severity"`
+	DefaultChannels    []string            `json:"default_channels"`
+	OwnerRef           string              `json:"owner_ref,omitempty"`
+	OwnerEmail         string              `json:"owner_email,omitempty"`
+	DigestInterval     int                 `json:"digest_interval_seconds,omitempty"`
+	DigestTimezone     string              `json:"digest_timezone,omitempty"`
+}
+
+// NotificationRoutingPolicyDeleted is the payload of
+// notification.routing_policy.deleted.
+type NotificationRoutingPolicyDeleted struct {
+	ID string `json:"id"`
 }
 
 // NotificationRead is the payload of notification.read. It marks one notification
@@ -881,63 +903,65 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
-	EventTenantRegistered:                 {1: true},
-	EventTenantOffboarded:                 {1: true},
-	EventOwnerCreated:                     {1: true},
-	EventOwnerUpdated:                     {1: true},
-	EventOwnerDeleted:                     {1: true},
-	EventIssuerCreated:                    {1: true},
-	EventIdentityCreated:                  {1: true},
-	EventIdentityIssued:                   {1: true},
-	EventIdentityDeployed:                 {1: true},
-	EventIdentityRevoked:                  {1: true},
-	EventIdentityRenewing:                 {1: true},
-	EventIdentityRenewed:                  {1: true},
-	EventIdentityRetired:                  {1: true},
-	EventCertificateRecorded:              {1: true},
-	EventCertificateRevoked:               {1: true},
-	EventCertificateSuperseded:            {1: true},
-	EventCAIssuedCertificate:              {1: true},
-	EventCACertificateRevoked:             {1: true},
-	EventCACeremonyStarted:                {1: true},
-	EventCACeremonyApproved:               {1: true},
-	EventCRLPublished:                     {1: true, 2: true, 3: true},
-	EventOCSPResponderRotated:             {1: true},
-	EventAgentHeartbeat:                   {1: true},
-	EventAgentCertRenewed:                 {1: true},
-	EventAgentCertRevoked:                 {1: true},
-	EventProfileCreated:                   {1: true, 2: true},
-	EventProfileUpdated:                   {1: true, 2: true},
-	EventDiscoverySourceUpserted:          {1: true},
-	EventDiscoveryScheduleUpserted:        {1: true},
-	EventDiscoveryRunQueued:               {1: true},
-	EventDiscoveryRunStarted:              {1: true},
-	EventDiscoveryFindingRecorded:         {1: true},
-	EventDiscoveryFindingTriageChanged:    {1: true},
-	EventDiscoveryRunCompleted:            {1: true},
-	EventComplianceReportScheduleUpserted: {1: true},
-	EventNotificationRead:                 {1: true},
-	EventNotificationThresholdDelivered:   {1: true},
-	EventCBOMAssetObserved:                {1: true},
-	EventDeploymentTargetUpserted:         {1: true},
-	EventDeploymentTargetDeleted:          {1: true},
-	EventIdentityConnectorTargetBound:     {1: true},
-	EventConnectorDeliveryRecorded:        {1: true},
-	EventLifecycleRotationRecorded:        {1: true},
-	EventIncidentExecutionRecorded:        {1: true},
-	EventIncidentFleetReissuanceRecorded:  {1: true},
-	EventRemediationPlaybookRunRecorded:   {1: true},
-	EventResponseIntegrationDispatched:    {1: true},
-	EventPrivacySubjectErased:             {1: true},
-	EventPrivacyRetentionEnforced:         {1: true},
-	EventTenantMemberUpserted:             {1: true},
-	EventTenantMemberOffboarded:           {1: true},
-	EventAPITokenCreated:                  {1: true},
-	EventAPITokenRevoked:                  {1: true},
-	EventPAMSessionStarted:                {1: true},
-	EventPAMSessionExpired:                {1: true},
-	EventNHIAccessReviewCampaignStarted:   {1: true},
-	EventNHIAccessReviewItemDecided:       {1: true},
+	EventTenantRegistered:                  {1: true},
+	EventTenantOffboarded:                  {1: true},
+	EventOwnerCreated:                      {1: true},
+	EventOwnerUpdated:                      {1: true},
+	EventOwnerDeleted:                      {1: true},
+	EventIssuerCreated:                     {1: true},
+	EventIdentityCreated:                   {1: true},
+	EventIdentityIssued:                    {1: true},
+	EventIdentityDeployed:                  {1: true},
+	EventIdentityRevoked:                   {1: true},
+	EventIdentityRenewing:                  {1: true},
+	EventIdentityRenewed:                   {1: true},
+	EventIdentityRetired:                   {1: true},
+	EventCertificateRecorded:               {1: true},
+	EventCertificateRevoked:                {1: true},
+	EventCertificateSuperseded:             {1: true},
+	EventCAIssuedCertificate:               {1: true},
+	EventCACertificateRevoked:              {1: true},
+	EventCACeremonyStarted:                 {1: true},
+	EventCACeremonyApproved:                {1: true},
+	EventCRLPublished:                      {1: true, 2: true, 3: true},
+	EventOCSPResponderRotated:              {1: true},
+	EventAgentHeartbeat:                    {1: true},
+	EventAgentCertRenewed:                  {1: true},
+	EventAgentCertRevoked:                  {1: true},
+	EventProfileCreated:                    {1: true, 2: true},
+	EventProfileUpdated:                    {1: true, 2: true},
+	EventDiscoverySourceUpserted:           {1: true},
+	EventDiscoveryScheduleUpserted:         {1: true},
+	EventDiscoveryRunQueued:                {1: true},
+	EventDiscoveryRunStarted:               {1: true},
+	EventDiscoveryFindingRecorded:          {1: true},
+	EventDiscoveryFindingTriageChanged:     {1: true},
+	EventDiscoveryRunCompleted:             {1: true},
+	EventComplianceReportScheduleUpserted:  {1: true},
+	EventNotificationRead:                  {1: true},
+	EventNotificationRoutingPolicyUpserted: {1: true},
+	EventNotificationRoutingPolicyDeleted:  {1: true},
+	EventNotificationThresholdDelivered:    {1: true},
+	EventCBOMAssetObserved:                 {1: true},
+	EventDeploymentTargetUpserted:          {1: true},
+	EventDeploymentTargetDeleted:           {1: true},
+	EventIdentityConnectorTargetBound:      {1: true},
+	EventConnectorDeliveryRecorded:         {1: true},
+	EventLifecycleRotationRecorded:         {1: true},
+	EventIncidentExecutionRecorded:         {1: true},
+	EventIncidentFleetReissuanceRecorded:   {1: true},
+	EventRemediationPlaybookRunRecorded:    {1: true},
+	EventResponseIntegrationDispatched:     {1: true},
+	EventPrivacySubjectErased:              {1: true},
+	EventPrivacyRetentionEnforced:          {1: true},
+	EventTenantMemberUpserted:              {1: true},
+	EventTenantMemberOffboarded:            {1: true},
+	EventAPITokenCreated:                   {1: true},
+	EventAPITokenRevoked:                   {1: true},
+	EventPAMSessionStarted:                 {1: true},
+	EventPAMSessionExpired:                 {1: true},
+	EventNHIAccessReviewCampaignStarted:    {1: true},
+	EventNHIAccessReviewItemDecided:        {1: true},
 }
 
 func init() {
@@ -1340,6 +1364,30 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			TenantID: e.TenantID, Subject: pl.Subject, ThresholdDays: pl.ThresholdDays,
 			Channel: pl.Channel, SentAt: sentAt,
 		})
+	case EventNotificationRoutingPolicyUpserted:
+		var pl NotificationRoutingPolicyUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyNotificationRoutingPolicyUpsertedTx(ctx, tx, store.NotificationRoutingPolicy{
+			ID:                 pl.ID,
+			TenantID:           e.TenantID,
+			Name:               pl.Name,
+			ChannelsBySeverity: pl.ChannelsBySeverity,
+			DefaultChannels:    pl.DefaultChannels,
+			OwnerRef:           pl.OwnerRef,
+			OwnerEmail:         pl.OwnerEmail,
+			DigestInterval:     pl.DigestInterval,
+			DigestTimezone:     pl.DigestTimezone,
+			CreatedAt:          e.Time,
+			UpdatedAt:          e.Time,
+		})
+	case EventNotificationRoutingPolicyDeleted:
+		var pl NotificationRoutingPolicyDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.DeleteNotificationRoutingPolicyTx(ctx, tx, e.TenantID, pl.ID)
 	case EventNotificationRead:
 		var pl NotificationRead
 		if err := decode(e, &pl); err != nil {

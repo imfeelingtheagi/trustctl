@@ -875,6 +875,78 @@ func TestNotificationCommandsSendPathsQueriesAndIdempotencyKeys(t *testing.T) {
 		t.Errorf("channels request = %s %s", cap.Method, cap.Path)
 	}
 
+	testBody := `{"severity":"critical","credential_ref":"secret://notifications/slack/raw-webhook-url"}`
+	code, _, _ = run(t, []string{"notifications", "channels", "test", "slack", "-f", "-"}, env, testBody)
+	if code != 0 {
+		t.Fatalf("channel test exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/notification-channels/slack/test" {
+		t.Errorf("channel test request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != testBody {
+		t.Errorf("channel test body = %q, want %q", cap.Body, testBody)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("channel test Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
+	policyBody := `{"name":"Expiry escalation","default_channels":["slack"],"channels_by_severity":{"critical":["slack"]}}`
+	code, _, _ = run(t, []string{"notifications", "routing-policies", "create", "-f", "-"}, env, policyBody)
+	if code != 0 {
+		t.Fatalf("routing policy create exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/notification-routing-policies" {
+		t.Errorf("routing policy create request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != policyBody {
+		t.Errorf("routing policy create body = %q, want %q", cap.Body, policyBody)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("routing policy create Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
+	code, _, _ = run(t, []string{"notifications", "routing-policies", "list"}, env, "")
+	if code != 0 {
+		t.Fatalf("routing policy list exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notification-routing-policies" {
+		t.Errorf("routing policy list request = %s %s", cap.Method, cap.Path)
+	}
+
+	const policyID = "11111111-1111-4111-8111-111111111111"
+	code, _, _ = run(t, []string{"notifications", "routing-policies", "get", policyID}, env, "")
+	if code != 0 {
+		t.Fatalf("routing policy get exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notification-routing-policies/"+policyID {
+		t.Errorf("routing policy get request = %s %s", cap.Method, cap.Path)
+	}
+
+	code, _, _ = run(t, []string{"notifications", "routing-policies", "update", policyID, "-f", "-"}, env, policyBody)
+	if code != 0 {
+		t.Fatalf("routing policy update exit = %d", code)
+	}
+	if cap.Method != "PUT" || cap.Path != "/api/v1/notification-routing-policies/"+policyID {
+		t.Errorf("routing policy update request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != policyBody {
+		t.Errorf("routing policy update body = %q, want %q", cap.Body, policyBody)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("routing policy update Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
+	code, _, _ = run(t, []string{"notifications", "routing-policies", "delete", policyID, "--force"}, env, "")
+	if code != 0 {
+		t.Fatalf("routing policy delete exit = %d", code)
+	}
+	if cap.Method != "DELETE" || cap.Path != "/api/v1/notification-routing-policies/"+policyID {
+		t.Errorf("routing policy delete request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("routing policy delete Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
 	code, _, _ = run(t, []string{"notifications", "list", "--status", "dead", "--limit", "10"}, env, "")
 	if code != 0 {
 		t.Fatalf("list exit = %d", code)

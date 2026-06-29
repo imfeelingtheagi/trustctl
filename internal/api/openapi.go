@@ -1156,6 +1156,53 @@ func componentSchemas() map[string]*Schema {
 		"delivery":    str(),
 		"description": str(),
 	}, "id", "label", "category", "configured", "delivery")
+	notificationRoutingPolicyReq := object(map[string]*Schema{
+		"id":                      uuid(),
+		"name":                    str(),
+		"channels_by_severity":    {Type: "object"},
+		"default_channels":        {Type: "array", Items: str()},
+		"owner_ref":               str(),
+		"owner_email":             str(),
+		"digest_interval_seconds": {Type: "integer"},
+		"digest_timezone":         str(),
+	}, "name")
+	notificationDigestPreview := object(map[string]*Schema{
+		"interval_seconds": {Type: "integer"},
+		"timezone":         str(),
+		"next_run_at":      timestamp(),
+	}, "interval_seconds", "timezone", "next_run_at")
+	notificationRoutingPolicy := object(map[string]*Schema{
+		"id":                      uuid(),
+		"tenant_id":               uuid(),
+		"name":                    str(),
+		"channels_by_severity":    {Type: "object"},
+		"default_channels":        {Type: "array", Items: str()},
+		"owner_ref":               str(),
+		"owner_email":             str(),
+		"digest_interval_seconds": {Type: "integer"},
+		"digest_timezone":         str(),
+		"digest_preview":          ref("NotificationDigestPreview"),
+		"created_at":              timestamp(),
+		"updated_at":              timestamp(),
+	}, "id", "tenant_id", "name", "channels_by_severity", "default_channels", "digest_interval_seconds", "digest_timezone", "digest_preview", "created_at", "updated_at")
+	notificationChannelTestReq := object(map[string]*Schema{
+		"subject":           str(),
+		"severity":          {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
+		"detail":            str(),
+		"routing_policy_id": uuid(),
+		"credential_ref":    str(),
+		"owner_email":       str(),
+	})
+	notificationChannelTest := object(map[string]*Schema{
+		"channel_id":      str(),
+		"destination":     str(),
+		"outbox_id":       {Type: "integer"},
+		"status":          {Type: "string", Enum: []string{"queued"}},
+		"credential_ref":  str(),
+		"secret_handling": str(),
+		"idempotency_key": str(),
+		"queued_at":       timestamp(),
+	}, "channel_id", "destination", "outbox_id", "status", "secret_handling", "idempotency_key", "queued_at")
 	outboxCircuit := object(map[string]*Schema{
 		"tenant_id": uuid(), "destination": str(),
 		"state":      {Type: "string", Enum: []string{"closed", "open", "half-open"}},
@@ -2318,6 +2365,12 @@ func componentSchemas() map[string]*Schema {
 		"AlertRecipient":                        alertRecipient,
 		"NotificationChannel":                   notificationChannel,
 		"NotificationChannelList":               list("NotificationChannel"),
+		"NotificationChannelTestRequest":        notificationChannelTestReq,
+		"NotificationChannelTest":               notificationChannelTest,
+		"NotificationDigestPreview":             notificationDigestPreview,
+		"NotificationRoutingPolicyRequest":      notificationRoutingPolicyReq,
+		"NotificationRoutingPolicy":             notificationRoutingPolicy,
+		"NotificationRoutingPolicyList":         list("NotificationRoutingPolicy"),
 		"Notification":                          notification,
 		"NotificationList":                      list("Notification"),
 		"OutboxCircuit":                         outboxCircuit,

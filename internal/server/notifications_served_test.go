@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -219,6 +220,114 @@ func TestServedMultiChannelAlertingCAPOBS05(t *testing.T) {
 		if !configured[want] {
 			t.Fatalf("configured channel catalog = %#v, missing %q", configured, want)
 		}
+	}
+}
+
+func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *testing.T) {
+	httpSink := newMultiChannelHTTPSink(t)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.NotificationChannels = []notify.Notifier{
+			slack.New(httpSink.URL("/slack"), slack.WithHTTPClient(httpSink.Client())),
+			webhook.New(httpSink.URL("/webhook"), []byte("webhook-test-secret"), webhook.WithHTTPClient(httpSink.Client())),
+		}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-routing-policies", tok, "design-003-policy-create", map[string]any{
+		"name": "Expiry escalation",
+		"channels_by_severity": map[string][]string{
+			"critical": {"slack", "webhook"},
+			"warning":  {"slack"},
+		},
+		"default_channels":        []string{"webhook"},
+		"owner_ref":               "team/platform-security",
+		"owner_email":             "platform-security@example.test",
+		"digest_interval_seconds": 43200,
+		"digest_timezone":         "UTC",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create notification routing policy: status %d body %s", status, body)
+	}
+	var created struct {
+		ID                 string              `json:"id"`
+		Name               string              `json:"name"`
+		ChannelsBySeverity map[string][]string `json:"channels_by_severity"`
+		DefaultChannels    []string            `json:"default_channels"`
+		OwnerEmail         string              `json:"owner_email"`
+		DigestPreview      struct {
+			IntervalSeconds int    `json:"interval_seconds"`
+			Timezone        string `json:"timezone"`
+			NextRunAt       string `json:"next_run_at"`
+		} `json:"digest_preview"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode created policy: %v (%s)", err, body)
+	}
+	if created.ID == "" || created.Name != "Expiry escalation" || created.OwnerEmail != "platform-security@example.test" {
+		t.Fatalf("bad created policy: %+v", created)
+	}
+	if got := created.ChannelsBySeverity["critical"]; len(got) != 2 || got[0] != "slack" || got[1] != "webhook" {
+		t.Fatalf("critical routes = %#v, want slack + webhook", got)
+	}
+	if len(created.DefaultChannels) != 1 || created.DefaultChannels[0] != "webhook" {
+		t.Fatalf("default routes = %#v, want webhook", created.DefaultChannels)
+	}
+	if created.DigestPreview.IntervalSeconds != 43200 || created.DigestPreview.Timezone != "UTC" || created.DigestPreview.NextRunAt == "" {
+		t.Fatalf("bad digest preview: %+v", created.DigestPreview)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/notification-routing-policies", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list notification routing policies: status %d body %s", status, body)
+	}
+	if !strings.Contains(string(body), "Expiry escalation") || !strings.Contains(string(body), "platform-security@example.test") {
+		t.Fatalf("policy list did not show authored policy: %s", body)
+	}
+
+	const rawSlackSecretRef = "secret://notifications/slack/raw-webhook-url"
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/slack/test", tok, "design-003-slack-test", map[string]any{
+		"subject":           "design-003 slack",
+		"severity":          "critical",
+		"detail":            "routing policy channel test",
+		"routing_policy_id": created.ID,
+		"credential_ref":    rawSlackSecretRef,
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("test slack channel: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), rawSlackSecretRef) || !strings.Contains(string(body), `"credential_ref":"redacted"`) {
+		t.Fatalf("channel test response leaked or failed to redact credential ref: %s", body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain slack channel test: %v", err)
+	}
+	if got := httpSink.Count("/slack"); got != 1 {
+		t.Fatalf("slack test deliveries = %d, want 1", got)
+	}
+	if got := httpSink.Count("/webhook"); got != 0 {
+		t.Fatalf("webhook deliveries after slack test = %d, want 0", got)
+	}
+
+	const rawWebhookSecretRef = "secret://notifications/webhook/hmac-key"
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/webhook/test", tok, "design-003-webhook-test", map[string]any{
+		"subject":        "design-003 webhook",
+		"severity":       "warning",
+		"credential_ref": rawWebhookSecretRef,
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("test webhook channel: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), rawWebhookSecretRef) {
+		t.Fatalf("webhook test response leaked credential ref: %s", body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain webhook channel test: %v", err)
+	}
+	if got := httpSink.Count("/webhook"); got != 1 {
+		t.Fatalf("webhook test deliveries = %d, want 1", got)
+	}
+	if !h.hasEvent(t, "notification.routing_policy.upserted") {
+		t.Fatal("missing notification.routing_policy.upserted event")
 	}
 }
 

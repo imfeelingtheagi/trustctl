@@ -9,6 +9,9 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     notifications: vi.fn(),
     notificationChannels: vi.fn(),
+    notificationRoutingPolicies: vi.fn(),
+    createNotificationRoutingPolicy: vi.fn(),
+    testNotificationChannel: vi.fn(),
     markNotificationRead: vi.fn(),
     requeueNotification: vi.fn(),
   },
@@ -81,6 +84,29 @@ describe("C10-3 notifications inbox", () => {
         { id: "siem", label: "SIEM", category: "security", configured: true, delivery: "notification.* outbox fanout" },
       ],
     });
+    apiMock.notificationRoutingPolicies.mockResolvedValue({ items: [] });
+    apiMock.createNotificationRoutingPolicy.mockResolvedValue({
+      id: "policy-1",
+      tenant_id: "t1",
+      name: "Expiry escalation",
+      channels_by_severity: { critical: ["slack"] },
+      default_channels: ["email"],
+      digest_interval_seconds: 86400,
+      digest_timezone: "UTC",
+      digest_preview: { interval_seconds: 86400, timezone: "UTC", next_run_at: "2026-06-27T10:00:00Z" },
+      created_at: "2026-06-26T10:00:00Z",
+      updated_at: "2026-06-26T10:00:00Z",
+    });
+    apiMock.testNotificationChannel.mockResolvedValue({
+      channel_id: "slack",
+      destination: "notification.test",
+      outbox_id: 303,
+      status: "queued",
+      credential_ref: "redacted",
+      secret_handling: "credential reference redacted",
+      idempotency_key: "idem",
+      queued_at: "2026-06-26T10:00:00Z",
+    });
     apiMock.markNotificationRead.mockResolvedValue({ ...pendingNotification, status: "read", read_at: "2026-06-26T10:05:00Z" });
     apiMock.requeueNotification.mockResolvedValue({ ...deadNotification, status: "pending", attempts: 0, last_error: undefined });
   });
@@ -95,7 +121,7 @@ describe("C10-3 notifications inbox", () => {
     expect(screen.getByText("Channel coverage")).toBeInTheDocument();
     expect(screen.getByText("5 configured")).toBeInTheDocument();
     for (const label of ["Email", "Slack", "Microsoft Teams", "SMS", "SIEM"]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
     expect(screen.getByText("1 unread")).toBeInTheDocument();

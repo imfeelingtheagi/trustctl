@@ -51,8 +51,9 @@ secrets, API keys, OAuth apps, tokens/PATs, service accounts, IAM roles, webhook
 workload IDs, and agents), and a **severity-ranked alert center** projects the credentials
 that need attention now — derived from served risk and certificate-expiry events. (There is
 no dedicated alerts endpoint; the center is a projection of events the backend already
-serves. Notification *channel* configuration and scheduled digests are not served and are
-intentionally absent rather than faked.)
+serves. Notification routing policy authoring and channel-test delivery are served on
+`/notifications`; channel credentials remain operator-managed, and scheduled digest
+delivery is not implied by the digest preview.)
 
 ### Certificate lifecycle command center (`/certificates`)
 
@@ -224,7 +225,7 @@ trstctl-cli privacy retention run
 - **The console is a view, not a second backend** — it adds no capability the API lacks.
   If a surface looks read-only for you, that is RBAC, not a missing screen.
 - **Some adjacent capabilities are API-only by design today** — data-subject export,
-  policy dry-run preview, notification channel configuration, scheduled digests, and
+  policy dry-run preview, scheduled digest delivery, and
   email/webhook compliance report dispatch are not served as console workflows and are
   not faked.
 - **Auth lives in an HttpOnly cookie**, never in web storage; only the theme preference (and

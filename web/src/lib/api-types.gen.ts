@@ -1922,9 +1922,66 @@ export interface NotificationChannelList {
   next_cursor?: string;
 }
 
+export interface NotificationChannelTest {
+  channel_id: string;
+  credential_ref?: string;
+  destination: string;
+  idempotency_key: string;
+  outbox_id: number;
+  queued_at: string;
+  secret_handling: string;
+  status: "queued";
+}
+
+export interface NotificationChannelTestRequest {
+  credential_ref?: string;
+  detail?: string;
+  owner_email?: string;
+  routing_policy_id?: string;
+  severity?: "low" | "informational" | "warning" | "critical";
+  subject?: string;
+}
+
+export interface NotificationDigestPreview {
+  interval_seconds: number;
+  next_run_at: string;
+  timezone: string;
+}
+
 export interface NotificationList {
   items: Notification[];
   next_cursor?: string;
+}
+
+export interface NotificationRoutingPolicy {
+  channels_by_severity: Record<string, unknown>;
+  created_at: string;
+  default_channels: string[];
+  digest_interval_seconds: number;
+  digest_preview: NotificationDigestPreview;
+  digest_timezone: string;
+  id: string;
+  name: string;
+  owner_email?: string;
+  owner_ref?: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface NotificationRoutingPolicyList {
+  items: NotificationRoutingPolicy[];
+  next_cursor?: string;
+}
+
+export interface NotificationRoutingPolicyRequest {
+  channels_by_severity?: Record<string, unknown>;
+  default_channels?: string[];
+  digest_interval_seconds?: number;
+  digest_timezone?: string;
+  id?: string;
+  name: string;
+  owner_email?: string;
+  owner_ref?: string;
 }
 
 export interface OIDCMappingStatus {

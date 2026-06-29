@@ -164,7 +164,12 @@ import type {
   Notification,
   NotificationChannel,
   NotificationChannelList,
+  NotificationChannelTest,
+  NotificationChannelTestRequest,
   NotificationList,
+  NotificationRoutingPolicy,
+  NotificationRoutingPolicyList,
+  NotificationRoutingPolicyRequest,
   OffboardMemberRequest,
   OffboardMemberResponse,
   OIDCMappingStatus,
@@ -364,7 +369,12 @@ export type {
   Notification,
   NotificationChannel,
   NotificationChannelList,
+  NotificationChannelTest,
+  NotificationChannelTestRequest,
   NotificationList,
+  NotificationRoutingPolicy,
+  NotificationRoutingPolicyList,
+  NotificationRoutingPolicyRequest,
   OffboardMemberRequest,
   OffboardMemberResponse,
   OIDCMappingStatus,
@@ -905,6 +915,11 @@ export interface Api {
   verifyTransit(input: TransitVerifyRequest): Promise<TransitVerify>;
   notifications(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): Promise<NotificationList>;
   notificationChannels(): Promise<NotificationChannelList>;
+  notificationRoutingPolicies(): Promise<NotificationRoutingPolicyList>;
+  createNotificationRoutingPolicy(input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicy>;
+  updateNotificationRoutingPolicy(id: string, input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicy>;
+  deleteNotificationRoutingPolicy(id: string): Promise<void>;
+  testNotificationChannel(id: string, input: NotificationChannelTestRequest): Promise<NotificationChannelTest>;
   markNotificationRead(id: string): Promise<Notification>;
   requeueNotification(id: string): Promise<Notification>;
 }
@@ -1125,6 +1140,13 @@ export const api: Api = {
   verifyTransit: (input) => mutate<TransitVerify>("POST", "/api/v1/transit/verify", input),
   notifications: (options) => req<NotificationList>(`/api/v1/notifications${notificationQueryString(options)}`),
   notificationChannels: () => req<NotificationChannelList>("/api/v1/notification-channels"),
+  notificationRoutingPolicies: () => req<NotificationRoutingPolicyList>("/api/v1/notification-routing-policies"),
+  createNotificationRoutingPolicy: (input) => mutate<NotificationRoutingPolicy>("POST", "/api/v1/notification-routing-policies", input),
+  updateNotificationRoutingPolicy: (id, input) =>
+    mutate<NotificationRoutingPolicy>("PUT", `/api/v1/notification-routing-policies/${encodeURIComponent(id)}`, input),
+  deleteNotificationRoutingPolicy: (id) => mutate<void>("DELETE", `/api/v1/notification-routing-policies/${encodeURIComponent(id)}`),
+  testNotificationChannel: (id, input) =>
+    mutate<NotificationChannelTest>("POST", `/api/v1/notification-channels/${encodeURIComponent(id)}/test`, input),
   markNotificationRead: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/read`),
   requeueNotification: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/requeue`),
 };

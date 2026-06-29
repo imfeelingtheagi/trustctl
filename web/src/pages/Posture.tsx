@@ -396,11 +396,10 @@ export function Posture() {
         <Bell className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div>
           <h2 id="alert-heading" className="text-title font-semibold">
-            Alert routing is not configured here
+            Alert routing is managed from Notifications
           </h2>
           <p className="mt-1 text-muted-foreground">
-            CT anomalies and drift findings can be routed through operator-wired notification channels. Tenant self-service channel setup remains a backend gap,
-            not a browser-only setting.
+            CT anomalies and drift findings can be routed through saved notification policies. Channel credentials stay in operator-managed configuration.
           </p>
         </div>
       </section>

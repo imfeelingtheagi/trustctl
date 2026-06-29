@@ -7437,6 +7437,98 @@
         ],
         "type": "object"
       },
+      "NotificationChannelTest": {
+        "properties": {
+          "channel_id": {
+            "type": "string"
+          },
+          "credential_ref": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_id",
+          "destination",
+          "outbox_id",
+          "status",
+          "secret_handling",
+          "idempotency_key",
+          "queued_at"
+        ],
+        "type": "object"
+      },
+      "NotificationChannelTestRequest": {
+        "properties": {
+          "credential_ref": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "owner_email": {
+            "type": "string"
+          },
+          "routing_policy_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "informational",
+              "warning",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NotificationDigestPreview": {
+        "properties": {
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "interval_seconds",
+          "timezone",
+          "next_run_at"
+        ],
+        "type": "object"
+      },
       "NotificationList": {
         "properties": {
           "items": {
@@ -7451,6 +7543,119 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "NotificationRoutingPolicy": {
+        "properties": {
+          "channels_by_severity": {
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "default_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "digest_interval_seconds": {
+            "type": "integer"
+          },
+          "digest_preview": {
+            "$ref": "#/components/schemas/NotificationDigestPreview"
+          },
+          "digest_timezone": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_email": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "channels_by_severity",
+          "default_channels",
+          "digest_interval_seconds",
+          "digest_timezone",
+          "digest_preview",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NotificationRoutingPolicyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationRoutingPolicy"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "NotificationRoutingPolicyRequest": {
+        "properties": {
+          "channels_by_severity": {
+            "type": "object"
+          },
+          "default_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "digest_interval_seconds": {
+            "type": "integer"
+          },
+          "digest_timezone": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_email": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -18661,6 +18866,349 @@
         ],
         "summary": "List supported and configured notification channels",
         "x-trstctl-permission": "notifications:read"
+      }
+    },
+    "/api/v1/notification-channels/{id}/test": {
+      "post": {
+        "operationId": "testNotificationChannel",
+        "parameters": [
+          {
+            "description": "notification channel id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationChannelTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelTest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue a notification channel test",
+        "x-trstctl-permission": "notifications:write"
+      }
+    },
+    "/api/v1/notification-routing-policies": {
+      "get": {
+        "operationId": "listNotificationRoutingPolicies",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRoutingPolicyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List notification routing policies",
+        "x-trstctl-permission": "notifications:read"
+      },
+      "post": {
+        "operationId": "createNotificationRoutingPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationRoutingPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRoutingPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a notification routing policy",
+        "x-trstctl-permission": "notifications:write"
+      }
+    },
+    "/api/v1/notification-routing-policies/{id}": {
+      "delete": {
+        "operationId": "deleteNotificationRoutingPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete a notification routing policy",
+        "x-trstctl-permission": "notifications:write"
+      },
+      "get": {
+        "operationId": "getNotificationRoutingPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRoutingPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a notification routing policy",
+        "x-trstctl-permission": "notifications:read"
+      },
+      "put": {
+        "operationId": "updateNotificationRoutingPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationRoutingPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRoutingPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Update a notification routing policy",
+        "x-trstctl-permission": "notifications:write"
       }
     },
     "/api/v1/notifications": {

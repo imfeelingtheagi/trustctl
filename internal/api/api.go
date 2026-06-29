@@ -90,6 +90,7 @@ type API struct {
 	license                 *license.Manager
 	remediation             bool
 	notificationChannels    []string
+	notificationOutbox      *orchestrator.Outbox
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	privacyRetentionSource  privacy.RetentionPolicySource
@@ -147,6 +148,7 @@ type config struct {
 	license                 *license.Manager
 	remediation             bool
 	notificationChannels    []string
+	notificationOutbox      *orchestrator.Outbox
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	privacyRetentionSource  privacy.RetentionPolicySource
@@ -227,6 +229,12 @@ func WithRemediation() Option {
 // tenant-side authoring claims.
 func WithNotificationChannels(names ...string) Option {
 	return func(c *config) { c.notificationChannels = append([]string(nil), names...) }
+}
+
+// WithNotificationOutbox wires the served outbox used to queue operator-requested
+// notification channel tests. Delivery still happens only in the outbox worker.
+func WithNotificationOutbox(outbox *orchestrator.Outbox) Option {
+	return func(c *config) { c.notificationOutbox = outbox }
 }
 
 // observeFeature emits one per-feature telemetry signal (COVER-009) if an observer is
@@ -379,6 +387,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		license:                 cfg.license,
 		remediation:             cfg.remediation,
 		notificationChannels:    append([]string(nil), cfg.notificationChannels...),
+		notificationOutbox:      cfg.notificationOutbox,
 		outboxCircuits:          cfg.outboxCircuits,
 		featureObserver:         cfg.featureObserver,
 		privacyRetentionPolicy:  policy.WithDefaults(),
@@ -700,6 +709,8 @@ func (a *API) routes() []route {
 	caCeremonyPath := []param{pathUUID("id")}
 	caAuthorityPath := []param{pathUUID("id")}
 	externalCAPath := []param{pathString("id", "configured external CA registry id")}
+	notificationChannelPath := []param{pathString("id", "notification channel id")}
+	notificationRoutingPolicyPath := []param{pathUUID("id")}
 	ephemeralRequestPath := []param{pathString("id", "ephemeral JIT request id")}
 	page := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
@@ -864,6 +875,12 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/identities/{id}/connector-target", opID: "bindIdentityConnectorTarget", summary: "Bind an identity to a deployment connector target", handler: a.bindIdentityConnectorTarget, pathParams: idPath, reqSchema: "IdentityConnectorTargetRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.ConnectorsWrite},
 		{method: "GET", path: "/api/v1/connectors/outbox-circuits", opID: "listOutboxCircuits", summary: "List outbox destination circuit breaker state", handler: a.listOutboxCircuits, resSchema: "OutboxCircuitList", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/notification-channels", opID: "listNotificationChannels", summary: "List supported and configured notification channels", handler: a.listNotificationChannels, resSchema: "NotificationChannelList", successCode: "200", perm: authz.NotificationsRead},
+		{method: "POST", path: "/api/v1/notification-channels/{id}/test", opID: "testNotificationChannel", summary: "Queue a notification channel test", handler: a.testNotificationChannel, pathParams: notificationChannelPath, reqSchema: "NotificationChannelTestRequest", resSchema: "NotificationChannelTest", successCode: "202", mutation: true, perm: authz.NotificationsWrite},
+		{method: "POST", path: "/api/v1/notification-routing-policies", opID: "createNotificationRoutingPolicy", summary: "Create a notification routing policy", handler: a.createNotificationRoutingPolicy, reqSchema: "NotificationRoutingPolicyRequest", resSchema: "NotificationRoutingPolicy", successCode: "201", mutation: true, perm: authz.NotificationsWrite},
+		{method: "GET", path: "/api/v1/notification-routing-policies", opID: "listNotificationRoutingPolicies", summary: "List notification routing policies", handler: a.listNotificationRoutingPolicies, resSchema: "NotificationRoutingPolicyList", successCode: "200", perm: authz.NotificationsRead},
+		{method: "GET", path: "/api/v1/notification-routing-policies/{id}", opID: "getNotificationRoutingPolicy", summary: "Get a notification routing policy", handler: a.getNotificationRoutingPolicy, pathParams: notificationRoutingPolicyPath, resSchema: "NotificationRoutingPolicy", successCode: "200", perm: authz.NotificationsRead},
+		{method: "PUT", path: "/api/v1/notification-routing-policies/{id}", opID: "updateNotificationRoutingPolicy", summary: "Update a notification routing policy", handler: a.updateNotificationRoutingPolicy, pathParams: notificationRoutingPolicyPath, reqSchema: "NotificationRoutingPolicyRequest", resSchema: "NotificationRoutingPolicy", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
+		{method: "DELETE", path: "/api/v1/notification-routing-policies/{id}", opID: "deleteNotificationRoutingPolicy", summary: "Delete a notification routing policy", handler: a.deleteNotificationRoutingPolicy, pathParams: notificationRoutingPolicyPath, successCode: "204", mutation: true, perm: authz.NotificationsWrite},
 		{method: "GET", path: "/api/v1/notifications", opID: "listNotifications", summary: "List notification inbox and dead-letter rows", handler: a.listNotifications, query: notificationQuery, resSchema: "NotificationList", successCode: "200", perm: authz.NotificationsRead},
 		{method: "POST", path: "/api/v1/notifications/{id}/read", opID: "markNotificationRead", summary: "Mark a notification as read", handler: a.markNotificationRead, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
 		{method: "POST", path: "/api/v1/notifications/{id}/requeue", opID: "requeueNotification", summary: "Requeue a dead-lettered notification dispatch", handler: a.requeueNotification, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
