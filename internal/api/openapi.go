@@ -667,6 +667,47 @@ func componentSchemas() map[string]*Schema {
 		"summary":      {Type: "object"},
 		"coverage":     {Type: "array", Items: str()},
 	}, "generated_at", "items", "summary", "coverage")
+	nhiDecommissionSignal := object(map[string]*Schema{
+		"type":            {Type: "string", Enum: []string{"departure", "vendor_term", "inactivity"}},
+		"subject":         str(),
+		"owner_id":        uuid(),
+		"owner_name":      str(),
+		"vendor_name":     str(),
+		"identity_id":     uuid(),
+		"inactive_before": timestamp(),
+		"evidence_refs":   {Type: "array", Items: str()},
+	}, "type")
+	nhiDecommissionRequest := object(map[string]*Schema{
+		"reason":            str(),
+		"revocation_reason": str(),
+		"signals":           {Type: "array", Items: ref("NHIDecommissionSignal")},
+	}, "signals")
+	nhiDecommissionSummary := object(map[string]*Schema{
+		"total_matched": {Type: "integer"},
+		"revoked":       {Type: "integer"},
+		"retired":       {Type: "integer"},
+		"skipped":       {Type: "integer"},
+		"failed":        {Type: "integer"},
+	}, "total_matched", "revoked", "retired", "skipped", "failed")
+	nhiDecommissionItem := object(map[string]*Schema{
+		"identity_id":   uuid(),
+		"name":          str(),
+		"kind":          str(),
+		"owner_id":      uuid(),
+		"signal_type":   {Type: "string", Enum: []string{"departure", "vendor_term", "inactivity"}},
+		"action":        {Type: "string", Enum: []string{"revoked", "retired", "skipped", "failed"}},
+		"from":          str(),
+		"to":            str(),
+		"evidence_refs": {Type: "array", Items: str()},
+		"error":         str(),
+	}, "identity_id", "name", "kind", "owner_id", "signal_type", "action", "from", "to")
+	nhiDecommissionResponse := object(map[string]*Schema{
+		"capability": str(),
+		"coverage":   {Type: "array", Items: str()},
+		"reason":     str(),
+		"summary":    ref("NHIDecommissionSummary"),
+		"items":      {Type: "array", Items: ref("NHIDecommissionItem")},
+	}, "capability", "coverage", "reason", "summary", "items")
 	ownershipAttributionOwner := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service", "vendor"}},
 		"name": str(), "email": str(),
@@ -1534,6 +1575,11 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoring":                   discoveryMonitoring,
 		"NHIInventoryItem":                      nhiInventoryItem,
 		"NHIInventory":                          nhiInventory,
+		"NHIDecommissionSignal":                 nhiDecommissionSignal,
+		"NHIDecommissionRequest":                nhiDecommissionRequest,
+		"NHIDecommissionSummary":                nhiDecommissionSummary,
+		"NHIDecommissionItem":                   nhiDecommissionItem,
+		"NHIDecommissionResponse":               nhiDecommissionResponse,
 		"OwnershipAttributionOwner":             ownershipAttributionOwner,
 		"OwnershipAttributionItem":              ownershipAttributionItem,
 		"OwnershipAttribution":                  ownershipAttribution,

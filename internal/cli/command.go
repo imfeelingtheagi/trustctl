@@ -32,6 +32,7 @@ func (c Command) Destructive() bool {
 	name := strings.Join(c.Name, " ")
 	for _, marker := range []string{
 		"bulk-revoke",
+		"decommission",
 		"delete",
 		"erase",
 		"managed-keys rotate",
@@ -85,6 +86,7 @@ var commandTable = []Command{
 	{Name: []string{"identities", "bulk-revoke"}, Method: "POST", Path: "/api/v1/identities/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke identities by id or criteria"},
 
 	{Name: []string{"nhi", "inventory"}, Method: "GET", Path: "/api/v1/nhi/inventory", Summary: "List unified NHI inventory across certificates, keys, tokens, secrets, roles, webhooks, and workload identities"},
+	{Name: []string{"nhi", "decommission"}, Method: "POST", Path: "/api/v1/nhi/decommission", Body: bodyFile, Summary: "Decommission NHIs from departure, vendor-term, or inactivity signals"},
 	{Name: []string{"owners", "attribution"}, Method: "GET", Path: "/api/v1/ownership/attribution", Summary: "List NHI ownership attribution across human, team, vendor, and orphaned records"},
 
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},

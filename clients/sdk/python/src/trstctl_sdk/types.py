@@ -1934,6 +1934,72 @@ MemberRequest = TypedDict(
     total=False,
 )
 
+NHIDecommissionItem = TypedDict(
+    'NHIDecommissionItem',
+    {
+        'action': str,
+        'error': str,
+        'evidence_refs': list[str],
+        'from': str,
+        'identity_id': str,
+        'kind': str,
+        'name': str,
+        'owner_id': str,
+        'signal_type': str,
+        'to': str,
+    },
+    total=False,
+)
+
+NHIDecommissionRequest = TypedDict(
+    'NHIDecommissionRequest',
+    {
+        'reason': str,
+        'revocation_reason': str,
+        'signals': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+NHIDecommissionResponse = TypedDict(
+    'NHIDecommissionResponse',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'items': list[dict[str, Any]],
+        'reason': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIDecommissionSignal = TypedDict(
+    'NHIDecommissionSignal',
+    {
+        'evidence_refs': list[str],
+        'identity_id': str,
+        'inactive_before': str,
+        'owner_id': str,
+        'owner_name': str,
+        'subject': str,
+        'type': str,
+        'vendor_name': str,
+    },
+    total=False,
+)
+
+NHIDecommissionSummary = TypedDict(
+    'NHIDecommissionSummary',
+    {
+        'failed': int,
+        'retired': int,
+        'revoked': int,
+        'skipped': int,
+        'total_matched': int,
+    },
+    total=False,
+)
+
 NHIInventory = TypedDict(
     'NHIInventory',
     {

@@ -158,6 +158,9 @@ echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f -
 # Show managed and discovered NHI attribution by human owner, team, vendor, or orphan state.
 trstctl-cli owners attribution
 
+# Decommission NHIs selected from departure, vendor-term, or inactivity signals.
+trstctl-cli nhi decommission -f nhi-decommission.json --force
+
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50
 

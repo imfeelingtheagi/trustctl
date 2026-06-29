@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, identityState, type ConnectorDelivery, type GraphImpact, type Identity, type RotationRun, type TransitionTo } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  api,
+  ApiError,
+  identityState,
+  type ConnectorDelivery,
+  type GraphImpact,
+  type Identity,
+  type NHIDecommissionRequest,
+  type NHIDecommissionResponse,
+  type RotationRun,
+  type TransitionTo,
+} from "@/lib/api";
 import { Dialog } from "@/components/Dialog";
 import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -11,6 +22,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -24,6 +36,7 @@ const lifecycleTargets: TransitionTo[] = ["issued", "deployed", "renewing", "rev
 const identityKinds = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"] as const satisfies Identity["kind"][];
 type KindFilter = "all" | Identity["kind"];
 type BulkResult = { id: string; name: string; status: "accepted" | "failed"; message: string };
+type DecommissionSignalType = NHIDecommissionRequest["signals"][number]["type"];
 type BlastRadiusState = {
   error: string | null;
   impact: GraphImpact | null;
@@ -206,6 +219,19 @@ function deniedKey(id: string, to: TransitionTo): string {
   return `${id}:${to}`;
 }
 
+function decommissionInputLabelKey(
+  type: DecommissionSignalType,
+): "identities.decommission.vendor" | "identities.decommission.inactiveBefore" | "identities.decommission.subject" {
+  if (type === "vendor_term") return "identities.decommission.vendor";
+  if (type === "inactivity") return "identities.decommission.inactiveBefore";
+  return "identities.decommission.subject";
+}
+
+function localDateTimeToISO(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+}
+
 function formatDate(value?: string): string {
   return formatDateTimePolicy(value);
 }
@@ -247,6 +273,7 @@ function attributeRows(identity: Identity): Array<[string, string]> {
 }
 
 export function Identities() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<Identity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deliveryReceipts, setDeliveryReceipts] = useState<ConnectorDelivery[] | null>(null);
@@ -271,6 +298,11 @@ export function Identities() {
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [decommissionType, setDecommissionType] = useState<DecommissionSignalType>("departure");
+  const [decommissionTarget, setDecommissionTarget] = useState("");
+  const [decommissionReason, setDecommissionReason] = useState("");
+  const [decommissionBusy, setDecommissionBusy] = useState(false);
+  const [decommissionResult, setDecommissionResult] = useState<NHIDecommissionResponse | null>(null);
   const [pendingImpact, setPendingImpact] = useState<BlastRadiusState>(emptyBlastRadiusState);
   const pendingConfirmRef = useRef<HTMLInputElement>(null);
   const bulkConfirmRef = useRef<HTMLButtonElement>(null);
@@ -442,6 +474,38 @@ export function Identities() {
     await loadEvidence();
   }
 
+  async function runDecommission(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = decommissionTarget.trim();
+    if (!value) {
+      setError(`${t(decommissionInputLabelKey(decommissionType))} is required`);
+      return;
+    }
+    const signal: NHIDecommissionRequest["signals"][number] =
+      decommissionType === "vendor_term"
+        ? { type: "vendor_term", vendor_name: value, evidence_refs: ["ui:identities/decommission"] }
+        : decommissionType === "inactivity"
+          ? { type: "inactivity", inactive_before: localDateTimeToISO(value), evidence_refs: ["ui:identities/decommission"] }
+          : { type: "departure", subject: value, evidence_refs: ["ui:identities/decommission"] };
+    setDecommissionBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.decommissionNHI({
+        reason: decommissionReason.trim() || `${decommissionType} decommission via UI`,
+        signals: [signal],
+      });
+      setDecommissionResult(result);
+      await load();
+      await loadEvidence();
+      setNotice(`NHI decommission accepted: ${result.summary.revoked} revoked, ${result.summary.retired} retired, ${result.summary.skipped} skipped.`);
+    } catch (err) {
+      setError(`NHI decommission failed: ${apiProblemMessage(err)}`);
+    } finally {
+      setDecommissionBusy(false);
+    }
+  }
+
   const identityColumns = useMemo<Array<DataGridColumn<Identity>>>(
     () => [
       {
@@ -533,6 +597,73 @@ export function Identities() {
       )}
 
       <DeliveryEvidencePanel deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
+
+      <form
+        aria-label={t("identities.decommission.ariaLabel")}
+        className="mb-3 grid gap-3 rounded-md border border-border p-3 md:grid-cols-[minmax(10rem,12rem)_1fr_1fr_auto]"
+        onSubmit={(event) => void runDecommission(event)}
+      >
+        <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-type">
+          {t("identities.decommission.signal")}
+          <select
+            id="nhi-decommission-type"
+            className="ui-input"
+            value={decommissionType}
+            onChange={(event) => {
+              setDecommissionType(event.target.value as DecommissionSignalType);
+              setDecommissionTarget("");
+              setDecommissionResult(null);
+            }}
+          >
+            <option value="departure">{t("identities.decommission.departure")}</option>
+            <option value="vendor_term">{t("identities.decommission.vendorTerm")}</option>
+            <option value="inactivity">{t("identities.decommission.inactivity")}</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-target">
+          {t(decommissionInputLabelKey(decommissionType))}
+          <input
+            id="nhi-decommission-target"
+            className="ui-input"
+            type={decommissionType === "inactivity" ? "datetime-local" : "text"}
+            value={decommissionTarget}
+            onChange={(event) => setDecommissionTarget(event.target.value)}
+            placeholder={decommissionType === "vendor_term" ? "Acme SaaS" : decommissionType === "departure" ? "alice@example.com" : undefined}
+            required
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-medium" htmlFor="nhi-decommission-reason">
+          Reason
+          <input
+            id="nhi-decommission-reason"
+            className="ui-input"
+            value={decommissionReason}
+            onChange={(event) => setDecommissionReason(event.target.value)}
+            placeholder={t("identities.decommission.reasonPlaceholder")}
+          />
+        </label>
+        <div className="flex items-end">
+          <Button type="submit" variant="outline" className="w-full text-status-danger" disabled={decommissionBusy}>
+            {t("identities.decommission.submit")}
+          </Button>
+        </div>
+      </form>
+
+      {decommissionResult && (
+        <div role="status" className="mb-3 rounded-md border border-border p-3 text-sm">
+          <p className="font-medium">
+            CAP-GOV-04: matched {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked}; retired{" "}
+            {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {decommissionResult.items.slice(0, 5).map((item) => (
+              <li key={item.identity_id}>
+                {item.name} {item.action} via {item.signal_type}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {notice && (
         <p role="status" className="mb-3 text-sm text-status-success">

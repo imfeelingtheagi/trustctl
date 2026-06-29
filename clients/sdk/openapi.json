@@ -4922,6 +4922,190 @@
         ],
         "type": "object"
       },
+      "NHIDecommissionItem": {
+        "properties": {
+          "action": {
+            "enum": [
+              "revoked",
+              "retired",
+              "skipped",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "from": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "signal_type": {
+            "enum": [
+              "departure",
+              "vendor_term",
+              "inactivity"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "name",
+          "kind",
+          "owner_id",
+          "signal_type",
+          "action",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "NHIDecommissionRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "revocation_reason": {
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/NHIDecommissionSignal"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "signals"
+        ],
+        "type": "object"
+      },
+      "NHIDecommissionResponse": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIDecommissionItem"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIDecommissionSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "coverage",
+          "reason",
+          "summary",
+          "items"
+        ],
+        "type": "object"
+      },
+      "NHIDecommissionSignal": {
+        "properties": {
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "inactive_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "departure",
+              "vendor_term",
+              "inactivity"
+            ],
+            "type": "string"
+          },
+          "vendor_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "NHIDecommissionSummary": {
+        "properties": {
+          "failed": {
+            "type": "integer"
+          },
+          "retired": {
+            "type": "integer"
+          },
+          "revoked": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "total_matched": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_matched",
+          "revoked",
+          "retired",
+          "skipped",
+          "failed"
+        ],
+        "type": "object"
+      },
       "NHIInventory": {
         "properties": {
           "coverage": {
@@ -14472,6 +14656,63 @@
         ],
         "summary": "Invoke one MCP tool (read by default; guarded writes when enabled)",
         "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/nhi/decommission": {
+      "post": {
+        "operationId": "decommissionNHI",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIDecommissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIDecommissionResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Decommission NHIs from departure, vendor-term, or inactivity signals",
+        "x-trstctl-permission": "identities:write"
       }
     },
     "/api/v1/nhi/inventory": {

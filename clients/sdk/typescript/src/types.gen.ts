@@ -1718,6 +1718,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/decommission": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decommission NHIs from departure, vendor-term, or inactivity signals */
+        post: operations["decommissionNHI"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/inventory": {
         parameters: {
             query?: never;
@@ -3924,6 +3941,55 @@ export interface components {
             email?: string;
             roles: string[];
             source?: string;
+        };
+        NHIDecommissionItem: {
+            /** @enum {string} */
+            action: "revoked" | "retired" | "skipped" | "failed";
+            error?: string;
+            evidence_refs?: string[];
+            from: string;
+            /** Format: uuid */
+            identity_id: string;
+            kind: string;
+            name: string;
+            /** Format: uuid */
+            owner_id: string;
+            /** @enum {string} */
+            signal_type: "departure" | "vendor_term" | "inactivity";
+            to: string;
+        };
+        NHIDecommissionRequest: {
+            reason?: string;
+            revocation_reason?: string;
+            signals: components["schemas"]["NHIDecommissionSignal"][];
+        };
+        NHIDecommissionResponse: {
+            capability: string;
+            coverage: string[];
+            items: components["schemas"]["NHIDecommissionItem"][];
+            reason: string;
+            summary: components["schemas"]["NHIDecommissionSummary"];
+        };
+        NHIDecommissionSignal: {
+            evidence_refs?: string[];
+            /** Format: uuid */
+            identity_id?: string;
+            /** Format: date-time */
+            inactive_before?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            owner_name?: string;
+            subject?: string;
+            /** @enum {string} */
+            type: "departure" | "vendor_term" | "inactivity";
+            vendor_name?: string;
+        };
+        NHIDecommissionSummary: {
+            failed: number;
+            retired: number;
+            revoked: number;
+            skipped: number;
+            total_matched: number;
         };
         NHIInventory: {
             coverage: string[];
@@ -9461,6 +9527,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPToolResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decommissionNHI: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIDecommissionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIDecommissionResponse"];
                 };
             };
             /** @description client error */

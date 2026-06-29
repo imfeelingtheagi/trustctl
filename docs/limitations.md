@@ -148,6 +148,10 @@ never live in the API process. What you can do end to end against the running bi
 - **Revocation hardening:** RFC 5280 named revocation reasons, bulk revoke routes,
   delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching, and
   CRL ETag / `If-None-Match` caching are served on the revocation surface.
+- **NHI decommissioning:** `POST /api/v1/nhi/decommission` and `trstctl-cli nhi
+  decommission` resolve departure, vendor-term, and inactivity signals to
+  tenant-local managed NHIs, then drive event-sourced lifecycle revoke/retire
+  transitions with per-item evidence.
 - **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served notification

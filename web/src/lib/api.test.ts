@@ -244,6 +244,34 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(firstHeaders["Idempotency-Key"]).not.toBe(secondHeaders["Idempotency-Key"]);
   });
 
+  it("posts NHI decommission through the served mutation with Idempotency-Key", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-decommission; path=/";
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-GOV-04",
+        coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
+        reason: "vendor termination",
+        summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+        items: [],
+      }),
+    );
+
+    await api.decommissionNHI({
+      reason: "vendor termination",
+      signals: [{ type: "vendor_term", vendor_name: "Acme SaaS", evidence_refs: ["ui:test"] }],
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/decommission");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-decommission");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+      reason: "vendor termination",
+      signals: [{ type: "vendor_term", vendor_name: "Acme SaaS" }],
+    });
+  });
+
   it("mints an enrollment token through the served mutation with Idempotency-Key", async () => {
     document.cookie = "trstctl_csrf=csrf-token-agent; path=/";
     mockFetch(201, JSON.stringify({ token: "BOOT-TOKEN-XYZ", enroll_path: "/enroll/bootstrap" }));

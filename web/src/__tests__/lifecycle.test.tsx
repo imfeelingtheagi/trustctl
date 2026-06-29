@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     getIdentity: vi.fn(),
     issueCertificate: vi.fn(),
     transitionIdentity: vi.fn(),
+    decommissionNHI: vi.fn(),
     approveIdentityAction: vi.fn(),
     graphBlastRadius: vi.fn(),
     connectorDeliveries: vi.fn(),
@@ -44,6 +45,13 @@ describe("lifecycle actions from the UI", () => {
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", status: "issued" });
     apiMock.getIdentity.mockReset();
     apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", status: "x" });
+    apiMock.decommissionNHI.mockReset().mockResolvedValue({
+      capability: "CAP-GOV-04",
+      coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
+      reason: "departure decommission via UI",
+      summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+      items: [{ identity_id: "dep-1", name: "payments-api", kind: "api_key", owner_id: "own-1", signal_type: "departure", action: "revoked", from: "deployed", to: "revoked" }],
+    });
     apiMock.approveIdentityAction.mockReset().mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.graphBlastRadius.mockReset().mockResolvedValue({
       node: { id: "cert:demo", kind: "credential", name: "demo" },
@@ -449,6 +457,34 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText("bulk-ok accepted")).toBeInTheDocument();
     expect(screen.getByText(/bulk-fail failed: connector queue unavailable/)).toBeInTheDocument();
     expect(screen.getByText(/accepted 1; failed 1/i)).toBeInTheDocument();
+  });
+
+  it("runs NHI decommission from a served governance signal", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "dep-1", name: "payments-api", kind: "api_key", owner_id: "owner-1", status: "deployed" }]);
+    apiMock.decommissionNHI.mockResolvedValueOnce({
+      capability: "CAP-GOV-04",
+      coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
+      reason: "vendor termination CAB-22",
+      summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+      items: [{ identity_id: "dep-1", name: "payments-api", kind: "api_key", owner_id: "owner-1", signal_type: "vendor_term", action: "revoked", from: "deployed", to: "revoked" }],
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    expect(await screen.findByText("payments-api")).toBeInTheDocument();
+    const form = screen.getByRole("form", { name: "NHI decommission" });
+    await user.selectOptions(within(form).getByLabelText("Signal"), "vendor_term");
+    await user.type(within(form).getByLabelText("Vendor"), "Acme SaaS");
+    await user.type(within(form).getByLabelText("Reason"), "vendor termination CAB-22");
+    await user.click(within(form).getByRole("button", { name: "Decommission" }));
+
+    await waitFor(() => expect(apiMock.decommissionNHI).toHaveBeenCalledTimes(1));
+    expect(apiMock.decommissionNHI).toHaveBeenCalledWith({
+      reason: "vendor termination CAB-22",
+      signals: [{ type: "vendor_term", vendor_name: "Acme SaaS", evidence_refs: ["ui:identities/decommission"] }],
+    });
+    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 1; retired 0; failed 0/)).toBeInTheDocument();
+    expect(screen.getByText("payments-api revoked via vendor_term")).toBeInTheDocument();
   });
 
   it("removes static revocation endpoint prose from the identities page", async () => {

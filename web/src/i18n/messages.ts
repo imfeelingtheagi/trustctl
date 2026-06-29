@@ -840,6 +840,46 @@ export const messages = {
     defaultMessage: "High risk",
     description: "Dashboard stat label for high-risk non-human identities.",
   },
+  "identities.decommission.ariaLabel": {
+    defaultMessage: "NHI decommission",
+    description: "Accessible label for the NHI decommission form on the identities page.",
+  },
+  "identities.decommission.signal": {
+    defaultMessage: "Signal",
+    description: "Label for the decommission signal selector.",
+  },
+  "identities.decommission.subject": {
+    defaultMessage: "Subject",
+    description: "Label for the owner subject field in the NHI decommission form.",
+  },
+  "identities.decommission.vendor": {
+    defaultMessage: "Vendor",
+    description: "Label for the vendor field in the NHI decommission form.",
+  },
+  "identities.decommission.inactiveBefore": {
+    defaultMessage: "Inactive before",
+    description: "Label for the inactivity cutoff field in the NHI decommission form.",
+  },
+  "identities.decommission.departure": {
+    defaultMessage: "Departure",
+    description: "Option label for an owner-departure decommission signal.",
+  },
+  "identities.decommission.vendorTerm": {
+    defaultMessage: "Vendor term",
+    description: "Option label for a vendor-termination decommission signal.",
+  },
+  "identities.decommission.inactivity": {
+    defaultMessage: "Inactivity",
+    description: "Option label for an inactivity decommission signal.",
+  },
+  "identities.decommission.submit": {
+    defaultMessage: "Decommission",
+    description: "Submit button for the NHI decommission form.",
+  },
+  "identities.decommission.reasonPlaceholder": {
+    defaultMessage: "CAB-1234",
+    description: "Placeholder for a decommission change-management reason.",
+  },
   "owners.attribution.heading": {
     defaultMessage: "Ownership attribution",
     description: "Owners page section heading for NHI ownership attribution.",
@@ -1241,6 +1281,16 @@ const esESCatalog = {
   "nhi.inventory.description": "cada identidad de máquina por tipo, con una lente de riesgo común",
   "nhi.inventory.total": "Identidades totales",
   "nhi.inventory.highRisk": "Riesgo alto",
+  "identities.decommission.ariaLabel": "Retiro de NHI",
+  "identities.decommission.signal": "Señal",
+  "identities.decommission.subject": "Sujeto",
+  "identities.decommission.vendor": "Proveedor",
+  "identities.decommission.inactiveBefore": "Inactivo antes de",
+  "identities.decommission.departure": "Salida",
+  "identities.decommission.vendorTerm": "Fin de proveedor",
+  "identities.decommission.inactivity": "Inactividad",
+  "identities.decommission.submit": "Retirar",
+  "identities.decommission.reasonPlaceholder": "CAB-1234",
   "owners.attribution.heading": "Atribución de propiedad",
   "owners.attribution.loading": "Cargando atribución de propiedad...",
   "owners.attribution.error": "No se pudo cargar la atribución de propiedad",

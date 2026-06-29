@@ -191,14 +191,21 @@ The non-human-identity lifecycle is served today:
 trstctl-cli identities create -f service-account.json
 
 # transition its state (e.g. disable on decommission)
-trstctl-cli identities transition <id> -f '{"to":"disabled","reason":"decommission"}'
+trstctl-cli identities transition <id> -f '{"to":"revoked","reason":"cessationOfOperation"}'
+
+# run automated NHI decommissioning from governance signals
+trstctl-cli nhi decommission -f nhi-decommission.json --force
 ```
 
-Those map to `POST /api/v1/identities` and `POST /api/v1/identities/{id}/transitions`
-(both require an `Idempotency-Key`). The **SPIFFE Workload API is now served** over a
-UDS (`protocols.spiffe.enabled`): workloads fetch X.509-SVIDs and JWT-SVIDs from the
-same socket, fetch both bundle types, and validate JWT-SVIDs through the served
-`ValidateJWTSVID` RPC.
+Those map to `POST /api/v1/identities`,
+`POST /api/v1/identities/{id}/transitions`, and `POST
+/api/v1/nhi/decommission` (mutations require an `Idempotency-Key`). The
+decommission route resolves departure, vendor-term, and inactivity signals to
+tenant-local managed NHIs, then uses the same event-sourced lifecycle transitions
+to revoke active credentials or retire already-revoked identities. The **SPIFFE
+Workload API is now served** over a UDS (`protocols.spiffe.enabled`): workloads
+fetch X.509-SVIDs and JWT-SVIDs from the same socket, fetch both bundle types,
+and validate JWT-SVIDs through the served `ValidateJWTSVID` RPC.
 
 If SPIRE already runs in the cluster, install the plugin binary into the SPIRE server
 container image or mount it from a read-only volume, then configure the

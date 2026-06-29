@@ -326,6 +326,11 @@ Ownership attribution for the same denominator is served by `GET
 resolve metadata-only owner/team/vendor names to registered owners, and unresolved
 records stay marked `orphaned` for CAP-GOV-01 governance reporting.
 
+Managed NHI decommissioning is served by `POST /api/v1/nhi/decommission`.
+Departure, vendor-term, and inactivity signals select tenant-local managed
+identities from the same ownership/activity metadata and then drive the normal
+event-sourced lifecycle revoke/retire transitions for CAP-GOV-04.
+
 **Status:** REST, OpenAPI, generated web client types, dashboard summary, and
 served end-to-end acceptance coverage are implemented.
 

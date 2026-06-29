@@ -74,6 +74,27 @@ shows the attribution table beside the owner registry.
 **Status: served** for managed identities plus discovery-fed NHIs from the served
 inventory path, including user, team, vendor, and orphaned coverage.
 
+### Automated NHI decommissioning (CAP-GOV-04)
+
+`POST /api/v1/nhi/decommission` (`identities:write`) accepts governance signals
+from owner departure, vendor termination, or inactivity review and resolves them
+against tenant-local managed NHI identities. The matcher understands direct
+`identity_id`, `owner_id`, owner name/email, vendor name, and metadata-only
+activity fields such as `last_seen_at` and `last_used_at`. Matched identities are
+decommissioned through the normal lifecycle state machine: active issued,
+deployed, or renewing identities are revoked with the RFC 5280
+`cessationOfOperation` reason by default, and already-revoked identities are
+retired. The response is an evidence pack with the signal type, action, previous
+state, final state, and evidence refs for each item.
+
+The same workflow is exposed as `trstctl-cli nhi decommission -f
+nhi-decommission.json --force` and in the Identities console. It deliberately
+does not treat full tenant deletion or member/API-token offboarding as NHI
+decommissioning; those remain separate admin flows.
+
+**Status: served** for managed NHI identities selected by departure, vendor-term,
+and inactivity signals, using event-sourced revoke/retire transitions.
+
 ### ABAC deny overlay
 
 Attribute-based access control (ABAC) narrows a permission that RBAC already granted.

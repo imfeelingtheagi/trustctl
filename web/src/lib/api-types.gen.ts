@@ -1320,6 +1320,52 @@ export interface MemberRequest {
   source?: string;
 }
 
+export interface NHIDecommissionItem {
+  action: "revoked" | "retired" | "skipped" | "failed";
+  error?: string;
+  evidence_refs?: string[];
+  from: string;
+  identity_id: string;
+  kind: string;
+  name: string;
+  owner_id: string;
+  signal_type: "departure" | "vendor_term" | "inactivity";
+  to: string;
+}
+
+export interface NHIDecommissionRequest {
+  reason?: string;
+  revocation_reason?: string;
+  signals: NHIDecommissionSignal[];
+}
+
+export interface NHIDecommissionResponse {
+  capability: string;
+  coverage: string[];
+  items: NHIDecommissionItem[];
+  reason: string;
+  summary: NHIDecommissionSummary;
+}
+
+export interface NHIDecommissionSignal {
+  evidence_refs?: string[];
+  identity_id?: string;
+  inactive_before?: string;
+  owner_id?: string;
+  owner_name?: string;
+  subject?: string;
+  type: "departure" | "vendor_term" | "inactivity";
+  vendor_name?: string;
+}
+
+export interface NHIDecommissionSummary {
+  failed: number;
+  retired: number;
+  revoked: number;
+  skipped: number;
+  total_matched: number;
+}
+
 export interface NHIInventory {
   coverage: string[];
   generated_at: string;

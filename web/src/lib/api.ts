@@ -125,6 +125,8 @@ import type {
   Member,
   MemberList,
   MemberRequest,
+  NHIDecommissionRequest,
+  NHIDecommissionResponse,
   NHIInventory,
   NHIInventoryItem,
   OwnershipAttribution,
@@ -289,6 +291,8 @@ export type {
   Member,
   MemberList,
   MemberRequest,
+  NHIDecommissionRequest,
+  NHIDecommissionResponse,
   NHIInventory,
   NHIInventoryItem,
   OwnershipAttribution,
@@ -681,6 +685,7 @@ export interface Api {
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
   nhiInventory(): Promise<NHIInventory>;
+  decommissionNHI(input: NHIDecommissionRequest): Promise<NHIDecommissionResponse>;
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
@@ -839,6 +844,7 @@ export const api: Api = {
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   nhiInventory: () => req<NHIInventory>("/api/v1/nhi/inventory"),
+  decommissionNHI: (input) => mutate<NHIDecommissionResponse>("POST", "/api/v1/nhi/decommission", input),
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
