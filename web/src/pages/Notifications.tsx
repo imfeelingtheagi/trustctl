@@ -232,6 +232,11 @@ function NotificationsTable({
       ),
     },
     {
+      id: "escalation",
+      header: "Escalation",
+      cell: (notification) => <EscalationSummary notification={notification} />,
+    },
+    {
       id: "status",
       header: "Status",
       cell: (notification) => <StatusBadge value={notification.status} label={notification.status} tone={statusTone(notification.status)} />,
@@ -284,6 +289,33 @@ function NotificationsTable({
     },
   ];
   return <DataGrid ariaLabel="Notifications inbox" rows={notifications} columns={columns} getRowId={(notification) => notification.id} state="ready" />;
+}
+
+function EscalationSummary({ notification }: { notification: Notification }) {
+  const owner = notification.owner_email || notification.owner_name || notification.owner_id;
+  const approvers = (notification.escalation_recipients ?? [])
+    .filter((recipient) => recipient.kind === "approver")
+    .map(recipientLabel)
+    .filter(Boolean);
+  if (!owner && approvers.length === 0) return <span className="text-muted-foreground">-</span>;
+  return (
+    <div className="grid max-w-[18rem] gap-1 text-sm">
+      {owner && (
+        <span className="truncate" title={owner}>
+          Owner: {owner}
+        </span>
+      )}
+      {approvers.length > 0 && (
+        <span className="truncate text-muted-foreground" title={approvers.join(", ")}>
+          Approvers: {approvers.join(", ")}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function recipientLabel(recipient: NonNullable<Notification["escalation_recipients"]>[number]): string {
+  return recipient.email || recipient.display_name || recipient.subject;
 }
 
 function tabClass(active: boolean): string {

@@ -209,11 +209,25 @@ func (m *Manager) AlertExpiring(ctx context.Context, tenantID string) (int, erro
 		if c.NotAfter != nil {
 			na = *c.NotAfter
 		}
-		payload, err := json.Marshal(notify.Alert{
+		alertContext, err := m.store.CertificateAlertContextForOwner(ctx, tenantID, certificateOwnerID(c))
+		if err != nil {
+			return alerted, err
+		}
+		thresholdDays := expiryThresholdDays(now, na)
+		alert := notify.Alert{
 			Kind: notify.KindCertificateExpiry, TenantID: tenantID, CertificateID: c.ID,
 			Subject: c.Subject, Serial: c.Serial, NotAfter: na,
-			Detail: "certificate expiring within the alert window",
-		})
+			Detail:               "certificate expiring within the alert window",
+			Severity:             expirySeverity(thresholdDays),
+			ThresholdDays:        &thresholdDays,
+			EscalationRecipients: alertRecipients(alertContext),
+		}
+		if alertContext.Owner != nil {
+			alert.OwnerID = alertContext.Owner.ID
+			alert.OwnerName = alertContext.Owner.Name
+			alert.OwnerEmail = alertContext.Owner.Email
+		}
+		payload, err := json.Marshal(alert)
 		if err != nil {
 			return alerted, err
 		}
@@ -235,6 +249,75 @@ func (m *Manager) AlertExpiring(ctx context.Context, tenantID string) (int, erro
 		alerted++
 	}
 	return alerted, nil
+}
+
+func certificateOwnerID(c store.Certificate) string {
+	if c.OwnerID == nil {
+		return ""
+	}
+	return *c.OwnerID
+}
+
+func expiryThresholdDays(now, notAfter time.Time) int {
+	if notAfter.IsZero() {
+		return 0
+	}
+	remaining := notAfter.Sub(now)
+	if remaining <= 0 {
+		return 0
+	}
+	const day = 24 * time.Hour
+	days := int(remaining / day)
+	if remaining%day != 0 {
+		days++
+	}
+	return days
+}
+
+func expirySeverity(days int) string {
+	switch {
+	case days <= 7:
+		return notify.AlertSeverityCritical
+	case days <= 30:
+		return notify.AlertSeverityWarning
+	default:
+		return notify.AlertSeverityLow
+	}
+}
+
+func alertRecipients(ctx store.CertificateAlertContext) []notify.AlertRecipient {
+	recipients := make([]notify.AlertRecipient, 0, 1+len(ctx.Approvers))
+	seen := map[string]bool{}
+	if ctx.Owner != nil {
+		recipient := notify.AlertRecipient{
+			Kind:        "owner",
+			Subject:     ctx.Owner.ID,
+			DisplayName: ctx.Owner.Name,
+			Email:       ctx.Owner.Email,
+		}
+		recipients = append(recipients, recipient)
+		seen[recipientKey(recipient)] = true
+	}
+	for _, approver := range ctx.Approvers {
+		recipient := notify.AlertRecipient{
+			Kind:        "approver",
+			Subject:     approver.Subject,
+			DisplayName: approver.DisplayName,
+			Email:       approver.Email,
+			Roles:       append([]string(nil), approver.Roles...),
+		}
+		key := recipientKey(recipient)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		recipients = append(recipients, recipient)
+	}
+	return recipients
+}
+
+func recipientKey(r notify.AlertRecipient) string {
+	return r.Kind + "\x00" + r.Subject + "\x00" + r.Email
 }
 
 // buildCSR generates an ephemeral subject key in a locked buffer (AN-8), builds a

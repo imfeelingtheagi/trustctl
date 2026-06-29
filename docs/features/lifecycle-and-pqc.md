@@ -47,17 +47,21 @@ three signals, with each tenant's data isolated at the database layer:
   a `revocation.publish` to the [outbox](../glossary.md) in the same transaction so a
   crash can't drop it, and emits `certificate.revoked`.
 - **Alert before expiry.** It finds certificates inside the `alert_before` window,
-  enqueues a notification to the outbox, stamps `alerted_at` so it doesn't nag, and
-  emits `certificate.expiring`.
+  enriches the alert with the certificate owner and active approver recipients,
+  enqueues a notification to the outbox, stamps `alerted_at` so it doesn't nag,
+  and emits `certificate.expiring`.
 
 **Status:** the manager is served by the running binary. The leader-only background
 loop scans tenant-scoped deployed X.509 identities, consumes ARI renewal windows first,
 falls back to `lifecycle.renew_before`, and writes the normal `ca.renew` outbox intent
 instead of signing inline. The same served sweep honors `lifecycle.alert_before`: it
-enqueues `notification.expiry` work and the outbox worker dispatches it through the
-operator-wired notification channels. It is integration-tested against real PostgreSQL,
-NATS, the signer process, and a signed webhook sink; `lifecycle.renew_before` and
-`lifecycle.alert_before` are parsed and validated at startup.
+enqueues `notification.expiry` work with `owner_id`, owner contact, approver
+recipients, severity, and threshold-day metadata; the outbox worker dispatches it
+through the operator-wired notification channels, and the notification inbox exposes
+the same escalation fields. It is integration-tested against real PostgreSQL, NATS,
+the signer process, tenant-member approvers, and a signed webhook sink;
+`lifecycle.renew_before` and `lifecycle.alert_before` are parsed and validated at
+startup.
 
 `POST /api/v1/lifecycle/endpoint-bindings` is the served end-to-end path for
 automated enrollment -> provision -> renewal -> endpoint-bind. It creates the

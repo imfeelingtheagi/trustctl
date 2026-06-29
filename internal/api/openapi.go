@@ -697,13 +697,19 @@ func componentSchemas() map[string]*Schema {
 		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")
+	alertRecipient := object(map[string]*Schema{
+		"kind": str(), "subject": str(), "display_name": str(), "email": str(),
+		"roles": {Type: "array", Items: str()},
+	}, "kind", "subject")
 	notification := object(map[string]*Schema{
 		"id": str(), "tenant_id": uuid(), "destination": str(), "kind": str(),
 		"certificate_id": str(), "subject": str(), "serial": str(), "not_after": timestamp(),
 		"detail": str(), "severity": {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
 		"routing_policy_id": str(), "threshold_days": {Type: "integer"},
-		"status":   {Type: "string", Enum: []string{"pending", "sent", "dead", "read"}},
-		"attempts": {Type: "integer"}, "last_error": str(), "idempotency_key": str(),
+		"owner_id": uuid(), "owner_name": str(), "owner_email": str(),
+		"escalation_recipients": {Type: "array", Items: ref("AlertRecipient")},
+		"status":                {Type: "string", Enum: []string{"pending", "sent", "dead", "read"}},
+		"attempts":              {Type: "integer"}, "last_error": str(), "idempotency_key": str(),
 		"created_at": timestamp(), "delivered_at": timestamp(), "read_at": timestamp(),
 	}, "id", "tenant_id", "destination", "status", "attempts", "created_at")
 	outboxCircuit := object(map[string]*Schema{
@@ -1496,6 +1502,7 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorTargetActionRequest":          connectorTargetActionReq,
 		"ConnectorDelivery":                     connectorDelivery,
 		"ConnectorDeliveryList":                 list("ConnectorDelivery"),
+		"AlertRecipient":                        alertRecipient,
 		"Notification":                          notification,
 		"NotificationList":                      list("Notification"),
 		"OutboxCircuit":                         outboxCircuit,

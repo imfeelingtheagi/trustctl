@@ -27,6 +27,12 @@ const pendingNotification = {
   subject: "payments-api",
   detail: "Certificate expires in 7 days.",
   severity: "warning",
+  owner_email: "payments-owner@example.test",
+  owner_name: "Payments owners",
+  escalation_recipients: [
+    { kind: "owner", subject: "owner-pay", display_name: "Payments owners", email: "payments-owner@example.test" },
+    { kind: "approver", subject: "ra-one@example.test", display_name: "RA One", email: "ra-one@example.test", roles: ["operator"] },
+  ],
   status: "pending",
   attempts: 1,
   created_at: "2026-06-26T10:00:00Z",
@@ -82,6 +88,8 @@ describe("C10-3 notifications inbox", () => {
 
     const inboxRow = screen.getByText("payments-api").closest("tr")!;
     expect(within(inboxRow).getByText("certificate.expiring")).toBeInTheDocument();
+    expect(within(inboxRow).getByText("Owner: payments-owner@example.test")).toBeInTheDocument();
+    expect(within(inboxRow).getByText("Approvers: ra-one@example.test")).toBeInTheDocument();
     expect(within(inboxRow).getByText("1 / 10")).toBeInTheDocument();
 
     await user.click(within(inboxRow).getByRole("button", { name: "Mark notification 101 read" }));

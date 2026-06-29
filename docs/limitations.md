@@ -36,8 +36,10 @@ never live in the API process. What you can do end to end against the running bi
   configured alert window, writes `notification.expiry` outbox work, stamps
   `alerted_at` in the same transaction so one certificate does not spam, and the
   served outbox worker dispatches the alert through operator-wired Slack, Teams,
-  email, PagerDuty, OpsGenie, or webhook channels. This is runtime delivery, not a
-  tenant channel-management API.
+  email, PagerDuty, OpsGenie, or webhook channels. The payload and notification inbox
+  include the certificate owner plus active approver escalation recipients, severity,
+  and threshold-day metadata. This is runtime delivery, not a tenant
+  channel-management API.
 - **Deployment connector target mutation** for the shipped connector set is served
   through the outbox when an operator wires a native `ConnectorRegistry` into the
   running binary, or when a provenance-verified signed WASM connector plugin owns
@@ -146,7 +148,7 @@ never live in the API process. What you can do end to end against the running bi
 - **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served notification
-  inbox with dead-letter requeue.
+  inbox with owner/approver escalation fields and dead-letter requeue.
 - **MCP-vs-REST parity guard:** the served MCP automation surface includes broad
   route-backed REST tools in addition to the named investigation tools, and CI fails
   when a served REST route is missing both an MCP mapping and an explicit allowlist.

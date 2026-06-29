@@ -50,15 +50,27 @@ const (
 
 // Alert is one operational alert on the notification surface — the JSON payload
 // of a notification.* outbox entry.
+type AlertRecipient struct {
+	Kind        string   `json:"kind"`
+	Subject     string   `json:"subject"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Email       string   `json:"email,omitempty"`
+	Roles       []string `json:"roles,omitempty"`
+}
+
 type Alert struct {
-	Kind            string    `json:"kind"`
-	TenantID        string    `json:"tenant_id"`
-	CertificateID   string    `json:"certificate_id,omitempty"`
-	Subject         string    `json:"subject,omitempty"`
-	Serial          string    `json:"serial,omitempty"`
-	NotAfter        time.Time `json:"not_after,omitempty"`
-	Detail          string    `json:"detail,omitempty"`
-	Severity        string    `json:"severity,omitempty"`
-	RoutingPolicyID string    `json:"routing_policy_id,omitempty"`
-	ThresholdDays   *int      `json:"threshold_days,omitempty"`
+	Kind                 string           `json:"kind"`
+	TenantID             string           `json:"tenant_id"`
+	CertificateID        string           `json:"certificate_id,omitempty"`
+	Subject              string           `json:"subject,omitempty"`
+	Serial               string           `json:"serial,omitempty"`
+	NotAfter             time.Time        `json:"not_after,omitempty"`
+	Detail               string           `json:"detail,omitempty"`
+	Severity             string           `json:"severity,omitempty"`
+	RoutingPolicyID      string           `json:"routing_policy_id,omitempty"`
+	ThresholdDays        *int             `json:"threshold_days,omitempty"`
+	OwnerID              string           `json:"owner_id,omitempty"`
+	OwnerName            string           `json:"owner_name,omitempty"`
+	OwnerEmail           string           `json:"owner_email,omitempty"`
+	EscalationRecipients []AlertRecipient `json:"escalation_recipients,omitempty"`
 }

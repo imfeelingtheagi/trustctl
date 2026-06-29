@@ -125,13 +125,16 @@ into a request to loopback, RFC1918, or cloud metadata addresses.
 **Status: partially served.** Expiry alerts are served by the running binary when an
 operator wires notification channels into the process and sets the lifecycle alert
 window: the leader scheduler writes `notification.expiry` outbox work, stamps the
-certificate as alerted, and the outbox dispatcher uses a severity-to-channel routing matrix
-instead of fanning every alert to every channel. `EffectiveAlertChannels` resolves
-the policy-specific channel set at dispatch time. A per-(subject, threshold, channel)
-dedup ledger prevents the same expiry threshold for the same credential from being sent
-to the same channel again. Operators can list/get the tenant-scoped notification inbox,
-mark rows read at `/api/v1/notifications/{id}/read`, and requeue failed notification
-dispatches from `/api/v1/notifications/{id}/requeue` with idempotency keys.
+certificate as alerted, and includes the owner id/contact plus active approver
+recipients from the tenant-member read model. The outbox dispatcher uses severity and
+threshold-day metadata with the severity-to-channel routing matrix instead of fanning
+every alert to every channel. `EffectiveAlertChannels` resolves the policy-specific
+channel set at dispatch time. A per-(subject, threshold, channel) dedup ledger prevents
+the same expiry threshold for the same credential from being sent to the same channel
+again. Operators can list/get the tenant-scoped notification inbox, inspect the
+owner/approver escalation fields, mark rows read at `/api/v1/notifications/{id}/read`,
+and requeue failed notification dispatches from `/api/v1/notifications/{id}/requeue`
+with idempotency keys.
 Tenant-facing channel CRUD and test delivery remain deployment-time configuration rather
 than served API.
 

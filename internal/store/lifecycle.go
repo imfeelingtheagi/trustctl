@@ -124,3 +124,61 @@ func (s *Store) TenantsWithAlertableCertificates(ctx context.Context, now, befor
 	}
 	return tenants, rows.Err()
 }
+
+// CertificateAlertContext returns the responsible owner plus active approver
+// principals for an expiry alert. It is read-only and tenant-scoped: the scheduler
+// uses it to enrich notification payloads, while the alert enqueue and alerted_at
+// stamp still happen atomically in AlertExpiring.
+type CertificateAlertContext struct {
+	Owner     *Owner
+	Approvers []TenantMember
+}
+
+// CertificateAlertContextForOwner loads alert-routing context for a certificate
+// owner. Missing owners do not suppress alerting: an orphaned certificate still
+// produces an expiry alert, just without owner contact fields.
+func (s *Store) CertificateAlertContextForOwner(ctx context.Context, tenantID, ownerID string) (CertificateAlertContext, error) {
+	out := CertificateAlertContext{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if ownerID != "" {
+			var (
+				owner Owner
+				kind  string
+			)
+			err := tx.QueryRow(ctx,
+				`SELECT id::text, tenant_id::text, kind, name, email, created_at
+				   FROM owners WHERE tenant_id = $1 AND id = $2`,
+				tenantID, ownerID).Scan(&owner.ID, &owner.TenantID, &kind, &owner.Name, &owner.Email, &owner.CreatedAt)
+			if err != nil && err != pgx.ErrNoRows {
+				return err
+			}
+			if err == nil {
+				owner.Kind = OwnerKind(kind)
+				out.Owner = &owner
+			}
+		}
+
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, subject, display_name, email, roles, source, status,
+			        created_at, updated_at, offboarded_at, offboarded_by, offboard_reason
+			   FROM tenant_members
+			  WHERE tenant_id = $1
+			    AND status <> 'offboarded'
+			    AND roles && $2::text[]
+			  ORDER BY subject LIMIT 10000`,
+			tenantID, []string{"admin", "operator", "approver", "cert-approver", "cert_approver", "certificate-approver", "certificate_approver"})
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var m TenantMember
+			if err := rows.Scan(&m.TenantID, &m.Subject, &m.DisplayName, &m.Email, &m.Roles, &m.Source, &m.Status, &m.CreatedAt, &m.UpdatedAt, &m.OffboardedAt, &m.OffboardedBy, &m.OffboardReason); err != nil {
+				return err
+			}
+			out.Approvers = append(out.Approvers, m)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

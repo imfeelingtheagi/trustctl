@@ -296,10 +296,26 @@ func FormatMessage(a Alert) string {
 	if !a.NotAfter.IsZero() {
 		b.WriteString(" — not after " + a.NotAfter.UTC().Format("2006-01-02"))
 	}
+	if owner := ownerLabel(a); owner != "" {
+		b.WriteString(" — owner " + owner)
+	}
 	if a.Detail != "" {
 		b.WriteString(" — " + a.Detail)
 	}
 	return b.String()
+}
+
+func ownerLabel(a Alert) string {
+	if a.OwnerEmail != "" && a.OwnerName != "" {
+		return a.OwnerName + " <" + a.OwnerEmail + ">"
+	}
+	if a.OwnerEmail != "" {
+		return a.OwnerEmail
+	}
+	if a.OwnerName != "" {
+		return a.OwnerName
+	}
+	return a.OwnerID
 }
 
 // Conform exercises a Notifier: it must report a name and deliver a well-formed alert

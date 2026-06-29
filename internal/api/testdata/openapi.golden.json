@@ -439,6 +439,33 @@
         ],
         "type": "object"
       },
+      "AlertRecipient": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject"
+        ],
+        "type": "object"
+      },
       "Approval": {
         "properties": {
           "action": {
@@ -5203,6 +5230,12 @@
           "detail": {
             "type": "string"
           },
+          "escalation_recipients": {
+            "items": {
+              "$ref": "#/components/schemas/AlertRecipient"
+            },
+            "type": "array"
+          },
           "id": {
             "type": "string"
           },
@@ -5217,6 +5250,16 @@
           },
           "not_after": {
             "format": "date-time",
+            "type": "string"
+          },
+          "owner_email": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_name": {
             "type": "string"
           },
           "read_at": {

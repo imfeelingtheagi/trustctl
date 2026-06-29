@@ -134,6 +134,14 @@ export interface AgentList {
   next_cursor?: string;
 }
 
+export interface AlertRecipient {
+  display_name?: string;
+  email?: string;
+  kind: string;
+  roles?: string[];
+  subject: string;
+}
+
 export interface Approval {
   action: "issue" | "revoke";
   approvals: number;
@@ -1391,11 +1399,15 @@ export interface Notification {
   delivered_at?: string;
   destination: string;
   detail?: string;
+  escalation_recipients?: AlertRecipient[];
   id: string;
   idempotency_key?: string;
   kind?: string;
   last_error?: string;
   not_after?: string;
+  owner_email?: string;
+  owner_id?: string;
+  owner_name?: string;
   read_at?: string;
   routing_policy_id?: string;
   serial?: string;
