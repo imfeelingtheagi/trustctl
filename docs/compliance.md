@@ -32,6 +32,14 @@ makes you compliant.
   `cabf-br`, `webtrust`, or `etsi`. The response includes
   `signed_export` plus `public_key_der`, so an auditor can verify the report
   manifest offline without trusting the API response body after the fact.
+- **Compliance inventory reporting and schedule definitions.** `GET
+  /api/v1/compliance/inventory-report` returns the CAP-OBS-02 reporting view:
+  supported frameworks, supported report types, backing API routes, evidence
+  references, report-schedule rows, and counts from certificates, CBOM assets,
+  discovery schedules, and compliance report schedules. `POST
+  /api/v1/compliance/report-schedules` records an idempotent, event-sourced
+  audit-export schedule definition, and `GET
+  /api/v1/compliance/report-schedules` lists those definitions.
 - **Tenant isolation.** Every audit query is tenant-scoped.
 
 ## The tamper-evidence trust model (read this)
@@ -103,6 +111,38 @@ status, and subscriber/registration-authority procedures as external residuals. 
 other words: trstctl serves the evidence pack; it does not self-award WebTrust,
 ETSI, or CA/Browser Forum compliance certification.
 
+## Compliance inventory report and schedule definitions
+
+An auditor or operator with `audit:read` can read the served reporting coverage:
+
+```sh
+trstctl-cli compliance inventory-report
+curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  "$TRSTCTL_SERVER/api/v1/compliance/inventory-report"
+```
+
+The response is intentionally mechanical. It names the capability
+(`CAP-OBS-02`), the supported framework ids, the supported report types
+(`framework_evidence_pack`, `inventory_snapshot`, `cbom_posture`, and
+`audit_summary`), the served routes, evidence references, inventory counts, and
+the first page of tenant report schedules.
+
+An operator with `audit:write` can record a schedule definition. This is a
+tenant-scoped, idempotent event plus read-model projection; it does not claim
+email, webhook, or ticket dispatch.
+
+```sh
+cat > soc2-schedule.json <<'JSON'
+{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
+JSON
+trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
+trstctl-cli compliance report-schedules list
+```
+
+`delivery` is `audit_export` only. Any other delivery value is rejected, because
+the product should never make an unserved email/webhook delivery look like a
+category meet.
+
 ## What the operator must still do
 
 trstctl enables the controls below; **you** operate them:
@@ -112,6 +152,10 @@ trstctl enables the controls below; **you** operate them:
   half) but you cannot produce new bundles under the same key; rotating it changes
   the verification key your auditor pins.
 - **Distribute the verification (public) key** to auditors out of band.
+- **Connect report-schedule definitions to your evidence operations.** The served
+  schedule API records the reporting plan and exposes it in the CAP-OBS-02
+  inventory report; external WORM storage, ticketing, email, and webhook dispatch
+  remain operator-run until a served runner exists.
 - **Set a retention policy — trstctl can now enforce it.** By default the event log
   is **retained indefinitely** (no pruning). When you set **both**
   `TRSTCTL_AUDIT_RETENTION` (a window, e.g. `8760h`) **and**

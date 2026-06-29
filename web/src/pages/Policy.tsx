@@ -5,9 +5,20 @@ import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePr
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
-import { api, ApiError, type ComplianceEvidencePack, type NHIReviewCampaign, type NHIReviewDecisionRequest, type NHIReviewItem } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type ComplianceEvidencePack,
+  type ComplianceInventoryReport,
+  type ComplianceReportSchedule,
+  type ComplianceReportScheduleRequest,
+  type NHIReviewCampaign,
+  type NHIReviewDecisionRequest,
+  type NHIReviewItem,
+} from "@/lib/api";
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
+type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
 
 const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; labelKey?: MessageKey }> = [
   { id: "pci-dss", label: "PCI DSS" },
@@ -20,6 +31,13 @@ const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; lab
   { id: "cabf-br", labelKey: "policy.framework.cabfBR" },
   { id: "webtrust", label: "WebTrust" },
   { id: "etsi", label: "ETSI" },
+];
+
+const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: MessageKey }> = [
+  { id: "inventory_snapshot", labelKey: "policy.reportType.inventorySnapshot" },
+  { id: "framework_evidence_pack", labelKey: "policy.reportType.frameworkEvidencePack" },
+  { id: "cbom_posture", labelKey: "policy.reportType.cbomPosture" },
+  { id: "audit_summary", labelKey: "policy.reportType.auditSummary" },
 ];
 
 interface ComplianceControl {
@@ -41,11 +59,17 @@ interface ComplianceManifest {
 }
 
 export function Policy() {
-  const { t } = useTranslation();
+  const { formatDate, t } = useTranslation();
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>("soc2");
   const [evidencePack, setEvidencePack] = useState<ComplianceEvidencePack | null>(null);
   const [evidencePackError, setEvidencePackError] = useState<string | null>(null);
   const [evidencePackLoading, setEvidencePackLoading] = useState(true);
+  const [inventoryReport, setInventoryReport] = useState<ComplianceInventoryReport | null>(null);
+  const [reportSchedules, setReportSchedules] = useState<ComplianceReportSchedule[]>([]);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
+  const [scheduleAction, setScheduleAction] = useState(false);
   const [evidenceBundle, setEvidenceBundle] = useState<string | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -65,6 +89,13 @@ export function Policy() {
     entitlement: "secret:payments/db/read",
     evidenceRefs: "audit:nhi-discovery/latest",
     risk: "medium",
+  });
+  const [scheduleForm, setScheduleForm] = useState({
+    name: "Quarterly SOC 2 inventory",
+    framework: "soc2" as ComplianceFramework,
+    reportType: "inventory_snapshot" as ComplianceReportType,
+    intervalDays: "90",
+    recipientRef: "audit-vault",
   });
 
   useEffect(() => {
@@ -87,6 +118,27 @@ export function Policy() {
       active = false;
     };
   }, [selectedFramework]);
+
+  useEffect(() => {
+    let active = true;
+    setReportLoading(true);
+    setReportError(null);
+    Promise.all([api.complianceInventoryReport(), api.complianceReportSchedules({ limit: 5 })])
+      .then(([report, schedules]) => {
+        if (!active) return;
+        setInventoryReport(report);
+        setReportSchedules(schedules.items ?? []);
+      })
+      .catch((err: unknown) => {
+        if (active) setReportError(describePolicyError(err, "compliance reporting unavailable"));
+      })
+      .finally(() => {
+        if (active) setReportLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -127,6 +179,50 @@ export function Policy() {
       setEvidenceError(`Could not export audit evidence: ${describePolicyError(err, "export failed")}`);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function refreshComplianceReporting() {
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const [report, schedules] = await Promise.all([api.complianceInventoryReport(), api.complianceReportSchedules({ limit: 5 })]);
+      setInventoryReport(report);
+      setReportSchedules(schedules.items ?? []);
+    } catch (err) {
+      setReportError(describePolicyError(err, "compliance reporting unavailable"));
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
+  async function createReportSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScheduleAction(true);
+    setReportError(null);
+    setReportNotice(null);
+    const intervalDays = Number.parseInt(scheduleForm.intervalDays, 10);
+    if (!Number.isFinite(intervalDays) || intervalDays < 1) {
+      setReportError("interval days must be a positive integer");
+      setScheduleAction(false);
+      return;
+    }
+    try {
+      const schedule = await api.createComplianceReportSchedule({
+        name: scheduleForm.name.trim(),
+        framework: scheduleForm.framework,
+        report_type: scheduleForm.reportType,
+        interval_seconds: intervalDays * 24 * 60 * 60,
+        enabled: true,
+        delivery: "audit_export",
+        recipient_ref: optionalText(scheduleForm.recipientRef),
+      });
+      setReportNotice(`${schedule.name} scheduled for ${formatDate(schedule.next_run_at)}.`);
+      await refreshComplianceReporting();
+    } catch (err) {
+      setReportError(describePolicyError(err, "report schedule create failed"));
+    } finally {
+      setScheduleAction(false);
     }
   }
 
@@ -281,6 +377,77 @@ export function Policy() {
         {evidencePackLoading && <LoadingState>Loading evidence pack.</LoadingState>}
         {evidencePackError && <ErrorState title="Evidence pack unavailable">{evidencePackError}</ErrorState>}
         {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework, t)} />}
+
+        {reportLoading && <LoadingState>{t("policy.reporting.loading")}</LoadingState>}
+        {reportError && <ErrorState title={t("policy.reporting.unavailableTitle")}>{reportError}</ErrorState>}
+        {inventoryReport && <ComplianceInventoryReportPanel report={inventoryReport} schedules={reportSchedules} />}
+
+        <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void createReportSchedule(event)}>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">{t("policy.reporting.schedule")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={scheduleForm.name}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.reporting.framework")}</span>
+            <select
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={scheduleForm.framework}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, framework: event.target.value as ComplianceFramework }))}
+            >
+              {complianceFrameworks.map((framework) => (
+                <option key={framework.id} value={framework.id}>
+                  {frameworkLabel(framework.id, t)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.reporting.reportType")}</span>
+            <select
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={scheduleForm.reportType}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, reportType: event.target.value as ComplianceReportType }))}
+            >
+              {complianceReportTypes.map((reportType) => (
+                <option key={reportType.id} value={reportType.id}>
+                  {t(reportType.labelKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.reporting.cadenceDays")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={scheduleForm.intervalDays}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, intervalDays: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.reporting.recipientRef")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={scheduleForm.recipientRef}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, recipientRef: event.target.value }))}
+            />
+          </label>
+          <div className="flex items-end lg:col-span-6">
+            <Button type="submit" disabled={scheduleAction}>
+              {scheduleAction ? t("policy.reporting.scheduling") : t("policy.reporting.createSchedule")}
+            </Button>
+          </div>
+        </form>
+        {reportNotice && (
+          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+            {reportNotice}
+          </p>
+        )}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
           <Button type="button" onClick={() => void exportComplianceEvidence()} disabled={exporting}>
@@ -526,6 +693,76 @@ function ComplianceEvidencePackPanel({ label, pack }: { label: string; pack: Com
   );
 }
 
+function ComplianceInventoryReportPanel({ report, schedules }: { report: ComplianceInventoryReport; schedules: ComplianceReportSchedule[] }) {
+  const { formatDate, t } = useTranslation();
+  const rows = schedules.length > 0 ? schedules : report.schedules;
+
+  return (
+    <section aria-labelledby="compliance-inventory-report-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="compliance-inventory-report-heading" className="text-title font-semibold">
+            {t("policy.reporting.heading")}
+          </h3>
+          <p className="mt-1 text-muted-foreground">
+            {t("policy.reporting.generated", { capability: report.capability, date: formatDate(report.generated_at) })}
+          </p>
+        </div>
+        <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{t("policy.reporting.auditExport")}</span>
+      </div>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label={t("policy.reporting.inventoryRows")} value={String(report.summary.inventory_rows)} />
+        <Metric label={t("policy.reporting.certificates")} value={String(report.summary.certificates)} />
+        <Metric label={t("policy.reporting.cryptoAssets")} value={String(report.summary.crypto_assets)} />
+        <Metric label={t("policy.reporting.discoverySchedules")} value={String(report.summary.discovery_schedules)} />
+        <Metric label={t("policy.reporting.frameworks")} value={String(report.summary.frameworks_supported)} />
+        <Metric label={t("policy.reporting.reportTypes")} value={String(report.summary.report_types_supported)} />
+        <Metric label={t("policy.reporting.schedules")} value={String(report.summary.report_schedules)} />
+        <Metric label={t("policy.reporting.enabledSchedules")} value={String(report.summary.enabled_report_schedules)} />
+      </dl>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <EvidenceList title={t("policy.reporting.reportTypeList")} items={report.report_types.map((reportType) => reportTypeLabel(reportType, t))} />
+        <EvidenceList title={t("policy.reporting.routeList")} items={report.routes} />
+      </div>
+
+      {rows.length > 0 ? (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[48rem]">
+            <caption className="sr-only">{t("policy.reporting.tableCaption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("policy.reporting.schedule")}</th>
+                <th scope="col">{t("policy.reporting.framework")}</th>
+                <th scope="col">{t("policy.reporting.type")}</th>
+                <th scope="col">{t("policy.reporting.cadence")}</th>
+                <th scope="col">{t("policy.reporting.nextRun")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((schedule) => (
+                <tr key={schedule.id}>
+                  <td>
+                    <p className="font-medium">{schedule.name}</p>
+                    {schedule.recipient_ref && <p className="mt-1 font-mono text-xs text-muted-foreground">{schedule.recipient_ref}</p>}
+                  </td>
+                  <td>{schedule.framework}</td>
+                  <td>{reportTypeLabel(schedule.report_type, t)}</td>
+                  <td>{Math.round(schedule.interval_seconds / 86400)}d</td>
+                  <td>{formatDate(schedule.next_run_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">{t("policy.reporting.empty")}</p>
+      )}
+    </section>
+  );
+}
+
 function NHIReviewCampaignPanel({
   campaign,
   decisionReasons,
@@ -699,6 +936,11 @@ function splitRefs(value: string): string[] {
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function reportTypeLabel(value: string, t: (key: MessageKey) => string): string {
+  const item = complianceReportTypes.find((candidate) => candidate.id === value);
+  return item ? t(item.labelKey) : value;
 }
 
 function describePolicyError(err: unknown, fallback: string): string {

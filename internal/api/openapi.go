@@ -1042,6 +1042,49 @@ func componentSchemas() map[string]*Schema {
 		"signed_export":  {Type: "object"},
 		"public_key_der": {Type: "string", Format: "byte"},
 	}, "format", "framework", "signed_export", "public_key_der")
+	complianceReportScheduleReq := object(map[string]*Schema{
+		"framework":        {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
+		"name":             str(),
+		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"}},
+		"interval_seconds": {Type: "integer"},
+		"enabled":          {Type: "boolean"},
+		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
+		"recipient_ref":    str(),
+	}, "framework", "name", "report_type", "interval_seconds")
+	complianceReportSchedule := object(map[string]*Schema{
+		"id":               uuid(),
+		"tenant_id":        uuid(),
+		"framework":        {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
+		"name":             str(),
+		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"}},
+		"interval_seconds": {Type: "integer"},
+		"enabled":          {Type: "boolean"},
+		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
+		"recipient_ref":    str(),
+		"next_run_at":      timestamp(),
+		"created_at":       timestamp(),
+		"updated_at":       timestamp(),
+	}, "id", "tenant_id", "framework", "name", "report_type", "interval_seconds", "enabled", "delivery", "next_run_at", "created_at", "updated_at")
+	complianceInventorySummary := object(map[string]*Schema{
+		"certificates":             {Type: "integer"},
+		"crypto_assets":            {Type: "integer"},
+		"discovery_schedules":      {Type: "integer"},
+		"report_schedules":         {Type: "integer"},
+		"enabled_report_schedules": {Type: "integer"},
+		"frameworks_supported":     {Type: "integer"},
+		"report_types_supported":   {Type: "integer"},
+		"inventory_rows":           {Type: "integer"},
+	}, "certificates", "crypto_assets", "discovery_schedules", "report_schedules", "enabled_report_schedules", "frameworks_supported", "report_types_supported", "inventory_rows")
+	complianceInventoryReport := object(map[string]*Schema{
+		"capability":    str(),
+		"generated_at":  timestamp(),
+		"summary":       ref("ComplianceInventorySummary"),
+		"frameworks":    {Type: "array", Items: str()},
+		"report_types":  {Type: "array", Items: str()},
+		"routes":        {Type: "array", Items: str()},
+		"evidence_refs": {Type: "array", Items: str()},
+		"schedules":     {Type: "array", Items: ref("ComplianceReportSchedule")},
+	}, "capability", "generated_at", "summary", "frameworks", "report_types", "routes", "evidence_refs", "schedules")
 	privacyErasureReq := object(map[string]*Schema{
 		"subject": str(),
 		"reason":  str(),
@@ -1822,6 +1865,11 @@ func componentSchemas() map[string]*Schema {
 		"AuditEventList":                        auditEventList,
 		"AuditBundle":                           auditBundle,
 		"ComplianceEvidencePack":                complianceEvidencePack,
+		"ComplianceReportScheduleRequest":       complianceReportScheduleReq,
+		"ComplianceReportSchedule":              complianceReportSchedule,
+		"ComplianceReportScheduleList":          list("ComplianceReportSchedule"),
+		"ComplianceInventorySummary":            complianceInventorySummary,
+		"ComplianceInventoryReport":             complianceInventoryReport,
 		"PrivacySubjectErasureRequest":          privacyErasureReq,
 		"PrivacyErasureSelectors":               privacyErasureSelectors,
 		"PrivacySubjectErasure":                 privacySubjectErasure,

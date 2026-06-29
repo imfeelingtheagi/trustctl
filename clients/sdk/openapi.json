@@ -2096,6 +2096,250 @@
         ],
         "type": "object"
       },
+      "ComplianceInventoryReport": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "frameworks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceReportSchedule"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ComplianceInventorySummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "summary",
+          "frameworks",
+          "report_types",
+          "routes",
+          "evidence_refs",
+          "schedules"
+        ],
+        "type": "object"
+      },
+      "ComplianceInventorySummary": {
+        "properties": {
+          "certificates": {
+            "type": "integer"
+          },
+          "crypto_assets": {
+            "type": "integer"
+          },
+          "discovery_schedules": {
+            "type": "integer"
+          },
+          "enabled_report_schedules": {
+            "type": "integer"
+          },
+          "frameworks_supported": {
+            "type": "integer"
+          },
+          "inventory_rows": {
+            "type": "integer"
+          },
+          "report_schedules": {
+            "type": "integer"
+          },
+          "report_types_supported": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "certificates",
+          "crypto_assets",
+          "discovery_schedules",
+          "report_schedules",
+          "enabled_report_schedules",
+          "frameworks_supported",
+          "report_types_supported",
+          "inventory_rows"
+        ],
+        "type": "object"
+      },
+      "ComplianceReportSchedule": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivery": {
+            "enum": [
+              "audit_export"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "framework": {
+            "enum": [
+              "pci-dss",
+              "hipaa",
+              "soc2",
+              "fedramp",
+              "cnsa-2.0",
+              "fips-140",
+              "common-criteria",
+              "cabf-br",
+              "webtrust",
+              "etsi"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recipient_ref": {
+            "type": "string"
+          },
+          "report_type": {
+            "enum": [
+              "framework_evidence_pack",
+              "inventory_snapshot",
+              "cbom_posture",
+              "audit_summary"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "framework",
+          "name",
+          "report_type",
+          "interval_seconds",
+          "enabled",
+          "delivery",
+          "next_run_at",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ComplianceReportScheduleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ComplianceReportSchedule"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ComplianceReportScheduleRequest": {
+        "properties": {
+          "delivery": {
+            "enum": [
+              "audit_export"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "framework": {
+            "enum": [
+              "pci-dss",
+              "hipaa",
+              "soc2",
+              "fedramp",
+              "cnsa-2.0",
+              "fips-140",
+              "common-criteria",
+              "cabf-br",
+              "webtrust",
+              "etsi"
+            ],
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "recipient_ref": {
+            "type": "string"
+          },
+          "report_type": {
+            "enum": [
+              "framework_evidence_pack",
+              "inventory_snapshot",
+              "cbom_posture",
+              "audit_summary"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "framework",
+          "name",
+          "report_type",
+          "interval_seconds"
+        ],
+        "type": "object"
+      },
       "ConnectorCatalog": {
         "properties": {
           "items": {
@@ -11578,6 +11822,173 @@
         ],
         "summary": "Export a signed framework compliance evidence pack",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/inventory-report": {
+      "get": {
+        "operationId": "getComplianceInventoryReport",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceInventoryReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get compliance and inventory reporting coverage",
+        "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/report-schedules": {
+      "get": {
+        "operationId": "listComplianceReportSchedules",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportScheduleList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List scheduled compliance and inventory reports",
+        "x-trstctl-permission": "audit:read"
+      },
+      "post": {
+        "operationId": "createComplianceReportSchedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplianceReportScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a scheduled compliance or inventory report",
+        "x-trstctl-permission": "audit:write"
       }
     },
     "/api/v1/connectors/catalog": {

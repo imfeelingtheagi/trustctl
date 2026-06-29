@@ -118,13 +118,15 @@ workload and resource that depends on it — backed by `/api/v1/graph/blast-radi
 The **policy** page renders the policy gate, a **compliance evidence-pack dashboard**
 (pick a framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140,
 Common Criteria, CA/B Forum BR, WebTrust, or ETSI — render the signed pack, and
-export audit evidence), and the dry-run gate. The **audit explorer** filters the
+export audit evidence), the CAP-OBS-02 compliance inventory report, audit-export
+report schedule definitions, and the dry-run gate. The **audit explorer** filters the
 tamper-evident event stream (type presets such as *Policy decisions*, time and sequence
 windows) and exports a **signed evidence bundle**. See
 **[Policy & governance](features/policy-and-governance.md)** and **[Compliance](compliance.md)**.
-Backed by `/api/v1/compliance/evidence-packs/{framework}`, `/api/v1/audit/events`, and
-`/api/v1/audit/export`. (A policy *dry-run preview* and *scheduled* compliance reports are
-not served and are not faked here.)
+Backed by `/api/v1/compliance/evidence-packs/{framework}`,
+`/api/v1/compliance/inventory-report`, `/api/v1/compliance/report-schedules`,
+`/api/v1/audit/events`, and `/api/v1/audit/export`. (A policy *dry-run preview*
+and email/webhook report dispatch are not served and are not faked here.)
 
 ### Privacy / data governance (`/privacy`)
 
@@ -189,8 +191,8 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   Idempotency at the orchestrator makes a retried fan-out safe.
 - **Saved views & export** — persist an inventory's columns, sort, and non-sensitive filter
   metadata as a reusable view (never row payloads or auth material — see the security-sink
-  boundary), and pull the current view as **CSV** on demand. *Scheduled* reports are not
-  served and are not implied.
+  boundary), and pull the current view as **CSV** on demand. Saved-view scheduled CSV
+  exports are not served and are not implied.
 - **CTA empty states** — first-run pages use action-shaped empty states that point to the
   next served workflow, such as issuing a certificate or connecting an issuer.
 - **Command palette** — Cmd+K has local commands plus debounced server-side record search
@@ -214,9 +216,10 @@ trstctl-cli privacy retention run
 
 - **The console is a view, not a second backend** — it adds no capability the API lacks.
   If a surface looks read-only for you, that is RBAC, not a missing screen.
-- **Some adjacent capabilities are API-only by design today** — data-subject export, policy
-  dry-run preview, notification channel configuration, scheduled digests, and scheduled
-  compliance reports are not served as console workflows and are not faked.
+- **Some adjacent capabilities are API-only by design today** — data-subject export,
+  policy dry-run preview, notification channel configuration, scheduled digests, and
+  email/webhook compliance report dispatch are not served as console workflows and are
+  not faked.
 - **Auth lives in an HttpOnly cookie**, never in web storage; only the theme preference (and
   non-sensitive saved-view metadata) is persisted client-side.
 

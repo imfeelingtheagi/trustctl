@@ -222,6 +222,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.CertsRead,
 			authz.CertsWrite,
 			authz.AuditRead,
+			authz.AuditWrite,
 			authz.PrivacyRead,
 			authz.PrivacyWrite,
 			authz.GraphRead,

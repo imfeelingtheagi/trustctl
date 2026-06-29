@@ -44,6 +44,10 @@ import type {
   CAIntermediateCSR,
   CAKeyCeremony,
   ComplianceEvidencePack,
+  ComplianceInventoryReport,
+  ComplianceReportSchedule,
+  ComplianceReportScheduleList,
+  ComplianceReportScheduleRequest,
   Certificate as GenCertificate,
   CertificateHealthDashboard as GenCertificateHealthDashboard,
   CertificateIngest,
@@ -274,6 +278,10 @@ export type {
   CAIntermediateCSR,
   CAKeyCeremony,
   ComplianceEvidencePack,
+  ComplianceInventoryReport,
+  ComplianceReportSchedule,
+  ComplianceReportScheduleList,
+  ComplianceReportScheduleRequest,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -777,6 +785,9 @@ export interface Api {
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
+  complianceInventoryReport(): Promise<ComplianceInventoryReport>;
+  complianceReportSchedules(options?: { limit?: number; cursor?: string }): Promise<ComplianceReportScheduleList>;
+  createComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedule>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
   graphReachable(id: string): Promise<GraphReachable>;
@@ -914,7 +925,8 @@ export const api: Api = {
   getFleetReissuanceRun: (id) => req<FleetReissuanceRun>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}`),
   pauseFleetReissuance: (id, input) => mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/pause`, input),
   resumeFleetReissuance: (id, input) => mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/resume`, input),
-  rollbackFleetReissuance: (id, input) => mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/rollback`, input),
+  rollbackFleetReissuance: (id, input) =>
+    mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/rollback`, input),
   exportFleetReissuanceEvidence: (id) => req<FleetReissuanceEvidence>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/evidence`),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
@@ -928,7 +940,8 @@ export const api: Api = {
   approveCACeremony: (id) => mutate<CAKeyCeremony>("POST", `/api/v1/ca/ceremonies/${encodeURIComponent(id)}/approvals`),
   importOfflineRootCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/offline-roots", input),
   importExistingCA: (input) => mutate<CAAuthority>("POST", "/api/v1/ca/authorities/imported", input),
-  createOfflineIntermediateCSR: (id, input) => mutate<CAIntermediateCSR>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates/csr`, input),
+  createOfflineIntermediateCSR: (id, input) =>
+    mutate<CAIntermediateCSR>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates/csr`, input),
   importOfflineIntermediateCA: (id, input) => mutate<CAAuthority>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates`, input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
   rotateManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/rotate", { key_id: keyId }),
@@ -955,6 +968,9 @@ export const api: Api = {
   auditEvents: (options) => req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
+  complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),
+  complianceReportSchedules: (options) => req<ComplianceReportScheduleList>(`/api/v1/compliance/report-schedules${pageQueryString(options)}`),
+  createComplianceReportSchedule: (input) => mutate<ComplianceReportSchedule>("POST", "/api/v1/compliance/report-schedules", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),

@@ -688,6 +688,130 @@ export const messages = {
     defaultMessage: "Common Criteria",
     description: "Short label for the Common Criteria compliance evidence-pack selector.",
   },
+  "policy.reportType.inventorySnapshot": {
+    defaultMessage: "Inventory snapshot",
+    description: "Compliance report type option for an inventory snapshot.",
+  },
+  "policy.reportType.frameworkEvidencePack": {
+    defaultMessage: "Framework evidence pack",
+    description: "Compliance report type option for a signed framework evidence pack.",
+  },
+  "policy.reportType.cbomPosture": {
+    defaultMessage: "CBOM posture",
+    description: "Compliance report type option for cryptographic bill of materials posture.",
+  },
+  "policy.reportType.auditSummary": {
+    defaultMessage: "Audit summary",
+    description: "Compliance report type option for an audit-log summary.",
+  },
+  "policy.reporting.loading": {
+    defaultMessage: "Loading report coverage.",
+    description: "Loading state for compliance inventory reporting coverage.",
+  },
+  "policy.reporting.unavailableTitle": {
+    defaultMessage: "Report coverage unavailable",
+    description: "Error title when compliance inventory reporting cannot load.",
+  },
+  "policy.reporting.schedule": {
+    defaultMessage: "Schedule",
+    description: "Label for compliance report schedule name.",
+  },
+  "policy.reporting.framework": {
+    defaultMessage: "Framework",
+    description: "Label for compliance report framework.",
+  },
+  "policy.reporting.reportType": {
+    defaultMessage: "Report type",
+    description: "Label for compliance report type.",
+  },
+  "policy.reporting.cadenceDays": {
+    defaultMessage: "Cadence days",
+    description: "Label for compliance report schedule interval in days.",
+  },
+  "policy.reporting.recipientRef": {
+    defaultMessage: "Recipient ref",
+    description: "Label for a non-secret audit archive or recipient reference.",
+  },
+  "policy.reporting.scheduling": {
+    defaultMessage: "Scheduling...",
+    description: "Busy label while creating a compliance report schedule.",
+  },
+  "policy.reporting.createSchedule": {
+    defaultMessage: "Create schedule",
+    description: "Button label for creating a compliance report schedule.",
+  },
+  "policy.reporting.heading": {
+    defaultMessage: "Compliance inventory report",
+    description: "Heading for the compliance inventory reporting panel.",
+  },
+  "policy.reporting.generated": {
+    defaultMessage: "{capability} generated {date}",
+    description: "Generated timestamp line for the compliance inventory reporting panel.",
+  },
+  "policy.reporting.auditExport": {
+    defaultMessage: "audit_export",
+    description: "Technical delivery value for compliance report schedules.",
+  },
+  "policy.reporting.inventoryRows": {
+    defaultMessage: "Inventory rows",
+    description: "Compliance inventory report metric label.",
+  },
+  "policy.reporting.certificates": {
+    defaultMessage: "Certificates",
+    description: "Compliance inventory report metric label for certificates.",
+  },
+  "policy.reporting.cryptoAssets": {
+    defaultMessage: "Crypto assets",
+    description: "Compliance inventory report metric label for CBOM assets.",
+  },
+  "policy.reporting.discoverySchedules": {
+    defaultMessage: "Discovery schedules",
+    description: "Compliance inventory report metric label for discovery schedules.",
+  },
+  "policy.reporting.frameworks": {
+    defaultMessage: "Frameworks",
+    description: "Compliance inventory report metric label for supported frameworks.",
+  },
+  "policy.reporting.reportTypes": {
+    defaultMessage: "Report types",
+    description: "Compliance inventory report metric label for supported report types.",
+  },
+  "policy.reporting.schedules": {
+    defaultMessage: "Schedules",
+    description: "Compliance inventory report metric label for report schedules.",
+  },
+  "policy.reporting.enabledSchedules": {
+    defaultMessage: "Enabled schedules",
+    description: "Compliance inventory report metric label for enabled report schedules.",
+  },
+  "policy.reporting.reportTypeList": {
+    defaultMessage: "Report types",
+    description: "Compliance inventory report list title for report types.",
+  },
+  "policy.reporting.routeList": {
+    defaultMessage: "API routes",
+    description: "Compliance inventory report list title for API routes.",
+  },
+  "policy.reporting.tableCaption": {
+    defaultMessage: "Compliance report schedules",
+    description: "Accessible caption for compliance report schedules table.",
+  },
+  "policy.reporting.type": {
+    defaultMessage: "Type",
+    description: "Short compliance report schedule table heading for report type.",
+  },
+  "policy.reporting.cadence": {
+    defaultMessage: "Cadence",
+    description: "Short compliance report schedule table heading for interval.",
+  },
+  "policy.reporting.nextRun": {
+    defaultMessage: "Next run",
+    description: "Compliance report schedule table heading for next run time.",
+  },
+  "policy.reporting.empty": {
+    defaultMessage: "No report schedules yet.",
+    description: "Empty state for compliance report schedules.",
+  },
   "nav.item.privacy": {
     defaultMessage: "Privacy",
     description: "Primary navigation item.",
@@ -1318,7 +1442,8 @@ const esESCatalog = {
   "nav.item.issuance": "Emisión",
   "nav.item.caHierarchy": "Jerarquía de CA",
   "caHierarchy.discovery.heading": "Inventario de descubrimiento de CA",
-  "caHierarchy.discovery.description": "Las CA ascendentes públicas, las CA ascendentes privadas y las autoridades importadas de la jerarquía de CA se normalizan en un inventario de solo lectura.",
+  "caHierarchy.discovery.description":
+    "Las CA ascendentes públicas, las CA ascendentes privadas y las autoridades importadas de la jerarquía de CA se normalizan en un inventario de solo lectura.",
   "caHierarchy.discovery.summaryPublic": "Públicas",
   "caHierarchy.discovery.summaryPrivate": "Privadas",
   "caHierarchy.discovery.summaryUpstream": "Ascendentes",
@@ -1354,7 +1479,8 @@ const esESCatalog = {
   "discovery.monitoring.columnRepository": "Repositorio",
   "discovery.monitoring.unscheduled": "sin programación",
   "caHierarchy.offline.heading": "Raíz sin conexión",
-  "caHierarchy.offline.description": "Importa una raíz pública, genera una CSR de intermediaria retenida por el firmante e importa la intermediaria firmada por la raíz.",
+  "caHierarchy.offline.description":
+    "Importa una raíz pública, genera una CSR de intermediaria retenida por el firmante e importa la intermediaria firmada por la raíz.",
   "caHierarchy.offline.errorTitle": "Falló la acción de raíz sin conexión",
   "caHierarchy.offline.rootImport": "Importación de raíz",
   "caHierarchy.offline.startRootCeremony": "Iniciar ceremonia de raíz sin conexión",
@@ -1380,7 +1506,8 @@ const esESCatalog = {
   "caHierarchy.offline.placeholderAuthorityID": "ca-authority-id",
   "caHierarchy.offline.placeholderDNSDomain": "example.internal",
   "caHierarchy.existing.heading": "Importación de CA existente",
-  "caHierarchy.existing.description": "Vincula una cadena de certificados raíz o intermedia ya existente a un identificador de clave retenido por el firmante después de una revisión m-de-n.",
+  "caHierarchy.existing.description":
+    "Vincula una cadena de certificados raíz o intermedia ya existente a un identificador de clave retenido por el firmante después de una revisión m-de-n.",
   "caHierarchy.existing.errorTitle": "Falló la importación de CA existente",
   "caHierarchy.existing.formHeading": "Importar cadena respaldada por firmante",
   "caHierarchy.existing.startCeremony": "Iniciar ceremonia de CA existente",
@@ -1419,6 +1546,37 @@ const esESCatalog = {
   "policy.framework.cabfBR": "BR del Foro CA/B",
   "policy.framework.fips140": "FIPS 140",
   "policy.framework.commonCriteria": "Criterios comunes",
+  "policy.reportType.inventorySnapshot": "Instantánea de inventario",
+  "policy.reportType.frameworkEvidencePack": "Paquete de evidencia del marco",
+  "policy.reportType.cbomPosture": "Postura CBOM",
+  "policy.reportType.auditSummary": "Resumen de auditoría",
+  "policy.reporting.loading": "Cargando cobertura de informes.",
+  "policy.reporting.unavailableTitle": "Cobertura de informes no disponible",
+  "policy.reporting.schedule": "Programación",
+  "policy.reporting.framework": "Marco",
+  "policy.reporting.reportType": "Tipo de informe",
+  "policy.reporting.cadenceDays": "Días de cadencia",
+  "policy.reporting.recipientRef": "Ref. de destinatario",
+  "policy.reporting.scheduling": "Programando...",
+  "policy.reporting.createSchedule": "Crear programación",
+  "policy.reporting.heading": "Informe de inventario de cumplimiento",
+  "policy.reporting.generated": "{capability} generado {date}",
+  "policy.reporting.auditExport": "audit_export",
+  "policy.reporting.inventoryRows": "Filas de inventario",
+  "policy.reporting.certificates": "Certificados",
+  "policy.reporting.cryptoAssets": "Activos criptográficos",
+  "policy.reporting.discoverySchedules": "Programaciones de descubrimiento",
+  "policy.reporting.frameworks": "Marcos",
+  "policy.reporting.reportTypes": "Tipos de informe",
+  "policy.reporting.schedules": "Programaciones",
+  "policy.reporting.enabledSchedules": "Programaciones activas",
+  "policy.reporting.reportTypeList": "Tipos de informe",
+  "policy.reporting.routeList": "Rutas de API",
+  "policy.reporting.tableCaption": "Programaciones de informes de cumplimiento",
+  "policy.reporting.type": "Tipo",
+  "policy.reporting.cadence": "Cadencia",
+  "policy.reporting.nextRun": "Próxima ejecución",
+  "policy.reporting.empty": "Aún no hay programaciones de informes.",
   "nav.item.privacy": "Privacidad",
   "nav.item.integrate": "Integración y SDK",
   "nav.item.operations": "Operaciones",
@@ -1468,7 +1626,8 @@ const esESCatalog = {
   "risk.nhiOverprivilege.unusedGrants": "Permisos sin uso",
   "risk.nhiOverprivilege.recommendation": "Recomendación de privilegio mínimo",
   "risk.nhiStale.heading": "NHI obsoletas y dormidas",
-  "risk.nhiStale.summary": "CAP-POST-02: {findings} obsoletas, sin uso, huérfanas o dormidas de {total} NHI analizadas; {dormant} dormidas, {orphaned} huérfanas.",
+  "risk.nhiStale.summary":
+    "CAP-POST-02: {findings} obsoletas, sin uso, huérfanas o dormidas de {total} NHI analizadas; {dormant} dormidas, {orphaned} huérfanas.",
   "risk.nhiStale.loading": "Cargando postura de NHI obsoletas.",
   "risk.nhiStale.unavailableTitle": "Postura de NHI obsoletas no disponible",
   "risk.nhiStale.empty": "No se detectó evidencia de NHI obsoletas, sin uso, huérfanas o dormidas.",
@@ -1479,7 +1638,8 @@ const esESCatalog = {
   "risk.nhiStale.ageValue": "{activity}d actividad / {created}d creada",
   "risk.nhiStale.recommendation": "Recomendación",
   "risk.contextual.heading": "Prioridades contextuales",
-  "risk.contextual.summary": "CAP-POST-05: {priorities} priorizadas de {total} credenciales; {highBlast} de alto radio de impacto, {weakCrypto} con contexto criptográfico débil.",
+  "risk.contextual.summary":
+    "CAP-POST-05: {priorities} priorizadas de {total} credenciales; {highBlast} de alto radio de impacto, {weakCrypto} con contexto criptográfico débil.",
   "risk.contextual.loading": "Cargando prioridades contextuales.",
   "risk.contextual.unavailableTitle": "Prioridades contextuales no disponibles",
   "risk.contextual.empty": "No se detectaron prioridades de riesgo contextual.",
@@ -1491,7 +1651,8 @@ const esESCatalog = {
   "risk.contextual.scoreValue": "{contextual} contextual / {base} base",
   "risk.contextual.blastValue": "{total} afectadas; {resources} recursos, {cryptoAssets} activos criptográficos",
   "risk.nhiStatic.heading": "Credenciales estáticas",
-  "risk.nhiStatic.summary": "CAP-POST-03: {findings} estáticas o de larga duración de {total} NHI analizadas; {longLived} de larga duración, {staticCredentials} estáticas.",
+  "risk.nhiStatic.summary":
+    "CAP-POST-03: {findings} estáticas o de larga duración de {total} NHI analizadas; {longLived} de larga duración, {staticCredentials} estáticas.",
   "risk.nhiStatic.loading": "Cargando postura de credenciales estáticas.",
   "risk.nhiStatic.unavailableTitle": "Postura de credenciales estáticas no disponible",
   "risk.nhiStatic.empty": "No se detectó evidencia de credenciales estáticas o de larga duración.",

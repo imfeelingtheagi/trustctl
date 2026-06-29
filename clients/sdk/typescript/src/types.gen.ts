@@ -773,6 +773,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/inventory-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get compliance and inventory reporting coverage */
+        get: operations["getComplianceInventoryReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compliance/report-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scheduled compliance and inventory reports */
+        get: operations["listComplianceReportSchedules"];
+        put?: never;
+        /** Create a scheduled compliance or inventory report */
+        post: operations["createComplianceReportSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/catalog": {
         parameters: {
             query?: never;
@@ -3227,6 +3262,65 @@ export interface components {
             /** Format: byte */
             public_key_der: string;
             signed_export: Record<string, never>;
+        };
+        ComplianceInventoryReport: {
+            capability: string;
+            evidence_refs: string[];
+            frameworks: string[];
+            /** Format: date-time */
+            generated_at: string;
+            report_types: string[];
+            routes: string[];
+            schedules: components["schemas"]["ComplianceReportSchedule"][];
+            summary: components["schemas"]["ComplianceInventorySummary"];
+        };
+        ComplianceInventorySummary: {
+            certificates: number;
+            crypto_assets: number;
+            discovery_schedules: number;
+            enabled_report_schedules: number;
+            frameworks_supported: number;
+            inventory_rows: number;
+            report_schedules: number;
+            report_types_supported: number;
+        };
+        ComplianceReportSchedule: {
+            /** Format: date-time */
+            created_at: string;
+            /** @enum {string} */
+            delivery: "audit_export";
+            enabled: boolean;
+            /** @enum {string} */
+            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+            /** Format: uuid */
+            id: string;
+            interval_seconds: number;
+            name: string;
+            /** Format: date-time */
+            next_run_at: string;
+            recipient_ref?: string;
+            /** @enum {string} */
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ComplianceReportScheduleList: {
+            items: components["schemas"]["ComplianceReportSchedule"][];
+            next_cursor?: string;
+        };
+        ComplianceReportScheduleRequest: {
+            /** @enum {string} */
+            delivery?: "audit_export";
+            enabled?: boolean;
+            /** @enum {string} */
+            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+            interval_seconds: number;
+            name: string;
+            recipient_ref?: string;
+            /** @enum {string} */
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
         };
         ConnectorCatalog: {
             items: components["schemas"]["ConnectorCatalogItem"][];
@@ -7078,6 +7172,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComplianceEvidencePack"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getComplianceInventoryReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceInventoryReport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listComplianceReportSchedules: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportScheduleList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createComplianceReportSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComplianceReportScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportSchedule"];
                 };
             };
             /** @description client error */

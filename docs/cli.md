@@ -59,7 +59,7 @@ secret injection:
 | `ephemeral` | `issue` · `api-keys issue` · `approve` |
 | `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
-| `compliance` | `evidence-pack` |
+| `compliance` | `inventory-report` · `report-schedules create` · `report-schedules list` · `evidence-pack` |
 | `privacy` | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog` |
 | `graph` | `nodes` · `reachable` · `blast-radius` · `query` |
 | `risk` | `credentials` |
@@ -257,6 +257,17 @@ trstctl-cli compliance evidence-pack common-criteria
 
 # Export CA/Browser Forum Baseline Requirements evidence posture.
 trstctl-cli compliance evidence-pack cabf-br
+
+# Show CAP-OBS-02 compliance/inventory reporting coverage and served report routes.
+trstctl-cli compliance inventory-report
+
+# Record and list an audit-export report schedule definition. The delivery value is
+# metadata for the audit-export workflow; email/webhook delivery is not implied.
+cat > compliance-schedule.json <<'JSON'
+{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
+JSON
+trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f compliance-schedule.json
+trstctl-cli compliance report-schedules list
 
 # Scan TLS endpoints/config files into the cryptographic bill of materials.
 cat > cbom-scan.json <<'JSON'

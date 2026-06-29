@@ -7,6 +7,9 @@ import { Policy } from "@/pages/Policy";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     complianceEvidencePack: vi.fn(),
+    complianceInventoryReport: vi.fn(),
+    complianceReportSchedules: vi.fn(),
+    createComplianceReportSchedule: vi.fn(),
     decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
@@ -65,9 +68,51 @@ function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
   };
 }
 
+function complianceSchedule(name = "Quarterly SOC 2 inventory") {
+  return {
+    id: "33333333-3333-4333-8333-333333333333",
+    tenant_id: "tenant-1",
+    framework: "soc2",
+    name,
+    report_type: "inventory_snapshot",
+    interval_seconds: 90 * 24 * 60 * 60,
+    enabled: true,
+    delivery: "audit_export",
+    recipient_ref: "audit-vault",
+    next_run_at: "2026-09-26T12:00:00Z",
+    created_at: "2026-06-28T12:00:00Z",
+    updated_at: "2026-06-28T12:00:00Z",
+  };
+}
+
+function complianceInventoryReport() {
+  return {
+    capability: "CAP-OBS-02",
+    generated_at: "2026-06-28T12:00:00Z",
+    frameworks: ["pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"],
+    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"],
+    routes: ["GET /api/v1/compliance/inventory-report", "POST /api/v1/compliance/report-schedules", "GET /api/v1/compliance/report-schedules"],
+    evidence_refs: ["event:compliance.report_schedule.upserted"],
+    schedules: [complianceSchedule()],
+    summary: {
+      certificates: 8,
+      crypto_assets: 4,
+      discovery_schedules: 2,
+      report_schedules: 1,
+      enabled_report_schedules: 1,
+      frameworks_supported: 10,
+      report_types_supported: 4,
+      inventory_rows: 15,
+    },
+  };
+}
+
 describe("policy governance surface", () => {
   beforeEach(() => {
     apiMock.complianceEvidencePack.mockReset();
+    apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
+    apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
+    apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule("Quarterly SOC 2 inventory"));
     apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
     apiMock.exportAudit.mockReset();
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
@@ -149,23 +194,23 @@ describe("policy governance surface", () => {
                 ? ["CA/Browser Forum profile lint evidence", "external zlint corpus gate", "served CA issuance and revocation audit evidence"]
                 : framework === "fips-140"
                   ? ["FIPS-capable build and fail-closed POST evidence"]
-                : framework === "common-criteria"
-                  ? ["security-target evidence map over served controls"]
-                : framework === "webtrust" || framework === "etsi"
-                ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
-                : ["FIPS 203/204/205 migration posture from the CBOM"],
+                  : framework === "common-criteria"
+                    ? ["security-target evidence map over served controls"]
+                    : framework === "webtrust" || framework === "etsi"
+                      ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
+                      : ["FIPS 203/204/205 migration posture from the CBOM"],
             operator_attests:
               framework === "cabf-br"
                 ? ["independent WebTrust practitioner opinion for public-trust issuance", "CA/Browser Forum policy program operation"]
                 : framework === "fips-140"
-                ? ["NIST CMVP certificate number for the deployed validated module"]
-                : framework === "common-criteria"
-                ? ["Common Criteria certificate and evaluation report"]
-                : framework === "webtrust"
-                ? ["WebTrust practitioner audit opinion"]
-                : framework === "etsi"
-                  ? ["ETSI conformity assessment"]
-                  : ["organizational policies & governance"],
+                  ? ["NIST CMVP certificate number for the deployed validated module"]
+                  : framework === "common-criteria"
+                    ? ["Common Criteria certificate and evaluation report"]
+                    : framework === "webtrust"
+                      ? ["WebTrust practitioner audit opinion"]
+                      : framework === "etsi"
+                        ? ["ETSI conformity assessment"]
+                        : ["organizational policies & governance"],
           },
           signature: "signed-by-export-key",
         },
@@ -208,7 +253,12 @@ describe("policy governance surface", () => {
 
     expect(screen.getByRole("heading", { name: "Compliance posture and reports" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenCalledWith("soc2"));
+    await waitFor(() => expect(apiMock.complianceInventoryReport).toHaveBeenCalled());
     expect(await screen.findByRole("heading", { name: "SOC 2 evidence pack" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Compliance inventory report" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-OBS-02/i)).toBeInTheDocument();
+    expect(screen.getByText("Quarterly SOC 2 inventory")).toBeInTheDocument();
+    expect(screen.getByText("GET /api/v1/compliance/inventory-report")).toBeInTheDocument();
     expect(screen.getByText("trstctl.compliance.evidence-pack.v1")).toBeInTheDocument();
     expect(screen.getByText("3 controls")).toBeInTheDocument();
     expect(screen.getByText("2 evidenced")).toBeInTheDocument();
@@ -255,6 +305,18 @@ describe("policy governance surface", () => {
 
     await waitFor(() => expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 500 }));
     expect(await screen.findByText("jws: signed.audit.bundle")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() =>
+      expect(apiMock.createComplianceReportSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          framework: "soc2",
+          report_type: "inventory_snapshot",
+          interval_seconds: 90 * 24 * 60 * 60,
+          delivery: "audit_export",
+        }),
+      ),
+    );
     expect(screen.queryByRole("button", { name: /generate report|attest compliance/i })).not.toBeInTheDocument();
   });
 

@@ -167,6 +167,15 @@ never live in the API process. What you can do end to end against the running bi
   static lifecycle markers, no-expiry credentials, and overdue rotation age from the
   unified NHI inventory. Findings are read-only recommendations; rotation still
   requires the served lifecycle or connector workflow.
+- **Compliance and inventory reporting:** `GET
+  /api/v1/compliance/inventory-report` and `trstctl-cli compliance
+  inventory-report` return the CAP-OBS-02 reporting view: supported frameworks,
+  report types, routes, evidence refs, inventory counts, and tenant report
+  schedules. `POST /api/v1/compliance/report-schedules` and `trstctl-cli
+  compliance report-schedules create` record idempotent, event-sourced
+  audit-export schedule definitions; `GET /api/v1/compliance/report-schedules`
+  and `trstctl-cli compliance report-schedules list` read them back. Delivery is
+  `audit_export` only; email/webhook/ticket dispatch is not served or implied.
 - **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served notification

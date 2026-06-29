@@ -1911,24 +1911,31 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 	projectionsGo := read(t, "../internal/projections/projections.go")
 	for _, want := range []string{
 		"knownSchemaVersions",
-		"EventIdentityIssued:                  {1: true}",
-		"EventIdentityRetired:                 {1: true}",
-		"EventDiscoverySourceUpserted:         {1: true}",
-		"EventDiscoveryScheduleUpserted:       {1: true}",
-		"EventDiscoveryRunQueued:              {1: true}",
-		"EventDiscoveryRunStarted:             {1: true}",
-		"EventDiscoveryFindingRecorded:        {1: true}",
-		"EventDiscoveryFindingTriageChanged:   {1: true}",
-		"EventDiscoveryRunCompleted:           {1: true}",
-		"EventNotificationRead:                {1: true}",
-		"EventNotificationThresholdDelivered:  {1: true}",
-		"EventIncidentFleetReissuanceRecorded: {1: true}",
 		"lifecycleEventTypes",
 		"ErrUnknownSchemaVersion",
 		"func ValidateSchemaVersion(e events.Event) error",
 		"if err := ValidateSchemaVersion(e); err != nil",
 	} {
 		if !strings.Contains(projectionsGo, want) {
+			t.Errorf("SCHEMA-101: projections.go no longer contains %q; projector schema-version gate may have drifted", want)
+		}
+	}
+	compactProjectionsGo := strings.Join(strings.Fields(projectionsGo), " ")
+	for _, want := range []string{
+		"EventIdentityIssued: {1: true}",
+		"EventIdentityRetired: {1: true}",
+		"EventDiscoverySourceUpserted: {1: true}",
+		"EventDiscoveryScheduleUpserted: {1: true}",
+		"EventDiscoveryRunQueued: {1: true}",
+		"EventDiscoveryRunStarted: {1: true}",
+		"EventDiscoveryFindingRecorded: {1: true}",
+		"EventDiscoveryFindingTriageChanged: {1: true}",
+		"EventDiscoveryRunCompleted: {1: true}",
+		"EventNotificationRead: {1: true}",
+		"EventNotificationThresholdDelivered: {1: true}",
+		"EventIncidentFleetReissuanceRecorded: {1: true}",
+	} {
+		if !strings.Contains(compactProjectionsGo, want) {
 			t.Errorf("SCHEMA-101: projections.go no longer contains %q; projector schema-version gate may have drifted", want)
 		}
 	}
@@ -2812,7 +2819,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "pam_sessions", "privacy_subject_erasures", "privacy_retention_runs", "nhi_access_review_campaigns", "nhi_access_review_items"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "pam_sessions", "compliance_report_schedules", "privacy_subject_erasures", "privacy_retention_runs", "nhi_access_review_campaigns", "nhi_access_review_items"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",

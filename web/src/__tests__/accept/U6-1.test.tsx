@@ -7,6 +7,9 @@ import { Policy } from "@/pages/Policy";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     complianceEvidencePack: vi.fn(),
+    complianceInventoryReport: vi.fn(),
+    complianceReportSchedules: vi.fn(),
+    createComplianceReportSchedule: vi.fn(),
     decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
@@ -27,6 +30,9 @@ beforeEach(() => {
     public_key_der: "BASE64DER",
     signed_export: { controls: 12, posture: "pass" },
   });
+  apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
+  apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
+  apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule());
   apiMock.exportAudit.mockReset().mockResolvedValue({ format: "json", bundle: "BASE64BUNDLE" });
   apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
   apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
@@ -65,6 +71,45 @@ function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
         updated_at: "2026-06-28T12:00:00Z",
       },
     ],
+  };
+}
+
+function complianceSchedule() {
+  return {
+    id: "33333333-3333-4333-8333-333333333333",
+    tenant_id: "tenant-1",
+    framework: "soc2",
+    name: "Quarterly SOC 2 inventory",
+    report_type: "inventory_snapshot",
+    interval_seconds: 90 * 24 * 60 * 60,
+    enabled: true,
+    delivery: "audit_export",
+    recipient_ref: "audit-vault",
+    next_run_at: "2026-09-26T12:00:00Z",
+    created_at: "2026-06-28T12:00:00Z",
+    updated_at: "2026-06-28T12:00:00Z",
+  };
+}
+
+function complianceInventoryReport() {
+  return {
+    capability: "CAP-OBS-02",
+    generated_at: "2026-06-28T12:00:00Z",
+    frameworks: ["pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"],
+    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"],
+    routes: ["GET /api/v1/compliance/inventory-report", "POST /api/v1/compliance/report-schedules", "GET /api/v1/compliance/report-schedules"],
+    evidence_refs: ["event:compliance.report_schedule.upserted"],
+    schedules: [complianceSchedule()],
+    summary: {
+      certificates: 8,
+      crypto_assets: 4,
+      discovery_schedules: 2,
+      report_schedules: 1,
+      enabled_report_schedules: 1,
+      frameworks_supported: 10,
+      report_types_supported: 4,
+      inventory_rows: 15,
+    },
   };
 }
 

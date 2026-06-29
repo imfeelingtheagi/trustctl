@@ -25,6 +25,7 @@ const (
 	CertsRead          Permission = "certs:read"
 	CertsWrite         Permission = "certs:write"
 	AuditRead          Permission = "audit:read"
+	AuditWrite         Permission = "audit:write"
 	PrivacyRead        Permission = "privacy:read"
 	PrivacyWrite       Permission = "privacy:write"
 	GraphRead          Permission = "graph:read"
@@ -83,7 +84,7 @@ func allResourcePermissions() []Permission {
 	return []Permission{
 		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
-		PrivacyRead, PrivacyWrite,
+		AuditWrite, PrivacyRead, PrivacyWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, NotificationsRead, NotificationsWrite,

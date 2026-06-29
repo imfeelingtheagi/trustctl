@@ -575,6 +575,58 @@ export interface ComplianceEvidencePack {
   signed_export: Record<string, unknown>;
 }
 
+export interface ComplianceInventoryReport {
+  capability: string;
+  evidence_refs: string[];
+  frameworks: string[];
+  generated_at: string;
+  report_types: string[];
+  routes: string[];
+  schedules: ComplianceReportSchedule[];
+  summary: ComplianceInventorySummary;
+}
+
+export interface ComplianceInventorySummary {
+  certificates: number;
+  crypto_assets: number;
+  discovery_schedules: number;
+  enabled_report_schedules: number;
+  frameworks_supported: number;
+  inventory_rows: number;
+  report_schedules: number;
+  report_types_supported: number;
+}
+
+export interface ComplianceReportSchedule {
+  created_at: string;
+  delivery: "audit_export";
+  enabled: boolean;
+  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+  id: string;
+  interval_seconds: number;
+  name: string;
+  next_run_at: string;
+  recipient_ref?: string;
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface ComplianceReportScheduleList {
+  items: ComplianceReportSchedule[];
+  next_cursor?: string;
+}
+
+export interface ComplianceReportScheduleRequest {
+  delivery?: "audit_export";
+  enabled?: boolean;
+  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+  interval_seconds: number;
+  name: string;
+  recipient_ref?: string;
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+}
+
 export interface ConnectorCatalog {
   items: ConnectorCatalogItem[];
 }

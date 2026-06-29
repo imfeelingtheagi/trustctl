@@ -210,6 +210,17 @@ WebTrust and ETSI packs add broader CA-audit posture controls while keeping
 practitioner opinion, qualified trust-service status, and external conformity
 assessment as explicit operator/auditor residuals.
 
+CAP-OBS-02 adds the inventory/reporting layer around those packs. `GET
+/api/v1/compliance/inventory-report` returns a tenant-scoped report that
+enumerates the served frameworks, supported report types, backing routes, evidence
+references, report-schedule rows, and inventory counts from certificates, CBOM
+assets, discovery schedules, and report schedules. `POST
+/api/v1/compliance/report-schedules` records an idempotent,
+event-sourced schedule definition, and `GET /api/v1/compliance/report-schedules`
+lists the tenant's definitions. Delivery is deliberately limited to
+`audit_export`; email, webhook, and ticket dispatch are not claimed until a
+served runner exists.
+
 The same served governance surface now includes **NHI access certification campaigns**
 (CAP-GOV-02). A reviewer starts a campaign with non-secret NHI/resource/entitlement
 items and evidence references, then records each item decision as `certified`,
@@ -222,13 +233,15 @@ evidence refs only; inline secrets, tokens, passwords, and credential values are
 
 ### In the console
 
-The `/policy` screen renders a **compliance evidence-pack dashboard** — pick a framework
+The `/policy` screen renders a **compliance evidence-pack dashboard** - pick a framework
 (PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, or ETSI), render the signed pack, and export audit
-evidence — plus an **NHI access certification** panel for starting campaigns and recording
-reviewer decisions. The `/audit` screen is a filterable **audit explorer** (type presets such as
-*Policy decisions*, time and sequence windows) that downloads a signed evidence bundle. A
-policy *dry-run preview* and *scheduled* reports are not served and are not faked in the
-console. See [The web console](../web-console.md).
+evidence - plus the CAP-OBS-02 **compliance inventory report** and audit-export
+schedule-definition form. It also includes an **NHI access certification** panel
+for starting campaigns and recording reviewer decisions. The `/audit` screen is a
+filterable **audit explorer** (type presets such as *Policy decisions*, time and
+sequence windows) that downloads a signed evidence bundle. A policy *dry-run
+preview* is not served and is not faked in the console. See
+[The web console](../web-console.md).
 
 ## Use it
 
@@ -244,6 +257,16 @@ trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:0
 # export a signed SOC 2 evidence pack with CBOM/FIPS posture
 trstctl-cli compliance evidence-pack soc2
 
+# read CAP-OBS-02 inventory/reporting coverage
+trstctl-cli compliance inventory-report
+
+# record an audit-export report schedule definition
+cat > soc2-schedule.json <<'JSON'
+{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
+JSON
+trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
+trstctl-cli compliance report-schedules list
+
 # start an NHI access certification campaign from metadata/evidence refs
 trstctl-cli access reviews start -f nhi-review.json
 
@@ -251,8 +274,11 @@ trstctl-cli access reviews start -f nhi-review.json
 trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision.json
 ```
 
-Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`, and
-`GET /api/v1/compliance/evidence-packs/{framework}`. NHI certification campaigns map to
+Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
+`GET /api/v1/compliance/evidence-packs/{framework}`,
+`GET /api/v1/compliance/inventory-report`, `POST
+/api/v1/compliance/report-schedules`, and `GET
+/api/v1/compliance/report-schedules`. NHI certification campaigns map to
 `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
 /api/v1/access/reviews/{id}`, and `POST
 /api/v1/access/reviews/{id}/items/{item_id}/decision`; all mutations require an
@@ -294,7 +320,8 @@ auth:
 ## Pitfalls & limits
 
 - **Served vs library:** RBAC (F8) is enforced, the ABAC deny overlay is served, and
-  the audit log (F9) plus framework evidence-pack export (F62) are served. The
+  the audit log (F9), framework evidence-pack export, compliance inventory report,
+  and audit-export report schedule definitions (F62/CAP-OBS-02) are served. The
   **policy engine (F28) and the RA/dual-control gate are now served on the issuance
   path**: with `ca.policy.enabled` the default-deny OPA/Rego gate runs
   on every served issue/deploy/revoke transition (fail-closed), the RA scope split
@@ -324,6 +351,11 @@ auth:
   `auditor`, `ra-officer`; `guard` middleware.
 - **Audit (served):** `GET /api/v1/audit/events` (`type`, `since`, `until`, `as_of`, `q`,
   `limit`), `GET /api/v1/audit/export`; `Seal`/`VerifyChain`.
+- **Compliance reporting (served):** `GET /api/v1/compliance/evidence-packs/{framework}`,
+  `GET /api/v1/compliance/inventory-report`, `POST
+  /api/v1/compliance/report-schedules`, and `GET
+  /api/v1/compliance/report-schedules`; report-schedule delivery is `audit_export`
+  only.
 - **Notifications:** Slack, Teams, email, PagerDuty, OpsGenie, webhook (HMAC-signed);
   HTTP targets are public HTTPS by default; inbox routes are `GET /api/v1/notifications`,
   `GET /api/v1/notifications/{id}`, `POST /api/v1/notifications/{id}/read`, and

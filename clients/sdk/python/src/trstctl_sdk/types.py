@@ -845,6 +845,78 @@ ComplianceEvidencePack = TypedDict(
     total=False,
 )
 
+ComplianceInventoryReport = TypedDict(
+    'ComplianceInventoryReport',
+    {
+        'capability': str,
+        'evidence_refs': list[str],
+        'frameworks': list[str],
+        'generated_at': str,
+        'report_types': list[str],
+        'routes': list[str],
+        'schedules': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+ComplianceInventorySummary = TypedDict(
+    'ComplianceInventorySummary',
+    {
+        'certificates': int,
+        'crypto_assets': int,
+        'discovery_schedules': int,
+        'enabled_report_schedules': int,
+        'frameworks_supported': int,
+        'inventory_rows': int,
+        'report_schedules': int,
+        'report_types_supported': int,
+    },
+    total=False,
+)
+
+ComplianceReportSchedule = TypedDict(
+    'ComplianceReportSchedule',
+    {
+        'created_at': str,
+        'delivery': str,
+        'enabled': bool,
+        'framework': str,
+        'id': str,
+        'interval_seconds': int,
+        'name': str,
+        'next_run_at': str,
+        'recipient_ref': str,
+        'report_type': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+ComplianceReportScheduleList = TypedDict(
+    'ComplianceReportScheduleList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+ComplianceReportScheduleRequest = TypedDict(
+    'ComplianceReportScheduleRequest',
+    {
+        'delivery': str,
+        'enabled': bool,
+        'framework': str,
+        'interval_seconds': int,
+        'name': str,
+        'recipient_ref': str,
+        'report_type': str,
+    },
+    total=False,
+)
+
 ConnectorCatalog = TypedDict(
     'ConnectorCatalog',
     {
