@@ -1282,18 +1282,18 @@
       "phase": "P0",
       "priority": 8,
       "served_state": "served",
-      "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture, CAP-POST-02 stale/dormant/orphaned NHI posture, and CAP-POST-03 static-credential posture",
-      "current_frontend_mapping": "served: Risk page lists certificate scores, CAP-POST-01 NHI over-privilege findings, CAP-POST-02 stale/dormant/orphaned findings, and CAP-POST-03 static-credential findings with recommendations; coverage ledger: /coverage",
+      "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture, CAP-POST-02 stale/dormant/orphaned NHI posture, CAP-POST-03 static-credential posture, and CAP-POST-05 contextual blast-radius prioritization",
+      "current_frontend_mapping": "served: Risk page lists certificate scores, CAP-POST-05 contextual blast-radius priorities, CAP-POST-01 NHI over-privilege findings, CAP-POST-02 stale/dormant/orphaned findings, and CAP-POST-03 static-credential findings with recommendations; coverage ledger: /coverage",
       "target_gui_mapping": "Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time.",
-      "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-01 over-privilege panel, the CAP-POST-02 stale/dormant/orphaned panel, and the CAP-POST-03 static-credential panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs, and /api/v1/nhi/posture/static-credentials detects long-lived/static credentials.",
+      "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-05 contextual priorities panel, the CAP-POST-01 over-privilege panel, the CAP-POST-02 stale/dormant/orphaned panel, and the CAP-POST-03 static-credential panel. Served Go tests prove /api/v1/risk/contextual-priorities ranks credentials with graph blast-radius and CBOM crypto context, /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs, and /api/v1/nhi/posture/static-credentials detects long-lived/static credentials.",
       "source_docs": ["docs/features/observability-and-risk.md"],
-      "source_backend": ["/api/v1/risk/credentials", "/api/v1/nhi/posture/overprivilege", "/api/v1/nhi/posture/stale", "/api/v1/nhi/posture/static-credentials"],
+      "source_backend": ["/api/v1/risk/credentials", "/api/v1/risk/contextual-priorities", "/api/v1/nhi/posture/overprivilege", "/api/v1/nhi/posture/stale", "/api/v1/nhi/posture/static-credentials"],
       "source_frontend": ["web/src/pages/Risk.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. COMPETE-035 update serves CAP-POST-01 through GET /api/v1/nhi/posture/overprivilege and CLI nhi posture overprivilege: the read path analyzes unified NHI inventory rows with both granted and observed usage metadata, detects unused grants/admin breadth, and returns least-privilege keep/remove recommendations without classifying rows that lack usage evidence. COMPETE-036 update serves CAP-POST-02 through GET /api/v1/nhi/posture/stale and CLI nhi posture stale: the read path detects stale activity, dormant activity, unused no-activity credentials, and orphaned NHI records with thresholds, owner status, evidence refs, and remediation recommendations. COMPETE-037 update serves CAP-POST-03 through GET /api/v1/nhi/posture/static-credentials and CLI nhi posture static-credentials: the read path detects long-lived TTLs, static lifecycle markers, no-expiry credentials, and overdue rotation age with lifetime thresholds and remediation recommendations.",
-      "api_surface": ["listRiskScores", "listNHIOverPrivilegePosture", "listNHIStalePosture", "listNHIStaticPosture"],
+      "notes": "Closed by /coverage feature-map hub. COMPETE-035 update serves CAP-POST-01 through GET /api/v1/nhi/posture/overprivilege and CLI nhi posture overprivilege: the read path analyzes unified NHI inventory rows with both granted and observed usage metadata, detects unused grants/admin breadth, and returns least-privilege keep/remove recommendations without classifying rows that lack usage evidence. COMPETE-036 update serves CAP-POST-02 through GET /api/v1/nhi/posture/stale and CLI nhi posture stale: the read path detects stale activity, dormant activity, unused no-activity credentials, and orphaned NHI records with thresholds, owner status, evidence refs, and remediation recommendations. COMPETE-037 update serves CAP-POST-03 through GET /api/v1/nhi/posture/static-credentials and CLI nhi posture static-credentials: the read path detects long-lived TTLs, static lifecycle markers, no-expiry credentials, and overdue rotation age with lifetime thresholds and remediation recommendations. COMPETE-038 update serves CAP-POST-05 through GET /api/v1/risk/contextual-priorities and CLI risk contextual-priorities: the read path ranks certificate risk with graph blast-radius, affected resources, CBOM weak/quantum crypto context, owner state, expiry urgency, evidence refs, and recommended action.",
+      "api_surface": ["listRiskScores", "listContextualRiskPriorities", "listNHIOverPrivilegePosture", "listNHIStalePosture", "listNHIStaticPosture"],
       "api_na": "",
-      "cli_surface": ["risk credentials", "nhi posture overprivilege", "nhi posture stale", "nhi posture static-credentials"],
+      "cli_surface": ["risk credentials", "risk contextual-priorities", "nhi posture overprivilege", "nhi posture stale", "nhi posture static-credentials"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -1301,22 +1301,23 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: Risk page lists certificate scores, CAP-POST-01 NHI over-privilege findings, CAP-POST-02 stale/dormant/orphaned findings, and CAP-POST-03 static-credential findings with recommendations; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Risk page lists certificate scores, CAP-POST-05 contextual blast-radius priorities, CAP-POST-01 NHI over-privilege findings, CAP-POST-02 stale/dormant/orphaned findings, and CAP-POST-03 static-credential findings with recommendations; coverage ledger: /coverage",
             "target_gui_mapping: Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Risk.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: risk credentials", "CLI command: nhi posture overprivilege", "CLI command: nhi posture stale", "CLI command: nhi posture static-credentials"],
+          "evidence": ["CLI command: risk credentials", "CLI command: risk contextual-priorities", "CLI command: nhi posture overprivilege", "CLI command: nhi posture stale", "CLI command: nhi posture static-credentials"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listRiskScores", "OpenAPI operationId: listNHIOverPrivilegePosture", "OpenAPI operationId: listNHIStalePosture", "OpenAPI operationId: listNHIStaticPosture"],
+          "evidence": ["OpenAPI operationId: listRiskScores", "OpenAPI operationId: listContextualRiskPriorities", "OpenAPI operationId: listNHIOverPrivilegePosture", "OpenAPI operationId: listNHIStalePosture", "OpenAPI operationId: listNHIStaticPosture"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-01 over-privilege panel, the CAP-POST-02 stale/dormant/orphaned panel, and the CAP-POST-03 static-credential panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs, and /api/v1/nhi/posture/static-credentials detects long-lived/static credentials.",
+            "acceptance_test: Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-05 contextual priorities panel, the CAP-POST-01 over-privilege panel, the CAP-POST-02 stale/dormant/orphaned panel, and the CAP-POST-03 static-credential panel. Served Go tests prove /api/v1/risk/contextual-priorities ranks credentials with graph blast-radius and CBOM crypto context, /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs, and /api/v1/nhi/posture/static-credentials detects long-lived/static credentials.",
+            "TestContextualRiskPrioritizationCAPPOST05 proves CAP-POST-05 over the served API path.",
             "TestServedNHIOverPrivilegeCAPPOST01EndToEnd proves CAP-POST-01 over the served API path.",
             "TestServedNHIStaleDormantCAPPOST02EndToEnd proves CAP-POST-02 over the served API path.",
             "TestServedNHIStaticCredentialCAPPOST03EndToEnd proves CAP-POST-03 over the served API path.",
@@ -1337,7 +1338,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores, listNHIOverPrivilegePosture, listNHIStalePosture, listNHIStaticPosture",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores, listContextualRiskPriorities, listNHIOverPrivilegePosture, listNHIStalePosture, listNHIStaticPosture",
+            "listContextualRiskPriorities requires risk:read and reports only non-secret score, graph blast-radius, CBOM context, evidence-ref, and recommendation metadata.",
             "listNHIOverPrivilegePosture requires nhi:read and reports only non-secret scope/usage metadata from the unified NHI inventory.",
             "listNHIStalePosture requires nhi:read and reports only non-secret activity, age, owner-status, and recommendation metadata from the unified NHI inventory.",
             "listNHIStaticPosture requires nhi:read and reports only non-secret lifetime, expiry, rotation-age, owner-status, and recommendation metadata from the unified NHI inventory.",
@@ -1355,7 +1357,7 @@
           "na": "N/A: no mutating served audit path is claimed for F19; risk scoring and NHI over-privilege posture are read-only computations over tenant-scoped inventory rows."
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.", "NHI posture findings include total analyzed, overprivileged, unused grant, wildcard/admin, stale, dormant, orphaned, static, long-lived, rotation-overdue, severity, and recommendation counts for operator-visible posture."],
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.", "Risk and NHI posture findings include total analyzed, contextual priorities, high-blast-radius, weak-crypto context, overprivileged, unused grant, wildcard/admin, stale, dormant, orphaned, static, long-lived, rotation-overdue, severity, and recommendation counts for operator-visible posture."],
           "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {

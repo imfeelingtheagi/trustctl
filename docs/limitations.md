@@ -267,7 +267,7 @@ remaining integration work.
   for metadata-only local findings including trust-store anchors, and the **CBOM**
   scan/inventory API are served (above). The **credential
   graph** and **risk scoring** read APIs are already served (`/api/v1/graph*`,
-  `/api/v1/risk/credentials`), and the **AI/RCA/MCP** surface is served behind
+  `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`), and the **AI/RCA/MCP** surface is served behind
   `ai.enable_api`; they are not part of this not-yet-served bucket.
 - **React console scale work:** the console itself is served (see "The React web
   console" below). What remains not yet served of the original F12 epic is cursor

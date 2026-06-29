@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     me: vi.fn(),
     risk: vi.fn(),
+    contextualRiskPriorities: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
     nhiStalePosture: vi.fn(),
     nhiStaticPosture: vi.fn(),
@@ -62,6 +63,13 @@ describe("POL-03 polish fixes", () => {
       thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
       summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
       findings: [],
+    });
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      capability: "CAP-POST-05",
+      generated_at: "2026-06-29T00:00:00Z",
+      coverage: ["credential_risk_scores", "graph_blast_radius", "resource_reachability", "cbom_crypto_context", "owner_and_rotation_context"],
+      summary: { total_analyzed: 0, priorities: 0, critical: 0, high: 0, medium: 0, low: 0, high_blast_radius: 0, weak_crypto_context: 0, orphaned: 0, near_expiry: 0, recommendations: 0 },
+      priorities: [],
     });
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });
     apiMock.profiles.mockResolvedValue([{ id: "prof-1", name: "web-server", version: 2, active: true }]);

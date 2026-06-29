@@ -159,6 +159,104 @@ func TestRiskAPIRequiresPermission(t *testing.T) {
 	}
 }
 
+// TestContextualRiskPrioritizationCAPPOST05 proves CAP-POST-05 is served: the
+// API prioritizes credentials with blast-radius context, including affected
+// resources and CBOM crypto assets, not only the raw credential score.
+func TestContextualRiskPrioritizationCAPPOST05(t *testing.T) {
+	srv, s := newGraphAPI(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerWorkload, Name: "payments"})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	payments, err := s.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantA, OwnerID: &owner.ID, Subject: "CN=payments-api.prod", SANs: []string{"payments-api.prod", "payments-api.internal"},
+		Issuer: "CN=CA", Serial: "ctx-01", Fingerprint: "fp-context-payments", KeyAlgorithm: "ECDSA",
+		NotBefore: tptr(now.Add(-300 * 24 * time.Hour)), NotAfter: tptr(now.Add(30 * 24 * time.Hour)),
+		RenewedAt: tptr(now.Add(-240 * 24 * time.Hour)), DeploymentLocation: "payments-db",
+		Source: "import", Status: "active",
+	})
+	if err != nil {
+		t.Fatalf("seed payments cert: %v", err)
+	}
+	if _, err := s.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantA, OwnerID: &owner.ID, Subject: "CN=dev-api", SANs: []string{"dev-api"},
+		Issuer: "CN=CA", Serial: "ctx-02", Fingerprint: "fp-context-dev", KeyAlgorithm: "ECDSA",
+		NotBefore: tptr(now.Add(-24 * time.Hour)), NotAfter: tptr(now.Add(365 * 24 * time.Hour)),
+		RenewedAt: tptr(now.Add(-24 * time.Hour)), DeploymentLocation: "dev-api",
+		Source: "import", Status: "active",
+	}); err != nil {
+		t.Fatalf("seed dev cert: %v", err)
+	}
+	for _, asset := range []store.CryptoAsset{
+		{TenantID: tenantA, Kind: "tls-protocol", Location: "payments-db", Protocol: "TLSv1.0", Strength: "weak", OutOfPolicy: true, Reasons: []string{"legacy protocol"}},
+		{TenantID: tenantA, Kind: "cipher", Location: "payments-db", Cipher: "3DES", Strength: "weak", OutOfPolicy: true, Reasons: []string{"weak cipher"}},
+		{TenantID: tenantA, Kind: "algorithm", Location: "payments-db", Algorithm: "RSA", KeyBits: 2048, Strength: "classical", QuantumVulnerable: true, Reasons: []string{"quantum vulnerable"}},
+	} {
+		if _, err := s.UpsertCryptoAsset(ctx, asset); err != nil {
+			t.Fatalf("upsert crypto asset: %v", err)
+		}
+	}
+
+	status, _, body := do(t, srv, http.MethodGet, "/api/v1/risk/contextual-priorities", reqOpts{tenant: tenantA})
+	if status != http.StatusOK {
+		t.Fatalf("GET contextual priorities = %d: %s", status, body)
+	}
+	var resp struct {
+		Capability string `json:"capability"`
+		Summary    struct {
+			TotalAnalyzed     int `json:"total_analyzed"`
+			Priorities        int `json:"priorities"`
+			HighBlastRadius   int `json:"high_blast_radius"`
+			WeakCryptoContext int `json:"weak_crypto_context"`
+			Recommendations   int `json:"recommendations"`
+		} `json:"summary"`
+		Priorities []struct {
+			Rank                   int      `json:"rank"`
+			CredentialID           string   `json:"credential_id"`
+			Severity               string   `json:"severity"`
+			ContextualScore        float64  `json:"contextual_score"`
+			BaseScore              float64  `json:"base_score"`
+			BlastRadius            int      `json:"blast_radius"`
+			ResourceBlastRadius    int      `json:"resource_blast_radius"`
+			CryptoAssetBlastRadius int      `json:"crypto_asset_blast_radius"`
+			PriorityReasons        []string `json:"priority_reasons"`
+			EvidenceRefs           []string `json:"evidence_refs"`
+			RecommendedAction      string   `json:"recommended_action"`
+		} `json:"priorities"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode contextual priorities: %v", err)
+	}
+	if resp.Capability != "CAP-POST-05" {
+		t.Fatalf("capability = %q, want CAP-POST-05", resp.Capability)
+	}
+	if resp.Summary.TotalAnalyzed != 2 || resp.Summary.Priorities != 2 || resp.Summary.HighBlastRadius != 1 || resp.Summary.WeakCryptoContext != 1 || resp.Summary.Recommendations != 2 {
+		t.Fatalf("summary = %+v, want analyzed/priorities/high-blast/weak-context/recommendations = 2/2/1/1/2", resp.Summary)
+	}
+	if len(resp.Priorities) != 2 {
+		t.Fatalf("priorities = %d, want 2", len(resp.Priorities))
+	}
+	top := resp.Priorities[0]
+	if top.Rank != 1 || top.CredentialID != payments.ID {
+		t.Fatalf("top priority = rank %d credential %s, want payments cert %s", top.Rank, top.CredentialID, payments.ID)
+	}
+	if top.ContextualScore <= top.BaseScore {
+		t.Fatalf("contextual score %.2f should exceed base score %.2f when blast radius and weak crypto context are present", top.ContextualScore, top.BaseScore)
+	}
+	if top.BlastRadius < 4 || top.ResourceBlastRadius != 1 || top.CryptoAssetBlastRadius < 3 {
+		t.Fatalf("top blast radius = total %d resources %d crypto assets %d, want >=4 / 1 / >=3", top.BlastRadius, top.ResourceBlastRadius, top.CryptoAssetBlastRadius)
+	}
+	if !hasString(top.PriorityReasons, "high_blast_radius") || !hasString(top.PriorityReasons, "weak_crypto_context") {
+		t.Fatalf("priority reasons = %v, want high_blast_radius and weak_crypto_context", top.PriorityReasons)
+	}
+	if len(top.EvidenceRefs) == 0 || top.RecommendedAction == "" || top.Severity == "" {
+		t.Fatalf("top priority missing evidence/action/severity: %+v", top)
+	}
+}
+
 func credIDs(rs []risk.CredentialRisk) []string {
 	out := make([]string, len(rs))
 	for i, r := range rs {
@@ -168,3 +266,12 @@ func credIDs(rs []risk.CredentialRisk) []string {
 }
 
 func ftoa(f float64) string { return strconv.FormatFloat(f, 'f', 4, 64) }
+
+func hasString(vals []string, want string) bool {
+	for _, v := range vals {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}

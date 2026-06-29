@@ -246,6 +246,7 @@ trstctl-cli external-cas issue digicert -f upstream-issue.json
 
 # Rank credentials by risk — what to rotate first.
 trstctl-cli risk credentials --sort score
+trstctl-cli risk contextual-priorities
 
 # Export a signed SOC 2 evidence pack from audit records plus CBOM posture.
 trstctl-cli compliance evidence-pack soc2

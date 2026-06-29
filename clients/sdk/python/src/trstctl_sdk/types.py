@@ -905,6 +905,64 @@ ConnectorTargetActionRequest = TypedDict(
     total=False,
 )
 
+ContextualRiskPriorities = TypedDict(
+    'ContextualRiskPriorities',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'generated_at': str,
+        'priorities': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+ContextualRiskPriority = TypedDict(
+    'ContextualRiskPriority',
+    {
+        'base_score': float,
+        'blast_radius': int,
+        'components': dict[str, Any],
+        'contextual_score': float,
+        'credential_blast_radius': int,
+        'credential_id': str,
+        'crypto_asset_blast_radius': int,
+        'evidence_refs': list[str],
+        'expires_at': str,
+        'kind': str,
+        'owner_active': bool,
+        'priority_reasons': list[str],
+        'privilege': int,
+        'rank': int,
+        'recommended_action': str,
+        'resource_blast_radius': int,
+        'sensitivity': int,
+        'severity': str,
+        'subject': str,
+        'weak_crypto_context': int,
+        'workload_blast_radius': int,
+    },
+    total=False,
+)
+
+ContextualRiskSummary = TypedDict(
+    'ContextualRiskSummary',
+    {
+        'critical': int,
+        'high': int,
+        'high_blast_radius': int,
+        'low': int,
+        'medium': int,
+        'near_expiry': int,
+        'orphaned': int,
+        'priorities': int,
+        'recommendations': int,
+        'total_analyzed': int,
+        'weak_crypto_context': int,
+    },
+    total=False,
+)
+
 CredentialRisk = TypedDict(
     'CredentialRisk',
     {

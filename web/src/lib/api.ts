@@ -54,6 +54,8 @@ import type {
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
   CredentialRisk as GenCredentialRisk,
+  ContextualRiskPriorities as GenContextualRiskPriorities,
+  ContextualRiskPriority as GenContextualRiskPriority,
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
@@ -217,6 +219,8 @@ export type CBOMAsset = GenCBOMAsset;
 export type AIAnswer = GenAIAnswer;
 export type AIStatus = GenAIStatus;
 export type CredentialRisk = GenCredentialRisk;
+export type ContextualRiskPriorities = GenContextualRiskPriorities;
+export type ContextualRiskPriority = GenContextualRiskPriority;
 export type Approval = GenApproval;
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
@@ -739,6 +743,7 @@ export interface Api {
   signCode(input: CodeSigningRequest): Promise<CodeSigningSignature>;
   signCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningSignature>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
+  contextualRiskPriorities(): Promise<ContextualRiskPriorities>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
@@ -915,6 +920,7 @@ export const api: Api = {
   signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
   signCodeKeyless: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input),
   risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
+  contextualRiskPriorities: () => req<ContextualRiskPriorities>("/api/v1/risk/contextual-priorities"),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
   getProfileVersion: (name, version) => req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),

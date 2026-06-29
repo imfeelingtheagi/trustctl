@@ -2241,6 +2241,196 @@
         ],
         "type": "object"
       },
+      "ContextualRiskPriorities": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "priorities": {
+            "items": {
+              "$ref": "#/components/schemas/ContextualRiskPriority"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ContextualRiskSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "summary",
+          "priorities"
+        ],
+        "type": "object"
+      },
+      "ContextualRiskPriority": {
+        "properties": {
+          "base_score": {
+            "type": "number"
+          },
+          "blast_radius": {
+            "type": "integer"
+          },
+          "components": {
+            "$ref": "#/components/schemas/RiskComponents"
+          },
+          "contextual_score": {
+            "type": "number"
+          },
+          "credential_blast_radius": {
+            "type": "integer"
+          },
+          "credential_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "crypto_asset_blast_radius": {
+            "type": "integer"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "owner_active": {
+            "type": "boolean"
+          },
+          "priority_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "privilege": {
+            "type": "integer"
+          },
+          "rank": {
+            "type": "integer"
+          },
+          "recommended_action": {
+            "type": "string"
+          },
+          "resource_blast_radius": {
+            "type": "integer"
+          },
+          "sensitivity": {
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "weak_crypto_context": {
+            "type": "integer"
+          },
+          "workload_blast_radius": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rank",
+          "credential_id",
+          "subject",
+          "kind",
+          "severity",
+          "contextual_score",
+          "base_score",
+          "blast_radius",
+          "resource_blast_radius",
+          "workload_blast_radius",
+          "credential_blast_radius",
+          "crypto_asset_blast_radius",
+          "weak_crypto_context",
+          "privilege",
+          "sensitivity",
+          "owner_active",
+          "expires_at",
+          "components",
+          "priority_reasons",
+          "evidence_refs",
+          "recommended_action"
+        ],
+        "type": "object"
+      },
+      "ContextualRiskSummary": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "high_blast_radius": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "near_expiry": {
+            "type": "integer"
+          },
+          "orphaned": {
+            "type": "integer"
+          },
+          "priorities": {
+            "type": "integer"
+          },
+          "recommendations": {
+            "type": "integer"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          },
+          "weak_crypto_context": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "priorities",
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "high_blast_radius",
+          "weak_crypto_context",
+          "orphaned",
+          "near_expiry",
+          "recommendations"
+        ],
+        "type": "object"
+      },
       "CredentialRisk": {
         "properties": {
           "components": {
@@ -16711,6 +16901,53 @@
         ],
         "summary": "Get a certificate-profile version",
         "x-trstctl-permission": "profiles:read"
+      }
+    },
+    "/api/v1/risk/contextual-priorities": {
+      "get": {
+        "operationId": "listContextualRiskPriorities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextualRiskPriorities"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Prioritize credential risk with blast-radius context",
+        "x-trstctl-permission": "risk:read"
       }
     },
     "/api/v1/risk/credentials": {

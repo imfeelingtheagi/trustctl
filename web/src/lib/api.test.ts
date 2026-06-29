@@ -730,6 +730,23 @@ describe("risk query contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/static-credentials");
   });
 
+  it("fetches contextual blast-radius risk priorities from the served CAP-POST-05 route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-POST-05",
+        generated_at: "2026-06-29T00:00:00Z",
+        coverage: ["credential_risk_scores", "graph_blast_radius", "resource_reachability", "cbom_crypto_context", "owner_and_rotation_context"],
+        summary: { total_analyzed: 0, priorities: 0, critical: 0, high: 0, medium: 0, low: 0, high_blast_radius: 0, weak_crypto_context: 0, orphaned: 0, near_expiry: 0, recommendations: 0 },
+        priorities: [],
+      }),
+    );
+
+    await api.contextualRiskPriorities();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/risk/contextual-priorities");
+  });
+
   it("does not pin risk to score and sends only requested server-side filters", async () => {
     mockFetch(200, JSON.stringify({ credentials: [] }));
 

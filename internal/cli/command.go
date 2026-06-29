@@ -197,6 +197,7 @@ var commandTable = []Command{
 	{Name: []string{"graph", "query"}, Method: "POST", Path: "/api/v1/graph/query", Body: bodyCypher, Summary: "Run a Cypher-style query"},
 
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},
+	{Name: []string{"risk", "contextual-priorities"}, Method: "GET", Path: "/api/v1/risk/contextual-priorities", Summary: "Prioritize credential risk with blast-radius context"},
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and PQC migration progress"},
 	{Name: []string{"pqc", "migrations", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Queue PQC re-issuance for CBOM assets"},

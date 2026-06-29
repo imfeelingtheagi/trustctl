@@ -615,6 +615,52 @@ export interface ConnectorTargetActionRequest {
   reason?: string;
 }
 
+export interface ContextualRiskPriorities {
+  capability: string;
+  coverage: string[];
+  generated_at: string;
+  priorities: ContextualRiskPriority[];
+  summary: ContextualRiskSummary;
+}
+
+export interface ContextualRiskPriority {
+  base_score: number;
+  blast_radius: number;
+  components: RiskComponents;
+  contextual_score: number;
+  credential_blast_radius: number;
+  credential_id: string;
+  crypto_asset_blast_radius: number;
+  evidence_refs: string[];
+  expires_at: string;
+  kind: string;
+  owner_active: boolean;
+  priority_reasons: string[];
+  privilege: number;
+  rank: number;
+  recommended_action: string;
+  resource_blast_radius: number;
+  sensitivity: number;
+  severity: "critical" | "high" | "medium" | "low";
+  subject: string;
+  weak_crypto_context: number;
+  workload_blast_radius: number;
+}
+
+export interface ContextualRiskSummary {
+  critical: number;
+  high: number;
+  high_blast_radius: number;
+  low: number;
+  medium: number;
+  near_expiry: number;
+  orphaned: number;
+  priorities: number;
+  recommendations: number;
+  total_analyzed: number;
+  weak_crypto_context: number;
+}
+
 export interface CredentialRisk {
   components: RiskComponents;
   credential_id: string;

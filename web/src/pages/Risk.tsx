@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { api, type CredentialRisk, type NHIOverPrivilegePosture, type NHIStaticPosture, type NHIStalePosture, type RiskQuery } from "@/lib/api";
+import {
+  api,
+  type ContextualRiskPriorities,
+  type CredentialRisk,
+  type NHIOverPrivilegePosture,
+  type NHIStaticPosture,
+  type NHIStalePosture,
+  type RiskQuery,
+} from "@/lib/api";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
@@ -61,6 +69,9 @@ export function Risk() {
   const [nhiStaticPosture, setNHIStaticPosture] = useState<NHIStaticPosture | null>(null);
   const [nhiStaticPostureLoading, setNHIStaticPostureLoading] = useState(true);
   const [nhiStaticPostureError, setNHIStaticPostureError] = useState<string | null>(null);
+  const [contextualRisk, setContextualRisk] = useState<ContextualRiskPriorities | null>(null);
+  const [contextualRiskLoading, setContextualRiskLoading] = useState(true);
+  const [contextualRiskError, setContextualRiskError] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const ignoredCount = (data?.length ?? 0) - certRows.length;
   const rows = useMemo(() => {
@@ -112,6 +123,29 @@ export function Risk() {
       })
       .finally(() => {
         if (active) setNHIPostureLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setContextualRiskLoading(true);
+    setContextualRiskError(null);
+    api
+      .contextualRiskPriorities()
+      .then((priorities) => {
+        if (!active) return;
+        setContextualRisk(priorities);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setContextualRisk(null);
+        setContextualRiskError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setContextualRiskLoading(false);
       });
     return () => {
       active = false;
@@ -235,6 +269,7 @@ export function Risk() {
       />
 
       <RiskPosture risks={data ?? []} />
+      <ContextualRiskPanel priorities={contextualRisk} loading={contextualRiskLoading} error={contextualRiskError} />
       <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
       <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
       <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
@@ -292,6 +327,93 @@ export function Risk() {
           </h2>
           <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
         </section>
+      )}
+    </section>
+  );
+}
+
+function ContextualRiskPanel({ priorities, loading, error }: { priorities: ContextualRiskPriorities | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const topPriorities = priorities?.priorities?.slice(0, 5) ?? [];
+  return (
+    <section aria-labelledby="contextual-risk-heading" className="mb-4 border-b border-border pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="contextual-risk-heading" className="text-title font-semibold">
+            {t("risk.contextual.heading")}
+          </h2>
+          {priorities && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.contextual.summary", {
+                priorities: priorities.summary.priorities,
+                total: priorities.summary.total_analyzed,
+                highBlast: priorities.summary.high_blast_radius,
+                weakCrypto: priorities.summary.weak_crypto_context,
+              })}
+            </p>
+          )}
+        </div>
+        {priorities && (
+          <StatusBadge
+            vocabulary="risk"
+            value={priorities.summary.critical > 0 ? "critical" : priorities.summary.high > 0 ? "high" : priorities.summary.medium > 0 ? "medium" : "low"}
+          />
+        )}
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.contextual.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && priorities && topPriorities.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.empty")}</p>
+      )}
+      {!loading && !error && topPriorities.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[58rem]">
+            <caption className="sr-only">{t("risk.contextual.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.contextual.credential")}</th>
+                <th scope="col">{t("risk.contextual.priority")}</th>
+                <th scope="col">{t("risk.contextual.blastRadius")}</th>
+                <th scope="col">{t("risk.contextual.action")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topPriorities.map((priority) => (
+                <tr key={priority.credential_id}>
+                  <td>
+                    <p className="font-medium">{priority.subject}</p>
+                    <p className="text-caption text-muted-foreground">#{priority.rank} · {priority.credential_id}</p>
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge vocabulary="risk" value={priority.severity} />
+                      <span>
+                        {t("risk.contextual.scoreValue", {
+                          contextual: priority.contextual_score.toFixed(1),
+                          base: priority.base_score.toFixed(1),
+                        })}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-caption text-muted-foreground">{priority.priority_reasons.join(", ")}</p>
+                  </td>
+                  <td>
+                    {t("risk.contextual.blastValue", {
+                      total: priority.blast_radius,
+                      resources: priority.resource_blast_radius,
+                      cryptoAssets: priority.crypto_asset_blast_radius,
+                    })}
+                  </td>
+                  <td>{priority.recommended_action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

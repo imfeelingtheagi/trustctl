@@ -2064,6 +2064,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/risk/contextual-priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prioritize credential risk with blast-radius context */
+        get: operations["listContextualRiskPriorities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/credentials": {
         parameters: {
             query?: never;
@@ -3252,6 +3269,53 @@ export interface components {
             /** Format: uuid */
             identity_id: string;
             reason?: string;
+        };
+        ContextualRiskPriorities: {
+            capability: string;
+            coverage: string[];
+            /** Format: date-time */
+            generated_at: string;
+            priorities: components["schemas"]["ContextualRiskPriority"][];
+            summary: components["schemas"]["ContextualRiskSummary"];
+        };
+        ContextualRiskPriority: {
+            base_score: number;
+            blast_radius: number;
+            components: components["schemas"]["RiskComponents"];
+            contextual_score: number;
+            credential_blast_radius: number;
+            /** Format: uuid */
+            credential_id: string;
+            crypto_asset_blast_radius: number;
+            evidence_refs: string[];
+            /** Format: date-time */
+            expires_at: string;
+            kind: string;
+            owner_active: boolean;
+            priority_reasons: string[];
+            privilege: number;
+            rank: number;
+            recommended_action: string;
+            resource_blast_radius: number;
+            sensitivity: number;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            subject: string;
+            weak_crypto_context: number;
+            workload_blast_radius: number;
+        };
+        ContextualRiskSummary: {
+            critical: number;
+            high: number;
+            high_blast_radius: number;
+            low: number;
+            medium: number;
+            near_expiry: number;
+            orphaned: number;
+            priorities: number;
+            recommendations: number;
+            total_analyzed: number;
+            weak_crypto_context: number;
         };
         CredentialRisk: {
             components: components["schemas"]["RiskComponents"];
@@ -10792,6 +10856,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listContextualRiskPriorities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextualRiskPriorities"];
                 };
             };
             /** @description client error */

@@ -924,6 +924,54 @@ export const messages = {
     defaultMessage: "Recommendation",
     description: "Stale NHI table column for remediation recommendation.",
   },
+  "risk.contextual.heading": {
+    defaultMessage: "Contextual priorities",
+    description: "Risk page section heading for blast-radius contextual prioritization.",
+  },
+  "risk.contextual.summary": {
+    defaultMessage: "CAP-POST-05: {priorities} prioritized of {total} credentials; {highBlast} high-blast-radius, {weakCrypto} with weak crypto context.",
+    description: "Risk page summary for contextual risk priorities.",
+  },
+  "risk.contextual.loading": {
+    defaultMessage: "Loading contextual priorities.",
+    description: "Loading text for contextual risk priorities.",
+  },
+  "risk.contextual.unavailableTitle": {
+    defaultMessage: "Contextual priorities unavailable",
+    description: "Error title when contextual risk priorities cannot be loaded.",
+  },
+  "risk.contextual.empty": {
+    defaultMessage: "No contextual risk priorities detected.",
+    description: "Empty-state text for contextual risk priorities.",
+  },
+  "risk.contextual.caption": {
+    defaultMessage: "Blast-radius contextual risk priorities",
+    description: "Accessible caption for the contextual risk table.",
+  },
+  "risk.contextual.credential": {
+    defaultMessage: "Credential",
+    description: "Contextual risk table column for the credential.",
+  },
+  "risk.contextual.priority": {
+    defaultMessage: "Priority",
+    description: "Contextual risk table column for priority score and reasons.",
+  },
+  "risk.contextual.blastRadius": {
+    defaultMessage: "Blast radius",
+    description: "Contextual risk table column for graph blast-radius counts.",
+  },
+  "risk.contextual.action": {
+    defaultMessage: "Action",
+    description: "Contextual risk table column for recommended action.",
+  },
+  "risk.contextual.scoreValue": {
+    defaultMessage: "{contextual} contextual / {base} base",
+    description: "Contextual risk score comparison value.",
+  },
+  "risk.contextual.blastValue": {
+    defaultMessage: "{total} affected; {resources} resources, {cryptoAssets} crypto assets",
+    description: "Contextual risk blast-radius count value.",
+  },
   "risk.nhiStatic.heading": {
     defaultMessage: "Static credentials",
     description: "Risk page section heading for long-lived and static NHI credentials.",
@@ -1430,6 +1478,18 @@ const esESCatalog = {
   "risk.nhiStale.age": "Antigüedad",
   "risk.nhiStale.ageValue": "{activity}d actividad / {created}d creada",
   "risk.nhiStale.recommendation": "Recomendación",
+  "risk.contextual.heading": "Prioridades contextuales",
+  "risk.contextual.summary": "CAP-POST-05: {priorities} priorizadas de {total} credenciales; {highBlast} de alto radio de impacto, {weakCrypto} con contexto criptográfico débil.",
+  "risk.contextual.loading": "Cargando prioridades contextuales.",
+  "risk.contextual.unavailableTitle": "Prioridades contextuales no disponibles",
+  "risk.contextual.empty": "No se detectaron prioridades de riesgo contextual.",
+  "risk.contextual.caption": "Prioridades de riesgo contextual por radio de impacto",
+  "risk.contextual.credential": "Credencial",
+  "risk.contextual.priority": "Prioridad",
+  "risk.contextual.blastRadius": "Radio de impacto",
+  "risk.contextual.action": "Acción",
+  "risk.contextual.scoreValue": "{contextual} contextual / {base} base",
+  "risk.contextual.blastValue": "{total} afectadas; {resources} recursos, {cryptoAssets} activos criptográficos",
   "risk.nhiStatic.heading": "Credenciales estáticas",
   "risk.nhiStatic.summary": "CAP-POST-03: {findings} estáticas o de larga duración de {total} NHI analizadas; {longLived} de larga duración, {staticCredentials} estáticas.",
   "risk.nhiStatic.loading": "Cargando postura de credenciales estáticas.",

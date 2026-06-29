@@ -20,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphReachable: vi.fn(),
     graphQuery: vi.fn(),
     risk: vi.fn(),
+    contextualRiskPriorities: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
     nhiStalePosture: vi.fn(),
     nhiStaticPosture: vi.fn(),
@@ -58,6 +59,7 @@ describe("operational console surface", () => {
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
     apiMock.nhiStaticPosture.mockResolvedValue(emptyNHIStaticPosture());
+    apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
   });
@@ -532,14 +534,49 @@ describe("operational console surface", () => {
         },
       ],
     });
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      ...emptyContextualRiskPriorities(),
+      summary: { total_analyzed: 2, priorities: 2, critical: 1, high: 0, medium: 1, low: 0, high_blast_radius: 1, weak_crypto_context: 1, orphaned: 0, near_expiry: 1, recommendations: 2 },
+      priorities: [
+        {
+          rank: 1,
+          credential_id: "cert-payments",
+          subject: "payments-api.prod",
+          kind: "certificate",
+          severity: "critical",
+          contextual_score: 96.4,
+          base_score: 64.4,
+          blast_radius: 4,
+          resource_blast_radius: 1,
+          workload_blast_radius: 0,
+          credential_blast_radius: 0,
+          crypto_asset_blast_radius: 3,
+          weak_crypto_context: 3,
+          privilege: 2,
+          sensitivity: 1,
+          owner_active: true,
+          expires_at: "2026-07-29T00:00:00Z",
+          components: { age: 0.8, rotation: 0.7, privilege: 0.7, exposure: 0.2, owner: 0, sensitivity: 0.5 },
+          priority_reasons: ["high_blast_radius", "weak_crypto_context"],
+          evidence_refs: ["credential:cert-payments", "graph:blast-radius:cert:cert-payments"],
+          recommended_action: "Rotate and redeploy before lower-blast-radius work; review affected resources and weak crypto assets first.",
+        },
+      ],
+    });
     const user = userEvent.setup();
     renderAt("/risk");
 
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
+    await waitFor(() => expect(apiMock.contextualRiskPriorities).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiOverPrivilegePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStaticPosture).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("heading", { name: "Contextual priorities" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-05: 2 prioritized of 2 credentials; 1 high-blast-radius/)).toBeInTheDocument();
+    expect(screen.getByText("payments-api.prod")).toBeInTheDocument();
+    expect(screen.getByText("high_blast_radius, weak_crypto_context")).toBeInTheDocument();
+    expect(screen.getByText("4 affected; 1 resources, 3 crypto assets")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "NHI over-privilege" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-POST-01: 1 over-privileged of 2 usage-backed NHIs; 2 unused grants/)).toBeInTheDocument();
     expect(screen.getByText("legacy-github-app")).toBeInTheDocument();
@@ -660,6 +697,16 @@ function emptyNHIStaticPosture() {
     thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
     summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
     findings: [],
+  };
+}
+
+function emptyContextualRiskPriorities() {
+  return {
+    capability: "CAP-POST-05",
+    generated_at: "2026-06-29T00:00:00Z",
+    coverage: ["credential_risk_scores", "graph_blast_radius", "resource_reachability", "cbom_crypto_context", "owner_and_rotation_context"],
+    summary: { total_analyzed: 0, priorities: 0, critical: 0, high: 0, medium: 0, low: 0, high_blast_radius: 0, weak_crypto_context: 0, orphaned: 0, near_expiry: 0, recommendations: 0 },
+    priorities: [],
   };
 }
 
