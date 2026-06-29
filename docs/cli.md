@@ -170,6 +170,11 @@ trstctl-cli nhi posture stale
 # List long-lived and static NHI credential posture findings.
 trstctl-cli nhi posture static-credentials
 
+# List and run automated remediation playbooks.
+trstctl-cli remediation playbooks
+trstctl-cli remediation playbooks run nhi-right-size -f right-size.json --force
+trstctl-cli remediation playbook-runs list --playbook_id nhi-right-size
+
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50
 

@@ -42,7 +42,7 @@ const SnapshotFormatVersion = 1
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "identities", "certificates", "crypto_assets", "agents", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "pam_sessions", "compliance_report_schedules", "privacy_subject_erasures", "privacy_retention_runs", "nhi_access_review_campaigns", "nhi_access_review_items", "identity_transitions"}
+var snapshotTables = []string{"owners", "issuers", "certificate_profiles", "identities", "certificates", "crypto_assets", "agents", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "privacy_subject_erasures", "privacy_retention_runs", "nhi_access_review_campaigns", "nhi_access_review_items", "identity_transitions"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -99,6 +99,7 @@ SELECT jsonb_build_object(
   'lifecycle_rotation_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM lifecycle_rotation_runs t),
   'incident_executions',   (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM incident_executions t),
   'incident_fleet_reissuance_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM incident_fleet_reissuance_runs t),
+  'remediation_playbook_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM remediation_playbook_runs t),
   'pam_sessions',          (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM pam_sessions t),
   'compliance_report_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM compliance_report_schedules t),
   'privacy_subject_erasures', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM privacy_subject_erasures t),

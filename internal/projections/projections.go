@@ -71,6 +71,7 @@ const (
 	EventLifecycleRotationRecorded        = "lifecycle.rotation.recorded"
 	EventIncidentExecutionRecorded        = "incident.execution.recorded"
 	EventIncidentFleetReissuanceRecorded  = "incident.fleet_reissuance.recorded"
+	EventRemediationPlaybookRunRecorded   = "remediation.playbook_run.recorded"
 	EventPrivacySubjectErased             = "privacy.subject.erased"
 	EventPrivacyRetentionEnforced         = "privacy.retention.enforced"
 	EventTenantMemberUpserted             = "tenant.member.upserted"
@@ -666,6 +667,30 @@ type IncidentFleetReissuanceRecorded struct {
 	CreatedBy              string                      `json:"created_by,omitempty"`
 }
 
+// RemediationPlaybookRunRecorded is the payload of
+// remediation.playbook_run.recorded. It is operational evidence only: target ids,
+// action phase, scope delta, outbox/connector evidence ids, rollback references,
+// and the operator/idempotency metadata needed to audit a served remediation run.
+type RemediationPlaybookRunRecorded struct {
+	ID                  string          `json:"id"`
+	PlaybookID          string          `json:"playbook_id"`
+	TargetIdentityID    string          `json:"target_identity_id,omitempty"`
+	InventoryID         string          `json:"inventory_id,omitempty"`
+	Status              string          `json:"status"`
+	Phase               string          `json:"phase"`
+	Action              string          `json:"action"`
+	Reason              string          `json:"reason,omitempty"`
+	Connector           string          `json:"connector,omitempty"`
+	Target              string          `json:"target,omitempty"`
+	OutboxID            *int64          `json:"outbox_id,omitempty"`
+	ConnectorDeliveryID *string         `json:"connector_delivery_id,omitempty"`
+	ScopeDelta          json.RawMessage `json:"scope_delta"`
+	EvidenceRefs        []string        `json:"evidence_refs,omitempty"`
+	RollbackRefs        []string        `json:"rollback_refs,omitempty"`
+	IdempotencyKey      string          `json:"idempotency_key,omitempty"`
+	CreatedBy           string          `json:"created_by,omitempty"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -866,6 +891,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventLifecycleRotationRecorded:        {1: true},
 	EventIncidentExecutionRecorded:        {1: true},
 	EventIncidentFleetReissuanceRecorded:  {1: true},
+	EventRemediationPlaybookRunRecorded:   {1: true},
 	EventPrivacySubjectErased:             {1: true},
 	EventPrivacyRetentionEnforced:         {1: true},
 	EventTenantMemberUpserted:             {1: true},
@@ -1443,6 +1469,24 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			RollbackRefs: pl.RollbackRefs, EvidenceBundleFormat: pl.EvidenceBundleFormat,
 			EvidenceBundle: pl.EvidenceBundle, IdempotencyKey: pl.IdempotencyKey,
 			CreatedBy: pl.CreatedBy, CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventRemediationPlaybookRunRecorded:
+		var pl RemediationPlaybookRunRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.PlaybookID == "" || pl.Status == "" || pl.Action == "" {
+			return fmt.Errorf("projections: %s requires id, playbook_id, status, and action", e.Type)
+		}
+		return p.store.ApplyRemediationPlaybookRunRecordedTx(ctx, tx, store.RemediationPlaybookRun{
+			ID: pl.ID, TenantID: e.TenantID, PlaybookID: pl.PlaybookID,
+			TargetIdentityID: pl.TargetIdentityID, InventoryID: pl.InventoryID,
+			Status: pl.Status, Phase: pl.Phase, Action: pl.Action, Reason: pl.Reason,
+			Connector: pl.Connector, Target: pl.Target, OutboxID: pl.OutboxID,
+			ConnectorDeliveryID: pl.ConnectorDeliveryID, ScopeDelta: pl.ScopeDelta,
+			EvidenceRefs: pl.EvidenceRefs, RollbackRefs: pl.RollbackRefs,
+			IdempotencyKey: pl.IdempotencyKey, CreatedBy: pl.CreatedBy,
+			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
 	case EventPrivacySubjectErased:
 		var pl PrivacySubjectErased

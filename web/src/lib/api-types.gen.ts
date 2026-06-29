@@ -2053,6 +2053,66 @@ export interface RCARequest {
   subject?: string;
 }
 
+export interface RemediationPlaybook {
+  action: string;
+  capability: string;
+  evidence_sources: string[];
+  external_effect: string;
+  id: string;
+  name: string;
+  required_inputs: string[];
+  status: string;
+  summary: string;
+}
+
+export interface RemediationPlaybookCatalog {
+  capability: string;
+  generated_at: string;
+  items: RemediationPlaybook[];
+  status: string;
+}
+
+export interface RemediationPlaybookRun {
+  action: string;
+  connector?: string;
+  connector_delivery?: ConnectorDelivery;
+  connector_delivery_id?: string;
+  created_at: string;
+  created_by?: string;
+  evidence_refs: string[];
+  id: string;
+  idempotency_key?: string;
+  inventory_id?: string;
+  outbox_id?: number;
+  phase: string;
+  playbook_id: string;
+  reason?: string;
+  rollback_refs: string[];
+  scope_delta: Record<string, unknown>;
+  status: string;
+  target?: string;
+  target_identity_id?: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface RemediationPlaybookRunList {
+  items: RemediationPlaybookRun[];
+  next_cursor?: string;
+}
+
+export interface RemediationPlaybookRunRequest {
+  connector?: string;
+  inventory_id?: string;
+  reason?: string;
+  recommended_scopes?: string[];
+  remove_scopes?: string[];
+  replacement_name?: string;
+  rollback_ref?: string;
+  target?: string;
+  target_identity_id?: string;
+}
+
 export interface RiskComponents {
   age: number;
   exposure: number;

@@ -140,9 +140,9 @@ remains an API call.
 ### Operations & trust (`/incidents`, `/codesign`, `/ca-hierarchy`)
 
 - **Incidents** — the response console: compromise → served **blast radius** → replacement-
-  before-revoke execution → evidence, plus a **break-glass reconciliation** panel that
-  reconciles offline-issued, quorum-approved bundles back into the event log
-  (`/api/v1/breakglass/reconcile`).
+  before-revoke execution → automated revoke/rotate/right-size playbooks → evidence,
+  plus a **break-glass reconciliation** panel that reconciles offline-issued,
+  quorum-approved bundles back into the event log (`/api/v1/breakglass/reconcile`).
 - **Code signing** — a real signing console (key-backed and keyless/Fulcio), submitting only
   the artifact digest and rendering the signature receipt; private keys and artifact bytes
   never enter the browser (`/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).

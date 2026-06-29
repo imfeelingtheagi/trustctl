@@ -7793,6 +7793,230 @@
         ],
         "type": "object"
       },
+      "RemediationPlaybook": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "evidence_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "external_effect": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "action",
+          "status",
+          "capability",
+          "summary",
+          "external_effect",
+          "required_inputs",
+          "evidence_sources"
+        ],
+        "type": "object"
+      },
+      "RemediationPlaybookCatalog": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RemediationPlaybook"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "status",
+          "generated_at",
+          "items"
+        ],
+        "type": "object"
+      },
+      "RemediationPlaybookRun": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "connector_delivery": {
+            "$ref": "#/components/schemas/ConnectorDelivery"
+          },
+          "connector_delivery_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "playbook_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rollback_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scope_delta": {
+            "type": "object"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "target_identity_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "playbook_id",
+          "status",
+          "phase",
+          "action",
+          "scope_delta",
+          "evidence_refs",
+          "rollback_refs",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "RemediationPlaybookRunList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RemediationPlaybookRun"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "RemediationPlaybookRunRequest": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommended_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remove_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "replacement_name": {
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "target_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RiskComponents": {
         "properties": {
           "age": {
@@ -17406,6 +17630,252 @@
         ],
         "summary": "Get a certificate-profile version",
         "x-trstctl-permission": "profiles:read"
+      }
+    },
+    "/api/v1/remediation/playbook-runs": {
+      "get": {
+        "operationId": "listRemediationPlaybookRuns",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only runs for this remediation playbook",
+            "in": "query",
+            "name": "playbook_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationPlaybookRunList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List remediation playbook run evidence",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/remediation/playbook-runs/{id}": {
+      "get": {
+        "operationId": "getRemediationPlaybookRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationPlaybookRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a remediation playbook run evidence pack",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/remediation/playbooks": {
+      "get": {
+        "operationId": "listRemediationPlaybooks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationPlaybookCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List automated remediation playbooks",
+        "x-trstctl-permission": "incidents:read"
+      }
+    },
+    "/api/v1/remediation/playbooks/{id}/runs": {
+      "post": {
+        "operationId": "runRemediationPlaybook",
+        "parameters": [
+          {
+            "description": "remediation playbook id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemediationPlaybookRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationPlaybookRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run an automated remediation playbook",
+        "x-trstctl-permission": "incidents:write"
       }
     },
     "/api/v1/risk/contextual-priorities": {

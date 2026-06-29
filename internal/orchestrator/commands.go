@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auth"
@@ -28,6 +29,7 @@ const (
 	eventProfileEditApprovalApproved  = "profile.edit_approval.approved"
 	eventProfileEditApprovalRefused   = "profile.edit_approval.refused"
 	EventAuthzDecision                = "authz.decision"
+	DestinationConnectorRightSize     = "connector.right_size"
 )
 
 type approvalProfileEditRequest struct {
@@ -852,6 +854,56 @@ func (o *Orchestrator) RecordIncidentExecution(ctx context.Context, tenantID str
 	ev, err := o.emit(ctx, projections.EventIncidentExecutionRecorded, tenantID, payload)
 	if err != nil {
 		return store.IncidentExecution{}, err
+	}
+	r.TenantID = tenantID
+	r.CreatedAt = ev.Time
+	r.UpdatedAt = ev.Time
+	return r, nil
+}
+
+// RecordRemediationPlaybookRun records the final served playbook evidence pack.
+// When outboxDestination is non-empty, the same event payload is also enqueued as
+// the durable external-effect intent in the projection transaction (AN-6), keyed
+// by the event id so boot reconciliation can recreate a lost right-size intent
+// exactly once.
+func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantID string, r store.RemediationPlaybookRun, outboxDestination string) (store.RemediationPlaybookRun, error) {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	payload, err := json.Marshal(projections.RemediationPlaybookRunRecorded{
+		ID: r.ID, PlaybookID: r.PlaybookID, TargetIdentityID: r.TargetIdentityID,
+		InventoryID: r.InventoryID, Status: r.Status, Phase: r.Phase, Action: r.Action,
+		Reason: r.Reason, Connector: r.Connector, Target: r.Target, OutboxID: r.OutboxID,
+		ConnectorDeliveryID: r.ConnectorDeliveryID, ScopeDelta: r.ScopeDelta,
+		EvidenceRefs: r.EvidenceRefs, RollbackRefs: r.RollbackRefs,
+		IdempotencyKey: r.IdempotencyKey, CreatedBy: r.CreatedBy,
+	})
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventRemediationPlaybookRunRecorded, TenantID: tenantID, Data: payload})
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		if outboxDestination == "" {
+			return nil
+		}
+		if o.outbox == nil {
+			return fmt.Errorf("orchestrator: remediation playbook outbox is not configured")
+		}
+		_, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+			TenantID:       tenantID,
+			Destination:    outboxDestination,
+			IdempotencyKey: ev.ID,
+			Payload:        payload,
+		})
+		return err
+	}); err != nil {
+		return store.RemediationPlaybookRun{}, err
 	}
 	r.TenantID = tenantID
 	r.CreatedAt = ev.Time

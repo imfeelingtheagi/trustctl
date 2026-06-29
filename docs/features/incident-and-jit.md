@@ -144,10 +144,11 @@ ceremony.
 ### In the console
 
 The `/incidents` screen is the response console: a served **blast-radius** preview for the
-compromised identity, replacement-before-revoke execution with the resulting evidence, a
-ServiceNow ITSM ticket form that queues the Table API call through the outbox, and a
-**break-glass reconciliation** panel that folds offline-issued, quorum-approved bundles back
-into the event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
+compromised identity, replacement-before-revoke execution with the resulting evidence,
+automated remediation playbooks for revoke / rotate / NHI right-size, a ServiceNow ITSM
+ticket form that queues the Table API call through the outbox, and a **break-glass
+reconciliation** panel that folds offline-issued, quorum-approved bundles back into the
+event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
 `/approvals` blocks self-approval of your own request. See
 [The web console](../web-console.md).
 
@@ -161,6 +162,9 @@ trstctl incidents fleet-reissuance start -f compromised-issuer.json
 trstctl incidents fleet-reissuance pause 33333333-3333-4333-8333-333333333333 -f pause.json
 trstctl incidents fleet-reissuance evidence 33333333-3333-4333-8333-333333333333
 trstctl itsm servicenow tickets create -f servicenow-ticket.json
+trstctl remediation playbooks
+trstctl remediation playbooks run nhi-right-size -f right-size.json
+trstctl remediation playbook-runs list --playbook_id nhi-right-size
 trstctl incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
 trstctl incidents executions get 22222222-2222-2222-2222-222222222222
 ```
@@ -276,6 +280,12 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 - **Serving status:** credential-compromise execution (F31) is served through
   `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`;
+  automated remediation playbooks (CAP-REM-01) are served through
+  `/api/v1/remediation/playbooks`,
+  `/api/v1/remediation/playbooks/{id}/runs`,
+  `/api/v1/remediation/playbook-runs{,/{id}}`, `trstctl remediation playbooks*`,
+  and `/incidents`; NHI right-size runs require usage-backed CAP-POST-01 posture
+  evidence and queue `connector.right_size` through the outbox;
   CA-compromise fleet re-issuance (F32) is served through
   `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl incidents fleet-reissuance *`, and the `/incidents` console;
@@ -299,6 +309,10 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 - **Compromise:** `/api/v1/incidents/executions`, `incident.execution.recorded`,
   `Workflow.Preview`, `Workflow.Remediate` (replacement→deploy→revoke).
+- **Playbooks:** `/api/v1/remediation/playbooks`,
+  `/api/v1/remediation/playbooks/{id}/runs`, `remediation.playbook_run.recorded`,
+  and `connector.right_size` outbox delivery for right-size; revoke/rotate use the
+  lifecycle state machine.
 - **ITSM:** `/api/v1/itsm/servicenow/tickets`, `itsm.ticket.requested`,
   `itsm.servicenow` outbox delivery; token material by `token_ref` only.
 - **Fleet:** `/api/v1/incidents/fleet-reissuance-runs`,

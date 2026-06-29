@@ -2967,6 +2967,86 @@ RCARequest = TypedDict(
     total=False,
 )
 
+RemediationPlaybook = TypedDict(
+    'RemediationPlaybook',
+    {
+        'action': str,
+        'capability': str,
+        'evidence_sources': list[str],
+        'external_effect': str,
+        'id': str,
+        'name': str,
+        'required_inputs': list[str],
+        'status': str,
+        'summary': str,
+    },
+    total=False,
+)
+
+RemediationPlaybookCatalog = TypedDict(
+    'RemediationPlaybookCatalog',
+    {
+        'capability': str,
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'status': str,
+    },
+    total=False,
+)
+
+RemediationPlaybookRun = TypedDict(
+    'RemediationPlaybookRun',
+    {
+        'action': str,
+        'connector': str,
+        'connector_delivery': dict[str, Any],
+        'connector_delivery_id': str,
+        'created_at': str,
+        'created_by': str,
+        'evidence_refs': list[str],
+        'id': str,
+        'idempotency_key': str,
+        'inventory_id': str,
+        'outbox_id': int,
+        'phase': str,
+        'playbook_id': str,
+        'reason': str,
+        'rollback_refs': list[str],
+        'scope_delta': dict[str, Any],
+        'status': str,
+        'target': str,
+        'target_identity_id': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+RemediationPlaybookRunList = TypedDict(
+    'RemediationPlaybookRunList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+RemediationPlaybookRunRequest = TypedDict(
+    'RemediationPlaybookRunRequest',
+    {
+        'connector': str,
+        'inventory_id': str,
+        'reason': str,
+        'recommended_scopes': list[str],
+        'remove_scopes': list[str],
+        'replacement_name': str,
+        'rollback_ref': str,
+        'target': str,
+        'target_identity_id': str,
+    },
+    total=False,
+)
+
 RiskComponents = TypedDict(
     'RiskComponents',
     {

@@ -1256,6 +1256,126 @@ export const messages = {
     defaultMessage: "unconfigured",
     description: "Status badge for a notification channel family that is supported but not configured.",
   },
+  "incidents.playbooks.heading": {
+    defaultMessage: "Automated remediation playbooks",
+    description: "Heading for the incident remediation playbook section.",
+  },
+  "incidents.playbooks.description": {
+    defaultMessage: "Run served revoke, rotate, and right-size playbooks with event-sourced evidence and outbox-backed external intent.",
+    description: "Description for the incident remediation playbook section.",
+  },
+  "incidents.playbooks.targetIdentity": {
+    defaultMessage: "Target identity",
+    description: "Label for target identity input on the remediation playbook form.",
+  },
+  "incidents.playbooks.inventoryId": {
+    defaultMessage: "Inventory ID",
+    description: "Label for inventory id input on the remediation playbook form.",
+  },
+  "incidents.playbooks.connector": {
+    defaultMessage: "Connector",
+    description: "Label for remediation connector input and table column.",
+  },
+  "incidents.playbooks.providerTarget": {
+    defaultMessage: "Provider target",
+    description: "Label for provider target input on the remediation playbook form.",
+  },
+  "incidents.playbooks.removeScopes": {
+    defaultMessage: "Remove scopes",
+    description: "Label for scopes to remove in an NHI right-size run.",
+  },
+  "incidents.playbooks.rollbackReference": {
+    defaultMessage: "Rollback reference",
+    description: "Label for rollback reference input on the remediation playbook form.",
+  },
+  "incidents.playbooks.reason": {
+    defaultMessage: "Reason",
+    description: "Label for remediation playbook reason input.",
+  },
+  "incidents.playbooks.defaultReason": {
+    defaultMessage: "right-size unused grants",
+    description: "Default reason for a right-size remediation playbook run.",
+  },
+  "incidents.playbooks.inventoryPlaceholder": {
+    defaultMessage: "identity/... or finding/...",
+    description: "Placeholder for remediation playbook inventory id input.",
+  },
+  "incidents.playbooks.connectorPlaceholder": {
+    defaultMessage: "aws-iam",
+    description: "Placeholder for remediation playbook connector input.",
+  },
+  "incidents.playbooks.providerTargetPlaceholder": {
+    defaultMessage: "role, service account, secret path",
+    description: "Placeholder for remediation playbook provider target input.",
+  },
+  "incidents.playbooks.removeScopesPlaceholder": {
+    defaultMessage: "optional comma-separated subset",
+    description: "Placeholder for right-size scope removal input.",
+  },
+  "incidents.playbooks.rollbackPlaceholder": {
+    defaultMessage: "restore previous policy version",
+    description: "Placeholder for remediation playbook rollback reference input.",
+  },
+  "incidents.playbooks.runRightSize": {
+    defaultMessage: "Run right-size",
+    description: "Button label for starting an NHI right-size playbook.",
+  },
+  "incidents.playbooks.running": {
+    defaultMessage: "Running...",
+    description: "Busy button label while a playbook run is being requested.",
+  },
+  "incidents.playbooks.failedTitle": {
+    defaultMessage: "Playbook run failed",
+    description: "Error title when a remediation playbook run fails.",
+  },
+  "incidents.playbooks.requiredTarget": {
+    defaultMessage: "Target identity or inventory ID is required.",
+    description: "Validation error when no target was entered for a playbook run.",
+  },
+  "incidents.playbooks.loadError": {
+    defaultMessage: "Could not run remediation playbook",
+    description: "Fallback error when a playbook run request fails.",
+  },
+  "incidents.playbooks.recorded": {
+    defaultMessage: "Playbook run recorded",
+    description: "Status heading after a remediation playbook run is recorded.",
+  },
+  "incidents.playbooks.run": {
+    defaultMessage: "Run",
+    description: "Short label for a remediation playbook run id.",
+  },
+  "incidents.playbooks.playbook": {
+    defaultMessage: "Playbook",
+    description: "Short label for a remediation playbook id.",
+  },
+  "incidents.playbooks.status": {
+    defaultMessage: "Status",
+    description: "Short label for remediation playbook run status.",
+  },
+  "incidents.playbooks.externalIntent": {
+    defaultMessage: "External intent",
+    description: "Short label for remediation playbook external intent evidence.",
+  },
+  "incidents.playbooks.noRuns": {
+    defaultMessage: "No remediation playbook runs have been recorded.",
+    description: "Empty state for remediation playbook run table.",
+  },
+  "incidents.playbooks.tableCaption": {
+    defaultMessage: "Remediation playbook run evidence",
+    description: "Accessible caption for remediation playbook run table.",
+  },
+  "incidents.playbooks.target": {
+    defaultMessage: "Target",
+    description: "Short table-column label for playbook target.",
+  },
+  "incidents.playbooks.rollback": {
+    defaultMessage: "Rollback",
+    description: "Short table-column label for playbook rollback evidence.",
+  },
+  "incidents.playbooks.none": {
+    defaultMessage: "none",
+    description: "Fallback when a playbook run has no rollback refs.",
+  },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
@@ -1715,6 +1835,36 @@ const esESCatalog = {
   "notifications.channels.loadError": "No se pudieron cargar los canales de notificación",
   "notifications.channels.configured": "configurado",
   "notifications.channels.unconfigured": "sin configurar",
+  "incidents.playbooks.heading": "Playbooks de remediación automatizada",
+  "incidents.playbooks.description": "Ejecuta playbooks servidos de revocación, rotación y ajuste de permisos con evidencia basada en eventos e intención externa en outbox.",
+  "incidents.playbooks.targetIdentity": "Identidad objetivo",
+  "incidents.playbooks.inventoryId": "ID de inventario",
+  "incidents.playbooks.connector": "Conector",
+  "incidents.playbooks.providerTarget": "Destino del proveedor",
+  "incidents.playbooks.removeScopes": "Permisos a quitar",
+  "incidents.playbooks.rollbackReference": "Referencia de reversión",
+  "incidents.playbooks.reason": "Motivo",
+  "incidents.playbooks.defaultReason": "ajustar permisos sin uso",
+  "incidents.playbooks.inventoryPlaceholder": "identity/... o finding/...",
+  "incidents.playbooks.connectorPlaceholder": "aws-iam",
+  "incidents.playbooks.providerTargetPlaceholder": "rol, cuenta de servicio o ruta de secreto",
+  "incidents.playbooks.removeScopesPlaceholder": "subconjunto opcional separado por comas",
+  "incidents.playbooks.rollbackPlaceholder": "restaurar versión anterior de política",
+  "incidents.playbooks.runRightSize": "Ejecutar ajuste",
+  "incidents.playbooks.running": "Ejecutando...",
+  "incidents.playbooks.failedTitle": "Falló la ejecución del playbook",
+  "incidents.playbooks.requiredTarget": "Se requiere identidad objetivo o ID de inventario.",
+  "incidents.playbooks.loadError": "No se pudo ejecutar el playbook de remediación",
+  "incidents.playbooks.recorded": "Ejecución de playbook registrada",
+  "incidents.playbooks.run": "Ejecución",
+  "incidents.playbooks.playbook": "Playbook",
+  "incidents.playbooks.status": "Estado",
+  "incidents.playbooks.externalIntent": "Intención externa",
+  "incidents.playbooks.noRuns": "No se han registrado ejecuciones de playbooks de remediación.",
+  "incidents.playbooks.tableCaption": "Evidencia de ejecución de playbook de remediación",
+  "incidents.playbooks.target": "Destino",
+  "incidents.playbooks.rollback": "Reversión",
+  "incidents.playbooks.none": "ninguna",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",

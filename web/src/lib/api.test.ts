@@ -27,6 +27,11 @@ function mockFetchSequence(responses: Array<{ status: number; body: string; head
   );
 }
 
+function lastSentHeaders(): Record<string, string> {
+  const init = vi.mocked(fetch).mock.calls.at(-1)?.[1] as RequestInit | undefined;
+  return (init?.headers ?? {}) as Record<string, string>;
+}
+
 afterEach(() => {
   document.cookie = "trstctl_csrf=; Max-Age=0; path=/";
   vi.unstubAllGlobals();
@@ -673,6 +678,33 @@ describe("certificate inventory contract", () => {
     await api.getIdentity("identity/unsafe");
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/identities/identity%2Funsafe");
+  });
+});
+
+describe("remediation playbook contract", () => {
+  it("fetches the served playbook catalog", async () => {
+    mockFetch(200, JSON.stringify({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-29T00:00:00Z", items: [] }));
+
+    await api.remediationPlaybooks();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/remediation/playbooks");
+  });
+
+  it("runs a playbook with idempotency", async () => {
+    mockFetch(201, JSON.stringify({ id: "run-1", tenant_id: "tenant-1", playbook_id: "nhi-right-size", status: "queued", phase: "right_size_connector_intent_queued", action: "right_size", scope_delta: {}, evidence_refs: [], rollback_refs: [], created_at: "2026-06-29T00:00:00Z", updated_at: "2026-06-29T00:00:00Z" }));
+
+    await api.runRemediationPlaybook("nhi-right-size", { target_identity_id: "id-1", reason: "right-size" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/remediation/playbooks/nhi-right-size/runs");
+    expect(lastSentHeaders()["Idempotency-Key"]).toBeTruthy();
+  });
+
+  it("lists playbook runs by playbook id", async () => {
+    mockFetch(200, JSON.stringify({ items: [], next_cursor: "" }));
+
+    await api.remediationPlaybookRuns({ limit: 5, cursor: "run-0", playbookId: "nhi-right-size" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/remediation/playbook-runs?limit=5&cursor=run-0&playbook_id=nhi-right-size");
   });
 });
 

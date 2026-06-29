@@ -55,6 +55,7 @@ var orchestratorCommandEventTypes = []string{
 	eventledger.EventLifecycleRotationRecorded,
 	eventledger.EventIncidentExecutionRecorded,
 	eventledger.EventIncidentFleetReissuanceRecorded,
+	eventledger.EventRemediationPlaybookRunRecorded,
 	eventledger.EventDiscoverySourceUpserted,
 	eventledger.EventDiscoveryScheduleUpserted,
 	eventledger.EventDiscoveryRunQueued,

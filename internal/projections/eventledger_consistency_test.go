@@ -48,6 +48,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventLifecycleRotationRecorded:        "EventLifecycleRotationRecorded",
 	projections.EventIncidentExecutionRecorded:        "EventIncidentExecutionRecorded",
 	projections.EventIncidentFleetReissuanceRecorded:  "EventIncidentFleetReissuanceRecorded",
+	projections.EventRemediationPlaybookRunRecorded:   "EventRemediationPlaybookRunRecorded",
 	projections.EventOwnerCreated:                     "EventOwnerCreated",
 	projections.EventOwnerUpdated:                     "EventOwnerUpdated",
 	projections.EventOwnerDeleted:                     "EventOwnerDeleted",

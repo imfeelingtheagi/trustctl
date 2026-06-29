@@ -11,6 +11,9 @@ import {
   type IncidentExecution,
   type IncidentExecutionRequest,
   type ITSMTicket,
+  type RemediationPlaybook,
+  type RemediationPlaybookRun,
+  type RemediationPlaybookRunRequest,
   type ServiceNowTicketRequest,
 } from "@/lib/api";
 import { Dialog } from "@/components/Dialog";
@@ -18,6 +21,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { BreakGlassReconcile } from "@/components/breakglass";
+import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 
 const defaultExecution: IncidentExecutionRequest = {
   identity_id: "",
@@ -54,6 +58,17 @@ const defaultFleetRun: FleetReissuanceRequest = {
   evidence_hint: "",
 };
 
+const defaultPlaybookRun: RemediationPlaybookRunRequest = {
+  target_identity_id: "",
+  inventory_id: "",
+  reason: "",
+  connector: "",
+  target: "",
+  remove_scopes: [],
+  recommended_scopes: [],
+  rollback_ref: "",
+};
+
 const breakGlassChecklist = [
   "emergency declaration names incident ID, commander, reason, and expiry",
   "quorum approval records two operators outside the affected owner team",
@@ -64,20 +79,27 @@ const breakGlassChecklist = [
 ];
 
 export function Incidents() {
+  const { t } = useTranslation();
   const [form, setForm] = useState<IncidentExecutionRequest>(defaultExecution);
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [executions, setExecutions] = useState<IncidentExecution[]>([]);
   const [fleetForm, setFleetForm] = useState<FleetReissuanceRequest>(defaultFleetRun);
   const [fleetRuns, setFleetRuns] = useState<FleetReissuanceRun[]>([]);
+  const [playbookForm, setPlaybookForm] = useState<RemediationPlaybookRunRequest>(defaultPlaybookRun);
+  const [playbooks, setPlaybooks] = useState<RemediationPlaybook[]>([]);
+  const [playbookRuns, setPlaybookRuns] = useState<RemediationPlaybookRun[]>([]);
+  const [removeScopesText, setRemoveScopesText] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [executeError, setExecuteError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
+  const [playbookError, setPlaybookError] = useState<string | null>(null);
   const [ticketForm, setTicketForm] = useState<ServiceNowTicketRequest>(defaultServiceNowTicket);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
   const [latestFleetRun, setLatestFleetRun] = useState<FleetReissuanceRun | null>(null);
   const [fleetEvidence, setFleetEvidence] = useState<FleetReissuanceEvidence | null>(null);
+  const [latestPlaybookRun, setLatestPlaybookRun] = useState<RemediationPlaybookRun | null>(null);
   const [latestTicket, setLatestTicket] = useState<ITSMTicket | null>(null);
   const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
   const breakGlassCloseRef = useRef<HTMLButtonElement>(null);
@@ -85,16 +107,24 @@ export function Incidents() {
   const [previewing, setPreviewing] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [runningFleet, setRunningFleet] = useState(false);
+  const [runningPlaybook, setRunningPlaybook] = useState(false);
   const [fleetAction, setFleetAction] = useState<string | null>(null);
   const [ticketing, setTicketing] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.incidentExecutions({ limit: 10 }), api.fleetReissuanceRuns({ limit: 10 })])
-      .then(([executionResult, fleetResult]) => {
+    Promise.all([
+      api.incidentExecutions({ limit: 10 }),
+      api.fleetReissuanceRuns({ limit: 10 }),
+      api.remediationPlaybooks(),
+      api.remediationPlaybookRuns({ limit: 10 }),
+    ])
+      .then(([executionResult, fleetResult, playbookCatalog, playbookRunResult]) => {
         if (!active) return;
         setExecutions(executionResult.items ?? []);
         setFleetRuns(fleetResult.items ?? []);
+        setPlaybooks(playbookCatalog.items ?? []);
+        setPlaybookRuns(playbookRunResult.items ?? []);
         setLoadError(null);
       })
       .catch((err) => {
@@ -149,6 +179,37 @@ export function Incidents() {
       setExecuteError(apiProblemMessage(err, "Could not execute incident"));
     } finally {
       setExecuting(false);
+    }
+  }
+
+  async function runRightSizePlaybook(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const targetIdentity = playbookForm.target_identity_id?.trim() ?? "";
+    const inventoryID = playbookForm.inventory_id?.trim() ?? "";
+    if (!targetIdentity && !inventoryID) {
+      setPlaybookError(t("incidents.playbooks.requiredTarget"));
+      return;
+    }
+    setRunningPlaybook(true);
+    setPlaybookError(null);
+    setLatestPlaybookRun(null);
+    try {
+      const result = await api.runRemediationPlaybook("nhi-right-size", {
+        ...playbookForm,
+        target_identity_id: targetIdentity,
+        inventory_id: inventoryID,
+        reason: playbookForm.reason?.trim() || t("incidents.playbooks.defaultReason"),
+        connector: playbookForm.connector?.trim() ?? "",
+        target: playbookForm.target?.trim() ?? "",
+        remove_scopes: splitList(removeScopesText),
+        rollback_ref: playbookForm.rollback_ref?.trim() ?? "",
+      });
+      setPlaybookRuns((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
+      setLatestPlaybookRun(result);
+    } catch (err) {
+      setPlaybookError(apiProblemMessage(err, t("incidents.playbooks.loadError")));
+    } finally {
+      setRunningPlaybook(false);
     }
   }
 
@@ -346,6 +407,121 @@ export function Incidents() {
         {impact && <BlastRadiusPreview impact={impact} />}
       </section>
 
+      <section aria-labelledby="playbooks-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="playbooks-heading" className="text-title font-semibold">
+            {t("incidents.playbooks.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {t("incidents.playbooks.description")}
+          </p>
+        </div>
+        <div className="grid gap-2 md:grid-cols-3">
+          {playbooks.map((item) => (
+            <div key={item.id} className="rounded-panel border border-border p-3">
+              <p className="font-medium">{item.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{item.external_effect}</p>
+            </div>
+          ))}
+        </div>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={runRightSizePlaybook}>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.playbooks.targetIdentity")}
+            <input
+              className="ui-input font-mono"
+              value={playbookForm.target_identity_id ?? ""}
+              onChange={(event) => setPlaybookForm({ ...playbookForm, target_identity_id: event.target.value })}
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.playbooks.inventoryId")}
+            <input
+              className="ui-input"
+              value={playbookForm.inventory_id ?? ""}
+              onChange={(event) => setPlaybookForm({ ...playbookForm, inventory_id: event.target.value })}
+              placeholder={t("incidents.playbooks.inventoryPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.playbooks.connector")}
+            <input
+              className="ui-input"
+              value={playbookForm.connector ?? ""}
+              onChange={(event) => setPlaybookForm({ ...playbookForm, connector: event.target.value })}
+              placeholder={t("incidents.playbooks.connectorPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.playbooks.providerTarget")}
+            <input
+              className="ui-input"
+              value={playbookForm.target ?? ""}
+              onChange={(event) => setPlaybookForm({ ...playbookForm, target: event.target.value })}
+              placeholder={t("incidents.playbooks.providerTargetPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.playbooks.removeScopes")}
+            <input
+              className="ui-input"
+              value={removeScopesText}
+              onChange={(event) => setRemoveScopesText(event.target.value)}
+              placeholder={t("incidents.playbooks.removeScopesPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.playbooks.rollbackReference")}
+            <input
+              className="ui-input"
+              value={playbookForm.rollback_ref ?? ""}
+              onChange={(event) => setPlaybookForm({ ...playbookForm, rollback_ref: event.target.value })}
+              placeholder={t("incidents.playbooks.rollbackPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium md:col-span-2">
+            {t("incidents.playbooks.reason")}
+            <input
+              className="ui-input"
+              value={playbookForm.reason ?? ""}
+              onChange={(event) => setPlaybookForm({ ...playbookForm, reason: event.target.value })}
+            />
+          </label>
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={runningPlaybook}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              {runningPlaybook ? t("incidents.playbooks.running") : t("incidents.playbooks.runRightSize")}
+            </Button>
+          </div>
+        </form>
+        {playbookError && <ErrorState title={t("incidents.playbooks.failedTitle")}>{playbookError}</ErrorState>}
+        {latestPlaybookRun && (
+          <section role="status" aria-labelledby="playbook-progress-heading" className="ui-panel p-comfortable">
+            <h3 id="playbook-progress-heading" className="text-title font-semibold">
+              {t("incidents.playbooks.recorded")}
+            </h3>
+            <dl className="mt-3 grid gap-2 md:grid-cols-4">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.playbooks.run")}</dt>
+                <dd className="font-mono text-xs">{latestPlaybookRun.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.playbooks.playbook")}</dt>
+                <dd>{latestPlaybookRun.playbook_id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.playbooks.status")}</dt>
+                <dd>{latestPlaybookRun.status}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.playbooks.externalIntent")}</dt>
+                <dd>{latestPlaybookRun.connector_delivery?.destination ?? latestPlaybookRun.connector ?? latestPlaybookRun.status}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
+      </section>
+
       <section aria-labelledby="servicenow-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="servicenow-heading" className="text-title font-semibold">
@@ -464,12 +640,17 @@ export function Incidents() {
             Execution evidence
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Each execution is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit-bundle state.
+            Each execution or playbook run is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit state.
           </p>
         </div>
         {loading && <LoadingState>Loading incident execution evidence...</LoadingState>}
         {loadError && <ErrorState title="Incident evidence unavailable">{loadError}</ErrorState>}
-        {!loading && !loadError && <IncidentExecutionTable executions={executions} />}
+        {!loading && !loadError && (
+          <>
+            <IncidentExecutionTable executions={executions} />
+            <RemediationPlaybookRunTable runs={playbookRuns} t={t} />
+          </>
+        )}
       </section>
 
       <BreakGlassReconcile />
@@ -732,6 +913,53 @@ function FleetReissuanceTable({
   );
 }
 
+function RemediationPlaybookRunTable({ runs, t }: { runs: RemediationPlaybookRun[]; t: I18nContextValue["t"] }) {
+  if (runs.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t("incidents.playbooks.noRuns")}</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-panel border border-border">
+      <table className="ui-table min-w-[64rem]">
+        <caption className="sr-only">{t("incidents.playbooks.tableCaption")}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t("incidents.playbooks.run")}</th>
+            <th scope="col">{t("incidents.playbooks.playbook")}</th>
+            <th scope="col">{t("incidents.playbooks.target")}</th>
+            <th scope="col">{t("incidents.playbooks.status")}</th>
+            <th scope="col">{t("incidents.playbooks.connector")}</th>
+            <th scope="col">{t("incidents.playbooks.rollback")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((item) => (
+            <tr key={item.id} className="align-top">
+              <td className="font-mono text-xs">{item.id}</td>
+              <td>
+                <p className="font-medium">{item.playbook_id}</p>
+                <p className="text-xs text-muted-foreground">{item.action}</p>
+              </td>
+              <td>
+                <p className="font-mono text-xs">{item.target_identity_id || item.inventory_id || "-"}</p>
+                <p className="text-xs text-muted-foreground">{item.inventory_id}</p>
+              </td>
+              <td>
+                <p className="font-medium">{item.status}</p>
+                <p className="text-xs text-muted-foreground">{item.phase}</p>
+              </td>
+              <td>
+                <p className="font-medium">{item.connector_delivery?.destination ?? item.connector ?? "-"}</p>
+                <p className="text-xs text-muted-foreground">{item.target}</p>
+              </td>
+              <td>{item.rollback_refs.length ? item.rollback_refs.join(", ") : t("incidents.playbooks.none")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function IncidentExecutionTable({ executions }: { executions: IncidentExecution[] }) {
   if (executions.length === 0) {
     return <p className="text-sm text-muted-foreground">No incident executions have been recorded.</p>;
@@ -833,6 +1061,13 @@ function displayValue(value: unknown): string {
 
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
+}
+
+function splitList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function apiProblemMessage(err: unknown, fallback: string): string {

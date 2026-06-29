@@ -96,6 +96,13 @@ never live in the API process. What you can do end to end against the running bi
   history-reconstructable single-identity remediation — replacement issue/deploy,
   revocation, blast-radius capture, and a
   sealed evidence pack readable via `GET /api/v1/incidents/executions{,/{id}}`.
+  Automated remediation playbooks are also served under the same Enterprise feature:
+  `GET /api/v1/remediation/playbooks`,
+  `POST /api/v1/remediation/playbooks/{id}/runs`, and
+  `GET /api/v1/remediation/playbook-runs{,/{id}}` cover revoke, rotate, and NHI
+  right-size. Right-size uses served CAP-POST-01 over-privilege evidence and queues
+  `connector.right_size` through the outbox; provider-specific workers still own the
+  actual external entitlement mutation.
   *Fleet-wide* re-issuance is served separately at
   `POST /api/v1/incidents/fleet-reissuance-runs` with pause/resume/rollback and
   evidence export routes under `/api/v1/incidents/fleet-reissuance-runs/{id}`,
@@ -308,7 +315,7 @@ the running binary serves**:
   + blast-radius query), **Audit** (`/audit`, audit-event list + evidence export),
   **dual-control approvals** from the identity table, licensed **incident execution** (`/incidents`,
   replacement issue/deploy, compromised-issuer fleet reissuance, revocation queue,
-  connector receipt, rollback evidence, and sealed audit bundle), and the existing
+  connector receipt, rollback evidence, automated remediation playbooks, and sealed audit bundle), and the existing
   **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**
   surfaces remain labeled here until they receive their own served UI: online
   break-glass issuance workflows (with API-served break-glass reconciliation but no

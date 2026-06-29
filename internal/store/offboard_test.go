@@ -82,7 +82,7 @@ func newStore(t *testing.T) *store.Store {
 		          discovery_findings, notification_reads, notification_threshold_deliveries, discovery_runs, discovery_schedules, discovery_sources,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
 		          notification_routing_policies,
-		          connector_delivery_receipts, lifecycle_rotation_runs, incident_fleet_reissuance_runs,
+		          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs, incident_fleet_reissuance_runs,
 		          secret_store, read_model_snapshots,
 		          issuance_approval_requests, issuance_approvals
 		 RESTART IDENTITY CASCADE`); err != nil {

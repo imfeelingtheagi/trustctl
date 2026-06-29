@@ -468,6 +468,7 @@ func (a *API) routeEnabled(r route) bool {
 	case "executeIncident", "listIncidentExecutions", "getIncidentExecution",
 		"startFleetReissuance", "listFleetReissuanceRuns", "getFleetReissuanceRun",
 		"pauseFleetReissuance", "resumeFleetReissuance", "rollbackFleetReissuance", "exportFleetReissuanceEvidence",
+		"listRemediationPlaybooks", "runRemediationPlaybook", "listRemediationPlaybookRuns", "getRemediationPlaybookRun",
 		"startPQCMigration", "rollbackPQCMigration":
 		return a.remediation
 	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
@@ -690,6 +691,7 @@ func (a *API) routes() []route {
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	dynamicLeaseIDPath := []param{pathString("lease_id", "dynamic secret lease id")}
 	pqcMigrationRunPath := []param{pathString("run_id", "PQC migration run id")}
+	playbookIDPath := []param{pathString("id", "remediation playbook id")}
 	complianceFrameworkPath := []param{pathString("framework", "compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, fips-140, common-criteria, cabf-br, webtrust, or etsi")}
 	caCeremonyPath := []param{pathUUID("id")}
 	caAuthorityPath := []param{pathUUID("id")}
@@ -728,6 +730,11 @@ func (a *API) routes() []route {
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "issuer_id", typ: "string", format: "uuid", desc: "return only runs for this compromised issuer"},
+	}
+	playbookScopedPage := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+		{name: "playbook_id", typ: "string", desc: "return only runs for this remediation playbook"},
 	}
 	auditQuery := []param{
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
@@ -869,6 +876,10 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/resume", opID: "resumeFleetReissuance", summary: "Record resume evidence for a fleet reissuance run", handler: a.resumeFleetReissuance, pathParams: idPath, reqSchema: "FleetReissuanceActionRequest", resSchema: "FleetReissuanceRun", successCode: "200", mutation: true, perm: authz.IncidentsWrite},
 		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback", opID: "rollbackFleetReissuance", summary: "Record rollback evidence for a fleet reissuance run", handler: a.rollbackFleetReissuance, pathParams: idPath, reqSchema: "FleetReissuanceActionRequest", resSchema: "FleetReissuanceRun", successCode: "200", mutation: true, perm: authz.IncidentsWrite},
 		{method: "GET", path: "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence", opID: "exportFleetReissuanceEvidence", summary: "Export fleet reissuance evidence", handler: a.exportFleetReissuanceEvidence, pathParams: idPath, resSchema: "FleetReissuanceEvidence", successCode: "200", perm: authz.IncidentsRead},
+		{method: "GET", path: "/api/v1/remediation/playbooks", opID: "listRemediationPlaybooks", summary: "List automated remediation playbooks", handler: a.listRemediationPlaybooks, resSchema: "RemediationPlaybookCatalog", successCode: "200", perm: authz.IncidentsRead},
+		{method: "POST", path: "/api/v1/remediation/playbooks/{id}/runs", opID: "runRemediationPlaybook", summary: "Run an automated remediation playbook", handler: a.runRemediationPlaybook, pathParams: playbookIDPath, reqSchema: "RemediationPlaybookRunRequest", resSchema: "RemediationPlaybookRun", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
+		{method: "GET", path: "/api/v1/remediation/playbook-runs", opID: "listRemediationPlaybookRuns", summary: "List remediation playbook run evidence", handler: a.listRemediationPlaybookRuns, query: playbookScopedPage, resSchema: "RemediationPlaybookRunList", successCode: "200", perm: authz.IncidentsRead},
+		{method: "GET", path: "/api/v1/remediation/playbook-runs/{id}", opID: "getRemediationPlaybookRun", summary: "Get a remediation playbook run evidence pack", handler: a.getRemediationPlaybookRun, pathParams: idPath, resSchema: "RemediationPlaybookRun", successCode: "200", perm: authz.IncidentsRead},
 
 		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},

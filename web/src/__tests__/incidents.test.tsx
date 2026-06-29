@@ -11,6 +11,9 @@ const { apiMock } = vi.hoisted(() => ({
     incidentExecutions: vi.fn(),
     executeIncident: vi.fn(),
     createServiceNowTicket: vi.fn(),
+    remediationPlaybooks: vi.fn(),
+    remediationPlaybookRuns: vi.fn(),
+    runRemediationPlaybook: vi.fn(),
     fleetReissuanceRuns: vi.fn(),
     startFleetReissuance: vi.fn(),
     pauseFleetReissuance: vi.fn(),
@@ -30,6 +33,9 @@ vi.mock("@/lib/api", async (orig) => {
       incidentExecutions: apiMock.incidentExecutions,
       executeIncident: apiMock.executeIncident,
       createServiceNowTicket: apiMock.createServiceNowTicket,
+      remediationPlaybooks: apiMock.remediationPlaybooks,
+      remediationPlaybookRuns: apiMock.remediationPlaybookRuns,
+      runRemediationPlaybook: apiMock.runRemediationPlaybook,
       fleetReissuanceRuns: apiMock.fleetReissuanceRuns,
       startFleetReissuance: apiMock.startFleetReissuance,
       pauseFleetReissuance: apiMock.pauseFleetReissuance,
@@ -141,11 +147,86 @@ const fleetRun = {
   connector_deliveries: [],
 };
 
+const playbooks = [
+  {
+    id: "identity-revoke",
+    name: "Revoke identity",
+    action: "revoke",
+    status: "served",
+    capability: "CAP-REM-01",
+    summary: "Revoke an identity",
+    external_effect: "revocation.publish outbox",
+    required_inputs: ["target_identity_id"],
+    evidence_sources: ["remediation.playbook_run.recorded event"],
+  },
+  {
+    id: "credential-rotate",
+    name: "Rotate credential",
+    action: "rotate",
+    status: "served",
+    capability: "CAP-REM-01",
+    summary: "Rotate a credential",
+    external_effect: "ca.issue, connector.deploy, revocation.publish outbox",
+    required_inputs: ["target_identity_id"],
+    evidence_sources: ["remediation.playbook_run.recorded event"],
+  },
+  {
+    id: "nhi-right-size",
+    name: "Right-size NHI grants",
+    action: "right_size",
+    status: "served",
+    capability: "CAP-REM-01",
+    summary: "Queue least-privilege grants",
+    external_effect: "connector.right_size outbox",
+    required_inputs: ["inventory_id or target_identity_id"],
+    evidence_sources: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded event"],
+  },
+];
+
+const playbookRun = {
+  id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+  tenant_id: "tenant-1",
+  playbook_id: "nhi-right-size",
+  target_identity_id: "11111111-1111-1111-1111-111111111111",
+  inventory_id: "identity/11111111-1111-1111-1111-111111111111",
+  status: "queued",
+  phase: "right_size_connector_intent_queued",
+  action: "right_size",
+  reason: "right-size unused grants",
+  connector: "aws-iam",
+  target: "arn:aws:iam::123456789012:role/payments-bot",
+  connector_delivery_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+  scope_delta: {
+    remove_scopes: ["secrets:write"],
+    used_scopes: ["secrets:read"],
+  },
+  evidence_refs: ["nhi_posture:CAP-POST-01"],
+  rollback_refs: ["restore iam policy version v17"],
+  idempotency_key: "playbook-1",
+  created_by: "incident-commander",
+  created_at: "2026-06-20T12:20:00Z",
+  updated_at: "2026-06-20T12:20:00Z",
+  connector_delivery: {
+    id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    tenant_id: "tenant-1",
+    destination: "connector.right_size",
+    connector: "aws-iam",
+    target: "arn:aws:iam::123456789012:role/payments-bot",
+    status: "queued",
+    attempts: 1,
+    created_at: "2026-06-20T12:20:00Z",
+    updated_at: "2026-06-20T12:20:00Z",
+  },
+};
+
 describe("incident response served execution surface", () => {
   beforeEach(() => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
+    apiMock.remediationPlaybooks.mockReset().mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
+    apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [playbookRun] });
+    apiMock.runRemediationPlaybook.mockReset().mockResolvedValue(playbookRun);
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
     apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
     apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
@@ -233,6 +314,38 @@ describe("incident response served execution surface", () => {
     );
     expect(await screen.findByText("ServiceNow ticket queued")).toBeInTheDocument();
     expect(screen.getByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
+  });
+
+  it("runs a served NHI right-size remediation playbook", async () => {
+    const user = userEvent.setup();
+    renderIncidents();
+
+    expect(await screen.findByRole("heading", { name: "Automated remediation playbooks" })).toBeInTheDocument();
+    expect(screen.getByText("Right-size NHI grants")).toBeInTheDocument();
+    expect(await screen.findByText("dddddddd-dddd-dddd-dddd-dddddddddddd")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Target identity"), "11111111-1111-1111-1111-111111111111");
+    await user.clear(screen.getByLabelText("Connector"));
+    await user.type(screen.getByLabelText("Connector"), "aws-iam");
+    await user.type(screen.getByLabelText("Provider target"), "arn:aws:iam::123456789012:role/payments-bot");
+    await user.type(screen.getByLabelText("Remove scopes"), "secrets:write");
+    await user.type(screen.getByLabelText("Rollback reference"), "restore iam policy version v17");
+    await user.click(screen.getByRole("button", { name: "Run right-size" }));
+
+    await waitFor(() =>
+      expect(apiMock.runRemediationPlaybook).toHaveBeenCalledWith("nhi-right-size", {
+        target_identity_id: "11111111-1111-1111-1111-111111111111",
+        inventory_id: "",
+        reason: "right-size unused grants",
+        connector: "aws-iam",
+        target: "arn:aws:iam::123456789012:role/payments-bot",
+        remove_scopes: ["secrets:write"],
+        recommended_scopes: [],
+        rollback_ref: "restore iam policy version v17",
+      }),
+    );
+    expect(await screen.findByText("Playbook run recorded")).toBeInTheDocument();
+    expect(screen.getAllByText("connector.right_size").length).toBeGreaterThan(0);
   });
 
   it("runs fleet reissuance actions and keeps break-glass in help", async () => {

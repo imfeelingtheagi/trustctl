@@ -954,6 +954,33 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
 	}, "identity_id")
+	remediationPlaybook := object(map[string]*Schema{
+		"id": str(), "name": str(), "action": str(), "status": str(), "capability": str(),
+		"summary": str(), "external_effect": str(),
+		"required_inputs":  {Type: "array", Items: str()},
+		"evidence_sources": {Type: "array", Items: str()},
+	}, "id", "name", "action", "status", "capability", "summary", "external_effect", "required_inputs", "evidence_sources")
+	remediationPlaybookCatalog := object(map[string]*Schema{
+		"capability": str(), "status": str(), "generated_at": timestamp(),
+		"items": {Type: "array", Items: ref("RemediationPlaybook")},
+	}, "capability", "status", "generated_at", "items")
+	remediationPlaybookRunReq := object(map[string]*Schema{
+		"target_identity_id": uuid(), "inventory_id": str(), "reason": str(),
+		"connector": str(), "target": str(), "replacement_name": str(),
+		"remove_scopes":      {Type: "array", Items: str()},
+		"recommended_scopes": {Type: "array", Items: str()},
+		"rollback_ref":       str(),
+	})
+	remediationPlaybookRun := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "playbook_id": str(),
+		"target_identity_id": str(), "inventory_id": str(),
+		"status": str(), "phase": str(), "action": str(), "reason": str(),
+		"connector": str(), "target": str(), "outbox_id": {Type: "integer"},
+		"connector_delivery_id": uuid(), "scope_delta": {Type: "object"},
+		"evidence_refs": {Type: "array", Items: str()}, "rollback_refs": {Type: "array", Items: str()},
+		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
+		"connector_delivery": ref("ConnectorDelivery"),
+	}, "id", "tenant_id", "playbook_id", "status", "phase", "action", "scope_delta", "evidence_refs", "rollback_refs", "created_at", "updated_at")
 	fleetHealthGate := object(map[string]*Schema{
 		"name": str(), "status": str(),
 	}, "name", "status")
@@ -1848,6 +1875,11 @@ func componentSchemas() map[string]*Schema {
 		"IncidentExecutionRequest":              incidentExecutionReq,
 		"IncidentExecution":                     incidentExecution,
 		"IncidentExecutionList":                 list("IncidentExecution"),
+		"RemediationPlaybook":                   remediationPlaybook,
+		"RemediationPlaybookCatalog":            remediationPlaybookCatalog,
+		"RemediationPlaybookRunRequest":         remediationPlaybookRunReq,
+		"RemediationPlaybookRun":                remediationPlaybookRun,
+		"RemediationPlaybookRunList":            list("RemediationPlaybookRun"),
 		"FleetReissuanceHealthGate":             fleetHealthGate,
 		"FleetReissuanceBatch":                  fleetBatch,
 		"FleetReissuanceRequest":                fleetReissuanceReq,

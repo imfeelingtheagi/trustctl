@@ -93,6 +93,11 @@ import type {
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
+  RemediationPlaybook,
+  RemediationPlaybookCatalog,
+  RemediationPlaybookRun,
+  RemediationPlaybookRunList,
+  RemediationPlaybookRunRequest,
   Owner as GenOwner,
   OwnerRequest,
   Profile as GenProfile,
@@ -297,6 +302,11 @@ export type {
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
+  RemediationPlaybook,
+  RemediationPlaybookCatalog,
+  RemediationPlaybookRun,
+  RemediationPlaybookRunList,
+  RemediationPlaybookRunRequest,
   ITSMTicket,
   MachineLoginRequest,
   MachineLoginResponse,
@@ -744,6 +754,10 @@ export interface Api {
   createServiceNowTicket(input: ServiceNowTicketRequest): Promise<ITSMTicket>;
   incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
   getIncidentExecution(id: string): Promise<IncidentExecution>;
+  remediationPlaybooks(): Promise<RemediationPlaybookCatalog>;
+  runRemediationPlaybook(id: string, input: RemediationPlaybookRunRequest): Promise<RemediationPlaybookRun>;
+  remediationPlaybookRuns(options?: { limit?: number; cursor?: string; playbookId?: string }): Promise<RemediationPlaybookRunList>;
+  getRemediationPlaybookRun(id: string): Promise<RemediationPlaybookRun>;
   startFleetReissuance(input: FleetReissuanceRequest): Promise<FleetReissuanceRun>;
   fleetReissuanceRuns(options?: { limit?: number; cursor?: string; issuerId?: string }): Promise<FleetReissuanceRunList>;
   getFleetReissuanceRun(id: string): Promise<FleetReissuanceRun>;
@@ -924,6 +938,11 @@ export const api: Api = {
   createServiceNowTicket: (input) => mutate<ITSMTicket>("POST", "/api/v1/itsm/servicenow/tickets", input),
   incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
+  remediationPlaybooks: () => req<RemediationPlaybookCatalog>("/api/v1/remediation/playbooks"),
+  runRemediationPlaybook: (id, input) => mutate<RemediationPlaybookRun>("POST", `/api/v1/remediation/playbooks/${encodeURIComponent(id)}/runs`, input),
+  remediationPlaybookRuns: (options) =>
+    req<RemediationPlaybookRunList>(`/api/v1/remediation/playbook-runs${pageQueryString(options, options?.playbookId, "playbook_id")}`),
+  getRemediationPlaybookRun: (id) => req<RemediationPlaybookRun>(`/api/v1/remediation/playbook-runs/${encodeURIComponent(id)}`),
   startFleetReissuance: (input) => mutate<FleetReissuanceRun>("POST", "/api/v1/incidents/fleet-reissuance-runs", input),
   fleetReissuanceRuns: (options) =>
     req<FleetReissuanceRunList>(`/api/v1/incidents/fleet-reissuance-runs${pageQueryString(options, options?.issuerId, "issuer_id")}`),

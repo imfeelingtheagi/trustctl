@@ -2116,6 +2116,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/remediation/playbook-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List remediation playbook run evidence */
+        get: operations["listRemediationPlaybookRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remediation/playbook-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a remediation playbook run evidence pack */
+        get: operations["getRemediationPlaybookRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remediation/playbooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List automated remediation playbooks */
+        get: operations["listRemediationPlaybooks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remediation/playbooks/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run an automated remediation playbook */
+        post: operations["runRemediationPlaybook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/contextual-priorities": {
         parameters: {
             query?: never;
@@ -4836,6 +4904,68 @@ export interface components {
         RCARequest: {
             question: string;
             subject?: string;
+        };
+        RemediationPlaybook: {
+            action: string;
+            capability: string;
+            evidence_sources: string[];
+            external_effect: string;
+            id: string;
+            name: string;
+            required_inputs: string[];
+            status: string;
+            summary: string;
+        };
+        RemediationPlaybookCatalog: {
+            capability: string;
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["RemediationPlaybook"][];
+            status: string;
+        };
+        RemediationPlaybookRun: {
+            action: string;
+            connector?: string;
+            connector_delivery?: components["schemas"]["ConnectorDelivery"];
+            /** Format: uuid */
+            connector_delivery_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            created_by?: string;
+            evidence_refs: string[];
+            /** Format: uuid */
+            id: string;
+            idempotency_key?: string;
+            inventory_id?: string;
+            outbox_id?: number;
+            phase: string;
+            playbook_id: string;
+            reason?: string;
+            rollback_refs: string[];
+            scope_delta: Record<string, never>;
+            status: string;
+            target?: string;
+            target_identity_id?: string;
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RemediationPlaybookRunList: {
+            items: components["schemas"]["RemediationPlaybookRun"][];
+            next_cursor?: string;
+        };
+        RemediationPlaybookRunRequest: {
+            connector?: string;
+            inventory_id?: string;
+            reason?: string;
+            recommended_scopes?: string[];
+            remove_scopes?: string[];
+            replacement_name?: string;
+            rollback_ref?: string;
+            target?: string;
+            /** Format: uuid */
+            target_identity_id?: string;
         };
         RiskComponents: {
             age: number;
@@ -11140,6 +11270,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRemediationPlaybookRuns: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+                /** @description return only runs for this remediation playbook */
+                playbook_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemediationPlaybookRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getRemediationPlaybookRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemediationPlaybookRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRemediationPlaybooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemediationPlaybookCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runRemediationPlaybook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description remediation playbook id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemediationPlaybookRunRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemediationPlaybookRun"];
                 };
             };
             /** @description client error */

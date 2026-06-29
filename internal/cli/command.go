@@ -38,6 +38,7 @@ func (c Command) Destructive() bool {
 		"managed-keys rotate",
 		"offboard",
 		"recover",
+		"remediation playbooks run",
 		"retention run",
 		"revoke",
 		"zeroize",
@@ -153,6 +154,10 @@ var commandTable = []Command{
 	{Name: []string{"incidents", "fleet-reissuance", "resume"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/resume", Body: bodyFile, Summary: "Record resume evidence for a fleet reissuance run"},
 	{Name: []string{"incidents", "fleet-reissuance", "rollback"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/rollback", Body: bodyFile, Summary: "Record rollback evidence for a fleet reissuance run"},
 	{Name: []string{"incidents", "fleet-reissuance", "evidence"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}/evidence", Summary: "Export fleet reissuance evidence"},
+	{Name: []string{"remediation", "playbooks"}, Method: "GET", Path: "/api/v1/remediation/playbooks", Summary: "List automated remediation playbooks"},
+	{Name: []string{"remediation", "playbooks", "run"}, Method: "POST", Path: "/api/v1/remediation/playbooks/{id}/runs", Body: bodyFile, Summary: "Run an automated remediation playbook"},
+	{Name: []string{"remediation", "playbook-runs", "list"}, Method: "GET", Path: "/api/v1/remediation/playbook-runs", Query: []string{"limit", "cursor", "playbook_id"}, Summary: "List remediation playbook run evidence"},
+	{Name: []string{"remediation", "playbook-runs", "get"}, Method: "GET", Path: "/api/v1/remediation/playbook-runs/{id}", Summary: "Get a remediation playbook run evidence pack"},
 	{Name: []string{"itsm", "servicenow", "tickets", "create"}, Method: "POST", Path: "/api/v1/itsm/servicenow/tickets", Body: bodyFile, Summary: "Queue a ServiceNow ITSM ticket through the outbox"},
 	{Name: []string{"breakglass", "reconcile"}, Method: "POST", Path: "/api/v1/breakglass/reconcile", Body: bodyFile, Summary: "Reconcile signed offline break-glass bundles into audit"},
 

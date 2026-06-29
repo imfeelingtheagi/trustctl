@@ -69,6 +69,7 @@ const (
 	EventLifecycleRotationRecorded        = "lifecycle.rotation.recorded"
 	EventIncidentExecutionRecorded        = "incident.execution.recorded"
 	EventIncidentFleetReissuanceRecorded  = "incident.fleet_reissuance.recorded"
+	EventRemediationPlaybookRunRecorded   = "remediation.playbook_run.recorded"
 	EventOwnerCreated                     = "owner.created"
 	EventOwnerUpdated                     = "owner.updated"
 	EventOwnerDeleted                     = "owner.deleted"
@@ -152,6 +153,7 @@ var ledger = []FeatureEvent{
 
 	// F47 — Incident remediation evidence pack.
 	{"F47", "Incident remediation", "execute_incident", "executeIncident", []string{EventIncidentExecutionRecorded}},
+	{"F47", "Incident remediation", "run_playbook", "runRemediationPlaybook", []string{EventRemediationPlaybookRunRecorded}},
 	{"F32", "CA compromise fleet reissuance", "start_fleet_reissuance", "startFleetReissuance", []string{EventIncidentFleetReissuanceRecorded}},
 	{"F32", "CA compromise fleet reissuance", "pause_fleet_reissuance", "pauseFleetReissuance", []string{EventIncidentFleetReissuanceRecorded}},
 	{"F32", "CA compromise fleet reissuance", "resume_fleet_reissuance", "resumeFleetReissuance", []string{EventIncidentFleetReissuanceRecorded}},
