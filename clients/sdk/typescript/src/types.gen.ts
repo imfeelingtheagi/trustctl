@@ -2670,6 +2670,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/rogue-certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List rogue and non-compliant certificate detection findings */
+        get: operations["listRogueCertificates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/contextual-priorities": {
         parameters: {
             query?: never;
@@ -6458,6 +6475,74 @@ export interface components {
             privilege: number;
             rotation: number;
             sensitivity: number;
+        };
+        RogueCertificateFinding: {
+            /** Format: uuid */
+            certificate_id?: string;
+            /** Format: date-time */
+            discovered_at?: string;
+            /** Format: uuid */
+            discovery_id?: string;
+            dns_names?: string[];
+            evidence_refs: string[];
+            finding_types: string[];
+            fingerprint?: string;
+            id: string;
+            issuer?: string;
+            /** @enum {string} */
+            kind: "rogue_certificate" | "non_compliant_certificate";
+            lifetime_days?: number;
+            log_index?: number;
+            log_url?: string;
+            matched_domain?: string;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: date-time */
+            not_before?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            policy_max_days?: number;
+            /** @enum {string} */
+            policy_status: "rogue" | "non_compliant";
+            recommendation: string;
+            risk_score: number;
+            /** Format: uuid */
+            run_id?: string;
+            serial?: string;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            /** Format: uuid */
+            source_id?: string;
+            status?: string;
+            subject: string;
+        };
+        RogueCertificatePosture: {
+            capability: string;
+            coverage: string[];
+            evidence_refs: string[];
+            findings: components["schemas"]["RogueCertificateFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            recommended_actions: string[];
+            summary: components["schemas"]["RogueCertificateSummary"];
+        };
+        RogueCertificateSummary: {
+            critical: number;
+            ct_unexpected: number;
+            expired_active: number;
+            findings: number;
+            high: number;
+            issuer_missing: number;
+            lifetime_violations: number;
+            low: number;
+            medium: number;
+            non_compliant: number;
+            owner_missing: number;
+            recommendations: number;
+            rogue: number;
+            total_analyzed: number;
+            weak_key: number;
         };
         Role: {
             name: string;
@@ -14748,6 +14833,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CTLogSubmission"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listRogueCertificates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RogueCertificatePosture"];
                 };
             };
             /** @description client error */

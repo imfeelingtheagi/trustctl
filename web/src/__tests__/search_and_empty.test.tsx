@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     certificateHealth: vi.fn(),
     getCertificate: vi.fn(),
     ingestCertificate: vi.fn(),
+    rogueCertificates: vi.fn(),
     submitCertificateTransparency: vi.fn(),
   },
 }));
@@ -38,6 +39,7 @@ describe("inventory search", () => {
     apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
+    apiMock.rogueCertificates.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
   });
 
@@ -126,6 +128,84 @@ describe("inventory search", () => {
     expect(screen.getByText("discovery:network")).toBeInTheDocument();
     expect(screen.getByText("f5:/Common/imported")).toBeInTheDocument();
   });
+
+  it("renders rogue and non-compliant certificate posture from the served route", async () => {
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        {
+          id: "c1",
+          subject: "CN=legacy.external.example.com",
+          issuer: "CN=External CA",
+          status: "active",
+          fingerprint: "fp1",
+          key_algorithm: "RSA-1024",
+        },
+      ],
+    });
+    apiMock.rogueCertificates.mockResolvedValue({
+      capability: "CAP-REV-05",
+      generated_at: "2026-06-30T00:00:00Z",
+      coverage: ["certificate_inventory", "ct_unexpected_issuance", "weak_key_algorithm"],
+      summary: {
+        total_analyzed: 2,
+        findings: 2,
+        rogue: 1,
+        non_compliant: 1,
+        ct_unexpected: 1,
+        weak_key: 1,
+        lifetime_violations: 0,
+        expired_active: 0,
+        owner_missing: 1,
+        issuer_missing: 0,
+        critical: 1,
+        high: 1,
+        medium: 0,
+        low: 0,
+        recommendations: 2,
+      },
+      findings: [
+        {
+          id: "discovery:f1",
+          discovery_id: "f1",
+          kind: "rogue_certificate",
+          policy_status: "rogue",
+          subject: "CN=shadow.example.com",
+          source: "ct_log",
+          finding_types: ["ct_unexpected_issuance", "not_in_inventory"],
+          severity: "critical",
+          risk_score: 95,
+          recommendation: "Investigate the unexpected CT hit.",
+          evidence_refs: ["projection:discovery_findings:f1", "outbox:notification.ct"],
+        },
+        {
+          id: "certificate:c1",
+          certificate_id: "c1",
+          kind: "non_compliant_certificate",
+          policy_status: "non_compliant",
+          subject: "CN=legacy.external.example.com",
+          source: "import",
+          finding_types: ["weak_key_algorithm", "owner_missing"],
+          severity: "high",
+          risk_score: 85,
+          recommendation: "Reissue with an approved key algorithm.",
+          evidence_refs: ["projection:certificates:c1"],
+        },
+      ],
+      recommended_actions: ["Investigate unexpected CT hits."],
+      evidence_refs: ["projection:certificates", "projection:discovery_findings"],
+    });
+
+    renderCerts();
+
+    const posture = await screen.findByRole("region", { name: "Rogue certificate detection" });
+    expect(apiMock.rogueCertificates).toHaveBeenCalled();
+    expect(within(posture).getByText("2 findings")).toBeInTheDocument();
+    expect(within(posture).getByText("CN=shadow.example.com")).toBeInTheDocument();
+    expect(within(posture).getByText("CN=legacy.external.example.com")).toBeInTheDocument();
+    expect(within(posture).getByText("Unexpected CT issuance, Not in inventory")).toBeInTheDocument();
+    expect(within(posture).getByText("Weak key, Owner missing")).toBeInTheDocument();
+    expect(within(posture).getByText("Reissue with an approved key algorithm.")).toBeInTheDocument();
+  });
 });
 
 describe("guiding empty states", () => {
@@ -134,6 +214,7 @@ describe("guiding empty states", () => {
     apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
+    apiMock.rogueCertificates.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
   });
 
@@ -175,6 +256,7 @@ describe("certificate inventory gap closure", () => {
     apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
+    apiMock.rogueCertificates.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
   });
 

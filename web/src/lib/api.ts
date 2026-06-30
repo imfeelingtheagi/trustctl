@@ -68,6 +68,7 @@ import type {
   CRLDistributionList,
   CTLogSubmission,
   CTLogSubmissionRequest,
+  RogueCertificatePosture,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -329,6 +330,7 @@ export type {
   MDMSCEPStatus,
   CRLDistribution,
   CRLDistributionList,
+  RogueCertificatePosture,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -806,6 +808,7 @@ export interface Api {
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   certificateHealth(): Promise<CertificateHealthDashboard>;
   crlDistributions(): Promise<CRLDistributionList>;
+  rogueCertificates(): Promise<RogueCertificatePosture>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
@@ -1015,6 +1018,7 @@ export const api: Api = {
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
   certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
+  rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
@@ -1093,8 +1097,7 @@ export const api: Api = {
   getRemediationPlaybookRun: (id) => req<RemediationPlaybookRun>(`/api/v1/remediation/playbook-runs/${encodeURIComponent(id)}`),
   ownerRemediationActions: (options) =>
     req<OwnerRemediationQueue>(`/api/v1/remediation/owner-actions${options?.ownerId ? `?owner_id=${encodeURIComponent(options.ownerId)}` : ""}`),
-  acceptOwnerRemediationAction: (id, input) =>
-    mutate<OwnerRemediationRun>("POST", `/api/v1/remediation/owner-actions/${encodeURIComponent(id)}/accept`, input),
+  acceptOwnerRemediationAction: (id, input) => mutate<OwnerRemediationRun>("POST", `/api/v1/remediation/owner-actions/${encodeURIComponent(id)}/accept`, input),
   startFleetReissuance: (input) => mutate<FleetReissuanceRun>("POST", "/api/v1/incidents/fleet-reissuance-runs", input),
   fleetReissuanceRuns: (options) =>
     req<FleetReissuanceRunList>(`/api/v1/incidents/fleet-reissuance-runs${pageQueryString(options, options?.issuerId, "issuer_id")}`),

@@ -207,6 +207,15 @@ never live in the API process. What you can do end to end against the running bi
   discovered inventory. Findings sanitize URL query strings and do not return
   credential values; live reachability probing and provider-native attack-path
   validation remain deeper connector work.
+- **Rogue and non-compliant certificate posture:** `GET
+  /api/v1/revocation/rogue-certificates` and `trstctl-cli revocation
+  rogue-certificates` combine unexpected CT findings with active certificate
+  inventory policy checks for weak keys, expired active state, over-long
+  public-TLS lifetimes, missing owners, and missing issuers. The route is
+  metadata-only and returns projection evidence refs, not PEM or key material.
+  CT coverage depends on configured monitored domains/logs and observed CT
+  entries; provider-native revocation, connector-side takedown, and arbitrary
+  customer policy evaluation remain separate remediation work.
 - **Compliance and inventory reporting:** `GET
   /api/v1/compliance/inventory-report` and `trstctl-cli compliance
   inventory-report` return the CAP-OBS-02 reporting view: supported frameworks,

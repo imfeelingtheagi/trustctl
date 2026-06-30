@@ -736,7 +736,28 @@ describe("remediation playbook contract", () => {
       JSON.stringify({
         capability: "CAP-REM-02",
         status: "accepted",
-        action: { id: "right-size-a", owner_id: "owner-1", owner_name: "payments", inventory_id: "identity/id-1", display_name: "payments", kind: "service_account", source: "managed", playbook_id: "nhi-right-size", action: "right_size", status: "accepted", severity: "high", risk_score: 80, connector: "aws-iam", target: "role/payments", reason: "owner accepted", recommendation: "remove admin", remove_scopes: ["admin:*"], recommended_scopes: ["secrets:read"], evidence_refs: [], rollback_ref: "restore" },
+        action: {
+          id: "right-size-a",
+          owner_id: "owner-1",
+          owner_name: "payments",
+          inventory_id: "identity/id-1",
+          display_name: "payments",
+          kind: "service_account",
+          source: "managed",
+          playbook_id: "nhi-right-size",
+          action: "right_size",
+          status: "accepted",
+          severity: "high",
+          risk_score: 80,
+          connector: "aws-iam",
+          target: "role/payments",
+          reason: "owner accepted",
+          recommendation: "remove admin",
+          remove_scopes: ["admin:*"],
+          recommended_scopes: ["secrets:read"],
+          evidence_refs: [],
+          rollback_ref: "restore",
+        },
         remediation_run: {
           id: "run-1",
           tenant_id: "tenant-1",
@@ -761,6 +782,41 @@ describe("remediation playbook contract", () => {
 });
 
 describe("revocation CRL distribution contract", () => {
+  it("fetches CAP-REV-05 rogue and non-compliant certificate posture", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-REV-05",
+        generated_at: "2026-06-30T00:00:00Z",
+        coverage: ["ct_unexpected_issuance"],
+        summary: { findings: 1, rogue: 1 },
+        findings: [
+          {
+            id: "discovery:f1",
+            kind: "rogue_certificate",
+            policy_status: "rogue",
+            subject: "CN=shadow",
+            source: "ct_log",
+            finding_types: ["ct_unexpected_issuance"],
+            severity: "critical",
+            risk_score: 90,
+            recommendation: "Investigate",
+            evidence_refs: ["projection:discovery_findings:f1"],
+          },
+        ],
+        recommended_actions: ["Investigate"],
+        evidence_refs: ["projection:discovery_findings"],
+      }),
+    );
+
+    const result = await api.rogueCertificates();
+
+    expect(result.capability).toBe("CAP-REV-05");
+    expect(result.findings[0]?.kind).toBe("rogue_certificate");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/revocation/rogue-certificates");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+  });
+
   it("fetches full, sharded, and delta CRL distribution status from the served route", async () => {
     mockFetch(
       200,

@@ -4210,6 +4210,77 @@ RiskComponents = TypedDict(
     total=False,
 )
 
+RogueCertificateFinding = TypedDict(
+    'RogueCertificateFinding',
+    {
+        'certificate_id': str,
+        'discovered_at': str,
+        'discovery_id': str,
+        'dns_names': list[str],
+        'evidence_refs': list[str],
+        'finding_types': list[str],
+        'fingerprint': str,
+        'id': str,
+        'issuer': str,
+        'kind': str,
+        'lifetime_days': int,
+        'log_index': int,
+        'log_url': str,
+        'matched_domain': str,
+        'not_after': str,
+        'not_before': str,
+        'owner_id': str,
+        'policy_max_days': int,
+        'policy_status': str,
+        'recommendation': str,
+        'risk_score': int,
+        'run_id': str,
+        'serial': str,
+        'severity': str,
+        'source': str,
+        'source_id': str,
+        'status': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+RogueCertificatePosture = TypedDict(
+    'RogueCertificatePosture',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'evidence_refs': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'recommended_actions': list[str],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+RogueCertificateSummary = TypedDict(
+    'RogueCertificateSummary',
+    {
+        'critical': int,
+        'ct_unexpected': int,
+        'expired_active': int,
+        'findings': int,
+        'high': int,
+        'issuer_missing': int,
+        'lifetime_violations': int,
+        'low': int,
+        'medium': int,
+        'non_compliant': int,
+        'owner_missing': int,
+        'recommendations': int,
+        'rogue': int,
+        'total_analyzed': int,
+        'weak_key': int,
+    },
+    total=False,
+)
+
 Role = TypedDict(
     'Role',
     {

@@ -2968,6 +2968,65 @@ export interface RiskComponents {
   sensitivity: number;
 }
 
+export interface RogueCertificateFinding {
+  certificate_id?: string;
+  discovered_at?: string;
+  discovery_id?: string;
+  dns_names?: string[];
+  evidence_refs: string[];
+  finding_types: string[];
+  fingerprint?: string;
+  id: string;
+  issuer?: string;
+  kind: "rogue_certificate" | "non_compliant_certificate";
+  lifetime_days?: number;
+  log_index?: number;
+  log_url?: string;
+  matched_domain?: string;
+  not_after?: string;
+  not_before?: string;
+  owner_id?: string;
+  policy_max_days?: number;
+  policy_status: "rogue" | "non_compliant";
+  recommendation: string;
+  risk_score: number;
+  run_id?: string;
+  serial?: string;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  source_id?: string;
+  status?: string;
+  subject: string;
+}
+
+export interface RogueCertificatePosture {
+  capability: string;
+  coverage: string[];
+  evidence_refs: string[];
+  findings: RogueCertificateFinding[];
+  generated_at: string;
+  recommended_actions: string[];
+  summary: RogueCertificateSummary;
+}
+
+export interface RogueCertificateSummary {
+  critical: number;
+  ct_unexpected: number;
+  expired_active: number;
+  findings: number;
+  high: number;
+  issuer_missing: number;
+  lifetime_violations: number;
+  low: number;
+  medium: number;
+  non_compliant: number;
+  owner_missing: number;
+  recommendations: number;
+  rogue: number;
+  total_analyzed: number;
+  weak_key: number;
+}
+
 export interface Role {
   name: string;
   permissions: string[];

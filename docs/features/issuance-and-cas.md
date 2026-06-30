@@ -279,6 +279,15 @@ The API records `ct.submission.queued`, the worker performs `add-pre-chain` and
 `add-chain`, and successful delivery records `ct.submission.delivered`; CT inclusion
 proof remains the external log's responsibility.
 
+Rogue and non-compliant certificate posture is served at
+`GET /api/v1/revocation/rogue-certificates` and
+`trstctl-cli revocation rogue-certificates`, with the Certificates console showing the
+same evidence. The response combines unexpected CT findings from monitored logs with
+active inventory policy violations such as weak keys, expired active certificates,
+over-long public-TLS lifetimes, missing owners, and missing issuer metadata. Findings
+return metadata and projection references only, so the response can drive triage
+without returning certificate PEM or private-key material.
+
 ### Where the private key lives: HSM/KMS (F26)
 
 A CA's private key is the single most valuable secret in the system — anyone who has it

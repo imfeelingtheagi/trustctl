@@ -352,6 +352,102 @@ export const messages = {
     defaultMessage: "queue Certificate Transparency submission",
     description: "Action phrase used in CT submission error messages.",
   },
+  "certificates.rogue.heading": {
+    defaultMessage: "Rogue certificate detection",
+    description: "Heading for the rogue and non-compliant certificate posture panel.",
+  },
+  "certificates.rogue.description": {
+    defaultMessage: "Flags unexpected Certificate Transparency hits and active certificates that fall outside key, lifetime, owner, or issuer policy.",
+    description: "Short description for rogue and non-compliant certificate detection.",
+  },
+  "certificates.rogue.findingBadge": {
+    defaultMessage: "{count} findings",
+    description: "Badge summarizing rogue certificate findings.",
+  },
+  "certificates.rogue.metricRogue": {
+    defaultMessage: "Rogue",
+    description: "Summary metric label for rogue certificate findings.",
+  },
+  "certificates.rogue.metricNonCompliant": {
+    defaultMessage: "Non-compliant",
+    description: "Summary metric label for non-compliant certificate findings.",
+  },
+  "certificates.rogue.metricCT": {
+    defaultMessage: "CT hits",
+    description: "Summary metric label for unexpected Certificate Transparency hits.",
+  },
+  "certificates.rogue.metricHigh": {
+    defaultMessage: "High or critical",
+    description: "Summary metric label for high or critical rogue certificate findings.",
+  },
+  "certificates.rogue.empty": {
+    defaultMessage: "No rogue or non-compliant certificates found in the current posture.",
+    description: "Empty state for the rogue certificate posture panel.",
+  },
+  "certificates.rogue.caption": {
+    defaultMessage: "Rogue and non-compliant certificate findings",
+    description: "Accessible table caption for rogue and non-compliant certificate findings.",
+  },
+  "certificates.rogue.columnSubject": {
+    defaultMessage: "Subject",
+    description: "Rogue certificate findings table column for certificate subject.",
+  },
+  "certificates.rogue.columnStatus": {
+    defaultMessage: "Status",
+    description: "Rogue certificate findings table column for policy status.",
+  },
+  "certificates.rogue.columnSeverity": {
+    defaultMessage: "Severity",
+    description: "Rogue certificate findings table column for severity.",
+  },
+  "certificates.rogue.columnEvidence": {
+    defaultMessage: "Evidence",
+    description: "Rogue certificate findings table column for evidence references.",
+  },
+  "certificates.rogue.columnRecommendation": {
+    defaultMessage: "Recommendation",
+    description: "Rogue certificate findings table column for remediation guidance.",
+  },
+  "certificates.rogue.policyRogue": {
+    defaultMessage: "Rogue",
+    description: "Policy status label for a rogue certificate finding.",
+  },
+  "certificates.rogue.policyNonCompliant": {
+    defaultMessage: "Non-compliant",
+    description: "Policy status label for a non-compliant certificate finding.",
+  },
+  "certificates.rogue.typeCTUnexpected": {
+    defaultMessage: "Unexpected CT issuance",
+    description: "Finding type label for unexpected Certificate Transparency issuance.",
+  },
+  "certificates.rogue.typeNotInInventory": {
+    defaultMessage: "Not in inventory",
+    description: "Finding type label for a certificate observed outside inventory.",
+  },
+  "certificates.rogue.typeWeakKey": {
+    defaultMessage: "Weak key",
+    description: "Finding type label for a weak certificate key algorithm.",
+  },
+  "certificates.rogue.typeLifetime": {
+    defaultMessage: "Lifetime exceeds policy",
+    description: "Finding type label for a certificate lifetime that exceeds policy.",
+  },
+  "certificates.rogue.typeExpiredActive": {
+    defaultMessage: "Expired while active",
+    description: "Finding type label for an active certificate past NotAfter.",
+  },
+  "certificates.rogue.typeOwnerMissing": {
+    defaultMessage: "Owner missing",
+    description: "Finding type label for a certificate without an owner.",
+  },
+  "certificates.rogue.typeIssuerMissing": {
+    defaultMessage: "Issuer missing",
+    description: "Finding type label for a certificate without issuer metadata.",
+  },
+  "certificates.rogue.riskScore": {
+    defaultMessage: "{score} risk",
+    description: "Risk score label for a rogue certificate finding.",
+  },
   "nav.group.overview": {
     defaultMessage: "Overview",
     description: "Primary navigation group.",
@@ -3510,7 +3606,8 @@ export const messages = {
     description: "Unavailable-state title for tenant-wide lease history.",
   },
   "workloads.leases.historyUnavailableDescription": {
-    defaultMessage: "The lease API can issue, read by ID, renew, and revoke. A tenant-wide lease list is not available in the browser contract yet, so this table shows leases returned during this session.",
+    defaultMessage:
+      "The lease API can issue, read by ID, renew, and revoke. A tenant-wide lease list is not available in the browser contract yet, so this table shows leases returned during this session.",
     description: "Unavailable-state description for tenant-wide lease history.",
   },
   "workloads.leases.jitUnavailableTitle": {
@@ -3518,7 +3615,8 @@ export const messages = {
     description: "Unavailable-state title for ephemeral JIT issuance approvals.",
   },
   "workloads.leases.jitUnavailableDescription": {
-    defaultMessage: "Approval-gated ephemeral issuance is available outside this console. This console does not collect live proof payloads or approval actions.",
+    defaultMessage:
+      "Approval-gated ephemeral issuance is available outside this console. This console does not collect live proof payloads or approval actions.",
     description: "Unavailable-state description for ephemeral JIT issuance approvals.",
   },
   "apiExplorer.title": {
@@ -3881,6 +3979,31 @@ const esESCatalog = {
   "certificates.ct.errorCertificateRequired": "El PEM del certificado es obligatorio.",
   "certificates.ct.errorLogRequired": "Se requiere al menos un log CT.",
   "certificates.ct.action": "encolar envío de Transparencia de certificados",
+  "certificates.rogue.heading": "Detección de certificados no autorizados",
+  "certificates.rogue.description":
+    "Marca hallazgos inesperados de Transparencia de certificados y certificados activos fuera de la política de clave, vigencia, propietario o emisor.",
+  "certificates.rogue.findingBadge": "{count} hallazgos",
+  "certificates.rogue.metricRogue": "No autorizado",
+  "certificates.rogue.metricNonCompliant": "No conforme",
+  "certificates.rogue.metricCT": "Hallazgos CT",
+  "certificates.rogue.metricHigh": "Alto o crítico",
+  "certificates.rogue.empty": "No hay certificados no autorizados o no conformes en la postura actual.",
+  "certificates.rogue.caption": "Hallazgos de certificados no autorizados y no conformes",
+  "certificates.rogue.columnSubject": "Sujeto",
+  "certificates.rogue.columnStatus": "Estado",
+  "certificates.rogue.columnSeverity": "Severidad",
+  "certificates.rogue.columnEvidence": "Evidencia",
+  "certificates.rogue.columnRecommendation": "Recomendación",
+  "certificates.rogue.policyRogue": "No autorizado",
+  "certificates.rogue.policyNonCompliant": "No conforme",
+  "certificates.rogue.typeCTUnexpected": "Emisión CT inesperada",
+  "certificates.rogue.typeNotInInventory": "Fuera del inventario",
+  "certificates.rogue.typeWeakKey": "Clave débil",
+  "certificates.rogue.typeLifetime": "Vigencia excede la política",
+  "certificates.rogue.typeExpiredActive": "Expirado mientras activo",
+  "certificates.rogue.typeOwnerMissing": "Falta propietario",
+  "certificates.rogue.typeIssuerMissing": "Falta emisor",
+  "certificates.rogue.riskScore": "{score} riesgo",
   "nav.group.overview": "Resumen",
   "nav.group.inventoryDiscovery": "Descubrir e inventariar",
   "nav.group.issuanceCas": "Emitir y renovar",

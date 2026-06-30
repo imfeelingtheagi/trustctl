@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/drift"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/webhook"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
@@ -85,6 +87,145 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event", eventType)
 		}
+	}
+}
+
+// CAP-REV-05 acceptance: rogue and non-compliant certificate detection is served
+// as a tenant-scoped posture, not only as CT plumbing. The proof runs the real
+// CT discovery worker, records a ct_unexpected_issuance finding and notification
+// outbox alert, seeds one weak/long-lived external cert, then verifies the API
+// enumerates both as actionable certificate findings without exposing DER/key
+// material.
+func TestServedRogueCertificateDetectionCAPREV05EndToEnd(t *testing.T) {
+	secret := []byte("served-rogue-cert-webhook-test-secret")
+	sink := newServedWebhookSink(t, secret)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.NotificationChannels = []notify.Notifier{
+			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
+		}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "discovery:read", "discovery:write")
+
+	now := time.Now().UTC()
+	notBefore := now.Add(-24 * time.Hour)
+	notAfter := now.Add(900 * 24 * time.Hour)
+	if _, err := h.store.UpsertCertificate(t.Context(), store.Certificate{
+		TenantID:           h.tenant,
+		Subject:            "CN=legacy.external.example.com",
+		SANs:               []string{"legacy.external.example.com"},
+		Issuer:             "CN=External Legacy CA",
+		Serial:             "1001",
+		Fingerprint:        "legacy-weak-fp",
+		KeyAlgorithm:       "RSA-1024",
+		NotBefore:          &notBefore,
+		NotAfter:           &notAfter,
+		DeploymentLocation: "f5:/Common/legacy",
+		Source:             "import",
+	}); err != nil {
+		t.Fatalf("seed weak external certificate: %v", err)
+	}
+
+	shadowDER, shadowTBS, err := ctlogtest.IssueCert("shadow", "shadow.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logSrv := ctlogtest.NewServer(ctlogtest.PrecertEntry(shadowDER, shadowTBS))
+	t.Cleanup(logSrv.Close)
+
+	ctRunID := createAndRunDiscoverySource(t, h, tok, "cap-rev-05-ct", "ct_log", map[string]any{
+		"logs":                   []string{logSrv.URL()},
+		"watched_domains":        []string{"example.com"},
+		"allow_private_endpoint": true,
+	})
+	ctFindings := discoveryFindingsForRun(t, h, tok, ctRunID)
+	if len(ctFindings.Items) != 1 || ctFindings.Items[0].Kind != "ct_unexpected_issuance" {
+		t.Fatalf("CT findings = %+v raw=%s, want one unexpected issuance", ctFindings.Items, ctFindings.Raw)
+	}
+	if sink.Accepted() != 1 || sink.LastAlert().Kind != notify.KindUnexpectedIssuance {
+		t.Fatalf("CT notification outbox delivery not observed: accepted=%d alert=%+v", sink.Accepted(), sink.LastAlert())
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/revocation/rogue-certificates", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list rogue certificates = %d, want 200; body=%s", status, body)
+	}
+	var posture struct {
+		Capability string `json:"capability"`
+		Summary    struct {
+			TotalAnalyzed      int `json:"total_analyzed"`
+			Findings           int `json:"findings"`
+			Rogue              int `json:"rogue"`
+			NonCompliant       int `json:"non_compliant"`
+			CTUnexpected       int `json:"ct_unexpected"`
+			WeakKey            int `json:"weak_key"`
+			LifetimeViolations int `json:"lifetime_violations"`
+			OwnerMissing       int `json:"owner_missing"`
+			Critical           int `json:"critical"`
+			High               int `json:"high"`
+		} `json:"summary"`
+		Findings []struct {
+			Kind           string   `json:"kind"`
+			PolicyStatus   string   `json:"policy_status"`
+			Subject        string   `json:"subject"`
+			Source         string   `json:"source"`
+			FindingTypes   []string `json:"finding_types"`
+			Severity       string   `json:"severity"`
+			RiskScore      int      `json:"risk_score"`
+			Recommendation string   `json:"recommendation"`
+			EvidenceRefs   []string `json:"evidence_refs"`
+			LogURL         string   `json:"log_url"`
+		} `json:"findings"`
+		EvidenceRefs []string `json:"evidence_refs"`
+	}
+	if err := json.Unmarshal(body, &posture); err != nil {
+		t.Fatalf("decode CAP-REV-05 posture: %v body=%s", err, body)
+	}
+	if posture.Capability != "CAP-REV-05" || posture.Summary.TotalAnalyzed < 2 || posture.Summary.Findings != 2 {
+		t.Fatalf("bad CAP-REV-05 summary %+v capability=%s", posture.Summary, posture.Capability)
+	}
+	if posture.Summary.Rogue != 1 || posture.Summary.NonCompliant != 1 || posture.Summary.CTUnexpected != 1 || posture.Summary.WeakKey != 1 || posture.Summary.LifetimeViolations != 1 || posture.Summary.OwnerMissing != 1 {
+		t.Fatalf("wrong CAP-REV-05 classification counts: %+v", posture.Summary)
+	}
+	byKind := map[string]struct {
+		PolicyStatus   string
+		Subject        string
+		Source         string
+		FindingTypes   []string
+		Severity       string
+		RiskScore      int
+		Recommendation string
+		EvidenceRefs   []string
+		LogURL         string
+	}{}
+	for _, finding := range posture.Findings {
+		byKind[finding.Kind] = struct {
+			PolicyStatus   string
+			Subject        string
+			Source         string
+			FindingTypes   []string
+			Severity       string
+			RiskScore      int
+			Recommendation string
+			EvidenceRefs   []string
+			LogURL         string
+		}{
+			PolicyStatus: finding.PolicyStatus, Subject: finding.Subject, Source: finding.Source, FindingTypes: finding.FindingTypes,
+			Severity: finding.Severity, RiskScore: finding.RiskScore, Recommendation: finding.Recommendation, EvidenceRefs: finding.EvidenceRefs, LogURL: finding.LogURL,
+		}
+		if strings.Contains(string(body), "BEGIN") || strings.Contains(string(body), "PRIVATE KEY") {
+			t.Fatalf("CAP-REV-05 response leaked PEM/key material: %s", body)
+		}
+	}
+	rogue, ok := byKind["rogue_certificate"]
+	if !ok || rogue.PolicyStatus != "rogue" || rogue.Source != "ct_log" || rogue.LogURL == "" || !containsString(rogue.FindingTypes, "ct_unexpected_issuance") || rogue.Severity != "critical" || len(rogue.EvidenceRefs) < 2 {
+		t.Fatalf("bad rogue certificate finding: %+v", rogue)
+	}
+	nonCompliant, ok := byKind["non_compliant_certificate"]
+	if !ok || nonCompliant.PolicyStatus != "non_compliant" || nonCompliant.Subject != "CN=legacy.external.example.com" || !containsString(nonCompliant.FindingTypes, "weak_key_algorithm") || !containsString(nonCompliant.FindingTypes, "lifetime_exceeds_policy") || !containsString(nonCompliant.FindingTypes, "owner_missing") || nonCompliant.RiskScore < 80 {
+		t.Fatalf("bad non-compliant certificate finding: %+v", nonCompliant)
+	}
+	if !h.hasEvent(t, "discovery.finding.recorded") || !h.hasEvent(t, "discovery.run.completed") {
+		t.Fatal("missing discovery event evidence for CAP-REV-05")
 	}
 }
 

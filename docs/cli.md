@@ -54,7 +54,7 @@ secret injection:
 | `external-cas`                    | `list` · `issue`                                                                                                                                                         |
 | `identities`                      | `create` · `list` · `get` · `transition` · `approve`                                                                                                                     |
 | `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
-| `revocation`                      | `crls` · `ct-submit`                                                                                                                                                     |
+| `revocation`                      | `crls` · `rogue-certificates` · `ct-submit`                                                                                                                              |
 | `kubernetes`                      | `csr`                                                                                                                                                                    |
 | `workloads`                       | `attested-issuance`                                                                                                                                                      |
 | `broker agent-identities`         | `issue`                                                                                                                                                                  |
@@ -247,6 +247,9 @@ trstctl-cli certificates list --limit 50
 
 # Show full, sharded, and delta CRL distribution artifacts for the tenant.
 trstctl-cli revocation crls
+
+# List rogue and non-compliant certificate posture findings.
+trstctl-cli revocation rogue-certificates
 
 # Queue a precertificate and final certificate for RFC 6962 CT log submission.
 trstctl-cli revocation ct-submit -f ct-submission.json

@@ -11456,6 +11456,253 @@
         ],
         "type": "object"
       },
+      "RogueCertificateFinding": {
+        "properties": {
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "discovered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "discovery_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "rogue_certificate",
+              "non_compliant_certificate"
+            ],
+            "type": "string"
+          },
+          "lifetime_days": {
+            "type": "integer"
+          },
+          "log_index": {
+            "type": "integer"
+          },
+          "log_url": {
+            "type": "string"
+          },
+          "matched_domain": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "policy_max_days": {
+            "type": "integer"
+          },
+          "policy_status": {
+            "enum": [
+              "rogue",
+              "non_compliant"
+            ],
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "policy_status",
+          "subject",
+          "source",
+          "finding_types",
+          "severity",
+          "risk_score",
+          "recommendation",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "RogueCertificatePosture": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/RogueCertificateFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recommended_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RogueCertificateSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "summary",
+          "findings",
+          "recommended_actions",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "RogueCertificateSummary": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "ct_unexpected": {
+            "type": "integer"
+          },
+          "expired_active": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "issuer_missing": {
+            "type": "integer"
+          },
+          "lifetime_violations": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "non_compliant": {
+            "type": "integer"
+          },
+          "owner_missing": {
+            "type": "integer"
+          },
+          "recommendations": {
+            "type": "integer"
+          },
+          "rogue": {
+            "type": "integer"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          },
+          "weak_key": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "findings",
+          "rogue",
+          "non_compliant",
+          "ct_unexpected",
+          "weak_key",
+          "lifetime_violations",
+          "expired_active",
+          "owner_missing",
+          "issuer_missing",
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "recommendations"
+        ],
+        "type": "object"
+      },
       "Role": {
         "properties": {
           "name": {
@@ -24580,6 +24827,53 @@
         ],
         "summary": "Queue precertificate and certificate submission to Certificate Transparency logs",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/revocation/rogue-certificates": {
+      "get": {
+        "operationId": "listRogueCertificates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RogueCertificatePosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List rogue and non-compliant certificate detection findings",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/risk/contextual-priorities": {
