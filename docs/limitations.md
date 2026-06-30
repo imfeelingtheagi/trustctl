@@ -161,7 +161,11 @@ never live in the API process. What you can do end to end against the running bi
   `/serverkeygen`, RFC 9266 `tls-server-end-point` binding, profile PathID dispatch,
   and an mTLS sibling route when configured. Served SCEP includes the
   **SCEP Intune challenge** gate with tenant/CSR binding, single-use replay rejection,
-  per-profile RA material, and per-device rate limiting.
+  per-profile RA material, and per-device rate limiting. The MDM SCEP control surface
+  serves `/api/v1/mdm/scep/status`, policy CRUD, challenge-rotation evidence, CLI
+  commands, and Protocols UI telemetry; live SCEP validator trust anchors are still
+  supplied by `protocols.scep.intune_challenge` configuration rather than hot-swapped
+  from policy CRUD.
 - **Revocation hardening:** RFC 5280 named revocation reasons, bulk revoke routes,
   delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching, and
   CRL ETag / `If-None-Match` caching are served on the revocation surface. CT

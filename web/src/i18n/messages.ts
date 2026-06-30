@@ -2313,6 +2313,86 @@ export const messages = {
     defaultMessage: "No provider configs were returned.",
     description: "Empty-state message for DNS-01 provider configuration table.",
   },
+  "protocols.mdm.heading": {
+    defaultMessage: "Intune / MDM SCEP policies",
+    description: "Heading for the MDM SCEP enrollment policy section.",
+  },
+  "protocols.mdm.caption": {
+    defaultMessage: "MDM SCEP enrollment policies",
+    description: "Accessible caption for the MDM SCEP policy table.",
+  },
+  "protocols.mdm.policy": {
+    defaultMessage: "Policy",
+    description: "MDM SCEP policy table column.",
+  },
+  "protocols.mdm.provider": {
+    defaultMessage: "Provider",
+    description: "MDM SCEP provider table column.",
+  },
+  "protocols.mdm.profile": {
+    defaultMessage: "Profile",
+    description: "MDM SCEP profile table column.",
+  },
+  "protocols.mdm.challenge": {
+    defaultMessage: "Challenge",
+    description: "MDM SCEP challenge policy table column.",
+  },
+  "protocols.mdm.references": {
+    defaultMessage: "References",
+    description: "MDM SCEP reference fields table column.",
+  },
+  "protocols.mdm.enabled": {
+    defaultMessage: "Enabled",
+    description: "Badge label for enabled MDM SCEP policy.",
+  },
+  "protocols.mdm.disabled": {
+    defaultMessage: "Disabled",
+    description: "Badge label for disabled MDM SCEP policy.",
+  },
+  "protocols.mdm.rotationVersion": {
+    defaultMessage: "Rotation version",
+    description: "MDM SCEP policy rotation-version label.",
+  },
+  "protocols.mdm.telemetry": {
+    defaultMessage: "Challenge telemetry",
+    description: "MDM SCEP challenge telemetry panel heading.",
+  },
+  "protocols.mdm.allowed": {
+    defaultMessage: "Allowed",
+    description: "Allowed MDM SCEP challenge count label.",
+  },
+  "protocols.mdm.denied": {
+    defaultMessage: "Denied",
+    description: "Denied MDM SCEP challenge count label.",
+  },
+  "protocols.mdm.replay": {
+    defaultMessage: "Replay",
+    description: "Replay-rejected MDM SCEP challenge count label.",
+  },
+  "protocols.mdm.runtime": {
+    defaultMessage: "Runtime",
+    description: "MDM SCEP runtime gate label.",
+  },
+  "protocols.mdm.runtimeConfigured": {
+    defaultMessage: "Configured",
+    description: "MDM SCEP runtime gate configured label.",
+  },
+  "protocols.mdm.runtimeUnknown": {
+    defaultMessage: "Unknown",
+    description: "MDM SCEP runtime gate unknown label.",
+  },
+  "protocols.mdm.loading": {
+    defaultMessage: "Loading MDM SCEP policies.",
+    description: "Loading message for MDM SCEP policy table.",
+  },
+  "protocols.mdm.emptyTitle": {
+    defaultMessage: "MDM SCEP policies unavailable",
+    description: "Empty-state title for MDM SCEP policies.",
+  },
+  "protocols.mdm.empty": {
+    defaultMessage: "No MDM SCEP policies were returned.",
+    description: "Empty-state message for MDM SCEP policies.",
+  },
   "secrets.scan.description": {
     defaultMessage: "Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.",
     description: "Description for the Code and CI secret scanning bridge panel.",
@@ -3550,6 +3630,26 @@ const esESCatalog = {
   "protocols.dns01.configLoading": "Cargando configuraciones de proveedor DNS-01.",
   "protocols.dns01.configEmptyTitle": "Configuraciones de proveedor DNS-01 no disponibles",
   "protocols.dns01.configEmpty": "No se devolvieron configuraciones de proveedor.",
+  "protocols.mdm.heading": "Políticas SCEP de Intune / MDM",
+  "protocols.mdm.caption": "Políticas de inscripción SCEP para MDM",
+  "protocols.mdm.policy": "Política",
+  "protocols.mdm.provider": "Proveedor",
+  "protocols.mdm.profile": "Perfil",
+  "protocols.mdm.challenge": "Challenge",
+  "protocols.mdm.references": "Referencias",
+  "protocols.mdm.enabled": "Habilitada",
+  "protocols.mdm.disabled": "Deshabilitada",
+  "protocols.mdm.rotationVersion": "Versión de rotación",
+  "protocols.mdm.telemetry": "Telemetría de challenge",
+  "protocols.mdm.allowed": "Permitidos",
+  "protocols.mdm.denied": "Denegados",
+  "protocols.mdm.replay": "Replay",
+  "protocols.mdm.runtime": "Runtime",
+  "protocols.mdm.runtimeConfigured": "Configurado",
+  "protocols.mdm.runtimeUnknown": "Desconocido",
+  "protocols.mdm.loading": "Cargando políticas SCEP de MDM.",
+  "protocols.mdm.emptyTitle": "Políticas SCEP de MDM no disponibles",
+  "protocols.mdm.empty": "No se devolvieron políticas SCEP de MDM.",
   "secrets.scan.description":
     "Ejecuta un escaneo de un repositorio o espacio de trabajo de build. Los hallazgos muestran solo regla, archivo, línea y la referencia de credencial redactada.",
   "secrets.scan.triageLibraryOnlyTitle": "La revisión de hallazgos del escaneo aún no está disponible",

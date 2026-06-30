@@ -60,6 +60,9 @@ const (
 	EventACMEDNS01ProviderConfigUpserted   = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted    = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted              = "acme.dns01.preflighted"
+	EventMDMSCEPPolicyUpserted             = "mdm.scep_policy.upserted"
+	EventMDMSCEPPolicyDeleted              = "mdm.scep_policy.deleted"
+	EventMDMSCEPChallengeRotated           = "mdm.scep_challenge.rotated"
 	EventComplianceReportScheduleUpserted  = "compliance.report_schedule.upserted"
 	EventNotificationRead                  = "notification.read"
 	EventNotificationRoutingPolicyUpserted = "notification.routing_policy.upserted"
@@ -486,6 +489,35 @@ type ACMEDNS01Preflighted struct {
 	SelectedMethod string   `json:"selected_method,omitempty"`
 	Ready          bool     `json:"ready"`
 	FailedChecks   []string `json:"failed_checks,omitempty"`
+}
+
+// MDMSCEPPolicyUpserted is the payload of mdm.scep_policy.upserted. It carries
+// enrollment policy metadata and reference names only; raw MDM connector secrets
+// and SCEP challenge values must never appear in this event.
+type MDMSCEPPolicyUpserted struct {
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Provider         string          `json:"provider"`
+	SCEPProfile      string          `json:"scep_profile"`
+	SCEPEndpoint     string          `json:"scep_endpoint"`
+	ExpectedAudience string          `json:"expected_audience,omitempty"`
+	ChallengeMode    string          `json:"challenge_mode"`
+	TrustAnchorRefs  json.RawMessage `json:"trust_anchor_refs"`
+	ProfileGuidance  json.RawMessage `json:"profile_guidance"`
+	Enabled          bool            `json:"enabled"`
+	RotationVersion  int             `json:"rotation_version,omitempty"`
+}
+
+// MDMSCEPPolicyDeleted is the payload of mdm.scep_policy.deleted.
+type MDMSCEPPolicyDeleted struct {
+	ID string `json:"id"`
+}
+
+// MDMSCEPChallengeRotated is the payload of mdm.scep_challenge.rotated. It records
+// a policy rotation version, not a raw challenge or signing credential.
+type MDMSCEPChallengeRotated struct {
+	ID              string `json:"id"`
+	RotationVersion int    `json:"rotation_version"`
 }
 
 // ComplianceReportScheduleUpserted is the payload of
@@ -979,6 +1011,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01ProviderConfigUpserted:   {1: true},
 	EventACMEDNS01ProviderConfigDeleted:    {1: true},
 	EventACMEDNS01Preflighted:              {1: true},
+	EventMDMSCEPPolicyUpserted:             {1: true},
+	EventMDMSCEPPolicyDeleted:              {1: true},
+	EventMDMSCEPChallengeRotated:           {1: true},
 	EventComplianceReportScheduleUpserted:  {1: true},
 	EventNotificationRead:                  {1: true},
 	EventNotificationRoutingPolicyUpserted: {1: true},
@@ -1407,6 +1442,39 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires domain and record_name", e.Type)
 		}
 		return nil
+	case EventMDMSCEPPolicyUpserted:
+		var pl MDMSCEPPolicyUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.Provider == "" || pl.SCEPProfile == "" || pl.SCEPEndpoint == "" {
+			return fmt.Errorf("projections: %s requires id, name, provider, scep_profile, and scep_endpoint", e.Type)
+		}
+		return p.store.ApplyMDMSCEPPolicyUpsertedTx(ctx, tx, store.MDMSCEPPolicy{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
+			SCEPProfile: pl.SCEPProfile, SCEPEndpoint: pl.SCEPEndpoint, ExpectedAudience: pl.ExpectedAudience,
+			ChallengeMode: pl.ChallengeMode, TrustAnchorRefs: pl.TrustAnchorRefs,
+			ProfileGuidance: pl.ProfileGuidance, Enabled: pl.Enabled, RotationVersion: pl.RotationVersion,
+			CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventMDMSCEPPolicyDeleted:
+		var pl MDMSCEPPolicyDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		return p.store.ApplyMDMSCEPPolicyDeletedTx(ctx, tx, e.TenantID, pl.ID)
+	case EventMDMSCEPChallengeRotated:
+		var pl MDMSCEPChallengeRotated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.RotationVersion <= 0 {
+			return fmt.Errorf("projections: %s requires id and positive rotation_version", e.Type)
+		}
+		return p.store.ApplyMDMSCEPChallengeRotatedTx(ctx, tx, e.TenantID, pl.ID, pl.RotationVersion, e.Time)
 	case EventComplianceReportScheduleUpserted:
 		var pl ComplianceReportScheduleUpserted
 		if err := decode(e, &pl); err != nil {

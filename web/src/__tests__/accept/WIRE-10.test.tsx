@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     protocolStatuses: vi.fn(),
     acmeDNS01Providers: vi.fn(),
     acmeDNS01ProviderConfigs: vi.fn(),
+    mdmSCEPStatus: vi.fn(),
   },
 }));
 
@@ -32,6 +33,7 @@ describe("WIRE-10 protocol responder status wiring", () => {
     apiMock.protocolStatuses.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
     apiMock.acmeDNS01ProviderConfigs.mockReset();
+    apiMock.mdmSCEPStatus.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -80,6 +82,12 @@ describe("WIRE-10 protocol responder status wiring", () => {
       ],
     });
     apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({ items: [] });
+    apiMock.mdmSCEPStatus.mockResolvedValue({
+      runtime_gate: "served_scep_intune_validator_config_driven",
+      runtime_note: "The SCEP endpoint enforces the configured Intune challenge gate.",
+      telemetry: { allowed: 0, denied: 0, replay_rejected: 0 },
+      policies: [],
+    });
   });
 
   it("renders live enabled and off state from the served responder-status client", async () => {
@@ -88,6 +96,7 @@ describe("WIRE-10 protocol responder status wiring", () => {
     await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.mdmSCEPStatus).toHaveBeenCalledTimes(1));
 
     const acmeRow = within(screen.getByRole("row", { name: /ACME ACME directory/i }));
     expect(acmeRow.getByText("Enabled")).toBeInTheDocument();

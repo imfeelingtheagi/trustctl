@@ -145,6 +145,8 @@ import type {
   ManagedOfferingStatus,
   ManagedTenant,
   ManagedTenantProvisionRequest,
+  MDMSCEPPolicyList,
+  MDMSCEPStatus,
   ScaleOrchestrationPlan,
   Member,
   MemberList,
@@ -299,6 +301,8 @@ export type {
   ACMEDNS01ProviderCatalogItem,
   ACMEDNS01ProviderConfig,
   ACMEDNS01ProviderConfigList,
+  MDMSCEPPolicyList,
+  MDMSCEPStatus,
   CRLDistribution,
   CRLDistributionList,
   ConnectorCatalog,
@@ -892,6 +896,8 @@ export interface Api {
   revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
   retireSSHHost(input: SSHHostRetireRequest): Promise<SSHHostRetirement>;
   protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
+  mdmSCEPStatus(): Promise<MDMSCEPStatus>;
+  mdmSCEPPolicies(): Promise<MDMSCEPPolicyList>;
   secretPage(options?: { limit?: number; cursor?: string }): Promise<SecretMetaList>;
   createSecret(input: SecretRequest): Promise<SecretMeta>;
   importSecrets(input: SecretImportRequest): Promise<SecretMetaList>;
@@ -963,6 +969,8 @@ export const api: Api = {
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
+  mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),
+  mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),

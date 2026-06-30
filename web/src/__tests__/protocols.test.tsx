@@ -8,6 +8,7 @@ const { apiMock } = vi.hoisted(() => ({
     protocolStatuses: vi.fn(),
     acmeDNS01Providers: vi.fn(),
     acmeDNS01ProviderConfigs: vi.fn(),
+    mdmSCEPStatus: vi.fn(),
   },
 }));
 
@@ -25,6 +26,7 @@ async function renderProtocols() {
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(apiMock.mdmSCEPStatus).toHaveBeenCalledTimes(1));
   await screen.findByText("ACME directory responded.");
   return result;
 }
@@ -49,6 +51,7 @@ describe("protocol surface", () => {
     apiMock.protocolStatuses.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
     apiMock.acmeDNS01ProviderConfigs.mockReset();
+    apiMock.mdmSCEPStatus.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -142,6 +145,38 @@ describe("protocol surface", () => {
         },
       ],
     });
+    apiMock.mdmSCEPStatus.mockResolvedValue({
+      runtime_gate: "served_scep_intune_validator_config_driven",
+      runtime_note:
+        "The SCEP endpoint enforces the Intune/JAMF challenge gate when protocols.scep and protocols.scep.intune_challenge trust anchors are configured.",
+      telemetry: {
+        allowed: 7,
+        denied: 2,
+        replay_rejected: 1,
+        last_failure_reason: "mdm: malformed challenge",
+        last_transaction_id: "txn-mdm-deny",
+        last_event_timestamp: "2026-06-26T14:03:00Z",
+      },
+      policies: [
+        {
+          id: "01900000-0000-7000-8000-000000000056",
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "intune-mobile",
+          provider: "intune",
+          scep_profile: "mobile-scep",
+          scep_endpoint: "https://trstctl.example.test/scep/pkiclient.exe",
+          expected_audience: "https://ca.example.test/scep",
+          challenge_mode: "intune-jws",
+          trust_anchor_refs: { root_ca_ref: "secret://mdm/intune/root-ca" },
+          profile_guidance: { challenge_source: "intune-jws" },
+          enabled: true,
+          rotation_version: 2,
+          last_rotated_at: "2026-06-26T14:02:00Z",
+          created_at: "2026-06-26T14:00:00Z",
+          updated_at: "2026-06-26T14:02:00Z",
+        },
+      ],
+    });
   });
 
   it("renders ACME setup with live responder status", async () => {
@@ -176,6 +211,15 @@ describe("protocol surface", () => {
     expect(screen.getAllByText("api_token_ref").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("secret://dns/cloudflare/api-token")).not.toBeInTheDocument();
     expect(screen.queryByText("zone-prod")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Intune / MDM SCEP policies" })).toBeInTheDocument();
+    expect(screen.getByText("intune-mobile")).toBeInTheDocument();
+    expect(screen.getByText("mobile-scep")).toBeInTheDocument();
+    expect(screen.getByText("intune-jws")).toBeInTheDocument();
+    expect(screen.getByText("Rotation version 2")).toBeInTheDocument();
+    expect(screen.getByText("Challenge telemetry")).toBeInTheDocument();
+    expect(screen.getByText("root_ca_ref")).toBeInTheDocument();
+    expect(screen.getByText("mdm: malformed challenge")).toBeInTheDocument();
+    expect(screen.queryByText("secret://mdm/intune/root-ca")).not.toBeInTheDocument();
     expect(screen.queryByText("Status unknown to console")).not.toBeInTheDocument();
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
 

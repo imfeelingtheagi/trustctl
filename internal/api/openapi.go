@@ -1187,6 +1187,35 @@ func componentSchemas() map[string]*Schema {
 		"checks":        {Type: "array", Items: ref("ACMEDNS01PreflightCheck")},
 		"failed_checks": {Type: "array", Items: str()},
 	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks")
+	mdmSCEPPolicyReq := object(map[string]*Schema{
+		"name": str(), "provider": {Type: "string", Enum: []string{"intune", "jamf"}},
+		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
+		"challenge_mode":    {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}},
+		"trust_anchor_refs": {Type: "object"}, "profile_guidance": {Type: "object"},
+		"enabled": {Type: "boolean"},
+	}, "name", "provider", "scep_profile", "scep_endpoint")
+	mdmSCEPPolicy := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(),
+		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
+		"challenge_mode": str(), "trust_anchor_refs": {Type: "object"},
+		"profile_guidance": {Type: "object"}, "enabled": {Type: "boolean"},
+		"rotation_version": {Type: "integer"}, "last_rotated_at": timestamp(),
+		"created_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "tenant_id", "name", "provider", "scep_profile", "scep_endpoint", "challenge_mode", "trust_anchor_refs", "profile_guidance", "enabled", "rotation_version", "created_at", "updated_at")
+	mdmSCEPPolicyList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("MDMSCEPPolicy")},
+	}, "items")
+	mdmSCEPTelemetry := object(map[string]*Schema{
+		"allowed": {Type: "integer"}, "denied": {Type: "integer"}, "replay_rejected": {Type: "integer"},
+		"last_failure_reason": str(), "last_transaction_id": str(), "last_event_timestamp": timestamp(),
+	}, "allowed", "denied", "replay_rejected")
+	mdmSCEPStatus := object(map[string]*Schema{
+		"runtime_gate": str(), "runtime_note": str(), "telemetry": ref("MDMSCEPTelemetry"),
+		"policies": {Type: "array", Items: ref("MDMSCEPPolicy")},
+	}, "runtime_gate", "runtime_note", "telemetry", "policies")
+	mdmSCEPChallengeRotated := object(map[string]*Schema{
+		"policy": ref("MDMSCEPPolicy"),
+	}, "policy")
 	deploymentTargetReq := object(map[string]*Schema{
 		"name": str(), "connector": str(), "config": {Type: "object"},
 	}, "name", "connector")
@@ -2444,6 +2473,12 @@ func componentSchemas() map[string]*Schema {
 		"ACMEDNS01PreflightRequest":             acmeDNS01PreflightReq,
 		"ACMEDNS01PreflightCheck":               acmeDNS01PreflightCheck,
 		"ACMEDNS01Preflight":                    acmeDNS01Preflight,
+		"MDMSCEPPolicyRequest":                  mdmSCEPPolicyReq,
+		"MDMSCEPPolicy":                         mdmSCEPPolicy,
+		"MDMSCEPPolicyList":                     mdmSCEPPolicyList,
+		"MDMSCEPTelemetry":                      mdmSCEPTelemetry,
+		"MDMSCEPStatus":                         mdmSCEPStatus,
+		"MDMSCEPChallengeRotated":               mdmSCEPChallengeRotated,
 		"ConnectorCatalogItem":                  connectorCatalogItem,
 		"ConnectorCatalog":                      connectorCatalog,
 		"DeploymentTargetRequest":               deploymentTargetReq,

@@ -65,6 +65,23 @@ func TestACMEDNS01ProviderConfigCommandsExist(t *testing.T) {
 	}
 }
 
+func TestMDMSCEPPolicyCommandsExist(t *testing.T) {
+	commands := cliCommandSet(t)
+	for _, command := range []string{
+		"mdm scep status",
+		"mdm scep policies create",
+		"mdm scep policies list",
+		"mdm scep policies get",
+		"mdm scep policies update",
+		"mdm scep policies delete",
+		"mdm scep policies rotate-challenge",
+	} {
+		if !commands[command] {
+			t.Fatalf("missing CLI command %q", command)
+		}
+	}
+}
+
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {
 	t.Helper()
 	catalog, err := featureparity.Load()
@@ -84,8 +101,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	if len(out) != 213 {
-		t.Fatalf("CLI commands = %d, want 213", len(out))
+	if len(out) != 220 {
+		t.Fatalf("CLI commands = %d, want 220", len(out))
 	}
 	return out
 }

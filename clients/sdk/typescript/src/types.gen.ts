@@ -1858,6 +1858,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mdm/scep/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List MDM SCEP enrollment policies */
+        get: operations["listMDMSCEPPolicies"];
+        put?: never;
+        /** Create an MDM SCEP enrollment policy using reference-only trust anchors */
+        post: operations["createMDMSCEPPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/scep/policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an MDM SCEP enrollment policy */
+        get: operations["getMDMSCEPPolicy"];
+        /** Replace an MDM SCEP enrollment policy */
+        put: operations["updateMDMSCEPPolicy"];
+        post?: never;
+        /** Delete an MDM SCEP enrollment policy */
+        delete: operations["deleteMDMSCEPPolicy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/scep/policies/{id}/rotate-challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record MDM SCEP challenge rotation evidence */
+        post: operations["rotateMDMSCEPChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mdm/scep/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get served MDM SCEP policy and challenge telemetry status */
+        get: operations["getMDMSCEPStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/decommission": {
         parameters: {
             query?: never;
@@ -4713,6 +4784,62 @@ export interface components {
             serial?: string;
             text: string;
             tool: string;
+        };
+        MDMSCEPChallengeRotated: {
+            policy: components["schemas"]["MDMSCEPPolicy"];
+        };
+        MDMSCEPPolicy: {
+            challenge_mode: string;
+            /** Format: date-time */
+            created_at: string;
+            enabled: boolean;
+            expected_audience?: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_rotated_at?: string;
+            name: string;
+            profile_guidance: Record<string, never>;
+            provider: string;
+            rotation_version: number;
+            scep_endpoint: string;
+            scep_profile: string;
+            /** Format: uuid */
+            tenant_id: string;
+            trust_anchor_refs: Record<string, never>;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MDMSCEPPolicyList: {
+            items: components["schemas"]["MDMSCEPPolicy"][];
+        };
+        MDMSCEPPolicyRequest: {
+            /** @enum {string} */
+            challenge_mode?: "intune-jws" | "hmac-dynamic";
+            enabled?: boolean;
+            expected_audience?: string;
+            name: string;
+            profile_guidance?: Record<string, never>;
+            /** @enum {string} */
+            provider: "intune" | "jamf";
+            scep_endpoint: string;
+            scep_profile: string;
+            trust_anchor_refs?: Record<string, never>;
+        };
+        MDMSCEPStatus: {
+            policies: components["schemas"]["MDMSCEPPolicy"][];
+            runtime_gate: string;
+            runtime_note: string;
+            telemetry: components["schemas"]["MDMSCEPTelemetry"];
+        };
+        MDMSCEPTelemetry: {
+            allowed: number;
+            denied: number;
+            /** Format: date-time */
+            last_event_timestamp?: string;
+            last_failure_reason?: string;
+            last_transaction_id?: string;
+            replay_rejected: number;
         };
         MachineLoginRequest: {
             credential: string;
@@ -11546,6 +11673,286 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPToolResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listMDMSCEPPolicies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPPolicyList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createMDMSCEPPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMSCEPPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPPolicy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMDMSCEPPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPPolicy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateMDMSCEPPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MDMSCEPPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPPolicy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteMDMSCEPPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateMDMSCEPChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPChallengeRotated"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMDMSCEPStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MDMSCEPStatus"];
                 };
             };
             /** @description client error */

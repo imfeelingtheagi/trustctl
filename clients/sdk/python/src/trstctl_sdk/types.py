@@ -2275,6 +2275,84 @@ MCPToolResult = TypedDict(
     total=False,
 )
 
+MDMSCEPChallengeRotated = TypedDict(
+    'MDMSCEPChallengeRotated',
+    {
+        'policy': dict[str, Any],
+    },
+    total=False,
+)
+
+MDMSCEPPolicy = TypedDict(
+    'MDMSCEPPolicy',
+    {
+        'challenge_mode': str,
+        'created_at': str,
+        'enabled': bool,
+        'expected_audience': str,
+        'id': str,
+        'last_rotated_at': str,
+        'name': str,
+        'profile_guidance': dict[str, Any],
+        'provider': str,
+        'rotation_version': int,
+        'scep_endpoint': str,
+        'scep_profile': str,
+        'tenant_id': str,
+        'trust_anchor_refs': dict[str, Any],
+        'updated_at': str,
+    },
+    total=False,
+)
+
+MDMSCEPPolicyList = TypedDict(
+    'MDMSCEPPolicyList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+MDMSCEPPolicyRequest = TypedDict(
+    'MDMSCEPPolicyRequest',
+    {
+        'challenge_mode': str,
+        'enabled': bool,
+        'expected_audience': str,
+        'name': str,
+        'profile_guidance': dict[str, Any],
+        'provider': str,
+        'scep_endpoint': str,
+        'scep_profile': str,
+        'trust_anchor_refs': dict[str, Any],
+    },
+    total=False,
+)
+
+MDMSCEPStatus = TypedDict(
+    'MDMSCEPStatus',
+    {
+        'policies': list[dict[str, Any]],
+        'runtime_gate': str,
+        'runtime_note': str,
+        'telemetry': dict[str, Any],
+    },
+    total=False,
+)
+
+MDMSCEPTelemetry = TypedDict(
+    'MDMSCEPTelemetry',
+    {
+        'allowed': int,
+        'denied': int,
+        'last_event_timestamp': str,
+        'last_failure_reason': str,
+        'last_transaction_id': str,
+        'replay_rejected': int,
+    },
+    total=False,
+)
+
 MachineLoginRequest = TypedDict(
     'MachineLoginRequest',
     {

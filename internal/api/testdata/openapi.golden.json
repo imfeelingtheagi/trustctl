@@ -6034,6 +6034,202 @@
         ],
         "type": "object"
       },
+      "MDMSCEPChallengeRotated": {
+        "properties": {
+          "policy": {
+            "$ref": "#/components/schemas/MDMSCEPPolicy"
+          }
+        },
+        "required": [
+          "policy"
+        ],
+        "type": "object"
+      },
+      "MDMSCEPPolicy": {
+        "properties": {
+          "challenge_mode": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expected_audience": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_rotated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "profile_guidance": {
+            "type": "object"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "rotation_version": {
+            "type": "integer"
+          },
+          "scep_endpoint": {
+            "type": "string"
+          },
+          "scep_profile": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "trust_anchor_refs": {
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "provider",
+          "scep_profile",
+          "scep_endpoint",
+          "challenge_mode",
+          "trust_anchor_refs",
+          "profile_guidance",
+          "enabled",
+          "rotation_version",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "MDMSCEPPolicyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MDMSCEPPolicy"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "MDMSCEPPolicyRequest": {
+        "properties": {
+          "challenge_mode": {
+            "enum": [
+              "intune-jws",
+              "hmac-dynamic"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "expected_audience": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "profile_guidance": {
+            "type": "object"
+          },
+          "provider": {
+            "enum": [
+              "intune",
+              "jamf"
+            ],
+            "type": "string"
+          },
+          "scep_endpoint": {
+            "type": "string"
+          },
+          "scep_profile": {
+            "type": "string"
+          },
+          "trust_anchor_refs": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "provider",
+          "scep_profile",
+          "scep_endpoint"
+        ],
+        "type": "object"
+      },
+      "MDMSCEPStatus": {
+        "properties": {
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/MDMSCEPPolicy"
+            },
+            "type": "array"
+          },
+          "runtime_gate": {
+            "type": "string"
+          },
+          "runtime_note": {
+            "type": "string"
+          },
+          "telemetry": {
+            "$ref": "#/components/schemas/MDMSCEPTelemetry"
+          }
+        },
+        "required": [
+          "runtime_gate",
+          "runtime_note",
+          "telemetry",
+          "policies"
+        ],
+        "type": "object"
+      },
+      "MDMSCEPTelemetry": {
+        "properties": {
+          "allowed": {
+            "type": "integer"
+          },
+          "denied": {
+            "type": "integer"
+          },
+          "last_event_timestamp": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_failure_reason": {
+            "type": "string"
+          },
+          "last_transaction_id": {
+            "type": "string"
+          },
+          "replay_rejected": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allowed",
+          "denied",
+          "replay_rejected"
+        ],
+        "type": "object"
+      },
       "MachineLoginRequest": {
         "properties": {
           "credential": {
@@ -19412,6 +19608,386 @@
         ],
         "summary": "Invoke one MCP tool (read by default; guarded writes when enabled)",
         "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/mdm/scep/policies": {
+      "get": {
+        "operationId": "listMDMSCEPPolicies",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPPolicyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List MDM SCEP enrollment policies",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "post": {
+        "operationId": "createMDMSCEPPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMSCEPPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an MDM SCEP enrollment policy using reference-only trust anchors",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/mdm/scep/policies/{id}": {
+      "delete": {
+        "operationId": "deleteMDMSCEPPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete an MDM SCEP enrollment policy",
+        "x-trstctl-permission": "issuers:write"
+      },
+      "get": {
+        "operationId": "getMDMSCEPPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an MDM SCEP enrollment policy",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "put": {
+        "operationId": "updateMDMSCEPPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MDMSCEPPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace an MDM SCEP enrollment policy",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/mdm/scep/policies/{id}/rotate-challenge": {
+      "post": {
+        "operationId": "rotateMDMSCEPChallenge",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPChallengeRotated"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record MDM SCEP challenge rotation evidence",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/mdm/scep/status": {
+      "get": {
+        "operationId": "getMDMSCEPStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MDMSCEPStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get served MDM SCEP policy and challenge telemetry status",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/nhi/decommission": {

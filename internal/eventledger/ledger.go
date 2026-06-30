@@ -52,6 +52,9 @@ const (
 	EventACMEDNS01ProviderConfigUpserted  = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted   = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted             = "acme.dns01.preflighted"
+	EventMDMSCEPPolicyUpserted            = "mdm.scep_policy.upserted"
+	EventMDMSCEPPolicyDeleted             = "mdm.scep_policy.deleted"
+	EventMDMSCEPChallengeRotated          = "mdm.scep_challenge.rotated"
 	EventComplianceReportScheduleUpserted = "compliance.report_schedule.upserted"
 	EventCBOMAssetObserved                = "cbom.asset.observed"
 	EventPQCMigrationStarted              = "pqc.migration.started"
@@ -135,6 +138,11 @@ var ledger = []FeatureEvent{
 	{"F72", "CAA policy enforcement and management", "preflight_caa", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
 	{"F73", "Multi-method domain-validation policy", "preflight_method", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
 	{"F74", "Automated wildcard issuance and renewal", "preflight_wildcard", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
+
+	// F56 — served MDM/SCEP challenge policy management for Intune/JAMF profiles.
+	{"F56", "Intune / MDM enrollment integration", "create_policy", "createMDMSCEPPolicy", []string{EventMDMSCEPPolicyUpserted}},
+	{"F56", "Intune / MDM enrollment integration", "delete_policy", "deleteMDMSCEPPolicy", []string{EventMDMSCEPPolicyDeleted}},
+	{"F56", "Intune / MDM enrollment integration", "rotate_challenge", "rotateMDMSCEPChallenge", []string{EventMDMSCEPChallengeRotated}},
 
 	// F4/F6 — CA-agnostic issuance and lifecycle automation, driven by the lifecycle
 	// state machine (internal/orchestrator/lifecycle.go). Each transition emits one

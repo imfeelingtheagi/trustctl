@@ -3701,49 +3701,85 @@
       "domain": "Enrollment protocols",
       "phase": "P2",
       "priority": 61,
-      "served_state": "conditional",
-      "backend_status": "conditional served through the SCEP challenge validator when protocols.scep and protocols.scep.intune_challenge trust anchors are configured",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - MDM/Intune SCEP challenge fixtures plus backend-gap disclosure; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors",
+      "current_frontend_mapping": "Protocols at /protocols - MDM SCEP policy table, profile guidance, challenge-rotation state, reference names, and Intune challenge telemetry; coverage ledger: /coverage",
       "target_gui_mapping": "MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures.",
       "acceptance_test": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
       "source_docs": ["docs/features/enrollment-protocols.md"],
-      "source_backend": ["internal/mdm", "internal/protocols/scep"],
-      "source_frontend": [],
+      "source_backend": ["internal/api/mdm_scep.go", "internal/store/mdm_scep.go", "internal/projections", "internal/mdm", "internal/protocols/scep"],
+      "source_frontend": ["web/src/pages/Protocols.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: served through the SCEP protocol endpoint and configuration, not the /api/v1 OpenAPI contract.",
-      "cli_surface": [],
-      "cli_na": "N/A: served through the SCEP protocol endpoint and configuration, not the trstctl CLI command table.",
+      "notes": "Closed as partial by TRACE-004: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI, and served SCEP still enforces the Intune validator when configured. Remaining gap: live SCEP validator trust anchors are config-driven rather than hot-swapped directly from policy CRUD.",
+      "api_surface": [
+        "getMDMSCEPStatus",
+        "createMDMSCEPPolicy",
+        "listMDMSCEPPolicies",
+        "getMDMSCEPPolicy",
+        "updateMDMSCEPPolicy",
+        "deleteMDMSCEPPolicy",
+        "rotateMDMSCEPChallenge"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "mdm scep status",
+        "mdm scep policies create",
+        "mdm scep policies list",
+        "mdm scep policies get",
+        "mdm scep policies update",
+        "mdm scep policies delete",
+        "mdm scep policies rotate-challenge"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served through the SCEP challenge validator when protocols.scep and protocols.scep.intune_challenge trust anchors are configured",
+            "served_state=partial",
+            "backend_status=served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors",
+            "MDM SCEP policy CRUD and challenge rotation append mdm.scep_policy.* and mdm.scep_challenge.rotated events, project into mdm_scep_policies, and serve status telemetry without storing raw challenge secrets.",
             "buildServedSCEP wires buildSCEPChallengeValidator into the served SCEP handler, and served SCEP tests prove a missing challenge is rejected while a valid Intune challenge can enroll."
           ],
-          "refs": ["internal/server/protocol_mounts.go", "internal/server/protocols_served_enroll_test.go", "internal/server/protocols_served_stock_clients_test.go", "internal/mdm/intune_challenge.go"]
+          "refs": [
+            "internal/api/mdm_scep.go",
+            "internal/store/mdm_scep.go",
+            "internal/projections/projections.go",
+            "internal/server/protocol_mounts.go",
+            "internal/server/protocols_served_enroll_test.go",
+            "internal/server/protocols_served_stock_clients_test.go",
+            "internal/mdm/intune_challenge.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - MDM/Intune SCEP challenge fixtures plus backend-gap disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: Protocols at /protocols - MDM SCEP policy table, profile guidance, challenge-rotation state, reference names, and Intune challenge telemetry; coverage ledger: /coverage",
             "target_gui_mapping: MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/Protocols.tsx", "web/src/__tests__/protocols.test.tsx", "web/src/lib/api.ts"]
         },
         "cli": {
-          "na": "N/A: served through the SCEP protocol endpoint and configuration, not the trstctl CLI command table."
+          "evidence": [
+            "trstctl mdm scep status and trstctl mdm scep policies create/list/get/update/delete/rotate-challenge call the served MDM SCEP API."
+          ],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: served through the SCEP protocol endpoint and configuration, not the /api/v1 OpenAPI contract."
+          "evidence": [
+            "OpenAPI exposes MDM SCEP status, policy CRUD, and rotate-challenge operations with mutation routes requiring idempotency."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/mdm_scep.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
+            "Served integration test creates an MDM SCEP policy, rotates its challenge version, rejects missing SCEP challenge material, accepts a valid Intune challenge, and reads challenge telemetry from the status API.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_enroll_test.go",
+            "internal/mdm/intune_challenge_test.go",
+            "internal/protocols/scep/scep_test.go",
+            "web/src/__tests__/protocols.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -3755,18 +3791,37 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps MDM SCEP status and policy reads to issuers:read, and policy create/update/delete/rotate-challenge mutations to issuers:write.",
             "protocol authz manifest maps scep route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "scep is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "F56 spans both surfaces: API policy/status management is guarded by /api/v1 route permissions, while SCEP enrollment itself carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_enroll_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/authz/authz.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "audit": {
-          "evidence": ["Served SCEP enrollment emits protocol.scep.enroll, and Intune challenge validation emits mdm.intune_scep_challenge plus mdm.intune_scep_challenge.replay_rejected events without raw challenge material."],
-          "refs": ["internal/protocols/scep/scep.go", "internal/mdm/intune_challenge.go", "internal/mdm/intune_challenge_test.go", "internal/server/protocols_served_enroll_test.go"]
+          "evidence": [
+            "Served SCEP enrollment emits protocol.scep.enroll, Intune challenge validation emits mdm.intune_scep_challenge plus mdm.intune_scep_challenge.replay_rejected, and MDM SCEP policy management emits mdm.scep_policy.* plus mdm.scep_challenge.rotated without raw challenge material."
+          ],
+          "refs": [
+            "internal/eventledger/ledger.go",
+            "internal/api/mdm_scep.go",
+            "internal/protocols/scep/scep.go",
+            "internal/mdm/intune_challenge.go",
+            "internal/mdm/intune_challenge_test.go",
+            "internal/server/protocols_served_enroll_test.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["The served SCEP protocol entrypoint that hosts the Intune challenge gate is covered by normalized request metrics and tracing without tenant or secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md", "internal/server/protocol_mounts.go"]
+          "evidence": [
+            "The served status API aggregates allowed, denied, replay-rejected, last failure, and last transaction data from MDM challenge audit events; protocol middleware also covers the served SCEP entrypoint with normalized request metrics and tracing without tenant or secret labels."
+          ],
+          "refs": ["internal/api/mdm_scep.go", "internal/observ/middleware.go", "docs/observability.md", "internal/server/protocol_mounts.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

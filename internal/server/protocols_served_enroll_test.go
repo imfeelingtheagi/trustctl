@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -152,6 +153,153 @@ func TestServedSCEPEndToEnd(t *testing.T) {
 	_ = plainResp.Body.Close()
 	if plainResp.StatusCode != http.StatusForbidden {
 		t.Fatalf("plain SCEP PKIOperation status %d, want 403", plainResp.StatusCode)
+	}
+}
+
+// TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004 proves F56 is served above
+// library-only code: operators can manage reference-only MDM SCEP policy, record
+// challenge rotation evidence, and see challenge-required/missing plus successful
+// Intune validation telemetry from the running SCEP endpoint.
+func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
+	intuneCfg, challenge := servedSCEPIntuneChallenge(t, "device-mdm-1")
+	h := newServedHarness(t, config.Protocols{
+		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SCEPIntuneChallenge: intuneCfg,
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+
+	create := map[string]any{
+		"name":              "intune-mobile",
+		"provider":          "intune",
+		"scep_profile":      "mobile-scep",
+		"scep_endpoint":     h.ts.URL + "/scep/pkiclient.exe",
+		"expected_audience": "https://ca.example.test/scep",
+		"challenge_mode":    "intune-jws",
+		"trust_anchor_refs": map[string]any{
+			"root_ca_ref": "secret://mdm/intune/root-ca",
+		},
+	}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, create)
+	if status != http.StatusCreated {
+		t.Fatalf("create MDM SCEP policy: status %d body %s", status, body)
+	}
+	if bytes.Contains(body, []byte("raw-token")) {
+		t.Fatalf("MDM SCEP policy response leaked raw material: %s", body)
+	}
+	var created struct {
+		ID              string         `json:"id"`
+		Provider        string         `json:"provider"`
+		ChallengeMode   string         `json:"challenge_mode"`
+		RotationVersion int            `json:"rotation_version"`
+		ProfileGuidance map[string]any `json:"profile_guidance"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode MDM SCEP policy: %v body=%s", err, body)
+	}
+	if created.ID == "" || created.Provider != "intune" || created.ChallengeMode != "intune-jws" || created.RotationVersion != 1 {
+		t.Fatalf("created MDM SCEP policy lost core fields: %+v", created)
+	}
+	if created.ProfileGuidance["challenge_source"] != "intune-jws" {
+		t.Fatalf("created MDM SCEP policy omitted Intune profile guidance: %+v", created.ProfileGuidance)
+	}
+
+	bad := map[string]any{
+		"name":          "bad-intune",
+		"provider":      "intune",
+		"scep_profile":  "bad",
+		"scep_endpoint": h.ts.URL + "/scep",
+		"trust_anchor_refs": map[string]any{
+			"root_ca": "raw-token",
+		},
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, bad)
+	if status != http.StatusBadRequest {
+		t.Fatalf("inline MDM SCEP trust material should be rejected: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies/"+created.ID+"/rotate-challenge", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("rotate MDM SCEP challenge: status %d body %s", status, body)
+	}
+	var rotated struct {
+		Policy struct {
+			RotationVersion int    `json:"rotation_version"`
+			LastRotatedAt   string `json:"last_rotated_at"`
+		} `json:"policy"`
+	}
+	if err := json.Unmarshal(body, &rotated); err != nil {
+		t.Fatalf("decode rotated MDM SCEP policy: %v body=%s", err, body)
+	}
+	if rotated.Policy.RotationVersion != 2 || rotated.Policy.LastRotatedAt == "" {
+		t.Fatalf("rotation did not advance version/timestamp: %+v", rotated.Policy)
+	}
+
+	caResp, err := h.ts.Client().Get(h.ts.URL + "/scep?operation=GetCACert")
+	if err != nil {
+		t.Fatalf("GetCACert: %v", err)
+	}
+	caBody, _ := readAllClose(caResp)
+	raCertDER := scepRARecipient(t, caBody)
+
+	plainClientCertDER, plainClientKeyPKCS8, plainCSRDER := newSCEPClient(t, "device-mdm-missing")
+	plainReqDER, err := crypto.BuildSCEPRequest(plainCSRDER, plainClientCertDER, plainClientKeyPKCS8, raCertDER, "trace-004-missing")
+	if err != nil {
+		t.Fatalf("build missing-challenge SCEP request: %v", err)
+	}
+	plainResp, err := h.ts.Client().Post(h.ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(plainReqDER))
+	if err != nil {
+		t.Fatalf("missing-challenge SCEP PKIOperation: %v", err)
+	}
+	_ = plainResp.Body.Close()
+	if plainResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("missing-challenge SCEP status %d, want 403", plainResp.StatusCode)
+	}
+
+	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClientWithChallenge(t, "device-mdm-1", challenge)
+	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCertDER, clientKeyPKCS8, raCertDER, "trace-004-valid")
+	if err != nil {
+		t.Fatalf("build valid Intune SCEP request: %v", err)
+	}
+	resp, err := h.ts.Client().Post(h.ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatalf("valid Intune SCEP PKIOperation: %v", err)
+	}
+	replyDER, _ := readAllClose(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("valid Intune SCEP status %d: %s", resp.StatusCode, replyDER)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/mdm/scep/status", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("MDM SCEP status: status %d body %s", status, body)
+	}
+	var mdmStatus struct {
+		RuntimeGate string `json:"runtime_gate"`
+		Telemetry   struct {
+			Allowed        int    `json:"allowed"`
+			Denied         int    `json:"denied"`
+			ReplayRejected int    `json:"replay_rejected"`
+			LastTxn        string `json:"last_transaction_id"`
+		} `json:"telemetry"`
+		Policies []struct {
+			ID              string `json:"id"`
+			RotationVersion int    `json:"rotation_version"`
+		} `json:"policies"`
+	}
+	if err := json.Unmarshal(body, &mdmStatus); err != nil {
+		t.Fatalf("decode MDM SCEP status: %v body=%s", err, body)
+	}
+	if mdmStatus.RuntimeGate != "served_scep_intune_validator_config_driven" || len(mdmStatus.Policies) != 1 {
+		t.Fatalf("status did not expose runtime gate and policy: %+v", mdmStatus)
+	}
+	if mdmStatus.Policies[0].ID != created.ID || mdmStatus.Policies[0].RotationVersion != 2 {
+		t.Fatalf("status did not report rotated policy: %+v", mdmStatus.Policies)
+	}
+	if mdmStatus.Telemetry.Allowed < 1 || mdmStatus.Telemetry.Denied < 1 || mdmStatus.Telemetry.LastTxn == "" {
+		t.Fatalf("status did not expose Intune challenge success/failure telemetry: %+v", mdmStatus.Telemetry)
+	}
+	if !h.hasEvent(t, projections.EventMDMSCEPPolicyUpserted) || !h.hasEvent(t, projections.EventMDMSCEPChallengeRotated) || !h.hasEvent(t, "mdm.intune_scep_challenge") {
+		t.Fatal("MDM SCEP policy or Intune challenge events were not recorded")
 	}
 }
 

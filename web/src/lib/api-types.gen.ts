@@ -1577,6 +1577,60 @@ export interface MCPToolResult {
   tool: string;
 }
 
+export interface MDMSCEPChallengeRotated {
+  policy: MDMSCEPPolicy;
+}
+
+export interface MDMSCEPPolicy {
+  challenge_mode: string;
+  created_at: string;
+  enabled: boolean;
+  expected_audience?: string;
+  id: string;
+  last_rotated_at?: string;
+  name: string;
+  profile_guidance: Record<string, unknown>;
+  provider: string;
+  rotation_version: number;
+  scep_endpoint: string;
+  scep_profile: string;
+  tenant_id: string;
+  trust_anchor_refs: Record<string, unknown>;
+  updated_at: string;
+}
+
+export interface MDMSCEPPolicyList {
+  items: MDMSCEPPolicy[];
+}
+
+export interface MDMSCEPPolicyRequest {
+  challenge_mode?: "intune-jws" | "hmac-dynamic";
+  enabled?: boolean;
+  expected_audience?: string;
+  name: string;
+  profile_guidance?: Record<string, unknown>;
+  provider: "intune" | "jamf";
+  scep_endpoint: string;
+  scep_profile: string;
+  trust_anchor_refs?: Record<string, unknown>;
+}
+
+export interface MDMSCEPStatus {
+  policies: MDMSCEPPolicy[];
+  runtime_gate: string;
+  runtime_note: string;
+  telemetry: MDMSCEPTelemetry;
+}
+
+export interface MDMSCEPTelemetry {
+  allowed: number;
+  denied: number;
+  last_event_timestamp?: string;
+  last_failure_reason?: string;
+  last_transaction_id?: string;
+  replay_rejected: number;
+}
+
 export interface MachineLoginRequest {
   credential: string;
   method?: string;

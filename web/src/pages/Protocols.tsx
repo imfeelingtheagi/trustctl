@@ -6,7 +6,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type ACMEDNS01ProviderCatalogItem, type ACMEDNS01ProviderConfig, type ProtocolRuntimeStatus } from "@/lib/api";
+import { api, ApiError, type ACMEDNS01ProviderCatalogItem, type ACMEDNS01ProviderConfig, type MDMSCEPStatus, type ProtocolRuntimeStatus } from "@/lib/api";
 
 interface ProtocolSnippet {
   label: string;
@@ -160,6 +160,7 @@ export function Protocols() {
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
   const [dnsProviders, setDNSProviders] = useState<ACMEDNS01ProviderCatalogItem[]>([]);
   const [dnsProviderConfigs, setDNSProviderConfigs] = useState<ACMEDNS01ProviderConfig[]>([]);
+  const [mdmSCEPStatus, setMDMSCEPStatus] = useState<MDMSCEPStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -167,13 +168,14 @@ export function Protocols() {
     let active = true;
     setStatusLoading(true);
     setStatusError(null);
-    Promise.all([api.protocolStatuses(), api.acmeDNS01Providers(), api.acmeDNS01ProviderConfigs()])
-      .then(([page, providerCatalog, providerConfigs]) => {
+    Promise.all([api.protocolStatuses(), api.acmeDNS01Providers(), api.acmeDNS01ProviderConfigs(), api.mdmSCEPStatus()])
+      .then(([page, providerCatalog, providerConfigs, mdmStatus]) => {
         if (!active) return;
         setProtocolStatuses(page.items);
         setStatusCheckedAt(page.checked_at);
         setDNSProviders(providerCatalog.items ?? []);
         setDNSProviderConfigs(providerConfigs.items ?? []);
+        setMDMSCEPStatus(mdmStatus);
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -419,6 +421,97 @@ export function Protocols() {
         )}
       </section>
 
+      <section aria-labelledby="mdm-scep-heading">
+        <h2 id="mdm-scep-heading" className="mb-3 text-title font-semibold">
+          {t("protocols.mdm.heading")}
+        </h2>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="ui-panel overflow-x-auto">
+            <table className="ui-table min-w-[64rem]">
+              <caption className="sr-only">{t("protocols.mdm.caption")}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{t("protocols.mdm.policy")}</th>
+                  <th scope="col">{t("protocols.mdm.provider")}</th>
+                  <th scope="col">{t("protocols.mdm.profile")}</th>
+                  <th scope="col">{t("protocols.mdm.challenge")}</th>
+                  <th scope="col">{t("protocols.mdm.references")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(mdmSCEPStatus?.policies ?? []).map((policy) => {
+                  const refs = mdmReferenceNames(policy);
+                  return (
+                    <tr key={policy.id} className="align-top">
+                      <td>
+                        <p className="font-medium">{policy.name}</p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.id}</p>
+                        <ProtocolServedBadge
+                          served={policy.enabled}
+                          servedLabel={t("protocols.mdm.enabled")}
+                          offLabel={t("protocols.mdm.disabled")}
+                        />
+                      </td>
+                      <td className="font-mono text-xs">{policy.provider}</td>
+                      <td>
+                        <p>{policy.scep_profile}</p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.scep_endpoint}</p>
+                        {policy.expected_audience && <p className="mt-1 font-mono text-xs text-muted-foreground">{policy.expected_audience}</p>}
+                      </td>
+                      <td>
+                        <p>{policy.challenge_mode}</p>
+                        <p className="mt-1 text-caption text-muted-foreground">
+                          {t("protocols.mdm.rotationVersion")} {policy.rotation_version}
+                        </p>
+                        {policy.last_rotated_at && <p className="mt-1 text-caption text-muted-foreground">{formatDate(policy.last_rotated_at)}</p>}
+                      </td>
+                      <td>
+                        <ul className="grid gap-1">
+                          {refs.map((field) => (
+                            <li key={field} className="font-mono text-xs">
+                              {field}
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="ui-panel p-3 text-sm">
+            <p className="font-medium">{t("protocols.mdm.telemetry")}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-2 text-caption">
+              <div>
+                <dt className="text-muted-foreground">{t("protocols.mdm.allowed")}</dt>
+                <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.allowed ?? 0}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{t("protocols.mdm.denied")}</dt>
+                <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.denied ?? 0}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{t("protocols.mdm.replay")}</dt>
+                <dd className="font-semibold tabular-nums">{mdmSCEPStatus?.telemetry.replay_rejected ?? 0}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">{t("protocols.mdm.runtime")}</dt>
+                <dd className="font-semibold">{mdmSCEPStatus?.runtime_gate ? t("protocols.mdm.runtimeConfigured") : t("protocols.mdm.runtimeUnknown")}</dd>
+              </div>
+            </dl>
+            {mdmSCEPStatus?.telemetry.last_failure_reason && (
+              <p className="mt-3 text-caption text-muted-foreground">{mdmSCEPStatus.telemetry.last_failure_reason}</p>
+            )}
+            {mdmSCEPStatus?.runtime_note && <p className="mt-3 text-caption text-muted-foreground">{mdmSCEPStatus.runtime_note}</p>}
+          </div>
+        </div>
+        {statusLoading && <LoadingState>{t("protocols.mdm.loading")}</LoadingState>}
+        {!statusLoading && !statusError && (mdmSCEPStatus?.policies ?? []).length === 0 && (
+          <ErrorState title={t("protocols.mdm.emptyTitle")}>{t("protocols.mdm.empty")}</ErrorState>
+        )}
+      </section>
+
       <section aria-labelledby="client-setup-heading" className="grid gap-4">
         <h2 id="client-setup-heading" className="text-title font-semibold">
           Client setup
@@ -466,6 +559,10 @@ export function Protocols() {
 
 function credentialReferenceNames(config: ACMEDNS01ProviderConfig) {
   return Object.keys(config.credential_refs ?? {}).sort();
+}
+
+function mdmReferenceNames(policy: MDMSCEPStatus["policies"][number]) {
+  return Object.keys(policy.trust_anchor_refs ?? {}).sort();
 }
 
 function ProtocolServedBadge({ served, servedLabel, offLabel }: { served: boolean; servedLabel: string; offLabel: string }) {

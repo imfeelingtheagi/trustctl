@@ -658,9 +658,9 @@
       "owner": "Enrollment protocols",
       "priority": "P2",
       "acceptance_criteria": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete challenge gate",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served API/CLI/UI policy management, status, challenge rotation evidence, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ]

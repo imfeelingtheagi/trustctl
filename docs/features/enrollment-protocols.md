@@ -129,6 +129,16 @@ trust anchors, checks tenant and CSR subject/SAN binding, and consumes the nonce
 a single-use replay cache for the token TTL. A captured challenge cannot be replayed for
 a second enrollment. The gate wires into the served SCEP server's challenge hook.
 
+Operators can now manage MDM SCEP enrollment policy records through the served control
+plane: `POST/GET/PUT/DELETE /api/v1/mdm/scep/policies`, `POST
+/api/v1/mdm/scep/policies/{id}/rotate-challenge`, `GET /api/v1/mdm/scep/status`, and
+the matching `trstctl mdm scep ...` commands. These records keep profile guidance,
+challenge mode, reference names for trust anchors, rotation version, and challenge
+telemetry visible in API, CLI, and the Protocols UI without storing raw MDM secrets.
+Runtime SCEP enforcement is still driven by the configured
+`protocols.scep.intune_challenge` trust anchors; hot-swapping live SCEP validator trust
+anchors directly from policy CRUD is the remaining hardening gap.
+
 ## Use it
 
 A device using a standard EST client enrolls like this (conceptually):
@@ -166,7 +176,7 @@ Be precise about what's mounted in the running server today:
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
 | SCEP per-profile RA and rate limits | **Served when configured** — per-profile SCEP RA cert/key plus per-device rate limiter |
 | CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped |
-| MDM challenge (F56) | **Served when configured** — Intune JWS challenge validation, tenant/CSR binding, and single-use replay cache on the served SCEP endpoint |
+| MDM challenge (F56) | **Partially served** — API/CLI/UI policy management, challenge rotation evidence, profile guidance, and challenge telemetry are served; Intune JWS validation, tenant/CSR binding, and single-use replay cache run on the served SCEP endpoint when configured; live validator trust anchors remain config-driven |
 
 The protocol servers each expose a `Handler()` and are mounted on the control-plane
 TLS listener at startup, each behind the same issuance seam the API mint uses —
@@ -193,7 +203,9 @@ in HA so all replicas use the same CMS transport identity.
 - **Embedded:** `POST /enroll/bootstrap` (served). `POST /enroll/renewal` is
   library-complete but **not yet mounted** (404 on the running binary; mounting it,
   alongside the agent steady-state channel, is tracked as future work).
-- **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`.
+- **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`,
+  `mdm.scep_policy.*`, `mdm.scep_challenge.rotated`, and
+  `mdm.intune_scep_challenge*`.
 - **EST authoring guide:** [Device enrollment (EST)](../guides/est-enrollment.md).
 
 ## See also
