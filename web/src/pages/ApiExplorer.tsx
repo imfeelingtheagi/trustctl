@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type APITokenCreateResponse } from "@/lib/api";
 
-const specURL = "/api/v1/openapi.json";
+export const apiExplorerSpecURL = "/api/v1/openapi.json";
 const docsTokenTTLMinutes = 15;
 const methods = ["get", "post", "put", "patch", "delete"] as const;
 const sampleUUID = "00000000-0000-4000-8000-000000000001";
@@ -52,14 +52,14 @@ interface OpenAPIOperation {
   "x-trstctl-sensitive-response"?: boolean;
 }
 
-interface OpenAPIDocument {
+export interface OpenAPIDocument {
   openapi: string;
   info?: { title?: string; version?: string };
   paths: Record<string, Partial<Record<HTTPMethod, OpenAPIOperation>>>;
   components?: { schemas?: Record<string, JSONSchema> };
 }
 
-interface OperationEntry {
+export interface OperationEntry {
   key: string;
   method: HTTPMethod;
   path: string;
@@ -169,7 +169,7 @@ function queryString(parameters: OpenAPIParameter[]): string {
   return out ? `?${out}` : "";
 }
 
-function buildOperations(spec: OpenAPIDocument): OperationEntry[] {
+export function buildOperations(spec: OpenAPIDocument): OperationEntry[] {
   const entries: OperationEntry[] = [];
   for (const [path, pathItem] of Object.entries(spec.paths)) {
     for (const method of methods) {
@@ -231,7 +231,7 @@ function safeJSON(value: unknown): string {
 }
 
 async function fetchSpec(): Promise<OpenAPIDocument> {
-  const res = await fetch(specURL, { credentials: "include", headers: { Accept: "application/json" } });
+  const res = await fetch(apiExplorerSpecURL, { credentials: "include", headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`contract load failed (${res.status})`);
   return (await res.json()) as OpenAPIDocument;
 }
@@ -339,11 +339,7 @@ export function ApiExplorer() {
   const loweredFilter = filter.trim().toLowerCase();
   const visibleOperations = operations.filter((entry) => {
     if (!loweredFilter) return true;
-    return [entry.path, entry.operation.operationId, entry.operation.summary, entry.permission]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
-      .includes(loweredFilter);
+    return [entry.path, entry.operation.operationId, entry.operation.summary, entry.permission].filter(Boolean).join(" ").toLowerCase().includes(loweredFilter);
   });
 
   async function mintTestKey(event: FormEvent<HTMLFormElement>) {
@@ -452,12 +448,7 @@ export function ApiExplorer() {
             </div>
             <label className="mb-3 grid gap-1 text-sm">
               <span className="sr-only">{t("apiExplorer.searchLabel")}</span>
-              <input
-                className="ui-input"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                placeholder={t("apiExplorer.searchPlaceholder")}
-              />
+              <input className="ui-input" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={t("apiExplorer.searchPlaceholder")} />
             </label>
             <div className="max-h-[34rem] overflow-auto pr-1">
               {visibleOperations.length === 0 ? (
@@ -532,7 +523,9 @@ export function ApiExplorer() {
                     {pathParameters.map((parameter) => (
                       <li key={parameter.name} className="rounded-control border border-border px-3 py-2">
                         <span className="font-mono text-xs">{parameter.name}</span>
-                        <span className="ml-2 text-caption text-muted-foreground">{parameter.required ? t("apiExplorer.required") : t("apiExplorer.optional")}</span>
+                        <span className="ml-2 text-caption text-muted-foreground">
+                          {parameter.required ? t("apiExplorer.required") : t("apiExplorer.optional")}
+                        </span>
                         {parameter.description && <p className="mt-1 text-xs text-muted-foreground">{parameter.description}</p>}
                       </li>
                     ))}
@@ -548,7 +541,9 @@ export function ApiExplorer() {
                     {queryParameters.map((parameter) => (
                       <li key={parameter.name} className="rounded-control border border-border px-3 py-2">
                         <span className="font-mono text-xs">{parameter.name}</span>
-                        <span className="ml-2 text-caption text-muted-foreground">{parameter.required ? t("apiExplorer.required") : t("apiExplorer.optional")}</span>
+                        <span className="ml-2 text-caption text-muted-foreground">
+                          {parameter.required ? t("apiExplorer.required") : t("apiExplorer.optional")}
+                        </span>
                         {parameter.description && <p className="mt-1 text-xs text-muted-foreground">{parameter.description}</p>}
                       </li>
                     ))}
@@ -566,7 +561,11 @@ export function ApiExplorer() {
                   <p className="text-caption text-muted-foreground">{schemaNameForOperation(selected.operation)}</p>
                 </div>
               </div>
-              {requestBody ? <CodeBlock labelledBy="api-request-body-heading" value={requestBody} /> : <p className="text-sm text-muted-foreground">{t("apiExplorer.noRequestBody")}</p>}
+              {requestBody ? (
+                <CodeBlock labelledBy="api-request-body-heading" value={requestBody} />
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("apiExplorer.noRequestBody")}</p>
+              )}
             </section>
 
             <section className="ui-panel p-comfortable">
