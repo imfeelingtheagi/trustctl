@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "USABILITY-SLO-002",
+  "generated_at": "2026-06-30T05:30:00Z",
+  "status": "no_numeric_claim",
+  "metric": "operator_satisfaction_nps",
+  "target": {
+    "nps_min": 30,
+    "csat_min": 4.0,
+    "minimum_external_operators": 5,
+    "freshness_days": 180
+  },
+  "participants": 0,
+  "nps_score": null,
+  "release_gate": "Release notes must not publish NPS, CSAT, operator-satisfaction, or satisfaction-score claims while this receipt status is no_numeric_claim.",
+  "current_receipt": "No external operator-study result is claimed by this repository. This receipt is the release-note guard: it keeps the NPS/operator-satisfaction denominator explicit and blocks numeric claims until a real measured study receipt replaces it.",
+  "recommended_collection_plan": [
+    "Recruit at least five external operators who have not built the feature.",
+    "Ask each operator to perform the getting-started first-certificate journey against a release-candidate build.",
+    "Record completion, blockers, CSAT, NPS, and raw anonymized notes in a non-public study packet.",
+    "Replace this guard receipt with status=measured only when the anonymized packet and scoring summary exist."
+  ]
+}

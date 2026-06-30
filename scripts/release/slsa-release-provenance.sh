@@ -50,8 +50,17 @@ fi
 if [ "${TRSTCTL_SLSA_UPLOAD:-1}" != "0" ]; then
   [ "${GITHUB_REF_TYPE:-}" = "tag" ] || { echo "::error::SLSA provenance release assets require a tag ref, got ${GITHUB_REF_TYPE:-unset} ${GITHUB_REF_NAME:-unset}" >&2; exit 1; }
   command -v gh >/dev/null 2>&1 || { echo "::error::gh is required to upload ${provenance}" >&2; exit 1; }
+  release_notes_text="${TRSTCTL_RELEASE_NOTES_TEXT:-trstctl ${GITHUB_REF_NAME}}"
+  if [ -n "${TRSTCTL_RELEASE_NOTES_FILE:-}" ]; then
+    python3 "$root/scripts/usability/verify-release-evidence.py" \
+      --release-notes "$TRSTCTL_RELEASE_NOTES_FILE" \
+      --release-notes-text "$release_notes_text"
+  else
+    python3 "$root/scripts/usability/verify-release-evidence.py" \
+      --release-notes-text "$release_notes_text"
+  fi
   gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-    gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+    gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "$release_notes_text"
   if [ -s "$bundle" ]; then
     gh release upload "$GITHUB_REF_NAME" "$provenance" "$bundle" --clobber
   else

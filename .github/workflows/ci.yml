@@ -321,6 +321,21 @@ jobs:
       - name: Test (Vitest + axe accessibility + coverage)
         run: npm run test:coverage
 
+      - name: First-run usability receipt
+        working-directory: .
+        run: |
+          node scripts/usability/measure-first-run.mjs --out "${RUNNER_TEMP}/first-run-receipt.json"
+          python3 scripts/usability/verify-release-evidence.py \
+            --first-run "${RUNNER_TEMP}/first-run-receipt.json" \
+            --release-notes-text "trstctl ci"
+
+      - name: Upload first-run usability receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: first-run-usability-receipt
+          path: ${{ runner.temp }}/first-run-receipt.json
+          if-no-files-found: error
+
       - name: Build (Vite -> internal/webui/dist)
         run: npm run build
 

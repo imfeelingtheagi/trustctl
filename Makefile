@@ -189,6 +189,21 @@ perf-capacity: ## Recompute the measured capacity and cost calibration artifact 
 	echo ">> perf-capacity ($$out)"; \
 	scripts/perf/run-capacity-calibration.sh --out "$$out"
 
+.PHONY: usability-first-run
+usability-first-run: ## Regenerate and verify the first-run usability receipt (TRACE-010)
+	@echo ">> usability-first-run"
+	node scripts/usability/measure-first-run.mjs
+	python3 scripts/usability/verify-release-evidence.py
+
+.PHONY: usability-release-check
+usability-release-check: ## Fail release notes that claim NPS/operator satisfaction without measured evidence
+	@notes="$${TRSTCTL_RELEASE_NOTES_FILE:-}"; \
+	if [ -n "$$notes" ]; then \
+		python3 scripts/usability/verify-release-evidence.py --release-notes "$$notes"; \
+	else \
+		python3 scripts/usability/verify-release-evidence.py --release-notes-text "$${TRSTCTL_RELEASE_NOTES_TEXT:-trstctl local release}"; \
+	fi
+
 .PHONY: soak
 soak: ## Run the endurance/soak gate self-test: fail on an induced leak, pass on a healthy series (PERF-004)
 	@out="$${SOAK_OUT:-$${TMPDIR:-/tmp}/trstctl-soak.json}"; \

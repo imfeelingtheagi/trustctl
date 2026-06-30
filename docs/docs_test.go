@@ -28,6 +28,7 @@ var requiredPages = []string{
 	"operations.md",
 	"performance.md",
 	"performance-capacity.md",
+	"usability.md",
 	"disaster-recovery.md",
 	"migrations.md",
 	"limitations.md",

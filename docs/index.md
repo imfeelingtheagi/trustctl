@@ -52,7 +52,9 @@ Reference docs:
   switches, server settings, and lifecycle thresholds.
 - **[Performance SLOs](performance.md)** and
   **[capacity planning](performance-capacity.md)** — the hot-path latency,
-  throughput, queue, projection-lag, and right-sizing contract.
+  throughput, queue, projection-lag, and right-sizing contract. **[Usability
+  outcome SLOs](usability.md)** define which first-run and NPS claims need fresh
+  receipts.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Terraform provider](terraform-provider.md)** — manage profiles, short-lived
   PKI credentials, and application secrets from infrastructure-as-code.

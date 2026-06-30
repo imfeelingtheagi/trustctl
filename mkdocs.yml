@@ -75,6 +75,7 @@ nav:
   - Performance:
       - SLO matrix: performance.md
       - Capacity and cost model: performance-capacity.md
+      - Usability outcome SLOs: usability.md
   - Operations & resilience: operations.md
   - CLI: cli.md
   - Telemetry: telemetry.md

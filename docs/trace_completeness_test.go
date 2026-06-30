@@ -18,9 +18,11 @@ package docs
 // idiom — exactly the pattern of TestServedVsLibraryStatusIsHonestAndCodeBound.
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // importsAnyOnServedPath reports whether any non-test Go file under the served
@@ -581,50 +583,137 @@ func TestPQCMigrationNotTraceCompleteDisclosed(t *testing.T) {
 	}
 }
 
-// ---- TRACE-011: usability outcome NFRs are aspirational/unmeasured ---------------
+// ---- TRACE-010: usability outcome NFRs have receipt-backed evidence -------------
 
-// TestUsabilityOutcomeNFRsDisclosedAsUnmeasured pins TRACE-011. Performance/scale
-// NFRs have executable evidence (smoke + served live-load + soak gates); usability
-// outcome NFRs (timed first-run wall-clock, NPS/satisfaction) are aspirational and
-// NOT measured in CI.
-// The disclosure must say so, and the performance NFRs it contrasts against must
-// remain backed by the real gates (so "measured" stays true).
+// TestUsabilityOutcomeNFRsDisclosedAsUnmeasured keeps the original TRACE-010
+// acceptance command name, but the expected reality changed: first-run timing now
+// has an executable receipt, while NPS/operator satisfaction is guarded as
+// "no numeric claim" until a real external study receipt exists.
 func TestUsabilityOutcomeNFRsDisclosedAsUnmeasured(t *testing.T) {
 	low := limLower(t)
 
-	// The honest "aspirational/unmeasured" disclosure for usability outcome NFRs.
 	for _, m := range []string{
-		"usability outcome nfrs are aspirational and unmeasured",
-		"no automated ci measurement",
-		"timed first-run",
+		"usability outcome nfrs are evidence-gated",
+		"usability-slo-001",
+		"scripts/usability/first-run-receipt.json",
+		"automated wizard timing",
+		"operator-study-receipt.json",
+		"no numeric nps",
 		"nps",
 	} {
 		if !strings.Contains(low, m) {
-			t.Errorf("limitations.md must disclose usability outcome NFRs (timed first-run / NPS) as aspirational and unmeasured (missing marker %q) — TRACE-011", m)
+			t.Errorf("limitations.md must disclose receipt-backed usability outcome NFRs (missing marker %q) — TRACE-010", m)
 		}
 	}
-	// It must not over-claim a measured first-run/NPS number.
 	for _, oc := range []string{
-		"first-run time is measured",
+		"usability outcome nfrs are aspirational and unmeasured",
+		"no automated ci measurement of first-run",
 		"nps is measured",
 		"operator satisfaction is measured",
 	} {
 		if strings.Contains(low, oc) {
-			t.Errorf("limitations.md over-claims a usability outcome NFR as measured (%q) while none is benchmarked — TRACE-011", oc)
+			t.Errorf("limitations.md carries stale or over-claiming usability NFR copy (%q) — TRACE-010", oc)
 		}
 	}
 
-	// Reality anchor: the contrast it draws — that performance/scale NFRs ARE measured
-	// — must stay true. The executable evidence exists (smoke + served live-load +
-	// soak gates). If the live or soak denominator is removed, this disclosure's
-	// "measured" contrast rots.
+	var firstRun struct {
+		SchemaVersion int      `json:"schema_version"`
+		ID            string   `json:"id"`
+		GeneratedAt   string   `json:"generated_at"`
+		Command       []string `json:"command"`
+		TestAnchor    string   `json:"test_anchor"`
+		SLO           struct {
+			TargetMS float64 `json:"target_ms"`
+		} `json:"slo"`
+		Measurements []struct {
+			DurationMS float64 `json:"duration_ms"`
+			Met        bool    `json:"met"`
+		} `json:"measurements"`
+		Summary struct {
+			OK         bool    `json:"ok"`
+			Met        bool    `json:"met"`
+			DurationMS float64 `json:"duration_ms"`
+			TargetMS   float64 `json:"target_ms"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../scripts/usability/first-run-receipt.json")), &firstRun); err != nil {
+		t.Fatalf("scripts/usability/first-run-receipt.json must be a valid receipt: %v", err)
+	}
+	if firstRun.SchemaVersion != 1 || firstRun.ID != "USABILITY-SLO-001" {
+		t.Fatalf("first-run receipt identity = version %d / id %q, want USABILITY-SLO-001 schema v1", firstRun.SchemaVersion, firstRun.ID)
+	}
+	if _, err := time.Parse(time.RFC3339, firstRun.GeneratedAt); err != nil {
+		t.Fatalf("first-run receipt generated_at must be RFC3339: %v", err)
+	}
+	if !firstRun.Summary.OK || !firstRun.Summary.Met || firstRun.Summary.DurationMS <= 0 || firstRun.Summary.DurationMS > firstRun.Summary.TargetMS {
+		t.Fatalf("first-run receipt is not green or exceeds target: %+v", firstRun.Summary)
+	}
+	if firstRun.SLO.TargetMS != firstRun.Summary.TargetMS || firstRun.SLO.TargetMS <= 0 {
+		t.Fatalf("first-run receipt target mismatch: slo=%v summary=%v", firstRun.SLO.TargetMS, firstRun.Summary.TargetMS)
+	}
+	if len(firstRun.Measurements) == 0 {
+		t.Fatal("first-run receipt must include at least one measurement")
+	}
+	if !containsAll(strings.ToLower(strings.Join(firstRun.Command, " ")), []string{"npm", "wizard.test.tsx"}) {
+		t.Fatalf("first-run receipt command must run the wizard journey test, got %q", strings.Join(firstRun.Command, " "))
+	}
+	if firstRun.TestAnchor != "web/src/__tests__/wizard.test.tsx" {
+		t.Fatalf("first-run receipt test anchor = %q, want web/src/__tests__/wizard.test.tsx", firstRun.TestAnchor)
+	}
+
+	var operatorStudy struct {
+		SchemaVersion int    `json:"schema_version"`
+		ID            string `json:"id"`
+		Status        string `json:"status"`
+		Participants  int    `json:"participants"`
+		ReleaseGate   string `json:"release_gate"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../scripts/usability/operator-study-receipt.json")), &operatorStudy); err != nil {
+		t.Fatalf("scripts/usability/operator-study-receipt.json must be a valid receipt: %v", err)
+	}
+	if operatorStudy.SchemaVersion != 1 || operatorStudy.ID != "USABILITY-SLO-002" {
+		t.Fatalf("operator-study receipt identity = version %d / id %q, want USABILITY-SLO-002 schema v1", operatorStudy.SchemaVersion, operatorStudy.ID)
+	}
+	if operatorStudy.Status != "no_numeric_claim" || operatorStudy.Participants != 0 {
+		t.Fatalf("operator-study receipt should be a no-numeric-claim guard until a real study exists: %+v", operatorStudy)
+	}
+	if !containsAll(strings.ToLower(operatorStudy.ReleaseGate), []string{"release", "nps", "claim"}) {
+		t.Fatalf("operator-study receipt release gate must explicitly block NPS claims, got %q", operatorStudy.ReleaseGate)
+	}
+
+	for _, path := range []string{"../scripts/usability/measure-first-run.mjs", "../scripts/usability/verify-release-evidence.py", "usability.md"} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("TRACE-010 usability evidence artifact %s missing: %v", path, err)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{"First-run usability receipt", "scripts/usability/measure-first-run.mjs", "scripts/usability/verify-release-evidence.py", "first-run-usability-receipt"} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("ci.yml missing usability evidence gate marker %q — TRACE-010", want)
+		}
+	}
+	releaseScript := read(t, "../scripts/release/slsa-release-provenance.sh")
+	for _, want := range []string{"scripts/usability/verify-release-evidence.py", "TRSTCTL_RELEASE_NOTES_FILE", "--release-notes-text"} {
+		if !strings.Contains(releaseScript, want) {
+			t.Errorf("release provenance script must gate release notes on usability evidence (missing %q) — TRACE-010", want)
+		}
+	}
+	releaseWorkflow := read(t, "../.github/workflows/release.yml")
+	for _, want := range []string{"Verify usability release evidence", "scripts/usability/verify-release-evidence.py"} {
+		if !strings.Contains(releaseWorkflow, want) {
+			t.Errorf("release.yml must gate direct release-note creation on usability evidence (missing %q) — TRACE-010", want)
+		}
+	}
+
+	// Reality anchor: performance/scale NFR evidence still exists alongside the new
+	// usability evidence. If these disappear, the NFR page needs a broader rewrite.
 	if _, err := os.Stat("../scripts/perf/artifacts/live-load-baseline.json"); err != nil {
-		t.Fatalf("scripts/perf/artifacts/live-load-baseline.json no longer exists; the TRACE-011 measured-vs-aspirational contrast has no served live-load anchor — revisit this reality test: %v", err)
+		t.Fatalf("scripts/perf/artifacts/live-load-baseline.json no longer exists; the TRACE-010 NFR evidence contrast has no served live-load anchor — revisit this reality test: %v", err)
 	}
 	if _, err := os.Stat("../internal/perf/soak.go"); err != nil {
-		t.Fatalf("internal/perf/soak.go no longer exists; the TRACE-011 measured-vs-aspirational contrast has no anchor — revisit this reality test: %v", err)
+		t.Fatalf("internal/perf/soak.go no longer exists; the TRACE-010 NFR evidence contrast has no anchor — revisit this reality test: %v", err)
 	}
 	if _, err := os.Stat("../scripts/perf/soak.sh"); err != nil {
-		t.Fatalf("scripts/perf/soak.sh no longer exists; the TRACE-011 measured-vs-aspirational contrast has no anchor — revisit this reality test: %v", err)
+		t.Fatalf("scripts/perf/soak.sh no longer exists; the TRACE-010 NFR evidence contrast has no anchor — revisit this reality test: %v", err)
 	}
 }
