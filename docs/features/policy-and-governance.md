@@ -184,9 +184,9 @@ than served API.
 ### Compliance reporting (F62)
 
 Compliance reporting turns the audit log and the [CBOM](observability-and-risk.md) into
-signed, reproducible **evidence packs** for PCI-DSS, HIPAA, SOC 2, FedRAMP,
-CNSA 2.0, FIPS 140, Common Criteria, CA/Browser Forum Baseline Requirements,
-WebTrust, and ETSI.
+signed, reproducible **evidence packs** for PCI-DSS, HIPAA, SOC 2, NIST SP
+800-53, NIST CSF 2.0, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria,
+CA/Browser Forum Baseline Requirements, WebTrust, ETSI, eIDAS, and NIS2.
 For each framework it marks controls *evidenced* or *gap* based on real audit records and
 crypto posture (e.g. CNSA 2.0's PQC control passes only when post-quantum assets exist and
 quantum-vulnerable ones don't). Crucially, it separates **what the product evidences**
@@ -210,6 +210,13 @@ operation, and independent public-trust audit remain operator/auditor residuals.
 WebTrust and ETSI packs add broader CA-audit posture controls while keeping
 practitioner opinion, qualified trust-service status, and external conformity
 assessment as explicit operator/auditor residuals.
+The `soc2` pack maps logical-access evidence for non-human credentials,
+security-event monitoring evidence, and change-management evidence to CC6/CC7/CC8
+style trust-services criteria from tenant RBAC, NHI posture, signed audit
+events, and the event-sourced change trail. It keeps trust-services category
+scope, management assertion, operating-effectiveness sampling, subservice
+organization carve-outs, and the independent CPA SOC 2 examination report as
+operator/auditor residuals.
 
 CAP-OBS-02 adds the inventory/reporting layer around those packs. `GET
 /api/v1/compliance/inventory-report` returns a tenant-scoped report that
@@ -222,7 +229,7 @@ lists the tenant's definitions. Delivery is deliberately limited to
 `audit_export`; email, webhook, and ticket dispatch are not claimed until a
 served runner exists.
 
-CAP-CMP-04 and CAP-CMP-06 add compliance mappings for external table-stakes
+CAP-CMP-04, CAP-CMP-05, and CAP-CMP-06 add compliance mappings for external table-stakes
 frameworks. `GET /api/v1/compliance/evidence-packs/{framework}` serves signed
 framework packs for PCI DSS, HIPAA, SOC 2, NIST SP 800-53, NIST CSF 2.0,
 FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR,
@@ -278,7 +285,7 @@ trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --l
 # download a signed evidence bundle for a date range
 trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
 
-# export a signed SOC 2 evidence pack with CBOM/FIPS posture
+# export a signed SOC 2 evidence pack with audit, access, and change evidence
 trstctl-cli compliance evidence-pack soc2
 
 # read CAP-OBS-02 inventory/reporting coverage
@@ -314,8 +321,9 @@ Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
 /api/v1/access/reviews/{id}`, and `POST
 /api/v1/access/reviews/{id}/items/{item_id}/decision`; policy dry-run maps to
 `POST /api/v1/policy/dry-run`. All mutations require an `Idempotency-Key`.
-Evidence packs support `pci-dss`, `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`,
-`fips-140`, `common-criteria`, `cabf-br`, `webtrust`, and `etsi`; the response
+Evidence packs support `pci-dss`, `hipaa`, `soc2`, `nist-800-53`,
+`nist-csf-2.0`, `fedramp`, `cmmc-2.0`, `cnsa-2.0`, `fips-140`,
+`common-criteria`, `cabf-br`, `webtrust`, `etsi`, `eidas`, and `nis2`; the response
 contains a signed export plus `public_key_der` so an auditor can verify the
 manifest offline. RBAC is enforced on every route automatically. A default-deny
 policy looks like this in Rego:

@@ -239,6 +239,22 @@ describe("policy governance surface", () => {
                     },
                   ]
                 : []),
+              ...(framework === "soc2"
+                ? [
+                    {
+                      id: "soc2-cc6-access-control",
+                      title: "Logical access controls for NHI credentials are evidenced",
+                      status: "evidenced",
+                      evidence: ["tenant RBAC", "NHI inventory and posture evidence mappings"],
+                    },
+                    {
+                      id: "soc2-attestation-residual",
+                      title: "CPA examination and trust-service scope remain operator responsibilities",
+                      status: "gap",
+                      evidence: ["independent CPA SOC 2 examination report"],
+                    },
+                  ]
+                : []),
               ...(framework === "fips-140"
                 ? [
                     {
@@ -297,6 +313,8 @@ describe("policy governance surface", () => {
             product_evidences:
               framework === "cabf-br"
                 ? ["CA/Browser Forum profile lint evidence", "external zlint corpus gate", "served CA issuance and revocation audit evidence"]
+                : framework === "soc2"
+                  ? ["SOC 2 security-event and change-control evidence mapping", "tenant RBAC and NHI access-review evidence"]
                 : framework === "fips-140"
                   ? ["FIPS-capable build and fail-closed POST evidence"]
                   : framework === "common-criteria"
@@ -309,6 +327,8 @@ describe("policy governance surface", () => {
             operator_attests:
               framework === "cabf-br"
                 ? ["independent WebTrust practitioner opinion for public-trust issuance", "CA/Browser Forum policy program operation"]
+                : framework === "soc2"
+                  ? ["SOC 2 trust-services category scope", "independent CPA SOC 2 examination report"]
                 : framework === "fips-140"
                   ? ["NIST CMVP certificate number for the deployed validated module"]
                   : framework === "common-criteria"
@@ -399,10 +419,11 @@ describe("policy governance surface", () => {
     expect(screen.getByText("Quarterly SOC 2 inventory")).toBeInTheDocument();
     expect(screen.getByText("GET /api/v1/compliance/inventory-report")).toBeInTheDocument();
     expect(screen.getByText("trstctl.compliance.evidence-pack.v1")).toBeInTheDocument();
-    expect(screen.getByText("3 controls")).toBeInTheDocument();
-    expect(screen.getByText("2 evidenced")).toBeInTheDocument();
-    expect(screen.getByText("1 gap")).toBeInTheDocument();
-    expect(screen.getByText("FIPS 203/204/205 migration posture from the CBOM")).toBeInTheDocument();
+    expect(screen.getByText("5 controls")).toBeInTheDocument();
+    expect(screen.getByText("3 evidenced")).toBeInTheDocument();
+    expect(screen.getByText("2 gaps")).toBeInTheDocument();
+    expect(screen.getByText("SOC 2 security-event and change-control evidence mapping")).toBeInTheDocument();
+    expect(screen.getAllByText("independent CPA SOC 2 examination report").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/evidence, not certification/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "soc2-evidence-pack.json");
 

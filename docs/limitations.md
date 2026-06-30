@@ -198,7 +198,9 @@ never live in the API process. What you can do end to end against the running bi
   schedules. `GET /api/v1/compliance/evidence-packs/{framework}` and
   `trstctl-cli compliance evidence-pack` serve signed CAP-CMP-04 framework packs
   for eIDAS, NIST SP 800-53/CSF, CMMC 2.0, FedRAMP, NIS2, and the existing
-  PCI/HIPAA/SOC/CNSA/FIPS/Common Criteria/CA-audit frameworks. `GET
+  PCI/HIPAA/CNSA/FIPS/Common Criteria/CA-audit frameworks. The `soc2` pack serves
+  CAP-CMP-05 by mapping CC6/CC7/CC8-style access, monitoring, and change evidence
+  while keeping the CPA examination and trust-services scope as residuals. `GET
   /api/v1/compliance/nhi-report` and `trstctl-cli compliance nhi-report` return
   CAP-CMP-06 NHI compliance mappings for NIST SP 800-53, NIST CSF 2.0, PCI DSS
   4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, and NIS2 from

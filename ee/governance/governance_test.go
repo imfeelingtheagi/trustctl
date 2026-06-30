@@ -317,6 +317,28 @@ func TestFIPSSignedExportIncludesRegulatedDeploymentProfile(t *testing.T) {
 	}
 }
 
+func TestSOC2EvidencePackMapsTrustServicesCriteriaWithoutClaimingAttestationCAPCMP05(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	rep, err := New("t1", caKey).Generate(SOC2, auditFixture(), cbom())
+	if err != nil {
+		t.Fatalf("Generate(SOC2): %v", err)
+	}
+	if rep.Framework != string(SOC2) {
+		t.Fatalf("framework = %q, want %q", rep.Framework, SOC2)
+	}
+	mustHaveControl(t, rep.Controls, "soc2-cc6-access-control", "evidenced")
+	mustHaveControl(t, rep.Controls, "soc2-cc7-monitoring-audit-evidence", "evidenced")
+	mustHaveControl(t, rep.Controls, "soc2-cc8-change-management-evidence", "evidenced")
+	mustHaveControl(t, rep.Controls, "soc2-attestation-residual", "gap")
+	if !contains(rep.ProductEvidences, "SOC 2 security-event and change-control evidence mapping") {
+		t.Fatalf("SOC 2 product evidence missing security/change mapping: %+v", rep.ProductEvidences)
+	}
+	if !contains(rep.OperatorAttests, "independent CPA SOC 2 examination report") {
+		t.Fatalf("SOC 2 operator attestations missing CPA examination residual: %+v", rep.OperatorAttests)
+	}
+}
+
 func mustHaveControl(t *testing.T, controls []Control, id, status string) {
 	t.Helper()
 	for _, control := range controls {

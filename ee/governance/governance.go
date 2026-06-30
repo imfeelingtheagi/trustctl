@@ -155,6 +155,14 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 			Control{ID: "nist-csf-2.0-govern-operator-residual", Title: "Govern and organizational risk strategy remain operator program responsibilities", Status: "gap", Evidence: []string{"operator attestation", "risk management program"}},
 		)
 	}
+	if fw == SOC2 {
+		controls = append(controls,
+			Control{ID: "soc2-cc6-access-control", Title: "Logical access controls for NHI credentials are evidenced", Status: "evidenced", Evidence: []string{"tenant RBAC", "NHI inventory", "least-privilege posture", "access certification campaigns"}},
+			Control{ID: "soc2-cc7-monitoring-audit-evidence", Title: "Security-event monitoring and investigation evidence is signed and exportable", Status: statusIf(hasAudit), Evidence: []string{"signed audit evidence log", "policy decision events", "certificate lifecycle events", "NHI posture findings"}},
+			Control{ID: "soc2-cc8-change-management-evidence", Title: "Credential and policy change-management events are attributable", Status: statusIf(hasAudit), Evidence: []string{"event-sourced change trail", "approval and policy dry-run evidence", "audit export"}},
+			Control{ID: "soc2-attestation-residual", Title: "Trust-services scope, management assertion, and independent CPA examination remain operator responsibilities", Status: "gap", Evidence: []string{"operator attestation", "trust-services category scope", "management assertion", "independent CPA SOC 2 examination report"}},
+		)
+	}
 	if fw == FedRAMP {
 		controls = append(controls,
 			Control{ID: "fedramp-rev5-au-ac-ia-evidence", Title: "FedRAMP Rev. 5 AU/AC/IA evidence is mapped from audit, RBAC, and NHI posture", Status: "evidenced", Evidence: []string{"signed audit evidence log", "tenant RBAC", "NHI compliance mapping"}},
@@ -363,6 +371,14 @@ func productEvidencesFor(fw Framework) []string {
 			"signed audit evidence mapped to framework controls",
 		)
 	}
+	if fw == SOC2 {
+		evidence = append(evidence,
+			"SOC 2 security-event and change-control evidence mapping",
+			"tenant RBAC and NHI access-review evidence",
+			"signed audit export for CC7 monitoring evidence",
+			"credential lifecycle and policy decision event trail",
+		)
+	}
 	return evidence
 }
 
@@ -407,6 +423,15 @@ func operatorAttestsFor(fw Framework) []string {
 	}
 	if fw == NISTCSF20 {
 		attests = append(attests, "NIST CSF organizational profile", "risk appetite and governance strategy", "target profile acceptance")
+	}
+	if fw == SOC2 {
+		attests = append(attests,
+			"SOC 2 trust-services category scope",
+			"management assertion",
+			"independent CPA SOC 2 examination report",
+			"control operating-effectiveness sampling",
+			"subservice organization carve-outs",
+		)
 	}
 	if fw == FedRAMP {
 		attests = append(attests, "FedRAMP authorization package", "agency or JAB authorization decision", "continuous monitoring package")

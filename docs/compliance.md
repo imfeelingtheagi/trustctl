@@ -88,9 +88,12 @@ four stable fields:
 The manifest is intentionally honest. It marks each control as `evidenced` or
 `gap`, includes CBOM-derived post-quantum and quantum-vulnerable counts, and
 separates what trstctl can prove from what your organization must still attest.
-For example, the SOC 2 pack can show tamper-evident audit evidence and FIPS
-203/204/205 migration posture from the CBOM, but it does not claim trstctl or
-your deployment is SOC 2 certified.
+For example, the SOC 2 pack maps logical-access evidence for NHIs, signed
+security-event monitoring evidence, and attributable change-management evidence
+to CC6/CC7/CC8-style trust-services criteria. It still leaves the trust-services
+category scope, management assertion, operating-effectiveness sampling, and
+independent CPA SOC 2 examination report as operator/auditor responsibilities;
+it does not claim trstctl or your deployment is SOC 2 certified.
 
 For broader regulatory mappings, the `nist-800-53`, `nist-csf-2.0`, `fedramp`,
 `cmmc-2.0`, `eidas`, and `nis2` packs bind signed audit evidence, NHI inventory,
@@ -222,7 +225,7 @@ control.
 
 | Framework | Controls trstctl's audit trail helps with | Still the operator's |
 | --- | --- | --- |
-| SOC 2 | CC7.2/7.3 (security event logging), CC8.1 (change tracking) — *attributable, tamper-evident event trail + signed evidence* | Monitoring/alerting program, change-management process, retention enforcement, the audit engagement |
+| SOC 2 | CC6 (logical access for NHI credentials), CC7.2/7.3 (security event logging and investigation), CC8.1 (change tracking) — *tenant RBAC, NHI posture, attributable event trail, signed evidence* | Trust-services scope, management assertion, operating-effectiveness sampling, subservice carve-outs, the independent CPA SOC 2 examination |
 | ISO 27001 | A.8.15/8.16 (logging, monitoring), A.5.28 (evidence collection) — *event capture + exportable evidence* | Log review cadence, retention schedule, ISMS scope and operation |
 | PCI DSS v4 | Req. 10 (log and monitor access) — *who/what/when trail*; 10.5 — *enforced retention: archive to signed bundles → checkpoint → prune, when configured* | 10.5 the chosen window (≥12 months) + WORM archive storage + 3-readily-available copies, daily review, FIM, key custody |
 | HIPAA | §164.312(b) audit controls — *recording and examining activity* | §164.308 review procedures, retention (6 years), BAAs |

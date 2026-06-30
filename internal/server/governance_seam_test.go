@@ -80,6 +80,37 @@ func TestComplianceEvidenceServedThroughGovernanceFactory(t *testing.T) {
 	}
 }
 
+func TestComplianceEvidenceServesSOC2CAPCMP05(t *testing.T) {
+	auditKey, err := jose.GenerateRSASigningKey("governance-seam-audit")
+	if err != nil {
+		t.Fatalf("generate audit key: %v", err)
+	}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.AuditSigningKey = auditKey
+		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
+			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
+				t.Fatalf("governance factory deps incomplete: %+v", deps)
+			}
+			return stubComplianceEvidence{}, nil
+		}
+	})
+	auditor := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "soc2-auditor", []string{
+		string(authz.AuditRead),
+	})
+
+	code, body := doBearer(t, h.ts, http.MethodGet, "/api/v1/compliance/evidence-packs/soc2", auditor, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("SOC 2 evidence pack = %d body=%s; want 200", code, body)
+	}
+	var resp api.ComplianceEvidencePack
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode SOC 2 evidence pack response: %v body=%s", err, body)
+	}
+	if resp.Format != api.ComplianceEvidencePackFormat || resp.Framework != string(api.ComplianceSOC2) {
+		t.Fatalf("SOC 2 evidence pack metadata = format %q framework %q", resp.Format, resp.Framework)
+	}
+}
+
 func TestComplianceEvidenceServesWebTrustAndETSICAPCMP02(t *testing.T) {
 	auditKey, err := jose.GenerateRSASigningKey("governance-seam-audit")
 	if err != nil {

@@ -284,7 +284,7 @@ trstctl-cli external-cas issue digicert -f upstream-issue.json
 trstctl-cli risk credentials --sort score
 trstctl-cli risk contextual-priorities
 
-# Export a signed SOC 2 evidence pack from audit records plus CBOM posture.
+# Export a signed SOC 2 evidence pack from audit, access, and change evidence.
 trstctl-cli compliance evidence-pack soc2
 
 # Export FIPS 140 and Common Criteria evidence posture.
