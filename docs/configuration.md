@@ -444,11 +444,14 @@ auth:
 
 ## Break-glass reconciliation
 
-Break-glass emergency issuance is an offline m-of-n operator ceremony. The served
-control plane handles the recovery side: `POST /api/v1/breakglass/reconcile` accepts
-signed offline bundles, verifies them against trust anchors pinned in process config,
-and records verified facts as `breakglass.issued` events in the hash-chained audit log.
-The request cannot supply its own verifier keys.
+Break-glass emergency issuance has two served paths. `POST /api/v1/breakglass/issue`
+performs online m-of-n emergency issuance when a signer-backed break-glass issuer is
+configured; it accepts a CSR, reason, TTL, and operator approvals, returns a
+self-verifying bundle, and records `breakglass.issued` before responding.
+`POST /api/v1/breakglass/reconcile` handles recovery after an offline ceremony: it
+accepts signed offline bundles, verifies them against trust anchors pinned in process
+config, and records verified facts as `breakglass.issued` events in the hash-chained
+audit log. Requests cannot supply their own verifier keys.
 
 In a config file, the keys are `breakglass.enabled`, `breakglass.ca_cert_file`, and
 `breakglass.public_key_file`. The files may be DER, or PEM with `CERTIFICATE` and
@@ -457,7 +460,7 @@ fails closed when either is missing or unreadable.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_BREAKGLASS_ENABLED` | `false` | Enables `POST /api/v1/breakglass/reconcile`; offline issuance is still an operator ceremony. |
+| `TRSTCTL_BREAKGLASS_ENABLED` | `false` | Enables verifier material for `POST /api/v1/breakglass/reconcile` and the audit check used by `POST /api/v1/breakglass/issue`. |
 | `TRSTCTL_BREAKGLASS_CA_CERT_FILE` | unset | DER or PEM CA certificate that emergency bundle certificates must chain to. Required when enabled. |
 | `TRSTCTL_BREAKGLASS_PUBLIC_KEY_FILE` | unset | DER or PEM public key that verifies the emergency bundle manifest signature. Required when enabled. |
 

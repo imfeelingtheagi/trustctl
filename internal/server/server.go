@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -148,12 +149,16 @@ type Deps struct {
 	EnableABAC bool
 	// ABACEnvironment is copied into input.env for every ABAC evaluation.
 	ABACEnvironment map[string]string
-	// BreakglassCACertDER and BreakglassPublicKeyDER pin the recovery-side verifier
-	// material for the served break-glass reconciliation endpoint. The route accepts
-	// only signed offline bundles; it never trusts verifier material supplied by the
-	// caller and never performs online emergency issuance.
+	// BreakglassCACertDER and BreakglassPublicKeyDER pin verifier material for
+	// break-glass reconciliation and for the online issuance audit check. The route
+	// never trusts verifier material supplied by the caller.
 	BreakglassCACertDER    []byte
 	BreakglassPublicKeyDER []byte
+	// BreakglassIssuer enables the served online m-of-n emergency issuance route.
+	// The signer behind this service must be a crypto.DigestSigner backed by the
+	// isolated signer process in production; nil leaves POST /api/v1/breakglass/issue
+	// unavailable.
+	BreakglassIssuer *breakglass.Service
 	// RequireApproval turns on served dual-control for privileged transitions (issue
 	// and revoke): the transition is denied unless a DISTINCT approver has recorded an
 	// approval (the served half of RED-004 / SEC-002). Backed by the store's issuance
@@ -812,6 +817,13 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	}
 	if breakglassReconciler != nil {
 		defaults = append(defaults, api.WithBreakglass(breakglassReconciler))
+	}
+	breakglassIssuer, err := buildBreakglassIssuer(d, breakglassReconciler)
+	if err != nil {
+		return nil, nil, err
+	}
+	if breakglassIssuer != nil {
+		defaults = append(defaults, api.WithBreakglassIssuer(breakglassIssuer))
 	}
 	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
 	defaults = append(defaults, api.WithPrivacyRetentionPolicySource(d.GovernancePolicySource))

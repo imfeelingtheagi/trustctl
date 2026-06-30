@@ -11,16 +11,18 @@ unilaterally stand up or rotate a CA.
 > certificate, generates a signer-held intermediate CSR, and imports the
 > offline-root-signed intermediate. The served path still keeps online CA private
 > keys in the isolated signer process and stores only signer handles in the control
-> plane; the offline root private key never enters trstctl. Rotation, cross-signing,
-> and online break-glass issuance remain library/operator procedures. Break-glass bundle
-> reconciliation is served separately at `POST /api/v1/breakglass/reconcile` so
-> operators can verify signed emergency bundles into the audit chain after recovery.
+> plane; the offline root private key never enters trstctl. Rotation and
+> cross-signing remain library/operator procedures. Online m-of-n break-glass
+> issuance is served at `POST /api/v1/breakglass/issue` when the signer-backed
+> break-glass issuer is configured; bundle reconciliation is served separately at
+> `POST /api/v1/breakglass/reconcile` so operators can verify signed emergency
+> bundles into the audit chain after recovery.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
 > signer reloads it after a restart, so the CA is not silently rotated (see
 > [Configuration -> Signer](../configuration.md#signer-topology--ca-custody) and
 > [disaster recovery](../disaster-recovery.md)). Helm `externalKMS` is wired for
 > signer key-store envelope custody; non-extractable HSM/KMS-resident CA private
-> keys and online break-glass issuance remain future work (see
+> key custody remains future work outside the managed-key path (see
 > [Current limitations](../limitations.md) and the [incident-response
 > runbook](incident-response.md)).
 

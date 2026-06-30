@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BreakGlassReconcile } from "@/components/breakglass";
 
-const { apiMock } = vi.hoisted(() => ({ apiMock: { breakglassReconcile: vi.fn() } }));
+const { apiMock } = vi.hoisted(() => ({ apiMock: { breakglassIssue: vi.fn(), breakglassReconcile: vi.fn() } }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
@@ -11,6 +11,7 @@ vi.mock("@/lib/api", async (orig) => {
 });
 
 beforeEach(() => {
+  apiMock.breakglassIssue.mockReset().mockResolvedValue({ reconciled: 1, audit_event_type: "breakglass.issued", bundle: { request_id: "bg-online-1" } });
   apiMock.breakglassReconcile.mockReset().mockResolvedValue({ reconciled: 2 });
 });
 
@@ -19,6 +20,25 @@ const bundles = JSON.stringify([
 ]);
 
 describe("U7-2 break-glass console", () => {
+  it("issues an online break-glass bundle through the served endpoint", async () => {
+    const user = userEvent.setup();
+    render(<BreakGlassReconcile />);
+    const body = JSON.stringify({
+      request_id: "bg-online-1",
+      subject: "svc.example",
+      csr_der: "Y3Ny",
+      reason: "regional outage",
+      approvals: ["op1", "op2"],
+      ttl_seconds: 900,
+    });
+
+    fireEvent.change(screen.getByLabelText("Online issue request (JSON)"), { target: { value: body } });
+    await user.click(screen.getByRole("button", { name: "Issue break-glass certificate" }));
+
+    await waitFor(() => expect(apiMock.breakglassIssue).toHaveBeenCalledWith(JSON.parse(body)));
+    expect(await screen.findByText(/Issued and audited 1 break-glass bundle/i)).toBeInTheDocument();
+  });
+
   it("reconciles offline-issued bundles through the served endpoint and reports the count", async () => {
     const user = userEvent.setup();
     render(<BreakGlassReconcile />);

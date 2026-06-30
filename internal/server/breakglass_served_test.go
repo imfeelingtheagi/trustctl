@@ -75,7 +75,119 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 	}
 }
 
+// TRACE-006/F34 acceptance: the served control plane can perform online
+// emergency issuance when a signer-backed break-glass issuer is configured. The
+// request still needs an m-of-n operator quorum, the certificate is returned as a
+// self-verifying bundle, and the served route reconciles the bundle into the
+// hash-chained audit log before responding.
+func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testing.T) {
+	svc, caDER, pubDER := servedBreakglassService(t)
+	auditKey, err := jose.GenerateRSASigningKey("trace-006-breakglass-audit")
+	if err != nil {
+		t.Fatalf("generate audit key: %v", err)
+	}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.AuditSigningKey = auditKey
+		d.BreakglassCACertDER = caDER
+		d.BreakglassPublicKeyDER = pubDER
+		d.BreakglassIssuer = svc
+	})
+	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "online-breakglass-commander", []string{
+		string(authz.CertsIssue), string(authz.AuditRead),
+	})
+	workload, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate workload key: %v", err)
+	}
+	t.Cleanup(workload.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "breakglass-online.svc.example.test",
+		DNSNames:   []string{"breakglass-online.svc.example.test"},
+	}, workload)
+	if err != nil {
+		t.Fatalf("create emergency CSR: %v", err)
+	}
+
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-issue", map[string]any{
+		"request_id":  "trace-006-online-emergency-1",
+		"subject":     "breakglass-online.svc.example.test",
+		"csr_der":     csrDER,
+		"reason":      "regional CA outage while production recovery needs one short-lived certificate",
+		"approvals":   []string{"op1", "op2"},
+		"ttl_seconds": 900,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("online break-glass issue = %d body=%s; want 201", code, body)
+	}
+	var issued struct {
+		Bundle         breakglass.Bundle `json:"bundle"`
+		Reconciled     int               `json:"reconciled"`
+		AuditEventType string            `json:"audit_event_type"`
+	}
+	if err := json.Unmarshal(body, &issued); err != nil {
+		t.Fatalf("decode issue response: %v body=%s", err, body)
+	}
+	if issued.Reconciled != 1 || issued.AuditEventType != "breakglass.issued" {
+		t.Fatalf("issue response audit fields = reconciled %d event %q", issued.Reconciled, issued.AuditEventType)
+	}
+	if issued.Bundle.RequestID != "trace-006-online-emergency-1" || !sameMembers(issued.Bundle.Approvals, []string{"op1", "op2"}) {
+		t.Fatalf("issued bundle = %+v", issued.Bundle)
+	}
+	if err := breakglass.Verify(issued.Bundle, caDER, pubDER); err != nil {
+		t.Fatalf("served online bundle does not verify: %v", err)
+	}
+	if !h.hasEvent(t, "breakglass.issued") {
+		t.Fatal("online break-glass issue did not append breakglass.issued")
+	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/audit/events?type=breakglass.issued", token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("audit search = %d body=%s; want 200", code, body)
+	}
+	var auditResp struct {
+		Events []audit.Record `json:"events"`
+		Count  int            `json:"count"`
+	}
+	if err := json.Unmarshal(body, &auditResp); err != nil || auditResp.Count != 1 || len(auditResp.Events) != 1 {
+		t.Fatalf("decode audit response: count=%d len=%d err=%v body=%s", auditResp.Count, len(auditResp.Events), err, body)
+	}
+	if !bytes.Contains(auditResp.Events[0].Data, []byte(`"request_id":"trace-006-online-emergency-1"`)) ||
+		!bytes.Contains(auditResp.Events[0].Data, []byte(`"approvals":2`)) {
+		t.Fatalf("audit data does not describe online break-glass issue: %s", auditResp.Events[0].Data)
+	}
+	if _, err := audit.VerifyChain(auditResp.Events); err != nil {
+		t.Fatalf("online break-glass audit record is not chain-verifiable: %v", err)
+	}
+
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue", token, "trace-006-breakglass-subquorum", map[string]any{
+		"request_id":  "trace-006-online-emergency-2",
+		"subject":     "breakglass-online.svc.example.test",
+		"csr_der":     csrDER,
+		"reason":      "sub-quorum should fail closed",
+		"approvals":   []string{"op1"},
+		"ttl_seconds": 900,
+	})
+	if code != http.StatusUnprocessableEntity || !bytes.Contains(body, []byte("quorum not met")) {
+		t.Fatalf("sub-quorum online break-glass issue = %d body=%s; want 422 quorum not met", code, body)
+	}
+}
+
 func servedBreakglassBundle(t *testing.T) (breakglass.Bundle, []byte, []byte) {
+	t.Helper()
+	svc, caDER, pubDER := servedBreakglassService(t)
+	bundle, err := svc.IssueOffline(breakglass.EmergencyRequest{
+		ID:        "iam-06-emergency-1",
+		Subject:   "recovery.svc.example.test",
+		CSRDer:    servedBreakglassCSR(t, "recovery.svc.example.test"),
+		Reason:    "control plane signer unavailable during regional outage",
+		Approvals: []string{"op1", "op2"},
+	}, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("issue offline bundle: %v", err)
+	}
+	return bundle, caDER, pubDER
+}
+
+func servedBreakglassService(t *testing.T) (*breakglass.Service, []byte, []byte) {
 	t.Helper()
 	ca, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
@@ -96,27 +208,22 @@ func servedBreakglassBundle(t *testing.T) (breakglass.Bundle, []byte, []byte) {
 	if err != nil {
 		t.Fatalf("new break-glass service: %v", err)
 	}
+	return svc, caDER, svc.PublicKeyDER()
+}
+
+func servedBreakglassCSR(t *testing.T, subject string) []byte {
+	t.Helper()
 	workload, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatalf("generate workload key: %v", err)
 	}
 	t.Cleanup(workload.Destroy)
 	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
-		CommonName: "recovery.svc.example.test",
-		DNSNames:   []string{"recovery.svc.example.test"},
+		CommonName: subject,
+		DNSNames:   []string{subject},
 	}, workload)
 	if err != nil {
 		t.Fatalf("create emergency CSR: %v", err)
 	}
-	bundle, err := svc.IssueOffline(breakglass.EmergencyRequest{
-		ID:        "iam-06-emergency-1",
-		Subject:   "recovery.svc.example.test",
-		CSRDer:    csrDER,
-		Reason:    "control plane signer unavailable during regional outage",
-		Approvals: []string{"op1", "op2"},
-	}, 30*time.Minute)
-	if err != nil {
-		t.Fatalf("issue offline bundle: %v", err)
-	}
-	return bundle, caDER, svc.PublicKeyDER()
+	return csrDER
 }

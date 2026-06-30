@@ -295,10 +295,11 @@ up a new CA, re-issue, and distribute the new bundle — see the
 [incident-response runbook](runbooks/incident-response.md) and the m-of-n
 [key-ceremony runbook](runbooks/key-ceremony.md). Helm `externalKMS` is wired for
 signer key-store envelope custody: the chart renders `--kms-*` signer arguments and
-omits the local KEK mount when `externalKMS.enabled=true`. Non-extractable
-HSM-resident CA private keys and online m-of-n break-glass issuance remain future
-work; recovery reconciliation is served at `POST /api/v1/breakglass/reconcile`
-after operators bring signed emergency bundles back to the control plane.
+omits the local KEK mount when `externalKMS.enabled=true`. Online m-of-n
+break-glass issuance is served at `POST /api/v1/breakglass/issue` when the
+signer-backed break-glass issuer is configured; recovery reconciliation is served at
+`POST /api/v1/breakglass/reconcile` after operators bring signed emergency bundles
+back to the control plane.
 
 See [Configuration → Datastores](configuration.md#datastores) and
 [Configuration → Signer](configuration.md#signer-topology--ca-custody) for the

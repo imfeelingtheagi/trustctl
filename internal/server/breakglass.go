@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
@@ -19,6 +20,11 @@ type breakglassReconciler struct {
 	caCertDER []byte
 	publicDER []byte
 	audit     auditsink.Auditor
+}
+
+type breakglassOnlineIssuer struct {
+	svc        *breakglass.Service
+	reconciler api.BreakglassReconciler
 }
 
 func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
@@ -39,6 +45,16 @@ func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
 	}, nil
 }
 
+func buildBreakglassIssuer(d Deps, reconciler api.BreakglassReconciler) (api.BreakglassIssuer, error) {
+	if d.BreakglassIssuer == nil {
+		return nil, nil
+	}
+	if reconciler == nil {
+		return nil, errors.New("server: online break-glass issuance requires verifier material and an event log for audit reconciliation")
+	}
+	return breakglassOnlineIssuer{svc: d.BreakglassIssuer, reconciler: reconciler}, nil
+}
+
 func (r breakglassReconciler) ReconcileBreakglass(ctx context.Context, tenantID string, bundles []breakglass.Bundle) (int, error) {
 	if tenantID == "" {
 		return 0, errors.New("server: break-glass reconciliation requires tenant scope")
@@ -49,6 +65,24 @@ func (r breakglassReconciler) ReconcileBreakglass(ctx context.Context, tenantID 
 		}
 	}
 	return breakglass.Reconcile(ctx, tenantID, bundles, r.caCertDER, r.publicDER, r.audit)
+}
+
+func (i breakglassOnlineIssuer) IssueBreakglass(ctx context.Context, tenantID string, req breakglass.EmergencyRequest, ttl time.Duration) (breakglass.Bundle, int, error) {
+	if tenantID == "" {
+		return breakglass.Bundle{}, 0, errors.New("server: online break-glass issuance requires tenant scope")
+	}
+	if i.svc == nil || i.reconciler == nil {
+		return breakglass.Bundle{}, 0, errors.New("server: online break-glass issuance is not configured")
+	}
+	bundle, err := i.svc.IssueOffline(req, ttl)
+	if err != nil {
+		return breakglass.Bundle{}, 0, err
+	}
+	reconciled, err := i.reconciler.ReconcileBreakglass(ctx, tenantID, []breakglass.Bundle{bundle})
+	if err != nil {
+		return breakglass.Bundle{}, 0, err
+	}
+	return bundle, reconciled, nil
 }
 
 func breakglassVerifierMaterialFromConfig(cfg config.Breakglass) (caCertDER, publicKeyDER []byte, err error) {

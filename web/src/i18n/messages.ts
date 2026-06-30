@@ -144,6 +144,38 @@ export const messages = {
     defaultMessage: "Includes issued, imported, and discovery-fed certificate inventory.",
     description: "Short description for the certificate estate health panel.",
   },
+  "breakglass.issue.heading": {
+    defaultMessage: "Online break-glass issue",
+    description: "Heading for the online break-glass issue form.",
+  },
+  "breakglass.issue.description": {
+    defaultMessage: "Submit a CSR, reason, TTL, and m-of-n operator approvals; the server records breakglass.issued before returning the bundle.",
+    description: "Description for the online break-glass issue form.",
+  },
+  "breakglass.issue.label": {
+    defaultMessage: "Online issue request (JSON)",
+    description: "Textarea label for an online break-glass issue request body.",
+  },
+  "breakglass.issue.submit": {
+    defaultMessage: "Issue break-glass certificate",
+    description: "Submit button for online break-glass issue.",
+  },
+  "breakglass.issue.busy": {
+    defaultMessage: "Issuing...",
+    description: "Busy submit button text for online break-glass issue.",
+  },
+  "breakglass.issue.errorTitle": {
+    defaultMessage: "Issue failed",
+    description: "Error title for online break-glass issue failures.",
+  },
+  "breakglass.issue.invalidJson": {
+    defaultMessage: "Issue request must be one JSON object.",
+    description: "Validation error when the online break-glass issue request is not valid JSON.",
+  },
+  "breakglass.issue.status": {
+    defaultMessage: "Issued and audited {count} break-glass bundle.",
+    description: "Success status after issuing an online break-glass bundle.",
+  },
   "certificates.health.stateCritical": {
     defaultMessage: "critical",
     description: "Critical certificate health state label.",
@@ -3106,6 +3138,15 @@ const esESCatalog = {
   "nav.task.highestRisk.description": "lista de rotación priorizada por riesgo",
   "certificates.health.heading": "Salud de certificados del entorno",
   "certificates.health.description": "Incluye inventario de certificados emitidos, importados y descubiertos.",
+  "breakglass.issue.heading": "Emisión break-glass en línea",
+  "breakglass.issue.description":
+    "Envía un CSR, motivo, TTL y aprobaciones de operadores m-de-n; el servidor registra breakglass.issued antes de devolver el paquete.",
+  "breakglass.issue.label": "Solicitud de emisión en línea (JSON)",
+  "breakglass.issue.submit": "Emitir certificado break-glass",
+  "breakglass.issue.busy": "Emitiendo...",
+  "breakglass.issue.errorTitle": "La emisión falló",
+  "breakglass.issue.invalidJson": "La solicitud de emisión debe ser un objeto JSON.",
+  "breakglass.issue.status": "Emitido y auditado {count} paquete break-glass.",
   "certificates.health.stateCritical": "crítico",
   "certificates.health.stateWarning": "advertencia",
   "certificates.health.stateOk": "correcto",

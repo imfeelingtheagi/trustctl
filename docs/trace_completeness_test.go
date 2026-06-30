@@ -378,14 +378,14 @@ func TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs(t *testing.T) {
 	}
 }
 
-// ---- TRACE-006: incident execution + fleet-wide re-issuance served; break-glass
-//      reconciliation/issuance state --------------------------------------------
+// ---- TRACE-006: incident execution + fleet-wide re-issuance + break-glass issue
+//      and reconciliation served ------------------------------------------------
 
 // TestIncidentAndFleetReissuanceServingStatusIsHonest pins TRACE-006. A
 // single-identity credential-compromise incident IS served end-to-end, and
-// compromised-issuer fleet re-issuance IS served through its own run API.
-// Break-glass reconciliation is served separately, but online m-of-n emergency
-// issuance is still not an always-online issuance workflow.
+// compromised-issuer fleet re-issuance IS served through its own run API. Online
+// m-of-n break-glass issue and offline-bundle reconciliation are also served, and
+// both must record breakglass.issued audit evidence.
 func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	low := limLower(t)
 
@@ -406,8 +406,14 @@ func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	if !strings.Contains(read(t, "../internal/api/api.go"), `path: "/api/v1/breakglass/reconcile"`) {
 		t.Fatal("internal/api/api.go no longer registers /api/v1/breakglass/reconcile; the TRACE-006 break-glass reconciliation disclosure has no code anchor — revisit this reality test")
 	}
+	if !strings.Contains(read(t, "../internal/api/api.go"), `path: "/api/v1/breakglass/issue"`) {
+		t.Fatal("internal/api/api.go no longer registers /api/v1/breakglass/issue; the TRACE-006 online break-glass disclosure has no code anchor — revisit this reality test")
+	}
 	if !strings.Contains(read(t, "../internal/server/breakglass.go"), "ReconcileBreakglass") {
 		t.Fatal("internal/server/breakglass.go no longer wires break-glass reconciliation; revisit this TRACE-006 reality test")
+	}
+	if !strings.Contains(read(t, "../internal/server/breakglass.go"), "IssueBreakglass") {
+		t.Fatal("internal/server/breakglass.go no longer wires online break-glass issue; revisit this TRACE-006 reality test")
 	}
 
 	// The served single-identity incident half must always be stated.
@@ -417,21 +423,18 @@ func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	if !strings.Contains(low, "/api/v1/incidents/fleet-reissuance-runs") {
 		t.Error("limitations.md must disclose the served fleet re-issuance route — TRACE-006")
 	}
-	if !strings.Contains(low, "online m-of-n break-glass issuance is not this surface") {
-		t.Error("limitations.md must still disclose that online m-of-n break-glass issuance is NOT the served incident surface — TRACE-006")
+	if !strings.Contains(low, "/api/v1/breakglass/issue") || !strings.Contains(low, "online m-of-n break-glass issuance is served") {
+		t.Error("limitations.md must disclose that online m-of-n break-glass issuance is served at /api/v1/breakglass/issue — TRACE-006")
 	}
 	if !strings.Contains(low, "/api/v1/breakglass/reconcile") || !strings.Contains(low, "breakglass.issued") {
 		t.Error("limitations.md must disclose the served break-glass reconciliation route and audit event — TRACE-006")
 	}
-	if !strings.Contains(low, "online") || !strings.Contains(low, "break-glass issuance workflows") {
-		t.Error("limitations.md must keep the React-console label that online break-glass issuance still lacks a served UI — TRACE-006")
-	}
 	for _, oc := range []string{
-		"online break-glass issuance is served",
-		"m-of-n break-glass issuance is served",
+		"online m-of-n break-glass issuance is not this surface",
+		"emergency issuance remains the offline operator ceremony",
 	} {
 		if strings.Contains(low, oc) {
-			t.Errorf("limitations.md over-claims online break-glass as served (%q) — TRACE-006", oc)
+			t.Errorf("limitations.md still carries stale unserved online break-glass copy (%q) — TRACE-006", oc)
 		}
 	}
 }

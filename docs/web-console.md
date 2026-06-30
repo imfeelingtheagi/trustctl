@@ -146,9 +146,10 @@ remains an API call.
 
 - **Incidents** — the response console: compromise → served **blast radius** → replacement-
   before-revoke execution → automated revoke/rotate/right-size playbooks →
-  Splunk/Jira/Slack/ServiceNow response dispatch → evidence, plus a **break-glass
-  reconciliation** panel that reconciles offline-issued, quorum-approved bundles back
-  into the event log (`/api/v1/breakglass/reconcile`).
+  Splunk/Jira/Slack/ServiceNow response dispatch → evidence, plus a **break-glass**
+  panel that can submit online m-of-n issue requests (`/api/v1/breakglass/issue`) and
+  reconcile offline-issued, quorum-approved bundles back into the event log
+  (`/api/v1/breakglass/reconcile`).
 - **Code signing** — a real signing console (key-backed and keyless/Fulcio), submitting only
   the artifact digest and rendering the signature receipt; private keys and artifact bytes
   never enter the browser (`/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).

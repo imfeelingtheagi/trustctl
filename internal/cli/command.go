@@ -182,6 +182,7 @@ var commandTable = []Command{
 	{Name: []string{"remediation", "playbook-runs", "list"}, Method: "GET", Path: "/api/v1/remediation/playbook-runs", Query: []string{"limit", "cursor", "playbook_id"}, Summary: "List remediation playbook run evidence"},
 	{Name: []string{"remediation", "playbook-runs", "get"}, Method: "GET", Path: "/api/v1/remediation/playbook-runs/{id}", Summary: "Get a remediation playbook run evidence pack"},
 	{Name: []string{"itsm", "servicenow", "tickets", "create"}, Method: "POST", Path: "/api/v1/itsm/servicenow/tickets", Body: bodyFile, Summary: "Queue a ServiceNow ITSM ticket through the outbox"},
+	{Name: []string{"breakglass", "issue"}, Method: "POST", Path: "/api/v1/breakglass/issue", Body: bodyFile, Summary: "Issue and audit an online m-of-n break-glass certificate"},
 	{Name: []string{"breakglass", "reconcile"}, Method: "POST", Path: "/api/v1/breakglass/reconcile", Body: bodyFile, Summary: "Reconcile signed offline break-glass bundles into audit"},
 
 	{Name: []string{"editions", "status"}, Method: "GET", Path: "/api/v1/editions", Summary: "Show edition, license, and FIPS posture"},

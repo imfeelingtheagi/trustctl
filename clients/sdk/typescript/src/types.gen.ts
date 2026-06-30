@@ -418,6 +418,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/breakglass/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue and audit an online m-of-n break-glass certificate */
+        post: operations["issueBreakglass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/breakglass/reconcile": {
         parameters: {
             query?: never;
@@ -3458,6 +3475,20 @@ export interface components {
             /** Format: byte */
             signature: string;
             subject: string;
+        };
+        BreakglassIssueRequest: {
+            approvals: string[];
+            /** Format: byte */
+            csr_der: string;
+            reason: string;
+            request_id: string;
+            subject: string;
+            ttl_seconds?: number;
+        };
+        BreakglassIssueResponse: {
+            audit_event_type: string;
+            bundle: components["schemas"]["BreakglassBundle"];
+            reconciled: number;
         };
         BreakglassReconcileRequest: {
             bundles: components["schemas"]["BreakglassBundle"][];
@@ -7686,6 +7717,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditBundle"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueBreakglass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassIssueResponse"];
                 };
             };
             /** @description client error */

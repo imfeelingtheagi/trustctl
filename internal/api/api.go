@@ -70,6 +70,7 @@ type API struct {
 	abacNow                 func() time.Time
 	approvals               ApprovalRecorder
 	breakglass              BreakglassReconciler
+	breakglassIssuer        BreakglassIssuer
 	breakglassAdmin         *breakglass.AdminService
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
@@ -128,6 +129,7 @@ type config struct {
 	abacNow                 func() time.Time
 	approvals               ApprovalRecorder
 	breakglass              BreakglassReconciler
+	breakglassIssuer        BreakglassIssuer
 	breakglassAdmin         *breakglass.AdminService
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
@@ -367,6 +369,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		abacNow:                 cfg.abacNow,
 		approvals:               cfg.approvals,
 		breakglass:              cfg.breakglass,
+		breakglassIssuer:        cfg.breakglassIssuer,
 		breakglassAdmin:         cfg.breakglassAdmin,
 		caHierarchy:             cfg.caHierarchy,
 		externalCAs:             cfg.externalCAs,
@@ -855,6 +858,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/nhi/posture/static-credentials", opID: "listNHIStaticPosture", summary: "List long-lived and static NHI credential posture findings", handler: a.listNHIStaticPosture, resSchema: "NHIStaticPosture", successCode: "200", perm: authz.NHIRead},
 		{method: "POST", path: "/api/v1/nhi/decommission", opID: "decommissionNHI", summary: "Decommission NHIs from departure, vendor-term, or inactivity signals", handler: a.decommissionNHI, reqSchema: "NHIDecommissionRequest", resSchema: "NHIDecommissionResponse", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/ownership/attribution", opID: "listOwnershipAttribution", summary: "List NHI ownership attribution across human, team, vendor, and orphaned records", handler: a.listOwnershipAttribution, resSchema: "OwnershipAttribution", successCode: "200", perm: authz.NHIRead},
+		{method: "POST", path: "/api/v1/breakglass/issue", opID: "issueBreakglass", summary: "Issue and audit an online m-of-n break-glass certificate", handler: a.issueBreakglass, reqSchema: "BreakglassIssueRequest", resSchema: "BreakglassIssueResponse", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/breakglass/reconcile", opID: "reconcileBreakglass", summary: "Verify break-glass bundles and reconcile them into audit", handler: a.reconcileBreakglass, reqSchema: "BreakglassReconcileRequest", resSchema: "BreakglassReconcileResponse", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},

@@ -117,9 +117,10 @@ never live in the API process. What you can do end to end against the running bi
   `POST /api/v1/incidents/fleet-reissuance-runs` with pause/resume/rollback and
   evidence export routes under `/api/v1/incidents/fleet-reissuance-runs/{id}`,
   matching `trstctl incidents fleet-reissuance *` CLI commands, and the `/incidents`
-  console;
-  online m-of-n break-glass issuance is not this surface. Break-glass recovery
-  reconciliation is served separately at
+  console. Online m-of-n break-glass issuance is served at
+  `POST /api/v1/breakglass/issue` when the signer-backed break-glass issuer is
+  configured; it returns a self-verifying bundle only after recording
+  `breakglass.issued`. Break-glass recovery reconciliation is served separately at
   `POST /api/v1/breakglass/reconcile`, where signed offline bundles are verified and
   recorded as `breakglass.issued` audit events.
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
@@ -1007,9 +1008,11 @@ and use the sealed signer key store by default. Helm `externalKMS` is wired for
 signer key-store envelope custody, so regulated deployments can wrap signer
 key-store DEKs through an operator-supplied AWS KMS, GCP KMS, Azure Key Vault, or
 PKCS#11 adapter instead of mounting the local signer KEK. Non-extractable
-HSM/KMS-resident CA private keys, online break-glass emergency issuance, and
-break-glass rotation/cross-sign workflows are still future work. Break-glass bundle
-reconciliation is served separately at `POST /api/v1/breakglass/reconcile`. The
+HSM/KMS-resident CA private keys are supported through the managed-key custody path.
+Online m-of-n break-glass issuance is served at `POST /api/v1/breakglass/issue`
+when a signer-backed break-glass issuer is configured, and break-glass bundle
+reconciliation is served separately at `POST /api/v1/breakglass/reconcile`.
+Break-glass rotation/cross-sign workflows are still future work. The
 credential-store key-encryption key is a local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
@@ -1078,10 +1081,10 @@ provider algorithms at request time.
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import
 → rotate → revoke → zeroize is implemented and end-to-end tested but not yet exposed as
-its own served route), plus online **m-of-n break-glass issuance**, rotation, and
-cross-signing. Break-glass reconciliation is served at
-`POST /api/v1/breakglass/reconcile`, but emergency issuance remains the offline
-operator ceremony. The signer's at-rest CA key is still sealed under a local
+its own served route), plus break-glass rotation and cross-signing. Online
+**m-of-n break-glass issuance** is served at `POST /api/v1/breakglass/issue` when
+the signer-backed break-glass issuer is configured, and reconciliation is served at
+`POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still sealed under a local
 key-encryption file by default. See the
 [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and

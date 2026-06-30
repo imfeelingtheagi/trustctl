@@ -5749,53 +5749,56 @@
       "domain": "Incident and JIT",
       "phase": "P2",
       "priority": 74,
-      "served_state": "partial",
-      "backend_status": "served-reconciliation; offline issuance remains operator ceremony",
-      "current_frontend_mapping": "API-served reconciliation plus disclosure: Incidents at /incidents - break-glass declaration, quorum, offline issue, reconciliation, expiry, and checklist fixture without bypass control; coverage ledger: /coverage",
-      "target_gui_mapping": "Break-glass UI with emergency declaration, quorum, offline issue, verification, reconciliation, expiry, and post-incident audit checklist.",
-      "acceptance_test": "UI requires high-risk confirmation and shows library-only state until served; tests no one-click bypass.",
+      "served_state": "served",
+      "backend_status": "served online m-of-n emergency issuance plus signed offline-bundle reconciliation",
+      "current_frontend_mapping": "served: Incidents at /incidents can submit online m-of-n break-glass issue requests and reconcile offline bundles, with audit event evidence; coverage ledger: /coverage",
+      "target_gui_mapping": "Break-glass UI with emergency declaration, quorum, online issue, offline verification, reconciliation, expiry, and post-incident audit checklist.",
+      "acceptance_test": "Served API requires m-of-n quorum, rejects sub-quorum online issue requests, returns a self-verifying bundle, and records breakglass.issued before responding; UI/CLI call the served route with high-risk confirmation/body-file workflows.",
       "source_docs": ["docs/features/incident-and-jit.md"],
       "source_backend": ["internal/breakglass"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. IAM-06 adds POST /api/v1/breakglass/reconcile: signed offline bundles are verified against deployment-pinned trust anchors and reconciled into the hash-chained audit log as breakglass.issued. Offline m-of-n issuance remains an operator ceremony, so this row is partial rather than fully served. Test evidence: internal/server/breakglass_served_test.go drives the running handler and verifies the audit chain; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search.",
-      "api_surface": ["reconcileBreakglass"],
+      "notes": "TRACE-006 closes F34 as served. POST /api/v1/breakglass/issue accepts a CSR, reason, TTL, and m-of-n operator approvals; it signs through the configured break-glass issuer, returns a self-verifying bundle, and reconciles breakglass.issued into the hash-chained audit log before responding. POST /api/v1/breakglass/reconcile remains the recovery path for signed offline bundles.",
+      "api_surface": ["issueBreakglass", "reconcileBreakglass"],
       "api_na": "",
-      "cli_surface": ["breakglass reconcile"],
+      "cli_surface": ["breakglass issue", "breakglass reconcile"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "POST /api/v1/breakglass/reconcile verifies signed offline break-glass bundles against deployment-pinned verifier material and reconciles them into audit as immutable breakglass.issued events.",
-            "The route does not issue credentials online; m-of-n emergency issuance remains the offline operator ceremony."
+            "POST /api/v1/breakglass/issue performs online m-of-n emergency issuance through the configured signer-backed break-glass issuer and reconciles the resulting bundle into audit before returning.",
+            "POST /api/v1/breakglass/reconcile verifies signed offline break-glass bundles against deployment-pinned verifier material and reconciles them into audit as immutable breakglass.issued events."
           ],
           "refs": ["internal/api/breakglass.go", "internal/server/breakglass.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: API-served reconciliation plus disclosure: Incidents at /incidents - break-glass declaration, quorum, offline issue, reconciliation, expiry, and checklist fixture without bypass control; coverage ledger: /coverage",
-            "target_gui_mapping: Break-glass UI with emergency declaration, quorum, offline issue, verification, reconciliation, expiry, and post-incident audit checklist."
+            "current_frontend_mapping: served: Incidents at /incidents can submit online m-of-n break-glass issue requests and reconcile offline bundles, with audit event evidence; coverage ledger: /coverage",
+            "target_gui_mapping: Break-glass UI with emergency declaration, quorum, online issue, offline verification, reconciliation, expiry, and post-incident audit checklist."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
           "evidence": [
+            "cli_surface: breakglass issue sends POST /api/v1/breakglass/issue with a JSON request body from -f and an Idempotency-Key for safe retries.",
             "cli_surface: breakglass reconcile sends POST /api/v1/breakglass/reconcile with a JSON request body from -f and an Idempotency-Key for safe retries.",
-            "TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey verifies the command's served path, request body, and mutation idempotency header."
+            "TestBreakglassIssueCommandSendsBodyAndIdempotencyKey and TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey verify the commands' served paths, request bodies, and mutation idempotency headers."
           ],
           "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
         },
         "api": {
           "evidence": [
+            "api_surface: issueBreakglass is in the served OpenAPI route registry at POST /api/v1/breakglass/issue.",
             "api_surface: reconcileBreakglass is in the served OpenAPI route registry at POST /api/v1/breakglass/reconcile.",
-            "OpenAPI exposes BreakglassBundle, BreakglassReconcileRequest, and BreakglassReconcileResponse schemas."
+            "OpenAPI exposes BreakglassIssueRequest, BreakglassIssueResponse, BreakglassBundle, BreakglassReconcileRequest, and BreakglassReconcileResponse schemas."
           ],
           "refs": ["internal/api/api.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "internal/server/breakglass_served_test.go posts a real offline bundle to the running handler and verifies breakglass.issued is chain-verifiable in the audit surface.",
-            "acceptance_test: UI requires high-risk confirmation and shows the residual offline ceremony disclosure; tests no one-click bypass.",
+            "internal/server/breakglass_served_test.go posts a real online m-of-n issue request to the running handler, verifies the returned bundle, verifies breakglass.issued is chain-verifiable in the audit surface, and proves sub-quorum online issue fails closed.",
+            "internal/server/breakglass_served_test.go also posts a real offline bundle to the running reconcile handler and verifies breakglass.issued is chain-verifiable in the audit surface.",
+            "acceptance_test: served API requires quorum, returns an audited bundle, and CLI/UI call the served route instead of a one-click bypass.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -5812,14 +5815,15 @@
         },
         "rbac": {
           "evidence": [
-            "The feature authz manifest maps reconcileBreakglass to POST /api/v1/breakglass/reconcile with certs:issue, and internal/api/feature_authz_test.go verifies every api_surface operation has permission metadata."
+            "The feature authz manifest maps issueBreakglass and reconcileBreakglass to certs:issue, and internal/api/feature_authz_test.go verifies every api_surface operation has permission metadata."
           ],
           "refs": ["internal/api/api.go", "internal/api/breakglass.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
           "evidence": [
-            "The served reconciler writes verified bundles through audit.NewAuditor(log), producing hash-chained breakglass.issued events.",
-            "TestServedBreakglassReconcileRecordsAuditChain verifies the event and audit hash chain through the served API."
+            "The online issuer signs through the configured break-glass service and immediately reconciles the returned bundle through audit.NewAuditor(log), producing hash-chained breakglass.issued events.",
+            "The served reconciler writes verified offline bundles through audit.NewAuditor(log), producing hash-chained breakglass.issued events.",
+            "TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain and TestServedBreakglassReconcileRecordsAuditChain verify the event and audit hash chain through the served API."
           ],
           "refs": ["internal/server/breakglass.go", "internal/server/breakglass_served_test.go"]
         },

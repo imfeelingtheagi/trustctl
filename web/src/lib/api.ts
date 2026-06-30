@@ -27,6 +27,8 @@ import type {
   AuditBundle,
   AuditEvent as GenAuditEvent,
   BreakglassBundle,
+  BreakglassIssueRequest,
+  BreakglassIssueResponse,
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
   CAAuthority,
@@ -278,6 +280,8 @@ export type {
   ActiveActiveIssuancePlan,
   AuditBundle,
   BreakglassBundle,
+  BreakglassIssueRequest,
+  BreakglassIssueResponse,
   BreakglassReconcileRequest,
   BreakglassReconcileResponse,
   CodeSigningKeylessRequest,
@@ -835,6 +839,7 @@ export interface Api {
   resumeFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
   rollbackFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
   exportFleetReissuanceEvidence(id: string): Promise<FleetReissuanceEvidence>;
+  breakglassIssue(input: BreakglassIssueRequest): Promise<BreakglassIssueResponse>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
   signCode(input: CodeSigningRequest): Promise<CodeSigningSignature>;
   signCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningSignature>;
@@ -1048,6 +1053,7 @@ export const api: Api = {
   rollbackFleetReissuance: (id, input) =>
     mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/rollback`, input),
   exportFleetReissuanceEvidence: (id) => req<FleetReissuanceEvidence>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/evidence`),
+  breakglassIssue: (input) => mutate<BreakglassIssueResponse>("POST", "/api/v1/breakglass/issue", input),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
   signCodeKeyless: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input),

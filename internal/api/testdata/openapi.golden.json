@@ -1081,6 +1081,59 @@
         ],
         "type": "object"
       },
+      "BreakglassIssueRequest": {
+        "properties": {
+          "approvals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "csr_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "subject",
+          "csr_der",
+          "reason",
+          "approvals"
+        ],
+        "type": "object"
+      },
+      "BreakglassIssueResponse": {
+        "properties": {
+          "audit_event_type": {
+            "type": "string"
+          },
+          "bundle": {
+            "$ref": "#/components/schemas/BreakglassBundle"
+          },
+          "reconciled": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bundle",
+          "reconciled",
+          "audit_event_type"
+        ],
+        "type": "object"
+      },
       "BreakglassReconcileRequest": {
         "properties": {
           "bundles": {
@@ -14012,6 +14065,63 @@
         ],
         "summary": "Export a signed audit evidence bundle",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/breakglass/issue": {
+      "post": {
+        "operationId": "issueBreakglass",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassIssueResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue and audit an online m-of-n break-glass certificate",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/breakglass/reconcile": {

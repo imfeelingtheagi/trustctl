@@ -367,6 +367,28 @@ func TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestBreakglassIssueCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 201, `{"reconciled":1,"audit_event_type":"breakglass.issued"}`, &cap)
+	body := `{"request_id":"bg-online-1","subject":"svc.example","csr_der":"Y3Ny","reason":"restore production","approvals":["alice","bob"],"ttl_seconds":900}`
+	code, _, _ := run(t, []string{"breakglass", "issue", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/breakglass/issue" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("break-glass issue mutation should send an Idempotency-Key")
+	}
+}
+
 func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 202, `{"id":"ticket-1","status":"queued"}`, &cap)

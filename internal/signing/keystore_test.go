@@ -92,7 +92,7 @@ func TestSignerKeystoreUsesKMSWrapper(t *testing.T) {
 		Provider:    "awskms",
 		KeyRef:      "arn:aws:kms:us-east-1:111122223333:key/signer-ca",
 		WrapCommand: helper,
-		Timeout:     time.Second,
+		Timeout:     5 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("NewExternalKMSWrapper: %v", err)

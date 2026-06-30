@@ -425,6 +425,29 @@ BreakglassBundle = TypedDict(
     total=False,
 )
 
+BreakglassIssueRequest = TypedDict(
+    'BreakglassIssueRequest',
+    {
+        'approvals': list[str],
+        'csr_der': str,
+        'reason': str,
+        'request_id': str,
+        'subject': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+BreakglassIssueResponse = TypedDict(
+    'BreakglassIssueResponse',
+    {
+        'audit_event_type': str,
+        'bundle': dict[str, Any],
+        'reconciled': int,
+    },
+    total=False,
+)
+
 BreakglassReconcileRequest = TypedDict(
     'BreakglassReconcileRequest',
     {

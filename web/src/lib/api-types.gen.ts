@@ -299,6 +299,21 @@ export interface BreakglassBundle {
   subject: string;
 }
 
+export interface BreakglassIssueRequest {
+  approvals: string[];
+  csr_der: string;
+  reason: string;
+  request_id: string;
+  subject: string;
+  ttl_seconds?: number;
+}
+
+export interface BreakglassIssueResponse {
+  audit_event_type: string;
+  bundle: BreakglassBundle;
+  reconciled: number;
+}
+
 export interface BreakglassReconcileRequest {
   bundles: BreakglassBundle[];
 }

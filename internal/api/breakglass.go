@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/breakglass"
 )
@@ -21,10 +22,26 @@ type BreakglassReconciler interface {
 	ReconcileBreakglass(ctx context.Context, tenantID string, bundles []breakglass.Bundle) (int, error)
 }
 
+// BreakglassIssuer performs the online m-of-n emergency issuance workflow. The
+// implementation is injected by server composition so the API never sees private
+// key material; it only enforces request shape, idempotency, RBAC, and response
+// semantics.
+type BreakglassIssuer interface {
+	IssueBreakglass(ctx context.Context, tenantID string, req breakglass.EmergencyRequest, ttl time.Duration) (breakglass.Bundle, int, error)
+}
+
 // WithBreakglass wires the served recovery-side break-glass reconciliation
 // endpoint. When unset, POST /api/v1/breakglass/reconcile fails closed.
 func WithBreakglass(r BreakglassReconciler) Option {
 	return func(c *config) { c.breakglass = r }
+}
+
+// WithBreakglassIssuer wires the served online m-of-n emergency issuance route.
+// When unset, POST /api/v1/breakglass/issue fails closed. The issuer must sign
+// through the configured signing boundary and reconcile the resulting bundle into
+// audit before returning it.
+func WithBreakglassIssuer(i BreakglassIssuer) Option {
+	return func(c *config) { c.breakglassIssuer = i }
 }
 
 // WithBreakglassAdmin wires the disabled-by-default local-admin recovery login.
@@ -53,6 +70,51 @@ type breakglassReconcileRequest struct {
 
 type breakglassReconcileResponse struct {
 	Reconciled int `json:"reconciled"`
+}
+
+type breakglassIssueRequest struct {
+	RequestID  string   `json:"request_id"`
+	Subject    string   `json:"subject"`
+	CSRDer     []byte   `json:"csr_der"`
+	Reason     string   `json:"reason"`
+	Approvals  []string `json:"approvals"`
+	TTLSeconds int      `json:"ttl_seconds"`
+}
+
+type breakglassIssueResponse struct {
+	Bundle         breakglass.Bundle `json:"bundle"`
+	Reconciled     int               `json:"reconciled"`
+	AuditEventType string            `json:"audit_event_type"`
+}
+
+// issueBreakglass is the online version of the break-glass ceremony: the
+// running control plane accepts a CSR plus a distinct m-of-n operator quorum,
+// asks the configured break-glass issuer to sign through the crypto boundary,
+// and returns only after the resulting bundle is reconciled into audit.
+//
+//trstctl:mutation
+func (a *API) issueBreakglass(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.breakglassIssuer == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "online break-glass issuance is not configured")
+		}
+		var req breakglassIssueRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		emergency, ttl, err := validateBreakglassIssueRequest(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		bundle, reconciled, err := a.breakglassIssuer.IssueBreakglass(ctx, tenantID, emergency, ttl)
+		if err != nil {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+		}
+		return http.StatusCreated, breakglassIssueResponse{
+			Bundle: bundle, Reconciled: reconciled, AuditEventType: "breakglass.issued",
+		}, nil
+	})
 }
 
 // reconcileBreakglass accepts already-issued offline break-glass bundles and
@@ -90,6 +152,49 @@ func (a *API) reconcileBreakglass(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, breakglassReconcileResponse{Reconciled: reconciled}, nil
 	})
+}
+
+func validateBreakglassIssueRequest(req breakglassIssueRequest) (breakglass.EmergencyRequest, time.Duration, error) {
+	id := strings.TrimSpace(req.RequestID)
+	if id == "" {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "request_id is required")
+	}
+	subject := strings.TrimSpace(req.Subject)
+	if subject == "" {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "subject is required")
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "reason is required")
+	}
+	if len(req.CSRDer) == 0 {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "csr_der is required")
+	}
+	approvals := compactNonEmptyStrings(req.Approvals)
+	if len(approvals) == 0 {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "approvals must contain at least one approval")
+	}
+	ttl := time.Duration(req.TTLSeconds) * time.Second
+	if ttl <= 0 {
+		ttl = 30 * time.Minute
+	}
+	if ttl > 24*time.Hour {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "ttl_seconds may not exceed 86400")
+	}
+	return breakglass.EmergencyRequest{
+		ID: id, Subject: subject, CSRDer: append([]byte(nil), req.CSRDer...),
+		Reason: reason, Approvals: approvals,
+	}, ttl, nil
+}
+
+func compactNonEmptyStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if s := strings.TrimSpace(v); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func validateBreakglassBundle(i int, b breakglass.Bundle) error {

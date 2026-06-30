@@ -360,6 +360,19 @@ func componentSchemas() map[string]*Schema {
 	breakglassReconcileResp := object(map[string]*Schema{
 		"reconciled": {Type: "integer"},
 	}, "reconciled")
+	breakglassIssueReq := object(map[string]*Schema{
+		"request_id":  str(),
+		"subject":     str(),
+		"csr_der":     {Type: "string", Format: "byte"},
+		"reason":      str(),
+		"approvals":   {Type: "array", Items: str()},
+		"ttl_seconds": {Type: "integer"},
+	}, "request_id", "subject", "csr_der", "reason", "approvals")
+	breakglassIssueResp := object(map[string]*Schema{
+		"bundle":           ref("BreakglassBundle"),
+		"reconciled":       {Type: "integer"},
+		"audit_event_type": str(),
+	}, "bundle", "reconciled", "audit_event_type")
 
 	list := func(item string) *Schema {
 		return object(map[string]*Schema{
@@ -2645,6 +2658,8 @@ func componentSchemas() map[string]*Schema {
 		"SecretApprovalRequest":                 secretApprovalReq,
 		"SecretApproval":                        secretApproval,
 		"BreakglassBundle":                      breakglassBundle,
+		"BreakglassIssueRequest":                breakglassIssueReq,
+		"BreakglassIssueResponse":               breakglassIssueResp,
 		"BreakglassReconcileRequest":            breakglassReconcileReq,
 		"BreakglassReconcileResponse":           breakglassReconcileResp,
 		"SecretRequest":                         secretReq,
