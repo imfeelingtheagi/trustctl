@@ -136,8 +136,10 @@ reviewed resource: `root:<sha256-of-ca-spec>`,
 `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>`, or
 `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>`. Existing CA import uses
 `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>`,
-binding the reviewed certificate chain to the exact signer-held key handle. If approvals are short,
-the operation returns `ErrQuorumNotMet`; if the opener tries to approve their own
+binding the reviewed certificate chain to the exact signer-held key handle. CA
+renewal/re-key uses `rotation:<ca-id>` and creates fresh signer-held CA material for
+the selected authority. If approvals are short, the operation returns
+`ErrQuorumNotMet`; if the opener tries to approve their own
 ceremony, or the ceremony was already used or opened for a different resource/spec,
 it fails closed before committing the CA mutation. This is how you stop a single
 compromised admin account from minting a rogue root or intermediate, and how you stop
@@ -149,10 +151,11 @@ The served hierarchy API lives at `/api/v1/ca/ceremonies`,
 `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
 `/api/v1/ca/authorities/{id}/issue`, with zero-downtime successor activation at
-`/api/v1/ca/authorities/{id}/rotate`. Online root and intermediate private keys
-are created in the isolated signing service and referenced by signer handles; the
-control plane stores certificates, chains, metadata, and ceremony state, but it
-never receives the CA private key. Existing CA import accepts a public root or
+`/api/v1/ca/authorities/{id}/rotate` and signer-backed renewal/re-key at
+`/api/v1/ca/authorities/{id}/rekey`. Online root and intermediate private keys are
+created in the isolated signing service and referenced by signer handles; the control
+plane stores certificates, chains, metadata, and ceremony state, but it never
+receives the CA private key. Existing CA import accepts a public root or
 intermediate chain plus a signer handle, verifies the first certificate's public key
 matches that signer-held key, verifies the chain/profile, and then serves normal leaf
 issuance from the imported authority. Offline-root import accepts exactly one public
@@ -163,10 +166,15 @@ matches the reviewed `CASpec`, and carries the signer-held public key. A rotatio
 activation takes an already-created signer-backed successor with the same authority
 constraints, marks the predecessor `superseded`, records the successor's
 `replaces_id`, and keeps the predecessor issue URL answering while routing new
-certificates to the successor. Every served step (`ca.ceremony.started`,
-`ca.ceremony.approved`, `ca.root.created`, `ca.authority.imported`,
-`ca.intermediate_csr.issued`, `ca.intermediate.created`, `ca.authority.rotated`,
-`ca.endentity.issued`) is a
+certificates to the successor. A re-key activation consumes a `rotation:<ca-id>`
+ceremony, creates a fresh signer-backed root or intermediate certificate with the
+same authority policy, marks the predecessor `superseded`, records `replaces_id`,
+and keeps both predecessor and successor issue URLs working while new certificates
+chain to the fresh CA. Offline-root re-key and cross-sign distribution remain
+operator procedures because the offline root key never enters trstctl. Every served
+step (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
+`ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
+`ca.authority.rotated`, `ca.authority.rekeyed`, `ca.endentity.issued`) is a
 tenant-scoped event carrying the ceremony/authority context and is recorded
 immutably in the tamper-evident log.
 Cross-signing remains a purpose-bound operator workflow using
@@ -375,6 +383,8 @@ external CA registry API, each of which calls the one issuance path with an
 - **Served routes:** `POST|GET /api/v1/profiles`,
   `GET /api/v1/profiles/{name}/versions/{version}`, `POST /api/v1/certificates`,
   `GET /api/v1/external-cas`, `POST /api/v1/external-cas/{id}/issue`,
+  `POST /api/v1/ca/authorities/{id}/rotate`,
+  `POST /api/v1/ca/authorities/{id}/rekey`,
   `POST /api/v1/certificates/bulk-revoke`,
   `POST /api/v1/identities/bulk-revoke`.
 - **Upstream CA adapters:** AD CS, AWS Private CA, Azure Key Vault, DigiCert, EJBCA,
@@ -384,8 +394,9 @@ external CA registry API, each of which calls the one issuance path with an
   `ImportExisting` / `CreateIntermediate`. See the
   [runbook](../runbooks/key-ceremony.md).
 - **Events:** `ca.issue`, `issuance.profile_evaluated`, `ca.root.created`,
-  `ca.authority.imported`, `ca.intermediate.created`, `ca.authority.rotated`, `ca.cross_signed`,
-  `ca.certificate.revoked`, `ca.crl.published`.
+  `ca.authority.imported`, `ca.intermediate.created`, `ca.authority.rotated`,
+  `ca.authority.rekeyed`, `ca.cross_signed`, `ca.certificate.revoked`,
+  `ca.crl.published`.
 - **RFCs:** 5280 (X.509/CRL), 6960 (OCSP), 9773 (ARI).
 
 ## See also

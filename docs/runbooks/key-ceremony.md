@@ -246,6 +246,44 @@ the predecessor's stable issue URL.
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).
 
+## Procedure: renewing or re-keying a signer-backed CA
+
+Use re-key when the authority should keep the same logical lane but receive a fresh
+CA key and certificate. The served path covers signer-backed online roots and
+intermediates; offline-root key use and cross-sign distribution stay outside the
+binary.
+
+1. Start a ceremony with `POST /api/v1/ca/ceremonies`:
+
+   ```json
+   {
+     "operation": "rekey_ca",
+     "authority_id": "<ca-authority-id>",
+     "threshold": 2,
+     "spec": { "common_name": "Reviewed re-key" }
+   }
+   ```
+
+   The ceremony purpose is `rotation:<ca-authority-id>`, so it cannot be replayed
+   against a different CA.
+2. Collect approvals with `POST /api/v1/ca/ceremonies/{id}/approvals`.
+3. Activate the re-key with `POST /api/v1/ca/authorities/{id}/rekey`:
+
+   ```json
+   {
+     "ceremony_id": "<rekey-ceremony-id>",
+     "ttl_seconds": 7776000,
+     "reason": "planned CA renewal"
+   }
+   ```
+
+   The server creates a fresh signer-held CA key, issues a replacement CA
+   certificate with the predecessor's common name, DNS constraints, EKUs, and path
+   length, emits `ca.authority.rekeyed`, marks the predecessor `superseded`, and
+   records `replaces_id` on the successor.
+4. Verify the stable predecessor issue URL and the fresh successor issue URL both
+   return chains signed by the fresh successor CA.
+
 ## Custodian hygiene
 
 - Custodians should be distinct people with independent credentials; do not let one

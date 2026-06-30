@@ -295,6 +295,59 @@ func TestCAAuthorityRotatedEventProjectsReadModel(t *testing.T) {
 	}
 }
 
+func TestCAAuthorityRekeyedEventProjectsReadModel(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	predecessor, err := s.InsertCAAuthority(ctx, store.CAAuthority{
+		TenantID: tenantA, CommonName: "re-key predecessor", Kind: "intermediate", Status: "active",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nPREDECESSOR\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "signer-predecessor", Serial: "predecessor-1", MaxPathLen: 0,
+	})
+	if err != nil {
+		t.Fatalf("insert predecessor: %v", err)
+	}
+	notAfter := time.Now().UTC().Add(365 * 24 * time.Hour)
+	payload, err := json.Marshal(projections.CAAuthorityRekeyed{
+		ID: "00000000-0000-4000-8000-000000000052", PredecessorCAID: predecessor.ID,
+		CommonName: "re-key predecessor", Kind: "intermediate",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nSUCCESSOR\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "signer-rekeyed", Serial: "successor-1", NotAfter: notAfter,
+		MaxPathLen: 0, PermittedDNSNames: []string{"example.test"}, EKUs: []string{"serverAuth"},
+		CeremonyID: "00000000-0000-4000-8000-000000000053",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Apply(ctx, events.Event{
+		Type:     projections.EventCAAuthorityRekeyed,
+		TenantID: tenantA,
+		Time:     notAfter.Add(-time.Hour),
+		Data:     payload,
+	}); err != nil {
+		t.Fatalf("apply re-key event: %v", err)
+	}
+	gotPredecessor, err := s.GetCAAuthority(ctx, tenantA, predecessor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotSuccessor, err := s.GetCAAuthority(ctx, tenantA, "00000000-0000-4000-8000-000000000052")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPredecessor.Status != "superseded" {
+		t.Errorf("predecessor status = %q, want superseded", gotPredecessor.Status)
+	}
+	if gotSuccessor.ReplacesID == nil || *gotSuccessor.ReplacesID != predecessor.ID {
+		t.Errorf("successor replaces_id = %v, want %s", gotSuccessor.ReplacesID, predecessor.ID)
+	}
+	if gotSuccessor.SignerHandle != "signer-rekeyed" || gotSuccessor.CertificatePEM == predecessor.CertificatePEM {
+		t.Errorf("successor = %+v; want fresh signer/certificate", gotSuccessor)
+	}
+}
+
 // TestCrossSignRequiresQuorum is the PKIGOV-003 acceptance: cross-signing is gated
 // by the m-of-n key ceremony, like CreateRoot / CreateIntermediate / Rotate.
 // Cross-signing below the threshold is refused with ErrQuorumNotMet; once the

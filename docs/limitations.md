@@ -264,9 +264,12 @@ remaining integration work.
   material. Zero-downtime CA rotation activation is served at
   `/api/v1/ca/authorities/{id}/rotate`: it marks the predecessor superseded,
   records the successor's `replaces_id`, and keeps the predecessor issue URL live
-  while new certificates route to the signer-backed successor. Cross-signing remains
-  an operator workflow until its served route ships (see the [key-ceremony
-  runbook](runbooks/key-ceremony.md)).
+  while new certificates route to the signer-backed successor. Signer-backed CA
+  renewal/re-key is also served at `/api/v1/ca/authorities/{id}/rekey`: it consumes
+  a `rotation:<ca-id>` ceremony, mints fresh CA key/certificate material with the
+  same authority policy, records `ca.authority.rekeyed`, and keeps the stable issue
+  URL live. Offline-root re-key and cross-signing remain operator workflows until
+  their served routes ship (see the [key-ceremony runbook](runbooks/key-ceremony.md)).
 - **14 CA integrations** are present under the served external-CA registry when the
   operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
   DigiCert, EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo,

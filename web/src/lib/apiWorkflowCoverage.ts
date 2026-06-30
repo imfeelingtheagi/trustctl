@@ -78,6 +78,15 @@ export const apiWorkflowCoverage = [
     rationale: "The Request Credential and Identities pages cover normal issuance; authority-specific leaf issue remains an advanced API Explorer action.",
   },
   {
+    path: "/api/v1/ca/authorities/{id}/rekey",
+    route: "/ca-hierarchy",
+    owner: "SURFACE/ca",
+    kind: "console-flow",
+    workflow: "Signer-backed CA renewal and re-key",
+    rationale:
+      "The CA Hierarchy page starts the m-of-n re-key ceremony, submits the activation request, and displays the stable predecessor and active successor issue URLs.",
+  },
+  {
     path: "/api/v1/ca/ceremonies/{id}",
     route: "/integrate/api",
     owner: "SURFACE/ca",

@@ -267,6 +267,28 @@ func TestCAAuthorityRotateCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestCAAuthorityRekeyCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 201, `{"issue_path":"/api/v1/ca/authorities/ca-old/issue","active_issue_path":"/api/v1/ca/authorities/ca-new/issue"}`, &cap)
+	body := `{"ceremony_id":"ceremony-1","ttl_seconds":15552000,"reason":"planned renewal"}`
+	code, _, _ := run(t, []string{"ca", "authorities", "rekey", "ca-old", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/ca/authorities/ca-old/rekey" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if ct := cap.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("CA re-key mutation should send an Idempotency-Key")
+	}
+}
+
 func TestBrokerAgentIdentityCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"agent_id":"agent-7","node_id":"wl:agent-7","subject":"agent-7","credential_id":"cred:test","certificate_id":"cert:test","certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","scopes":["mcp:graph.read"],"not_after":"2026-06-24T12:00:00Z","attestation":{"id":"att:broker","method":"stub_broker","subject":"agent-7","issuer":"broker","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &cap)

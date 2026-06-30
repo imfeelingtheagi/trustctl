@@ -45,8 +45,10 @@ process; its compromise is the worst case.
    rotation is a **deliberate re-key**, not an automatic restart side-effect. Once
    the successor authority exists, activate zero-downtime overlap with
    `POST /api/v1/ca/authorities/{predecessor-id}/rotate` and a `successor_id`.
-   The predecessor issue URL remains valid, but new certificates are signed by the
-   successor.
+   For same-lane signer-backed CA renewal, use
+   `POST /api/v1/ca/authorities/{predecessor-id}/rekey` after a `rotation:<ca-id>`
+   ceremony to mint fresh CA material directly. In both cases the predecessor issue
+   URL remains valid, but new certificates are signed by the successor.
 4. **Revoke** suspect leaves through the served lifecycle path; OCSP answers change
    immediately and trusted revocation paths publish a fresh tenant CRL. If the CA
    itself is compromised, distribute a replacement CA bundle and re-issue under the
@@ -87,6 +89,6 @@ process; its compromise is the worst case.
 | Stop new issuance | stop the signer (fails closed) | yes |
 | Verify audit timeline | `audit.VerifyChain` (R2.1) | yes |
 | Backup / restore | `trstctl --full-backup-dir` / `--full-restore-dir` | yes |
-| Rotate the CA | m-of-n [key ceremony](key-ceremony.md) plus `POST /api/v1/ca/authorities/{id}/rotate` | yes |
+| Rotate or re-key the CA | m-of-n [key ceremony](key-ceremony.md) plus `POST /api/v1/ca/authorities/{id}/rotate` or `/rekey` | yes |
 | Revoke leaves (CRL/OCSP) | served revocation surface (`/ocsp/{tenant}`, `/crl/{tenant}`) | yes |
 | Unexpected-issuance alert | CT monitoring | library |

@@ -1459,6 +1459,24 @@
         ],
         "type": "object"
       },
+      "CAAuthorityRekeyRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ceremony_id"
+        ],
+        "type": "object"
+      },
       "CAAuthorityRotation": {
         "properties": {
           "active_issue_path": {
@@ -1530,6 +1548,10 @@
       },
       "CACeremonyStartRequest": {
         "properties": {
+          "authority_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "certificate_pem": {
             "type": "string"
           },
@@ -1543,7 +1565,8 @@
               "import_existing_ca",
               "create_intermediate",
               "create_offline_intermediate",
-              "issue_intermediate_csr"
+              "issue_intermediate_csr",
+              "rekey_ca"
             ],
             "type": "string"
           },
@@ -14994,6 +15017,74 @@
           }
         ],
         "summary": "Create a signer-backed intermediate CSR for an offline root",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/rekey": {
+      "post": {
+        "operationId": "rekeyCAAuthority",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAAuthorityRekeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAAuthorityRotation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Re-key a signer-backed CA authority after ceremony quorum",
         "x-trstctl-permission": "issuers:write"
       }
     },

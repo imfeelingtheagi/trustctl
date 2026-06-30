@@ -42,6 +42,7 @@ const (
 	EventCARootCreated                    = "ca.root.created"
 	EventCAAuthorityImported              = "ca.authority.imported"
 	EventCAAuthorityRotated               = "ca.authority.rotated"
+	EventCAAuthorityRekeyed               = "ca.authority.rekeyed"
 	EventCAIntermediateCreated            = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued          = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                = "ca.endentity.issued"
@@ -169,6 +170,7 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "issue_external_intermediate", "issueIntermediateCAFromCSR", []string{EventCAIntermediateCSRIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "rotate_authority", "rotateCAAuthority", []string{EventCAAuthorityRotated}},
+	{"F48", "Private/enterprise CA hierarchy management", "rekey_authority", "rekeyCAAuthority", []string{EventCAAuthorityRekeyed}},
 
 	// F7 — Deployment connectors (delivery receipts are event-sourced evidence).
 	{"F7", "Deployment connectors", "upsert_target", "createConnectorTarget", []string{EventDeploymentTargetUpserted}},

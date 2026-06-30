@@ -216,8 +216,8 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr"}},
-		"parent_id": uuid(), "csr_pem": str(), "certificate_pem": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca"}},
+		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(), "signer_handle": str(), "threshold": {Type: "integer"}, "spec": ref("CASpec"),
 	}, "operation", "threshold", "spec")
 	caCeremony := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "purpose": str(), "threshold": {Type: "integer"},
@@ -247,6 +247,9 @@ func componentSchemas() map[string]*Schema {
 	caAuthorityRotationReq := object(map[string]*Schema{
 		"successor_id": uuid(), "reason": str(),
 	}, "successor_id")
+	caAuthorityRekeyReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "ttl_seconds": {Type: "integer"}, "reason": str(),
+	}, "ceremony_id")
 	caIntermediateCSR := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "csr_pem": str(), "signer_handle": str(),
 	}, "ceremony_id", "parent_id", "csr_pem", "signer_handle")
@@ -2685,6 +2688,7 @@ func componentSchemas() map[string]*Schema {
 		"CAIntermediateCSR":                     caIntermediateCSR,
 		"CAIssueIntermediateRequest":            caIssueIntermediateReq,
 		"CAAuthorityRotationRequest":            caAuthorityRotationReq,
+		"CAAuthorityRekeyRequest":               caAuthorityRekeyReq,
 		"CAAuthorityRotationIssuer":             caAuthorityRotationIssuer,
 		"CAAuthorityRotation":                   caAuthorityRotation,
 		"CAAuthority":                           caAuthority,

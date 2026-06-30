@@ -192,6 +192,72 @@ func (s *Store) ApplyCAAuthorityRotatedTx(ctx context.Context, tx pgx.Tx, tenant
 	return nil
 }
 
+// ApplyCAAuthorityRekeyedTx projects a ca.authority.rekeyed event into the CA
+// hierarchy read model. The event owns the successor id and public certificate
+// bytes, so replay never invents a different CA row for the same re-key ceremony.
+func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, successor CAAuthority, predecessorID string) error {
+	dns := successor.PermittedDNSNames
+	if dns == nil {
+		dns = []string{}
+	}
+	ekus := successor.EKUs
+	if ekus == nil {
+		ekus = []string{}
+	}
+	status := successor.Status
+	if status == "" {
+		status = "active"
+	}
+	if successor.CreatedAt.IsZero() {
+		successor.CreatedAt = time.Now().UTC()
+	}
+	if successor.ReplacesID == nil {
+		replacesID := predecessorID
+		successor.ReplacesID = &replacesID
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_authorities
+		    SET status = 'superseded'
+		  WHERE tenant_id = $1 AND id = $2`,
+		successor.TenantID, predecessorID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	tag, err = tx.Exec(ctx,
+		`INSERT INTO ca_authorities
+		        (id, tenant_id, parent_id, common_name, kind, status, certificate_pem,
+		         signer_handle, serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10, $11, $12, $13, $14, $15)
+		 ON CONFLICT (id) DO UPDATE
+		    SET parent_id = EXCLUDED.parent_id,
+		        common_name = EXCLUDED.common_name,
+		        kind = EXCLUDED.kind,
+		        status = EXCLUDED.status,
+		        certificate_pem = EXCLUDED.certificate_pem,
+		        signer_handle = EXCLUDED.signer_handle,
+		        serial = EXCLUDED.serial,
+		        not_after = EXCLUDED.not_after,
+		        max_path_len = EXCLUDED.max_path_len,
+		        permitted_dns_names = EXCLUDED.permitted_dns_names,
+		        ekus = EXCLUDED.ekus,
+		        replaces_id = EXCLUDED.replaces_id,
+		        created_at = EXCLUDED.created_at
+		  WHERE ca_authorities.tenant_id = EXCLUDED.tenant_id`,
+		successor.ID, successor.TenantID, successor.ParentID, successor.CommonName, successor.Kind, status,
+		successor.CertificatePEM, successor.SignerHandle, successor.Serial, successor.NotAfter, successor.MaxPathLen,
+		dns, ekus, successor.ReplacesID, successor.CreatedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
 // KeyCeremony is an m-of-n CA key-generation ceremony. Approvals is the current
 // count of distinct custodian approvals that also have immutable event-log
 // evidence. Opener is the authenticated principal who started it (empty when

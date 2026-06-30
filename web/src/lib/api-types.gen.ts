@@ -391,6 +391,12 @@ export interface CAAuthorityList {
   next_cursor?: string;
 }
 
+export interface CAAuthorityRekeyRequest {
+  ceremony_id: string;
+  reason?: string;
+  ttl_seconds?: number;
+}
+
 export interface CAAuthorityRotation {
   active_issue_path: string;
   issue_path: string;
@@ -412,9 +418,10 @@ export interface CAAuthorityRotationRequest {
 }
 
 export interface CACeremonyStartRequest {
+  authority_id?: string;
   certificate_pem?: string;
   csr_pem?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca";
   parent_id?: string;
   signer_handle?: string;
   spec: CASpec;

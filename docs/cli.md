@@ -262,6 +262,17 @@ cat > spire-intermediate.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key spire-upstream-root-1 ca authorities issue-intermediate-csr <ca-authority-id> -f spire-intermediate.json
 
+# Re-key a signer-backed CA authority after a purpose-bound ceremony.
+cat > ca-rekey-ceremony.json <<'JSON'
+{"operation":"rekey_ca","authority_id":"<ca-authority-id>","threshold":2,"spec":{"common_name":"Reviewed CA re-key"}}
+JSON
+trstctl-cli ca ceremonies start -f ca-rekey-ceremony.json
+
+cat > ca-rekey.json <<'JSON'
+{"ceremony_id":"<rekey-ceremony-id>","ttl_seconds":7776000,"reason":"planned CA renewal"}
+JSON
+trstctl-cli ca authorities rekey <ca-authority-id> -f ca-rekey.json
+
 # List configured upstream CAs and issue through one of them.
 trstctl-cli external-cas list
 cat > upstream-issue.json <<'JSON'

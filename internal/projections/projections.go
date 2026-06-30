@@ -41,6 +41,7 @@ const (
 	EventCARootCreated                     = "ca.root.created"
 	EventCAAuthorityImported               = "ca.authority.imported"
 	EventCAAuthorityRotated                = "ca.authority.rotated"
+	EventCAAuthorityRekeyed                = "ca.authority.rekeyed"
 	EventCAIntermediateCreated             = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued           = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                 = "ca.endentity.issued"
@@ -312,6 +313,28 @@ type CAAuthorityRotated struct {
 	Reason          string `json:"reason,omitempty"`
 	IssuePath       string `json:"issue_path,omitempty"`
 	ActiveIssuePath string `json:"active_issue_path,omitempty"`
+}
+
+// CAAuthorityRekeyed is the payload of ca.authority.rekeyed. It carries the full
+// successor authority row so event replay creates the same id/certificate/signing
+// handle and then supersedes the predecessor in one projection step.
+type CAAuthorityRekeyed struct {
+	ID                string    `json:"id"`
+	PredecessorCAID   string    `json:"predecessor_ca_id"`
+	ParentID          *string   `json:"parent_id,omitempty"`
+	CommonName        string    `json:"common_name"`
+	Kind              string    `json:"kind"`
+	CertificatePEM    string    `json:"certificate_pem"`
+	SignerHandle      string    `json:"signer_handle"`
+	Serial            string    `json:"serial"`
+	NotAfter          time.Time `json:"not_after"`
+	MaxPathLen        int       `json:"max_path_len"`
+	PermittedDNSNames []string  `json:"permitted_dns_names,omitempty"`
+	EKUs              []string  `json:"extended_key_usages,omitempty"`
+	CeremonyID        string    `json:"ceremony_id"`
+	Reason            string    `json:"reason,omitempty"`
+	IssuePath         string    `json:"issue_path,omitempty"`
+	ActiveIssuePath   string    `json:"active_issue_path,omitempty"`
 }
 
 // CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
@@ -1007,6 +1030,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCACeremonyStarted:                 {1: true},
 	EventCACeremonyApproved:                {1: true},
 	EventCAAuthorityRotated:                {1: true},
+	EventCAAuthorityRekeyed:                {1: true},
 	EventCRLPublished:                      {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:              {1: true},
 	EventAgentHeartbeat:                    {1: true},
@@ -1257,6 +1281,21 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires predecessor_ca_id and successor_ca_id", e.Type)
 		}
 		return p.store.ApplyCAAuthorityRotatedTx(ctx, tx, e.TenantID, pl.PredecessorCAID, pl.SuccessorCAID)
+	case EventCAAuthorityRekeyed:
+		var pl CAAuthorityRekeyed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.PredecessorCAID == "" || pl.CommonName == "" || pl.Kind == "" ||
+			pl.CertificatePEM == "" || pl.SignerHandle == "" || pl.Serial == "" || pl.NotAfter.IsZero() {
+			return fmt.Errorf("projections: %s requires a complete signer-backed successor authority", e.Type)
+		}
+		return p.store.ApplyCAAuthorityRekeyedTx(ctx, tx, store.CAAuthority{
+			ID: pl.ID, TenantID: e.TenantID, ParentID: pl.ParentID, CommonName: pl.CommonName,
+			Kind: pl.Kind, Status: "active", CertificatePEM: pl.CertificatePEM, SignerHandle: pl.SignerHandle,
+			Serial: pl.Serial, NotAfter: &pl.NotAfter, MaxPathLen: pl.MaxPathLen,
+			PermittedDNSNames: pl.PermittedDNSNames, EKUs: pl.EKUs, CreatedAt: e.Time,
+		}, pl.PredecessorCAID)
 	case EventCRLPublished:
 		var pl CRLPublished
 		if err := decode(e, &pl); err != nil {

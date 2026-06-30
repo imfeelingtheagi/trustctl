@@ -36,6 +36,7 @@ type CAHierarchyService interface {
 	IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req CAIssueIntermediateRequest) (CAIssuedIntermediate, error)
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
 	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
+	RekeyAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRekeyRequest) (CAAuthorityRotation, error)
 }
 
 // WithCAHierarchy wires the served CA hierarchy surface. When unset, the routes
@@ -56,6 +57,7 @@ type CASpec struct {
 type CACeremonyStartRequest struct {
 	Operation      string `json:"operation"`
 	ParentID       string `json:"parent_id"`
+	AuthorityID    string `json:"authority_id,omitempty"`
 	CSRPem         string `json:"csr_pem,omitempty"`
 	CertificatePEM string `json:"certificate_pem,omitempty"`
 	SignerHandle   string `json:"signer_handle,omitempty"`
@@ -106,6 +108,12 @@ type CAIssueLeafRequest struct {
 type CAAuthorityRotationRequest struct {
 	SuccessorID string `json:"successor_id"`
 	Reason      string `json:"reason,omitempty"`
+}
+
+type CAAuthorityRekeyRequest struct {
+	CeremonyID string `json:"ceremony_id"`
+	TTLSeconds int64  `json:"ttl_seconds,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 type CAIssueIntermediateRequest struct {
@@ -454,6 +462,26 @@ func (a *API) rotateCAAuthority(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, rotation, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) rekeyCAAuthority(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAAuthorityRekeyRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		rotation, err := a.caHierarchy.RekeyAuthority(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, rotation, nil
 	})
 }
 

@@ -230,6 +230,99 @@ func TestServedCARotationWithoutDowntimeCAPCA03(t *testing.T) {
 	}
 }
 
+func TestServedCARekeyCAPCA06(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-rekey-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approver := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-rekey-approver", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+
+	rootSpec := map[string]any{
+		"common_name":           "rekey root",
+		"max_path_len":          1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"rekey.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	rootCeremony := createCACeremony(t, h, operator, "create_root", "", rootSpec, 1, "rekey-root-ceremony")
+	approveCACeremony(t, h, approver, rootCeremony.ID, 1, "rekey-root-approval")
+	root := createRootCA(t, h, operator, rootCeremony.ID, rootSpec, "rekey-root-create")
+
+	intermediateSpec := map[string]any{
+		"common_name":           "rekey issuing intermediate",
+		"ttl_seconds":           int64((180 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"rekey.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	interCeremony := createCACeremony(t, h, operator, "create_intermediate", root.ID, intermediateSpec, 1, "rekey-intermediate-ceremony")
+	approveCACeremony(t, h, approver, interCeremony.ID, 1, "rekey-intermediate-approval")
+	oldCA := createIntermediateCA(t, h, operator, interCeremony.ID, root.ID, intermediateSpec, "rekey-intermediate-create")
+
+	before := issueHierarchyLeaf(t, h, operator, oldCA.ID, "before.rekey.example.test", "rekey-before")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(before.CertificatePEM)), caCertDER(t, []byte(oldCA.CertificatePEM))); err != nil {
+		t.Fatalf("pre-rekey leaf did not chain to original CA: %v", err)
+	}
+
+	rekeyCeremony := createCARekeyCeremony(t, h, operator, oldCA.ID, 1, "rekey-ceremony")
+	approveCACeremony(t, h, approver, rekeyCeremony.ID, 1, "rekey-approval")
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rekey", operator, "rekey-activate-cap-ca-06", map[string]any{
+		"ceremony_id": rekeyCeremony.ID,
+		"ttl_seconds": int64((90 * 24 * time.Hour).Seconds()),
+		"reason":      "CAP-CA-06 planned CA certificate renewal and re-key",
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("re-key CA authority = %d body=%s; want 201", code, body)
+	}
+	var rotation struct {
+		Predecessor     servedCAAuthority `json:"predecessor"`
+		Successor       servedCAAuthority `json:"successor"`
+		IssuePath       string            `json:"issue_path"`
+		ActiveIssuePath string            `json:"active_issue_path"`
+	}
+	if err := json.Unmarshal(body, &rotation); err != nil {
+		t.Fatalf("decode CA re-key: %v body=%s", err, body)
+	}
+	if rotation.Predecessor.Status != "superseded" || rotation.Successor.Status != "active" {
+		t.Fatalf("re-key statuses = predecessor %q successor %q; want superseded/active", rotation.Predecessor.Status, rotation.Successor.Status)
+	}
+	if rotation.Successor.ID == oldCA.ID || rotation.Successor.SignerHandle == oldCA.SignerHandle || rotation.Successor.CertificatePEM == oldCA.CertificatePEM {
+		t.Fatalf("re-key successor did not get fresh authority material: old=%+v successor=%+v", oldCA, rotation.Successor)
+	}
+	if rotation.Successor.ReplacesID == nil || *rotation.Successor.ReplacesID != oldCA.ID {
+		t.Fatalf("successor replaces_id = %v; want predecessor %s", rotation.Successor.ReplacesID, oldCA.ID)
+	}
+	if rotation.IssuePath != "/api/v1/ca/authorities/"+oldCA.ID+"/issue" || rotation.ActiveIssuePath != "/api/v1/ca/authorities/"+rotation.Successor.ID+"/issue" {
+		t.Fatalf("re-key paths = %q / %q; want stable predecessor and active successor paths", rotation.IssuePath, rotation.ActiveIssuePath)
+	}
+	storedPredecessor, err := h.store.GetCAAuthority(context.Background(), h.tenant, oldCA.ID)
+	if err != nil {
+		t.Fatalf("load projected re-key predecessor: %v", err)
+	}
+	storedSuccessor, err := h.store.GetCAAuthority(context.Background(), h.tenant, rotation.Successor.ID)
+	if err != nil {
+		t.Fatalf("load projected re-key successor: %v", err)
+	}
+	if storedPredecessor.Status != "superseded" || storedSuccessor.ReplacesID == nil || *storedSuccessor.ReplacesID != oldCA.ID {
+		t.Fatalf("projected re-key state = predecessor %+v successor %+v", storedPredecessor, storedSuccessor)
+	}
+
+	throughStableOldURL := issueHierarchyLeaf(t, h, operator, oldCA.ID, "after.rekey.example.test", "rekey-old-after")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(throughStableOldURL.CertificatePEM)), caCertDER(t, []byte(rotation.Successor.CertificatePEM))); err != nil {
+		t.Fatalf("post-rekey leaf from predecessor URL did not chain to fresh CA: %v", err)
+	}
+	throughSuccessorURL := issueHierarchyLeaf(t, h, operator, rotation.Successor.ID, "direct.rekey.example.test", "rekey-successor-direct")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(throughSuccessorURL.CertificatePEM)), caCertDER(t, []byte(rotation.Successor.CertificatePEM))); err != nil {
+		t.Fatalf("post-rekey leaf from successor URL did not chain to fresh CA: %v", err)
+	}
+	if !h.hasEvent(t, "ca.authority.rekeyed") || !h.hasEvent(t, "ca.endentity.issued") {
+		t.Fatal("CA re-key did not record re-key and issuance audit events")
+	}
+}
+
 func TestServedCAHierarchySignsExternalIntermediateCSRRequiresCeremony(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-operator", []string{
@@ -699,6 +792,26 @@ func createCACeremonyWithCSR(t *testing.T, h *servedHarness, token, parentID, cs
 	var got servedCACeremony
 	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" || got.Threshold != threshold || got.Status != "pending" {
 		t.Fatalf("decode issue_intermediate_csr ceremony: %v got=%+v body=%s", err, got, raw)
+	}
+	return got
+}
+
+func createCARekeyCeremony(t *testing.T, h *servedHarness, token, authorityID string, threshold int, idem string) servedCACeremony {
+	t.Helper()
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/ceremonies", token, idem, map[string]any{
+		"operation":    "rekey_ca",
+		"authority_id": authorityID,
+		"threshold":    threshold,
+		"spec": map[string]any{
+			"common_name": "re-key existing CA",
+		},
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("create rekey_ca ceremony = %d body=%s; want 201", code, raw)
+	}
+	var got servedCACeremony
+	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" || got.Threshold != threshold || got.Status != "pending" {
+		t.Fatalf("decode rekey_ca ceremony: %v got=%+v body=%s", err, got, raw)
 	}
 	return got
 }

@@ -622,6 +622,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/rekey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-key a signer-backed CA authority after ceremony quorum */
+        post: operations["rekeyCAAuthority"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/{id}/rotate": {
         parameters: {
             query?: never;
@@ -3607,6 +3624,12 @@ export interface components {
             items: components["schemas"]["CAAuthority"][];
             next_cursor?: string;
         };
+        CAAuthorityRekeyRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            reason?: string;
+            ttl_seconds?: number;
+        };
         CAAuthorityRotation: {
             active_issue_path: string;
             issue_path: string;
@@ -3627,10 +3650,12 @@ export interface components {
             successor_id: string;
         };
         CACeremonyStartRequest: {
+            /** Format: uuid */
+            authority_id?: string;
             certificate_pem?: string;
             csr_pem?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca";
             /** Format: uuid */
             parent_id?: string;
             signer_handle?: string;
@@ -8320,6 +8345,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAIntermediateCSR"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rekeyCAAuthority: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAAuthorityRekeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthorityRotation"];
                 };
             };
             /** @description client error */

@@ -102,6 +102,13 @@ export function CAHierarchy() {
   const [rotationResult, setRotationResult] = useState<CAAuthorityRotation | null>(null);
   const [rotationBusy, setRotationBusy] = useState(false);
   const [rotationError, setRotationError] = useState<string | null>(null);
+  const [rekeyAuthorityID, setRekeyAuthorityID] = useState("");
+  const [rekeyCeremonyID, setRekeyCeremonyID] = useState("");
+  const [rekeyTTLDays, setRekeyTTLDays] = useState("825");
+  const [rekeyReason, setRekeyReason] = useState("planned CA renewal");
+  const [rekeyResult, setRekeyResult] = useState<CAAuthorityRotation | null>(null);
+  const [rekeyBusy, setRekeyBusy] = useState(false);
+  const [rekeyError, setRekeyError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -379,6 +386,49 @@ export function CAHierarchy() {
     }
   }
 
+  async function startCARekeyCeremony() {
+    setRekeyBusy(true);
+    setRekeyError(null);
+    try {
+      const authorityID = rekeyAuthorityID.trim();
+      const selected = (caDiscovery?.items ?? []).find((item) => item.source_id === authorityID);
+      const next = await api.createCACeremony({
+        operation: "rekey_ca",
+        authority_id: authorityID,
+        threshold: 2,
+        spec: {
+          common_name: selected?.name ?? "Re-key existing CA",
+        },
+      });
+      setRekeyCeremonyID(next.id);
+      setCeremony(next);
+    } catch (err) {
+      setRekeyError(errorText(err, "Could not start CA re-key ceremony"));
+    } finally {
+      setRekeyBusy(false);
+    }
+  }
+
+  async function activateCARekey() {
+    setRekeyBusy(true);
+    setRekeyError(null);
+    try {
+      const days = Number.parseInt(rekeyTTLDays.trim(), 10);
+      const ttlSeconds = Number.isFinite(days) && days > 0 ? days * 24 * 60 * 60 : undefined;
+      const next = await api.rekeyCAAuthority(rekeyAuthorityID.trim(), {
+        ceremony_id: rekeyCeremonyID.trim(),
+        ttl_seconds: ttlSeconds,
+        reason: rekeyReason.trim() || undefined,
+      });
+      setRekeyResult(next);
+      await load();
+    } catch (err) {
+      setRekeyError(errorText(err, "Could not re-key CA authority"));
+    } finally {
+      setRekeyBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -411,6 +461,23 @@ export function CAHierarchy() {
         onPredecessorChange={setRotationPredecessorID}
         onReasonChange={setRotationReason}
         onSuccessorChange={setRotationSuccessorID}
+      />
+
+      <CARekeyPanel
+        authorityID={rekeyAuthorityID}
+        busy={rekeyBusy}
+        ceremonyID={rekeyCeremonyID}
+        error={rekeyError}
+        inventory={caDiscovery}
+        reason={rekeyReason}
+        result={rekeyResult}
+        ttlDays={rekeyTTLDays}
+        onActivate={() => void activateCARekey()}
+        onAuthorityChange={setRekeyAuthorityID}
+        onCeremonyChange={setRekeyCeremonyID}
+        onReasonChange={setRekeyReason}
+        onStartCeremony={() => void startCARekeyCeremony()}
+        onTTLChange={setRekeyTTLDays}
       />
 
       {probe && <ProbeBanner probe={probe} onDismiss={() => setProbe(null)} />}
@@ -692,13 +759,108 @@ function CARotationPanel({
               </option>
             ))}
           </LabeledSelect>
-          <LabeledInput id="ca-rotation-reason" label="Reason" value={reason} onChange={onReasonChange} />
+          <LabeledInput id="ca-rotation-reason" label="Rotation reason" value={reason} onChange={onReasonChange} />
         </div>
         {authorities.length < 2 && <p className="mt-3 text-sm text-muted-foreground">Create a signer-backed successor before activating rotation.</p>}
         {result && (
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
             <KeyValue label="Successor" value={`${result.successor.common_name} (${result.successor.status})`} />
+            <KeyValue label="Stable issue URL" value={result.issue_path} mono />
+            <KeyValue label="Active issue URL" value={result.active_issue_path} mono />
+          </dl>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function CARekeyPanel({
+  authorityID,
+  busy,
+  ceremonyID,
+  error,
+  inventory,
+  reason,
+  result,
+  ttlDays,
+  onActivate,
+  onAuthorityChange,
+  onCeremonyChange,
+  onReasonChange,
+  onStartCeremony,
+  onTTLChange,
+}: {
+  authorityID: string;
+  busy: boolean;
+  ceremonyID: string;
+  error: string | null;
+  inventory: CADiscovery | null;
+  reason: string;
+  result: CAAuthorityRotation | null;
+  ttlDays: string;
+  onActivate: () => void;
+  onAuthorityChange: (value: string) => void;
+  onCeremonyChange: (value: string) => void;
+  onReasonChange: (value: string) => void;
+  onStartCeremony: () => void;
+  onTTLChange: (value: string) => void;
+}) {
+  const authorities = (inventory?.items ?? []).filter((item) => item.source === "ca_hierarchy" && item.managed && item.issuance_path && item.status === "active");
+  const readyToStart = authorityID.trim() !== "";
+  const readyToRekey = readyToStart && ceremonyID.trim() !== "";
+
+  return (
+    <section aria-labelledby="ca-rekey-heading" className="grid gap-3 border-b border-border py-4">
+      <div className="flex items-start gap-3">
+        <KeyRound className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <h2 id="ca-rekey-heading" className="text-title font-semibold">
+            CA renewal and re-key
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Mint a fresh signer-backed CA key and certificate for the selected authority while the previous issue URL keeps routing to the active successor.
+          </p>
+        </div>
+      </div>
+      {error && <ErrorState title="CA re-key failed">{error}</ErrorState>}
+      <section aria-labelledby="ca-rekey-form-heading" className="ui-panel p-comfortable text-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 id="ca-rekey-form-heading" className="text-title font-semibold">
+              Fresh CA material
+            </h3>
+            {result && <p className="mt-1 font-mono text-xs">{result.active_issue_path}</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={onStartCeremony} disabled={busy || !readyToStart}>
+              <FileKey2 className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              Start re-key ceremony
+            </Button>
+            <Button type="button" size="sm" onClick={onActivate} disabled={busy || !readyToRekey}>
+              <KeyRound className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              Re-key CA
+            </Button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-4">
+          <LabeledSelect id="ca-rekey-authority" label="CA authority" value={authorityID} onChange={onAuthorityChange}>
+            <option value="">Select authority</option>
+            {authorities.map((item) => (
+              <option key={item.id} value={item.source_id}>
+                {item.name} ({item.status})
+              </option>
+            ))}
+          </LabeledSelect>
+          <LabeledInput id="ca-rekey-ceremony" label="Ceremony ID" value={ceremonyID} onChange={onCeremonyChange} />
+          <LabeledInput id="ca-rekey-ttl" label="Validity days" value={ttlDays} type="number" onChange={onTTLChange} />
+          <LabeledInput id="ca-rekey-reason" label="Re-key reason" value={reason} onChange={onReasonChange} />
+        </div>
+        {authorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">Create or import a signer-backed authority before re-key.</p>}
+        {result && (
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
+            <KeyValue label="Fresh successor" value={`${result.successor.common_name} (${result.successor.status})`} />
             <KeyValue label="Stable issue URL" value={result.issue_path} mono />
             <KeyValue label="Active issue URL" value={result.active_issue_path} mono />
           </dl>

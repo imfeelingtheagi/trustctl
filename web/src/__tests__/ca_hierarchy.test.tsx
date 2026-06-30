@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     createOfflineIntermediateCSR: vi.fn(),
     importOfflineIntermediateCA: vi.fn(),
     rotateCAAuthority: vi.fn(),
+    rekeyCAAuthority: vi.fn(),
     generateManagedKey: vi.fn(),
     rotateManagedKey: vi.fn(),
     revokeManagedKey: vi.fn(),
@@ -146,6 +147,9 @@ describe("CA hierarchy and custody surface", () => {
       if (input.operation === "import_existing_ca") {
         return { ...base, id: "ceremony-existing-ca", purpose: "import-existing-ca:customer-existing-ca" };
       }
+      if (input.operation === "rekey_ca") {
+        return { ...base, id: "ceremony-rekey-ca", purpose: "rotation:ca-existing-imported" };
+      }
       return { ...base, id: "ceremony-root-1", purpose: "create_root:Trust Root CA" };
     });
     apiMock.approveCACeremony.mockResolvedValue({
@@ -238,6 +242,39 @@ describe("CA hierarchy and custody surface", () => {
         { authority_id: "ca-existing-successor", role: "successor", status: "active", issue_path: "/api/v1/ca/authorities/ca-existing-successor/issue" },
       ],
     });
+    apiMock.rekeyCAAuthority.mockResolvedValue({
+      predecessor: {
+        id: "ca-existing-imported",
+        tenant_id: "tenant-1",
+        kind: "intermediate",
+        common_name: "Imported Existing CA",
+        signer_handle: "customer-existing-ca",
+        certificate_pem: "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----",
+        serial: "03",
+        max_path_len: 0,
+        status: "superseded",
+        created_at: "2026-06-26T14:00:00Z",
+      },
+      successor: {
+        id: "ca-existing-rekeyed",
+        tenant_id: "tenant-1",
+        kind: "intermediate",
+        common_name: "Imported Existing CA",
+        signer_handle: "ca-hierarchy-ceremony-rekey-ca",
+        certificate_pem: "-----BEGIN CERTIFICATE-----\nREKEYED\n-----END CERTIFICATE-----",
+        serial: "05",
+        max_path_len: 0,
+        status: "active",
+        replaces_id: "ca-existing-imported",
+        created_at: "2026-06-26T14:05:00Z",
+      },
+      issue_path: "/api/v1/ca/authorities/ca-existing-imported/issue",
+      active_issue_path: "/api/v1/ca/authorities/ca-existing-rekeyed/issue",
+      overlap_issuers: [
+        { authority_id: "ca-existing-imported", role: "predecessor", status: "superseded", issue_path: "/api/v1/ca/authorities/ca-existing-imported/issue" },
+        { authority_id: "ca-existing-rekeyed", role: "successor", status: "active", issue_path: "/api/v1/ca/authorities/ca-existing-rekeyed/issue" },
+      ],
+    });
   });
 
   it("renders issuers with kind, chain, public key, and certificate links", async () => {
@@ -276,8 +313,8 @@ describe("CA hierarchy and custody surface", () => {
     await screen.findByRole("heading", { name: "CA rotation" });
     await user.selectOptions(screen.getByLabelText("Predecessor CA"), "ca-existing-imported");
     await user.selectOptions(screen.getByLabelText("Successor CA"), "ca-existing-successor");
-    await user.clear(screen.getByLabelText("Reason"));
-    await user.type(screen.getByLabelText("Reason"), "planned overlap");
+    await user.clear(screen.getByLabelText("Rotation reason"));
+    await user.type(screen.getByLabelText("Rotation reason"), "planned overlap");
     await user.click(screen.getByRole("button", { name: "Activate CA rotation" }));
 
     await waitFor(() =>
@@ -290,6 +327,42 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("Imported Existing CA v2 (active)").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-imported/issue").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-successor/issue").length).toBeGreaterThan(0);
+  });
+
+  it("starts a CA re-key ceremony and activates fresh CA material", async () => {
+    const user = userEvent.setup();
+    renderCAHierarchy();
+
+    await screen.findByRole("heading", { name: "CA renewal and re-key" });
+    await user.selectOptions(screen.getByLabelText("CA authority"), "ca-existing-imported");
+    await user.click(screen.getByRole("button", { name: "Start re-key ceremony" }));
+
+    await waitFor(() =>
+      expect(apiMock.createCACeremony).toHaveBeenCalledWith({
+        operation: "rekey_ca",
+        authority_id: "ca-existing-imported",
+        threshold: 2,
+        spec: { common_name: "Imported Existing CA" },
+      }),
+    );
+    expect(await screen.findByDisplayValue("ceremony-rekey-ca")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Validity days"));
+    await user.type(screen.getByLabelText("Validity days"), "90");
+    await user.clear(screen.getByLabelText("Re-key reason"));
+    await user.type(screen.getByLabelText("Re-key reason"), "planned renewal");
+    await user.click(screen.getByRole("button", { name: "Re-key CA" }));
+
+    await waitFor(() =>
+      expect(apiMock.rekeyCAAuthority).toHaveBeenCalledWith("ca-existing-imported", {
+        ceremony_id: "ceremony-rekey-ca",
+        ttl_seconds: 7_776_000,
+        reason: "planned renewal",
+      }),
+    );
+    expect(await screen.findByText("Fresh successor")).toBeInTheDocument();
+    expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-imported/issue").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-rekeyed/issue").length).toBeGreaterThan(0);
   });
 
   it("starts and approves a CA key ceremony through the API", async () => {

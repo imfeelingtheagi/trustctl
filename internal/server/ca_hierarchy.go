@@ -605,6 +605,116 @@ func (h *caHierarchyService) RotateAuthority(ctx context.Context, tenantID, caID
 	return authorityRotationResponse(predecessor, successor), nil
 }
 
+func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID string, req api.CAAuthorityRekeyRequest) (api.CAAuthorityRotation, error) {
+	ceremonyID := strings.TrimSpace(req.CeremonyID)
+	if caID == "" || ceremonyID == "" {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: authority id and ceremony_id are required", api.ErrCAHierarchyInvalid)
+	}
+	if req.TTLSeconds < 0 {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: ttl_seconds cannot be negative", api.ErrCAHierarchyInvalid)
+	}
+	purpose, err := rekeyCAPurpose(caID)
+	if err != nil {
+		return api.CAAuthorityRotation{}, err
+	}
+	handle := hierarchySignerHandle(ceremonyID)
+	newID := uuid.NewString()
+	var predecessor, successor store.CAAuthority
+	var rekeySigner *signing.RemoteSigner
+	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		predecessor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
+		if err != nil {
+			return err
+		}
+		if err := validateAuthorityRekey(predecessor); err != nil {
+			return err
+		}
+		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
+			return err
+		}
+		rekeySigner, err = h.createOrBindSigner(ctx, handle)
+		if err != nil {
+			return err
+		}
+		spec := rekeyAuthoritySpec(predecessor, req.TTLSeconds)
+		issued, chainPEM, err := h.issueRekeyedCA(ctx, tx, tenantID, predecessor, rekeySigner, spec)
+		if err != nil {
+			return err
+		}
+		notAfter := issued.NotAfter
+		successor = store.CAAuthority{
+			ID: newID, TenantID: tenantID, ParentID: predecessor.ParentID, CommonName: spec.CommonName,
+			Kind: predecessor.Kind, Status: "active", CertificatePEM: chainPEM, SignerHandle: handle,
+			Serial: issued.Serial, NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
+			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
+		}
+		ev, err := h.appendEvent(ctx, tenantID, projections.EventCAAuthorityRekeyed, projections.CAAuthorityRekeyed{
+			ID: newID, PredecessorCAID: predecessor.ID, ParentID: predecessor.ParentID,
+			CommonName: successor.CommonName, Kind: successor.Kind, CertificatePEM: successor.CertificatePEM,
+			SignerHandle: successor.SignerHandle, Serial: successor.Serial, NotAfter: notAfter,
+			MaxPathLen: successor.MaxPathLen, PermittedDNSNames: successor.PermittedDNSNames, EKUs: successor.EKUs,
+			CeremonyID: ceremonyID, Reason: strings.TrimSpace(req.Reason),
+			IssuePath: caAuthorityIssuePath(predecessor.ID), ActiveIssuePath: caAuthorityIssuePath(successor.ID),
+		})
+		if err != nil {
+			return err
+		}
+		if err := projections.New(h.store).ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		predecessor.Status = "superseded"
+		replacesID := predecessor.ID
+		successor.ReplacesID = &replacesID
+		successor.CreatedAt = ev.Time
+		return nil
+	})
+	if err != nil {
+		return api.CAAuthorityRotation{}, caHierarchyConflict(err)
+	}
+	h.rememberSigner(successor.ID, rekeySigner)
+	return authorityRotationResponse(predecessor, successor), nil
+}
+
+func (h *caHierarchyService) issueRekeyedCA(ctx context.Context, tx pgx.Tx, tenantID string, predecessor store.CAAuthority, signer *signing.RemoteSigner, spec api.CASpec) (crypto.IssuedHierarchyCA, string, error) {
+	switch predecessor.Kind {
+	case "root":
+		issued, err := crypto.SelfSignedHierarchyCA(signer, cryptoProfile(spec))
+		if err != nil {
+			return crypto.IssuedHierarchyCA{}, "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		return issued, string(issued.CertificatePEM), nil
+	case "intermediate":
+		if predecessor.ParentID == nil || *predecessor.ParentID == "" {
+			return crypto.IssuedHierarchyCA{}, "", fmt.Errorf("%w: intermediate CA has no parent authority", api.ErrCAHierarchyInvalid)
+		}
+		parent, err := h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, *predecessor.ParentID)
+		if err != nil {
+			return crypto.IssuedHierarchyCA{}, "", err
+		}
+		if parent.Status != "active" || parent.SignerHandle == "" {
+			return crypto.IssuedHierarchyCA{}, "", fmt.Errorf("%w: parent CA must be active and signer-backed for served re-key", api.ErrCAHierarchyInvalid)
+		}
+		parentDER, err := firstCertDER(parent.CertificatePEM)
+		if err != nil {
+			return crypto.IssuedHierarchyCA{}, "", err
+		}
+		parentSigner, err := h.signerForAuthority(ctx, parent)
+		if err != nil {
+			return crypto.IssuedHierarchyCA{}, "", err
+		}
+		issued, err := crypto.SignIntermediateHierarchyCA(parentDER, parentSigner, signer.Public(), cryptoProfile(spec))
+		if err != nil {
+			return crypto.IssuedHierarchyCA{}, "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+		}
+		chain := append([]byte{}, issued.CertificatePEM...)
+		chain = append(chain, []byte(parent.CertificatePEM)...)
+		return issued, string(chain), nil
+	default:
+		return crypto.IssuedHierarchyCA{}, "", fmt.Errorf("%w: unsupported CA kind %q", api.ErrCAHierarchyInvalid, predecessor.Kind)
+	}
+}
+
 func (h *caHierarchyService) issuingAuthority(ctx context.Context, tenantID, caID string) (store.CAAuthority, store.CAAuthority, error) {
 	ca, err := h.store.GetCAAuthority(ctx, tenantID, caID)
 	if err != nil {
@@ -658,6 +768,29 @@ func validateAuthorityRotation(predecessor, successor store.CAAuthority) error {
 		return fmt.Errorf("%w: successor EKUs must match predecessor", api.ErrCAHierarchyInvalid)
 	}
 	return nil
+}
+
+func validateAuthorityRekey(ca store.CAAuthority) error {
+	if ca.Status != "active" {
+		return fmt.Errorf("%w: CA authority must be active to re-key", api.ErrCAHierarchyConflict)
+	}
+	if ca.SignerHandle == "" {
+		return fmt.Errorf("%w: CA authority must be signer-backed to re-key", api.ErrCAHierarchyInvalid)
+	}
+	switch ca.Kind {
+	case "root", "intermediate":
+		return nil
+	default:
+		return fmt.Errorf("%w: unsupported CA kind %q", api.ErrCAHierarchyInvalid, ca.Kind)
+	}
+}
+
+func rekeyAuthoritySpec(ca store.CAAuthority, ttlSeconds int64) api.CASpec {
+	return api.CASpec{
+		CommonName: ca.CommonName, PermittedDNSDomains: append([]string(nil), ca.PermittedDNSNames...),
+		MaxPathLen: ca.MaxPathLen, ExtendedKeyUsages: append([]string(nil), ca.EKUs...),
+		TTLSeconds: ttlSeconds, SignatureAlgorithm: "ecdsa-p256",
+	}
 }
 
 func sameStringPtr(a, b *string) bool {
@@ -729,6 +862,8 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 			return "", err
 		}
 		return externalIntermediateCSRPurpose(req.ParentID, csrDER, req.Spec)
+	case "rekey_ca":
+		return rekeyCAPurpose(req.AuthorityID)
 	default:
 		return hierarchyPurpose(req.Operation, req.ParentID, req.Spec)
 	}
@@ -776,6 +911,14 @@ func externalIntermediateCSRPurpose(parentID string, csrDER []byte, spec api.CAS
 		return "", err
 	}
 	return "intermediate-csr:" + parentID + ":" + crypto.SHA256Hex(csrDER) + ":" + specPurpose, nil
+}
+
+func rekeyCAPurpose(authorityID string) (string, error) {
+	authorityID = strings.TrimSpace(authorityID)
+	if authorityID == "" {
+		return "", fmt.Errorf("%w: authority_id is required for rekey_ca", api.ErrCAHierarchyInvalid)
+	}
+	return libhierarchy.PurposeRotate(authorityID), nil
 }
 
 func flattenDERChain(chain [][]byte) []byte {

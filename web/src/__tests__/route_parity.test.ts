@@ -33,6 +33,7 @@ const auditedUnwrappedPaths = [
   "/api/v1/ca/authorities/roots",
   "/api/v1/ca/authorities/{id}/intermediates/csr",
   "/api/v1/ca/authorities/{id}/issue",
+  "/api/v1/ca/authorities/{id}/rekey",
   "/api/v1/ca/ceremonies/{id}",
   "/api/v1/certificates/bulk-revoke",
   "/api/v1/certificates/{id}",

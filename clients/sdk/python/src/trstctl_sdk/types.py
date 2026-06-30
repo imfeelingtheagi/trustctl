@@ -561,6 +561,16 @@ CAAuthorityList = TypedDict(
     total=False,
 )
 
+CAAuthorityRekeyRequest = TypedDict(
+    'CAAuthorityRekeyRequest',
+    {
+        'ceremony_id': str,
+        'reason': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
 CAAuthorityRotation = TypedDict(
     'CAAuthorityRotation',
     {
@@ -596,6 +606,7 @@ CAAuthorityRotationRequest = TypedDict(
 CACeremonyStartRequest = TypedDict(
     'CACeremonyStartRequest',
     {
+        'authority_id': str,
         'certificate_pem': str,
         'csr_pem': str,
         'operation': str,
