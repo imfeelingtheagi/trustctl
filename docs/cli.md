@@ -169,6 +169,9 @@ trstctl-cli owners attribution
 # Decommission NHIs selected from departure, vendor-term, or inactivity signals.
 trstctl-cli nhi decommission -f nhi-decommission.json --force
 
+# List shadow, unmanaged, and unregistered NHI posture findings.
+trstctl-cli nhi posture shadow
+
 # List usage-backed NHI over-privilege findings and least-privilege recommendations.
 trstctl-cli nhi posture overprivilege
 

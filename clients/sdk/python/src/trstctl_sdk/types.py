@@ -2890,6 +2890,64 @@ NHIReviewItemRequest = TypedDict(
     total=False,
 )
 
+NHIShadowFinding = TypedDict(
+    'NHIShadowFinding',
+    {
+        'discovered_at': str,
+        'display_name': str,
+        'evidence_refs': list[str],
+        'finding_id': str,
+        'fingerprint': str,
+        'kind': str,
+        'managed_identity_id': str,
+        'owner_status': str,
+        'provenance': str,
+        'recommendation': str,
+        'ref': str,
+        'risk_score': int,
+        'run_id': str,
+        'severity': str,
+        'source_id': str,
+        'surface': str,
+        'system': str,
+        'triage_status': str,
+    },
+    total=False,
+)
+
+NHIShadowPosture = TypedDict(
+    'NHIShadowPosture',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'evidence_refs': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'recommended_actions': list[str],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIShadowSummary = TypedDict(
+    'NHIShadowSummary',
+    {
+        'critical': int,
+        'findings': int,
+        'high': int,
+        'investigating': int,
+        'kind_counts': dict[str, Any],
+        'low': int,
+        'medium': int,
+        'ownerless': int,
+        'surface_counts': dict[str, Any],
+        'total_analyzed': int,
+        'unmanaged': int,
+        'unregistered': int,
+    },
+    total=False,
+)
+
 NHIStaleFinding = TypedDict(
     'NHIStaleFinding',
     {

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type DiscoveryFinding, type DiscoveryMonitoring, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
+import { api, ApiError, type DiscoveryFinding, type DiscoveryMonitoring, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest, type NHIShadowPosture } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 
@@ -77,6 +77,7 @@ export function Discovery() {
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [findings, setFindings] = useState<DiscoveryFinding[]>([]);
   const [monitoring, setMonitoring] = useState<DiscoveryMonitoring | null>(null);
+  const [shadowPosture, setShadowPosture] = useState<NHIShadowPosture | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -99,11 +100,12 @@ export function Discovery() {
   async function load() {
     setLoading(true);
     setNotice(null);
-    const [sourceResult, scheduleResult, runResult, monitoringResult, findingResult] = await Promise.allSettled([
+    const [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult] = await Promise.allSettled([
       api.discoverySources({ limit: 50 }),
       api.discoverySchedules({ limit: 50 }),
       api.discoveryRuns({ limit: 50 }),
       api.discoveryMonitoring(),
+      api.nhiShadowPosture(),
       api.discoveryFindings({ limit: 50 }),
     ]);
     if (sourceResult.status === "fulfilled") setSources(sourceResult.value.items ?? []);
@@ -114,9 +116,11 @@ export function Discovery() {
     else setRuns([]);
     if (monitoringResult.status === "fulfilled") setMonitoring(monitoringResult.value);
     else setMonitoring(null);
+    if (shadowPostureResult.status === "fulfilled") setShadowPosture(shadowPostureResult.value);
+    else setShadowPosture(null);
     if (findingResult.status === "fulfilled") setFindings(findingResult.value.items ?? []);
     else setFindings([]);
-    const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, findingResult].find((result) => result.status === "rejected");
+    const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult].find((result) => result.status === "rejected");
     if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
   }
@@ -263,6 +267,7 @@ export function Discovery() {
       <DiscoveryHero findings={findings} />
       <CTDriftPanel findings={findings} sources={sources} />
       <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
+      <ShadowPosturePanel posture={shadowPosture} />
 
       {notice && renderNotice(notice)}
       {loading && <LoadingState>Loading discovery records...</LoadingState>}
@@ -516,6 +521,127 @@ export function Discovery() {
       </section>
     </section>
   );
+}
+
+function ShadowPosturePanel({ posture }: { posture: NHIShadowPosture | null }) {
+  const { t } = useTranslation();
+  if (!posture) return null;
+  const kindCounts = topRecordEntries(posture.summary.kind_counts, 4);
+  const surfaceCounts = topRecordEntries(posture.summary.surface_counts, 4);
+  const findings = posture.findings.slice(0, 4);
+  return (
+    <section aria-labelledby="shadow-posture-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h2 id="shadow-posture-heading" className="text-title font-semibold">
+            {t("discovery.shadow.heading")}
+          </h2>
+        </div>
+        <span className="rounded-full border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{posture.capability}</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <ShadowMetric label={t("discovery.shadow.metricFindings")} value={posture.summary.findings} />
+        <ShadowMetric label={t("discovery.shadow.metricUnmanaged")} value={posture.summary.unmanaged} />
+        <ShadowMetric label={t("discovery.shadow.metricUnregistered")} value={posture.summary.unregistered} />
+        <ShadowMetric label={t("discovery.shadow.metricOwnerless")} value={posture.summary.ownerless} />
+        <ShadowMetric label={t("discovery.shadow.metricHigh")} value={posture.summary.high + posture.summary.critical} />
+        <ShadowMetric label={t("discovery.shadow.metricAnalyzed")} value={posture.summary.total_analyzed} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[0.7fr_1.3fr]">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+          <ShadowBreakdown title={t("discovery.shadow.kindBreakdown")} entries={kindCounts} />
+          <ShadowBreakdown title={t("discovery.shadow.surfaceBreakdown")} entries={surfaceCounts} />
+        </div>
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[54rem]">
+            <caption className="sr-only">{t("discovery.shadow.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("discovery.findings.columnReference")}</th>
+                <th scope="col">{t("discovery.findings.columnKind")}</th>
+                <th scope="col">{t("discovery.shadow.columnSurface")}</th>
+                <th scope="col">{t("discovery.shadow.columnSeverity")}</th>
+                <th scope="col">{t("discovery.shadow.columnRecommendation")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {findings.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    {t("discovery.shadow.empty")}
+                  </td>
+                </tr>
+              ) : (
+                findings.map((finding) => (
+                  <tr key={finding.finding_id} className="align-top">
+                    <td className="font-medium">{finding.ref}</td>
+                    <td>{finding.kind}</td>
+                    <td>{finding.surface || "-"}</td>
+                    <td>
+                      <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${severityTone(finding.severity)}`}>{finding.severity}</span>
+                    </td>
+                    <td className="max-w-[26rem] text-sm">{finding.recommendation}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ShadowMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="ui-panel p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-title font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function ShadowBreakdown({ title, entries }: { title: string; entries: { key: string; value: number }[] }) {
+  return (
+    <div className="ui-panel grid gap-2 p-3">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {entries.length === 0 ? (
+        <div className="text-sm text-muted-foreground">-</div>
+      ) : (
+        <dl className="grid gap-2">
+          {entries.map((entry) => (
+            <div key={entry.key} className="flex items-center justify-between gap-3 text-sm">
+              <dt className="break-words text-muted-foreground">{entry.key}</dt>
+              <dd className="font-semibold">{entry.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function topRecordEntries(value: unknown, limit: number): { key: string; value: number }[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => ({ key, value: typeof raw === "number" ? raw : Number(raw) }))
+    .filter((entry) => entry.key && Number.isFinite(entry.value) && entry.value > 0)
+    .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key))
+    .slice(0, limit);
+}
+
+function severityTone(severity: string): string {
+  switch (severity) {
+    case "critical":
+      return "border-status-danger/60 bg-status-danger/15 text-status-danger";
+    case "high":
+      return "border-status-warning/60 bg-status-warning/15 text-status-warning";
+    case "medium":
+      return "border-accent/40 bg-accent/10 text-accent-foreground";
+    default:
+      return "border-muted-foreground/30 bg-muted text-muted-foreground";
+  }
 }
 
 function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: DiscoveryMonitoring | null; onCreateSource: () => void }) {

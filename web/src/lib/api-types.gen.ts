@@ -2016,6 +2016,52 @@ export interface NHIReviewItemRequest {
   risk?: string;
 }
 
+export interface NHIShadowFinding {
+  discovered_at: string;
+  display_name: string;
+  evidence_refs: string[];
+  finding_id: string;
+  fingerprint?: string;
+  kind: string;
+  managed_identity_id?: string;
+  owner_status: "owned_metadata" | "ownerless";
+  provenance: string;
+  recommendation: string;
+  ref: string;
+  risk_score: number;
+  run_id: string;
+  severity: "critical" | "high" | "medium" | "low";
+  source_id: string;
+  surface?: string;
+  system?: string;
+  triage_status: "unmanaged" | "investigating";
+}
+
+export interface NHIShadowPosture {
+  capability: string;
+  coverage: string[];
+  evidence_refs: string[];
+  findings: NHIShadowFinding[];
+  generated_at: string;
+  recommended_actions: string[];
+  summary: NHIShadowSummary;
+}
+
+export interface NHIShadowSummary {
+  critical: number;
+  findings: number;
+  high: number;
+  investigating: number;
+  kind_counts: Record<string, unknown>;
+  low: number;
+  medium: number;
+  ownerless: number;
+  surface_counts: Record<string, unknown>;
+  total_analyzed: number;
+  unmanaged: number;
+  unregistered: number;
+}
+
 export interface NHIStaleFinding {
   activity_age_days: number;
   created_age_days: number;

@@ -176,6 +176,11 @@ never live in the API process. What you can do end to end against the running bi
   decommission` resolve departure, vendor-term, and inactivity signals to
   tenant-local managed NHIs, then drive event-sourced lifecycle revoke/retire
   transitions with per-item evidence.
+- **NHI shadow posture:** `GET /api/v1/nhi/posture/shadow` and `trstctl-cli nhi
+  posture shadow` summarize unmanaged, unregistered, and ownerless external NHIs
+  from tenant discovery findings. The view is read-only and metadata-only: claiming,
+  owner assignment, rotation, revocation, and final business-purpose decisions still
+  require the served triage/lifecycle/remediation workflows.
 - **NHI over-privilege posture:** `GET /api/v1/nhi/posture/overprivilege` and
   `trstctl-cli nhi posture overprivilege` compare granted scopes/permissions/roles
   with observed usage metadata from the unified NHI inventory and return

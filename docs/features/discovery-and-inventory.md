@@ -695,12 +695,20 @@ event-sourced. `triage_status` starts as `unmanaged`; the state model also inclu
 tenant-scoped, idempotent mutations guarded by `discovery:write`; the investigation
 state remains a projected workflow state, not a separate public endpoint.
 
+`GET /api/v1/nhi/posture/shadow` is the served CAP-NHI-05 shadow posture view. It
+pages through tenant-scoped discovery findings, excludes findings already claimed as
+managed or dismissed, counts unmanaged and unregistered external NHIs by kind and
+surface, and returns recommendation/evidence refs only. `trstctl-cli nhi posture
+shadow` reads the same view. The endpoint is guarded by `nhi:read`; raw discovery
+source config and credential values are not returned.
+
 ### In the console
 
-The `/discovery` screen is the discovery front door: a **shadow-inventory** summary of
-unmanaged credentials found across your environments, and a **CT-log & drift** panel that
-counts certificate-transparency and configuration-drift findings — both projected over the
-served sources, schedules, runs, and findings. See [The web console](../web-console.md).
+The `/discovery` screen is the discovery front door: a **shadow NHI posture** summary
+of unmanaged and unregistered NHIs found across your environments, and a **CT-log &
+drift** panel that counts certificate-transparency and configuration-drift findings —
+both projected over the served sources, schedules, runs, and findings. See [The web
+console](../web-console.md).
 
 ## Use it
 
@@ -739,13 +747,15 @@ JSON
 trstctl-cli discovery runs start -f run.json
 trstctl-cli discovery runs list
 trstctl-cli discovery findings list --run_id <run-id>
+trstctl-cli nhi posture shadow
 ```
 
 Those map to `POST|GET /api/v1/discovery/sources`,
 `POST|GET /api/v1/discovery/schedules`, `POST|GET /api/v1/discovery/runs`,
 `GET /api/v1/discovery/runs/{id}`, `GET /api/v1/discovery/findings`,
 `POST /api/v1/discovery/findings/{id}/claim`, and
-`POST /api/v1/discovery/findings/{id}/dismiss`.
+`POST /api/v1/discovery/findings/{id}/dismiss`. The shadow posture command maps to
+`GET /api/v1/nhi/posture/shadow`.
 
 To see enrolled agents that perform local discovery:
 
@@ -789,6 +799,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | Unified NHI inventory (CAP-NHI-02) | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent kinds |
+| Shadow/unmanaged NHI posture (CAP-NHI-05) | **Served** — `/api/v1/nhi/posture/shadow`, `trstctl-cli nhi posture shadow`, and the Discovery console summarize unmanaged, unregistered, ownerless external NHIs by kind/surface from tenant discovery projections without returning credential values |
 | API-key/token/PAT discovery (CAP-NHI-04) | **Served** — `api_key` source/schedule/run/finding records normalize cloud access keys, SaaS API keys, CI/CD tokens, OAuth refresh tokens, and personal access tokens into metadata-only `api_key`, `api_token`, and `personal_access_token` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | Malicious / abused OAuth-grant detection (CAP-ITDR-03) | **Served** — `oauth_grant` runs emit metadata-only `oauth_grant_abuse` findings tagged `CAP-ITDR-03` when grant exports include provider threat signals, dangerous scopes, unverified-publisher evidence, ownerless privileged admin consent, or suspicious redirect URIs |
@@ -811,13 +822,14 @@ what it is.
 
 - **CLI groups:** `certificates`, `discovery`, `agents` (full set: `owners`,
   `issuers`, `identities`, `certificates`, `discovery`, `profiles`, `audit`,
-  `graph`, `risk`, `agents`).
+  `graph`, `risk`, `nhi`, `agents`).
 - **Served routes:** `GET|POST /api/v1/certificates`, `GET /api/v1/certificates/{id}`,
   `GET|POST /api/v1/discovery/sources`, `GET|POST /api/v1/discovery/schedules`,
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
   `GET /api/v1/discovery/findings`, `POST /api/v1/discovery/findings/{id}/claim`,
   `POST /api/v1/discovery/findings/{id}/dismiss`, `GET /api/v1/agents`,
-  `POST /api/v1/agents/enrollment-tokens`, `GET /api/v1/graph`,
+  `GET /api/v1/nhi/posture/shadow`, `POST /api/v1/agents/enrollment-tokens`,
+  `GET /api/v1/graph`,
   `POST /enroll/bootstrap`.
 - **Agent channel:** `AgentService.ReportInventory` over the mTLS agent gRPC listener
   when `agent_channel.enabled` is true.

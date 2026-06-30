@@ -670,6 +670,162 @@ func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd is the COMPETE-060
+// proof: CAP-NHI-05 has a named served posture surface for shadow/unmanaged
+// external NHIs. It reads the tenant discovery projection, excludes findings
+// already claimed as managed, and returns metadata-only evidence references.
+func TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "cap-nhi-05-shadow",
+		"kind": "nhi_cross_surface",
+		"config": map[string]any{
+			"observations": []map[string]any{
+				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-api", "owner": "platform", "credential_kind": "oauth_client", "scopes": []string{"payments.read"}},
+				{"surface": "cloud", "system": "aws-iam", "external_id": "access-key/AKIASHADOW", "principal": "shadow-cloud-key", "credential_kind": "api_key", "scopes": []string{"s3:*", "iam:read"}},
+				{"surface": "saas", "system": "github", "external_id": "user/legacy-bot/pat", "principal": "legacy-bot-token", "credential_kind": "personal_access_token"},
+				{"surface": "on_prem", "system": "ldap", "external_id": "svc-legacy", "principal": "svc-legacy", "owner": "identity", "credential_kind": "service_account"},
+				{"surface": "code", "system": "github-code-search", "external_id": "repo/payments/path/deploy.yaml", "principal": "payments-deploy-key", "owner": "devex", "credential_kind": "ssh_key"},
+				{"surface": "ci", "system": "github-actions", "external_id": "repo/payments/env/prod", "principal": "payments-ci-token", "credential_kind": "workflow_token", "scopes": []string{"repo", "workflow", "packages", "admin:org"}},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create shadow NHI source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start shadow NHI run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued run: %v (%s)", err, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain shadow NHI run: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list shadow NHI findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			ID  string `json:"id"`
+			Ref string `json:"ref"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode shadow findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 6 {
+		t.Fatalf("shadow findings count = %d body %s, want 6", len(findings.Items), body)
+	}
+	var managedFindingID string
+	for _, finding := range findings.Items {
+		if finding.Ref == "payments-api" {
+			managedFindingID = finding.ID
+			break
+		}
+	}
+	if managedFindingID == "" {
+		t.Fatalf("could not find managed seed finding in %+v", findings.Items)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/findings/"+managedFindingID+"/claim", tok, map[string]any{
+		"managed_identity_id": "11111111-1111-4111-8111-111111111111",
+		"reason":              "already registered identity",
+		"owner":               "platform",
+		"tags":                []string{"managed"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("claim managed NHI finding: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/nhi/posture/shadow", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list shadow NHI posture: status %d body %s", status, body)
+	}
+	var posture struct {
+		Capability string `json:"capability"`
+		Summary    struct {
+			TotalAnalyzed int            `json:"total_analyzed"`
+			Findings      int            `json:"findings"`
+			Unmanaged     int            `json:"unmanaged"`
+			Unregistered  int            `json:"unregistered"`
+			Ownerless     int            `json:"ownerless"`
+			High          int            `json:"high"`
+			KindCounts    map[string]int `json:"kind_counts"`
+			SurfaceCounts map[string]int `json:"surface_counts"`
+		} `json:"summary"`
+		Findings []struct {
+			FindingID         string   `json:"finding_id"`
+			Kind              string   `json:"kind"`
+			Ref               string   `json:"ref"`
+			Surface           string   `json:"surface"`
+			TriageStatus      string   `json:"triage_status"`
+			ManagedIdentityID string   `json:"managed_identity_id"`
+			OwnerStatus       string   `json:"owner_status"`
+			Severity          string   `json:"severity"`
+			Recommendation    string   `json:"recommendation"`
+			EvidenceRefs      []string `json:"evidence_refs"`
+		} `json:"findings"`
+		RecommendedActions []string `json:"recommended_actions"`
+		EvidenceRefs       []string `json:"evidence_refs"`
+	}
+	if err := json.Unmarshal(body, &posture); err != nil {
+		t.Fatalf("decode shadow posture: %v (%s)", err, body)
+	}
+	if posture.Capability != "CAP-NHI-05" {
+		t.Fatalf("capability = %q, want CAP-NHI-05", posture.Capability)
+	}
+	if posture.Summary.TotalAnalyzed != 6 || posture.Summary.Findings != 5 || posture.Summary.Unmanaged != 5 || posture.Summary.Unregistered != 5 || posture.Summary.Ownerless < 2 {
+		t.Fatalf("shadow summary = %+v, want claimed row excluded and shadow ownerless rows counted", posture.Summary)
+	}
+	if posture.Summary.KindCounts["token"] == 0 || posture.Summary.KindCounts["api_key"] == 0 || posture.Summary.SurfaceCounts["ci"] == 0 || posture.Summary.SurfaceCounts["cloud"] == 0 {
+		t.Fatalf("shadow posture did not enumerate kind/surface denominator: %+v/%+v", posture.Summary.KindCounts, posture.Summary.SurfaceCounts)
+	}
+	if len(posture.RecommendedActions) < 3 || len(posture.EvidenceRefs) == 0 {
+		t.Fatalf("shadow posture lacks recommended actions or top-level evidence: %+v", posture)
+	}
+	seenShadowToken := false
+	for _, finding := range posture.Findings {
+		if finding.FindingID == managedFindingID || finding.ManagedIdentityID != "" {
+			t.Fatalf("managed finding leaked into shadow posture: %+v", finding)
+		}
+		if finding.Ref == "payments-ci-token" {
+			seenShadowToken = true
+			if finding.OwnerStatus != "ownerless" || finding.Severity == "" || finding.Recommendation == "" {
+				t.Fatalf("shadow token finding lacks ownerless severity/recommendation: %+v", finding)
+			}
+			refs := strings.Join(finding.EvidenceRefs, ",")
+			if !strings.Contains(refs, "discovery.finding:") || !strings.Contains(refs, "metadata:surface") {
+				t.Fatalf("shadow finding evidence refs = %q, want file-free projection metadata refs", refs)
+			}
+		}
+	}
+	if !seenShadowToken {
+		t.Fatalf("shadow posture did not include ownerless CI token: %+v", posture.Findings)
+	}
+	bodyText := strings.ToLower(string(body))
+	for _, forbidden := range []string{"raw-value", "client_secret", "secret_value"} {
+		if strings.Contains(bodyText, forbidden) {
+			t.Fatalf("shadow posture leaked credential material marker %q: %s", forbidden, body)
+		}
+	}
+}
+
 // TestServedUnifiedNHIInventoryCAPNHI02EndToEnd is the COMPETE-030 proof:
 // CAP-NHI-02 is not just an identities-page rollup. The served inventory API
 // must merge first-party identities/certificates/API tokens with metadata-only

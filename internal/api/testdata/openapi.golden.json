@@ -7789,6 +7789,206 @@
         ],
         "type": "object"
       },
+      "NHIShadowFinding": {
+        "properties": {
+          "discovered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "managed_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_status": {
+            "enum": [
+              "owned_metadata",
+              "ownerless"
+            ],
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "system": {
+            "type": "string"
+          },
+          "triage_status": {
+            "enum": [
+              "unmanaged",
+              "investigating"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "source_id",
+          "run_id",
+          "kind",
+          "ref",
+          "display_name",
+          "provenance",
+          "triage_status",
+          "owner_status",
+          "severity",
+          "risk_score",
+          "recommendation",
+          "evidence_refs",
+          "discovered_at"
+        ],
+        "type": "object"
+      },
+      "NHIShadowPosture": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/NHIShadowFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recommended_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIShadowSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "summary",
+          "findings",
+          "recommended_actions",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "NHIShadowSummary": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "investigating": {
+            "type": "integer"
+          },
+          "kind_counts": {
+            "type": "object"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "ownerless": {
+            "type": "integer"
+          },
+          "surface_counts": {
+            "type": "object"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          },
+          "unmanaged": {
+            "type": "integer"
+          },
+          "unregistered": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "findings",
+          "unmanaged",
+          "investigating",
+          "unregistered",
+          "ownerless",
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "kind_counts",
+          "surface_counts"
+        ],
+        "type": "object"
+      },
       "NHIStaleFinding": {
         "properties": {
           "activity_age_days": {
@@ -20809,6 +21009,53 @@
           }
         ],
         "summary": "List over-privileged NHIs with usage-driven least-privilege recommendations",
+        "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/shadow": {
+      "get": {
+        "operationId": "listNHIShadowPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIShadowPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List shadow, unmanaged, and unregistered NHI posture findings",
         "x-trstctl-permission": "nhi:read"
       }
     },

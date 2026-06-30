@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
     discoverySchedules: vi.fn(),
     discoveryRuns: vi.fn(),
     discoveryMonitoring: vi.fn(),
+    nhiShadowPosture: vi.fn(),
     discoveryFindings: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
@@ -178,6 +179,48 @@ function seedDiscoveryMocks() {
       },
     ],
   });
+  apiMock.nhiShadowPosture.mockResolvedValue({
+    capability: "CAP-NHI-05",
+    generated_at: "2026-06-20T10:04:00Z",
+    coverage: ["discovery_findings", "unmanaged_triage", "unregistered_detection", "ownerless_detection"],
+    summary: {
+      total_analyzed: 3,
+      findings: 2,
+      unmanaged: 2,
+      investigating: 0,
+      unregistered: 2,
+      ownerless: 1,
+      critical: 0,
+      high: 1,
+      medium: 1,
+      low: 0,
+      kind_counts: { api_key: 1, certificate: 1 },
+      surface_counts: { ci: 1, cloud: 1 },
+    },
+    findings: [
+      {
+        finding_id: "finding-2",
+        source_id: "source-1",
+        run_id: "run-1",
+        kind: "api_key",
+        ref: "github:user/payments-ci/pat",
+        display_name: "payments-ci",
+        surface: "ci",
+        system: "github",
+        provenance: "github:audit/pat-1",
+        fingerprint: "1234567890abcdef1234567890abcdef",
+        triage_status: "unmanaged",
+        owner_status: "ownerless",
+        severity: "high",
+        risk_score: 80,
+        recommendation: "Claim the finding to an existing identity or create one before allowing continued use.",
+        evidence_refs: ["discovery.finding:finding-2", "metadata:surface"],
+        discovered_at: "2026-06-20T10:02:06Z",
+      },
+    ],
+    recommended_actions: ["Claim legitimate findings to managed identities."],
+    evidence_refs: ["projection:discovery_findings"],
+  });
   apiMock.discoveryFindings.mockResolvedValue({
     items: [
       {
@@ -279,6 +322,11 @@ describe("discovery control-plane surface", () => {
     expect(within(monitoring as HTMLElement).getByText("1h")).toBeInTheDocument();
     expect(within(monitoring as HTMLElement).getAllByText("/api/v1/certificates").length).toBeGreaterThanOrEqual(1);
     expect(within(monitoring as HTMLElement).getByText("/api/v1/discovery/findings?run_id=run-1")).toBeInTheDocument();
+    const shadow = screen.getByRole("heading", { name: "Shadow NHI posture" }).closest("section");
+    expect(shadow).toBeTruthy();
+    expect(within(shadow as HTMLElement).getByText("CAP-NHI-05")).toBeInTheDocument();
+    expect(within(shadow as HTMLElement).getByText("Unregistered")).toBeInTheDocument();
+    expect(within(shadow as HTMLElement).getByText("github:user/payments-ci/pat")).toBeInTheDocument();
     expect(await screen.findByText("edge-hourly")).toBeInTheDocument();
     expect(screen.getByText("run-1")).toBeInTheDocument();
     expect(screen.getAllByText("x509_certificate").length).toBeGreaterThanOrEqual(1);
@@ -356,7 +404,10 @@ describe("discovery control-plane surface", () => {
     expect(await within(certRow as HTMLTableRowElement).findByText("Managed")).toBeInTheDocument();
     expect(await within(certRow as HTMLTableRowElement).findByText("follow-up")).toBeInTheDocument();
 
-    const tokenRow = screen.getByText("github:user/payments-ci/pat").closest("tr");
+    const tokenRow = screen
+      .getAllByText("github:user/payments-ci/pat")
+      .map((node) => node.closest("tr"))
+      .find((row) => row && within(row as HTMLTableRowElement).queryByRole("button", { name: "Dismiss" }));
     expect(tokenRow).toBeTruthy();
     await user.click(within(tokenRow as HTMLTableRowElement).getByRole("button", { name: "Dismiss" }));
     await user.clear(screen.getByLabelText("Reason"));
@@ -383,7 +434,9 @@ describe("discovery control-plane surface", () => {
     expect(params.get("tag")).toBe("follow-up");
     expect(params.get("triage")).toBe("managed");
     expect(screen.getByText("10.0.0.10:443")).toBeInTheDocument();
-    expect(screen.queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
+    const findingsSection = screen.getByRole("heading", { name: "Findings" }).closest("section");
+    expect(findingsSection).toBeTruthy();
+    expect(within(findingsSection as HTMLElement).queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
   });
 
   it("creates a network source with host:port targets and can queue a run", async () => {

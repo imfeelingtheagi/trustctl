@@ -584,6 +584,62 @@ export const messages = {
     defaultMessage: "unscheduled",
     description: "Short status text for sources without an enabled monitoring schedule.",
   },
+  "discovery.shadow.heading": {
+    defaultMessage: "Shadow NHI posture",
+    description: "Heading for shadow and unmanaged non-human identity posture.",
+  },
+  "discovery.shadow.metricFindings": {
+    defaultMessage: "Findings",
+    description: "Shadow NHI posture metric for current findings.",
+  },
+  "discovery.shadow.metricUnmanaged": {
+    defaultMessage: "Unmanaged",
+    description: "Shadow NHI posture metric for unmanaged findings.",
+  },
+  "discovery.shadow.metricUnregistered": {
+    defaultMessage: "Unregistered",
+    description: "Shadow NHI posture metric for findings not linked to a managed identity.",
+  },
+  "discovery.shadow.metricOwnerless": {
+    defaultMessage: "Ownerless",
+    description: "Shadow NHI posture metric for findings without owner metadata.",
+  },
+  "discovery.shadow.metricHigh": {
+    defaultMessage: "High or critical",
+    description: "Shadow NHI posture metric for high or critical findings.",
+  },
+  "discovery.shadow.metricAnalyzed": {
+    defaultMessage: "Analyzed",
+    description: "Shadow NHI posture metric for analyzed discovery findings.",
+  },
+  "discovery.shadow.kindBreakdown": {
+    defaultMessage: "Kind breakdown",
+    description: "Heading for shadow NHI posture kind counts.",
+  },
+  "discovery.shadow.surfaceBreakdown": {
+    defaultMessage: "Surface breakdown",
+    description: "Heading for shadow NHI posture surface counts.",
+  },
+  "discovery.shadow.caption": {
+    defaultMessage: "Shadow NHI findings",
+    description: "Accessible table caption for shadow NHI findings.",
+  },
+  "discovery.shadow.columnSurface": {
+    defaultMessage: "Surface",
+    description: "Column header for shadow NHI discovery surface.",
+  },
+  "discovery.shadow.columnSeverity": {
+    defaultMessage: "Severity",
+    description: "Column header for shadow NHI severity.",
+  },
+  "discovery.shadow.columnRecommendation": {
+    defaultMessage: "Recommendation",
+    description: "Column header for shadow NHI recommendation.",
+  },
+  "discovery.shadow.empty": {
+    defaultMessage: "No shadow NHI findings.",
+    description: "Empty table text when no shadow NHI posture findings exist.",
+  },
   "discovery.findings.filters": {
     defaultMessage: "Discovery finding filters",
     description: "Accessible label for discovery finding triage filters.",
@@ -3554,6 +3610,20 @@ const esESCatalog = {
   "discovery.monitoring.columnInventory": "Inventario",
   "discovery.monitoring.columnRepository": "Repositorio",
   "discovery.monitoring.unscheduled": "sin programación",
+  "discovery.shadow.heading": "Postura NHI sombra",
+  "discovery.shadow.metricFindings": "Hallazgos",
+  "discovery.shadow.metricUnmanaged": "No administrados",
+  "discovery.shadow.metricUnregistered": "Sin registrar",
+  "discovery.shadow.metricOwnerless": "Sin propietario",
+  "discovery.shadow.metricHigh": "Alto o crítico",
+  "discovery.shadow.metricAnalyzed": "Analizados",
+  "discovery.shadow.kindBreakdown": "Desglose por tipo",
+  "discovery.shadow.surfaceBreakdown": "Desglose por superficie",
+  "discovery.shadow.caption": "Hallazgos NHI sombra",
+  "discovery.shadow.columnSurface": "Superficie",
+  "discovery.shadow.columnSeverity": "Severidad",
+  "discovery.shadow.columnRecommendation": "Recomendación",
+  "discovery.shadow.empty": "Sin hallazgos NHI sombra.",
   "discovery.findings.filters": "Filtros de hallazgos de descubrimiento",
   "discovery.findings.filterStatus": "Estado de triaje",
   "discovery.findings.filterStatusAll": "Todos los estados",

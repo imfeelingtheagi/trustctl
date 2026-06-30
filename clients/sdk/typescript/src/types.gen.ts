@@ -2048,6 +2048,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/shadow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List shadow, unmanaged, and unregistered NHI posture findings */
+        get: operations["listNHIShadowPosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/stale": {
         parameters: {
             query?: never;
@@ -5333,6 +5350,58 @@ export interface components {
             owner_ref?: string;
             resource: string;
             risk?: string;
+        };
+        NHIShadowFinding: {
+            /** Format: date-time */
+            discovered_at: string;
+            display_name: string;
+            evidence_refs: string[];
+            /** Format: uuid */
+            finding_id: string;
+            fingerprint?: string;
+            kind: string;
+            /** Format: uuid */
+            managed_identity_id?: string;
+            /** @enum {string} */
+            owner_status: "owned_metadata" | "ownerless";
+            provenance: string;
+            recommendation: string;
+            ref: string;
+            risk_score: number;
+            /** Format: uuid */
+            run_id: string;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            /** Format: uuid */
+            source_id: string;
+            surface?: string;
+            system?: string;
+            /** @enum {string} */
+            triage_status: "unmanaged" | "investigating";
+        };
+        NHIShadowPosture: {
+            capability: string;
+            coverage: string[];
+            evidence_refs: string[];
+            findings: components["schemas"]["NHIShadowFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            recommended_actions: string[];
+            summary: components["schemas"]["NHIShadowSummary"];
+        };
+        NHIShadowSummary: {
+            critical: number;
+            findings: number;
+            high: number;
+            investigating: number;
+            kind_counts: Record<string, never>;
+            low: number;
+            medium: number;
+            ownerless: number;
+            surface_counts: Record<string, never>;
+            total_analyzed: number;
+            unmanaged: number;
+            unregistered: number;
         };
         NHIStaleFinding: {
             activity_age_days: number;
@@ -12431,6 +12500,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIOverPrivilegePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIShadowPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIShadowPosture"];
                 };
             };
             /** @description client error */
