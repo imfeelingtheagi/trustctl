@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -94,5 +95,28 @@ func TestIssuerScopedGuardUsesPathIssuer(t *testing.T) {
 	}
 	if !handlerRan {
 		t.Fatal("issuer-scoped manage with matching issuer never reached handler")
+	}
+}
+
+func TestCARotationRequiresSuccessorIssuerScope(t *testing.T) {
+	role := authz.Role{Name: "issuer-manager", Permissions: []authz.Permission{authz.IssuersWrite}}
+	predecessorOnly := authz.Principal{
+		TenantID: "tenant-1",
+		Subject:  "issuer-admin",
+		Grants:   []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: "tenant-1", Issuer: "issuer-old"}}},
+	}
+	ctx := context.WithValue(context.Background(), principalCtxKey, predecessorOnly)
+	if err := authorizeCARotationSuccessor(ctx, "tenant-1", "issuer-new"); err == nil {
+		t.Fatal("predecessor-scoped rotation principal authorized an unauthorized successor")
+	}
+
+	tenantWide := authz.Principal{
+		TenantID: "tenant-1",
+		Subject:  "issuer-admin",
+		Grants:   []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: "tenant-1"}}},
+	}
+	ctx = context.WithValue(context.Background(), principalCtxKey, tenantWide)
+	if err := authorizeCARotationSuccessor(ctx, "tenant-1", "issuer-new"); err != nil {
+		t.Fatalf("tenant-wide issuer manager should authorize successor rotation: %v", err)
 	}
 }

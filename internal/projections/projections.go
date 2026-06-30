@@ -40,6 +40,7 @@ const (
 	EventCACeremonyApproved                = "ca.ceremony.approved"
 	EventCARootCreated                     = "ca.root.created"
 	EventCAAuthorityImported               = "ca.authority.imported"
+	EventCAAuthorityRotated                = "ca.authority.rotated"
 	EventCAIntermediateCreated             = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued           = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                 = "ca.endentity.issued"
@@ -300,6 +301,17 @@ type CACeremonyApproved struct {
 	CeremonyID string `json:"ceremony_id"`
 	Custodian  string `json:"custodian"`
 	Approvals  int    `json:"approvals,omitempty"`
+}
+
+// CAAuthorityRotated is the payload of ca.authority.rotated. It carries the
+// predecessor/successor link the projector needs to keep the old issue URL
+// routable while the active signer advances to the successor CA.
+type CAAuthorityRotated struct {
+	PredecessorCAID string `json:"predecessor_ca_id"`
+	SuccessorCAID   string `json:"successor_ca_id"`
+	Reason          string `json:"reason,omitempty"`
+	IssuePath       string `json:"issue_path,omitempty"`
+	ActiveIssuePath string `json:"active_issue_path,omitempty"`
 }
 
 // CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
@@ -994,6 +1006,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCACertificateRevoked:              {1: true},
 	EventCACeremonyStarted:                 {1: true},
 	EventCACeremonyApproved:                {1: true},
+	EventCAAuthorityRotated:                {1: true},
 	EventCRLPublished:                      {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:              {1: true},
 	EventAgentHeartbeat:                    {1: true},
@@ -1235,6 +1248,15 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires ceremony_id and custodian", e.Type)
 		}
 		return p.store.ApplyKeyCeremonyApprovedTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Custodian, e.ID, e.Sequence, e.Time)
+	case EventCAAuthorityRotated:
+		var pl CAAuthorityRotated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.PredecessorCAID == "" || pl.SuccessorCAID == "" {
+			return fmt.Errorf("projections: %s requires predecessor_ca_id and successor_ca_id", e.Type)
+		}
+		return p.store.ApplyCAAuthorityRotatedTx(ctx, tx, e.TenantID, pl.PredecessorCAID, pl.SuccessorCAID)
 	case EventCRLPublished:
 		var pl CRLPublished
 		if err := decode(e, &pl); err != nil {

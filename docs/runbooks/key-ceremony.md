@@ -12,7 +12,9 @@ unilaterally stand up or rotate a CA.
 > offline-root-signed intermediate. The served path still keeps online CA private
 > keys in the isolated signer process and stores only signer handles in the control
 > plane; the offline root private key never enters trstctl. Rotation and
-> cross-signing remain library/operator procedures. Online m-of-n break-glass
+> cross-signing remain split: zero-downtime successor activation is served at
+> `POST /api/v1/ca/authorities/{id}/rotate`, while cross-signing remains an
+> operator procedure. Online m-of-n break-glass
 > issuance is served at `POST /api/v1/breakglass/issue` when the signer-backed
 > break-glass issuer is configured; bundle reconciliation is served separately at
 > `POST /api/v1/breakglass/reconcile` so operators can verify signed emergency
@@ -51,7 +53,6 @@ Purpose values are deliberately concrete:
   authorizes importing one existing root/intermediate public certificate chain and
   binding it to the exact signer-held key handle whose public key appears in the
   first certificate.
-- `rotation:<ca-id>` authorizes one rotation of that exact CA.
 - `cross-sign:<ca-id>:<sha256-of-target-cert-der>` authorizes one cross-signature
   from that CA over that exact target certificate.
 
@@ -219,17 +220,29 @@ Leaf issuance then uses `POST /api/v1/ca/authorities/{imported-ca-id}/issue`.
 
 ## Procedure: rotating a CA
 
-Rotation is the same ceremony model, but the purpose is bound to the exact CA:
-`rotation:<ca-id>`.
+Zero-downtime rotation is a two-step model: create or import the successor CA under
+the same ceremony rules as any other authority, then activate that successor behind
+the predecessor's stable issue URL.
 
-1. Open a `rotation:<ca-id>` ceremony with threshold *m* and collect *m* approvals.
-2. Run `Rotate` for the CA; it is refused until quorum.
-3. If your hierarchy requires cross-signing the new CA, **open a separate
+1. Create or import the successor CA with the same kind, parent, path-length, DNS,
+   and EKU constraints as the predecessor. This step uses the root/intermediate,
+   offline-root, offline-intermediate, or existing-CA import ceremony described
+   above, so the new signing key is reviewed before it can issue.
+2. Activate the overlap window with
+   `POST /api/v1/ca/authorities/{predecessor-id}/rotate` and a JSON body containing
+   the `successor_id`. The server marks the predecessor `superseded`, records the
+   successor's `replaces_id`, emits `ca.authority.rotated`, and keeps the
+   predecessor issue URL live while routing new issuance to the successor.
+3. Verify both issue URLs: the predecessor URL should still answer, but the returned
+   chain should verify to the successor; the successor URL should also issue
+   directly. Already-issued predecessor-chain certificates continue to validate
+   until their normal expiry or revocation.
+4. If your hierarchy requires cross-signing the new CA, **open a separate
    `cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony** and collect its *m*
    approvals — `CrossSign` is refused until quorum and exact target-certificate
    match, exactly like the create/rotate operations. Then distribute the new CA and
    renew issuance under it.
-4. Retire the old key per your policy (and per the
+5. Retire the old key per your policy (and per the
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).
 

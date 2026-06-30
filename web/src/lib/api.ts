@@ -325,6 +325,8 @@ export type {
   CBOMScan,
   CBOMScanRequest,
   CAAuthority,
+  CAAuthorityRotation,
+  CAAuthorityRotationRequest,
   CACeremonyStartRequest,
   CACreateOfflineIntermediateCSRRequest,
   CAImportExistingRequest,
@@ -858,6 +860,7 @@ export interface Api {
   importExistingCA(input: CAImportExistingRequest): Promise<CAAuthority>;
   createOfflineIntermediateCSR(id: string, input: CACreateOfflineIntermediateCSRRequest): Promise<CAIntermediateCSR>;
   importOfflineIntermediateCA(id: string, input: CAImportOfflineIntermediateRequest): Promise<CAAuthority>;
+  rotateCAAuthority(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotation>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
   rotateManagedKey(keyId: string): Promise<ManagedKey>;
   revokeManagedKey(keyId: string): Promise<ManagedKey>;
@@ -1074,6 +1077,7 @@ export const api: Api = {
   createOfflineIntermediateCSR: (id, input) =>
     mutate<CAIntermediateCSR>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates/csr`, input),
   importOfflineIntermediateCA: (id, input) => mutate<CAAuthority>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-intermediates`, input),
+  rotateCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate`, input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
   rotateManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/rotate", { key_id: keyId }),
   revokeManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/revoke", { key_id: keyId }),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { Building2, CheckCircle2, Cloud, FileKey2, Globe2, Home, KeyRound, LockKeyhole, Plus, RefreshCw, Server, ShieldCheck, X, XCircle } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,6 +12,7 @@ import {
   ApiError,
   type CADiscovery,
   type CAAuthority,
+  type CAAuthorityRotation,
   type CACeremonyStartRequest,
   type CAIntermediateCSR,
   type CAKeyCeremony,
@@ -95,6 +96,12 @@ export function CAHierarchy() {
   const [existingCA, setExistingCA] = useState<CAAuthority | null>(null);
   const [existingCABusy, setExistingCABusy] = useState(false);
   const [existingCAError, setExistingCAError] = useState<string | null>(null);
+  const [rotationPredecessorID, setRotationPredecessorID] = useState("");
+  const [rotationSuccessorID, setRotationSuccessorID] = useState("");
+  const [rotationReason, setRotationReason] = useState("planned CA rotation");
+  const [rotationResult, setRotationResult] = useState<CAAuthorityRotation | null>(null);
+  const [rotationBusy, setRotationBusy] = useState(false);
+  const [rotationError, setRotationError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -354,6 +361,24 @@ export function CAHierarchy() {
     }
   }
 
+  async function activateCARotation() {
+    setRotationBusy(true);
+    setRotationError(null);
+    try {
+      const predecessorID = rotationPredecessorID.trim();
+      const next = await api.rotateCAAuthority(predecessorID, {
+        successor_id: rotationSuccessorID.trim(),
+        reason: rotationReason.trim() || undefined,
+      });
+      setRotationResult(next);
+      await load();
+    } catch (err) {
+      setRotationError(errorText(err, "Could not activate CA rotation"));
+    } finally {
+      setRotationBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -373,6 +398,20 @@ export function CAHierarchy() {
       <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
 
       <CADiscoveryInventoryPanel inventory={caDiscovery} />
+
+      <CARotationPanel
+        busy={rotationBusy}
+        error={rotationError}
+        inventory={caDiscovery}
+        predecessorID={rotationPredecessorID}
+        reason={rotationReason}
+        result={rotationResult}
+        successorID={rotationSuccessorID}
+        onActivate={() => void activateCARotation()}
+        onPredecessorChange={setRotationPredecessorID}
+        onReasonChange={setRotationReason}
+        onSuccessorChange={setRotationSuccessorID}
+      />
 
       {probe && <ProbeBanner probe={probe} onDismiss={() => setProbe(null)} />}
 
@@ -578,6 +617,124 @@ function CADiscoveryInventoryPanel({ inventory }: { inventory: CADiscovery | nul
         </div>
       )}
     </section>
+  );
+}
+
+function CARotationPanel({
+  busy,
+  error,
+  inventory,
+  predecessorID,
+  reason,
+  result,
+  successorID,
+  onActivate,
+  onPredecessorChange,
+  onReasonChange,
+  onSuccessorChange,
+}: {
+  busy: boolean;
+  error: string | null;
+  inventory: CADiscovery | null;
+  predecessorID: string;
+  reason: string;
+  result: CAAuthorityRotation | null;
+  successorID: string;
+  onActivate: () => void;
+  onPredecessorChange: (value: string) => void;
+  onReasonChange: (value: string) => void;
+  onSuccessorChange: (value: string) => void;
+}) {
+  const authorities = (inventory?.items ?? []).filter((item) => item.source === "ca_hierarchy" && item.managed && item.issuance_path);
+  const ready = predecessorID.trim() !== "" && successorID.trim() !== "" && predecessorID.trim() !== successorID.trim();
+
+  return (
+    <section aria-labelledby="ca-rotation-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex items-start gap-3">
+        <RefreshCw className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <h2 id="ca-rotation-heading" className="text-title font-semibold">
+            CA rotation
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Activate an existing signer-backed successor while the predecessor issue URL remains valid for the overlap window.
+          </p>
+        </div>
+      </div>
+      {error && <ErrorState title="CA rotation failed">{error}</ErrorState>}
+      <section aria-labelledby="ca-rotation-form-heading" className="ui-panel p-comfortable text-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 id="ca-rotation-form-heading" className="text-title font-semibold">
+              Successor activation
+            </h3>
+            {result && <p className="mt-1 font-mono text-xs">{result.issue_path}</p>}
+          </div>
+          <Button type="button" size="sm" onClick={onActivate} disabled={busy || !ready}>
+            <RefreshCw className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+            Activate CA rotation
+          </Button>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <LabeledSelect id="ca-rotation-predecessor" label="Predecessor CA" value={predecessorID} onChange={onPredecessorChange}>
+            <option value="">Select predecessor</option>
+            {authorities.map((item) => (
+              <option key={item.id} value={item.source_id}>
+                {item.name} ({item.status})
+              </option>
+            ))}
+          </LabeledSelect>
+          <LabeledSelect id="ca-rotation-successor" label="Successor CA" value={successorID} onChange={onSuccessorChange}>
+            <option value="">Select successor</option>
+            {authorities.map((item) => (
+              <option key={item.id} value={item.source_id}>
+                {item.name} ({item.status})
+              </option>
+            ))}
+          </LabeledSelect>
+          <LabeledInput id="ca-rotation-reason" label="Reason" value={reason} onChange={onReasonChange} />
+        </div>
+        {authorities.length < 2 && <p className="mt-3 text-sm text-muted-foreground">Create a signer-backed successor before activating rotation.</p>}
+        {result && (
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <KeyValue label="Predecessor" value={`${result.predecessor.common_name} (${result.predecessor.status})`} />
+            <KeyValue label="Successor" value={`${result.successor.common_name} (${result.successor.status})`} />
+            <KeyValue label="Stable issue URL" value={result.issue_path} mono />
+            <KeyValue label="Active issue URL" value={result.active_issue_path} mono />
+          </dl>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function LabeledSelect({
+  children,
+  id,
+  label,
+  onChange,
+  value,
+}: {
+  children: ReactNode;
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="text-sm font-medium" htmlFor={id}>
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="rounded-control border border-border bg-background px-3 py-2 outline-none transition-colors focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+      >
+        {children}
+      </select>
+    </div>
   );
 }
 

@@ -1410,6 +1410,10 @@
             },
             "type": "array"
           },
+          "replaces_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "serial": {
             "type": "string"
           },
@@ -1452,6 +1456,75 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "CAAuthorityRotation": {
+        "properties": {
+          "active_issue_path": {
+            "type": "string"
+          },
+          "issue_path": {
+            "type": "string"
+          },
+          "overlap_issuers": {
+            "items": {
+              "$ref": "#/components/schemas/CAAuthorityRotationIssuer"
+            },
+            "type": "array"
+          },
+          "predecessor": {
+            "$ref": "#/components/schemas/CAAuthority"
+          },
+          "successor": {
+            "$ref": "#/components/schemas/CAAuthority"
+          }
+        },
+        "required": [
+          "predecessor",
+          "successor",
+          "issue_path",
+          "active_issue_path",
+          "overlap_issuers"
+        ],
+        "type": "object"
+      },
+      "CAAuthorityRotationIssuer": {
+        "properties": {
+          "authority_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issue_path": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "authority_id",
+          "role",
+          "status",
+          "issue_path"
+        ],
+        "type": "object"
+      },
+      "CAAuthorityRotationRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "successor_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "successor_id"
         ],
         "type": "object"
       },
@@ -14921,6 +14994,74 @@
           }
         ],
         "summary": "Create a signer-backed intermediate CSR for an offline root",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/rotate": {
+      "post": {
+        "operationId": "rotateCAAuthority",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAAuthorityRotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAAuthorityRotation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Activate a signer-backed successor CA without changing the stable issue URL",
         "x-trstctl-permission": "issuers:write"
       }
     },

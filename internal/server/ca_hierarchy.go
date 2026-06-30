@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -517,7 +518,7 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	if req.TTLSeconds <= 0 {
 		return api.CAIssuedLeaf{}, fmt.Errorf("%w: ttl_seconds must be positive", api.ErrCAHierarchyInvalid)
 	}
-	ca, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	requestedCA, ca, err := h.issuingAuthority(ctx, tenantID, caID)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
@@ -544,12 +545,144 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	}
 	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
 	out = append(out, []byte(ca.CertificatePEM)...)
-	if err := h.emit(ctx, tenantID, "ca.endentity.issued", map[string]any{
+	event := map[string]any{
 		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject,
-	}); err != nil {
+	}
+	if requestedCA.ID != ca.ID {
+		event["ca_id"] = ca.ID
+		event["requested_ca_id"] = requestedCA.ID
+		event["rotation_routed"] = true
+	}
+	if err := h.emit(ctx, tenantID, "ca.endentity.issued", event); err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
 	return api.CAIssuedLeaf{CertificatePEM: string(out), Serial: info.SerialNumber, NotAfter: info.NotAfter}, nil
+}
+
+func (h *caHierarchyService) RotateAuthority(ctx context.Context, tenantID, caID string, req api.CAAuthorityRotationRequest) (api.CAAuthorityRotation, error) {
+	successorID := strings.TrimSpace(req.SuccessorID)
+	if caID == "" || successorID == "" {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: predecessor and successor_id are required", api.ErrCAHierarchyInvalid)
+	}
+	if caID == successorID {
+		return api.CAAuthorityRotation{}, fmt.Errorf("%w: successor_id must be a different CA authority", api.ErrCAHierarchyInvalid)
+	}
+	var predecessor, successor store.CAAuthority
+	err := h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		predecessor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
+		if err != nil {
+			return err
+		}
+		successor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, successorID)
+		if err != nil {
+			return err
+		}
+		if err := validateAuthorityRotation(predecessor, successor); err != nil {
+			return err
+		}
+		ev, err := h.appendEvent(ctx, tenantID, projections.EventCAAuthorityRotated, projections.CAAuthorityRotated{
+			PredecessorCAID: predecessor.ID,
+			SuccessorCAID:   successor.ID,
+			Reason:          strings.TrimSpace(req.Reason),
+			IssuePath:       caAuthorityIssuePath(predecessor.ID),
+			ActiveIssuePath: caAuthorityIssuePath(successor.ID),
+		})
+		if err != nil {
+			return err
+		}
+		if err := projections.New(h.store).ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		predecessor.Status = "superseded"
+		replacesID := predecessor.ID
+		successor.ReplacesID = &replacesID
+		return nil
+	})
+	if err != nil {
+		return api.CAAuthorityRotation{}, caHierarchyConflict(err)
+	}
+	return authorityRotationResponse(predecessor, successor), nil
+}
+
+func (h *caHierarchyService) issuingAuthority(ctx context.Context, tenantID, caID string) (store.CAAuthority, store.CAAuthority, error) {
+	ca, err := h.store.GetCAAuthority(ctx, tenantID, caID)
+	if err != nil {
+		return store.CAAuthority{}, store.CAAuthority{}, err
+	}
+	switch ca.Status {
+	case "active":
+		return ca, ca, nil
+	case "superseded":
+		successor, err := h.store.FindActiveCAAuthoritySuccessor(ctx, tenantID, ca.ID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return store.CAAuthority{}, store.CAAuthority{}, fmt.Errorf("%w: superseded CA %s has no active successor", api.ErrCAHierarchyConflict, ca.ID)
+			}
+			return store.CAAuthority{}, store.CAAuthority{}, err
+		}
+		return ca, successor, nil
+	case "revoked":
+		return store.CAAuthority{}, store.CAAuthority{}, fmt.Errorf("%w: revoked CA %s cannot issue", api.ErrCAHierarchyConflict, ca.ID)
+	default:
+		return store.CAAuthority{}, store.CAAuthority{}, fmt.Errorf("%w: CA %s status %q cannot issue", api.ErrCAHierarchyConflict, ca.ID, ca.Status)
+	}
+}
+
+func validateAuthorityRotation(predecessor, successor store.CAAuthority) error {
+	if predecessor.Status != "active" {
+		return fmt.Errorf("%w: predecessor CA must be active", api.ErrCAHierarchyConflict)
+	}
+	if successor.Status != "active" {
+		return fmt.Errorf("%w: successor CA must be active", api.ErrCAHierarchyConflict)
+	}
+	if predecessor.SignerHandle == "" || successor.SignerHandle == "" {
+		return fmt.Errorf("%w: predecessor and successor must both be signer-backed issuing authorities", api.ErrCAHierarchyInvalid)
+	}
+	if predecessor.Kind != successor.Kind {
+		return fmt.Errorf("%w: successor kind must match predecessor kind", api.ErrCAHierarchyInvalid)
+	}
+	if !sameStringPtr(predecessor.ParentID, successor.ParentID) {
+		return fmt.Errorf("%w: successor must share the predecessor parent authority", api.ErrCAHierarchyInvalid)
+	}
+	if successor.ReplacesID != nil && *successor.ReplacesID != predecessor.ID {
+		return fmt.Errorf("%w: successor already replaces a different CA", api.ErrCAHierarchyConflict)
+	}
+	if predecessor.MaxPathLen != successor.MaxPathLen {
+		return fmt.Errorf("%w: successor max_path_len must match predecessor", api.ErrCAHierarchyInvalid)
+	}
+	if !sameStringSet(predecessor.PermittedDNSNames, successor.PermittedDNSNames) {
+		return fmt.Errorf("%w: successor DNS constraints must match predecessor", api.ErrCAHierarchyInvalid)
+	}
+	if !sameStringSet(predecessor.EKUs, successor.EKUs) {
+		return fmt.Errorf("%w: successor EKUs must match predecessor", api.ErrCAHierarchyInvalid)
+	}
+	return nil
+}
+
+func sameStringPtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, value := range a {
+		seen[strings.ToLower(strings.TrimSpace(value))]++
+	}
+	for _, value := range b {
+		key := strings.ToLower(strings.TrimSpace(value))
+		if seen[key] == 0 {
+			return false
+		}
+		seen[key]--
+	}
+	return true
 }
 
 func hierarchyPurpose(operation, parentID string, spec api.CASpec) (string, error) {
@@ -860,8 +993,25 @@ func authorityResponse(c store.CAAuthority) api.CAAuthority {
 		ID: c.ID, TenantID: c.TenantID, ParentID: c.ParentID, CommonName: c.CommonName,
 		Kind: c.Kind, Status: c.Status, CertificatePEM: c.CertificatePEM, SignerHandle: c.SignerHandle,
 		Serial: c.Serial, NotAfter: c.NotAfter, MaxPathLen: c.MaxPathLen,
-		PermittedDNSNames: c.PermittedDNSNames, ExtendedKeyUsages: c.EKUs, CreatedAt: c.CreatedAt,
+		PermittedDNSNames: c.PermittedDNSNames, ExtendedKeyUsages: c.EKUs, ReplacesID: c.ReplacesID, CreatedAt: c.CreatedAt,
 	}
+}
+
+func authorityRotationResponse(predecessor, successor store.CAAuthority) api.CAAuthorityRotation {
+	return api.CAAuthorityRotation{
+		Predecessor:     authorityResponse(predecessor),
+		Successor:       authorityResponse(successor),
+		IssuePath:       caAuthorityIssuePath(predecessor.ID),
+		ActiveIssuePath: caAuthorityIssuePath(successor.ID),
+		OverlapIssuers: []api.CAAuthorityRotationIssuer{
+			{AuthorityID: predecessor.ID, Role: "predecessor", Status: predecessor.Status, IssuePath: caAuthorityIssuePath(predecessor.ID)},
+			{AuthorityID: successor.ID, Role: "successor", Status: successor.Status, IssuePath: caAuthorityIssuePath(successor.ID)},
+		},
+	}
+}
+
+func caAuthorityIssuePath(id string) string {
+	return "/api/v1/ca/authorities/" + url.PathEscape(id) + "/issue"
 }
 
 func ceremonyResponse(c store.KeyCeremony) api.CAKeyCeremony {

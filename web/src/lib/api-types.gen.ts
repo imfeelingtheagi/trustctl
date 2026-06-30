@@ -379,6 +379,7 @@ export interface CAAuthority {
   not_after?: string;
   parent_id?: string;
   permitted_dns_names?: string[];
+  replaces_id?: string;
   serial: string;
   signer_handle: string;
   status: string;
@@ -388,6 +389,26 @@ export interface CAAuthority {
 export interface CAAuthorityList {
   items: CAAuthority[];
   next_cursor?: string;
+}
+
+export interface CAAuthorityRotation {
+  active_issue_path: string;
+  issue_path: string;
+  overlap_issuers: CAAuthorityRotationIssuer[];
+  predecessor: CAAuthority;
+  successor: CAAuthority;
+}
+
+export interface CAAuthorityRotationIssuer {
+  authority_id: string;
+  issue_path: string;
+  role: string;
+  status: string;
+}
+
+export interface CAAuthorityRotationRequest {
+  reason?: string;
+  successor_id: string;
 }
 
 export interface CACeremonyStartRequest {

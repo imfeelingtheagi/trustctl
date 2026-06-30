@@ -244,6 +244,9 @@ func componentSchemas() map[string]*Schema {
 	caIssueIntermediateReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "csr_pem": str(), "spec": ref("CASpec"),
 	}, "ceremony_id", "csr_pem", "spec")
+	caAuthorityRotationReq := object(map[string]*Schema{
+		"successor_id": uuid(), "reason": str(),
+	}, "successor_id")
 	caIntermediateCSR := object(map[string]*Schema{
 		"ceremony_id": uuid(), "parent_id": uuid(), "csr_pem": str(), "signer_handle": str(),
 	}, "ceremony_id", "parent_id", "csr_pem", "signer_handle")
@@ -253,8 +256,19 @@ func componentSchemas() map[string]*Schema {
 		"serial": str(), "not_after": timestamp(), "max_path_len": {Type: "integer"},
 		"permitted_dns_names": {Type: "array", Items: str()},
 		"extended_key_usages": {Type: "array", Items: str()},
+		"replaces_id":         uuid(),
 		"created_at":          timestamp(),
 	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")
+	caAuthorityRotationIssuer := object(map[string]*Schema{
+		"authority_id": uuid(), "role": str(), "status": str(), "issue_path": str(),
+	}, "authority_id", "role", "status", "issue_path")
+	caAuthorityRotation := object(map[string]*Schema{
+		"predecessor":       ref("CAAuthority"),
+		"successor":         ref("CAAuthority"),
+		"issue_path":        str(),
+		"active_issue_path": str(),
+		"overlap_issuers":   {Type: "array", Items: ref("CAAuthorityRotationIssuer")},
+	}, "predecessor", "successor", "issue_path", "active_issue_path", "overlap_issuers")
 	caDiscoveryItem := object(map[string]*Schema{
 		"id": str(), "source_id": str(), "source": {Type: "string", Enum: []string{"external_ca_registry", "ca_hierarchy"}},
 		"scope": {Type: "string", Enum: []string{"public", "private"}}, "type": str(), "name": str(), "status": str(),
@@ -2670,6 +2684,9 @@ func componentSchemas() map[string]*Schema {
 		"CAImportOfflineIntermediateRequest":    caImportOfflineIntermediateReq,
 		"CAIntermediateCSR":                     caIntermediateCSR,
 		"CAIssueIntermediateRequest":            caIssueIntermediateReq,
+		"CAAuthorityRotationRequest":            caAuthorityRotationReq,
+		"CAAuthorityRotationIssuer":             caAuthorityRotationIssuer,
+		"CAAuthorityRotation":                   caAuthorityRotation,
 		"CAAuthority":                           caAuthority,
 		"CAAuthorityList":                       list("CAAuthority"),
 		"CADiscoveryItem":                       caDiscoveryItem,

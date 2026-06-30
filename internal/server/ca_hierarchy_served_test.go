@@ -120,6 +120,116 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	}
 }
 
+func TestServedCARotationWithoutDowntimeCAPCA03(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-rotation-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approver := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-rotation-approver", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+
+	rootSpec := map[string]any{
+		"common_name":           "rotation root",
+		"max_path_len":          1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"rotation.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	rootCeremony := createCACeremony(t, h, operator, "create_root", "", rootSpec, 1, "rotation-root-ceremony")
+	approveCACeremony(t, h, approver, rootCeremony.ID, 1, "rotation-root-approval")
+	root := createRootCA(t, h, operator, rootCeremony.ID, rootSpec, "rotation-root-create")
+
+	intermediateSpec := map[string]any{
+		"common_name":           "rotation issuing intermediate",
+		"ttl_seconds":           int64((180 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"rotation.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	oldCeremony := createCACeremony(t, h, operator, "create_intermediate", root.ID, intermediateSpec, 1, "rotation-old-ceremony")
+	approveCACeremony(t, h, approver, oldCeremony.ID, 1, "rotation-old-approval")
+	oldCA := createIntermediateCA(t, h, operator, oldCeremony.ID, root.ID, intermediateSpec, "rotation-old-create")
+
+	successorSpec := map[string]any{
+		"common_name":           "rotation issuing intermediate v2",
+		"ttl_seconds":           int64((180 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"rotation.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	successorCeremony := createCACeremony(t, h, operator, "create_intermediate", root.ID, successorSpec, 1, "rotation-successor-ceremony")
+	approveCACeremony(t, h, approver, successorCeremony.ID, 1, "rotation-successor-approval")
+	successorCA := createIntermediateCA(t, h, operator, successorCeremony.ID, root.ID, successorSpec, "rotation-successor-create")
+
+	before := issueHierarchyLeaf(t, h, operator, oldCA.ID, "before.rotation.example.test", "rotation-old-before")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(before.CertificatePEM)), caCertDER(t, []byte(oldCA.CertificatePEM))); err != nil {
+		t.Fatalf("pre-rotation leaf did not chain to predecessor: %v", err)
+	}
+
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+oldCA.ID+"/rotate", operator, "rotation-activate-cap-ca-03", map[string]any{
+		"successor_id": successorCA.ID,
+		"reason":       "CAP-CA-03 zero-downtime overlap",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("activate CA rotation = %d body=%s; want 200", code, body)
+	}
+	var rotation struct {
+		Predecessor     servedCAAuthority `json:"predecessor"`
+		Successor       servedCAAuthority `json:"successor"`
+		IssuePath       string            `json:"issue_path"`
+		ActiveIssuePath string            `json:"active_issue_path"`
+		OverlapIssuers  []struct {
+			AuthorityID string `json:"authority_id"`
+			Role        string `json:"role"`
+			Status      string `json:"status"`
+			IssuePath   string `json:"issue_path"`
+		} `json:"overlap_issuers"`
+	}
+	if err := json.Unmarshal(body, &rotation); err != nil {
+		t.Fatalf("decode CA rotation: %v body=%s", err, body)
+	}
+	if rotation.Predecessor.Status != "superseded" || rotation.Successor.Status != "active" {
+		t.Fatalf("rotation statuses = predecessor %q successor %q; want superseded/active", rotation.Predecessor.Status, rotation.Successor.Status)
+	}
+	if rotation.Successor.ReplacesID == nil || *rotation.Successor.ReplacesID != oldCA.ID {
+		t.Fatalf("successor replaces_id = %v; want predecessor %s", rotation.Successor.ReplacesID, oldCA.ID)
+	}
+	storedPredecessor, err := h.store.GetCAAuthority(context.Background(), h.tenant, oldCA.ID)
+	if err != nil {
+		t.Fatalf("load projected predecessor: %v", err)
+	}
+	storedSuccessor, err := h.store.GetCAAuthority(context.Background(), h.tenant, successorCA.ID)
+	if err != nil {
+		t.Fatalf("load projected successor: %v", err)
+	}
+	if storedPredecessor.Status != "superseded" {
+		t.Fatalf("projected predecessor status = %q; want superseded", storedPredecessor.Status)
+	}
+	if storedSuccessor.ReplacesID == nil || *storedSuccessor.ReplacesID != oldCA.ID {
+		t.Fatalf("projected successor replaces_id = %v; want predecessor %s", storedSuccessor.ReplacesID, oldCA.ID)
+	}
+	if rotation.IssuePath != "/api/v1/ca/authorities/"+oldCA.ID+"/issue" || rotation.ActiveIssuePath != "/api/v1/ca/authorities/"+successorCA.ID+"/issue" {
+		t.Fatalf("rotation paths = %q / %q; want predecessor and successor issue paths", rotation.IssuePath, rotation.ActiveIssuePath)
+	}
+	if len(rotation.OverlapIssuers) != 2 {
+		t.Fatalf("overlap issuers = %+v; want predecessor and successor", rotation.OverlapIssuers)
+	}
+
+	throughStableOldURL := issueHierarchyLeaf(t, h, operator, oldCA.ID, "after.rotation.example.test", "rotation-old-after")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(throughStableOldURL.CertificatePEM)), caCertDER(t, []byte(successorCA.CertificatePEM))); err != nil {
+		t.Fatalf("post-rotation leaf from predecessor URL did not chain to successor: %v", err)
+	}
+	throughSuccessorURL := issueHierarchyLeaf(t, h, operator, successorCA.ID, "direct.rotation.example.test", "rotation-successor-direct")
+	if err := crypto.VerifyLeafSignedByCA(caCertDER(t, []byte(throughSuccessorURL.CertificatePEM)), caCertDER(t, []byte(successorCA.CertificatePEM))); err != nil {
+		t.Fatalf("post-rotation leaf from successor URL did not chain to successor: %v", err)
+	}
+	if !h.hasEvent(t, "ca.authority.rotated") || !h.hasEvent(t, "ca.endentity.issued") {
+		t.Fatal("CA rotation did not record rotation and issuance audit events")
+	}
+}
+
 func TestServedCAHierarchySignsExternalIntermediateCSRRequiresCeremony(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-operator", []string{
@@ -505,6 +615,12 @@ type servedCAAuthority struct {
 	Status         string  `json:"status"`
 	CertificatePEM string  `json:"certificate_pem"`
 	SignerHandle   string  `json:"signer_handle"`
+	ReplacesID     *string `json:"replaces_id"`
+}
+
+type servedCAIssuedLeaf struct {
+	CertificatePEM string `json:"certificate_pem"`
+	Serial         string `json:"serial"`
 }
 
 type servedCAIntermediateCSR struct {
@@ -601,6 +717,23 @@ func importExistingCA(t *testing.T, h *servedHarness, token, ceremonyID, certifi
 	var got servedCAAuthority
 	if err := json.Unmarshal(raw, &got); err != nil || got.ID == "" {
 		t.Fatalf("decode imported existing CA: %v got=%+v body=%s", err, got, raw)
+	}
+	return got
+}
+
+func issueHierarchyLeaf(t *testing.T, h *servedHarness, token, authorityID, dnsName, idem string) servedCAIssuedLeaf {
+	t.Helper()
+	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: hierarchyLeafCSR(t, dnsName)}))
+	code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+authorityID+"/issue", token, idem, map[string]any{
+		"csr_pem":     csrPEM,
+		"ttl_seconds": int64((24 * time.Hour).Seconds()),
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("issue hierarchy leaf from %s = %d body=%s; want 201", authorityID, code, raw)
+	}
+	var got servedCAIssuedLeaf
+	if err := json.Unmarshal(raw, &got); err != nil || got.CertificatePEM == "" || got.Serial == "" {
+		t.Fatalf("decode issued hierarchy leaf: %v got=%+v body=%s", err, got, raw)
 	}
 	return got
 }

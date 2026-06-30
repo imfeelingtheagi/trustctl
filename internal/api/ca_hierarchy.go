@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -34,6 +35,7 @@ type CAHierarchyService interface {
 	ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req CAImportOfflineIntermediateRequest) (CAAuthority, error)
 	IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req CAIssueIntermediateRequest) (CAIssuedIntermediate, error)
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
+	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
 }
 
 // WithCAHierarchy wires the served CA hierarchy surface. When unset, the routes
@@ -101,6 +103,11 @@ type CAIssueLeafRequest struct {
 	TTLSeconds int64
 }
 
+type CAAuthorityRotationRequest struct {
+	SuccessorID string `json:"successor_id"`
+	Reason      string `json:"reason,omitempty"`
+}
+
 type CAIssueIntermediateRequest struct {
 	CeremonyID string
 	CSRDER     []byte
@@ -150,7 +157,23 @@ type CAAuthority struct {
 	MaxPathLen        int        `json:"max_path_len"`
 	PermittedDNSNames []string   `json:"permitted_dns_names"`
 	ExtendedKeyUsages []string   `json:"extended_key_usages"`
+	ReplacesID        *string    `json:"replaces_id,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
+}
+
+type CAAuthorityRotationIssuer struct {
+	AuthorityID string `json:"authority_id"`
+	Role        string `json:"role"`
+	Status      string `json:"status"`
+	IssuePath   string `json:"issue_path"`
+}
+
+type CAAuthorityRotation struct {
+	Predecessor     CAAuthority                 `json:"predecessor"`
+	Successor       CAAuthority                 `json:"successor"`
+	IssuePath       string                      `json:"issue_path"`
+	ActiveIssuePath string                      `json:"active_issue_path"`
+	OverlapIssuers  []CAAuthorityRotationIssuer `json:"overlap_issuers"`
 }
 
 type CAIssuedLeaf struct {
@@ -405,6 +428,45 @@ func (a *API) issueHierarchyLeaf(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, issued, nil
 	})
+}
+
+//trstctl:mutation
+func (a *API) rotateCAAuthority(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAAuthorityRotationRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		req.SuccessorID = strings.TrimSpace(req.SuccessorID)
+		if req.SuccessorID == "" {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, "successor_id is required")
+		}
+		if err := authorizeCARotationSuccessor(ctx, tenantID, req.SuccessorID); err != nil {
+			return 0, nil, err
+		}
+		rotation, err := a.caHierarchy.RotateAuthority(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, rotation, nil
+	})
+}
+
+func authorizeCARotationSuccessor(ctx context.Context, tenantID, successorID string) error {
+	principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+	if !ok {
+		return errStatus(http.StatusUnauthorized, "missing authenticated principal")
+	}
+	target := authz.Scope{TenantID: tenantID, Issuer: successorID}
+	if !principal.Can(authz.IssuersWrite, target) {
+		return errStatus(http.StatusForbidden, "forbidden: requires issuers:write on successor authority")
+	}
+	return nil
 }
 
 func (a *API) writeCAHierarchyError(w http.ResponseWriter, err error) bool {

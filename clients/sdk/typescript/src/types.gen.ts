@@ -622,6 +622,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a signer-backed successor CA without changing the stable issue URL */
+        post: operations["rotateCAAuthority"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/ceremonies": {
         parameters: {
             query?: never;
@@ -3578,6 +3595,8 @@ export interface components {
             /** Format: uuid */
             parent_id?: string;
             permitted_dns_names?: string[];
+            /** Format: uuid */
+            replaces_id?: string;
             serial: string;
             signer_handle: string;
             status: string;
@@ -3587,6 +3606,25 @@ export interface components {
         CAAuthorityList: {
             items: components["schemas"]["CAAuthority"][];
             next_cursor?: string;
+        };
+        CAAuthorityRotation: {
+            active_issue_path: string;
+            issue_path: string;
+            overlap_issuers: components["schemas"]["CAAuthorityRotationIssuer"][];
+            predecessor: components["schemas"]["CAAuthority"];
+            successor: components["schemas"]["CAAuthority"];
+        };
+        CAAuthorityRotationIssuer: {
+            /** Format: uuid */
+            authority_id: string;
+            issue_path: string;
+            role: string;
+            status: string;
+        };
+        CAAuthorityRotationRequest: {
+            reason?: string;
+            /** Format: uuid */
+            successor_id: string;
         };
         CACeremonyStartRequest: {
             certificate_pem?: string;
@@ -8282,6 +8320,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAIntermediateCSR"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateCAAuthority: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAAuthorityRotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthorityRotation"];
                 };
             };
             /** @description client error */

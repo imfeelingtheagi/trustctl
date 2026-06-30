@@ -2,6 +2,7 @@ package projections_test
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -237,6 +239,59 @@ func TestCARotationCompletes(t *testing.T) {
 	}
 	if old.Status != "superseded" {
 		t.Errorf("old CA status = %q, want superseded", old.Status)
+	}
+}
+
+func TestCAAuthorityRotatedEventProjectsReadModel(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	predecessor, err := s.InsertCAAuthority(ctx, store.CAAuthority{
+		TenantID: tenantA, CommonName: "rotation predecessor", Kind: "intermediate", Status: "active",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nPREDECESSOR\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "signer-predecessor", Serial: "predecessor-1", MaxPathLen: 0,
+	})
+	if err != nil {
+		t.Fatalf("insert predecessor: %v", err)
+	}
+	successor, err := s.InsertCAAuthority(ctx, store.CAAuthority{
+		TenantID: tenantA, CommonName: "rotation successor", Kind: "intermediate", Status: "active",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nSUCCESSOR\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "signer-successor", Serial: "successor-1", MaxPathLen: 0,
+	})
+	if err != nil {
+		t.Fatalf("insert successor: %v", err)
+	}
+	payload, err := json.Marshal(projections.CAAuthorityRotated{
+		PredecessorCAID: predecessor.ID,
+		SuccessorCAID:   successor.ID,
+		Reason:          "projection regression",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(s).Apply(ctx, events.Event{
+		Type:     projections.EventCAAuthorityRotated,
+		TenantID: tenantA,
+		Data:     payload,
+	}); err != nil {
+		t.Fatalf("apply rotation event: %v", err)
+	}
+	gotPredecessor, err := s.GetCAAuthority(ctx, tenantA, predecessor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotSuccessor, err := s.GetCAAuthority(ctx, tenantA, successor.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPredecessor.Status != "superseded" {
+		t.Errorf("predecessor status = %q, want superseded", gotPredecessor.Status)
+	}
+	if gotSuccessor.ReplacesID == nil || *gotSuccessor.ReplacesID != predecessor.ID {
+		t.Errorf("successor replaces_id = %v, want %s", gotSuccessor.ReplacesID, predecessor.ID)
 	}
 }
 

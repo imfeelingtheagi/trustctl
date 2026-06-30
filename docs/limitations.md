@@ -261,9 +261,12 @@ remaining integration work.
   `/api/v1/external-cas`. Public/private direct-CA discovery is now served at
   `/api/v1/ca/discovery`, which returns configured public upstream CAs, configured
   private upstream CAs, and imported CA hierarchy authorities without PEM or key
-  material. Rotation and cross-signing remain library/operator workflows until
-  their served routes ship (see the
-  [key-ceremony runbook](runbooks/key-ceremony.md)).
+  material. Zero-downtime CA rotation activation is served at
+  `/api/v1/ca/authorities/{id}/rotate`: it marks the predecessor superseded,
+  records the successor's `replaces_id`, and keeps the predecessor issue URL live
+  while new certificates route to the signer-backed successor. Cross-signing remains
+  an operator workflow until its served route ships (see the [key-ceremony
+  runbook](runbooks/key-ceremony.md)).
 - **14 CA integrations** are present under the served external-CA registry when the
   operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
   DigiCert, EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo,

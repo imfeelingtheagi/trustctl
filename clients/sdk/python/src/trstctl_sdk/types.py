@@ -543,6 +543,7 @@ CAAuthority = TypedDict(
         'not_after': str,
         'parent_id': str,
         'permitted_dns_names': list[str],
+        'replaces_id': str,
         'serial': str,
         'signer_handle': str,
         'status': str,
@@ -556,6 +557,38 @@ CAAuthorityList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+CAAuthorityRotation = TypedDict(
+    'CAAuthorityRotation',
+    {
+        'active_issue_path': str,
+        'issue_path': str,
+        'overlap_issuers': list[dict[str, Any]],
+        'predecessor': dict[str, Any],
+        'successor': dict[str, Any],
+    },
+    total=False,
+)
+
+CAAuthorityRotationIssuer = TypedDict(
+    'CAAuthorityRotationIssuer',
+    {
+        'authority_id': str,
+        'issue_path': str,
+        'role': str,
+        'status': str,
+    },
+    total=False,
+)
+
+CAAuthorityRotationRequest = TypedDict(
+    'CAAuthorityRotationRequest',
+    {
+        'reason': str,
+        'successor_id': str,
     },
     total=False,
 )

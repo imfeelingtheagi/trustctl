@@ -93,6 +93,18 @@ func (s *Store) GetCAAuthority(ctx context.Context, tenantID, id string) (CAAuth
 	return c, err
 }
 
+// GetCAAuthorityForUpdateTx loads and row-locks a CA authority in the caller's
+// tenant transaction. Rotation uses this to make the predecessor/successor state
+// transition one atomic decision under PostgreSQL RLS.
+func (s *Store) GetCAAuthorityForUpdateTx(ctx context.Context, tx pgx.Tx, tenantID, id string) (CAAuthority, error) {
+	var c CAAuthority
+	err := scanCAAuthority(tx.QueryRow(ctx,
+		`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
+		        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+		   FROM ca_authorities WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, id), &c)
+	return c, err
+}
+
 // ListCAAuthorities returns a tenant's CA authorities, oldest first.
 func (s *Store) ListCAAuthorities(ctx context.Context, tenantID string) ([]CAAuthority, error) {
 	var out []CAAuthority
@@ -117,13 +129,67 @@ func (s *Store) ListCAAuthorities(ctx context.Context, tenantID string) ([]CAAut
 	return out, err
 }
 
+// FindActiveCAAuthoritySuccessor returns the active signer-backed replacement for
+// a superseded authority. This is what lets the old issuance URL keep working
+// during a zero-downtime rotation window while the actual signer moves forward.
+func (s *Store) FindActiveCAAuthoritySuccessor(ctx context.Context, tenantID, replacesID string) (CAAuthority, error) {
+	var c CAAuthority
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanCAAuthority(tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+			   FROM ca_authorities
+			  WHERE tenant_id = $1 AND replaces_id = $2 AND status = 'active'
+			  ORDER BY created_at DESC, id DESC
+			  LIMIT 1`,
+			tenantID, replacesID), &c)
+	})
+	return c, err
+}
+
 // SupersedeCAAuthorityTx marks a CA authority superseded, on the caller's
 // transaction (so it commits atomically with inserting its successor).
 func (s *Store) SupersedeCAAuthorityTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
-	_, err := tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE ca_authorities SET status = 'superseded' WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// ApplyCAAuthorityRotatedTx projects a ca.authority.rotated event into the CA
+// hierarchy read model. Command handlers append the event; only the projector
+// calls this writer, so a rebuild from the event log reproduces the same
+// predecessor/successor state (AN-2).
+func (s *Store) ApplyCAAuthorityRotatedTx(ctx context.Context, tx pgx.Tx, tenantID, predecessorID, successorID string) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_authorities
+		    SET status = 'superseded'
+		  WHERE tenant_id = $1 AND id = $2`,
+		tenantID, predecessorID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	tag, err = tx.Exec(ctx,
+		`UPDATE ca_authorities
+		    SET replaces_id = $2
+		  WHERE tenant_id = $1 AND id = $3`,
+		tenantID, predecessorID, successorID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // KeyCeremony is an m-of-n CA key-generation ceremony. Approvals is the current

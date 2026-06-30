@@ -148,27 +148,31 @@ The served hierarchy API lives at `/api/v1/ca/ceremonies`,
 `/api/v1/ca/authorities/imported`,
 `/api/v1/ca/authorities/{id}/offline-intermediates/csr`,
 `/api/v1/ca/authorities/{id}/offline-intermediates`, and
-`/api/v1/ca/authorities/{id}/issue`. Online root and intermediate private keys are
-created in the isolated signing service and referenced by signer handles; the control
-plane stores certificates, chains, metadata, and ceremony state, but it never
-receives the CA private key. Existing CA import accepts a public root or
+`/api/v1/ca/authorities/{id}/issue`, with zero-downtime successor activation at
+`/api/v1/ca/authorities/{id}/rotate`. Online root and intermediate private keys
+are created in the isolated signing service and referenced by signer handles; the
+control plane stores certificates, chains, metadata, and ceremony state, but it
+never receives the CA private key. Existing CA import accepts a public root or
 intermediate chain plus a signer handle, verifies the first certificate's public key
 matches that signer-held key, verifies the chain/profile, and then serves normal leaf
 issuance from the imported authority. Offline-root import accepts exactly one public
 certificate PEM and rejects private-key PEM blocks. It then generates a signer-held
 intermediate CSR, the operator signs that CSR with the offline root outside trstctl,
 and trstctl imports the signed intermediate only if it chains to the offline root,
-matches the reviewed `CASpec`, and carries the signer-held public key. Every served
-step (`ca.ceremony.started`, `ca.ceremony.approved`, `ca.root.created`,
-`ca.authority.imported`, `ca.intermediate_csr.issued`, `ca.intermediate.created`,
+matches the reviewed `CASpec`, and carries the signer-held public key. A rotation
+activation takes an already-created signer-backed successor with the same authority
+constraints, marks the predecessor `superseded`, records the successor's
+`replaces_id`, and keeps the predecessor issue URL answering while routing new
+certificates to the successor. Every served step (`ca.ceremony.started`,
+`ca.ceremony.approved`, `ca.root.created`, `ca.authority.imported`,
+`ca.intermediate_csr.issued`, `ca.intermediate.created`, `ca.authority.rotated`,
 `ca.endentity.issued`) is a
 tenant-scoped event carrying the ceremony/authority context and is recorded
 immutably in the tamper-evident log.
-Rotation and cross-signing remain purpose-bound library/operator workflows for now:
-they use `rotation:<ca-id>` and `cross-sign:<ca-id>:<sha256-of-target-cert-der>`
-ceremonies, with the same single-use quorum gate, until served rotation/cross-sign
-routes ship. The full operator procedure is the
-[CA key-ceremony runbook](../runbooks/key-ceremony.md).
+Cross-signing remains a purpose-bound operator workflow using
+`cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremonies until a served
+cross-sign route ships. The full operator procedure is the [CA key-ceremony
+runbook](../runbooks/key-ceremony.md).
 
 ### Profiles and the registration-authority split (F53)
 
@@ -380,7 +384,7 @@ external CA registry API, each of which calls the one issuance path with an
   `ImportExisting` / `CreateIntermediate`. See the
   [runbook](../runbooks/key-ceremony.md).
 - **Events:** `ca.issue`, `issuance.profile_evaluated`, `ca.root.created`,
-  `ca.authority.imported`, `ca.intermediate.created`, `ca.rotated`, `ca.cross_signed`,
+  `ca.authority.imported`, `ca.intermediate.created`, `ca.authority.rotated`, `ca.cross_signed`,
   `ca.certificate.revoked`, `ca.crl.published`.
 - **RFCs:** 5280 (X.509/CRL), 6960 (OCSP), 9773 (ARI).
 
