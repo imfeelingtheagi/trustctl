@@ -412,7 +412,7 @@ func componentSchemas() map[string]*Schema {
 	}
 
 	problemSchema := object(map[string]*Schema{
-		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(),
+		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(), "code": str(),
 	})
 	editionTiers := []string{"community", "enterprise", "provider"}
 	editionStates := []string{"community", "active", "grace", "read_only"}

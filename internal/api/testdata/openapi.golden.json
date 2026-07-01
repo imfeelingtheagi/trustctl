@@ -11261,6 +11261,9 @@
       },
       "Problem": {
         "properties": {
+          "code": {
+            "type": "string"
+          },
           "detail": {
             "type": "string"
           },

@@ -2900,6 +2900,7 @@ export interface PrivacySubjectExportRequest {
 }
 
 export interface Problem {
+  code?: string;
   detail?: string;
   instance?: string;
   status?: number;

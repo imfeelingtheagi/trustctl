@@ -441,6 +441,34 @@ func TestAuthMeRejectsRevokedServerSideSession(t *testing.T) {
 	}
 }
 
+func TestAuthMeLocalizesProblemFromAcceptLanguage(t *testing.T) {
+	h, _ := authAPI(t)
+	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	req.Header.Set("Accept-Language", "es-ES, en;q=0.8")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("me without session = %d, want 401", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Language"); got != "es-ES" {
+		t.Fatalf("Content-Language = %q, want es-ES", got)
+	}
+	var body struct {
+		Detail string `json:"detail"`
+		Code   string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode problem body: %v", err)
+	}
+	if body.Code != "problem.auth.missing_or_invalid_tenant" {
+		t.Fatalf("problem code = %q", body.Code)
+	}
+	if body.Detail != "tenant faltante o no valido" {
+		t.Fatalf("localized detail = %q", body.Detail)
+	}
+}
+
 func testStringSetHas(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

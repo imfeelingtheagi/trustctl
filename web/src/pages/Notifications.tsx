@@ -9,6 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import { api, ApiError, type Notification, type NotificationChannel, type NotificationChannelTest, type NotificationRoutingPolicy } from "@/lib/api";
 import type { StatusTone } from "@/lib/statusVocab";
 
@@ -51,13 +52,13 @@ const initialTestForm: TestFormState = {
   credentialRef: "",
 };
 
-const statusOptions: Array<{ value: "" | NotificationStatus; label: string }> = [
-  { value: "", label: "All statuses" },
-  { value: "pending", label: "pending" },
-  { value: "sent", label: "sent" },
-  { value: "read", label: "read" },
-  { value: "dead", label: "dead" },
-];
+const statusOptions = [
+  { value: "", labelKey: "notifications.filter.statusAll" },
+  { value: "pending", labelKey: "notifications.status.pending" },
+  { value: "sent", labelKey: "notifications.status.sent" },
+  { value: "read", labelKey: "notifications.status.read" },
+  { value: "dead", labelKey: "notifications.status.dead" },
+] satisfies Array<{ value: "" | NotificationStatus; labelKey: MessageKey }>;
 const digestOptions = [
   { value: "3600", labelKey: "notifications.routing.intervalOneHour" },
   { value: "43200", labelKey: "notifications.routing.intervalTwelveHours" },
@@ -70,6 +71,12 @@ export function Notifications() {
   const { toast } = useToast();
   const { t } = useTranslation();
   const channelLoadError = t("notifications.channels.loadError");
+  const notificationUnavailable = t("notifications.error.unavailable");
+  const notificationLoadError = t("notifications.error.loadFailed");
+  const markReadFailed = t("notifications.action.markReadFailed");
+  const markReadLoadFailed = t("notifications.action.markReadLoadFailed");
+  const requeueFailed = t("notifications.action.requeueFailed");
+  const requeueLoadFailed = t("notifications.action.requeueLoadFailed");
   const [activeTab, setActiveTab] = useState<ActiveTab>("all");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,12 +108,12 @@ export function Notifications() {
     } catch (err) {
       setNotifications([]);
       setPolicies([]);
-      setError({ title: "Notifications unavailable", detail: errorText(err, "Could not load notifications") });
+      setError({ title: notificationUnavailable, detail: errorText(err, notificationLoadError) });
       setChannelError(errorText(err, channelLoadError));
     } finally {
       setLoading(false);
     }
-  }, [activeTab, channelLoadError]);
+  }, [activeTab, channelLoadError, notificationLoadError, notificationUnavailable]);
 
   useEffect(() => {
     setLoading(true);
@@ -140,11 +147,11 @@ export function Notifications() {
     try {
       const updated = await api.markNotificationRead(notification.id);
       setNotifications((current) => current.map((candidate) => (candidate.id === notification.id ? updated : candidate)));
-      toast({ kind: "success", title: "Notification marked read", description: notificationSubject(notification) });
+      toast({ kind: "success", title: t("notifications.action.markedRead"), description: notificationSubject(notification) });
     } catch (err) {
       setNotifications(snapshot);
-      setError({ title: "Mark read failed", detail: errorText(err, "Could not mark notification read") });
-      toast({ kind: "error", title: "Mark read failed", description: errorText(err, "Could not mark notification read") });
+      setError({ title: markReadFailed, detail: errorText(err, markReadLoadFailed) });
+      toast({ kind: "error", title: markReadFailed, description: errorText(err, markReadLoadFailed) });
     } finally {
       setBusyId(null);
     }
@@ -156,10 +163,10 @@ export function Notifications() {
     try {
       const updated = await api.requeueNotification(notification.id);
       setNotifications((current) => current.map((candidate) => (candidate.id === notification.id ? updated : candidate)));
-      toast({ kind: "success", title: "Notification requeued", description: notificationSubject(notification) });
+      toast({ kind: "success", title: t("notifications.action.requeued"), description: notificationSubject(notification) });
     } catch (err) {
-      setError({ title: "Requeue failed", detail: errorText(err, "Could not requeue notification") });
-      toast({ kind: "error", title: "Requeue failed", description: errorText(err, "Could not requeue notification") });
+      setError({ title: requeueFailed, detail: errorText(err, requeueLoadFailed) });
+      toast({ kind: "error", title: requeueFailed, description: errorText(err, requeueLoadFailed) });
     } finally {
       setBusyId(null);
     }
@@ -250,7 +257,7 @@ export function Notifications() {
       />
 
       <div className="ui-panel grid gap-3 p-comfortable lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
-        <div role="tablist" aria-label="Notification queues" className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border">
+        <div role="tablist" aria-label={t("notifications.queue.tablist")} className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border">
           <button
             type="button"
             role="tab"
@@ -258,7 +265,7 @@ export function Notifications() {
             className={tabClass(activeTab === "all")}
             onClick={() => setActiveTab("all")}
           >
-            All
+            {t("notifications.queue.all")}
           </button>
           <button
             type="button"
@@ -267,18 +274,18 @@ export function Notifications() {
             className={tabClass(activeTab === "dead")}
             onClick={() => setActiveTab("dead")}
           >
-            Dead-letter
+            {t("notifications.queue.deadLetter")}
           </button>
         </div>
         <label className="grid gap-2 text-sm font-medium">
-          Type filter
+          {t("notifications.filter.type")}
           <select
-            aria-label="Type filter"
+            aria-label={t("notifications.filter.type")}
             value={typeFilter}
             onChange={(event) => setTypeFilter(event.target.value)}
             className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
           >
-            <option value="">All types</option>
+            <option value="">{t("notifications.filter.typeAll")}</option>
             {typeOptions.map((type) => (
               <option key={type} value={type}>
                 {type}
@@ -287,30 +294,30 @@ export function Notifications() {
           </select>
         </label>
         <label className="grid gap-2 text-sm font-medium">
-          Status filter
+          {t("notifications.filter.status")}
           <select
-            aria-label="Status filter"
+            aria-label={t("notifications.filter.status")}
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as "" | NotificationStatus)}
             className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
           >
             {statusOptions.map((option) => (
               <option key={option.value || "all"} value={option.value}>
-                {option.label}
+                {t(option.labelKey)}
               </option>
             ))}
           </select>
         </label>
         <div className="flex items-end justify-between gap-3 text-sm text-muted-foreground">
-          <span>{filteredNotifications.length} notifications</span>
-          <span>{unreadCount} unread</span>
+          <span>{t("notifications.count.total", { count: filteredNotifications.length })}</span>
+          <span>{t("notifications.count.unread", { count: unreadCount })}</span>
         </div>
       </div>
 
       {loading ? (
-        <LoadingState>Loading notifications...</LoadingState>
+        <LoadingState>{t("notifications.loading")}</LoadingState>
       ) : filteredNotifications.length === 0 ? (
-        <EmptyState title="No notifications found">Adjust filters or refresh the inbox.</EmptyState>
+        <EmptyState title={t("notifications.emptyTitle")}>{t("notifications.emptyBody")}</EmptyState>
       ) : (
         <NotificationsTable
           notifications={filteredNotifications}
@@ -588,6 +595,7 @@ function NotificationsTable({
   onMarkRead: (notification: Notification) => void;
   onRequeue: (notification: Notification) => void;
 }) {
+  const { t } = useTranslation();
   const columns: DataGridColumn<Notification>[] = [
     {
       id: "notification",
@@ -639,7 +647,7 @@ function NotificationsTable({
     { id: "created", header: "Created", cell: (notification) => formatDateTime(notification.created_at) },
     {
       id: "actions",
-      header: "Actions",
+      header: t("notifications.table.actions"),
       cell: (notification) => (
         <div className="flex flex-wrap gap-2">
           {isUnread(notification) && (
@@ -649,9 +657,9 @@ function NotificationsTable({
               variant="outline"
               disabled={busyId === notification.id}
               onClick={() => onMarkRead(notification)}
-              aria-label={`Mark notification ${notification.id} read`}
+              aria-label={t("notifications.action.markReadAria", { id: notification.id })}
             >
-              <span>Mark read</span>
+              <span>{t("notifications.action.markRead")}</span>
             </Button>
           )}
           {notification.status === "dead" && (
@@ -661,16 +669,16 @@ function NotificationsTable({
               variant="outline"
               disabled={busyId === notification.id}
               onClick={() => onRequeue(notification)}
-              aria-label={`Requeue notification ${notification.id}`}
+              aria-label={t("notifications.action.requeueAria", { id: notification.id })}
             >
-              <span>Requeue</span>
+              <span>{t("notifications.action.requeue")}</span>
             </Button>
           )}
         </div>
       ),
     },
   ];
-  return <DataGrid ariaLabel="Notifications inbox" rows={notifications} columns={columns} getRowId={(notification) => notification.id} state="ready" />;
+  return <DataGrid ariaLabel={t("notifications.table.ariaLabel")} rows={notifications} columns={columns} getRowId={(notification) => notification.id} state="ready" />;
 }
 
 function EscalationSummary({ notification }: { notification: Notification }) {

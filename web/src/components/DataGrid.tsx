@@ -3,6 +3,7 @@ import { ChevronDown, ChevronsUpDown, ChevronUp, Columns3 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { readGridPreferences, sanitizeViewMetadata, writeGridPreferences, type GridViewPrimitive, type SavedGridView } from "@/lib/gridViews";
 import { cn } from "@/lib/utils";
 
@@ -397,17 +398,19 @@ function columnLabel<Row>(column: DataGridColumn<Row>): string {
 }
 
 function GridState({ state, title, children }: { state: DataGridState; title?: string; children?: ReactNode }) {
+  const { t } = useTranslation();
+
   switch (state) {
     case "loading":
-      return <LoadingState>{children ?? "Loading rows..."}</LoadingState>;
+      return <LoadingState>{children ?? t("grid.state.loading")}</LoadingState>;
     case "error":
-      return <ErrorState title={title ?? "Could not load rows"}>{children}</ErrorState>;
+      return <ErrorState title={title ?? t("grid.state.error")}>{children}</ErrorState>;
     case "permission-denied":
-      return <PermissionDeniedState>{children ?? "Your session cannot read these rows."}</PermissionDeniedState>;
+      return <PermissionDeniedState>{children ?? t("grid.state.permissionDeniedBody")}</PermissionDeniedState>;
     case "unavailable":
-      return <UnavailableState title={title ?? "Rows unavailable"}>{children}</UnavailableState>;
+      return <UnavailableState title={title ?? t("grid.state.unavailable")}>{children}</UnavailableState>;
     case "empty":
-      return <EmptyState title={title ?? "No rows"}>{children}</EmptyState>;
+      return <EmptyState title={title ?? t("grid.state.empty")}>{children}</EmptyState>;
     default:
       return null;
   }

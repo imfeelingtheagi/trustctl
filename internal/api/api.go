@@ -560,7 +560,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 }
 
 // ServeHTTP implements http.Handler.
-func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) { a.mux.ServeHTTP(w, r) }
+func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.mux.ServeHTTP(localizedProblemWriter(w, r), r)
+}
 
 func (a *API) routeEnabled(r route) bool {
 	switch r.opID {
@@ -1617,7 +1619,13 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	}
 }
 
-func (a *API) writeProblem(w http.ResponseWriter, p *problem.Problem) { _ = p.Write(w) }
+func (a *API) writeProblem(w http.ResponseWriter, p *problem.Problem) {
+	if localizeProblemResponse(w, p) {
+		w.Header().Set("Content-Language", problemLocaleFromWriter(w))
+		addVaryHeader(w.Header(), "Accept-Language")
+	}
+	_ = p.Write(w)
+}
 
 func problemUnauthorized() *problem.Problem {
 	return problem.New(http.StatusUnauthorized, "missing or invalid tenant")

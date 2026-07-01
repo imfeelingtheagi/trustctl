@@ -277,7 +277,7 @@ export const extractedMessages = [
     key: "source.action.64cff1319d",
     defaultMessage: "Action",
     sources: [
-      "src/components/DataGrid.tsx:330",
+      "src/components/DataGrid.tsx:331",
       "src/pages/Graph.tsx:314",
     ],
   },
@@ -346,13 +346,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.adjust.filters.or.refresh.the.inbox.c0aa00b44e",
-    defaultMessage: "Adjust filters or refresh the inbox.",
-    sources: [
-      "src/pages/Notifications.tsx:313",
-    ],
-  },
-  {
     key: "source.adjust.filters.refresh.the.queue.or.move.t.4a4fa7f45b",
     defaultMessage: "Adjust filters, refresh the queue, or move to the approval and certificate worklists that create operations.",
     sources: [
@@ -391,14 +384,14 @@ export const extractedMessages = [
     key: "source.agent.fleet.ac46d1b700",
     defaultMessage: "Agent fleet",
     sources: [
-      "src/pages/Agents.tsx:187",
+      "src/pages/Agents.tsx:241",
     ],
   },
   {
     key: "source.agent.id.510bce732d",
     defaultMessage: "Agent ID",
     sources: [
-      "src/pages/Agents.tsx:222",
+      "src/pages/Agents.tsx:327",
       "src/pages/Workloads.tsx:854",
     ],
   },
@@ -406,14 +399,14 @@ export const extractedMessages = [
     key: "source.agent.profile.heartbeat.and.version.detail.fbb4a88e48",
     defaultMessage: "Agent profile, heartbeat, and version details.",
     sources: [
-      "src/pages/Agents.tsx:218",
+      "src/pages/Agents.tsx:323",
     ],
   },
   {
     key: "source.agents.279b44d2ab",
     defaultMessage: "Agents",
     sources: [
-      "src/pages/Agents.tsx:109",
+      "src/pages/Agents.tsx:163",
     ],
   },
   {
@@ -484,7 +477,6 @@ export const extractedMessages = [
     defaultMessage: "All",
     sources: [
       "src/pages/Certificates.tsx:36",
-      "src/pages/Notifications.tsx:260",
     ],
   },
   {
@@ -521,7 +513,6 @@ export const extractedMessages = [
     key: "source.all.statuses.8ee57323a6",
     defaultMessage: "All statuses",
     sources: [
-      "src/pages/Notifications.tsx:55",
       "src/pages/Operations.tsx:54",
     ],
   },
@@ -536,7 +527,6 @@ export const extractedMessages = [
     key: "source.all.types.f10988e79e",
     defaultMessage: "All types",
     sources: [
-      "src/pages/Notifications.tsx:281",
       "src/pages/Operations.tsx:64",
     ],
   },
@@ -1047,7 +1037,7 @@ export const extractedMessages = [
     key: "source.bootstrap.token.2996dc8b78",
     defaultMessage: "Bootstrap token",
     sources: [
-      "src/pages/Agents.tsx:154",
+      "src/pages/Agents.tsx:208",
       "src/pages/Wizard.tsx:293",
     ],
   },
@@ -1273,6 +1263,7 @@ export const extractedMessages = [
     key: "source.cancel.19766ed6cc",
     defaultMessage: "Cancel",
     sources: [
+      "src/pages/Agents.tsx:295",
       "src/pages/CAHierarchy.tsx:1403",
       "src/pages/Identities.tsx:733",
       "src/pages/Identities.tsx:783",
@@ -1613,29 +1604,29 @@ export const extractedMessages = [
     key: "source.column.datagridcolumn.ee69fa6c44",
     defaultMessage: "(column: DataGridColumn",
     sources: [
-      "src/components/DataGrid.tsx:395",
+      "src/components/DataGrid.tsx:396",
     ],
   },
   {
     key: "source.columnbyid.get.columnid.filter.column.colu.401794f02d",
     defaultMessage: "columnById.get(columnId)) .filter((column): column is DataGridColumn",
     sources: [
-      "src/components/DataGrid.tsx:93",
+      "src/components/DataGrid.tsx:94",
     ],
   },
   {
     key: "source.columns.53aade77cd",
     defaultMessage: "Columns",
     sources: [
-      "src/components/DataGrid.tsx:208",
+      "src/components/DataGrid.tsx:209",
     ],
   },
   {
     key: "source.columns.array.628cb6e821",
     defaultMessage: "(columns: Array",
     sources: [
-      "src/components/DataGrid.tsx:372",
-      "src/components/DataGrid.tsx:379",
+      "src/components/DataGrid.tsx:373",
+      "src/components/DataGrid.tsx:380",
     ],
   },
   {
@@ -1882,14 +1873,14 @@ export const extractedMessages = [
     key: "source.copied.once.from.memory.ffb61f0314",
     defaultMessage: "Copied once from memory.",
     sources: [
-      "src/pages/Agents.tsx:169",
+      "src/pages/Agents.tsx:223",
     ],
   },
   {
     key: "source.copy.command.9a01feecae",
     defaultMessage: "Copy command",
     sources: [
-      "src/pages/Agents.tsx:166",
+      "src/pages/Agents.tsx:220",
     ],
   },
   {
@@ -1945,7 +1936,7 @@ export const extractedMessages = [
     key: "source.could.not.load.agents.1d510cf246",
     defaultMessage: "Could not load agents",
     sources: [
-      "src/pages/Agents.tsx:175",
+      "src/pages/Agents.tsx:229",
     ],
   },
   {
@@ -1973,7 +1964,7 @@ export const extractedMessages = [
     key: "source.could.not.mint.enrollment.token.7b0b6374e9",
     defaultMessage: "Could not mint enrollment token",
     sources: [
-      "src/pages/Agents.tsx:135",
+      "src/pages/Agents.tsx:189",
     ],
   },
   {
@@ -2349,20 +2340,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.dead.28a3a5e81d",
-    defaultMessage: "dead",
-    sources: [
-      "src/pages/Notifications.tsx:59",
-    ],
-  },
-  {
-    key: "source.dead.letter.7254a19077",
-    defaultMessage: "Dead-letter",
-    sources: [
-      "src/pages/Notifications.tsx:269",
-    ],
-  },
-  {
     key: "source.decision.640ae4baf9",
     defaultMessage: "Decision",
     sources: [
@@ -2450,7 +2427,7 @@ export const extractedMessages = [
     key: "source.delivered.373e0712c8",
     defaultMessage: "delivered",
     sources: [
-      "src/lib/statusVocab.ts:69",
+      "src/lib/statusVocab.ts:70",
     ],
   },
   {
@@ -2661,7 +2638,7 @@ export const extractedMessages = [
     key: "source.dismiss.48845bff33",
     defaultMessage: "Dismiss",
     sources: [
-      "src/pages/Agents.tsx:148",
+      "src/pages/Agents.tsx:202",
       "src/pages/CAHierarchy.tsx:1541",
       "src/pages/Operations.tsx:371",
       "src/pages/Platform.tsx:837",
@@ -2944,7 +2921,7 @@ export const extractedMessages = [
     key: "source.enrollment.token.6c86be7863",
     defaultMessage: "Enrollment token",
     sources: [
-      "src/pages/Agents.tsx:122",
+      "src/pages/Agents.tsx:176",
     ],
   },
   {
@@ -3281,7 +3258,7 @@ export const extractedMessages = [
     key: "source.failed.5d28a90f44",
     defaultMessage: "failed",
     sources: [
-      "src/lib/statusVocab.ts:70",
+      "src/lib/statusVocab.ts:71",
       "src/pages/Dashboard.tsx:430",
     ],
   },
@@ -3412,7 +3389,7 @@ export const extractedMessages = [
     key: "source.fresh.heartbeat.39d75ce503",
     defaultMessage: "Fresh heartbeat",
     sources: [
-      "src/pages/Agents.tsx:276",
+      "src/pages/Agents.tsx:401",
     ],
   },
   {
@@ -3919,7 +3896,7 @@ export const extractedMessages = [
     key: "source.install.command.1ae9754205",
     defaultMessage: "Install command",
     sources: [
-      "src/pages/Agents.tsx:158",
+      "src/pages/Agents.tsx:212",
     ],
   },
   {
@@ -4360,7 +4337,7 @@ export const extractedMessages = [
     key: "source.last.seen.21fd79c7de",
     defaultMessage: "Last seen",
     sources: [
-      "src/pages/Agents.tsx:234",
+      "src/pages/Agents.tsx:339",
     ],
   },
   {
@@ -4473,7 +4450,7 @@ export const extractedMessages = [
     key: "source.loading.agents.a4e0608f99",
     defaultMessage: "Loading agents...",
     sources: [
-      "src/pages/Agents.tsx:176",
+      "src/pages/Agents.tsx:230",
     ],
   },
   {
@@ -4600,13 +4577,6 @@ export const extractedMessages = [
     defaultMessage: "Loading NHI access reviews.",
     sources: [
       "src/pages/Policy.tsx:810",
-    ],
-  },
-  {
-    key: "source.loading.notifications.f3484ee688",
-    defaultMessage: "Loading notifications...",
-    sources: [
-      "src/pages/Notifications.tsx:311",
     ],
   },
   {
@@ -4805,21 +4775,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.mark.read.b49c9b6cdf",
-    defaultMessage: "Mark read",
-    sources: [
-      "src/pages/Notifications.tsx:654",
-    ],
-  },
-  {
-    key: "source.mark.read.failed.a326ea4bbd",
-    defaultMessage: "Mark read failed",
-    sources: [
-      "src/pages/Notifications.tsx:146",
-      "src/pages/Notifications.tsx:147",
-    ],
-  },
-  {
     key: "source.max.path.length.bd7da36364",
     defaultMessage: "Max Path Length",
     sources: [
@@ -4885,7 +4840,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:787",
+      "src/lib/api.ts:789",
     ],
   },
   {
@@ -4927,7 +4882,7 @@ export const extractedMessages = [
     key: "source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e",
     defaultMessage: "Mint a one-time enrollment token, install an agent inside the tenant network, then refresh this page when it registers.",
     sources: [
-      "src/pages/Agents.tsx:179",
+      "src/pages/Agents.tsx:233",
     ],
   },
   {
@@ -4985,92 +4940,89 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:1038",
-      "src/lib/api.ts:1051",
-      "src/lib/api.ts:1057",
-      "src/lib/api.ts:1059",
-      "src/lib/api.ts:1061",
-      "src/lib/api.ts:1072",
+      "src/lib/api.ts:1041",
+      "src/lib/api.ts:1054",
+      "src/lib/api.ts:1060",
+      "src/lib/api.ts:1062",
+      "src/lib/api.ts:1064",
       "src/lib/api.ts:1075",
-      "src/lib/api.ts:1076",
-      "src/lib/api.ts:1077",
-      "src/lib/api.ts:1088",
-      "src/lib/api.ts:1090",
+      "src/lib/api.ts:1078",
+      "src/lib/api.ts:1079",
+      "src/lib/api.ts:1080",
+      "src/lib/api.ts:1091",
       "src/lib/api.ts:1092",
-      "src/lib/api.ts:1095",
-      "src/lib/api.ts:1105",
-      "src/lib/api.ts:1106",
+      "src/lib/api.ts:1094",
+      "src/lib/api.ts:1096",
+      "src/lib/api.ts:1099",
       "src/lib/api.ts:1109",
       "src/lib/api.ts:1110",
-      "src/lib/api.ts:1111",
-      "src/lib/api.ts:1112",
       "src/lib/api.ts:1113",
       "src/lib/api.ts:1114",
+      "src/lib/api.ts:1115",
+      "src/lib/api.ts:1116",
       "src/lib/api.ts:1117",
       "src/lib/api.ts:1118",
-      "src/lib/api.ts:1119",
+      "src/lib/api.ts:1121",
+      "src/lib/api.ts:1122",
       "src/lib/api.ts:1123",
-      "src/lib/api.ts:1129",
-      "src/lib/api.ts:1130",
+      "src/lib/api.ts:1127",
+      "src/lib/api.ts:1133",
       "src/lib/api.ts:1134",
-      "src/lib/api.ts:1135",
-      "src/lib/api.ts:1136",
+      "src/lib/api.ts:1138",
       "src/lib/api.ts:1139",
       "src/lib/api.ts:1140",
-      "src/lib/api.ts:1141",
-      "src/lib/api.ts:1142",
-      "src/lib/api.ts:1147",
-      "src/lib/api.ts:1148",
-      "src/lib/api.ts:1149",
-      "src/lib/api.ts:1150",
+      "src/lib/api.ts:1143",
+      "src/lib/api.ts:1144",
+      "src/lib/api.ts:1145",
+      "src/lib/api.ts:1146",
       "src/lib/api.ts:1151",
       "src/lib/api.ts:1152",
+      "src/lib/api.ts:1153",
       "src/lib/api.ts:1154",
       "src/lib/api.ts:1155",
       "src/lib/api.ts:1156",
-      "src/lib/api.ts:1157",
       "src/lib/api.ts:1158",
       "src/lib/api.ts:1159",
       "src/lib/api.ts:1160",
+      "src/lib/api.ts:1161",
+      "src/lib/api.ts:1162",
+      "src/lib/api.ts:1163",
       "src/lib/api.ts:1164",
-      "src/lib/api.ts:1165",
-      "src/lib/api.ts:1167",
+      "src/lib/api.ts:1168",
       "src/lib/api.ts:1169",
       "src/lib/api.ts:1171",
       "src/lib/api.ts:1173",
-      "src/lib/api.ts:1176",
+      "src/lib/api.ts:1175",
       "src/lib/api.ts:1177",
-      "src/lib/api.ts:1178",
       "src/lib/api.ts:1180",
-      "src/lib/api.ts:1189",
-      "src/lib/api.ts:1190",
-      "src/lib/api.ts:1201",
-      "src/lib/api.ts:1202",
-      "src/lib/api.ts:1204",
+      "src/lib/api.ts:1181",
+      "src/lib/api.ts:1182",
+      "src/lib/api.ts:1184",
+      "src/lib/api.ts:1193",
+      "src/lib/api.ts:1194",
       "src/lib/api.ts:1205",
-      "src/lib/api.ts:1207",
+      "src/lib/api.ts:1206",
+      "src/lib/api.ts:1208",
       "src/lib/api.ts:1209",
       "src/lib/api.ts:1211",
-      "src/lib/api.ts:1212",
-      "src/lib/api.ts:1214",
+      "src/lib/api.ts:1213",
       "src/lib/api.ts:1215",
       "src/lib/api.ts:1216",
-      "src/lib/api.ts:1217",
-      "src/lib/api.ts:1230",
-      "src/lib/api.ts:1231",
-      "src/lib/api.ts:1240",
-      "src/lib/api.ts:1241",
-      "src/lib/api.ts:1242",
-      "src/lib/api.ts:1243",
+      "src/lib/api.ts:1218",
+      "src/lib/api.ts:1219",
+      "src/lib/api.ts:1220",
+      "src/lib/api.ts:1221",
+      "src/lib/api.ts:1234",
+      "src/lib/api.ts:1235",
+      "src/lib/api.ts:1244",
       "src/lib/api.ts:1245",
-      "src/lib/api.ts:1248",
-      "src/lib/api.ts:1250",
-      "src/lib/api.ts:1251",
-      "src/lib/api.ts:1259",
-      "src/lib/api.ts:1261",
-      "src/lib/api.ts:1262",
+      "src/lib/api.ts:1246",
+      "src/lib/api.ts:1247",
+      "src/lib/api.ts:1249",
+      "src/lib/api.ts:1252",
+      "src/lib/api.ts:1254",
+      "src/lib/api.ts:1255",
       "src/lib/api.ts:1263",
-      "src/lib/api.ts:1264",
       "src/lib/api.ts:1265",
       "src/lib/api.ts:1266",
       "src/lib/api.ts:1267",
@@ -5084,12 +5036,16 @@ export const extractedMessages = [
       "src/lib/api.ts:1275",
       "src/lib/api.ts:1276",
       "src/lib/api.ts:1277",
+      "src/lib/api.ts:1278",
+      "src/lib/api.ts:1279",
+      "src/lib/api.ts:1280",
       "src/lib/api.ts:1281",
-      "src/lib/api.ts:1282",
-      "src/lib/api.ts:1284",
       "src/lib/api.ts:1285",
       "src/lib/api.ts:1286",
-      "src/lib/api.ts:1287",
+      "src/lib/api.ts:1288",
+      "src/lib/api.ts:1289",
+      "src/lib/api.ts:1290",
+      "src/lib/api.ts:1291",
     ],
   },
   {
@@ -5110,7 +5066,7 @@ export const extractedMessages = [
     key: "source.name.8a6d880a09",
     defaultMessage: "\", \"--name",
     sources: [
-      "src/pages/Agents.tsx:290",
+      "src/pages/Agents.tsx:427",
       "src/pages/Wizard.tsx:273",
     ],
   },
@@ -5264,7 +5220,7 @@ export const extractedMessages = [
     key: "source.no.agents.enrolled.yet.345799ad5d",
     defaultMessage: "No agents enrolled yet",
     sources: [
-      "src/pages/Agents.tsx:179",
+      "src/pages/Agents.tsx:233",
     ],
   },
   {
@@ -5496,7 +5452,7 @@ export const extractedMessages = [
     key: "source.no.heartbeat.timestamp.7c01a4e0ea",
     defaultMessage: "No heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:271",
+      "src/pages/Agents.tsx:396",
     ],
   },
   {
@@ -5567,13 +5523,6 @@ export const extractedMessages = [
     defaultMessage: "No nodes or edges exist for this tenant yet. Ingest certificates or issue identities first.",
     sources: [
       "src/pages/Graph.tsx:213",
-    ],
-  },
-  {
-    key: "source.no.notifications.found.43817f37bb",
-    defaultMessage: "No notifications found",
-    sources: [
-      "src/pages/Notifications.tsx:313",
     ],
   },
   {
@@ -5748,28 +5697,7 @@ export const extractedMessages = [
     key: "source.notification.last.error.b706f99e97",
     defaultMessage: "notification.last_error ? (",
     sources: [
-      "src/pages/Notifications.tsx:630",
-    ],
-  },
-  {
-    key: "source.notification.marked.read.8d8c35b6bb",
-    defaultMessage: "Notification marked read",
-    sources: [
-      "src/pages/Notifications.tsx:143",
-    ],
-  },
-  {
-    key: "source.notification.queues.65f3cb3a67",
-    defaultMessage: "Notification queues",
-    sources: [
-      "src/pages/Notifications.tsx:253",
-    ],
-  },
-  {
-    key: "source.notification.requeued.be861abb6e",
-    defaultMessage: "Notification requeued",
-    sources: [
-      "src/pages/Notifications.tsx:159",
+      "src/pages/Notifications.tsx:638",
     ],
   },
   {
@@ -5783,14 +5711,7 @@ export const extractedMessages = [
     key: "source.notifications.788011833a",
     defaultMessage: "Notifications",
     sources: [
-      "src/pages/Notifications.tsx:223",
-    ],
-  },
-  {
-    key: "source.notifications.unavailable.163284db66",
-    defaultMessage: "Notifications unavailable",
-    sources: [
-      "src/pages/Notifications.tsx:104",
+      "src/pages/Notifications.tsx:230",
     ],
   },
   {
@@ -5846,6 +5767,7 @@ export const extractedMessages = [
     key: "source.offboard.9053e68ef6",
     defaultMessage: "Offboard",
     sources: [
+      "src/pages/Agents.tsx:150",
       "src/pages/Platform.tsx:903",
     ],
   },
@@ -5854,6 +5776,34 @@ export const extractedMessages = [
     defaultMessage: "Offboard member",
     sources: [
       "src/pages/Platform.tsx:892",
+    ],
+  },
+  {
+    key: "source.offboard.reason.6c2b7a820c",
+    defaultMessage: "Offboard reason",
+    sources: [
+      "src/pages/Agents.tsx:356",
+    ],
+  },
+  {
+    key: "source.offboarded.1e493e6cf3",
+    defaultMessage: "offboarded",
+    sources: [
+      "src/lib/statusVocab.ts:64",
+    ],
+  },
+  {
+    key: "source.offboarded.bc5f0c93d1",
+    defaultMessage: "Offboarded",
+    sources: [
+      "src/pages/Agents.tsx:345",
+    ],
+  },
+  {
+    key: "source.offboarded.by.4c49b0d40c",
+    defaultMessage: "Offboarded by",
+    sources: [
+      "src/pages/Agents.tsx:350",
     ],
   },
   {
@@ -6215,14 +6165,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:797",
+      "src/lib/api.ts:799",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:721",
+      "src/lib/api.ts:723",
     ],
   },
   {
@@ -6258,8 +6208,7 @@ export const extractedMessages = [
     key: "source.pending.62a2fed3d6",
     defaultMessage: "pending",
     sources: [
-      "src/lib/statusVocab.ts:67",
-      "src/pages/Notifications.tsx:56",
+      "src/lib/statusVocab.ts:68",
     ],
   },
   {
@@ -6267,13 +6216,6 @@ export const extractedMessages = [
     defaultMessage: "permission boundary",
     sources: [
       "src/pages/Assistant.tsx:199",
-    ],
-  },
-  {
-    key: "source.permission.denied.59b77dbd5b",
-    defaultMessage: "Permission denied",
-    sources: [
-      "src/components/StatePrimitives.tsx:31",
     ],
   },
   {
@@ -6373,10 +6315,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1194",
-      "src/lib/api.ts:1196",
-      "src/lib/api.ts:1197",
-      "src/lib/api.ts:1199",
+      "src/lib/api.ts:1198",
+      "src/lib/api.ts:1200",
+      "src/lib/api.ts:1201",
+      "src/lib/api.ts:1203",
     ],
   },
   {
@@ -6495,7 +6437,7 @@ export const extractedMessages = [
     key: "source.processing.0a63dd9aa0",
     defaultMessage: "processing",
     sources: [
-      "src/lib/statusVocab.ts:68",
+      "src/lib/statusVocab.ts:69",
     ],
   },
   {
@@ -6842,13 +6784,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.read.3316348dba",
-    defaultMessage: "read",
-    sources: [
-      "src/pages/Notifications.tsx:58",
-    ],
-  },
-  {
     key: "source.read.only.responder.probe.23655af063",
     defaultMessage: "Read-only responder probe",
     sources: [
@@ -6873,6 +6808,7 @@ export const extractedMessages = [
     key: "source.reason.f81ab834de",
     defaultMessage: "Reason",
     sources: [
+      "src/pages/Agents.tsx:285",
       "src/pages/Connectors.tsx:231",
       "src/pages/Connectors.tsx:312",
       "src/pages/Identities.tsx:635",
@@ -7011,7 +6947,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/CAHierarchy.tsx:440",
       "src/pages/Discovery.tsx:307",
-      "src/pages/Notifications.tsx:228",
+      "src/pages/Notifications.tsx:235",
       "src/pages/Operations.tsx:156",
     ],
   },
@@ -7132,26 +7068,23 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:1031",
-      "src/lib/api.ts:1032",
-      "src/lib/api.ts:1033",
       "src/lib/api.ts:1034",
       "src/lib/api.ts:1035",
       "src/lib/api.ts:1036",
       "src/lib/api.ts:1037",
-      "src/lib/api.ts:1048",
-      "src/lib/api.ts:1049",
-      "src/lib/api.ts:1050",
+      "src/lib/api.ts:1038",
+      "src/lib/api.ts:1039",
+      "src/lib/api.ts:1040",
+      "src/lib/api.ts:1051",
       "src/lib/api.ts:1052",
       "src/lib/api.ts:1053",
-      "src/lib/api.ts:1054",
       "src/lib/api.ts:1055",
       "src/lib/api.ts:1056",
+      "src/lib/api.ts:1057",
       "src/lib/api.ts:1058",
-      "src/lib/api.ts:1060",
-      "src/lib/api.ts:1062",
+      "src/lib/api.ts:1059",
+      "src/lib/api.ts:1061",
       "src/lib/api.ts:1063",
-      "src/lib/api.ts:1064",
       "src/lib/api.ts:1065",
       "src/lib/api.ts:1066",
       "src/lib/api.ts:1067",
@@ -7159,70 +7092,73 @@ export const extractedMessages = [
       "src/lib/api.ts:1069",
       "src/lib/api.ts:1070",
       "src/lib/api.ts:1071",
+      "src/lib/api.ts:1072",
       "src/lib/api.ts:1073",
       "src/lib/api.ts:1074",
-      "src/lib/api.ts:1087",
-      "src/lib/api.ts:1089",
-      "src/lib/api.ts:1091",
+      "src/lib/api.ts:1076",
+      "src/lib/api.ts:1077",
+      "src/lib/api.ts:1090",
       "src/lib/api.ts:1093",
-      "src/lib/api.ts:1094",
-      "src/lib/api.ts:1096",
-      "src/lib/api.ts:1107",
-      "src/lib/api.ts:1108",
-      "src/lib/api.ts:1115",
-      "src/lib/api.ts:1116",
+      "src/lib/api.ts:1095",
+      "src/lib/api.ts:1097",
+      "src/lib/api.ts:1098",
+      "src/lib/api.ts:1100",
+      "src/lib/api.ts:1111",
+      "src/lib/api.ts:1112",
+      "src/lib/api.ts:1119",
       "src/lib/api.ts:1120",
-      "src/lib/api.ts:1121",
-      "src/lib/api.ts:1122",
       "src/lib/api.ts:1124",
+      "src/lib/api.ts:1125",
       "src/lib/api.ts:1126",
-      "src/lib/api.ts:1127",
+      "src/lib/api.ts:1128",
+      "src/lib/api.ts:1130",
       "src/lib/api.ts:1131",
-      "src/lib/api.ts:1133",
-      "src/lib/api.ts:1138",
-      "src/lib/api.ts:1143",
-      "src/lib/api.ts:1144",
-      "src/lib/api.ts:1145",
-      "src/lib/api.ts:1146",
-      "src/lib/api.ts:1161",
-      "src/lib/api.ts:1162",
-      "src/lib/api.ts:1163",
+      "src/lib/api.ts:1135",
+      "src/lib/api.ts:1137",
+      "src/lib/api.ts:1142",
+      "src/lib/api.ts:1147",
+      "src/lib/api.ts:1148",
+      "src/lib/api.ts:1149",
+      "src/lib/api.ts:1150",
+      "src/lib/api.ts:1165",
       "src/lib/api.ts:1166",
-      "src/lib/api.ts:1168",
+      "src/lib/api.ts:1167",
       "src/lib/api.ts:1170",
       "src/lib/api.ts:1172",
-      "src/lib/api.ts:1175",
+      "src/lib/api.ts:1174",
+      "src/lib/api.ts:1176",
       "src/lib/api.ts:1179",
-      "src/lib/api.ts:1181",
-      "src/lib/api.ts:1182",
       "src/lib/api.ts:1183",
-      "src/lib/api.ts:1184",
       "src/lib/api.ts:1185",
       "src/lib/api.ts:1186",
       "src/lib/api.ts:1187",
       "src/lib/api.ts:1188",
+      "src/lib/api.ts:1189",
+      "src/lib/api.ts:1190",
       "src/lib/api.ts:1191",
       "src/lib/api.ts:1192",
-      "src/lib/api.ts:1193",
       "src/lib/api.ts:1195",
-      "src/lib/api.ts:1198",
-      "src/lib/api.ts:1200",
-      "src/lib/api.ts:1203",
-      "src/lib/api.ts:1213",
-      "src/lib/api.ts:1238",
-      "src/lib/api.ts:1244",
-      "src/lib/api.ts:1247",
-      "src/lib/api.ts:1252",
-      "src/lib/api.ts:1253",
-      "src/lib/api.ts:1254",
-      "src/lib/api.ts:1255",
+      "src/lib/api.ts:1196",
+      "src/lib/api.ts:1197",
+      "src/lib/api.ts:1199",
+      "src/lib/api.ts:1202",
+      "src/lib/api.ts:1204",
+      "src/lib/api.ts:1207",
+      "src/lib/api.ts:1217",
+      "src/lib/api.ts:1242",
+      "src/lib/api.ts:1248",
+      "src/lib/api.ts:1251",
       "src/lib/api.ts:1256",
       "src/lib/api.ts:1257",
       "src/lib/api.ts:1258",
+      "src/lib/api.ts:1259",
       "src/lib/api.ts:1260",
-      "src/lib/api.ts:1278",
-      "src/lib/api.ts:1279",
-      "src/lib/api.ts:1280",
+      "src/lib/api.ts:1261",
+      "src/lib/api.ts:1262",
+      "src/lib/api.ts:1264",
+      "src/lib/api.ts:1282",
+      "src/lib/api.ts:1283",
+      "src/lib/api.ts:1284",
     ],
   },
   {
@@ -7268,21 +7204,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.requeue.210c2a1886",
-    defaultMessage: "Requeue",
-    sources: [
-      "src/pages/Notifications.tsx:666",
-    ],
-  },
-  {
-    key: "source.requeue.failed.ee9d58023f",
-    defaultMessage: "Requeue failed",
-    sources: [
-      "src/pages/Notifications.tsx:161",
-      "src/pages/Notifications.tsx:162",
-    ],
-  },
-  {
     key: "source.reset.daee7606b3",
     defaultMessage: "Reset",
     sources: [
@@ -7316,7 +7237,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:766",
+      "src/lib/api.ts:768",
     ],
   },
   {
@@ -7803,15 +7724,15 @@ export const extractedMessages = [
     key: "source.save.view.2115387503",
     defaultMessage: "Save view",
     sources: [
-      "src/components/DataGrid.tsx:262",
+      "src/components/DataGrid.tsx:263",
     ],
   },
   {
     key: "source.saved.view.name.9aa4b3b580",
     defaultMessage: "Saved view name",
     sources: [
-      "src/components/DataGrid.tsx:253",
-      "src/components/DataGrid.tsx:255",
+      "src/components/DataGrid.tsx:254",
+      "src/components/DataGrid.tsx:256",
     ],
   },
   {
@@ -8057,7 +7978,7 @@ export const extractedMessages = [
     key: "source.select.all.visible.rows.b83e9323d3",
     defaultMessage: "Select all visible rows",
     sources: [
-      "src/components/DataGrid.tsx:304",
+      "src/components/DataGrid.tsx:305",
     ],
   },
   {
@@ -8149,13 +8070,6 @@ export const extractedMessages = [
     defaultMessage: "Sensitivity label",
     sources: [
       "src/pages/Risk.tsx:929",
-    ],
-  },
-  {
-    key: "source.sent.7afbb3347f",
-    defaultMessage: "sent",
-    sources: [
-      "src/pages/Notifications.tsx:57",
     ],
   },
   {
@@ -8334,7 +8248,7 @@ export const extractedMessages = [
     key: "source.shown.once.22548d041f",
     defaultMessage: "Shown once",
     sources: [
-      "src/pages/Agents.tsx:141",
+      "src/pages/Agents.tsx:195",
     ],
   },
   {
@@ -8562,7 +8476,7 @@ export const extractedMessages = [
     key: "source.stale.heartbeat.d8742526e2",
     defaultMessage: "Stale heartbeat",
     sources: [
-      "src/pages/Agents.tsx:275",
+      "src/pages/Agents.tsx:400",
     ],
   },
   {
@@ -8612,7 +8526,7 @@ export const extractedMessages = [
     key: "source.status.920e413c7d",
     defaultMessage: "Status",
     sources: [
-      "src/pages/Agents.tsx:226",
+      "src/pages/Agents.tsx:331",
       "src/pages/Certificates.tsx:1201",
       "src/pages/Connectors.tsx:306",
       "src/pages/Identities.tsx:1090",
@@ -8635,8 +8549,6 @@ export const extractedMessages = [
     key: "source.status.filter.9bfe8b184f",
     defaultMessage: "Status filter",
     sources: [
-      "src/pages/Notifications.tsx:289",
-      "src/pages/Notifications.tsx:292",
       "src/pages/Operations.tsx:166",
       "src/pages/Operations.tsx:169",
     ],
@@ -8863,6 +8775,13 @@ export const extractedMessages = [
     sources: [
       "src/pages/CAHierarchy.tsx:1643",
       "src/pages/Connectors.tsx:239",
+    ],
+  },
+  {
+    key: "source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10",
+    defaultMessage: "The agent row remains as an offboarded tombstone, and future mTLS RPCs from this agent are rejected.",
+    sources: [
+      "src/pages/Agents.tsx:281",
     ],
   },
   {
@@ -9192,8 +9111,6 @@ export const extractedMessages = [
     key: "source.type.filter.5607113309",
     defaultMessage: "Type filter",
     sources: [
-      "src/pages/Notifications.tsx:273",
-      "src/pages/Notifications.tsx:276",
       "src/pages/Operations.tsx:181",
       "src/pages/Operations.tsx:184",
     ],
@@ -9258,7 +9175,7 @@ export const extractedMessages = [
     key: "source.unparseable.heartbeat.timestamp.bb97c8934b",
     defaultMessage: "Unparseable heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:273",
+      "src/pages/Agents.tsx:398",
     ],
   },
   {
@@ -9351,7 +9268,7 @@ export const extractedMessages = [
     key: "source.version.dd167905de",
     defaultMessage: "Version",
     sources: [
-      "src/pages/Agents.tsx:230",
+      "src/pages/Agents.tsx:335",
       "src/pages/Secrets.tsx:863",
     ],
   },
@@ -9380,21 +9297,21 @@ export const extractedMessages = [
     key: "source.view.details.d1bf045bb5",
     defaultMessage: "View details",
     sources: [
-      "src/pages/Agents.tsx:98",
+      "src/pages/Agents.tsx:139",
     ],
   },
   {
     key: "source.view.name.572ffd1862",
     defaultMessage: "View name",
     sources: [
-      "src/components/DataGrid.tsx:258",
+      "src/components/DataGrid.tsx:259",
     ],
   },
   {
     key: "source.visible.columns.1da58ee7c6",
     defaultMessage: "Visible columns",
     sources: [
-      "src/components/DataGrid.tsx:214",
+      "src/components/DataGrid.tsx:215",
     ],
   },
   {

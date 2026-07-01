@@ -24,6 +24,30 @@ export const messages = {
     defaultMessage: "Skip to main content",
     description: "Keyboard skip-link label.",
   },
+  "state.permissionDenied": {
+    defaultMessage: "Permission denied",
+    description: "Shared alert title for authenticated users who cannot read a resource.",
+  },
+  "grid.state.loading": {
+    defaultMessage: "Loading rows...",
+    description: "Shared data-grid loading state.",
+  },
+  "grid.state.error": {
+    defaultMessage: "Could not load rows",
+    description: "Shared data-grid error state title.",
+  },
+  "grid.state.permissionDeniedBody": {
+    defaultMessage: "Your session cannot read these rows.",
+    description: "Shared data-grid permission-denied body.",
+  },
+  "grid.state.unavailable": {
+    defaultMessage: "Rows unavailable",
+    description: "Shared data-grid unavailable state title.",
+  },
+  "grid.state.empty": {
+    defaultMessage: "No rows",
+    description: "Shared data-grid empty state title.",
+  },
   "shell.primaryNavigation": {
     defaultMessage: "Primary",
     description: "Accessible label for the primary navigation landmark.",
@@ -2379,6 +2403,126 @@ export const messages = {
     defaultMessage: "Next digest",
     description: "Label for notification routing digest preview summary.",
   },
+  "notifications.error.unavailable": {
+    defaultMessage: "Notifications unavailable",
+    description: "Error title when the notification inbox cannot be fetched.",
+  },
+  "notifications.error.loadFailed": {
+    defaultMessage: "Could not load notifications",
+    description: "Fallback error when the notification inbox cannot be fetched.",
+  },
+  "notifications.action.markedRead": {
+    defaultMessage: "Notification marked read",
+    description: "Toast title after marking a notification read.",
+  },
+  "notifications.action.markReadFailed": {
+    defaultMessage: "Mark read failed",
+    description: "Toast and error title when marking a notification read fails.",
+  },
+  "notifications.action.markReadLoadFailed": {
+    defaultMessage: "Could not mark notification read",
+    description: "Fallback error when marking a notification read fails.",
+  },
+  "notifications.action.requeued": {
+    defaultMessage: "Notification requeued",
+    description: "Toast title after requeueing a dead-letter notification.",
+  },
+  "notifications.action.requeueFailed": {
+    defaultMessage: "Requeue failed",
+    description: "Toast and error title when requeueing a notification fails.",
+  },
+  "notifications.action.requeueLoadFailed": {
+    defaultMessage: "Could not requeue notification",
+    description: "Fallback error when requeueing a notification fails.",
+  },
+  "notifications.queue.tablist": {
+    defaultMessage: "Notification queues",
+    description: "Accessible label for notification queue tabs.",
+  },
+  "notifications.queue.all": {
+    defaultMessage: "All",
+    description: "Tab label for all notifications.",
+  },
+  "notifications.queue.deadLetter": {
+    defaultMessage: "Dead-letter",
+    description: "Tab label for dead-letter notifications.",
+  },
+  "notifications.filter.type": {
+    defaultMessage: "Type filter",
+    description: "Label for notification type filter.",
+  },
+  "notifications.filter.typeAll": {
+    defaultMessage: "All types",
+    description: "Option label showing all notification types.",
+  },
+  "notifications.filter.status": {
+    defaultMessage: "Status filter",
+    description: "Label for notification status filter.",
+  },
+  "notifications.filter.statusAll": {
+    defaultMessage: "All statuses",
+    description: "Option label showing all notification statuses.",
+  },
+  "notifications.status.pending": {
+    defaultMessage: "pending",
+    description: "Notification status option.",
+  },
+  "notifications.status.sent": {
+    defaultMessage: "sent",
+    description: "Notification status option.",
+  },
+  "notifications.status.read": {
+    defaultMessage: "read",
+    description: "Notification status option.",
+  },
+  "notifications.status.dead": {
+    defaultMessage: "dead",
+    description: "Notification status option.",
+  },
+  "notifications.count.total": {
+    defaultMessage: "{count} notifications",
+    description: "Notification result count summary.",
+  },
+  "notifications.count.unread": {
+    defaultMessage: "{count} unread",
+    description: "Unread notification count summary.",
+  },
+  "notifications.loading": {
+    defaultMessage: "Loading notifications...",
+    description: "Loading state for notification inbox rows.",
+  },
+  "notifications.emptyTitle": {
+    defaultMessage: "No notifications found",
+    description: "Empty state title for notification inbox rows.",
+  },
+  "notifications.emptyBody": {
+    defaultMessage: "Adjust filters or refresh the inbox.",
+    description: "Empty state body for notification inbox rows.",
+  },
+  "notifications.table.ariaLabel": {
+    defaultMessage: "Notifications inbox",
+    description: "Accessible table label for notification inbox rows.",
+  },
+  "notifications.table.actions": {
+    defaultMessage: "Actions",
+    description: "Column header for notification row actions.",
+  },
+  "notifications.action.markRead": {
+    defaultMessage: "Mark read",
+    description: "Button label to mark a notification read.",
+  },
+  "notifications.action.markReadAria": {
+    defaultMessage: "Mark notification {id} read",
+    description: "Accessible label to mark a notification read.",
+  },
+  "notifications.action.requeue": {
+    defaultMessage: "Requeue",
+    description: "Button label to requeue a dead-letter notification.",
+  },
+  "notifications.action.requeueAria": {
+    defaultMessage: "Requeue notification {id}",
+    description: "Accessible label to requeue a notification.",
+  },
   "incidents.playbooks.heading": {
     defaultMessage: "Automated remediation playbooks",
     description: "Heading for the incident remediation playbook section.",
@@ -4232,6 +4376,12 @@ const esESCatalog = {
   "app.brand.name": "trstctl",
   "app.brand.subtitle": "plano de control",
   "app.skipToMain": "Saltar al contenido principal",
+  "state.permissionDenied": "Permiso denegado",
+  "grid.state.loading": "Cargando filas...",
+  "grid.state.error": "No se pudieron cargar las filas",
+  "grid.state.permissionDeniedBody": "Tu sesion no puede leer estas filas.",
+  "grid.state.unavailable": "Filas no disponibles",
+  "grid.state.empty": "Sin filas",
   "shell.primaryNavigation": "Principal",
   "shell.primaryNavigationDialog": "Navegación principal",
   "shell.openPrimaryNavigation": "Abrir navegación principal",
@@ -4833,6 +4983,36 @@ const esESCatalog = {
   "notifications.routing.noPolicies": "Aún no hay políticas de enrutamiento.",
   "notifications.routing.owner": "Propietario",
   "notifications.routing.nextDigest": "Próximo resumen",
+  "notifications.error.unavailable": "Notificaciones no disponibles",
+  "notifications.error.loadFailed": "No se pudieron cargar las notificaciones",
+  "notifications.action.markedRead": "Notificación marcada como leída",
+  "notifications.action.markReadFailed": "Falló marcar como leída",
+  "notifications.action.markReadLoadFailed": "No se pudo marcar la notificación como leída",
+  "notifications.action.requeued": "Notificación reencolada",
+  "notifications.action.requeueFailed": "Falló reencolar",
+  "notifications.action.requeueLoadFailed": "No se pudo reencolar la notificación",
+  "notifications.queue.tablist": "Colas de notificaciones",
+  "notifications.queue.all": "Todas",
+  "notifications.queue.deadLetter": "Letra muerta",
+  "notifications.filter.type": "Filtro de tipo",
+  "notifications.filter.typeAll": "Todos los tipos",
+  "notifications.filter.status": "Filtro de estado",
+  "notifications.filter.statusAll": "Todos los estados",
+  "notifications.status.pending": "pendiente",
+  "notifications.status.sent": "enviada",
+  "notifications.status.read": "leída",
+  "notifications.status.dead": "muerta",
+  "notifications.count.total": "{count} notificaciones",
+  "notifications.count.unread": "{count} sin leer",
+  "notifications.loading": "Cargando notificaciones...",
+  "notifications.emptyTitle": "No se encontraron notificaciones",
+  "notifications.emptyBody": "Ajusta los filtros o actualiza la bandeja.",
+  "notifications.table.ariaLabel": "Bandeja de notificaciones",
+  "notifications.table.actions": "Acciones",
+  "notifications.action.markRead": "Marcar leída",
+  "notifications.action.markReadAria": "Marcar notificación {id} como leída",
+  "notifications.action.requeue": "Reencolar",
+  "notifications.action.requeueAria": "Reencolar notificación {id}",
   "incidents.playbooks.heading": "Playbooks de remediación automatizada",
   "incidents.playbooks.description": "Ejecuta playbooks de revocación, rotación y ajuste de permisos con evidencia auditable y acciones externas en cola.",
   "incidents.playbooks.targetIdentity": "Identidad objetivo",

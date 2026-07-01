@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 export function LoadingState({ children }: { children: ReactNode }) {
   return (
@@ -22,13 +23,15 @@ export function ErrorState({ title, children }: { title: string; children?: Reac
 }
 
 export function PermissionDeniedState({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
+
   return (
     <div
       role="alert"
       data-state-primitive="permission-denied"
       className="rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm"
     >
-      <p className="font-medium text-status-warning">Permission denied</p>
+      <p className="font-medium text-status-warning">{t("state.permissionDenied")}</p>
       <div className="mt-1 text-muted-foreground">{children}</div>
     </div>
   );
