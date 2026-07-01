@@ -21,6 +21,7 @@ func TestPrivacyCatalogCoversSubjectErasurePIIFields(t *testing.T) {
 		"approvals.actors",
 		"profiles.created-by",
 		"agents.name",
+		"agents.offboarding-evidence",
 		"pam_sessions.subjects",
 		"discovery_findings.triage",
 		"notification_threshold_deliveries.subject",
@@ -52,6 +53,14 @@ func TestPrivacyCatalogCoversServedSchemaPIIDenominator(t *testing.T) {
 		source  string
 		markers []string
 	}{
+		{
+			id:     "agents.offboarding-evidence",
+			source: "../internal/store/migrations/0068_agent_offboarding.sql",
+			markers: []string{
+				"ADD COLUMN IF NOT EXISTS offboarded_by text",
+				"ADD COLUMN IF NOT EXISTS offboard_reason text",
+			},
+		},
 		{
 			id:     "nhi_access_reviews.actors",
 			source: "../internal/store/migrations/0056_nhi_access_reviews.sql",

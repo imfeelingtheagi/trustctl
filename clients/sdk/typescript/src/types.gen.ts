@@ -385,6 +385,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{id}/offboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Offboard an agent, leave a tombstone, and reject future mTLS RPCs */
+        post: operations["offboardAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/query": {
         parameters: {
             query?: never;
@@ -3825,6 +3842,10 @@ export interface components {
             /** Format: date-time */
             last_seen_at?: string;
             name: string;
+            offboard_reason?: string;
+            /** Format: date-time */
+            offboarded_at?: string;
+            offboarded_by?: string;
             status: string;
             version?: string;
         };
@@ -3854,6 +3875,13 @@ export interface components {
         AgentList: {
             agents: components["schemas"]["Agent"][];
             next_cursor?: string;
+        };
+        AgentOffboardRequest: {
+            reason?: string;
+        };
+        AgentOffboardResponse: {
+            agent: components["schemas"]["Agent"];
+            revocation_evidence: string;
         };
         AlertRecipient: {
             display_name?: string;
@@ -6447,6 +6475,9 @@ export interface components {
             retention_class: string;
         };
         PrivacyErasureSelectors: {
+            agent_ids?: string[];
+            agent_offboard_actor_ids?: string[];
+            agent_offboard_reason_ids?: string[];
             attestation_ids?: string[];
             certificate_fingerprints?: string[];
             identity_ids?: string[];
@@ -8769,6 +8800,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCertRevocation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    offboardAgent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentOffboardRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentOffboardResponse"];
                 };
             };
             /** @description client error */

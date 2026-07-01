@@ -367,6 +367,103 @@ func TestServedAgentChannelRevokedCertRejected(t *testing.T) {
 	}
 }
 
+func TestServedAgentOffboardingTombstonesAndRejectsMTLSCert(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	if !h.srv.AgentChannelServed() {
+		t.Fatal("agent channel is not served - wire-in failed")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	const (
+		serverName = "agent.trstctl.local"
+		agentName  = "edge-agent-offboarded"
+	)
+	a := enrollAgent(t, h, agentName, serverName)
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: agentName, Version: "test-1.0", Status: "active"}); err != nil {
+		t.Fatalf("initial heartbeat: %v", err)
+	}
+
+	agentID := agentRowID(h.tenant, agentName)
+	token := seedScopedToken(t, h.store, h.tenant, "agents:write", "agents:read")
+	code, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/"+agentID+"/offboard", token, "agent-offboard-journey-003", map[string]any{
+		"reason": "host decommissioned",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("offboard agent: status %d body %s", code, body)
+	}
+	if !h.hasEvent(t, "agent.offboarded") {
+		t.Fatal("agent offboarding did not emit agent.offboarded")
+	}
+
+	statusCode, listBody := secretsReq(t, h, http.MethodGet, "/api/v1/agents", token, nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("list agents after offboard: status %d body %s", statusCode, listBody)
+	}
+	var listed struct {
+		Agents []struct {
+			ID             string `json:"id"`
+			Name           string `json:"name"`
+			Status         string `json:"status"`
+			OffboardedAt   string `json:"offboarded_at"`
+			OffboardedBy   string `json:"offboarded_by"`
+			OffboardReason string `json:"offboard_reason"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(listBody, &listed); err != nil {
+		t.Fatalf("decode listed agents: %v (%s)", err, listBody)
+	}
+	var tombstone *struct {
+		ID             string `json:"id"`
+		Name           string `json:"name"`
+		Status         string `json:"status"`
+		OffboardedAt   string `json:"offboarded_at"`
+		OffboardedBy   string `json:"offboarded_by"`
+		OffboardReason string `json:"offboard_reason"`
+	}
+	for i := range listed.Agents {
+		if listed.Agents[i].ID == agentID {
+			tombstone = &listed.Agents[i]
+			break
+		}
+	}
+	if tombstone == nil {
+		t.Fatalf("offboarded agent row disappeared instead of remaining as a tombstone: %+v", listed.Agents)
+	}
+	if tombstone.Name != agentName || tombstone.Status != "offboarded" || tombstone.OffboardedAt == "" || tombstone.OffboardReason != "host decommissioned" {
+		t.Fatalf("agent tombstone = %+v, want name/status/offboarding evidence", *tombstone)
+	}
+
+	before := servedEventCount(t, h, projections.EventAgentHeartbeat)
+	_, err = client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: agentName, Version: "test-1.0", Status: "active"})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("offboarded agent heartbeat error = %v, want PermissionDenied", err)
+	}
+	after := servedEventCount(t, h, projections.EventAgentHeartbeat)
+	if after != before {
+		t.Fatalf("offboarded heartbeat appended %d heartbeat events, want 0", after-before)
+	}
+}
+
 // TestServedAgentInventoryOverChannelPopulatesDiscoveryAndGraph is the DISC-01
 // acceptance proof: an enrolled agent reports host inventory over the served mTLS
 // channel, the control plane derives the tenant from the verified client certificate

@@ -11,13 +11,16 @@ import (
 // Agent is an in-network agent that performs discovery, deployment, and drift
 // detection on behalf of the control plane.
 type Agent struct {
-	ID         string
-	TenantID   string
-	Name       string
-	Status     string
-	Version    string
-	LastSeenAt *time.Time
-	CreatedAt  time.Time
+	ID             string
+	TenantID       string
+	Name           string
+	Status         string
+	Version        string
+	LastSeenAt     *time.Time
+	CreatedAt      time.Time
+	OffboardedAt   *time.Time
+	OffboardedBy   string
+	OffboardReason string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -60,8 +63,10 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
-		    SET name = EXCLUDED.name, status = EXCLUDED.status,
-		        version = EXCLUDED.version, last_seen_at = EXCLUDED.last_seen_at`,
+		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
+		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
+		        version = CASE WHEN agents.status = 'offboarded' THEN agents.version ELSE EXCLUDED.version END,
+		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
 	return err
 }
@@ -75,9 +80,45 @@ func (s *Store) ApplyAgentCertRenewedTx(ctx context.Context, tx pgx.Tx, a Agent)
 		`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
-		    SET name = EXCLUDED.name,
-		        last_seen_at = EXCLUDED.last_seen_at`,
+		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
+		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
+	return err
+}
+
+// ApplyAgentOffboardedTx projects an agent.offboarded event into the agents read
+// model as a terminal tombstone. The row remains visible for operators and API
+// clients; future heartbeat/renewal projections do not resurrect it.
+func (s *Store) ApplyAgentOffboardedTx(ctx context.Context, tx pgx.Tx, a Agent) error {
+	if a.ID == "" {
+		return nil
+	}
+	name := a.Name
+	if strings.TrimSpace(name) == "" {
+		name = a.ID
+	}
+	offboardedAt := a.OffboardedAt
+	if offboardedAt == nil {
+		ts := a.CreatedAt
+		if ts.IsZero() {
+			ts = time.Now().UTC()
+		}
+		offboardedAt = &ts
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO agents
+		        (id, tenant_id, name, status, version, last_seen_at, offboarded_at, offboarded_by, offboard_reason)
+		 VALUES ($1, $2, $3, 'offboarded', '', NULL, $4, $5, $6)
+		 ON CONFLICT (tenant_id, id) DO UPDATE
+		    SET status = 'offboarded',
+		        name = CASE WHEN agents.name = '' THEN EXCLUDED.name ELSE agents.name END,
+		        offboarded_at = CASE
+		            WHEN agents.offboarded_at IS NULL THEN EXCLUDED.offboarded_at
+		            ELSE LEAST(agents.offboarded_at, EXCLUDED.offboarded_at)
+		        END,
+		        offboarded_by = CASE WHEN COALESCE(agents.offboarded_by, '') = '' THEN EXCLUDED.offboarded_by ELSE agents.offboarded_by END,
+		        offboard_reason = CASE WHEN COALESCE(agents.offboard_reason, '') = '' THEN EXCLUDED.offboard_reason ELSE agents.offboard_reason END`,
+		a.ID, a.TenantID, name, offboardedAt, a.OffboardedBy, a.OffboardReason)
 	return err
 }
 
@@ -135,6 +176,28 @@ func (s *Store) AgentCertRevoked(ctx context.Context, tenantID, agentID, serial,
 	return revoked, err
 }
 
+// AgentOffboarded reports whether the tenant-scoped agent row is a terminal
+// tombstone. The served mTLS channel checks this per RPC, so offboarding takes
+// effect on existing connections before heartbeat, renewal, or inventory work.
+func (s *Store) AgentOffboarded(ctx context.Context, tenantID, agentID string) (bool, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return false, nil
+	}
+	var offboarded bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1
+			      FROM agents
+			     WHERE tenant_id = $1
+			       AND id = $2
+			       AND status = 'offboarded'
+			)`, tenantID, agentID).Scan(&offboarded)
+	})
+	return offboarded, err
+}
+
 func normalizeAgentCertSelectorType(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case AgentCertSelectorSerial:
@@ -164,9 +227,11 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 	var a Agent
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at
+			`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at,
+			        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, '')
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
-			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.LastSeenAt, &a.CreatedAt)
+			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.LastSeenAt, &a.CreatedAt,
+				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason)
 	})
 	return a, err
 }
@@ -184,7 +249,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		)
 		if afterCreatedAt != nil {
 			rows, err = tx.Query(ctx,
-				`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at
+				`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at,
+				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, '')
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -192,7 +258,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				tenantID, *afterCreatedAt, afterID, limit)
 		} else {
 			rows, err = tx.Query(ctx,
-				`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at
+				`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at,
+				        offboarded_at, COALESCE(offboarded_by, ''), COALESCE(offboard_reason, '')
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -205,7 +272,8 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		defer rows.Close()
 		for rows.Next() {
 			var a Agent
-			if err := rows.Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.LastSeenAt, &a.CreatedAt); err != nil {
+			if err := rows.Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.LastSeenAt, &a.CreatedAt,
+				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason); err != nil {
 				return err
 			}
 			out = append(out, a)

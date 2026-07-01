@@ -23,6 +23,8 @@ type PrivacyErasureSelectors struct {
 	Approvals               []PrivacyApprovalSelector  `json:"approvals,omitempty"`
 	ProfileIDs              []string                   `json:"profile_ids,omitempty"`
 	AgentIDs                []string                   `json:"agent_ids,omitempty"`
+	AgentOffboardActorIDs   []string                   `json:"agent_offboard_actor_ids,omitempty"`
+	AgentOffboardReasonIDs  []string                   `json:"agent_offboard_reason_ids,omitempty"`
 	ReadModels              []PrivacyReadModelSelector `json:"read_models,omitempty"`
 }
 
@@ -513,6 +515,18 @@ func (s *Store) SelectPrivacySubjectErasure(ctx context.Context, tenantID, subje
 				  ORDER BY id`, tenantID, subject); err != nil {
 			return err
 		}
+		if out.Selectors.AgentOffboardActorIDs, err = selectStrings(ctx, tx,
+			`SELECT id::text FROM agents
+			  WHERE tenant_id = $1 AND COALESCE(offboarded_by, '') = $2
+			  ORDER BY id`, tenantID, subject); err != nil {
+			return err
+		}
+		if out.Selectors.AgentOffboardReasonIDs, err = selectStrings(ctx, tx,
+			`SELECT id::text FROM agents
+			  WHERE tenant_id = $1 AND position($2 in COALESCE(offboard_reason, '')) > 0
+			  ORDER BY id`, tenantID, subject); err != nil {
+			return err
+		}
 		for _, q := range privacyReadModelSelectorQueries(tenantID, subject) {
 			if err := appendPrivacyReadModelSelectors(ctx, tx, &out.Selectors.ReadModels, q.table, q.sql, q.args...); err != nil {
 				return err
@@ -703,6 +717,20 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		e.TenantID, e.Selectors.AgentIDs, placeholder); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE agents
+		    SET offboarded_by = $3
+		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
+		e.TenantID, e.Selectors.AgentOffboardActorIDs, placeholder); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE agents
+		    SET offboard_reason = ''
+		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
+		e.TenantID, e.Selectors.AgentOffboardReasonIDs); err != nil {
+		return err
+	}
 	if err := erasePrivacyReadModelRows(ctx, tx, e.TenantID, e.SubjectRef, placeholder, e.Selectors.ReadModels); err != nil {
 		return err
 	}
@@ -861,12 +889,25 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE agents
-			    SET name = 'retained:' || left(id::text, 12)
+			    SET name = CASE
+			          WHEN name LIKE 'retained:%' THEN name
+			          ELSE 'retained:' || left(id::text, 12)
+			        END,
+			        offboarded_by = CASE
+			          WHEN offboarded_by IS NULL OR offboarded_by = '' OR offboarded_by LIKE 'retained:%' THEN offboarded_by
+			          ELSE 'retained:' || left(md5($1::text || ':' || offboarded_by), 12)
+			        END,
+			        offboard_reason = CASE WHEN offboard_reason IS NULL THEN NULL ELSE '' END
 			  WHERE tenant_id = $1
-			    AND name NOT LIKE 'retained:%'
+			    AND (
+			          name NOT LIKE 'retained:%'
+			       OR (COALESCE(offboarded_by, '') <> '' AND offboarded_by NOT LIKE 'retained:%')
+			       OR COALESCE(offboard_reason, '') <> ''
+			    )
 		    AND (
 		          (last_seen_at IS NOT NULL AND last_seen_at < $2)
 		       OR (last_seen_at IS NULL AND created_at < $2)
+		       OR (offboarded_at IS NOT NULL AND offboarded_at < $2)
 		    )`,
 		r.TenantID, r.Cutoffs.AgentStaleBefore); err != nil {
 		return err
@@ -2167,10 +2208,15 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		"agents": {
 			sql: `SELECT count(*) FROM agents
 				       WHERE tenant_id = $1
-				         AND name NOT LIKE 'retained:%'
+				         AND (
+				               name NOT LIKE 'retained:%'
+				            OR (COALESCE(offboarded_by, '') <> '' AND offboarded_by NOT LIKE 'retained:%')
+				            OR COALESCE(offboard_reason, '') <> ''
+				         )
 			         AND (
 			               (last_seen_at IS NOT NULL AND last_seen_at < $2)
 			            OR (last_seen_at IS NULL AND created_at < $2)
+			            OR (offboarded_at IS NOT NULL AND offboarded_at < $2)
 				         )`,
 			args: []any{tenantID, c.AgentStaleBefore},
 		},
@@ -2305,18 +2351,20 @@ func selectCount(ctx context.Context, tx pgx.Tx, sql string, args ...any) (int, 
 
 func countsForPrivacySelectors(sel PrivacyErasureSelectors) map[string]int {
 	out := map[string]int{
-		"owners":            len(sel.OwnerIDs),
-		"identities":        len(sel.IdentityIDs),
-		"certificates":      len(sel.CertificateFingerprints),
-		"ssh_keys":          len(sel.SSHKeyIDs),
-		"attestations":      len(sel.AttestationIDs),
-		"approval_requests": len(sel.ApprovalRequests),
-		"approvals":         len(sel.Approvals),
-		"profiles":          len(sel.ProfileIDs),
-		"agents":            len(sel.AgentIDs),
-		"api_tokens":        0, // filled by subject_ref update at projection time; rows are not enumerated in the event.
-		"tenant_members":    0,
-		"read_models":       len(sel.ReadModels),
+		"owners":                 len(sel.OwnerIDs),
+		"identities":             len(sel.IdentityIDs),
+		"certificates":           len(sel.CertificateFingerprints),
+		"ssh_keys":               len(sel.SSHKeyIDs),
+		"attestations":           len(sel.AttestationIDs),
+		"approval_requests":      len(sel.ApprovalRequests),
+		"approvals":              len(sel.Approvals),
+		"profiles":               len(sel.ProfileIDs),
+		"agents":                 len(sel.AgentIDs),
+		"agent_offboard_actors":  len(sel.AgentOffboardActorIDs),
+		"agent_offboard_reasons": len(sel.AgentOffboardReasonIDs),
+		"api_tokens":             0, // filled by subject_ref update at projection time; rows are not enumerated in the event.
+		"tenant_members":         0,
+		"read_models":            len(sel.ReadModels),
 	}
 	for _, rm := range sel.ReadModels {
 		out[rm.Table]++

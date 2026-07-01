@@ -39,6 +39,8 @@ public final class OpenApiSchemas {
       "AgentCertRevocationRequest",
       "AgentDiscoveryCapability",
       "AgentList",
+      "AgentOffboardRequest",
+      "AgentOffboardResponse",
       "AlertRecipient",
       "Approval",
       "ApprovalRequest",

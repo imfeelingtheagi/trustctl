@@ -320,6 +320,13 @@ func (a *agentService) peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) 
 	if revoked {
 		return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, "agent certificate has been revoked")
 	}
+	offboarded, err := a.store.AgentOffboarded(ctx, info.TenantID, agentID)
+	if err != nil {
+		return mtls.PeerCertInfo{}, status.Errorf(codes.Internal, "check agent offboarding: %v", err)
+	}
+	if offboarded {
+		return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, "agent has been offboarded")
+	}
 	return info, nil
 }
 

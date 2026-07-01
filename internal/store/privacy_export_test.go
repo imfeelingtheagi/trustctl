@@ -137,10 +137,12 @@ func TestPrivacySubjectErasureRedactsApprovalsProfilesAndAgents(t *testing.T) {
 		t.Fatalf("SelectPrivacySubjectErasure: %v", err)
 	}
 	for key, want := range map[string]int{
-		"approval_requests": 1,
-		"approvals":         1,
-		"profiles":          1,
-		"agents":            1,
+		"approval_requests":      1,
+		"approvals":              1,
+		"profiles":               1,
+		"agents":                 1,
+		"agent_offboard_actors":  1,
+		"agent_offboard_reasons": 1,
 	} {
 		if erasure.Counts[key] != want {
 			t.Fatalf("erasure count %s = %d, want %d; selectors=%+v", key, erasure.Counts[key], want, erasure.Selectors)
@@ -162,11 +164,12 @@ func TestPrivacySubjectErasureRedactsApprovalsProfilesAndAgents(t *testing.T) {
 			  (SELECT count(*) FROM issuance_approval_requests WHERE tenant_id = $1 AND requester = $2) +
 			  (SELECT count(*) FROM issuance_approvals WHERE tenant_id = $1 AND approver = $2) +
 			  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $2) +
-			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $2),
+			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND (name = $2 OR COALESCE(offboarded_by, '') = $2 OR position($2 in COALESCE(offboard_reason, '')) > 0)),
 			  (SELECT count(*) FROM issuance_approval_requests WHERE tenant_id = $1 AND requester = $3) +
 			  (SELECT count(*) FROM issuance_approvals WHERE tenant_id = $1 AND approver = $3) +
 			  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $3) +
-			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $3)`,
+			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $3) +
+			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND offboarded_by = $3)`,
 			tenantA, subject, placeholder).Scan(&rawHits, &placeholderHits)
 	}); err != nil {
 		t.Fatalf("scan erased actor rows: %v", err)
@@ -174,8 +177,8 @@ func TestPrivacySubjectErasureRedactsApprovalsProfilesAndAgents(t *testing.T) {
 	if rawHits != 0 {
 		t.Fatalf("raw subject still appears in %d approval/profile/agent rows", rawHits)
 	}
-	if placeholderHits != 4 {
-		t.Fatalf("placeholder hits = %d, want 4", placeholderHits)
+	if placeholderHits != 5 {
+		t.Fatalf("placeholder hits = %d, want 5", placeholderHits)
 	}
 }
 
@@ -348,9 +351,10 @@ func seedPrivacySubject(t *testing.T, s *store.Store, tenantID, subject, subject
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO agents (id, tenant_id, name, status, version)
-			 VALUES ($1,$2,$3,'active','v1')`,
-			uuid(tenantID, 19), tenantID, subject); err != nil {
+			`INSERT INTO agents
+			        (id, tenant_id, name, status, version, offboarded_at, offboarded_by, offboard_reason)
+			 VALUES ($1,$2,$3,'offboarded','v1',now(),$3,$4)`,
+			uuid(tenantID, 19), tenantID, subject, "offboard requested by "+subject); err != nil {
 			return err
 		}
 		return nil

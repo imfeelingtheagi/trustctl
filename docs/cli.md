@@ -73,7 +73,7 @@ secret injection:
 | `risk`                            | `credentials`                                                                                                                                                            |
 | `cbom`                            | `scan` · `assets`                                                                                                                                                        |
 | `pqc migrations`                  | `start` · `rollback`                                                                                                                                                     |
-| `agents`                          | `list` · `enroll-token`                                                                                                                                                  |
+| `agents`                          | `list` · `enroll-token` · `offboard`                                                                                                                                     |
 | `secrets store`                   | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`                                                                                          |
 | `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
 | `secrets rotations`               | `run`                                                                                                                                                                    |
@@ -399,6 +399,7 @@ trstctl-cli pqc migrations rollback <run-id> -f pqc-rollback.json
 trstctl-cli agents enroll-token
 printf '{"allowed_identity":"node-a"}\n' | trstctl-cli agents enroll-token -f -
 trstctl-cli agents list
+printf '{"reason":"host decommissioned"}\n' | trstctl-cli --idempotency-key agent-node-a-offboard-1 agents offboard <agent-id> -f -
 
 # Issue a policy-gated short-lived credential for an AI/MCP agent.
 cat > broker-agent.json <<'JSON'

@@ -61,6 +61,7 @@ export const agentStatus: Record<string, StatusDescriptor> = {
   online: { label: "online", tone: "success", order: 1 },
   degraded: { label: "degraded", tone: "warning", order: 2 },
   offline: { label: "offline", tone: "neutral", order: 3 },
+  offboarded: { label: "offboarded", tone: "neutral", order: 4 },
 };
 
 export const deliveryStatus: Record<string, StatusDescriptor> = {

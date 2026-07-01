@@ -229,9 +229,10 @@ func seedStalePIIRows(t *testing.T, ctx context.Context, st *store.Store, tenant
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at, created_at)
-				 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', $1, $2, 'stale', 'v1', $3, $3)`,
-			tenantID, raw, old); err != nil {
+			`INSERT INTO agents
+				        (id, tenant_id, name, status, version, last_seen_at, created_at, offboarded_at, offboarded_by, offboard_reason)
+				 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', $1, $2, 'offboarded', 'v1', $3, $3, $3, $2, $4)`,
+			tenantID, raw, old, "offboard "+raw); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
@@ -373,7 +374,7 @@ func assertNoRawRetentionPII(t *testing.T, ctx context.Context, st *store.Store,
 				  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $2) +
 				  (SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2) +
 				  (SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND (subject = $2 OR display_name = $2 OR email = $2)) +
-				  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $2) +
+				  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND (name = $2 OR COALESCE(offboarded_by, '') = $2 OR position($2 in COALESCE(offboard_reason, '')) > 0)) +
 				  (SELECT count(*) FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0)) +
 				  (SELECT count(*) FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0)) +
 				  (SELECT count(*) FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2)) +

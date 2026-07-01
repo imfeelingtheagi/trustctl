@@ -50,6 +50,7 @@ const (
 	EventAgentHeartbeat                      = "agent.heartbeat"
 	EventAgentCertRenewed                    = "agent.cert.renewed"
 	EventAgentCertRevoked                    = "agent.cert.revoked"
+	EventAgentOffboarded                     = "agent.offboarded"
 	EventProfileCreated                      = "profile.created"
 	EventProfileUpdated                      = "profile.updated"
 	EventDiscoverySourceUpserted             = "discovery.source.upserted"
@@ -456,6 +457,16 @@ type AgentCertRevoked struct {
 	Fingerprint string    `json:"fingerprint,omitempty"`
 	Reason      string    `json:"reason,omitempty"`
 	RevokedAt   time.Time `json:"revoked_at"`
+}
+
+// AgentOffboarded is the payload of an agent.offboarded event. It leaves a
+// tombstone in the agent inventory and makes the served mTLS channel reject the
+// agent identity before heartbeat, renewal, or inventory work.
+type AgentOffboarded struct {
+	ID           string `json:"id"`
+	Agent        string `json:"agent,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	OffboardedBy string `json:"offboarded_by,omitempty"`
 }
 
 // ProfileVersioned is the schema-v2 payload of profile.created/profile.updated.
@@ -1175,6 +1186,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentHeartbeat:                      {1: true},
 	EventAgentCertRenewed:                    {1: true},
 	EventAgentCertRevoked:                    {1: true},
+	EventAgentOffboarded:                     {1: true},
 	EventProfileCreated:                      {1: true, 2: true},
 	EventProfileUpdated:                      {1: true, 2: true},
 	EventDiscoverySourceUpserted:             {1: true},
@@ -1551,6 +1563,19 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			}
 		}
 		return nil
+	case EventAgentOffboarded:
+		var pl AgentOffboarded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		offboardedAt := e.Time
+		return p.store.ApplyAgentOffboardedTx(ctx, tx, store.Agent{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: "offboarded",
+			CreatedAt: e.Time, OffboardedAt: &offboardedAt, OffboardedBy: pl.OffboardedBy, OffboardReason: pl.Reason,
+		})
 	case EventProfileCreated, EventProfileUpdated:
 		if schemaVersionOf(e) == 1 {
 			// Legacy profile audit events did not carry the spec or id. They are kept

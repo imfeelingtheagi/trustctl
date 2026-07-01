@@ -37,6 +37,9 @@ type agentResponse struct {
 	Status                string                             `json:"status"`
 	Version               string                             `json:"version,omitempty"`
 	LastSeenAt            *string                            `json:"last_seen_at,omitempty"`
+	OffboardedAt          *string                            `json:"offboarded_at,omitempty"`
+	OffboardedBy          string                             `json:"offboarded_by,omitempty"`
+	OffboardReason        string                             `json:"offboard_reason,omitempty"`
 	InventoryReportPath   string                             `json:"inventory_report_path"`
 	DiscoveryCapabilities []agentDiscoveryCapabilityResponse `json:"discovery_capabilities"`
 }
@@ -57,6 +60,12 @@ func toAgentResponse(a store.Agent) agentResponse {
 		s := a.LastSeenAt.UTC().Format(time.RFC3339)
 		out.LastSeenAt = &s
 	}
+	if a.OffboardedAt != nil {
+		s := a.OffboardedAt.UTC().Format(time.RFC3339)
+		out.OffboardedAt = &s
+	}
+	out.OffboardedBy = a.OffboardedBy
+	out.OffboardReason = a.OffboardReason
 	return out
 }
 
@@ -157,6 +166,15 @@ type agentCertRevocationResponse struct {
 	RevokedAt   time.Time `json:"revoked_at"`
 }
 
+type agentOffboardRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+type agentOffboardResponse struct {
+	Agent              agentResponse `json:"agent"`
+	RevocationEvidence string        `json:"revocation_evidence"`
+}
+
 // createEnrollmentToken mints a one-time agent bootstrap token (S5.1/F15) bound to
 // the caller's tenant (WIRE-003/AN-1) so the web wizard can build the agent
 // install command. The mint runs under an idempotency key (AN-5): a retried
@@ -221,6 +239,38 @@ func (a *API) revokeAgentCertificate(w http.ResponseWriter, r *http.Request) {
 		return http.StatusCreated, agentCertRevocationResponse{
 			AgentID: agentID, Agent: req.Agent, Serial: req.Serial, Fingerprint: req.Fingerprint,
 			Reason: req.Reason, RevokedAt: revokedAt,
+		}, nil
+	})
+}
+
+// offboardAgent records a terminal agent tombstone and makes the served mTLS
+// channel reject future RPCs from that agent id. The row remains visible in
+// GET /api/v1/agents so operators see evidence instead of a silent deletion.
+//
+//trstctl:mutation
+func (a *API) offboardAgent(w http.ResponseWriter, r *http.Request) {
+	agentID := strings.TrimSpace(r.PathValue("id"))
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.orch == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "agent offboarding is not configured")
+		}
+		if agentID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "agent id is required")
+		}
+		var req agentOffboardRequest
+		if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
+			if err := decodeJSON(r, &req); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+		}
+		agent, err := a.orch.OffboardAgent(ctx, tenantID, agentID, req.Reason)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, agentOffboardResponse{
+			Agent:              toAgentResponse(agent),
+			RevocationEvidence: "offboarded agent certificates are rejected by the served mTLS channel before heartbeat, renewal, or inventory RPCs",
 		}, nil
 	})
 }

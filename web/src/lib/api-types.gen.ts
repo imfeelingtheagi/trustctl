@@ -258,6 +258,9 @@ export interface Agent {
   inventory_report_path: string;
   last_seen_at?: string;
   name: string;
+  offboard_reason?: string;
+  offboarded_at?: string;
+  offboarded_by?: string;
   status: string;
   version?: string;
 }
@@ -289,6 +292,15 @@ export interface AgentDiscoveryCapability {
 export interface AgentList {
   agents: Agent[];
   next_cursor?: string;
+}
+
+export interface AgentOffboardRequest {
+  reason?: string;
+}
+
+export interface AgentOffboardResponse {
+  agent: Agent;
+  revocation_evidence: string;
 }
 
 export interface AlertRecipient {
@@ -2785,6 +2797,9 @@ export interface PrivacyCatalogEntry {
 }
 
 export interface PrivacyErasureSelectors {
+  agent_ids?: string[];
+  agent_offboard_actor_ids?: string[];
+  agent_offboard_reason_ids?: string[];
   attestation_ids?: string[];
   certificate_fingerprints?: string[];
   identity_ids?: string[];

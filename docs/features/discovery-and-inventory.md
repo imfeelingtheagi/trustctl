@@ -120,6 +120,12 @@ fleet cannot starve the API. `GET /api/v1/agents` now advertises the served
 `agent.mtls.ReportInventory` path and the endpoint source kinds it accepts, and the
 Agents console shows that same capability list for each enrolled endpoint.
 
+Offboarding is served from the same fleet surface. `POST /api/v1/agents/{id}/offboard`
+and `trstctl-cli agents offboard` emit an `agent.offboarded` event, keep the row
+visible as an offboarded tombstone with actor/reason evidence, and cause the agent
+mTLS channel to reject future heartbeat, renewal, and inventory RPCs for that
+agent certificate.
+
 For Linux certificate files, the shipped agent can inventory public certificate roots
 at startup with `--inventory-cert-roots`. It reports references, fingerprints, and
 certificate metadata only — never private keys or secret values.
@@ -832,6 +838,7 @@ what it is.
   `POST /api/v1/discovery/findings/{id}/dismiss`, `GET /api/v1/agents`,
   `GET /api/v1/nhi/posture/shadow`, `GET /api/v1/nhi/policy/compliance`,
   `POST /api/v1/agents/enrollment-tokens`,
+  `POST /api/v1/agents/{id}/offboard`,
   `GET /api/v1/graph`,
   `POST /enroll/bootstrap`.
 - **Agent channel:** `AgentService.ReportInventory` over the mTLS agent gRPC listener

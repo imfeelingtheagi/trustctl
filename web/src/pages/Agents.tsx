@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Copy, Loader2, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Copy, Loader2, RefreshCw, UserX, X } from "lucide-react";
+import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
-import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
@@ -29,6 +30,12 @@ export function Agents() {
   const [tokenBusy, setTokenBusy] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [offboardTarget, setOffboardTarget] = useState<Agent | null>(null);
+  const [offboardReason, setOffboardReason] = useState("");
+  const [offboardBusy, setOffboardBusy] = useState(false);
+  const [offboardError, setOffboardError] = useState<string | null>(null);
+  const [offboardEvidence, setOffboardEvidence] = useState<string | null>(null);
+  const offboardConfirmRef = useRef<HTMLButtonElement>(null);
 
   async function load() {
     setError(null);
@@ -74,6 +81,31 @@ export function Agents() {
     }
   }
 
+  function openOffboard(agent: Agent) {
+    setSelectedID(agent.id);
+    setOffboardTarget(agent);
+    setOffboardReason(agent.offboard_reason || "");
+    setOffboardError(null);
+  }
+
+  async function offboardAgent() {
+    if (!offboardTarget) return;
+    setOffboardBusy(true);
+    setOffboardError(null);
+    try {
+      const result = await api.offboardAgent(offboardTarget.id, { reason: offboardReason.trim() });
+      setAgents((current) => current.map((agent) => (agent.id === result.agent.id ? result.agent : agent)));
+      setSelectedID(result.agent.id);
+      setOffboardEvidence(result.revocation_evidence);
+      setOffboardTarget(null);
+      setOffboardReason("");
+    } catch (err) {
+      setOffboardError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOffboardBusy(false);
+    }
+  }
+
   const agentColumns: DataGridColumn<Agent>[] = [
     { id: "name", header: "Name", className: "font-medium", cell: (agent) => agent.name },
     { id: "status", header: "Status", cell: (agent) => <StatusBadge vocabulary="agent" value={agent.status} /> },
@@ -82,6 +114,14 @@ export function Agents() {
       id: "lastSeen",
       header: "Last seen",
       cell: (agent) => {
+        if (isOffboarded(agent)) {
+          return (
+            <>
+              <p>{formatOffboarded(agent.offboarded_at)}</p>
+              <p className="text-xs text-muted-foreground">{agent.offboard_reason || "Terminal tombstone"}</p>
+            </>
+          );
+        }
         const freshness = heartbeatFreshness(agent.last_seen_at);
         return (
           <>
@@ -95,9 +135,23 @@ export function Agents() {
       id: "action",
       header: "Action",
       cell: (agent) => (
-        <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
-          View details
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
+            View details
+          </Button>
+          {!isOffboarded(agent) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-risk-critical/40 text-risk-critical hover:bg-risk-critical/10"
+              onClick={() => openOffboard(agent)}
+            >
+              <UserX className="h-4 w-4" aria-hidden="true" />
+              Offboard
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
@@ -187,6 +241,7 @@ export function Agents() {
             <h2 id="fleet-heading" className="mb-3 text-title font-semibold">
               Agent fleet
             </h2>
+            {offboardEvidence && <p className="mb-3 text-sm text-muted-foreground">{offboardEvidence}</p>}
             <DataGrid
               ariaLabel="Registered in-network agents"
               rows={agents}
@@ -198,6 +253,56 @@ export function Agents() {
           {selected && <AgentDetail agent={selected} />}
         </section>
       )}
+
+      <Dialog
+        open={offboardTarget !== null}
+        onClose={() => {
+          if (!offboardBusy) setOffboardTarget(null);
+        }}
+        titleId="agent-offboard-title"
+        descriptionId="agent-offboard-description"
+        role="alertdialog"
+        initialFocusRef={offboardConfirmRef}
+        closeOnBackdropClick={false}
+        panelClassName="fixed left-1/2 top-1/2 grid w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {offboardTarget && (
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void offboardAgent();
+            }}
+          >
+            <div>
+              <h2 id="agent-offboard-title" className="text-title font-semibold">
+                Offboard {offboardTarget.name}
+              </h2>
+              <p id="agent-offboard-description" className="mt-1 text-sm text-muted-foreground">
+                The agent row remains as an offboarded tombstone, and future mTLS RPCs from this agent are rejected.
+              </p>
+            </div>
+            <label className="grid gap-1 text-sm font-medium">
+              Reason
+              <textarea
+                className="min-h-24 rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
+                value={offboardReason}
+                onChange={(event) => setOffboardReason(event.target.value)}
+              />
+            </label>
+            {offboardError && <p className="text-sm font-medium text-risk-critical">{offboardError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setOffboardTarget(null)} disabled={offboardBusy}>
+                Cancel
+              </Button>
+              <Button ref={offboardConfirmRef} type="submit" disabled={offboardBusy}>
+                {offboardBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                Offboard agent
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
     </section>
   );
 }
@@ -234,6 +339,26 @@ function AgentDetail({ agent }: { agent: Agent }) {
           <dt className="font-medium text-muted-foreground">Last seen</dt>
           <dd>{formatDate(agent.last_seen_at)}</dd>
         </div>
+        {isOffboarded(agent) && (
+          <>
+            <div>
+              <dt className="font-medium text-muted-foreground">Offboarded</dt>
+              <dd>{formatDate(agent.offboarded_at)}</dd>
+            </div>
+            {agent.offboarded_by && (
+              <div>
+                <dt className="font-medium text-muted-foreground">Offboarded by</dt>
+                <dd className="break-all font-mono text-xs">{agent.offboarded_by}</dd>
+              </div>
+            )}
+            {agent.offboard_reason && (
+              <div>
+                <dt className="font-medium text-muted-foreground">Offboard reason</dt>
+                <dd>{agent.offboard_reason}</dd>
+              </div>
+            )}
+          </>
+        )}
       </dl>
       <section aria-labelledby="endpoint-discovery-heading" className="grid gap-2 border-t border-border pt-3 text-sm">
         <div>
@@ -278,6 +403,18 @@ function heartbeatFreshness(lastSeen?: string): { label: string; stale: boolean 
 
 function formatDate(value?: string): string {
   return formatDateTimePolicy(value);
+}
+
+function formatDateOnly(value?: string): string {
+  return formatDatePolicy(value);
+}
+
+function formatOffboarded(value?: string): string {
+  return `Offboarded ${formatDateOnly(value)}`;
+}
+
+function isOffboarded(agent: Agent): boolean {
+  return agent.status.toLowerCase() === "offboarded";
 }
 
 function enrollmentCommand(token: EnrollmentToken): string {

@@ -675,6 +675,35 @@ func (o *Orchestrator) RevokeAgentCertificate(ctx context.Context, tenantID, age
 	return err
 }
 
+// OffboardAgent records an agent.offboarded event and projects the agents read
+// model to a terminal tombstone. The served mTLS channel rejects that tenant-scoped
+// agent id before any future heartbeat, renewal, or inventory RPC can append work.
+func (o *Orchestrator) OffboardAgent(ctx context.Context, tenantID, agentID, reason string) (store.Agent, error) {
+	agentID = strings.TrimSpace(agentID)
+	reason = strings.TrimSpace(reason)
+	if agentID == "" {
+		return store.Agent{}, fmt.Errorf("orchestrator: agent offboarding requires an agent id")
+	}
+	existing, err := o.store.GetAgent(ctx, tenantID, agentID)
+	if err != nil {
+		return store.Agent{}, err
+	}
+	actor := ""
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = a.Subject
+	}
+	payload, err := json.Marshal(projections.AgentOffboarded{
+		ID: agentID, Agent: existing.Name, Reason: reason, OffboardedBy: actor,
+	})
+	if err != nil {
+		return store.Agent{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventAgentOffboarded, tenantID, payload); err != nil {
+		return store.Agent{}, err
+	}
+	return o.store.GetAgent(ctx, tenantID, agentID)
+}
+
 func normalizeAgentCertSerial(v string) string {
 	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(v)), ":", "")
 }

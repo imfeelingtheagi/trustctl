@@ -134,6 +134,15 @@ func Catalog() []CatalogEntry {
 			Owner:          "agent fleet",
 		},
 		{
+			ID:             "agents.offboarding-evidence",
+			Location:       "agents.offboarded_by/offboard_reason",
+			Category:       "agent offboarding actor and free-form reason metadata",
+			Purpose:        "operator accountability and tombstone evidence for terminal agent offboarding",
+			RetentionClass: "operational:agent-stale-after-180d",
+			Erasure:        "privacy.subject.erased pseudonymizes matching offboard actors and clears matching free-form reasons; privacy.retention.enforced clears stale offboarding evidence while preserving agent id/status/version/offboarded_at",
+			Owner:          "agent fleet",
+		},
+		{
 			ID:             "pam_sessions.subjects",
 			Location:       "pam_sessions.subject/requested_by/reason/audit",
 			Category:       "privileged-access requester, target subject, and free-form reason metadata",

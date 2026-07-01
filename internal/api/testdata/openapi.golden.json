@@ -980,6 +980,16 @@
           "name": {
             "type": "string"
           },
+          "offboard_reason": {
+            "type": "string"
+          },
+          "offboarded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "offboarded_by": {
+            "type": "string"
+          },
           "status": {
             "type": "string"
           },
@@ -1083,6 +1093,29 @@
         },
         "required": [
           "agents"
+        ],
+        "type": "object"
+      },
+      "AgentOffboardRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AgentOffboardResponse": {
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "revocation_evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "revocation_evidence"
         ],
         "type": "object"
       },
@@ -10804,6 +10837,27 @@
       },
       "PrivacyErasureSelectors": {
         "properties": {
+          "agent_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "agent_offboard_actor_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "agent_offboard_reason_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attestation_ids": {
             "items": {
               "format": "uuid",
@@ -16798,6 +16852,83 @@
           }
         ],
         "summary": "Revoke an agent mTLS certificate",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/agents/{id}/offboard": {
+      "post": {
+        "operationId": "offboardAgent",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentOffboardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentOffboardResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Offboard an agent, leave a tombstone, and reject future mTLS RPCs",
         "x-trstctl-permission": "agents:write"
       }
     },

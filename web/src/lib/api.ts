@@ -135,6 +135,8 @@ import type {
   IdentityRequest,
   TransitionRequest,
   Agent as GenAgent,
+  AgentOffboardRequest,
+  AgentOffboardResponse,
   Attestation as GenAttestation,
   AttestedSVID as GenAttestedSVID,
   AttestedSVIDRequest,
@@ -859,6 +861,7 @@ export interface Api {
   issueCertificate(input: IssueCertificateInput): Promise<Identity>;
   agents(): Promise<Agent[]>;
   createEnrollmentToken(): Promise<EnrollmentToken>;
+  offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
   discoverySchedules(options?: { limit?: number; cursor?: string }): Promise<DiscoveryScheduleList>;
@@ -1086,6 +1089,7 @@ export const api: Api = {
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
+  offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),
   discoverySchedules: (options) => req<DiscoveryScheduleList>(`/api/v1/discovery/schedules${pageQueryString(options)}`),

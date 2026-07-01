@@ -20,6 +20,7 @@ tenant read surfaces.
 | `approvals.actors` | `issuance_approval_requests.requester / issuance_approvals.approver` | Pseudonymize stale requester and approver subjects while preserving resource/action evidence. |
 | `profiles.created-by` | `certificate_profiles.created_by` | Pseudonymize stale profile author values. |
 | `agents.name` | `agents.name` | Pseudonymize stale agent names while preserving agent id/status/version. |
+| `agents.offboarding-evidence` | `agents.offboarded_by/offboard_reason` | Subject erasure pseudonymizes matching offboard actors and clears matching free-form reasons; retention clears stale offboarding evidence while preserving agent id/status/version/offboarded_at. |
 | `pam_sessions.subjects` | `pam_sessions.subject/requested_by/reason/audit` | Subject export includes matching rows; subject erasure pseudonymizes matching subject/requester fields and clears free-form reason/audit metadata; retention covers terminal PAM session metadata after the access window. |
 | `discovery_findings.triage` | `discovery_findings.triage_actor/triage_reason` | Subject export includes matching rows; subject erasure pseudonymizes matching triage actors and clears free-form triage reasons; retention covers stale triage metadata after discovery evidence ages out. |
 | `notification_threshold_deliveries.subject` | `notification_threshold_deliveries.subject/channel` | Subject export includes matching rows; subject erasure pseudonymizes matching threshold-delivery subjects/channels; retention covers stale threshold-delivery metadata after notification evidence ages out. |
@@ -35,7 +36,7 @@ tenant read surfaces.
 
 Default non-audit retention runs every `24h`. It uses these class windows:
 owners `17520h`, identities/certificates/approvals/profiles/attestations `9528h`,
-SSH keys/agents `4320h`, and access subjects/PAM subjects `2160h`. Governance,
+SSH keys/agents/agent offboarding evidence `4320h`, and access subjects/PAM subjects `2160h`. Governance,
 discovery, notification, remediation, compliance-schedule, and incident free-form
 evidence follows the 397-day operational evidence window unless an operator
 configures a shorter policy. OIDC pre-login metadata is ephemeral and expires after

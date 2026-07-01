@@ -1921,11 +1921,14 @@ func componentSchemas() map[string]*Schema {
 		"reason":  str(),
 	}, "subject")
 	privacyErasureSelectors := object(map[string]*Schema{
-		"owner_ids":                {Type: "array", Items: uuid()},
-		"identity_ids":             {Type: "array", Items: uuid()},
-		"certificate_fingerprints": {Type: "array", Items: str()},
-		"ssh_key_ids":              {Type: "array", Items: uuid()},
-		"attestation_ids":          {Type: "array", Items: uuid()},
+		"owner_ids":                 {Type: "array", Items: uuid()},
+		"identity_ids":              {Type: "array", Items: uuid()},
+		"certificate_fingerprints":  {Type: "array", Items: str()},
+		"ssh_key_ids":               {Type: "array", Items: uuid()},
+		"attestation_ids":           {Type: "array", Items: uuid()},
+		"agent_ids":                 {Type: "array", Items: uuid()},
+		"agent_offboard_actor_ids":  {Type: "array", Items: uuid()},
+		"agent_offboard_reason_ids": {Type: "array", Items: uuid()},
 	})
 	privacySubjectErasure := object(map[string]*Schema{
 		"subject_ref":      str(),
@@ -2262,6 +2265,7 @@ func componentSchemas() map[string]*Schema {
 	}, "source_kind", "label", "reported_over", "metadata_only", "private_key_bytes")
 	agent := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "status": str(), "version": str(), "last_seen_at": timestamp(),
+		"offboarded_at": timestamp(), "offboarded_by": str(), "offboard_reason": str(),
 		"inventory_report_path":  str(),
 		"discovery_capabilities": {Type: "array", Items: ref("AgentDiscoveryCapability")},
 	}, "id", "name", "status", "inventory_report_path", "discovery_capabilities")
@@ -2282,6 +2286,13 @@ func componentSchemas() map[string]*Schema {
 		"agent_id": uuid(), "agent": str(), "serial": str(), "fingerprint": str(),
 		"reason": str(), "revoked_at": timestamp(),
 	}, "agent_id", "revoked_at")
+	agentOffboardReq := object(map[string]*Schema{
+		"reason": str(),
+	})
+	agentOffboardResp := object(map[string]*Schema{
+		"agent":               ref("Agent"),
+		"revocation_evidence": str(),
+	}, "agent", "revocation_evidence")
 	riskComponents := object(map[string]*Schema{
 		"age": {Type: "number"}, "exposure": {Type: "number"}, "privilege": {Type: "number"},
 		"rotation": {Type: "number"}, "owner": {Type: "number"}, "sensitivity": {Type: "number"},
@@ -2951,6 +2962,8 @@ func componentSchemas() map[string]*Schema {
 		"EnrollmentToken":                          enrollmentToken,
 		"AgentCertRevocationRequest":               agentCertRevocationReq,
 		"AgentCertRevocation":                      agentCertRevocation,
+		"AgentOffboardRequest":                     agentOffboardReq,
+		"AgentOffboardResponse":                    agentOffboardResp,
 		"RiskComponents":                           riskComponents,
 		"CredentialRisk":                           credentialRisk,
 		"CredentialRiskList":                       credentialRiskList,

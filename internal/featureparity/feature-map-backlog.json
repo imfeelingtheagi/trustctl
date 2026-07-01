@@ -4650,13 +4650,15 @@
       "api_surface": [
         "listAgents",
         "createEnrollmentToken",
-        "revokeAgentCertificate"
+        "revokeAgentCertificate",
+        "offboardAgent"
       ],
       "api_na": "",
       "cli_surface": [
         "agents list",
         "agents enroll-token",
-        "agents revoke-cert"
+        "agents revoke-cert",
+        "agents offboard"
       ],
       "cli_na": "",
       "facet_evidence": {

@@ -346,6 +346,9 @@ Agent = TypedDict(
         'inventory_report_path': str,
         'last_seen_at': str,
         'name': str,
+        'offboard_reason': str,
+        'offboarded_at': str,
+        'offboarded_by': str,
         'status': str,
         'version': str,
     },
@@ -393,6 +396,23 @@ AgentList = TypedDict(
     {
         'agents': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+AgentOffboardRequest = TypedDict(
+    'AgentOffboardRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+AgentOffboardResponse = TypedDict(
+    'AgentOffboardResponse',
+    {
+        'agent': dict[str, Any],
+        'revocation_evidence': str,
     },
     total=False,
 )
@@ -3941,6 +3961,9 @@ PrivacyCatalogEntry = TypedDict(
 PrivacyErasureSelectors = TypedDict(
     'PrivacyErasureSelectors',
     {
+        'agent_ids': list[str],
+        'agent_offboard_actor_ids': list[str],
+        'agent_offboard_reason_ids': list[str],
         'attestation_ids': list[str],
         'certificate_fingerprints': list[str],
         'identity_ids': list[str],
