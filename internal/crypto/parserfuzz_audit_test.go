@@ -36,6 +36,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"../protocols/acme":    "ACME new-order / finalize",
 		"../protocols/ari":     "ARI CertID",
 		"../protocols/est":     "EST enroll body (base64 PKCS#10)",
+		"../tsa":               "RFC 3161 TimeStampReq served by /tsa",
 		"../signing":           "signer SignRequest (protobuf)",
 		"../secretscan":        "scanner-report ingest (untrusted JSON)",
 		"../../ee/kmip":        "KMIP TTLV wire frame parser",
@@ -98,6 +99,14 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	// decode stays fuzzed and dropping its harness trips this guard.
 	requireFuzzFuncByName(t, "seal", map[string]string{
 		"FuzzOpenSeal": "binary seal container decode (seal.go Open) — at-rest/backup bytes, pre-AEAD",
+	})
+
+	// The served RFC 3161 timestamp endpoint accepts attacker-controlled DER
+	// TimeStampReq bytes at /tsa before minting a TimeStampResp. Pin the exact
+	// parser harness so a future unrelated TSA fuzz target cannot accidentally
+	// satisfy the denominator guard.
+	requireFuzzFuncByName(t, "../tsa", map[string]string{
+		"FuzzParseTimeStampReq": "served RFC 3161 TimeStampReq DER (http.go parseTimeStampReq)",
 	})
 
 	// The non-CMS instance/workload attesters each parse an UNTRUSTED token/envelope
