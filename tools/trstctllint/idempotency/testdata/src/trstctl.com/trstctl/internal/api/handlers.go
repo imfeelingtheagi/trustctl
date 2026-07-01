@@ -57,7 +57,7 @@ func (a *API) routes() []route {
 // CreateBad never touches an idempotency key at all.
 //
 //trstctl:mutation
-func CreateBad(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+func CreateBad(w http.ResponseWriter, r *http.Request) { // want "must thread an approved Idempotency-Key value"
 	_ = w
 	_ = r
 }
@@ -66,7 +66,7 @@ func CreateBad(w http.ResponseWriter, r *http.Request) { // want "must thread an
 // key flows nowhere, so it does not honor AN-5.
 //
 //trstctl:mutation
-func ReadsButDiscards(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+func ReadsButDiscards(w http.ResponseWriter, r *http.Request) { // want "must thread an approved Idempotency-Key value"
 	key := r.Header.Get("Idempotency-Key")
 	_ = key
 	_ = w
@@ -77,7 +77,7 @@ func ReadsButDiscards(w http.ResponseWriter, r *http.Request) { // want "must th
 // key flowing into ANY call. It must now be flagged.
 //
 //trstctl:mutation
-func PassesToLogger(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+func PassesToLogger(w http.ResponseWriter, r *http.Request) { // want "must thread an approved Idempotency-Key value"
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	logf("creating resource idempotency_key=%s", idempotencyKey)
 	_ = w
@@ -88,7 +88,7 @@ func PassesToLogger(w http.ResponseWriter, r *http.Request) { // want "must thre
 // flagged (the old rule passed it on the parameter name alone).
 //
 //trstctl:mutation
-func ParamButUnused(ctx context.Context, tenantID, name, idempotencyKey string) error { // want "must thread an idempotency key into a dedupe sink"
+func ParamButUnused(ctx context.Context, tenantID, name, idempotencyKey string) error { // want "must thread an approved Idempotency-Key value"
 	_ = ctx
 	_ = tenantID
 	_ = name
@@ -100,7 +100,7 @@ func ParamButUnused(ctx context.Context, tenantID, name, idempotencyKey string) 
 // an idempotency-named parameter and discards it. ARCH-002: this must be flagged.
 //
 //trstctl:mutation
-func CreateBadViaNonDedupeHelper(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+func CreateBadViaNonDedupeHelper(w http.ResponseWriter, r *http.Request) { // want "must thread an approved Idempotency-Key value"
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	_ = save(r.Context(), idempotencyKey)
 	_ = w
@@ -145,7 +145,7 @@ func Unmarked(w http.ResponseWriter, r *http.Request) {
 
 // RouteMutationNoKey is not annotated, but the route registry declares it as a
 // mutation. The analyzer must still inspect it so route/marker drift fails CI.
-func (a *API) RouteMutationNoKey(w http.ResponseWriter, r *http.Request) { // want "must thread an idempotency key into a dedupe sink"
+func (a *API) RouteMutationNoKey(w http.ResponseWriter, r *http.Request) { // want "must thread an approved Idempotency-Key value"
 	_ = w
 	_ = r
 }

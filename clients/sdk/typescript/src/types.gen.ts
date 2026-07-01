@@ -3455,6 +3455,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workloads/attester-trust-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant workload attester trust sources */
+        get: operations["listWorkloadAttesterTrustSources"];
+        put?: never;
+        /** Create a tenant workload attester trust source */
+        post: operations["createWorkloadAttesterTrustSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workloads/attester-trust-sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a tenant workload attester trust source */
+        get: operations["getWorkloadAttesterTrustSource"];
+        /** Replace a tenant workload attester trust source */
+        put: operations["updateWorkloadAttesterTrustSource"];
+        post?: never;
+        /** Delete a workload attester trust source */
+        delete: operations["deleteWorkloadAttesterTrustSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workloads/attester-trust-sources/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a workload attester trust source */
+        post: operations["revokeWorkloadAttesterTrustSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workloads/attester-trust-sources/{id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate public trust material for a workload attester trust source */
+        post: operations["rotateWorkloadAttesterTrustSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4173,6 +4244,7 @@ export interface components {
             logs: string[];
             operator_correlation_ref?: string;
             precertificate_pem?: string;
+            private_egress_cidrs?: string[];
             submission_profile?: string;
         };
         Certificate: {
@@ -4760,6 +4832,9 @@ export interface components {
         EnrollmentToken: {
             enroll_path?: string;
             token: string;
+        };
+        EnrollmentTokenRequest: {
+            allowed_identity?: string;
         };
         EnterpriseProfessionalService: {
             deliverables: string[];
@@ -6526,6 +6601,7 @@ export interface components {
             id?: string;
             instance_url?: string;
             issue_type?: string;
+            private_egress_cidrs?: string[];
             project_key?: string;
             /** @enum {string} */
             provider: "splunk" | "jira" | "slack" | "servicenow";
@@ -7302,6 +7378,63 @@ export interface components {
             sync_configured: boolean;
             sync_supported: boolean;
         };
+        WorkloadAttesterTrustSource: {
+            audience?: string;
+            /** Format: date-time */
+            created_at: string;
+            enabled: boolean;
+            expected_nonce_base64?: string;
+            /** Format: uuid */
+            id: string;
+            issuer?: string;
+            jwks: Record<string, never>;
+            /** Format: date-time */
+            last_rotated_at?: string;
+            /** @enum {string} */
+            method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+            name: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            revoked_reason?: string;
+            root_certs_pem: string[];
+            rotation_version: number;
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        WorkloadAttesterTrustSourceList: {
+            items: components["schemas"]["WorkloadAttesterTrustSource"][];
+            next_cursor?: string;
+        };
+        WorkloadAttesterTrustSourceRequest: {
+            audience?: string;
+            enabled?: boolean;
+            expected_nonce_base64?: string;
+            issuer?: string;
+            jwks?: Record<string, never>;
+            /** @enum {string} */
+            method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+            name: string;
+            root_certs_pem?: string[];
+        };
+        WorkloadAttesterTrustSourceRevokeRequest: {
+            reason?: string;
+        };
+        WorkloadAttesterTrustSourceRevoked: {
+            trust_source: components["schemas"]["WorkloadAttesterTrustSource"];
+        };
+        WorkloadAttesterTrustSourceRotateRequest: {
+            audience?: string;
+            expected_nonce_base64?: string;
+            issuer?: string;
+            jwks?: Record<string, never>;
+            reason?: string;
+            root_certs_pem?: string[];
+        };
+        WorkloadAttesterTrustSourceRotated: {
+            trust_source: components["schemas"]["WorkloadAttesterTrustSource"];
+        };
     };
     responses: never;
     parameters: never;
@@ -7361,7 +7494,10 @@ export interface operations {
     createAPIToken: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7403,7 +7539,10 @@ export interface operations {
     revokeAPIToken: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -7486,7 +7625,10 @@ export interface operations {
     upsertMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description tenant member subject */
                 subject: string;
@@ -7531,7 +7673,10 @@ export interface operations {
     offboardMember: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description tenant member subject */
                 subject: string;
@@ -7657,7 +7802,10 @@ export interface operations {
     createAccessChangeRequest: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7739,7 +7887,10 @@ export interface operations {
     decideAccessChangeRequest: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -7826,7 +7977,10 @@ export interface operations {
     startNHIReviewCampaign: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7908,7 +8062,10 @@ export interface operations {
     decideNHIReviewItem: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
                 item_id: string;
@@ -8034,7 +8191,10 @@ export interface operations {
     openPAMSession: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8116,7 +8276,10 @@ export interface operations {
     preflightACMEDNS01: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8196,7 +8359,10 @@ export interface operations {
     createACMEDNS01ProviderConfig: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8278,7 +8444,10 @@ export interface operations {
     updateACMEDNS01ProviderConfig: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -8322,7 +8491,10 @@ export interface operations {
     deleteACMEDNS01ProviderConfig: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -8441,11 +8613,18 @@ export interface operations {
     createEnrollmentToken: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EnrollmentTokenRequest"];
+            };
+        };
         responses: {
             /** @description success */
             201: {
@@ -8479,7 +8658,10 @@ export interface operations {
     revokeAgentCertificate: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -8755,7 +8937,10 @@ export interface operations {
     issueBreakglass: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8797,7 +8982,10 @@ export interface operations {
     reconcileBreakglass: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8839,7 +9027,10 @@ export interface operations {
     issueBrokerAgentIdentity: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8919,7 +9110,10 @@ export interface operations {
     importExistingCA: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8961,7 +9155,10 @@ export interface operations {
     createIntermediateCA: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9003,7 +9200,10 @@ export interface operations {
     importOfflineRootCA: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9045,7 +9245,10 @@ export interface operations {
     createRootCA: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9087,7 +9290,10 @@ export interface operations {
     issueIntermediateCAFromCSR: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9131,7 +9337,10 @@ export interface operations {
     issueHierarchyLeaf: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9175,7 +9384,10 @@ export interface operations {
     importOfflineIntermediateCA: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9219,7 +9431,10 @@ export interface operations {
     createOfflineIntermediateCSR: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9263,7 +9478,10 @@ export interface operations {
     rekeyCAAuthority: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9307,7 +9525,10 @@ export interface operations {
     rotateCAAuthority: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9351,7 +9572,10 @@ export interface operations {
     createCACeremony: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9433,7 +9657,10 @@ export interface operations {
     approveCACeremony: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -9549,7 +9776,10 @@ export interface operations {
     startCBOMScan: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9636,7 +9866,10 @@ export interface operations {
     ingestCertificate: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9678,7 +9911,10 @@ export interface operations {
     bulkRevokeCertificates: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9798,7 +10034,10 @@ export interface operations {
     signCodeArtifactKeyless: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -9840,7 +10079,10 @@ export interface operations {
     signCodeArtifact: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10042,7 +10284,10 @@ export interface operations {
     createComplianceReportSchedule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10283,7 +10528,10 @@ export interface operations {
     createConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10365,7 +10613,10 @@ export interface operations {
     updateConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10409,7 +10660,10 @@ export interface operations {
     deleteConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10447,7 +10701,10 @@ export interface operations {
     deployConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10491,7 +10748,10 @@ export interface operations {
     rollbackConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10535,7 +10795,10 @@ export interface operations {
     testConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10620,7 +10883,10 @@ export interface operations {
     claimDiscoveryFinding: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10664,7 +10930,10 @@ export interface operations {
     dismissDiscoveryFinding: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -10789,7 +11058,10 @@ export interface operations {
     startDiscoveryRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10914,7 +11186,10 @@ export interface operations {
     createDiscoverySchedule: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10999,7 +11274,10 @@ export interface operations {
     createDiscoverySource: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11079,7 +11357,10 @@ export interface operations {
     issueEphemeralCredential: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11121,7 +11402,10 @@ export interface operations {
     issueEphemeralAPIKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11163,7 +11447,10 @@ export interface operations {
     approveEphemeralCredential: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description ephemeral JIT request id */
                 id: string;
@@ -11246,7 +11533,10 @@ export interface operations {
     issueExternalCA: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description configured external CA registry id */
                 id: string;
@@ -11492,7 +11782,10 @@ export interface operations {
     createIdentity: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11534,7 +11827,10 @@ export interface operations {
     bulkRevokeIdentities: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11616,7 +11912,10 @@ export interface operations {
     approveIdentityAction: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -11660,7 +11959,10 @@ export interface operations {
     bindIdentityConnectorTarget: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -11704,7 +12006,10 @@ export interface operations {
     transitionIdentity: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -11793,7 +12098,10 @@ export interface operations {
     executeIncident: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11920,7 +12228,10 @@ export interface operations {
     startFleetReissuance: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12042,7 +12353,10 @@ export interface operations {
     pauseFleetReissuance: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -12086,7 +12400,10 @@ export interface operations {
     resumeFleetReissuance: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -12130,7 +12447,10 @@ export interface operations {
     rollbackFleetReissuance: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -12174,7 +12494,10 @@ export interface operations {
     dispatchResponseIntegrations: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12259,7 +12582,10 @@ export interface operations {
     createIssuer: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12341,7 +12667,10 @@ export interface operations {
     createServiceNowTicket: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12459,7 +12788,10 @@ export interface operations {
     createEndpointBinding: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12586,7 +12918,10 @@ export interface operations {
     generateManagedKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12628,7 +12963,10 @@ export interface operations {
     revokeManagedKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12670,7 +13008,10 @@ export interface operations {
     rotateManagedKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12712,7 +13053,10 @@ export interface operations {
     zeroizeManagedKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12792,7 +13136,10 @@ export interface operations {
     provisionManagedTenant: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12955,7 +13302,10 @@ export interface operations {
     createMDMSCEPPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -13037,7 +13387,10 @@ export interface operations {
     updateMDMSCEPPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -13081,7 +13434,10 @@ export interface operations {
     deleteMDMSCEPPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -13119,7 +13475,10 @@ export interface operations {
     rotateMDMSCEPChallenge: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -13197,7 +13556,10 @@ export interface operations {
     decommissionNHI: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -13543,7 +13905,10 @@ export interface operations {
     testNotificationChannel: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description notification channel id */
                 id: string;
@@ -13626,7 +13991,10 @@ export interface operations {
     createNotificationRoutingPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -13708,7 +14076,10 @@ export interface operations {
     updateNotificationRoutingPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -13752,7 +14123,10 @@ export interface operations {
     deleteNotificationRoutingPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -13876,7 +14250,10 @@ export interface operations {
     markNotificationRead: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description notification outbox id */
                 id: number;
@@ -13917,7 +14294,10 @@ export interface operations {
     requeueNotification: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description notification outbox id */
                 id: number;
@@ -14001,7 +14381,10 @@ export interface operations {
     createOwner: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14083,7 +14466,10 @@ export interface operations {
     updateOwner: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -14127,7 +14513,10 @@ export interface operations {
     deleteOwner: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -14203,7 +14592,10 @@ export interface operations {
     dryRunPolicy: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14245,7 +14637,10 @@ export interface operations {
     startPQCMigration: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14287,7 +14682,10 @@ export interface operations {
     rollbackPQCMigration: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description PQC migration run id */
                 run_id: string;
@@ -14413,7 +14811,10 @@ export interface operations {
     enforcePrivacyRetention: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14494,7 +14895,10 @@ export interface operations {
     erasePrivacySubject: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14616,7 +15020,10 @@ export interface operations {
     createProfile: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14742,7 +15149,10 @@ export interface operations {
     acceptOwnerRemediationAction: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 id: string;
             };
@@ -14909,7 +15319,10 @@ export interface operations {
     runRemediationPlaybook: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description remediation playbook id */
                 id: string;
@@ -14992,7 +15405,10 @@ export interface operations {
     submitCertificateTransparency: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15300,7 +15716,10 @@ export interface operations {
     issueDynamicSecretLease: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15383,7 +15802,10 @@ export interface operations {
     renewDynamicSecretLease: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description dynamic secret lease id */
                 lease_id: string;
@@ -15428,7 +15850,10 @@ export interface operations {
     revokeDynamicSecretLease: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description dynamic secret lease id */
                 lease_id: string;
@@ -15511,7 +15936,10 @@ export interface operations {
     issuePKISecret: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15553,7 +15981,10 @@ export interface operations {
     rotateStaticSecret: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15595,7 +16026,10 @@ export interface operations {
     scanSecrets: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15675,7 +16109,10 @@ export interface operations {
     receiveSecretRepositoryWebhook: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description github, gitlab, or bitbucket */
                 provider: string;
@@ -15758,7 +16195,10 @@ export interface operations {
     ingestThirdPartySecretScan: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description cicd_log, container_registry, slack, or jira */
                 provider: string;
@@ -15803,7 +16243,10 @@ export interface operations {
     createShare: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15845,7 +16288,10 @@ export interface operations {
     redeemShare: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15930,7 +16376,10 @@ export interface operations {
     createSecret: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15972,7 +16421,10 @@ export interface operations {
     approveSecretChange: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description hierarchical secret name */
                 name: string;
@@ -16061,7 +16513,10 @@ export interface operations {
     importSecrets: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16103,7 +16558,10 @@ export interface operations {
     recoverSecretAt: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description hierarchical secret name */
                 name: string;
@@ -16192,7 +16650,10 @@ export interface operations {
     rotateSecret: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description hierarchical secret name */
                 name: string;
@@ -16237,7 +16698,10 @@ export interface operations {
     deleteSecret: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description hierarchical secret name */
                 name: string;
@@ -16276,7 +16740,10 @@ export interface operations {
     syncSecret: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16432,7 +16899,10 @@ export interface operations {
     issueAttestedSSHUserCert: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16474,7 +16944,10 @@ export interface operations {
     revokeSSHCertificate: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16516,7 +16989,10 @@ export interface operations {
     retireSSHHost: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16596,7 +17072,10 @@ export interface operations {
     recordSSHTrustRollout: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16718,7 +17197,10 @@ export interface operations {
     encryptTransit: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16760,7 +17242,10 @@ export interface operations {
     hmacTransit: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16802,7 +17287,10 @@ export interface operations {
     createTransitKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16844,7 +17332,10 @@ export interface operations {
     rotateTransitKey: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16886,7 +17377,10 @@ export interface operations {
     rewrapTransit: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16928,7 +17422,10 @@ export interface operations {
     signTransit: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -17012,7 +17509,10 @@ export interface operations {
     issueAttestedSVID: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -17029,6 +17529,311 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttestedSVID"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listWorkloadAttesterTrustSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadAttesterTrustSourceList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createWorkloadAttesterTrustSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkloadAttesterTrustSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadAttesterTrustSource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWorkloadAttesterTrustSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadAttesterTrustSource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateWorkloadAttesterTrustSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkloadAttesterTrustSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadAttesterTrustSource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteWorkloadAttesterTrustSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeWorkloadAttesterTrustSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkloadAttesterTrustSourceRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadAttesterTrustSourceRevoked"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateWorkloadAttesterTrustSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkloadAttesterTrustSourceRotateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkloadAttesterTrustSourceRotated"];
                 };
             };
             /** @description client error */

@@ -711,6 +711,7 @@ export interface CTLogSubmissionRequest {
   logs: string[];
   operator_correlation_ref?: string;
   precertificate_pem?: string;
+  private_egress_cidrs?: string[];
   submission_profile?: string;
 }
 
@@ -1257,6 +1258,10 @@ export interface EndpointBindingRequest {
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;
+}
+
+export interface EnrollmentTokenRequest {
+  allowed_identity?: string;
 }
 
 export interface EnterpriseProfessionalService {
@@ -2969,6 +2974,7 @@ export interface ResponseIntegrationDestinationRequest {
   id?: string;
   instance_url?: string;
   issue_type?: string;
+  private_egress_cidrs?: string[];
   project_key?: string;
   provider: "splunk" | "jira" | "slack" | "servicenow";
   table?: "incident" | "change_request" | "sc_task";
@@ -3758,4 +3764,60 @@ export interface UnvaultedSecretVaultProvider {
   name: string;
   sync_configured: boolean;
   sync_supported: boolean;
+}
+
+export interface WorkloadAttesterTrustSource {
+  audience?: string;
+  created_at: string;
+  enabled: boolean;
+  expected_nonce_base64?: string;
+  id: string;
+  issuer?: string;
+  jwks: Record<string, unknown>;
+  last_rotated_at?: string;
+  method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+  name: string;
+  revoked_at?: string;
+  revoked_reason?: string;
+  root_certs_pem: string[];
+  rotation_version: number;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface WorkloadAttesterTrustSourceList {
+  items: WorkloadAttesterTrustSource[];
+  next_cursor?: string;
+}
+
+export interface WorkloadAttesterTrustSourceRequest {
+  audience?: string;
+  enabled?: boolean;
+  expected_nonce_base64?: string;
+  issuer?: string;
+  jwks?: Record<string, unknown>;
+  method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
+  name: string;
+  root_certs_pem?: string[];
+}
+
+export interface WorkloadAttesterTrustSourceRevokeRequest {
+  reason?: string;
+}
+
+export interface WorkloadAttesterTrustSourceRevoked {
+  trust_source: WorkloadAttesterTrustSource;
+}
+
+export interface WorkloadAttesterTrustSourceRotateRequest {
+  audience?: string;
+  expected_nonce_base64?: string;
+  issuer?: string;
+  jwks?: Record<string, unknown>;
+  reason?: string;
+  root_certs_pem?: string[];
+}
+
+export interface WorkloadAttesterTrustSourceRotated {
+  trust_source: WorkloadAttesterTrustSource;
 }

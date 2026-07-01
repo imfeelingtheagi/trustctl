@@ -1,6 +1,8 @@
 package idempotency_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"golang.org/x/tools/go/analysis/analysistest"
@@ -19,4 +21,117 @@ import (
 func TestIdempotency(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), idempotency.Analyzer,
 		"trstctl.com/trstctl/internal/api")
+}
+
+func TestIdempotencyRejectsUnapprovedKeyProvenance(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "src/trstctl.com/trstctl/internal/orchestrator/idempotency.go", `package orchestrator
+
+type Idempotency struct{}
+
+func (i *Idempotency) Do(ctx any, tenantID, key string, fn func(any) ([]byte, error)) ([]byte, error) {
+	return fn(ctx)
+}
+`)
+	writeFixture(t, dir, "src/trstctl.com/trstctl/internal/api/handlers.go", `package api
+
+import (
+	"net/http"
+	"time"
+
+	"trstctl.com/trstctl/internal/orchestrator"
+)
+
+type uuidFactory struct{}
+
+var uuid uuidFactory
+
+func (uuidFactory) NewString() string { return "generated-uuid" }
+
+type API struct {
+	idem *orchestrator.Idempotency
+}
+
+type route struct {
+	handler  http.HandlerFunc
+	mutation bool
+}
+
+func (a *API) routes() []route {
+	return []route{
+		{handler: a.goodHeader, mutation: true},
+		{handler: a.goodVaultCompat, mutation: true},
+		{handler: a.goodSCIMCompat, mutation: true},
+		{handler: a.badFixedString, mutation: true},
+		{handler: a.badUUIDGenerated, mutation: true},
+		{handler: a.badTimeGenerated, mutation: true},
+		{handler: a.badWrongHeader, mutation: true},
+	}
+}
+
+func (a *API) goodHeader(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) goodVaultCompat(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := vaultIdempotencyKey(r, nil)
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) goodSCIMCompat(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := scimIdempotencyKey(r, nil)
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) badFixedString(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	idempotencyKey := "fixed-key"
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) badUUIDGenerated(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	idempotencyKey := uuid.NewString()
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) badTimeGenerated(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	idempotencyKey := time.Now().UTC().Format(time.RFC3339Nano)
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) badWrongHeader(w http.ResponseWriter, r *http.Request) { // want "mutating handler must thread an approved Idempotency-Key value"
+	idempotencyKey := r.Header.Get("X-Request-ID")
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn any) {
+	_, _ = a.idem.Do(r.Context(), "tenant", idempotencyKey, func(ctx any) ([]byte, error) { return nil, nil })
+}
+
+func vaultIdempotencyKey(r *http.Request, body []byte) string {
+	if key := r.Header.Get("Idempotency-Key"); key != "" {
+		return key
+	}
+	return "vault:documented-compatibility-derivation"
+}
+
+func scimIdempotencyKey(r *http.Request, body []byte) string {
+	if key := r.Header.Get("Idempotency-Key"); key != "" {
+		return key
+	}
+	return "scim:documented-compatibility-derivation"
+}
+`)
+	analysistest.Run(t, dir, idempotency.Analyzer, "trstctl.com/trstctl/internal/api")
+}
+
+func writeFixture(t *testing.T, root, rel, body string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir fixture %s: %v", rel, err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write fixture %s: %v", rel, err)
+	}
 }

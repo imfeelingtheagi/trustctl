@@ -1035,6 +1035,7 @@ CTLogSubmissionRequest = TypedDict(
         'logs': list[str],
         'operator_correlation_ref': str,
         'precertificate_pem': str,
+        'private_egress_cidrs': list[str],
         'submission_profile': str,
     },
     total=False,
@@ -1805,6 +1806,14 @@ EnrollmentToken = TypedDict(
     {
         'enroll_path': str,
         'token': str,
+    },
+    total=False,
+)
+
+EnrollmentTokenRequest = TypedDict(
+    'EnrollmentTokenRequest',
+    {
+        'allowed_identity': str,
     },
     total=False,
 )
@@ -4205,6 +4214,7 @@ ResponseIntegrationDestinationRequest = TypedDict(
         'id': str,
         'instance_url': str,
         'issue_type': str,
+        'private_egress_cidrs': list[str],
         'project_key': str,
         'provider': str,
         'table': str,
@@ -5338,6 +5348,90 @@ UnvaultedSecretVaultProvider = TypedDict(
         'name': str,
         'sync_configured': bool,
         'sync_supported': bool,
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSource = TypedDict(
+    'WorkloadAttesterTrustSource',
+    {
+        'audience': str,
+        'created_at': str,
+        'enabled': bool,
+        'expected_nonce_base64': str,
+        'id': str,
+        'issuer': str,
+        'jwks': dict[str, Any],
+        'last_rotated_at': str,
+        'method': str,
+        'name': str,
+        'revoked_at': str,
+        'revoked_reason': str,
+        'root_certs_pem': list[str],
+        'rotation_version': int,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSourceList = TypedDict(
+    'WorkloadAttesterTrustSourceList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSourceRequest = TypedDict(
+    'WorkloadAttesterTrustSourceRequest',
+    {
+        'audience': str,
+        'enabled': bool,
+        'expected_nonce_base64': str,
+        'issuer': str,
+        'jwks': dict[str, Any],
+        'method': str,
+        'name': str,
+        'root_certs_pem': list[str],
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSourceRevokeRequest = TypedDict(
+    'WorkloadAttesterTrustSourceRevokeRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSourceRevoked = TypedDict(
+    'WorkloadAttesterTrustSourceRevoked',
+    {
+        'trust_source': dict[str, Any],
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSourceRotateRequest = TypedDict(
+    'WorkloadAttesterTrustSourceRotateRequest',
+    {
+        'audience': str,
+        'expected_nonce_base64': str,
+        'issuer': str,
+        'jwks': dict[str, Any],
+        'reason': str,
+        'root_certs_pem': list[str],
+    },
+    total=False,
+)
+
+WorkloadAttesterTrustSourceRotated = TypedDict(
+    'WorkloadAttesterTrustSourceRotated',
+    {
+        'trust_source': dict[str, Any],
     },
     total=False,
 )

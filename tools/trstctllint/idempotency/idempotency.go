@@ -24,6 +24,9 @@
 //     function that happens to receive the value;
 //   - declaring an idempotency-named parameter that is never used — a parameter
 //     by itself is not "honoring"; it must reach a sink (ARCH-002).
+//   - passing a generated, fixed, or wrong-header value named idempotencyKey into
+//     a real sink. The value must come from r.Header.Get("Idempotency-Key") or a
+//     narrow documented compatibility helper.
 //
 // Detection is type-resolved (pass.TypesInfo), so the sink cannot be evaded by
 // aliasing a receiver or shadowing a name.
@@ -31,7 +34,9 @@ package idempotency
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
@@ -46,6 +51,8 @@ const (
 	idempotencyPkgPath = "trstctl.com/trstctl/internal/orchestrator"
 	idempotencyType    = "Idempotency"
 	idempotencyMethod  = "Do"
+	apiPkgPath         = "trstctl.com/trstctl/internal/api"
+	idempotencyHeader  = "Idempotency-Key"
 )
 
 // Analyzer enforces AN-5.
@@ -60,7 +67,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	for fn := range servedmutation.Funcs(pass) {
 		if !honorsIdempotency(pass, decls, fn) {
 			pass.Reportf(fn.Pos(),
-				"mutating handler must thread an idempotency key into a dedupe sink (Idempotency.Do or a key-accepting mutate), not merely name or log it (AN-5)")
+				"mutating handler must thread an approved Idempotency-Key value into a dedupe sink (direct request header or documented compatibility helper), not a generated, fixed, or wrong-header value (AN-5)")
 		}
 	}
 	return nil, nil
@@ -72,10 +79,29 @@ func run(pass *analysis.Pass) (interface{}, error) {
 // reach a sink call.
 func honorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.FuncDecl, fn *ast.FuncDecl) bool {
 	fnObj, _ := pass.TypesInfo.Defs[fn.Name].(*types.Func)
-	return functionHonorsIdempotency(pass, decls, fnObj, fn, map[*types.Func]bool{})
+	return functionHonorsIdempotency(pass, decls, fnObj, fn, approvedEntryParams(fnObj), map[*types.Func]bool{})
 }
 
-func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.FuncDecl, fnObj *types.Func, fn *ast.FuncDecl, visiting map[*types.Func]bool) bool {
+func approvedEntryParams(fnObj *types.Func) map[*types.Var]bool {
+	if fnObj == nil {
+		return nil
+	}
+	sig, ok := fnObj.Type().(*types.Signature)
+	if !ok {
+		return nil
+	}
+	params := sig.Params()
+	out := map[*types.Var]bool{}
+	for i := 0; i < params.Len(); i++ {
+		param := params.At(i)
+		if mentionsIdempotency(param.Name()) {
+			out[param] = true
+		}
+	}
+	return out
+}
+
+func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.FuncDecl, fnObj *types.Func, fn *ast.FuncDecl, approvedParams map[*types.Var]bool, visiting map[*types.Func]bool) bool {
 	if fn == nil || fn.Body == nil {
 		return false
 	}
@@ -86,8 +112,18 @@ func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.F
 		visiting[fnObj] = true
 		defer delete(visiting, fnObj)
 	}
+	approved := map[types.Object]bool{}
+	for param := range approvedParams {
+		approved[param] = true
+	}
 	honored := false
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.AssignStmt:
+			recordApprovedAssignments(pass, approved, stmt.Lhs, stmt.Rhs)
+		case *ast.ValueSpec:
+			recordApprovedValueSpec(pass, approved, stmt)
+		}
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
 			return true
@@ -96,13 +132,13 @@ func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.F
 		if callee == nil {
 			return true
 		}
-		if isCanonicalIdempotencyDo(callee) && callPassesIdempotencyArg(call) {
+		if isCanonicalIdempotencyDo(callee) && callPassesApprovedIdempotencyKey(pass, call, approved) {
 			honored = true
 			return false
 		}
-		if callForwardsIdempotencyArgToParam(call, callee.Type()) {
+		if param, ok := callForwardsApprovedIdempotencyArgToParam(pass, call, callee.Type(), approved); ok {
 			if calleeDecl := decls[callee]; calleeDecl != nil &&
-				functionHonorsIdempotency(pass, decls, callee, calleeDecl, visiting) {
+				functionHonorsIdempotency(pass, decls, callee, calleeDecl, map[*types.Var]bool{param: true}, visiting) {
 				honored = true
 				return false
 			}
@@ -112,17 +148,116 @@ func functionHonorsIdempotency(pass *analysis.Pass, decls map[*types.Func]*ast.F
 	return honored
 }
 
-// callPassesIdempotencyArg reports whether any argument of the call is, or
-// contains, an identifier whose name mentions idempotency. A bare string literal
-// (the header name spelled at a call site) does not count: the key must be a
-// value that flows through the program.
-func callPassesIdempotencyArg(call *ast.CallExpr) bool {
-	for _, arg := range call.Args {
-		if exprMentionsIdempotency(arg) {
+func callPassesApprovedIdempotencyKey(pass *analysis.Pass, call *ast.CallExpr, approved map[types.Object]bool) bool {
+	if len(call.Args) < 3 {
+		return false
+	}
+	return exprHasApprovedProvenance(pass, call.Args[2], approved)
+}
+
+func recordApprovedAssignments(pass *analysis.Pass, approved map[types.Object]bool, lhs, rhs []ast.Expr) {
+	for i, left := range lhs {
+		if i >= len(rhs) {
+			continue
+		}
+		recordApprovedObject(pass, approved, left, exprHasApprovedProvenance(pass, rhs[i], approved))
+	}
+}
+
+func recordApprovedValueSpec(pass *analysis.Pass, approved map[types.Object]bool, spec *ast.ValueSpec) {
+	for i, name := range spec.Names {
+		if i >= len(spec.Values) {
+			continue
+		}
+		recordApprovedObject(pass, approved, name, exprHasApprovedProvenance(pass, spec.Values[i], approved))
+	}
+}
+
+func recordApprovedObject(pass *analysis.Pass, approved map[types.Object]bool, expr ast.Expr, isApproved bool) {
+	id, ok := expr.(*ast.Ident)
+	if !ok {
+		return
+	}
+	obj := objectForIdent(pass, id)
+	if obj == nil {
+		return
+	}
+	if isApproved {
+		approved[obj] = true
+		return
+	}
+	delete(approved, obj)
+}
+
+func exprHasApprovedProvenance(pass *analysis.Pass, expr ast.Expr, approved map[types.Object]bool) bool {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return approved[objectForIdent(pass, e)]
+	case *ast.ParenExpr:
+		return exprHasApprovedProvenance(pass, e.X, approved)
+	case *ast.CallExpr:
+		if isDirectIdempotencyHeaderGet(e) || isApprovedIdempotencyHelper(pass, e) {
 			return true
+		}
+		if isTransparentStringWrapper(pass, e) && len(e.Args) == 1 {
+			return exprHasApprovedProvenance(pass, e.Args[0], approved)
 		}
 	}
 	return false
+}
+
+func objectForIdent(pass *analysis.Pass, id *ast.Ident) types.Object {
+	if obj := pass.TypesInfo.Defs[id]; obj != nil {
+		return obj
+	}
+	return pass.TypesInfo.Uses[id]
+}
+
+func isDirectIdempotencyHeaderGet(call *ast.CallExpr) bool {
+	if len(call.Args) != 1 || stringLiteralValue(call.Args[0]) != idempotencyHeader {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Get" {
+		return false
+	}
+	headerSel, ok := sel.X.(*ast.SelectorExpr)
+	return ok && headerSel.Sel.Name == "Header"
+}
+
+func isApprovedIdempotencyHelper(pass *analysis.Pass, call *ast.CallExpr) bool {
+	fn := calleeFunc(pass, call.Fun)
+	if fn == nil || fn.Pkg() == nil || fn.Pkg().Path() != apiPkgPath {
+		return false
+	}
+	switch fn.Name() {
+	case "vaultIdempotencyKey", "scimIdempotencyKey":
+		// Vault and SCIM compatibility routes intentionally preserve the header
+		// when present and derive a documented deterministic fallback for legacy
+		// clients that cannot set arbitrary headers.
+		return true
+	default:
+		return false
+	}
+}
+
+func isTransparentStringWrapper(pass *analysis.Pass, call *ast.CallExpr) bool {
+	fn := calleeFunc(pass, call.Fun)
+	return fn != nil && fn.Pkg() != nil &&
+		fn.Pkg().Path() == "strings" &&
+		(fn.Name() == "TrimSpace" || fn.Name() == "Trim")
+}
+
+func stringLiteralValue(expr ast.Expr) string {
+	lit, ok := expr.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return ""
+	}
+	s, err := strconv.Unquote(lit.Value)
+	if err != nil {
+		return ""
+	}
+	return s
 }
 
 // calleeFunc resolves the function/method object a call expression targets,
@@ -185,25 +320,26 @@ func isCanonicalIdempotencyDo(fn *types.Func) bool {
 		obj.Pkg() != nil && obj.Pkg().Path() == idempotencyPkgPath
 }
 
-// callForwardsIdempotencyArgToParam reports whether this call passes an
-// idempotency-named value into the corresponding idempotency-named parameter of
-// the callee. The callee is not accepted on that signature alone; the analyzer
+// callForwardsApprovedIdempotencyArgToParam reports whether this call passes an
+// approved idempotency value into the corresponding idempotency-named parameter
+// of the callee. The callee is not accepted on that signature alone; the analyzer
 // must also recursively prove that callee reaches Idempotency.Do.
-func callForwardsIdempotencyArgToParam(call *ast.CallExpr, t types.Type) bool {
+func callForwardsApprovedIdempotencyArgToParam(pass *analysis.Pass, call *ast.CallExpr, t types.Type, approved map[types.Object]bool) (*types.Var, bool) {
 	sig, ok := t.(*types.Signature)
 	if !ok {
-		return false
+		return nil, false
 	}
 	params := sig.Params()
 	for i, arg := range call.Args {
-		if !exprMentionsIdempotency(arg) || i >= params.Len() {
+		if i >= params.Len() || !exprHasApprovedProvenance(pass, arg, approved) {
 			continue
 		}
-		if mentionsIdempotency(params.At(i).Name()) {
-			return true
+		param := params.At(i)
+		if mentionsIdempotency(param.Name()) {
+			return param, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 // derefNamed returns the *types.Named behind a possibly-pointer receiver type.
@@ -215,20 +351,6 @@ func derefNamed(t types.Type) *types.Named {
 		return named
 	}
 	return nil
-}
-
-// exprMentionsIdempotency reports whether an argument expression is, or contains,
-// an identifier whose name mentions idempotency.
-func exprMentionsIdempotency(arg ast.Expr) bool {
-	found := false
-	ast.Inspect(arg, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && mentionsIdempotency(id.Name) {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
 }
 
 func mentionsIdempotency(s string) bool {

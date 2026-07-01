@@ -116,6 +116,28 @@ func TestOpenAPISpecCoversRoutes(t *testing.T) {
 	}
 }
 
+func TestOpenAPIMutationsDeclareRequiredIdempotencyKeyHeader(t *testing.T) {
+	doc := fetchSpec(t)
+	paths := doc["paths"].(map[string]any)
+
+	for _, rt := range api.New(nil, nil, nil).Routes() {
+		if !rt.Mutation {
+			continue
+		}
+		pathItem, ok := paths[openAPIPathForTest(rt.Path)].(map[string]any)
+		if !ok {
+			t.Fatalf("mutation route %s %s is missing from OpenAPI", rt.Method, rt.Path)
+		}
+		op, ok := pathItem[strings.ToLower(rt.Method)].(map[string]any)
+		if !ok {
+			t.Fatalf("mutation route %s %s is missing its OpenAPI operation", rt.Method, rt.Path)
+		}
+		if !hasRequiredHeaderParam(op, "Idempotency-Key") {
+			t.Errorf("mutation route %s %s (%s) does not declare required Idempotency-Key header", rt.Method, rt.Path, rt.OperationID)
+		}
+	}
+}
+
 func TestOpenAPISpecCoversMachineLogin(t *testing.T) {
 	doc := fetchSpec(t)
 	paths := doc["paths"].(map[string]any)
@@ -226,6 +248,21 @@ func assertPathParamSchema(t *testing.T, doc map[string]any, method, path, name,
 		return
 	}
 	t.Fatalf("%s %s missing path parameter %s", strings.ToUpper(method), path, name)
+}
+
+func hasRequiredHeaderParam(op map[string]any, name string) bool {
+	params, _ := op["parameters"].([]any)
+	for _, raw := range params {
+		p, _ := raw.(map[string]any)
+		if p["name"] == name && p["in"] == "header" && p["required"] == true {
+			return true
+		}
+	}
+	return false
+}
+
+func openAPIPathForTest(path string) string {
+	return strings.ReplaceAll(path, "...}", "}")
 }
 
 // collectRefs walks an arbitrary decoded JSON value and returns every $ref.
