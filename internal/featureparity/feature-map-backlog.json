@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "harness": "trstctl-feature-map-harness",
-  "objective": "Map every documented trstctl backend capability to an explicit GUI surface, workflow, status panel, or deliberate non-GUI disclosure, and bind each row to served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n facet evidence or an explicit N/A.",
+  "objective": "Map every documented trstctl backend capability to an explicit GUI surface, workflow, status panel, or deliberate non-GUI disclosure; bind each row to served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n facet evidence or an explicit N/A; and record explicit GA served-scope decisions for residual conditional/partial rows.",
   "target_repo": "/Users/shankar/Desktop/ctlplne-trstctl/trstctl",
   "frontend_routes_observed": [
     "/login",
@@ -1547,7 +1547,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F009",
@@ -1713,7 +1715,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F010",
@@ -2268,7 +2272,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served for built-in path, configured external CA registry, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F013",
@@ -3290,7 +3296,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F019",
@@ -3453,7 +3461,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F020",
@@ -3616,7 +3626,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F021",
@@ -3766,7 +3778,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F022",
@@ -3916,7 +3930,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F023",
@@ -4066,7 +4082,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: method-selection helpers plus provider-config allowed_methods and DNS-01 preflight checks are served; full order-time domain-validation policy management remains a follow-up. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F024",
@@ -4216,7 +4234,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: wildcard policy helpers plus provider-config allow_wildcards and DNS-01 preflight checks are served; automated wildcard renewal scheduling remains a follow-up. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F025",
@@ -4338,7 +4358,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F026",
@@ -4457,7 +4479,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F027",
@@ -4576,7 +4600,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F028",
@@ -4729,7 +4755,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: bootstrap served; renewal not mounted. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F029",
@@ -4911,7 +4939,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F030",
@@ -5031,7 +5061,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served over UDS for X.509-SVID and JWT-SVID RPCs. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F031",
@@ -5193,7 +5225,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served approval-gated ephemeral/JIT issuance endpoint. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F032",
@@ -5366,7 +5400,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served attested X.509-SVID issuance endpoint with six-attester verifier. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F033",
@@ -5709,7 +5745,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served policy-gated AI/MCP agent identity broker endpoint. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F035",
@@ -5863,7 +5901,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F036",
@@ -6020,7 +6060,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: agent-side explicit opt-in with served rollout and retirement evidence API. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F037",
@@ -6177,7 +6219,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served attestation-gated SSH user cert API. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F038",
@@ -6465,7 +6509,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: crypto boundary plus algorithms. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F040",
@@ -7247,7 +7293,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F045",
@@ -8679,7 +8727,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F053",
@@ -9008,7 +9058,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F055",
@@ -9191,7 +9243,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F056",
@@ -9330,7 +9384,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F057",
@@ -9518,7 +9574,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F058",
@@ -10075,7 +10133,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served on mutation gate, tenant-scoped policy dry-run workbench, CAP-GOV-01 ownership attribution, CAP-GOV-03 NHI policy compliance over rotation cadence, allowed scopes/geographies, expiry, and business purpose, and CAP-GOV-05 access-change approval workflow tied to PR/ticket evidence; live policy activation remains deploy/config-time. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F061",
@@ -10270,7 +10330,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox; channel credentials remain operator-managed config. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F062",
@@ -11466,7 +11528,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F069",
@@ -12418,7 +12482,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served through AI. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F076",
@@ -12559,7 +12625,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served; model egress opt-in. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F077",
@@ -12694,7 +12762,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     },
     {
       "id": "GUI-F078",
@@ -12833,7 +12903,9 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      }
+      },
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
     }
   ]
 }

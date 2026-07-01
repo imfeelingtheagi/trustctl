@@ -9,14 +9,20 @@ as `served_state`, using the vocabulary `served`, `conditional`, `partial`,
 `library`, and `roadmap`. Current GA-facing catalog rows may not use `library` as a
 landing zone for built-but-unserved behavior. If a capability is not wired to a served
 runtime surface, it must either be `roadmap` with explicit disclosure or be promoted to
-`served`, `conditional`, or `partial` with concrete evidence. The same JSON records
+`served`, `conditional`, or `partial` with concrete evidence. It also records
+`ga_served_scope` and `ga_scope_reason` for residual conditional/partial rows:
+`in_ga` rows must be fully `served`, while `out_of_ga` rows remain visible in the
+catalog with a row-specific residual reason and do not inflate the GA served
+denominator. The same JSON records
 `api_surface`, `api_na`, `cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests
 verify that every named OpenAPI operation/CLI command exists, or that the row has
 an explicit N/A reason. It also records `facet_evidence` for the served, UI, CLI,
 API, test, docs, RBAC, audit, telemetry, a11y, and i18n facets. The
 `FeatureFacetCoverage` test fails if any row is missing evidence or an explicit
 N/A, and GA-ish rows (`served`, `conditional`, `partial`) must carry concrete
-evidence for the facets that always apply to the shipped operator surface. RBAC is
+evidence for the facets that always apply to the shipped operator surface.
+`FeatureServedGACoverageCOVER001` recomputes the GA served denominator and fails
+unless it is 100% served after explicit residual exclusions. RBAC is
 tracked through feature-authz manifests: `/api/v1` rows bind each OpenAPI operation
 to a route permission or public credential-exchange rationale, while protocol rows
 bind ACME/EST/SCEP/CMP/SSH/SPIFFE/TSA mounts to either `certs:request` or an

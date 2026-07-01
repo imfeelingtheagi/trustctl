@@ -15,6 +15,8 @@ type Item struct {
 	FeatureID      string               `json:"feature_id"`
 	Feature        string               `json:"feature"`
 	ServedState    string               `json:"served_state"`
+	GAServedScope  string               `json:"ga_served_scope,omitempty"`
+	GAScopeReason  string               `json:"ga_scope_reason,omitempty"`
 	BackendStatus  string               `json:"backend_status"`
 	CurrentMapping string               `json:"current_frontend_mapping"`
 	AcceptanceTest string               `json:"acceptance_test"`
