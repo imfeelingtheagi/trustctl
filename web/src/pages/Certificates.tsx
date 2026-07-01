@@ -15,6 +15,7 @@ import {
   type RotationRun,
 } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { EmptyState } from "@/components/EmptyState";
@@ -27,6 +28,7 @@ import { formatDate as formatDatePolicy, formatNumber as formatNumberPolicy } fr
 import type { MessageKey } from "@/i18n/messages";
 import { CertificatesDashboard, ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
 import type { RiskItem } from "@/components/risk";
+import type { GridViewPrimitive } from "@/lib/gridViews";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -50,6 +52,28 @@ function expiryFromSearchParam(value: string | null): ExpiryFilter {
 
 type Notice = { kind: "permission" | "error"; message: string };
 type FacetFilter = "all" | string;
+
+function stringFromGridMetadata(metadata: Record<string, GridViewPrimitive>, key: string, fallback = "all"): string {
+  const value = metadata[key];
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function expiryFromGridMetadata(metadata: Record<string, GridViewPrimitive>): ExpiryFilter {
+  return expiryFromSearchParam(stringFromGridMetadata(metadata, "expiry"));
+}
+
+function limitFromGridMetadata(metadata: Record<string, GridViewPrimitive>, fallback: number): number {
+  const value = metadata.limit;
+  return typeof value === "number" && [5, 20, 50].includes(value) ? value : fallback;
+}
+
+function setOptionalParam(params: URLSearchParams, key: string, value: string) {
+  if (value === "all" || value === "") {
+    params.delete(key);
+  } else {
+    params.set(key, value);
+  }
+}
 
 function noticeForError(err: unknown, action: string): Notice {
   if (err instanceof UnauthorizedError) {
@@ -680,6 +704,34 @@ export function Certificates() {
     );
   }
 
+  function restoreCertificateGridView(metadata: Record<string, GridViewPrimitive>) {
+    const nextExpiry = expiryFromGridMetadata(metadata);
+    const nextIssuer = stringFromGridMetadata(metadata, "issuer");
+    const nextProfile = stringFromGridMetadata(metadata, "profile");
+    const nextTeam = stringFromGridMetadata(metadata, "team");
+    const nextEnvironment = stringFromGridMetadata(metadata, "environment");
+
+    setQuery(stringFromGridMetadata(metadata, "query", ""));
+    setExpiry(nextExpiry);
+    setIssuerFilter(nextIssuer);
+    setProfileFilter(nextProfile);
+    setTeamFilter(nextTeam);
+    setEnvironmentFilter(nextEnvironment);
+    setLimit(limitFromGridMetadata(metadata, limit));
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        setOptionalParam(next, "expiry", nextExpiry);
+        setOptionalParam(next, "issuer", nextIssuer);
+        setOptionalParam(next, "profile", nextProfile);
+        setOptionalParam(next, "team", nextTeam);
+        setOptionalParam(next, "environment", nextEnvironment);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
   async function openDetail(c: Certificate) {
     setDetailID(c.id);
     setDetail(null);
@@ -955,129 +1007,137 @@ export function Certificates() {
             </div>
             <DeploymentReceipts deliveries={deliveries} />
           </div>
-          <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(14rem,1.2fr)_repeat(4,minmax(10rem,12rem))_auto_auto] xl:items-end">
-            <div>
-              <label htmlFor="cert-search" className="mb-1 block text-sm font-medium">
-                Search loaded rows
-              </label>
-              <input
-                id="cert-search"
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Subject, issuer, serial, fingerprint…"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          <DataGrid
+            ariaLabel="Inventoried certificates"
+            rows={filtered}
+            columns={columns}
+            getRowId={(c) => c.id}
+            state={filtered.length === 0 ? "empty" : "ready"}
+            stateTitle="No certificates match your search."
+            showColumnChooser
+            viewStorageKey="certificates-inventory"
+            viewMetadata={{
+              query,
+              expiry,
+              issuer: issuerFilter,
+              profile: profileFilter,
+              team: teamFilter,
+              environment: environmentFilter,
+              limit,
+            }}
+            onViewRestore={restoreCertificateGridView}
+            toolbar={({ columnChooser, savedViews }) => (
+              <DataGridToolbar
+                searchLabel="Search loaded rows"
+                searchPlaceholder="Subject, issuer, serial, fingerprint..."
+                searchValue={query}
+                onSearchChange={setQuery}
+                filters={
+                  <>
+                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
+                      Issuer filter
+                      <select
+                        id="cert-issuer-filter"
+                        value={issuerFilter}
+                        onChange={(e) => selectFacet("issuer", e.target.value)}
+                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                      >
+                        <option value="all">All issuers</option>
+                        {issuerOptions.map((issuer) => (
+                          <option key={issuer} value={issuer}>
+                            {issuer}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
+                      Profile filter
+                      <select
+                        id="cert-profile-filter"
+                        value={profileFilter}
+                        onChange={(e) => selectFacet("profile", e.target.value)}
+                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                      >
+                        <option value="all">All profiles</option>
+                        {profileOptions.map((profile) => (
+                          <option key={profile} value={profile}>
+                            {profile}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
+                      Team filter
+                      <select
+                        id="cert-team-filter"
+                        value={teamFilter}
+                        onChange={(e) => selectFacet("team", e.target.value)}
+                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                      >
+                        <option value="all">All teams</option>
+                        {teamOptions.map((team) => (
+                          <option key={team.value} value={team.value}>
+                            {team.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
+                      Environment filter
+                      <select
+                        id="cert-environment-filter"
+                        value={environmentFilter}
+                        onChange={(e) => selectFacet("environment", e.target.value)}
+                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                      >
+                        <option value="all">All environments</option>
+                        {environmentOptions.map((environment) => (
+                          <option key={environment} value={environment}>
+                            {environment}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <fieldset>
+                      <legend className="mb-1 text-sm font-medium">Server expiry filter</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {expiryFilters.map((f) => (
+                          <button
+                            key={f.value}
+                            type="button"
+                            onClick={() => selectExpiry(f.value)}
+                            aria-pressed={expiry === f.value}
+                            className={`min-h-9 rounded-md border px-2.5 text-sm ${
+                              expiry === f.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <label className="grid gap-1 text-sm font-medium" htmlFor="cert-limit">
+                      Page size
+                      <select
+                        id="cert-limit"
+                        value={limit}
+                        onChange={(e) => setLimit(Number(e.target.value))}
+                        className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
+                      >
+                        <option value={5}>5</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </label>
+                  </>
+                }
+                savedViews={savedViews}
+                columnChooser={columnChooser}
               />
-            </div>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-issuer-filter">
-              Issuer filter
-              <select
-                id="cert-issuer-filter"
-                value={issuerFilter}
-                onChange={(e) => selectFacet("issuer", e.target.value)}
-                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-              >
-                <option value="all">All issuers</option>
-                {issuerOptions.map((issuer) => (
-                  <option key={issuer} value={issuer}>
-                    {issuer}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-profile-filter">
-              Profile filter
-              <select
-                id="cert-profile-filter"
-                value={profileFilter}
-                onChange={(e) => selectFacet("profile", e.target.value)}
-                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-              >
-                <option value="all">All profiles</option>
-                {profileOptions.map((profile) => (
-                  <option key={profile} value={profile}>
-                    {profile}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-team-filter">
-              Team filter
-              <select
-                id="cert-team-filter"
-                value={teamFilter}
-                onChange={(e) => selectFacet("team", e.target.value)}
-                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-              >
-                <option value="all">All teams</option>
-                {teamOptions.map((team) => (
-                  <option key={team.value} value={team.value}>
-                    {team.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-environment-filter">
-              Environment filter
-              <select
-                id="cert-environment-filter"
-                value={environmentFilter}
-                onChange={(e) => selectFacet("environment", e.target.value)}
-                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-              >
-                <option value="all">All environments</option>
-                {environmentOptions.map((environment) => (
-                  <option key={environment} value={environment}>
-                    {environment}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <fieldset>
-              <legend className="mb-1 text-sm font-medium">Server expiry filter</legend>
-              <div className="flex flex-wrap gap-2">
-                {expiryFilters.map((f) => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    onClick={() => selectExpiry(f.value)}
-                    aria-pressed={expiry === f.value}
-                    className={`min-h-9 rounded-md border px-2.5 text-sm ${
-                      expiry === f.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="cert-limit">
-              Page size
-              <select
-                id="cert-limit"
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="min-h-9 rounded-md border border-border bg-background px-2 text-sm"
-              >
-                <option value={5}>5</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </label>
-          </div>
-
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No certificates match your search.</p>
-          ) : (
-            <DataGrid
-              ariaLabel="Inventoried certificates"
-              rows={filtered}
-              columns={columns}
-              getRowId={(c) => c.id}
-              onRowOpen={(c) => void openDetail(c)}
-              rowActionLabel={() => "View details"}
-            />
-          )}
+            )}
+            onRowOpen={(c) => void openDetail(c)}
+            rowActionLabel={() => "View details"}
+          />
 
           <div className="mt-4 flex items-center gap-3">
             {nextCursor ? (

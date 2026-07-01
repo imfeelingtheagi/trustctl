@@ -7,6 +7,8 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { DataGrid, type DataGridColumn, type DataGridToolbarControls } from "@/components/DataGrid";
+import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
 import { useTranslation } from "@/i18n/I18nProvider";
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
+import type { GridViewPrimitive } from "@/lib/gridViews";
 
 type Notice = { kind: "permission" | "error" | "success"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
@@ -85,6 +88,15 @@ const triageStatusLabelKeys: Record<FindingTriageStatus, MessageKey> = {
   managed: "discovery.findings.statusManaged",
   dismissed: "discovery.findings.statusDismissed",
 };
+
+function gridControlsToolbar({ columnChooser, savedViews }: DataGridToolbarControls) {
+  return <DataGridToolbar columnChooser={columnChooser} savedViews={savedViews} />;
+}
+
+function gridMetadataString(metadata: Record<string, GridViewPrimitive>, key: string, fallback = "all"): string {
+  const value = metadata[key];
+  return typeof value === "string" && value ? value : fallback;
+}
 
 export function Discovery() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,6 +182,24 @@ export function Discovery() {
           next.delete(key);
         } else {
           next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function restoreFindingFilters(filters: FindingFilters) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const key of ["triage", "owner", "team", "tag"] as const) {
+          const value = filters[key];
+          if (value === "all" || value === "") {
+            next.delete(key);
+          } else {
+            next.set(key, value);
+          }
         }
         return next;
       },
@@ -530,6 +560,7 @@ export function Discovery() {
             filters={findingFilters}
             facetOptions={findingFacetOptions}
             onFilterChange={setFindingFilter}
+            onFiltersRestore={restoreFindingFilters}
             onFindingUpdated={replaceFinding}
             onNotice={setNotice}
           />
@@ -663,6 +694,62 @@ function severityTone(severity: string): string {
 function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: DiscoveryMonitoring | null; onCreateSource: () => void }) {
   const { t } = useTranslation();
   if (!monitoring) return null;
+  const columns: Array<DataGridColumn<DiscoveryMonitoring["sources"][number]>> = [
+    {
+      id: "source",
+      header: t("discovery.monitoring.columnSource"),
+      cell: (source) => (
+        <div>
+          <div className="font-medium">{source.name}</div>
+          <div className="font-mono text-xs text-muted-foreground">{source.source_id}</div>
+          <div className="text-xs text-muted-foreground">{sourceKindLabel(source.kind)}</div>
+        </div>
+      ),
+    },
+    {
+      id: "schedule",
+      header: t("discovery.monitoring.columnSchedule"),
+      cell: (source) => (
+        <div>
+          <StatusBadge vocabulary="lifecycle" value={source.scheduled ? "active" : "queued"} />
+          <div className="mt-1 text-xs text-muted-foreground">
+            {source.scheduled ? formatInterval(source.monitoring_interval_seconds, t("discovery.monitoring.unscheduled")) : t("discovery.monitoring.unscheduled")}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "last-run",
+      header: t("discovery.monitoring.columnLastRun"),
+      cell: (source) => (
+        <div>
+          <StatusBadge vocabulary="lifecycle" value={source.last_run_status || "queued"} />
+          <div className="mt-1 text-xs text-muted-foreground">{formatDateTime(source.last_run_completed_at)}</div>
+        </div>
+      ),
+    },
+    {
+      id: "findings",
+      header: t("discovery.monitoring.columnFindings"),
+      cell: (source) => source.finding_count,
+    },
+    {
+      id: "inventory",
+      header: t("discovery.monitoring.columnInventory"),
+      cell: (source) => source.certificate_inventory_count,
+    },
+    {
+      id: "repository",
+      header: t("discovery.monitoring.columnRepository"),
+      className: "font-mono text-xs",
+      cell: (source) => (
+        <div>
+          <div>{source.repository_path}</div>
+          <div>{source.findings_path}</div>
+        </div>
+      ),
+    },
+  ];
   return (
     <section aria-labelledby="monitoring-heading" className="grid gap-3 border-y border-border py-4">
       <div className="flex items-center gap-2">
@@ -688,47 +775,15 @@ function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: Discovery
           {t("discovery.monitoring.emptyBody")}
         </EmptyState>
       ) : (
-        <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[68rem]">
-            <caption className="sr-only">{t("discovery.monitoring.caption")}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("discovery.monitoring.columnSource")}</th>
-                <th scope="col">{t("discovery.monitoring.columnSchedule")}</th>
-                <th scope="col">{t("discovery.monitoring.columnLastRun")}</th>
-                <th scope="col">{t("discovery.monitoring.columnFindings")}</th>
-                <th scope="col">{t("discovery.monitoring.columnInventory")}</th>
-                <th scope="col">{t("discovery.monitoring.columnRepository")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {monitoring.sources.map((source) => (
-                <tr key={source.source_id} className="align-top">
-                  <td>
-                    <div className="font-medium">{source.name}</div>
-                    <div className="text-xs text-muted-foreground">{sourceKindLabel(source.kind)}</div>
-                  </td>
-                  <td>
-                    <StatusBadge vocabulary="lifecycle" value={source.scheduled ? "active" : "queued"} />
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {source.scheduled ? formatInterval(source.monitoring_interval_seconds, t("discovery.monitoring.unscheduled")) : t("discovery.monitoring.unscheduled")}
-                    </div>
-                  </td>
-                  <td>
-                    <StatusBadge vocabulary="lifecycle" value={source.last_run_status || "queued"} />
-                    <div className="mt-1 text-xs text-muted-foreground">{formatDateTime(source.last_run_completed_at)}</div>
-                  </td>
-                  <td>{source.finding_count}</td>
-                  <td>{source.certificate_inventory_count}</td>
-                  <td className="font-mono text-xs">
-                    <div>{source.repository_path}</div>
-                    <div>{source.findings_path}</div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataGrid
+          ariaLabel={t("discovery.monitoring.caption")}
+          rows={monitoring.sources}
+          columns={columns}
+          getRowId={(source) => source.source_id}
+          showColumnChooser
+          viewStorageKey="discovery-monitoring"
+          toolbar={gridControlsToolbar}
+        />
       )}
     </section>
   );
@@ -744,108 +799,157 @@ function MonitoringMetric({ label, value }: { label: string; value: number }) {
 }
 
 function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; busy: string | null; onStart: (sourceID: string, dryRun?: boolean) => void }) {
+  const columns: Array<DataGridColumn<DiscoverySource>> = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (source) => (
+        <div>
+          <div className="font-medium">{source.name}</div>
+          <div className="font-mono text-xs text-muted-foreground">{source.id}</div>
+        </div>
+      ),
+    },
+    {
+      id: "kind",
+      header: "Kind",
+      cell: (source) => sourceKindLabels[source.kind] ?? source.kind,
+    },
+    {
+      id: "targets",
+      header: "Targets",
+      className: "font-mono text-xs",
+      cell: (source) => targetCount(source),
+    },
+    {
+      id: "updated",
+      header: "Updated",
+      cell: (source) => formatDateTime(source.updated_at),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (source) => (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={() => onStart(source.id, false)} disabled={busy?.startsWith(`run:${source.id}`)}>
+            <Play className="h-4 w-4" aria-hidden="true" />
+            Run
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => onStart(source.id, true)} disabled={busy?.startsWith(`run:${source.id}`)}>
+            Dry run
+          </Button>
+        </div>
+      ),
+    },
+  ];
   return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[56rem]">
-        <caption className="sr-only">Discovery sources</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Kind</th>
-            <th scope="col">Targets</th>
-            <th scope="col">Updated</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sources.map((source) => (
-            <tr key={source.id} className="align-top">
-              <td className="font-medium">{source.name}</td>
-              <td>{sourceKindLabels[source.kind] ?? source.kind}</td>
-              <td className="font-mono text-xs">{targetCount(source)}</td>
-              <td>{formatDateTime(source.updated_at)}</td>
-              <td>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" onClick={() => onStart(source.id, false)} disabled={busy?.startsWith(`run:${source.id}`)}>
-                    <Play className="h-4 w-4" aria-hidden="true" />
-                    Run
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" onClick={() => onStart(source.id, true)} disabled={busy?.startsWith(`run:${source.id}`)}>
-                    Dry run
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid
+      ariaLabel="Discovery sources"
+      rows={sources}
+      columns={columns}
+      getRowId={(source) => source.id}
+      showColumnChooser
+      viewStorageKey="discovery-sources"
+      toolbar={gridControlsToolbar}
+    />
   );
 }
 
 function ScheduleTable({ schedules, sourceByID }: { schedules: DiscoverySchedule[]; sourceByID: Map<string, DiscoverySource> }) {
+  const columns: Array<DataGridColumn<DiscoverySchedule>> = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (schedule) => (
+        <div>
+          <div className="font-medium">{schedule.name}</div>
+          <div className="font-mono text-xs text-muted-foreground">{schedule.id}</div>
+        </div>
+      ),
+    },
+    {
+      id: "source",
+      header: "Source",
+      cell: (schedule) => sourceByID.get(schedule.source_id)?.name ?? <span className="font-mono text-xs">{schedule.source_id}</span>,
+    },
+    {
+      id: "interval",
+      header: "Interval",
+      cell: (schedule) => `${schedule.interval_seconds}s`,
+    },
+    {
+      id: "enabled",
+      header: "Enabled",
+      cell: (schedule) => (schedule.enabled ? "yes" : "no"),
+    },
+    {
+      id: "updated",
+      header: "Updated",
+      cell: (schedule) => formatDateTime(schedule.updated_at),
+    },
+  ];
   return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[44rem]">
-        <caption className="sr-only">Discovery schedules</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Source</th>
-            <th scope="col">Interval</th>
-            <th scope="col">Enabled</th>
-            <th scope="col">Updated</th>
-          </tr>
-        </thead>
-        <tbody>
-          {schedules.map((schedule) => (
-            <tr key={schedule.id} className="align-top">
-              <td className="font-medium">{schedule.name}</td>
-              <td>{sourceByID.get(schedule.source_id)?.name ?? schedule.source_id}</td>
-              <td>{schedule.interval_seconds}s</td>
-              <td>{schedule.enabled ? "yes" : "no"}</td>
-              <td>{formatDateTime(schedule.updated_at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid
+      ariaLabel="Discovery schedules"
+      rows={schedules}
+      columns={columns}
+      getRowId={(schedule) => schedule.id}
+      showColumnChooser
+      viewStorageKey="discovery-schedules"
+      toolbar={gridControlsToolbar}
+    />
   );
 }
 
 function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<string, DiscoverySource> }) {
+  const columns: Array<DataGridColumn<DiscoveryRun>> = [
+    {
+      id: "run",
+      header: "Run",
+      className: "font-mono text-xs",
+      cell: (run) => shortID(run.id),
+    },
+    {
+      id: "source",
+      header: "Source",
+      cell: (run) => sourceByID.get(run.source_id)?.name ?? <span className="font-mono text-xs">{run.source_id}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (run) => <StatusBadge vocabulary="lifecycle" value={run.status} />,
+    },
+    {
+      id: "targets",
+      header: "Targets",
+      cell: (run) => run.targets,
+    },
+    {
+      id: "discovered",
+      header: "Discovered",
+      cell: (run) => run.discovered,
+    },
+    {
+      id: "failed",
+      header: "Failed",
+      cell: (run) => run.failed + run.rejected,
+    },
+    {
+      id: "completed",
+      header: "Completed",
+      cell: (run) => formatDateTime(run.completed_at),
+    },
+  ];
   return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[58rem]">
-        <caption className="sr-only">Discovery runs</caption>
-        <thead>
-          <tr>
-            <th scope="col">Run</th>
-            <th scope="col">Source</th>
-            <th scope="col">Status</th>
-            <th scope="col">Targets</th>
-            <th scope="col">Discovered</th>
-            <th scope="col">Failed</th>
-            <th scope="col">Completed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => (
-            <tr key={run.id} className="align-top">
-              <td className="font-mono text-xs">{shortID(run.id)}</td>
-              <td>{sourceByID.get(run.source_id)?.name ?? run.source_id}</td>
-              <td>
-                <StatusBadge vocabulary="lifecycle" value={run.status} />
-              </td>
-              <td>{run.targets}</td>
-              <td>{run.discovered}</td>
-              <td>{run.failed + run.rejected}</td>
-              <td>{formatDateTime(run.completed_at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid
+      ariaLabel="Discovery runs"
+      rows={runs}
+      columns={columns}
+      getRowId={(run) => run.id}
+      showColumnChooser
+      viewStorageKey="discovery-runs"
+      toolbar={gridControlsToolbar}
+    />
   );
 }
 
@@ -856,6 +960,7 @@ function FindingTable({
   filters,
   facetOptions,
   onFilterChange,
+  onFiltersRestore,
   onFindingUpdated,
   onNotice,
 }: {
@@ -865,6 +970,7 @@ function FindingTable({
   filters: FindingFilters;
   facetOptions: { owners: string[]; teams: string[]; tags: string[] };
   onFilterChange: (key: keyof FindingFilters, value: string) => void;
+  onFiltersRestore: (filters: FindingFilters) => void;
   onFindingUpdated: (finding: DiscoveryFinding) => void;
   onNotice: (notice: Notice | null) => void;
 }) {
@@ -988,161 +1094,195 @@ function FindingTable({
     }
   }
 
+  function restoreGridView(metadata: Record<string, GridViewPrimitive>) {
+    onFiltersRestore({
+      triage: triageFilterFromSearchParam(gridMetadataString(metadata, "triage")),
+      owner: gridMetadataString(metadata, "owner"),
+      team: gridMetadataString(metadata, "team"),
+      tag: gridMetadataString(metadata, "tag"),
+    });
+  }
+
+  const filterControls = (
+    <>
+      <label className="grid gap-1 text-sm font-medium">
+        {t("discovery.findings.filterStatus")}
+        <select className="ui-input" value={filters.triage} onChange={(event) => onFilterChange("triage", event.target.value)}>
+          {triageFilterOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.labelKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm font-medium">
+        {t("discovery.findings.filterOwner")}
+        <select className="ui-input" value={filters.owner} onChange={(event) => onFilterChange("owner", event.target.value)}>
+          <option value="all">{t("discovery.findings.filterOwnerAll")}</option>
+          {facetOptions.owners.map((owner) => (
+            <option key={owner} value={owner}>
+              {owner}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm font-medium">
+        {t("discovery.findings.filterTeam")}
+        <select className="ui-input" value={filters.team} onChange={(event) => onFilterChange("team", event.target.value)}>
+          <option value="all">{t("discovery.findings.filterTeamAll")}</option>
+          {facetOptions.teams.map((team) => (
+            <option key={team} value={team}>
+              {team}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm font-medium">
+        {t("discovery.findings.filterTag")}
+        <select className="ui-input" value={filters.tag} onChange={(event) => onFilterChange("tag", event.target.value)}>
+          <option value="all">{t("discovery.findings.filterTagAll")}</option>
+          {facetOptions.tags.map((tag) => (
+            <option key={tag} value={tag}>
+              {tag}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
+  );
+
+  const columns: Array<DataGridColumn<DiscoveryFinding>> = [
+    {
+      id: "status",
+      header: t("discovery.findings.columnStatus"),
+      cell: (finding) => <TriagePill status={findingTriageStatus(finding)} />,
+    },
+    {
+      id: "kind",
+      header: t("discovery.findings.columnKind"),
+      cell: (finding) => finding.kind,
+    },
+    {
+      id: "reference",
+      header: t("discovery.findings.columnReference"),
+      cell: (finding) => <span className="font-medium">{finding.ref}</span>,
+    },
+    {
+      id: "fingerprint",
+      header: t("discovery.findings.columnFingerprint"),
+      className: "font-mono text-xs",
+      cell: (finding) => maskFingerprint(finding.fingerprint),
+    },
+    {
+      id: "owner",
+      header: t("discovery.findings.columnOwner"),
+      cell: (finding) => findingOwner(finding) || "-",
+    },
+    {
+      id: "team",
+      header: t("discovery.findings.columnTeam"),
+      cell: (finding) => findingTeam(finding) || "-",
+    },
+    {
+      id: "tags",
+      header: t("discovery.findings.columnTags"),
+      cell: (finding) => <TagList tags={findingTags(finding)} />,
+    },
+    {
+      id: "source",
+      header: t("discovery.findings.columnSource"),
+      cell: (finding) => sourceByID.get(finding.source_id)?.name ?? <span className="font-mono text-xs">{finding.source_id}</span>,
+    },
+    {
+      id: "risk",
+      header: t("discovery.findings.columnRisk"),
+      cell: (finding) => finding.risk_score ?? 0,
+    },
+    {
+      id: "discovered",
+      header: t("discovery.findings.columnDiscovered"),
+      cell: (finding) => formatDateTime(finding.discovered_at),
+    },
+    {
+      id: "actions",
+      header: t("discovery.findings.columnActions"),
+      cell: (finding) => {
+        const hasIdentity = Boolean(findingActionIdentityID(finding));
+        return (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => openDetail(finding)}>
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.details")}
+            </Button>
+            <Button type="button" size="sm" onClick={() => openAction(finding, "claim")} disabled={actionBusy}>
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.claim")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void runFindingLifecycleAction(finding, "rotate")}
+              disabled={actionBusy || !hasIdentity}
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.rotate")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void runFindingLifecycleAction(finding, "revoke")}
+              disabled={actionBusy || !hasIdentity}
+            >
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.revoke")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void runFindingLifecycleAction(finding, "decommission")}
+              disabled={actionBusy || !hasIdentity}
+            >
+              <Activity className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.decommission")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void runFindingLifecycleAction(finding, "remediate")}
+              disabled={actionBusy || !hasIdentity}
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.remediate")}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => openAction(finding, "dismiss")} disabled={actionBusy}>
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+              {t("discovery.findings.dismiss")}
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="grid gap-4">
-      <div className="ui-panel grid gap-3 p-3 lg:grid-cols-4" aria-label={t("discovery.findings.filters")}>
-        <label className="grid gap-1 text-sm font-medium">
-          {t("discovery.findings.filterStatus")}
-          <select className="ui-input" value={filters.triage} onChange={(event) => onFilterChange("triage", event.target.value)}>
-            {triageFilterOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {t(option.labelKey)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          {t("discovery.findings.filterOwner")}
-          <select className="ui-input" value={filters.owner} onChange={(event) => onFilterChange("owner", event.target.value)}>
-            <option value="all">{t("discovery.findings.filterOwnerAll")}</option>
-            {facetOptions.owners.map((owner) => (
-              <option key={owner} value={owner}>
-                {owner}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          {t("discovery.findings.filterTeam")}
-          <select className="ui-input" value={filters.team} onChange={(event) => onFilterChange("team", event.target.value)}>
-            <option value="all">{t("discovery.findings.filterTeamAll")}</option>
-            {facetOptions.teams.map((team) => (
-              <option key={team} value={team}>
-                {team}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm font-medium">
-          {t("discovery.findings.filterTag")}
-          <select className="ui-input" value={filters.tag} onChange={(event) => onFilterChange("tag", event.target.value)}>
-            <option value="all">{t("discovery.findings.filterTagAll")}</option>
-            {facetOptions.tags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="ui-panel overflow-x-auto">
-        <table className="ui-table min-w-[104rem]">
-          <caption className="sr-only">{t("discovery.findings.caption")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("discovery.findings.columnStatus")}</th>
-              <th scope="col">{t("discovery.findings.columnKind")}</th>
-              <th scope="col">{t("discovery.findings.columnReference")}</th>
-              <th scope="col">{t("discovery.findings.columnFingerprint")}</th>
-              <th scope="col">{t("discovery.findings.columnOwner")}</th>
-              <th scope="col">{t("discovery.findings.columnTeam")}</th>
-              <th scope="col">{t("discovery.findings.columnTags")}</th>
-              <th scope="col">{t("discovery.findings.columnSource")}</th>
-              <th scope="col">{t("discovery.findings.columnRisk")}</th>
-              <th scope="col">{t("discovery.findings.columnDiscovered")}</th>
-              <th scope="col">{t("discovery.findings.columnActions")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {findings.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
-                  {t("discovery.findings.noMatches")}
-                </td>
-              </tr>
-            ) : (
-              findings.map((finding) => {
-                const hasIdentity = Boolean(findingActionIdentityID(finding));
-                return (
-                  <tr key={finding.id} className="align-top">
-                    <td>
-                      <TriagePill status={findingTriageStatus(finding)} />
-                    </td>
-                    <td>{finding.kind}</td>
-                    <td className="font-medium">{finding.ref}</td>
-                    <td className="font-mono text-xs">{maskFingerprint(finding.fingerprint)}</td>
-                    <td>{findingOwner(finding) || "-"}</td>
-                    <td>{findingTeam(finding) || "-"}</td>
-                    <td>
-                      <TagList tags={findingTags(finding)} />
-                    </td>
-                    <td>{sourceByID.get(finding.source_id)?.name ?? finding.source_id}</td>
-                    <td>{finding.risk_score ?? 0}</td>
-                    <td>{formatDateTime(finding.discovered_at)}</td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => openDetail(finding)}>
-                          <Eye className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.details")}
-                        </Button>
-                        <Button type="button" size="sm" onClick={() => openAction(finding, "claim")} disabled={actionBusy}>
-                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.claim")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void runFindingLifecycleAction(finding, "rotate")}
-                          disabled={actionBusy || !hasIdentity}
-                        >
-                          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.rotate")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void runFindingLifecycleAction(finding, "revoke")}
-                          disabled={actionBusy || !hasIdentity}
-                        >
-                          <XCircle className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.revoke")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void runFindingLifecycleAction(finding, "decommission")}
-                          disabled={actionBusy || !hasIdentity}
-                        >
-                          <Activity className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.decommission")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void runFindingLifecycleAction(finding, "remediate")}
-                          disabled={actionBusy || !hasIdentity}
-                        >
-                          <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.remediate")}
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => openAction(finding, "dismiss")} disabled={actionBusy}>
-                          <XCircle className="h-4 w-4" aria-hidden="true" />
-                          {t("discovery.findings.dismiss")}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid
+        ariaLabel={t("discovery.findings.caption")}
+        rows={findings}
+        columns={columns}
+        getRowId={(finding) => finding.id}
+        state={findings.length === 0 ? "empty" : "ready"}
+        stateTitle={t("discovery.findings.noMatches")}
+        showColumnChooser
+        viewStorageKey="discovery-findings"
+        viewMetadata={{ triage: filters.triage, owner: filters.owner, team: filters.team, tag: filters.tag }}
+        onViewRestore={restoreGridView}
+        toolbar={({ columnChooser, savedViews }) => <DataGridToolbar filters={filterControls} columnChooser={columnChooser} savedViews={savedViews} />}
+      />
 
       {selected && (
         <aside className="ui-panel grid gap-4 p-comfortable" aria-labelledby="finding-detail-heading">
