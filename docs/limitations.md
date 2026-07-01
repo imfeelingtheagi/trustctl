@@ -12,6 +12,128 @@ and contribution terms in `NOTICE`.
 
 If a capability matters to your evaluation, check this page before relying on it.
 
+## Feature served-state matrix
+
+This matrix is the canonical served-state table for the feature catalog. The docs
+test suite checks every `F*` row below against
+`internal/featureparity/feature-map-backlog.json`, so a capability cannot sit under
+the wrong maturity heading without failing `go test ./docs/...`.
+
+- **Served** means the running binary serves the capability end to end.
+- **Conditional** means the served path exists but depends on configuration,
+  license activation, or an operator-supplied backend.
+- **Partial** means a real served path exists, with explicit residual work called
+  out below.
+- **Library-only** means built and tested, but not yet served by the binary: library
+  code exists with tests, but is not yet wired into the served API.
+- **Roadmap** means Phase 2 or later work with no current served product claim.
+
+<!-- feature-served-state-matrix:start -->
+### Served
+
+| ID | Feature | Primary docs |
+|----|---------|--------------|
+| F1 | Certificate inventory | docs/features/discovery-and-inventory.md |
+| F2 | Network discovery | docs/features/discovery-and-inventory.md |
+| F3 | Agent-based discovery | docs/features/discovery-and-inventory.md |
+| F42 | SSH credential discovery and inventory | docs/features/discovery-and-inventory.md, docs/features/ssh.md |
+| F49 | Agentless cloud certificate discovery | docs/features/discovery-and-inventory.md |
+| F35 | Secret store discovery | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
+| F36 | API key / token inventory | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
+| F19 | Credential risk scoring | docs/features/observability-and-risk.md |
+| F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
+| F48 | Private/enterprise CA hierarchy management | docs/features/issuance-and-cas.md, docs/runbooks/key-ceremony.md |
+| F53 | Certificate profiles and registration-authority model | docs/features/issuance-and-cas.md, docs/guides/profile-authoring.md |
+| F46 | ACME Renewal Information (ARI) | docs/features/issuance-and-cas.md, docs/features/acme-and-dns.md |
+| F47 | X.509 revocation infrastructure | docs/features/issuance-and-cas.md |
+| F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
+| F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
+| F6 | Lifecycle automation | docs/features/lifecycle-and-pqc.md |
+| F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
+| F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
+| F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
+| F50 | Code-signing service | docs/features/code-signing-and-timestamping.md |
+| F31 | Credential compromise workflow | docs/features/incident-and-jit.md, docs/features/discovery-and-inventory.md |
+| F32 | Fleet re-issuance for CA compromise | docs/features/incident-and-jit.md |
+| F33 | Just-in-time issuance with approval flows | docs/features/incident-and-jit.md |
+| F34 | Break-glass procedures | docs/features/incident-and-jit.md |
+| F37 | Secret rotation engine | docs/features/secrets.md |
+| F38 | Ephemeral API key issuance | docs/features/secrets.md |
+| F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
+| F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
+| F58 | Platform auth-method framework | docs/features/secrets.md |
+| F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
+| F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
+| F8 | RBAC | docs/features/policy-and-governance.md |
+| F9 | Audit log surfaces | docs/features/policy-and-governance.md, docs/observability.md, docs/configuration.md |
+| F10 | REST API | docs/features/platform-and-api.md |
+| F11 | CLI | docs/features/platform-and-api.md, docs/cli.md |
+| F12 | Web UI | docs/features/platform-and-api.md |
+| F14 | Single-binary distribution | docs/features/platform-and-api.md |
+| F15 | Encrypted control-plane transport | docs/features/platform-and-api.md |
+| F40 | Multi-tenant deployment topology | docs/features/platform-and-api.md |
+| F41 | Cross-cluster / multi-region federation | docs/features/platform-and-api.md |
+| F20 | Plugin SDK with capability sandboxing | docs/features/extensibility-plugins.md |
+| F21 | Credential graph | docs/features/graph-query-ai.md |
+| F79 | Privacy and data-subject controls | docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, docs/configuration.md |
+
+### Conditional
+
+| ID | Feature | Primary docs |
+|----|---------|--------------|
+| F5 | Built-in ACME server | docs/features/acme-and-dns.md |
+| F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
+| F23 | SCEP server | docs/features/enrollment-protocols.md |
+| F55 | CMP server | docs/features/enrollment-protocols.md |
+| F24 | SPIFFE Workload API | docs/features/workload-identity.md |
+| F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
+| F30 | Workload attestation chain | docs/features/workload-identity.md |
+| F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
+| F43 | SSH certificate authority | docs/features/ssh.md |
+| F44 | SSH deployment and trust configuration agent | docs/features/ssh.md, docs/design/ssh-trust-rewrite.md |
+| F45 | Attestation-gated short-lived SSH user certs | docs/features/ssh.md |
+| F51 | Timestamping authority | docs/features/code-signing-and-timestamping.md |
+| F63 | Native secret store | docs/features/secrets.md |
+| F65 | Dynamic secrets | docs/features/secrets.md |
+| F67 | PKI as a secrets engine | docs/features/secrets.md |
+| F68 | Secret sync / platform integrations | docs/features/secrets.md |
+| F13 | SSO/OIDC | docs/features/platform-and-api.md |
+| F75 | Unified semantic query layer | docs/features/graph-query-ai.md |
+| F76 | Pluggable AI model adapter | docs/features/graph-query-ai.md |
+| F77 | Grounded RCA and natural-language query | docs/features/graph-query-ai.md |
+| F78 | trstctl MCP server | docs/features/graph-query-ai.md |
+
+### Partial
+
+| ID | Feature | Primary docs |
+|----|---------|--------------|
+| F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
+| F18 | Drift detection | docs/features/observability-and-risk.md |
+| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
+| F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
+| F70 | DNS-provider plugin framework | docs/features/acme-and-dns.md |
+| F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
+| F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
+| F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
+| F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
+| F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
+| F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
+| F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
+| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
+| F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
+| F29 | Notification integrations | docs/features/policy-and-governance.md |
+
+### Library-only
+
+| ID | Feature | Primary docs |
+|----|---------|--------------|
+
+### Roadmap
+
+| ID | Feature | Primary docs |
+|----|---------|--------------|
+<!-- feature-served-state-matrix:end -->
+
 ## Served by the running binary today
 
 The `trstctl` binary assembles and serves a control plane: the tamper-evident event
@@ -280,10 +402,18 @@ operator privacy/compliance work, described in [compliance](compliance.md) and
 
 ## Built and tested, but not yet served by the binary
 
-These subsystems exist as **library code with real unit/integration/conformance
-tests**, but are **not yet wired into the served API of the running binary**. They
-are usable from Go today; "served, authenticated, end-to-end in the binary" is the
-remaining integration work.
+No current `feature-map-backlog.json` row uses `served_state=library`. If a row
+returns to that bucket, it belongs under **Library-only** in the matrix above with
+the same `F*` ID, because "library-only" means library code with real
+unit/integration/conformance tests that is **not yet wired into the served API**.
+
+## Conditional, partial, and residual boundaries
+
+These notes explain the rows that are **conditional** or **partial** in the matrix:
+some are served only when an operator enables or configures a backend, and some have
+a served spine with explicit residual work. Treat the matrix above as the authority
+for whether the running binary serves the capability; this section records the
+operator-facing edges and follow-up integration work.
 
 - Remaining **private CA hierarchy** operator flows beyond root/intermediate/leaf
   issuance. Root/intermediate CA creation, existing signer-backed CA chain import,

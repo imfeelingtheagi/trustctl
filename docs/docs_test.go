@@ -1442,7 +1442,7 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 	lim := read(t, "limitations.md")
 	// Collapse whitespace so a marker/over-claim is matched even when the Markdown
 	// source wraps it across lines (the disclosures are prose, not single tokens).
-	low := strings.Join(strings.Fields(strings.ToLower(lim)), " ")
+	low := strings.Join(strings.Fields(strings.ToLower(stripFeatureServedStateMatrix(lim))), " ")
 
 	claims := []servedClaim{
 		{
@@ -1782,6 +1782,23 @@ func containsAll(s string, subs []string) bool {
 		}
 	}
 	return true
+}
+
+func stripFeatureServedStateMatrix(s string) string {
+	const (
+		startMarker = "<!-- feature-served-state-matrix:start -->"
+		endMarker   = "<!-- feature-served-state-matrix:end -->"
+	)
+	start := strings.Index(s, startMarker)
+	if start == -1 {
+		return s
+	}
+	end := strings.Index(s[start:], endMarker)
+	if end == -1 {
+		return s
+	}
+	end += start + len(endMarker)
+	return s[:start] + s[end:]
 }
 
 // binaryServesSecretsFrameworks reports whether the served binary (internal/api,

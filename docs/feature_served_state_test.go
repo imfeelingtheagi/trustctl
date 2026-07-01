@@ -175,3 +175,112 @@ func TestFeatureMaturityVocabularyIsSharedByDocsAndWeb(t *testing.T) {
 		}
 	}
 }
+
+func TestLimitationsFeatureRowsMatchServedState(t *testing.T) {
+	const (
+		startMarker = "<!-- feature-served-state-matrix:start -->"
+		endMarker   = "<!-- feature-served-state-matrix:end -->"
+	)
+	sectionByHeading := map[string]string{
+		"Served":       "served",
+		"Conditional":  "conditional",
+		"Partial":      "partial",
+		"Library-only": "library",
+		"Roadmap":      "roadmap",
+	}
+
+	body := read(t, "limitations.md")
+	start := strings.Index(body, startMarker)
+	end := strings.Index(body, endMarker)
+	if start == -1 || end == -1 || end <= start {
+		t.Fatalf("limitations.md must contain the DOCS-003 served-state matrix markers %q and %q", startMarker, endMarker)
+	}
+	matrix := body[start+len(startMarker) : end]
+
+	byID := map[string]featureMapServedState{}
+	seen := map[string]int{}
+	for _, item := range featureServedStateLedger(t).Items {
+		byID[item.FeatureID] = item
+	}
+
+	sectionsSeen := map[string]bool{}
+	currentSection := ""
+	for _, line := range strings.Split(matrix, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "### ") {
+			heading := strings.TrimSpace(strings.TrimPrefix(trimmed, "### "))
+			state, ok := sectionByHeading[heading]
+			if !ok {
+				t.Fatalf("limitations.md DOCS-003 matrix has unknown section heading %q", heading)
+			}
+			currentSection = state
+			sectionsSeen[state] = true
+			continue
+		}
+
+		cells := markdownTableCells(trimmed)
+		if len(cells) == 0 || !isFeatureID(cells[0]) {
+			continue
+		}
+		if currentSection == "" {
+			t.Fatalf("limitations.md feature row %s appears before a DOCS-003 served-state heading", cells[0])
+		}
+		item, ok := byID[cells[0]]
+		if !ok {
+			t.Fatalf("limitations.md feature row %s has no feature-map-backlog.json row", cells[0])
+		}
+		if currentSection != item.ServedState {
+			t.Errorf("limitations.md feature row %s is under %q but feature-map-backlog.json says served_state=%q", item.FeatureID, currentSection, item.ServedState)
+		}
+		if len(cells) < 2 || cells[1] != item.Feature {
+			t.Errorf("limitations.md feature row %s title = %q, want %q from feature-map-backlog.json", item.FeatureID, cellAt(cells, 1), item.Feature)
+		}
+		seen[item.FeatureID]++
+	}
+
+	for _, state := range []string{"served", "conditional", "partial", "library", "roadmap"} {
+		if !sectionsSeen[state] {
+			t.Errorf("limitations.md DOCS-003 matrix missing %q section", state)
+		}
+	}
+	for _, item := range byID {
+		switch seen[item.FeatureID] {
+		case 0:
+			t.Errorf("limitations.md DOCS-003 matrix missing %s (%s)", item.FeatureID, item.Feature)
+		case 1:
+		default:
+			t.Errorf("limitations.md DOCS-003 matrix lists %s %d times", item.FeatureID, seen[item.FeatureID])
+		}
+	}
+}
+
+func markdownTableCells(line string) []string {
+	if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
+		return nil
+	}
+	raw := strings.Split(strings.Trim(line, "|"), "|")
+	cells := make([]string, 0, len(raw))
+	for _, cell := range raw {
+		cells = append(cells, strings.TrimSpace(cell))
+	}
+	return cells
+}
+
+func isFeatureID(s string) bool {
+	if len(s) < 2 || s[0] != 'F' {
+		return false
+	}
+	for _, r := range s[1:] {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func cellAt(cells []string, idx int) string {
+	if idx >= len(cells) {
+		return ""
+	}
+	return cells[idx]
+}
