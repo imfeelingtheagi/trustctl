@@ -10786,6 +10786,125 @@
         ],
         "type": "object"
       },
+      "PrivacyArchiveErasureAttestation": {
+        "properties": {
+          "action": {
+            "enum": [
+              "deleted",
+              "legal_hold",
+              "cryptographic_shred"
+            ],
+            "type": "string"
+          },
+          "artifact_type": {
+            "enum": [
+              "backup",
+              "signed_audit_archive"
+            ],
+            "type": "string"
+          },
+          "artifact_uri": {
+            "type": "string"
+          },
+          "attestation_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "attested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "held_until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_by_ref": {
+            "type": "string"
+          },
+          "subject_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attestation_id",
+          "subject_ref",
+          "artifact_type",
+          "action",
+          "evidence_refs",
+          "attested_at"
+        ],
+        "type": "object"
+      },
+      "PrivacyArchiveErasureAttestationList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrivacyArchiveErasureAttestation"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PrivacyArchiveErasureAttestationRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "deleted",
+              "legal_hold",
+              "cryptographic_shred"
+            ],
+            "type": "string"
+          },
+          "artifact_type": {
+            "enum": [
+              "backup",
+              "signed_audit_archive"
+            ],
+            "type": "string"
+          },
+          "artifact_uri": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "held_until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "artifact_type",
+          "action"
+        ],
+        "type": "object"
+      },
       "PrivacyCatalog": {
         "properties": {
           "items": {
@@ -25836,6 +25955,145 @@
         ],
         "summary": "Queue rollback for a PQC migration run",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/privacy/archive-erasure-attestations": {
+      "get": {
+        "operationId": "listPrivacyArchiveErasureAttestations",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque archive-erasure attestation cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "tenant-bound subject reference to filter evidence",
+            "in": "query",
+            "name": "subject_ref",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyArchiveErasureAttestationList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List backup/archive erasure evidence",
+        "x-trstctl-permission": "privacy:read"
+      },
+      "post": {
+        "operationId": "attestPrivacyArchiveErasure",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacyArchiveErasureAttestationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyArchiveErasureAttestation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record pre-erasure backup/archive erasure evidence",
+        "x-trstctl-permission": "privacy:write"
       }
     },
     "/api/v1/privacy/catalog": {

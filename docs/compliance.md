@@ -181,7 +181,11 @@ trstctl enables the controls below; **you** operate them:
   subject bytes replaced by the tenant-bound erasure placeholder, so new hot-log
   replay and later backups do not carry that raw subject. Signed archives and
   backups created before the erasure are historical artifacts outside the hot-log
-  rewrite; process them under your WORM, legal-hold, and backup-deletion policy.
+  rewrite; process them under your WORM, legal-hold, backup-deletion, or
+  cryptographic-shredding policy, then record **archive-erasure attestations**
+  through `POST /api/v1/privacy/archive-erasure-attestations` (or
+  `trstctl privacy archives attest`). `GET /api/v1/privacy/archive-erasure-attestations`
+  returns the tenant evidence ledger for privacy review.
 - **Run the rest of the program**: access reviews, change management, incident
   response, vendor management, and the framework-specific evidence your auditor
   requires.

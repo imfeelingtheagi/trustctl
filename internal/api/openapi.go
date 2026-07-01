@@ -1956,6 +1956,27 @@ func componentSchemas() map[string]*Schema {
 		"counts":           {Type: "object"},
 		"enforced_at":      timestamp(),
 	}, "run_id", "cutoffs", "counts", "enforced_at")
+	privacyArchiveErasureReq := object(map[string]*Schema{
+		"subject":       str(),
+		"artifact_type": {Type: "string", Enum: []string{"backup", "signed_audit_archive"}},
+		"artifact_uri":  str(),
+		"action":        {Type: "string", Enum: []string{"deleted", "legal_hold", "cryptographic_shred"}},
+		"reason":        str(),
+		"evidence_refs": {Type: "array", Items: str()},
+		"held_until":    timestamp(),
+	}, "subject", "artifact_type", "action")
+	privacyArchiveErasure := object(map[string]*Schema{
+		"attestation_id":   uuid(),
+		"subject_ref":      str(),
+		"requested_by_ref": str(),
+		"artifact_type":    {Type: "string", Enum: []string{"backup", "signed_audit_archive"}},
+		"artifact_uri":     str(),
+		"action":           {Type: "string", Enum: []string{"deleted", "legal_hold", "cryptographic_shred"}},
+		"reason":           str(),
+		"evidence_refs":    {Type: "array", Items: str()},
+		"held_until":       timestamp(),
+		"attested_at":      timestamp(),
+	}, "attestation_id", "subject_ref", "artifact_type", "action", "evidence_refs", "attested_at")
 	privacyCatalogEntry := object(map[string]*Schema{
 		"id": str(), "location": str(), "category": str(), "purpose": str(),
 		"retention_class": str(), "erasure": str(), "owner": str(),
@@ -3148,6 +3169,9 @@ func componentSchemas() map[string]*Schema {
 		"PrivacyRetentionCutoffs":                  privacyRetentionCutoffs,
 		"PrivacyRetentionRun":                      privacyRetentionRun,
 		"PrivacyRetentionRunList":                  list("PrivacyRetentionRun"),
+		"PrivacyArchiveErasureAttestationRequest":  privacyArchiveErasureReq,
+		"PrivacyArchiveErasureAttestation":         privacyArchiveErasure,
+		"PrivacyArchiveErasureAttestationList":     list("PrivacyArchiveErasureAttestation"),
 		"PrivacyCatalogEntry":                      privacyCatalogEntry,
 		"PrivacyCatalog":                           privacyCatalog,
 		"PrivacySubjectExportRequest":              privacySubjectExportReq,

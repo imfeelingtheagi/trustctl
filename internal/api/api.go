@@ -870,6 +870,11 @@ func (a *API) routes() []route {
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque retention-run cursor from a prior page"},
 	}
+	privacyArchiveErasureQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque archive-erasure attestation cursor from a prior page"},
+		{name: "subject_ref", typ: "string", desc: "tenant-bound subject reference to filter evidence"},
+	}
 	return []route{
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
 		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
@@ -1065,6 +1070,8 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/privacy/subject-erasures", opID: "listPrivacySubjectErasures", summary: "List subject-erasure evidence", handler: a.listPrivacySubjectErasures, query: privacyErasureQuery, resSchema: "PrivacySubjectErasureList", successCode: "200", perm: authz.PrivacyRead},
 		{method: "POST", path: "/api/v1/privacy/retention-runs", opID: "enforcePrivacyRetention", summary: "Run non-audit personal-data retention", handler: a.enforcePrivacyRetention, resSchema: "PrivacyRetentionRun", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
 		{method: "GET", path: "/api/v1/privacy/retention-runs", opID: "listPrivacyRetentionRuns", summary: "List non-audit retention evidence", handler: a.listPrivacyRetentionRuns, query: privacyRetentionQuery, resSchema: "PrivacyRetentionRunList", successCode: "200", perm: authz.PrivacyRead},
+		{method: "POST", path: "/api/v1/privacy/archive-erasure-attestations", opID: "attestPrivacyArchiveErasure", summary: "Record pre-erasure backup/archive erasure evidence", handler: a.attestPrivacyArchiveErasure, reqSchema: "PrivacyArchiveErasureAttestationRequest", resSchema: "PrivacyArchiveErasureAttestation", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
+		{method: "GET", path: "/api/v1/privacy/archive-erasure-attestations", opID: "listPrivacyArchiveErasureAttestations", summary: "List backup/archive erasure evidence", handler: a.listPrivacyArchiveErasureAttestations, query: privacyArchiveErasureQuery, resSchema: "PrivacyArchiveErasureAttestationList", successCode: "200", perm: authz.PrivacyRead},
 		{method: "POST", path: "/api/v1/privacy/subject-exports", opID: "exportPrivacySubject", summary: "Export all records tied to a data subject (access/portability, read-only)", handler: a.exportPrivacySubject, reqSchema: "PrivacySubjectExportRequest", resSchema: "PrivacySubjectExport", successCode: "200", perm: authz.PrivacyRead},
 		{method: "GET", path: "/api/v1/privacy/catalog", opID: "getPrivacyCatalog", summary: "Get the maintained personal-data catalog", handler: a.getPrivacyCatalog, resSchema: "PrivacyCatalog", successCode: "200", perm: authz.PrivacyRead},
 

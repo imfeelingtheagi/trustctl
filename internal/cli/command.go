@@ -246,6 +246,8 @@ var commandTable = []Command{
 	{Name: []string{"privacy", "erasures", "list"}, Method: "GET", Path: "/api/v1/privacy/subject-erasures", Query: []string{"limit", "cursor"}, Summary: "List subject-erasure evidence"},
 	{Name: []string{"privacy", "retention", "run"}, Method: "POST", Path: "/api/v1/privacy/retention-runs", Body: bodyNone, Summary: "Run non-audit personal-data retention"},
 	{Name: []string{"privacy", "retention", "list"}, Method: "GET", Path: "/api/v1/privacy/retention-runs", Query: []string{"limit", "cursor"}, Summary: "List retention evidence"},
+	{Name: []string{"privacy", "archives", "attest"}, Method: "POST", Path: "/api/v1/privacy/archive-erasure-attestations", Body: bodyFile, Summary: "Record backup/archive erasure evidence"},
+	{Name: []string{"privacy", "archives", "list"}, Method: "GET", Path: "/api/v1/privacy/archive-erasure-attestations", Query: []string{"limit", "cursor", "subject_ref"}, Summary: "List backup/archive erasure evidence"},
 	{Name: []string{"privacy", "export"}, Method: "POST", Path: "/api/v1/privacy/subject-exports", Body: bodyFile, Summary: "Export all records tied to a data subject"},
 	{Name: []string{"privacy", "catalog"}, Method: "GET", Path: "/api/v1/privacy/catalog", Summary: "Get the personal-data catalog"},
 

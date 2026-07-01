@@ -397,8 +397,12 @@ are governed by audit/privacy retention policy: configure
 `TRSTCTL_AUDIT_RETENTION` plus `TRSTCTL_AUDIT_ARCHIVE_DIR` for archive-then-prune
 of audit records, and use **Privacy Retention** for non-audit personal data
 pseudonymization. WORM/object-store archive cleanup and legal hold decisions remain
-operator privacy/compliance work, described in [compliance](compliance.md) and
-[configuration](configuration.md).
+operator privacy/compliance work, but the product now gives that work a queryable
+evidence ledger: record deletion, legal-hold exemption, or cryptographic shredding
+with `POST /api/v1/privacy/archive-erasure-attestations`, inspect it with
+`GET /api/v1/privacy/archive-erasure-attestations`, or use
+`trstctl privacy archives attest/list`. The attestation stores `subject_ref` and
+redacted evidence refs rather than the raw subject.
 
 ## Built and tested, but not yet served by the binary
 

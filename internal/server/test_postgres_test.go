@@ -97,7 +97,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          incident_executions, incident_fleet_reissuance_runs,
 		          pam_sessions, nhi_access_review_campaigns, nhi_access_review_items,
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,
-		          privacy_subject_erasures, privacy_retention_runs,
+		          privacy_subject_erasures, privacy_retention_runs, privacy_archive_erasure_attestations,
 		          secret_shares, secret_store, read_model_snapshots,
 		          issuance_approval_requests, issuance_approvals
 		 RESTART IDENTITY CASCADE`); err != nil {

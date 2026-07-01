@@ -2782,6 +2782,34 @@ export interface PolicyDryRunTrace {
   query_id: number;
 }
 
+export interface PrivacyArchiveErasureAttestation {
+  action: "deleted" | "legal_hold" | "cryptographic_shred";
+  artifact_type: "backup" | "signed_audit_archive";
+  artifact_uri?: string;
+  attestation_id: string;
+  attested_at: string;
+  evidence_refs: string[];
+  held_until?: string;
+  reason?: string;
+  requested_by_ref?: string;
+  subject_ref: string;
+}
+
+export interface PrivacyArchiveErasureAttestationList {
+  items: PrivacyArchiveErasureAttestation[];
+  next_cursor?: string;
+}
+
+export interface PrivacyArchiveErasureAttestationRequest {
+  action: "deleted" | "legal_hold" | "cryptographic_shred";
+  artifact_type: "backup" | "signed_audit_archive";
+  artifact_uri?: string;
+  evidence_refs?: string[];
+  held_until?: string;
+  reason?: string;
+  subject: string;
+}
+
 export interface PrivacyCatalog {
   items: PrivacyCatalogEntry[];
 }

@@ -286,8 +286,12 @@ old hot stream messages, and republishes the same envelopes with the erased subj
 replaced by its tenant-bound `erased:<subject_ref>` placeholder. This keeps future
 hot-log replay, audit queries, and full backups taken after the erasure from carrying
 the raw subject. Backups and signed audit archives created before the erasure are not
-rewritten automatically; apply your legal-hold, WORM, and backup-deletion procedure
-to those artifacts separately.
+rewritten automatically. Record the outcome of your legal-hold, WORM,
+backup-deletion, or cryptographic-shredding procedure with
+`POST /api/v1/privacy/archive-erasure-attestations`; inspect the tenant evidence
+ledger with `GET /api/v1/privacy/archive-erasure-attestations` or
+`trstctl privacy archives attest/list`. The attestation event stores
+`subject_ref` and redacted evidence refs, not the raw subject.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

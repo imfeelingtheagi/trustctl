@@ -41,6 +41,7 @@ var TenantScopedTables = []string{
 	"access_change_requests",
 	"nhi_access_review_items",
 	"nhi_access_review_campaigns",
+	"privacy_archive_erasure_attestations",
 	"privacy_retention_runs",
 	"privacy_subject_erasures",
 	"connector_delivery_receipts",

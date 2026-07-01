@@ -12963,6 +12963,8 @@
         "listPrivacySubjectErasures",
         "enforcePrivacyRetention",
         "listPrivacyRetentionRuns",
+        "attestPrivacyArchiveErasure",
+        "listPrivacyArchiveErasureAttestations",
         "exportPrivacySubject",
         "getPrivacyCatalog"
       ],
@@ -12972,6 +12974,8 @@
         "privacy erasures list",
         "privacy retention run",
         "privacy retention list",
+        "privacy archives attest",
+        "privacy archives list",
         "privacy export",
         "privacy catalog"
       ],
@@ -12981,14 +12985,15 @@
           "evidence": [
             "served_state=served",
             "backend_status=served",
-            "POST /api/v1/privacy/subject-erasures emits privacy.subject.erased; POST /api/v1/privacy/retention-runs emits privacy.retention.enforced; POST /api/v1/privacy/subject-exports and GET /api/v1/privacy/catalog serve access/portability and catalog reads."
+            "POST /api/v1/privacy/subject-erasures emits privacy.subject.erased; POST /api/v1/privacy/retention-runs emits privacy.retention.enforced; POST /api/v1/privacy/archive-erasure-attestations emits privacy.archive_erasure.attested; POST /api/v1/privacy/subject-exports and GET /api/v1/privacy/catalog serve access/portability and catalog reads."
           ],
           "refs": [
             "internal/api/privacy.go",
             "internal/orchestrator/commands.go",
             "internal/orchestrator/privacy_retention.go",
             "internal/server/privacy_subject_erasure_served_test.go",
-            "internal/server/privacy_retention_served_test.go"
+            "internal/server/privacy_retention_served_test.go",
+            "internal/server/privacy_archive_erasure_served_test.go"
           ]
         },
         "ui": {
@@ -13008,6 +13013,8 @@
             "CLI command: privacy erasures list",
             "CLI command: privacy retention run",
             "CLI command: privacy retention list",
+            "CLI command: privacy archives attest",
+            "CLI command: privacy archives list",
             "CLI command: privacy export",
             "CLI command: privacy catalog"
           ],

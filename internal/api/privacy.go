@@ -24,6 +24,16 @@ type privacySubjectExportRequest struct {
 	Subject string `json:"subject"`
 }
 
+type privacyArchiveErasureAttestationRequest struct {
+	Subject      string     `json:"subject"`
+	ArtifactType string     `json:"artifact_type"`
+	ArtifactURI  string     `json:"artifact_uri"`
+	Action       string     `json:"action"`
+	Reason       string     `json:"reason"`
+	EvidenceRefs []string   `json:"evidence_refs"`
+	HeldUntil    *time.Time `json:"held_until,omitempty"`
+}
+
 type privacySubjectErasureResponse struct {
 	SubjectRef     string                        `json:"subject_ref"`
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
@@ -67,6 +77,24 @@ type privacyRetentionRunListResponse struct {
 	NextCursor string                        `json:"next_cursor,omitempty"`
 }
 
+type privacyArchiveErasureAttestationResponse struct {
+	AttestationID  string     `json:"attestation_id"`
+	SubjectRef     string     `json:"subject_ref"`
+	RequestedByRef string     `json:"requested_by_ref,omitempty"`
+	ArtifactType   string     `json:"artifact_type"`
+	ArtifactURI    string     `json:"artifact_uri,omitempty"`
+	Action         string     `json:"action"`
+	Reason         string     `json:"reason,omitempty"`
+	EvidenceRefs   []string   `json:"evidence_refs"`
+	HeldUntil      *time.Time `json:"held_until,omitempty"`
+	AttestedAt     time.Time  `json:"attested_at"`
+}
+
+type privacyArchiveErasureAttestationListResponse struct {
+	Items      []privacyArchiveErasureAttestationResponse `json:"items"`
+	NextCursor string                                     `json:"next_cursor,omitempty"`
+}
+
 func toPrivacySubjectErasureResponse(e store.PrivacySubjectErasure) privacySubjectErasureResponse {
 	counts := e.Counts
 	if counts == nil {
@@ -106,6 +134,25 @@ func toPrivacyRetentionRunResponse(r store.PrivacyRetentionRun) privacyRetention
 	}
 }
 
+func toPrivacyArchiveErasureAttestationResponse(a store.PrivacyArchiveErasureAttestation) privacyArchiveErasureAttestationResponse {
+	refs := a.EvidenceRefs
+	if refs == nil {
+		refs = []string{}
+	}
+	return privacyArchiveErasureAttestationResponse{
+		AttestationID:  a.AttestationID,
+		SubjectRef:     a.SubjectRef,
+		RequestedByRef: a.RequestedByRef,
+		ArtifactType:   a.ArtifactType,
+		ArtifactURI:    a.ArtifactURI,
+		Action:         a.Action,
+		Reason:         a.Reason,
+		EvidenceRefs:   refs,
+		HeldUntil:      a.HeldUntil,
+		AttestedAt:     a.AttestedAt,
+	}
+}
+
 //trstctl:mutation
 func (a *API) erasePrivacySubject(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -140,6 +187,41 @@ func (a *API) enforcePrivacyRetention(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, toPrivacyRetentionRunResponse(run), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) attestPrivacyArchiveErasure(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req privacyArchiveErasureAttestationRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		req.Subject = strings.TrimSpace(req.Subject)
+		req.ArtifactType = strings.TrimSpace(req.ArtifactType)
+		req.Action = strings.TrimSpace(req.Action)
+		if req.Subject == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
+		}
+		if req.ArtifactType != "backup" && req.ArtifactType != "signed_audit_archive" {
+			return 0, nil, errStatus(http.StatusBadRequest, "artifact_type must be backup or signed_audit_archive")
+		}
+		if req.Action != "deleted" && req.Action != "legal_hold" && req.Action != "cryptographic_shred" {
+			return 0, nil, errStatus(http.StatusBadRequest, "action must be deleted, legal_hold, or cryptographic_shred")
+		}
+		att, err := a.orch.AttestPrivacyArchiveErasure(ctx, tenantID, req.Subject, store.PrivacyArchiveErasureAttestation{
+			ArtifactType: req.ArtifactType,
+			ArtifactURI:  req.ArtifactURI,
+			Action:       req.Action,
+			Reason:       req.Reason,
+			EvidenceRefs: req.EvidenceRefs,
+			HeldUntil:    req.HeldUntil,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toPrivacyArchiveErasureAttestationResponse(att), nil
 	})
 }
 
@@ -211,6 +293,42 @@ func (a *API) listPrivacyRetentionRuns(w http.ResponseWriter, r *http.Request) {
 		next = encodeStringCursor(runs[len(runs)-1].RunID)
 	}
 	a.writeJSON(w, http.StatusOK, privacyRetentionRunListResponse{Items: items, NextCursor: next})
+}
+
+func (a *API) listPrivacyArchiveErasureAttestations(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, err := pageLimit(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	after := ""
+	if c := r.URL.Query().Get("cursor"); c != "" {
+		after, err = decodeStringCursor(c)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid cursor"))
+			return
+		}
+	}
+	subjectRef := strings.TrimSpace(r.URL.Query().Get("subject_ref"))
+	atts, err := a.store.ListPrivacyArchiveErasureAttestationsPage(r.Context(), tenantID, subjectRef, after, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]privacyArchiveErasureAttestationResponse, 0, len(atts))
+	for _, att := range atts {
+		items = append(items, toPrivacyArchiveErasureAttestationResponse(att))
+	}
+	next := ""
+	if len(atts) == limit {
+		next = encodeStringCursor(atts[len(atts)-1].AttestationID)
+	}
+	a.writeJSON(w, http.StatusOK, privacyArchiveErasureAttestationListResponse{Items: items, NextCursor: next})
 }
 
 // exportPrivacySubject answers a data-subject access/portability request

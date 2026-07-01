@@ -98,6 +98,7 @@ const (
 	EventProfileUpdated                      = "profile.updated"
 	EventPrivacySubjectErased                = "privacy.subject.erased"
 	EventPrivacyRetentionEnforced            = "privacy.retention.enforced"
+	EventPrivacyArchiveErasureAttested       = "privacy.archive_erasure.attested"
 	EventNHIAccessReviewCampaignStarted      = "nhi.access_review.campaign.started"
 	EventNHIAccessReviewItemDecided          = "nhi.access_review.item.decided"
 	EventAccessChangeRequestCreated          = "access.change_request.created"
@@ -224,6 +225,7 @@ var ledger = []FeatureEvent{
 	// F79 — Privacy operations (subject erasure, retention enforcement).
 	{"F79", "Privacy subject erasure", "erase_subject", "erasePrivacySubject", []string{EventPrivacySubjectErased}},
 	{"F79", "Privacy retention", "enforce_retention", "enforcePrivacyRetention", []string{EventPrivacyRetentionEnforced}},
+	{"F79", "Privacy archive erasure evidence", "attest_archive_erasure", "attestPrivacyArchiveErasure", []string{EventPrivacyArchiveErasureAttested}},
 
 	// F62 — IGA-grade NHI access-review / certification campaigns.
 	{"F62", "Cryptographic compliance reporting & posture dashboards", "schedule_report", "createComplianceReportSchedule", []string{EventComplianceReportScheduleUpserted}},

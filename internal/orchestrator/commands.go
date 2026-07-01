@@ -461,6 +461,85 @@ func (o *Orchestrator) EnforcePrivacyRetention(ctx context.Context, tenantID str
 	return run, nil
 }
 
+// AttestPrivacyArchiveErasure records operator evidence that a pre-erasure backup
+// or signed audit archive was deleted, placed under legal hold, or made
+// unrecoverable by cryptographic shredding. The event carries subject_ref, not the
+// raw subject, and redacts the raw subject from operator-supplied evidence text.
+func (o *Orchestrator) AttestPrivacyArchiveErasure(ctx context.Context, tenantID, subject string, in store.PrivacyArchiveErasureAttestation) (store.PrivacyArchiveErasureAttestation, error) {
+	if tenantID == "" {
+		return store.PrivacyArchiveErasureAttestation{}, fmt.Errorf("orchestrator: archive erasure attestation requires tenant id (AN-1)")
+	}
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return store.PrivacyArchiveErasureAttestation{}, fmt.Errorf("orchestrator: archive erasure attestation requires subject")
+	}
+	in.ArtifactType = strings.TrimSpace(in.ArtifactType)
+	in.Action = strings.TrimSpace(in.Action)
+	if in.ArtifactType != "backup" && in.ArtifactType != "signed_audit_archive" {
+		return store.PrivacyArchiveErasureAttestation{}, fmt.Errorf("orchestrator: archive erasure artifact_type must be backup or signed_audit_archive")
+	}
+	if in.Action != "deleted" && in.Action != "legal_hold" && in.Action != "cryptographic_shred" {
+		return store.PrivacyArchiveErasureAttestation{}, fmt.Errorf("orchestrator: archive erasure action must be deleted, legal_hold, or cryptographic_shred")
+	}
+	subjectRef := privacy.SubjectRef(tenantID, subject)
+	placeholder := privacy.Placeholder(subjectRef)
+	out := store.PrivacyArchiveErasureAttestation{
+		TenantID:      tenantID,
+		AttestationID: uuid.NewString(),
+		SubjectRef:    subjectRef,
+		ArtifactType:  in.ArtifactType,
+		ArtifactURI:   redactArchiveEvidenceValue(strings.TrimSpace(in.ArtifactURI), subject, placeholder),
+		Action:        in.Action,
+		Reason:        redactArchiveEvidenceValue(strings.TrimSpace(in.Reason), subject, placeholder),
+		EvidenceRefs:  redactArchiveEvidenceRefs(in.EvidenceRefs, subject, placeholder),
+		HeldUntil:     in.HeldUntil,
+	}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		out.RequestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+	}
+	payload, err := json.Marshal(projections.PrivacyArchiveErasureAttested{
+		AttestationID:  out.AttestationID,
+		SubjectRef:     out.SubjectRef,
+		RequestedByRef: out.RequestedByRef,
+		ArtifactType:   out.ArtifactType,
+		ArtifactURI:    out.ArtifactURI,
+		Action:         out.Action,
+		Reason:         out.Reason,
+		EvidenceRefs:   out.EvidenceRefs,
+		HeldUntil:      out.HeldUntil,
+	})
+	if err != nil {
+		return store.PrivacyArchiveErasureAttestation{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventPrivacyArchiveErasureAttested, tenantID, payload)
+	if err != nil {
+		return store.PrivacyArchiveErasureAttestation{}, err
+	}
+	out.AttestedAt = ev.Time
+	return out, nil
+}
+
+func redactArchiveEvidenceRefs(refs []string, subject, placeholder string) []string {
+	if len(refs) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ref = redactArchiveEvidenceValue(strings.TrimSpace(ref), subject, placeholder)
+		if ref != "" {
+			out = append(out, ref)
+		}
+	}
+	return out
+}
+
+func redactArchiveEvidenceValue(value, subject, placeholder string) string {
+	if value == "" || subject == "" {
+		return value
+	}
+	return strings.ReplaceAll(value, subject, placeholder)
+}
+
 // CreateIssuer records an issuer.created event and returns the new issuer. The
 // caller is expected to have validated it (the structural issuer rules).
 func (o *Orchestrator) CreateIssuer(ctx context.Context, tenantID string, in store.Issuer) (store.Issuer, error) {

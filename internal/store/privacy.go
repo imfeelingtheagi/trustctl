@@ -433,6 +433,23 @@ type PrivacyRetentionRun struct {
 	EnforcedAt     time.Time
 }
 
+// PrivacyArchiveErasureAttestation is the projected evidence that an operator
+// handled pre-erasure backups or signed audit archives for one erased subject.
+// It stores the tenant-bound subject_ref, never the raw subject value.
+type PrivacyArchiveErasureAttestation struct {
+	TenantID       string
+	AttestationID  string
+	SubjectRef     string
+	RequestedByRef string
+	ArtifactType   string
+	ArtifactURI    string
+	Action         string
+	Reason         string
+	EvidenceRefs   []string
+	HeldUntil      *time.Time
+	AttestedAt     time.Time
+}
+
 // Total reports the number of rows selected for anonymization.
 func (r PrivacyRetentionRun) Total() int {
 	var n int
@@ -1123,6 +1140,37 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 	return nil
 }
 
+// ApplyPrivacyArchiveErasureAttestedTx projects a privacy.archive_erasure.attested
+// event. The event is the source of truth; this method only records queryable
+// evidence for the tenant privacy surface.
+func (s *Store) ApplyPrivacyArchiveErasureAttestedTx(ctx context.Context, tx pgx.Tx, a PrivacyArchiveErasureAttestation) error {
+	if a.AttestedAt.IsZero() {
+		a.AttestedAt = time.Now().UTC()
+	}
+	refs := a.EvidenceRefs
+	if refs == nil {
+		refs = []string{}
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO privacy_archive_erasure_attestations
+		        (tenant_id, attestation_id, subject_ref, requested_by_ref, artifact_type,
+		         artifact_uri, action, reason, evidence_refs, held_until, attested_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		 ON CONFLICT (tenant_id, attestation_id) DO UPDATE
+		    SET subject_ref = EXCLUDED.subject_ref,
+		        requested_by_ref = EXCLUDED.requested_by_ref,
+		        artifact_type = EXCLUDED.artifact_type,
+		        artifact_uri = EXCLUDED.artifact_uri,
+		        action = EXCLUDED.action,
+		        reason = EXCLUDED.reason,
+		        evidence_refs = EXCLUDED.evidence_refs,
+		        held_until = EXCLUDED.held_until,
+		        attested_at = EXCLUDED.attested_at`,
+		a.TenantID, a.AttestationID, a.SubjectRef, a.RequestedByRef, a.ArtifactType,
+		a.ArtifactURI, a.Action, a.Reason, refs, a.HeldUntil, a.AttestedAt)
+	return err
+}
+
 // ListPrivacySubjectErasuresPage returns erasure evidence in newest-first order.
 func (s *Store) ListPrivacySubjectErasuresPage(ctx context.Context, tenantID, afterRef string, limit int) ([]PrivacySubjectErasure, error) {
 	var out []PrivacySubjectErasure
@@ -1165,6 +1213,37 @@ func (s *Store) ListPrivacyRetentionRunsPage(ctx context.Context, tenantID, afte
 		defer rows.Close()
 		for rows.Next() {
 			r, err := scanPrivacyRetentionRun(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ListPrivacyArchiveErasureAttestationsPage returns projected archive/backup
+// erasure evidence. subjectRef is optional and already non-PII.
+func (s *Store) ListPrivacyArchiveErasureAttestationsPage(ctx context.Context, tenantID, subjectRef, afterID string, limit int) ([]PrivacyArchiveErasureAttestation, error) {
+	var out []PrivacyArchiveErasureAttestation
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, attestation_id::text, subject_ref, requested_by_ref,
+			        artifact_type, artifact_uri, action, reason, evidence_refs,
+			        held_until, attested_at
+			   FROM privacy_archive_erasure_attestations
+			  WHERE tenant_id = $1
+			    AND ($2 = '' OR subject_ref = $2)
+			    AND ($3 = '' OR attestation_id::text > $3)
+			  ORDER BY attestation_id LIMIT $4`,
+			tenantID, subjectRef, afterID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			r, err := scanPrivacyArchiveErasureAttestation(rows)
 			if err != nil {
 				return err
 			}
@@ -1239,6 +1318,19 @@ func scanPrivacyRetentionRun(row pgx.Row) (PrivacyRetentionRun, error) {
 		if err := json.Unmarshal(countsJSON, &r.Counts); err != nil {
 			return PrivacyRetentionRun{}, err
 		}
+	}
+	return r, nil
+}
+
+func scanPrivacyArchiveErasureAttestation(row pgx.Row) (PrivacyArchiveErasureAttestation, error) {
+	var r PrivacyArchiveErasureAttestation
+	if err := row.Scan(&r.TenantID, &r.AttestationID, &r.SubjectRef, &r.RequestedByRef,
+		&r.ArtifactType, &r.ArtifactURI, &r.Action, &r.Reason, &r.EvidenceRefs,
+		&r.HeldUntil, &r.AttestedAt); err != nil {
+		return PrivacyArchiveErasureAttestation{}, err
+	}
+	if r.EvidenceRefs == nil {
+		r.EvidenceRefs = []string{}
 	}
 	return r, nil
 }

@@ -92,6 +92,7 @@ const (
 	EventResponseIntegrationDispatched       = "response.integration.dispatched"
 	EventPrivacySubjectErased                = "privacy.subject.erased"
 	EventPrivacyRetentionEnforced            = "privacy.retention.enforced"
+	EventPrivacyArchiveErasureAttested       = "privacy.archive_erasure.attested"
 	EventTenantMemberUpserted                = "tenant.member.upserted"
 	EventTenantMemberOffboarded              = "tenant.member.offboarded"
 	EventAPITokenCreated                     = "api_token.created"
@@ -229,6 +230,21 @@ type PrivacyRetentionEnforced struct {
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
 	Cutoffs        store.PrivacyRetentionCutoffs `json:"cutoffs"`
 	Counts         map[string]int                `json:"counts,omitempty"`
+}
+
+// PrivacyArchiveErasureAttested is the payload of a
+// privacy.archive_erasure.attested event. It carries subject_ref and operator
+// evidence refs for backups/archives, never the raw erased subject.
+type PrivacyArchiveErasureAttested struct {
+	AttestationID  string     `json:"attestation_id"`
+	SubjectRef     string     `json:"subject_ref"`
+	RequestedByRef string     `json:"requested_by_ref,omitempty"`
+	ArtifactType   string     `json:"artifact_type"`
+	ArtifactURI    string     `json:"artifact_uri,omitempty"`
+	Action         string     `json:"action"`
+	Reason         string     `json:"reason,omitempty"`
+	EvidenceRefs   []string   `json:"evidence_refs,omitempty"`
+	HeldUntil      *time.Time `json:"held_until,omitempty"`
 }
 
 // NHIAccessReviewCampaignStarted is the payload of
@@ -1225,6 +1241,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventResponseIntegrationDispatched:       {1: true},
 	EventPrivacySubjectErased:                {1: true},
 	EventPrivacyRetentionEnforced:            {1: true},
+	EventPrivacyArchiveErasureAttested:       {1: true},
 	EventTenantMemberUpserted:                {1: true},
 	EventTenantMemberOffboarded:              {1: true},
 	EventAPITokenCreated:                     {1: true},
@@ -2084,6 +2101,27 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Cutoffs:        pl.Cutoffs,
 			Counts:         pl.Counts,
 			EnforcedAt:     e.Time,
+		})
+	case EventPrivacyArchiveErasureAttested:
+		var pl PrivacyArchiveErasureAttested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.AttestationID == "" || pl.SubjectRef == "" || pl.ArtifactType == "" || pl.Action == "" {
+			return fmt.Errorf("projections: %s requires attestation_id, subject_ref, artifact_type, and action", e.Type)
+		}
+		return p.store.ApplyPrivacyArchiveErasureAttestedTx(ctx, tx, store.PrivacyArchiveErasureAttestation{
+			TenantID:       e.TenantID,
+			AttestationID:  pl.AttestationID,
+			SubjectRef:     pl.SubjectRef,
+			RequestedByRef: pl.RequestedByRef,
+			ArtifactType:   pl.ArtifactType,
+			ArtifactURI:    pl.ArtifactURI,
+			Action:         pl.Action,
+			Reason:         pl.Reason,
+			EvidenceRefs:   pl.EvidenceRefs,
+			HeldUntil:      pl.HeldUntil,
+			AttestedAt:     e.Time,
 		})
 	case EventTenantMemberUpserted:
 		var pl TenantMemberUpserted
