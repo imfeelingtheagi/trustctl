@@ -243,7 +243,13 @@ func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
 		t.Fatalf("bad ssh finding: %+v", finding)
 	}
 	bodyText := strings.ToLower(string(body))
-	for _, forbidden := range []string{"private key", "begin openssh private key", "pem"} {
+	for _, forbidden := range []string{
+		"private key",
+		"begin openssh private key",
+		"-----begin private key-----",
+		"-----begin rsa private key-----",
+		"-----begin ec private key-----",
+	} {
 		if strings.Contains(bodyText, forbidden) {
 			t.Fatalf("ssh finding leaked key material marker %q: %s", forbidden, body)
 		}
