@@ -1893,6 +1893,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.copy.declaration.5084fad2e6",
+    defaultMessage: "Copy declaration",
+    sources: [
+      "src/pages/Integrate.tsx:300",
+    ],
+  },
+  {
     key: "source.copy.e21f935f11",
     defaultMessage: "Copy",
     sources: [
@@ -2363,6 +2370,27 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.declaration.must.be.valid.json.0dda422778",
+    defaultMessage: "Declaration must be valid JSON.",
+    sources: [
+      "src/pages/Integrate.tsx:487",
+    ],
+  },
+  {
+    key: "source.declarative.manifest.f427948a11",
+    defaultMessage: "Declarative manifest",
+    sources: [
+      "src/pages/Integrate.tsx:273",
+    ],
+  },
+  {
+    key: "source.declared.dc56dd2687",
+    defaultMessage: "Declared",
+    sources: [
+      "src/pages/Integrate.tsx:340",
+    ],
+  },
+  {
     key: "source.decrypt.2e4629449b",
     defaultMessage: "Decrypt",
     sources: [
@@ -2617,6 +2645,7 @@ export const extractedMessages = [
     key: "source.discovery.source.f533df1c0c",
     defaultMessage: "Discovery source",
     sources: [
+      "src/pages/Integrate.tsx:42",
       "src/pages/SSHTrust.tsx:225",
       "src/pages/SSHTrust.tsx:378",
     ],
@@ -2908,7 +2937,7 @@ export const extractedMessages = [
     key: "source.enrollment.protocols.04da0a17a8",
     defaultMessage: "Enrollment protocols",
     sources: [
-      "src/pages/Integrate.tsx:72",
+      "src/pages/Integrate.tsx:206",
     ],
   },
   {
@@ -3207,6 +3236,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.export.declaration.bc94ecc0eb",
+    defaultMessage: "Export declaration",
+    sources: [
+      "src/pages/Integrate.tsx:308",
+    ],
+  },
+  {
     key: "source.export.evidence.caab91492e",
     defaultMessage: "Export evidence",
     sources: [
@@ -3426,6 +3462,27 @@ export const extractedMessages = [
     defaultMessage: "github.com/example/payments",
     sources: [
       "src/pages/Secrets.tsx:1305",
+    ],
+  },
+  {
+    key: "source.gitops.drift.comparison.a7df4fb5bf",
+    defaultMessage: "GitOps drift comparison",
+    sources: [
+      "src/pages/Integrate.tsx:335",
+    ],
+  },
+  {
+    key: "source.gitops.validation.result.fe13be87a6",
+    defaultMessage: "GitOps validation result",
+    sources: [
+      "src/pages/Integrate.tsx:319",
+    ],
+  },
+  {
+    key: "source.gitops.workflow.b40da535f5",
+    defaultMessage: "GitOps workflow",
+    sources: [
+      "src/pages/Integrate.tsx:229",
     ],
   },
   {
@@ -3848,7 +3905,7 @@ export const extractedMessages = [
     key: "source.infrastructure.as.code.0153fab905",
     defaultMessage: "Infrastructure as code",
     sources: [
-      "src/pages/Integrate.tsx:95",
+      "src/pages/Integrate.tsx:370",
     ],
   },
   {
@@ -3866,10 +3923,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.install.values.5ab294c96e",
+    defaultMessage: "Install values",
+    sources: [
+      "src/pages/Integrate.tsx:44",
+    ],
+  },
+  {
     key: "source.integrate.ef6a2b3e1b",
     defaultMessage: "Integrate",
     sources: [
-      "src/pages/Integrate.tsx:59",
+      "src/pages/Integrate.tsx:193",
     ],
   },
   {
@@ -3898,6 +3962,13 @@ export const extractedMessages = [
     defaultMessage: "Issuance pipeline",
     sources: [
       "src/components/issuance/index.tsx:30",
+    ],
+  },
+  {
+    key: "source.issuance.profile.49d419e8dc",
+    defaultMessage: "Issuance profile",
+    sources: [
+      "src/pages/Integrate.tsx:41",
     ],
   },
   {
@@ -4378,6 +4449,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.live.b64ac05f17",
+    defaultMessage: "Live",
+    sources: [
+      "src/pages/Integrate.tsx:339",
+    ],
+  },
+  {
+    key: "source.live.object.748348420a",
+    defaultMessage: "Live object",
+    sources: [
+      "src/pages/Integrate.tsx:257",
+    ],
+  },
+  {
     key: "source.load.next.metadata.page.8cd7685eed",
     defaultMessage: "Load next metadata page",
     sources: [
@@ -4466,6 +4551,13 @@ export const extractedMessages = [
     defaultMessage: "Loading evidence pack.",
     sources: [
       "src/pages/Policy.tsx:626",
+    ],
+  },
+  {
+    key: "source.loading.gitops.sources.fd872181a9",
+    defaultMessage: "Loading GitOps sources...",
+    sources: [
+      "src/pages/Integrate.tsx:269",
     ],
   },
   {
@@ -4663,6 +4755,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.manifest.type.316703ce34",
+    defaultMessage: "Manifest type",
+    sources: [
+      "src/pages/Integrate.tsx:238",
+    ],
+  },
+  {
     key: "source.manual.36bde66f28",
     defaultMessage: "manual",
     sources: [
@@ -4694,6 +4793,7 @@ export const extractedMessages = [
     key: "source.map.f0acbb862c",
     defaultMessage: "()): Map",
     sources: [
+      "src/pages/Integrate.tsx:502",
       "src/pages/Profiles.tsx:586",
     ],
   },
@@ -5238,6 +5338,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.no.comparable.declaration.loaded.d2f463b5c7",
+    defaultMessage: "No comparable declaration loaded.",
+    sources: [
+      "src/pages/Integrate.tsx:356",
+    ],
+  },
+  {
     key: "source.no.connector.catalog.rows.were.returned.3a8d5bf05f",
     defaultMessage: "No connector catalog rows were returned.",
     sources: [
@@ -5666,6 +5773,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.notification.routing.policy.8be2dc8c23",
+    defaultMessage: "Notification routing policy",
+    sources: [
+      "src/pages/Integrate.tsx:43",
+    ],
+  },
+  {
     key: "source.notifications.788011833a",
     defaultMessage: "Notifications",
     sources: [
@@ -5859,6 +5973,13 @@ export const extractedMessages = [
     defaultMessage: "Open expiring certificates",
     sources: [
       "src/pages/Operations.tsx:206",
+    ],
+  },
+  {
+    key: "source.open.in.api.explorer.4614db45a8",
+    defaultMessage: "Open in API explorer",
+    sources: [
+      "src/pages/Integrate.tsx:311",
     ],
   },
   {
@@ -6085,6 +6206,7 @@ export const extractedMessages = [
     key: "source.path.62fa5a5b0d",
     defaultMessage: "Path",
     sources: [
+      "src/pages/Integrate.tsx:338",
       "src/pages/Profiles.tsx:457",
       "src/pages/Secrets.tsx:1300",
     ],
@@ -7757,7 +7879,7 @@ export const extractedMessages = [
     key: "source.sdks.f35720ac1e",
     defaultMessage: "SDKs",
     sources: [
-      "src/pages/Integrate.tsx:84",
+      "src/pages/Integrate.tsx:218",
     ],
   },
   {
@@ -8501,6 +8623,7 @@ export const extractedMessages = [
       "src/pages/Incidents.tsx:1248",
       "src/pages/Incidents.tsx:1416",
       "src/pages/Incidents.tsx:542",
+      "src/pages/Integrate.tsx:341",
       "src/pages/Platform.tsx:954",
       "src/pages/Platform.tsx:977",
       "src/pages/Policy.tsx:1190",
