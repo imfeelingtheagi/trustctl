@@ -1,12 +1,15 @@
 package eventsource_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/tools/trstctllint/eventsource"
 )
 
@@ -17,6 +20,28 @@ import (
 // planted direct-to-table write fails the build.
 func TestEventSource(t *testing.T) {
 	analysistest.Run(t, analysistest.TestData(), eventsource.Analyzer, "trstctl.com/trstctl/internal/api")
+}
+
+func TestEventSourceDeniesEveryStoreReadModelTableInServedMutation(t *testing.T) {
+	dir := t.TempDir()
+	var src strings.Builder
+	src.WriteString(`package api
+
+func exec(query string) error { _ = query; return nil }
+
+`)
+	for i, table := range store.ReadModelTables {
+		query := fmt.Sprintf("INSERT INTO %s (tenant_id) VALUES ($1)", table)
+		want := fmt.Sprintf("must not write the read model table .%s. with raw SQL", table)
+		fmt.Fprintf(&src, `//trstctl:mutation
+func RawReadModelWrite%d() error {
+	return exec(%q) // want %q
+}
+
+`, i, query, want)
+	}
+	writeFixture(t, dir, "src/trstctl.com/trstctl/internal/api/handlers.go", src.String())
+	analysistest.Run(t, dir, eventsource.Analyzer, "trstctl.com/trstctl/internal/api")
 }
 
 func TestEventSourceFollowsCrossPackageServiceDelegate(t *testing.T) {

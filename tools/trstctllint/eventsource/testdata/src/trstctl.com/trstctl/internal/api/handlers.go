@@ -137,6 +137,14 @@ func RawCRLInsertBad(st *store.Store) error {
 	return exec("INSERT INTO ca_crls (tenant_id, ca_id, crl_number) VALUES ($1, $2, $3)") // want "must not write the read model table .ca_crls. with raw SQL"
 }
 
+// RawPamSessionInsertBad writes a newer read-model table that must stay covered
+// by the same canonical manifest as store.ReadModelTables.
+//
+//trstctl:mutation
+func RawPamSessionInsertBad(st *store.Store) error {
+	return exec("INSERT INTO pam_sessions (tenant_id, id) VALUES ($1, $2)") // want "must not write the read model table .pam_sessions. with raw SQL"
+}
+
 // RawSelectOK reads a read-model table — a SELECT is not a write, so it is allowed
 // even in a mutation handler (the handler may validate inputs by reading).
 //

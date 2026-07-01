@@ -13,11 +13,11 @@
 //   - a call to a Create/Update/Delete/Upsert/Set method on *store.Store (a
 //     read-model mutator), resolved by TYPE so it cannot be evaded by aliasing;
 //   - a RAW SQL statement (INSERT INTO / UPDATE / DELETE FROM) targeting a
-//     read-model table (owners, issuers, identities, certificates, tenants,
-//     identity_transitions, ca_issued_certs, ca_crls) — the SPINE-010 evasion: a handler that reaches past
-//     the store mutators and runs `tx.Exec("INSERT INTO owners ...")` would have
-//     slipped through the call-name check. The SQL string is judged by shape so a
-//     bare "DELETE" method token or a struct literal is not mistaken for SQL.
+//     table in store.ReadModelTables — the SPINE-010 evasion: a handler that
+//     reaches past the store mutators and runs `tx.Exec("INSERT INTO owners ...")`
+//     would have slipped through the call-name check. The SQL string is judged by
+//     shape so a bare "DELETE" method token or a struct literal is not mistaken
+//     for SQL.
 //
 // The handler must instead emit a domain event and let the projection build the
 // read model. Reads (Get*/List*/Exists*; SELECT) are unaffected.
@@ -36,6 +36,7 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/tools/trstctllint/internal/servedmutation"
 )
 
@@ -60,14 +61,12 @@ var readModelMutatorNames = map[string]bool{
 	"AttachKeyCeremonyApprovalEvidence": true,
 }
 
-// readModelTables are the relational tables that are pure projections of the
-// event log (store.ReadModelTables). A //trstctl:mutation handler must never
-// write them with raw SQL — it must emit an event. Keep this in sync with
-// internal/store.ReadModelTables; a table joins this set as it becomes
-// event-sourced.
-var readModelTables = []string{
-	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls",
-}
+// readModelTables is the canonical relational table set that is pure projection
+// of the event log. A //trstctl:mutation handler must never write one of these
+// tables with raw SQL — it must emit an event. The analyzer consumes
+// internal/store.ReadModelTables directly so AN-2 enforcement cannot drift from
+// rebuild/backup classification.
+var readModelTables = store.ReadModelTables
 
 type mutationDelegateFact struct{}
 
