@@ -76,7 +76,8 @@ func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
 		t.Fatalf("ct.submit outbox rows = %d, want 2; rows=%+v", ctRows, rows)
 	}
 	var queuedEvent struct {
-		Capability string `json:"capability"`
+		Capability string   `json:"capability"`
+		OutboxKeys []string `json:"outbox_keys"`
 		Payloads   []struct {
 			SubmissionID         string `json:"submission_id"`
 			EntryType            string `json:"entry_type"`
@@ -98,6 +99,20 @@ func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
 	if !foundQueuedEvent || queuedEvent.Capability != "CAP-REV-06" || len(queuedEvent.Payloads) != 2 {
 		t.Fatalf("CT queued event = found %v %+v, want replayable event with two payloads", foundQueuedEvent, queuedEvent)
 	}
+	if len(queuedEvent.OutboxKeys) != 2 {
+		t.Fatalf("CT queued event outbox_keys = %v, want one key per payload", queuedEvent.OutboxKeys)
+	}
+	actualOutboxKeys := map[string]bool{}
+	for _, row := range rows {
+		if row.Destination == "ct.submit" {
+			actualOutboxKeys[row.IdempotencyKey] = true
+		}
+	}
+	for _, key := range queuedEvent.OutboxKeys {
+		if !actualOutboxKeys[key] {
+			t.Fatalf("CT queued event outbox key %q was not persisted in ct.submit rows %+v", key, rows)
+		}
+	}
 	for _, p := range queuedEvent.Payloads {
 		if p.SubmissionID == "" || p.EntryType == "" || len(p.LeafDER) == 0 || p.IdempotencyKey != "cap-rev-06-ct-submit" || !p.AllowPrivateEndpoint {
 			t.Fatalf("CT queued event payload is not replayable: %+v", p)
@@ -115,5 +130,34 @@ func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
 	}
 	if !h.hasEvent(t, "ct.submission.queued") || !h.hasEvent(t, "ct.submission.delivered") {
 		t.Fatal("served CT submission did not record queued and delivered audit events")
+	}
+}
+
+func TestServedCTSubmissionDoesNotPersistOutboxWithoutQueuedEvent(t *testing.T) {
+	certDER, _, err := ctlogtest.IssueCert("ct-submit-fail", "ct-submit-fail.example.com")
+	if err != nil {
+		t.Fatalf("issue CT submission fixture certificate: %v", err)
+	}
+	certPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+	logSrv := ctlogtest.NewServer()
+	t.Cleanup(logSrv.Close)
+
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:write", "certs:read", string(authz.PrivateEgress))
+	if err := h.log.Close(); err != nil {
+		t.Fatalf("close event log before CT request: %v", err)
+	}
+
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/revocation/ct-submissions", tok, "spine-004-event-first", map[string]any{
+		"certificate_pem":        certPEM,
+		"logs":                   []string{logSrv.URL()},
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
+	})
+	if status == http.StatusAccepted {
+		t.Fatalf("CT submission accepted with closed event log: status %d body %s", status, raw)
+	}
+	if got := servedOutboxDestinationCount(t, h, "ct.submit"); got != 0 {
+		t.Fatalf("ct.submit outbox rows persisted without queued event = %d, want 0", got)
 	}
 }

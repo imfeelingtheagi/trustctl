@@ -151,20 +151,23 @@ func (s *servedCTSubmissionService) SubmitCertificateTransparency(ctx context.Co
 	if err := s.appendQueuedEvent(ctx, tenantID, req.RequestedBy, payloads); err != nil {
 		return api.CTLogSubmissionResponse{}, err
 	}
-	if err := s.enqueue(ctx, tenantID, idempotencyKey, payloads); err != nil {
+	if err := s.enqueue(ctx, tenantID, payloads); err != nil {
 		return api.CTLogSubmissionResponse{}, err
 	}
 	return res, nil
 }
 
-func (s *servedCTSubmissionService) enqueue(ctx context.Context, tenantID, idempotencyKey string, payloads []ctSubmissionPayload) error {
+func (s *servedCTSubmissionService) enqueue(ctx context.Context, tenantID string, payloads []ctSubmissionPayload) error {
 	return s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, payload := range payloads {
 			encoded, err := json.Marshal(payload)
 			if err != nil {
 				return err
 			}
-			key := fmt.Sprintf("%s:%s:%s:%s", ctSubmissionDestination, idempotencyKey, payload.EntryType, payload.SubmissionID)
+			key, err := ctSubmissionPayloadOutboxKey(payload)
+			if err != nil {
+				return err
+			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 				TenantID: tenantID, Destination: ctSubmissionDestination, IdempotencyKey: key, Payload: encoded,
 			}); err != nil {
@@ -181,6 +184,7 @@ func (s *servedCTSubmissionService) appendQueuedEvent(ctx context.Context, tenan
 		RequestedBy   string                `json:"requested_by,omitempty"`
 		QueuedAt      time.Time             `json:"queued_at"`
 		SubmissionIDs []string              `json:"submission_ids"`
+		OutboxKeys    []string              `json:"outbox_keys"`
 		Logs          []string              `json:"logs"`
 		Fingerprints  []string              `json:"fingerprints"`
 		Payloads      []ctSubmissionPayload `json:"payloads,omitempty"`
@@ -196,6 +200,11 @@ func (s *servedCTSubmissionService) appendQueuedEvent(ctx context.Context, tenan
 	seenFingerprints := map[string]bool{}
 	for _, p := range payloads {
 		data.SubmissionIDs = append(data.SubmissionIDs, p.SubmissionID)
+		key, err := ctSubmissionPayloadOutboxKey(p)
+		if err != nil {
+			return err
+		}
+		data.OutboxKeys = append(data.OutboxKeys, key)
 		if !seenLogs[p.LogURL] {
 			data.Logs = append(data.Logs, p.LogURL)
 			seenLogs[p.LogURL] = true
@@ -211,6 +220,16 @@ func (s *servedCTSubmissionService) appendQueuedEvent(ctx context.Context, tenan
 	}
 	_, err = s.log.Append(ctx, events.Event{Type: ctSubmissionEventQueued, TenantID: tenantID, Data: encoded})
 	return err
+}
+
+func ctSubmissionPayloadOutboxKey(payload ctSubmissionPayload) (string, error) {
+	if payload.SubmissionID == "" || payload.EntryType == "" || payload.IdempotencyKey == "" {
+		return "", errors.New("server: CT submission payload requires submission_id, entry_type, and idempotency_key")
+	}
+	if payload.EntryType != ctSubmissionPrecertificate && payload.EntryType != ctSubmissionCertificate {
+		return "", fmt.Errorf("server: CT submission entry_type %q is invalid", payload.EntryType)
+	}
+	return fmt.Sprintf("%s:%s:%s:%s", ctSubmissionDestination, payload.IdempotencyKey, payload.EntryType, payload.SubmissionID), nil
 }
 
 type ctSubmissionPayload struct {
