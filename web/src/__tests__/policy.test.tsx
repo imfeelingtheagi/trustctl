@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Policy } from "@/pages/Policy";
-import type { ComplianceEvidencePack } from "@/lib/api";
+import type { AccessChangeRequest, ComplianceEvidencePack } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -75,7 +75,7 @@ function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
   };
 }
 
-function accessChangeRequest(status: "pending" | "approved" | "denied" = "pending") {
+function accessChangeRequest(status: "pending" | "approved" | "denied" = "pending", overrides: Partial<AccessChangeRequest> = {}): AccessChangeRequest {
   const terminal = status !== "pending";
   return {
     id: "77777777-7777-4777-8777-777777777777",
@@ -112,6 +112,7 @@ function accessChangeRequest(status: "pending" | "approved" | "denied" = "pendin
           },
         ]
       : [],
+    ...overrides,
   };
 }
 
@@ -166,7 +167,23 @@ function complianceInventoryReport() {
   return {
     capability: "CAP-OBS-02",
     generated_at: "2026-06-28T12:00:00Z",
-    frameworks: ["pci-dss", "hipaa", "soc2", "nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi", "eidas", "nis2"],
+    frameworks: [
+      "pci-dss",
+      "hipaa",
+      "soc2",
+      "nist-800-53",
+      "nist-csf-2.0",
+      "fedramp",
+      "cmmc-2.0",
+      "cnsa-2.0",
+      "fips-140",
+      "common-criteria",
+      "cabf-br",
+      "webtrust",
+      "etsi",
+      "eidas",
+      "nis2",
+    ],
     report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
     routes: [
       "GET /api/v1/compliance/inventory-report",
@@ -208,13 +225,37 @@ function nhiComplianceReport() {
     },
     frameworks: [
       { id: "nist-800-53", name: "NIST SP 800-53", version: "Rev. 5", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
-      { id: "nist-csf-2.0", name: "NIST Cybersecurity Framework", version: "2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      {
+        id: "nist-csf-2.0",
+        name: "NIST Cybersecurity Framework",
+        version: "2.0",
+        mapping_status: "served",
+        evidence_sources: ["api:GET /api/v1/compliance/nhi-report"],
+      },
       { id: "pci-dss-4.0", name: "PCI DSS", version: "4.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
-      { id: "dora", name: "Digital Operational Resilience Act", version: "Regulation (EU) 2022/2554", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
-      { id: "iso-27001", name: "ISO/IEC 27001", version: "2022 Annex A", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      {
+        id: "dora",
+        name: "Digital Operational Resilience Act",
+        version: "Regulation (EU) 2022/2554",
+        mapping_status: "served",
+        evidence_sources: ["api:GET /api/v1/compliance/nhi-report"],
+      },
+      {
+        id: "iso-27001",
+        name: "ISO/IEC 27001",
+        version: "2022 Annex A",
+        mapping_status: "served",
+        evidence_sources: ["api:GET /api/v1/compliance/nhi-report"],
+      },
       { id: "fedramp", name: "FedRAMP", version: "Rev. 5 baselines", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
       { id: "cmmc-2.0", name: "CMMC", version: "2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
-      { id: "eidas", name: "eIDAS", version: "Regulation (EU) No 910/2014 and eIDAS 2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      {
+        id: "eidas",
+        name: "eIDAS",
+        version: "Regulation (EU) No 910/2014 and eIDAS 2.0",
+        mapping_status: "served",
+        evidence_sources: ["api:GET /api/v1/compliance/nhi-report"],
+      },
       { id: "nis2", name: "NIS2", version: "Directive (EU) 2022/2555", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
     ],
     controls: [
@@ -363,41 +404,43 @@ describe("policy governance surface", () => {
                 ? ["CA/Browser Forum profile lint evidence", "external zlint corpus gate", "served CA issuance and revocation audit evidence"]
                 : framework === "soc2"
                   ? ["SOC 2 security-event and change-control evidence mapping", "tenant RBAC and NHI access-review evidence"]
-                : framework === "fips-140"
-                  ? ["FIPS-capable build and fail-closed POST evidence"]
-                  : framework === "common-criteria"
-                    ? ["security-target evidence map over served controls"]
-                    : framework === "webtrust" || framework === "etsi"
-                      ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
-                      : (["nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "eidas", "nis2"] as Array<ComplianceEvidencePack["framework"]>).includes(framework)
-                        ? ["NHI inventory and posture evidence mappings", "signed audit evidence mapped to framework controls"]
-                      : ["FIPS 203/204/205 migration posture from the CBOM"],
+                  : framework === "fips-140"
+                    ? ["FIPS-capable build and fail-closed POST evidence"]
+                    : framework === "common-criteria"
+                      ? ["security-target evidence map over served controls"]
+                      : framework === "webtrust" || framework === "etsi"
+                        ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
+                        : (["nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "eidas", "nis2"] as Array<ComplianceEvidencePack["framework"]>).includes(
+                              framework,
+                            )
+                          ? ["NHI inventory and posture evidence mappings", "signed audit evidence mapped to framework controls"]
+                          : ["FIPS 203/204/205 migration posture from the CBOM"],
             operator_attests:
               framework === "cabf-br"
                 ? ["independent WebTrust practitioner opinion for public-trust issuance", "CA/Browser Forum policy program operation"]
                 : framework === "soc2"
                   ? ["SOC 2 trust-services category scope", "independent CPA SOC 2 examination report"]
-                : framework === "fips-140"
-                  ? ["NIST CMVP certificate number for the deployed validated module"]
-                  : framework === "common-criteria"
-                    ? ["Common Criteria certificate and evaluation report"]
-                    : framework === "webtrust"
-                      ? ["WebTrust practitioner audit opinion"]
-                      : framework === "etsi"
-                        ? ["ETSI conformity assessment"]
-                        : framework === "eidas"
-                          ? ["eIDAS conformity assessment"]
-                          : framework === "nis2"
-                            ? ["NIS2 entity scope and national transposition obligations"]
-                            : framework === "fedramp"
-                              ? ["FedRAMP authorization package"]
-                              : framework === "cmmc-2.0"
-                                ? ["CMMC scope and CUI boundary"]
-                                : framework === "nist-800-53"
-                                  ? ["NIST SP 800-53 control tailoring"]
-                                  : framework === "nist-csf-2.0"
-                                    ? ["NIST CSF organizational profile"]
-                        : ["organizational policies & governance"],
+                  : framework === "fips-140"
+                    ? ["NIST CMVP certificate number for the deployed validated module"]
+                    : framework === "common-criteria"
+                      ? ["Common Criteria certificate and evaluation report"]
+                      : framework === "webtrust"
+                        ? ["WebTrust practitioner audit opinion"]
+                        : framework === "etsi"
+                          ? ["ETSI conformity assessment"]
+                          : framework === "eidas"
+                            ? ["eIDAS conformity assessment"]
+                            : framework === "nis2"
+                              ? ["NIS2 entity scope and national transposition obligations"]
+                              : framework === "fedramp"
+                                ? ["FedRAMP authorization package"]
+                                : framework === "cmmc-2.0"
+                                  ? ["CMMC scope and CUI boundary"]
+                                  : framework === "nist-800-53"
+                                    ? ["NIST SP 800-53 control tailoring"]
+                                    : framework === "nist-csf-2.0"
+                                      ? ["NIST CSF organizational profile"]
+                                      : ["organizational policies & governance"],
           },
           signature: "signed-by-export-key",
         },
@@ -601,5 +644,26 @@ describe("policy governance surface", () => {
       ),
     );
     expect(await screen.findByText("Prod deployer GitHub App grant request opened from github:org/prod-infra#4821.")).toBeInTheDocument();
+  });
+
+  it("renders access-change links only when the URL is safe", async () => {
+    renderPolicy();
+
+    const link = await screen.findByRole("link", { name: "https://github.com/org/prod-infra/pull/4821" });
+    expect(link).toHaveAttribute("href", "https://github.com/org/prod-infra/pull/4821");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("omits unsafe access-change links from API data", async () => {
+    const unsafeRequest = accessChangeRequest("pending", { change_url: "javascript:alert(1)" });
+    apiMock.accessChangeRequests.mockResolvedValue({ items: [unsafeRequest] });
+    apiMock.getAccessChangeRequest.mockResolvedValue(unsafeRequest);
+
+    renderPolicy();
+
+    expect(await screen.findByText("Scoped deployment automation access")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).not.toBeInTheDocument();
+    expect(screen.queryByText("javascript:alert(1)")).not.toBeInTheDocument();
   });
 });

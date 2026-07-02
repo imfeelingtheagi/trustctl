@@ -25,6 +25,7 @@ import {
 type ComplianceFramework = ComplianceEvidencePack["framework"];
 type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
 type PolicyDryRunKind = "lifecycle" | "abac";
+type SafeHref = { href: string; external: boolean };
 
 const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; labelKey?: MessageKey }> = [
   { id: "pci-dss", label: "PCI DSS" },
@@ -51,6 +52,32 @@ const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: Message
   { id: "audit_summary", labelKey: "policy.reportType.auditSummary" },
   { id: "nhi_compliance_mapping", labelKey: "policy.reportType.nhiComplianceMapping" },
 ];
+
+function safeHref(raw?: string | null): SafeHref | null {
+  const href = raw?.trim();
+  if (!href || /[\u0000-\u001f\u007f\\]/u.test(href)) {
+    return null;
+  }
+  try {
+    if (href.startsWith("/")) {
+      if (href.startsWith("//")) {
+        return null;
+      }
+      const parsed = new URL(href, window.location.origin);
+      if (parsed.origin !== window.location.origin || !parsed.pathname.startsWith("/")) {
+        return null;
+      }
+      return { href: `${parsed.pathname}${parsed.search}${parsed.hash}`, external: false };
+    }
+    const parsed = new URL(href);
+    if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password) {
+      return null;
+    }
+    return { href: parsed.href, external: true };
+  } catch {
+    return null;
+  }
+}
 
 interface ComplianceControl {
   id?: string;
@@ -312,7 +339,11 @@ export function Policy() {
     setReportLoading(true);
     setReportError(null);
     try {
-      const [report, nhiReport, schedules] = await Promise.all([api.complianceInventoryReport(), api.nhiComplianceReport(), api.complianceReportSchedules({ limit: 5 })]);
+      const [report, nhiReport, schedules] = await Promise.all([
+        api.complianceInventoryReport(),
+        api.nhiComplianceReport(),
+        api.complianceReportSchedules({ limit: 5 }),
+      ]);
       setInventoryReport(report);
       setNHIComplianceReport(nhiReport);
       setReportSchedules(schedules.items ?? []);
@@ -1027,16 +1058,28 @@ export function Policy() {
           <h2 id="policy-dry-run-heading" className="text-title font-semibold">
             {t("policy.dryRun.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {t("policy.dryRun.description")}
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.dryRun.description")}</p>
         </div>
-        <form aria-label={t("policy.dryRun.formLabel")} className="grid gap-4 rounded-md border border-border p-4" onSubmit={(event) => void runPolicyDryRun(event)}>
+        <form
+          aria-label={t("policy.dryRun.formLabel")}
+          className="grid gap-4 rounded-md border border-border p-4"
+          onSubmit={(event) => void runPolicyDryRun(event)}
+        >
           <div className="flex flex-wrap gap-2" role="group" aria-label={t("policy.dryRun.kindLabel")}>
-            <Button type="button" variant={dryRunKind === "lifecycle" ? "default" : "outline"} aria-pressed={dryRunKind === "lifecycle"} onClick={() => selectDryRunKind("lifecycle")}>
+            <Button
+              type="button"
+              variant={dryRunKind === "lifecycle" ? "default" : "outline"}
+              aria-pressed={dryRunKind === "lifecycle"}
+              onClick={() => selectDryRunKind("lifecycle")}
+            >
               {t("policy.dryRun.lifecycle")}
             </Button>
-            <Button type="button" variant={dryRunKind === "abac" ? "default" : "outline"} aria-pressed={dryRunKind === "abac"} onClick={() => selectDryRunKind("abac")}>
+            <Button
+              type="button"
+              variant={dryRunKind === "abac" ? "default" : "outline"}
+              aria-pressed={dryRunKind === "abac"}
+              onClick={() => selectDryRunKind("abac")}
+            >
               {t("policy.dryRun.abac")}
             </Button>
           </div>
@@ -1345,9 +1388,7 @@ function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {
                   </td>
                   <td>
                     <p>{control.status}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("policy.nhiCompliance.mappedSignals", { count: control.finding_count })}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("policy.nhiCompliance.mappedSignals", { count: control.finding_count })}</p>
                   </td>
                   <td>{control.evidence_refs.join(", ")}</td>
                 </tr>
@@ -1489,6 +1530,7 @@ function AccessChangeRequestPanel({
   const decisions = request.decisions ?? [];
   const reason = decisionReasons[request.id] ?? "";
   const busy = accessAction === "create" || (accessAction?.startsWith(`${request.id}:`) ?? false);
+  const changeHref = safeHref(request.change_url);
   const approve = () => {
     void onDecision(request, "approved");
   };
@@ -1526,9 +1568,14 @@ function AccessChangeRequestPanel({
         <section aria-label={t("policy.accessChange.changeReason")} className="rounded-md border border-border p-3">
           <p className="font-medium">{t("policy.accessChange.reason")}</p>
           <p className="mt-2 text-muted-foreground">{request.reason}</p>
-          {request.change_url && (
-            <a className="mt-2 block break-all text-sm underline" href={request.change_url}>
-              {request.change_url}
+          {changeHref && (
+            <a
+              className="mt-2 block break-all text-sm underline"
+              href={changeHref.href}
+              rel={changeHref.external ? "noopener noreferrer" : undefined}
+              target={changeHref.external ? "_blank" : undefined}
+            >
+              {changeHref.href}
             </a>
           )}
         </section>

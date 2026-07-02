@@ -144,3 +144,85 @@ func TestServedAccessChangeRequestCAPGOV05EndToEnd(t *testing.T) {
 		t.Fatalf("decision events = %d, want 2", len(events))
 	}
 }
+
+func TestServedAccessChangeRequestRejectsUnsafeChangeURLs(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	requesterTok := seedScopedTokenSubject(t, h.store, h.tenant, "platform-dev@example.test", "access:read", "access:write")
+
+	unsafeURLs := []struct {
+		name      string
+		requestID string
+		changeURL string
+	}{
+		{name: "javascript", requestID: "77777777-7777-4777-8777-777777777701", changeURL: "javascript:alert(1)"},
+		{name: "data", requestID: "77777777-7777-4777-8777-777777777702", changeURL: "data:text/html,<script>alert(1)</script>"},
+		{name: "file", requestID: "77777777-7777-4777-8777-777777777703", changeURL: "file:///etc/passwd"},
+		{name: "http", requestID: "77777777-7777-4777-8777-777777777704", changeURL: "http://change.example.test/ticket/1"},
+		{name: "scheme_relative", requestID: "77777777-7777-4777-8777-777777777705", changeURL: "//change.example.test/ticket/1"},
+		{name: "malformed_host", requestID: "77777777-7777-4777-8777-777777777706", changeURL: "https://[::1"},
+		{name: "opaque_https", requestID: "77777777-7777-4777-8777-777777777707", changeURL: "https:change.example.test/ticket/1"},
+	}
+	for _, tc := range unsafeURLs {
+		t.Run(tc.name, func(t *testing.T) {
+			body := accessChangeRequestPayload(tc.requestID, tc.changeURL)
+			status, resp := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests", requesterTok, "sec-003-"+tc.name, body)
+			if status != http.StatusBadRequest {
+				t.Fatalf("create access request with %q = %d body %s, want 400", tc.changeURL, status, resp)
+			}
+			if events := nhiReviewEvents(t, h.log, projections.EventAccessChangeRequestCreated, tc.requestID); len(events) != 0 {
+				t.Fatalf("unsafe change_url emitted %d create events, want 0", len(events))
+			}
+		})
+	}
+}
+
+func TestServedAccessChangeRequestAllowsSafeChangeURLs(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	requesterTok := seedScopedTokenSubject(t, h.store, h.tenant, "platform-dev@example.test", "access:read", "access:write")
+
+	safeURLs := []struct {
+		name      string
+		requestID string
+		changeURL string
+	}{
+		{name: "https", requestID: "88888888-8888-4888-8888-888888888801", changeURL: "https://change.example.test/tickets/CHG-4821?review=security#approval"},
+		{name: "rootRelative", requestID: "88888888-8888-4888-8888-888888888802", changeURL: "/audit?type=access.change_request.created"},
+	}
+	for _, tc := range safeURLs {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/access/requests", requesterTok, "sec-003-safe-"+tc.name, accessChangeRequestPayload(tc.requestID, tc.changeURL))
+			if status != http.StatusCreated {
+				t.Fatalf("create access request with %q = %d body %s, want 201", tc.changeURL, status, body)
+			}
+			var created struct {
+				ID        string `json:"id"`
+				ChangeURL string `json:"change_url"`
+			}
+			if err := json.Unmarshal(body, &created); err != nil {
+				t.Fatalf("decode created access request: %v", err)
+			}
+			if created.ID != tc.requestID || created.ChangeURL != tc.changeURL {
+				t.Fatalf("created access request = %+v, want id %s change_url %q", created, tc.requestID, tc.changeURL)
+			}
+		})
+	}
+}
+
+func accessChangeRequestPayload(requestID, changeURL string) map[string]any {
+	return map[string]any{
+		"id":                 requestID,
+		"requested_action":   "grant",
+		"nhi_id":             "github-app:prod-deployer",
+		"nhi_kind":           "oauth_app",
+		"display_name":       "prod deployer GitHub App",
+		"owner_ref":          "team:platform",
+		"resource":           "github:org/prod-infra",
+		"entitlement":        "repo:contents:write",
+		"change_ref":         "github:trstctl/prod-infra#4821",
+		"change_url":         changeURL,
+		"risk":               "high",
+		"reason":             "new deploy automation needs scoped repository write access",
+		"evidence_refs":      []string{"pull:4821/checks", "ticket:CAB-4821"},
+		"required_approvals": 2,
+	}
+}

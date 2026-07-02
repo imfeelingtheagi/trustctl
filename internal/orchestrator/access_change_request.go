@@ -141,10 +141,9 @@ func normalizeAccessChangeRequest(ctx context.Context, in AccessChangeRequestCre
 		changeSystem = inferChangeSystem(changeRef, in.ChangeURL)
 	}
 	changeURL := trimBounded(in.ChangeURL, 500)
-	if changeURL != "" {
-		if _, err := url.ParseRequestURI(changeURL); err != nil {
-			return projections.AccessChangeRequestCreated{}, fmt.Errorf("change_url must be an absolute or path URL")
-		}
+	changeURL, err := normalizeAccessChangeURL(changeURL)
+	if err != nil {
+		return projections.AccessChangeRequestCreated{}, err
 	}
 	risk := strings.ToLower(trimBounded(in.Risk, 40))
 	if risk == "" {
@@ -167,6 +166,42 @@ func normalizeAccessChangeRequest(ctx context.Context, in AccessChangeRequestCre
 		Resource: resource, Entitlement: entitlement, ChangeRef: changeRef, ChangeSystem: changeSystem,
 		ChangeURL: changeURL, Risk: risk, Reason: reason, EvidenceRefs: refs, RequiredApprovals: required,
 	}, nil
+}
+
+func normalizeAccessChangeURL(raw string) (string, error) {
+	changeURL := trimBounded(raw, 500)
+	if changeURL == "" {
+		return "", nil
+	}
+	if hasURLControlChar(changeURL) || strings.Contains(changeURL, "\\") {
+		return "", fmt.Errorf("change_url must be https or an approved root-relative path")
+	}
+	parsed, err := url.Parse(changeURL)
+	if err != nil {
+		return "", fmt.Errorf("change_url must be https or an approved root-relative path")
+	}
+	if parsed.IsAbs() {
+		if strings.EqualFold(parsed.Scheme, "https") && parsed.Host != "" && parsed.Opaque == "" && parsed.User == nil {
+			return changeURL, nil
+		}
+		return "", fmt.Errorf("change_url must be https or an approved root-relative path")
+	}
+	if parsed.Scheme != "" || parsed.Opaque != "" || parsed.Host != "" {
+		return "", fmt.Errorf("change_url must be https or an approved root-relative path")
+	}
+	if !strings.HasPrefix(changeURL, "/") || strings.HasPrefix(changeURL, "//") || parsed.Path == "" || !strings.HasPrefix(parsed.Path, "/") {
+		return "", fmt.Errorf("change_url must be https or an approved root-relative path")
+	}
+	return changeURL, nil
+}
+
+func hasURLControlChar(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeAccessChangeDecision(ctx context.Context, req store.AccessChangeRequest, in AccessChangeDecisionRequest) (projections.AccessChangeRequestDecided, error) {
