@@ -58,6 +58,9 @@ Reference docs:
 - **[Category leadership ledger](category-leadership.md)** — the REPORT-004
   score ledger: which category table-stakes now have served proof, and which
   narrative or packaging residuals still need human product decisions.
+- **[Product decision register](product-decision-register.md)** — the REPORT-007
+  register for narrative, pricing, editions, and managed-offering decisions that
+  are recommended but not product truth until a human owner approves them.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Terraform provider](terraform-provider.md)** — manage profiles, short-lived
   PKI credentials, and application secrets from infrastructure-as-code.

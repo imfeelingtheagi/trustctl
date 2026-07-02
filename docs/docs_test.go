@@ -29,6 +29,7 @@ var requiredPages = []string{
 	"performance.md",
 	"performance-capacity.md",
 	"category-leadership.md",
+	"product-decision-register.md",
 	"usability.md",
 	"disaster-recovery.md",
 	"migrations.md",
