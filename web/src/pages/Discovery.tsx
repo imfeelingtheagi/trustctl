@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
-import { CheckCircle2, Activity, ClipboardList, Eye, Play, Plus, RefreshCw, Search, Tag, XCircle } from "lucide-react";
+import type { ChangeEvent, FormEvent } from "react";
+import { CheckCircle2, Activity, ClipboardList, Code2, Eye, Play, Plus, RefreshCw, Search, Sparkles, Tag, Trash2, Upload, XCircle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
@@ -75,6 +75,422 @@ const sourceKindLabels: Record<SourceKind, string> = {
   credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
 };
+const structuredSourceKinds = [
+  "nhi_cross_surface",
+  "api_key",
+  "oauth_grant",
+  "service_account",
+  "nhi_behavior",
+  "credential_compromise",
+  "k8s_ingress_gateway",
+] as const;
+type StructuredSourceKind = (typeof structuredSourceKinds)[number];
+type StructuredFieldKind = "text" | "select" | "list" | "number" | "checkbox";
+type StructuredField = {
+  key: string;
+  fieldName: string;
+  inputKind?: StructuredFieldKind;
+  required?: boolean;
+  placeholder?: string;
+  choices?: Array<{ value: string; displayName: string }>;
+  defaultValue?: string | boolean;
+};
+type StructuredRow = Record<string, string | boolean>;
+type SourceTemplate = {
+  id: string;
+  templateName: string;
+  rows: Array<Record<string, string | boolean | number | string[]>>;
+};
+type StructuredSourceConfig = {
+  payloadKey: "observations" | "grants" | "accounts" | "events" | "signals" | "resources";
+  rowName: string;
+  fields: StructuredField[];
+  templates: SourceTemplate[];
+  fixedConfig?: Record<string, unknown>;
+};
+
+const surfaceChoices = [
+  { value: "idp", displayName: "IdP" },
+  { value: "cloud", displayName: "Cloud" },
+  { value: "saas", displayName: "SaaS" },
+  { value: "on_prem", displayName: "On-prem" },
+  { value: "code", displayName: "Code" },
+  { value: "ci", displayName: "CI" },
+];
+const structuredSourceConfigs: Record<StructuredSourceKind, StructuredSourceConfig> = {
+  nhi_cross_surface: {
+    payloadKey: "observations",
+    rowName: "NHI observation",
+    fields: [
+      { key: "surface", fieldName: "Surface", inputKind: "select", required: true, choices: surfaceChoices },
+      { key: "system", fieldName: "System", required: true, placeholder: "okta" },
+      { key: "external_id", fieldName: "External ID", required: true, placeholder: "app/payments" },
+      { key: "principal", fieldName: "Principal", required: true, placeholder: "payments-api" },
+      { key: "owner", fieldName: "Owner", placeholder: "platform" },
+      { key: "credential_kind", fieldName: "Credential kind", placeholder: "oauth_client" },
+      { key: "credential_ref", fieldName: "Credential reference", placeholder: "okta:app/payments" },
+      { key: "evidence_refs", fieldName: "Evidence refs", inputKind: "list", placeholder: "okta:audit/app-42" },
+    ],
+    templates: [
+      {
+        id: "idp-app",
+        templateName: "IdP app credential",
+        rows: [
+          {
+            surface: "idp",
+            system: "okta",
+            external_id: "app/payments",
+            principal: "payments-api",
+            owner: "platform",
+            credential_kind: "oauth_client",
+            evidence_refs: ["okta:audit/app-42"],
+          },
+        ],
+      },
+      {
+        id: "ci-token",
+        templateName: "CI token",
+        rows: [
+          {
+            surface: "ci",
+            system: "github-actions",
+            external_id: "repo/payments/env/prod",
+            principal: "payments-ci-token",
+            owner: "platform",
+            credential_kind: "workflow_token",
+          },
+        ],
+      },
+    ],
+  },
+  api_key: {
+    payloadKey: "observations",
+    rowName: "API key observation",
+    fields: [
+      { key: "surface", fieldName: "Surface", inputKind: "select", required: true, choices: surfaceChoices },
+      { key: "system", fieldName: "System", required: true, placeholder: "github" },
+      { key: "external_id", fieldName: "External ID", required: true, placeholder: "user/payments-ci/pat" },
+      { key: "principal", fieldName: "Principal", required: true, placeholder: "payments-ci" },
+      {
+        key: "credential_kind",
+        fieldName: "Credential kind",
+        inputKind: "select",
+        required: true,
+        choices: [
+          { value: "personal_access_token", displayName: "Personal access token" },
+          { value: "access_key", displayName: "Access key" },
+          { value: "api_token", displayName: "API token" },
+        ],
+      },
+      { key: "credential_ref", fieldName: "Credential reference", required: true, placeholder: "github:user/payments-ci/pat" },
+      { key: "masked_fingerprint", fieldName: "Masked fingerprint", placeholder: "sha256:github-pat-ref" },
+      { key: "evidence_refs", fieldName: "Evidence refs", inputKind: "list", placeholder: "github:audit/pat-1" },
+    ],
+    templates: [
+      {
+        id: "github-pat",
+        templateName: "GitHub token",
+        rows: [
+          {
+            surface: "saas",
+            system: "github",
+            external_id: "user/payments-ci/pat",
+            principal: "payments-ci",
+            credential_kind: "personal_access_token",
+            credential_ref: "github:user/payments-ci/pat",
+            masked_fingerprint: "sha256:github-pat-ref",
+            evidence_refs: ["github:audit/pat-1"],
+          },
+        ],
+      },
+      {
+        id: "aws-access-key",
+        templateName: "AWS access key",
+        rows: [
+          {
+            surface: "cloud",
+            system: "aws-iam",
+            external_id: "access-key/AKIAEXAMPLE",
+            principal: "arn:aws:iam::111111111111:user/payments-deploy",
+            credential_kind: "access_key",
+            credential_ref: "aws-iam:111111111111:access-key/AKIAEXAMPLE",
+            masked_fingerprint: "sha256:aws-access-key-ref",
+            evidence_refs: ["aws-iam:credential-report"],
+          },
+        ],
+      },
+    ],
+  },
+  oauth_grant: {
+    payloadKey: "grants",
+    rowName: "OAuth grant",
+    fields: [
+      { key: "provider", fieldName: "Provider", required: true, placeholder: "okta" },
+      { key: "app_id", fieldName: "App ID", required: true, placeholder: "0oa-payments" },
+      { key: "app_name", fieldName: "App name", placeholder: "Payments BI Export" },
+      { key: "principal", fieldName: "Principal", required: true, placeholder: "payments-bi-export" },
+      { key: "resource", fieldName: "Resource", required: true, placeholder: "google-workspace" },
+      { key: "scopes", fieldName: "Scopes", inputKind: "list", required: true, placeholder: "drive.readonly, admin.directory.user.readonly" },
+      {
+        key: "consent_type",
+        fieldName: "Consent type",
+        inputKind: "select",
+        required: true,
+        choices: [
+          { value: "admin", displayName: "Admin" },
+          { value: "user", displayName: "User" },
+        ],
+      },
+      { key: "third_party", fieldName: "Third party", inputKind: "checkbox", defaultValue: true },
+      { key: "owner", fieldName: "Owner", placeholder: "finance-platform" },
+      { key: "publisher_verified", fieldName: "Publisher verified", inputKind: "checkbox" },
+      { key: "threat_signals", fieldName: "Threat signals", inputKind: "list", placeholder: "consent_phishing" },
+      { key: "evidence_refs", fieldName: "Evidence refs", inputKind: "list", placeholder: "okta:audit/consent-42" },
+    ],
+    templates: [
+      {
+        id: "admin-consent",
+        templateName: "Admin consent app",
+        rows: [
+          {
+            provider: "okta",
+            app_id: "0oa-payments",
+            app_name: "Payments BI Export",
+            principal: "payments-bi-export",
+            resource: "google-workspace",
+            scopes: ["drive.readonly", "admin.directory.user.readonly"],
+            consent_type: "admin",
+            third_party: true,
+            owner: "finance-platform",
+            publisher_verified: false,
+            threat_signals: ["consent_phishing"],
+            evidence_refs: ["okta:audit/consent-42"],
+          },
+        ],
+      },
+      {
+        id: "entra-third-party",
+        templateName: "Entra third-party grant",
+        rows: [
+          {
+            provider: "entra-id",
+            app_id: "evil-consent-app",
+            principal: "legacy-mail-archive",
+            resource: "microsoft-graph",
+            scopes: ["offline_access", "Directory.ReadWrite.All", "*.default"],
+            consent_type: "admin",
+            third_party: true,
+            publisher_verified: false,
+            threat_signals: ["consent_phishing"],
+            evidence_refs: ["entra:audit/consent-42"],
+          },
+        ],
+      },
+    ],
+  },
+  service_account: {
+    payloadKey: "accounts",
+    rowName: "Service account",
+    fields: [
+      {
+        key: "surface",
+        fieldName: "Surface",
+        inputKind: "select",
+        required: true,
+        choices: [
+          { value: "active_directory", displayName: "Active Directory" },
+          { value: "cloud", displayName: "Cloud" },
+          { value: "saas", displayName: "SaaS" },
+        ],
+      },
+      { key: "provider", fieldName: "Provider", required: true, placeholder: "ad" },
+      { key: "directory", fieldName: "Directory", required: true, placeholder: "corp.example" },
+      { key: "account_id", fieldName: "Account ID", required: true, placeholder: "S-1-5-21-1000" },
+      { key: "principal", fieldName: "Principal", required: true, placeholder: "svc-payments@corp.example" },
+      { key: "owner", fieldName: "Owner", placeholder: "identity" },
+      { key: "privileged", fieldName: "Privileged", inputKind: "checkbox" },
+      { key: "groups", fieldName: "Groups", inputKind: "list", placeholder: "CN=Payments,OU=Service Accounts,DC=corp,DC=example" },
+      { key: "roles", fieldName: "Roles", inputKind: "list", placeholder: "AdministratorAccess" },
+      { key: "credential_refs", fieldName: "Credential refs", inputKind: "list", placeholder: "ad:corp.example:svc-payments" },
+    ],
+    templates: [
+      {
+        id: "active-directory",
+        templateName: "Active Directory account",
+        rows: [
+          {
+            surface: "active_directory",
+            provider: "ad",
+            directory: "corp.example",
+            account_id: "S-1-5-21-1000",
+            principal: "svc-payments@corp.example",
+            owner: "identity",
+            groups: ["CN=Payments,OU=Service Accounts,DC=corp,DC=example"],
+            credential_refs: ["ad:corp.example:svc-payments"],
+          },
+        ],
+      },
+      {
+        id: "cloud-role",
+        templateName: "Cloud privileged role",
+        rows: [
+          {
+            surface: "cloud",
+            provider: "aws-iam",
+            directory: "111111111111",
+            account_id: "role/payments-prod",
+            principal: "arn:aws:iam::111111111111:role/payments-prod",
+            owner: "platform",
+            privileged: true,
+            roles: ["AdministratorAccess"],
+            credential_refs: ["aws:iam:role/payments-prod"],
+          },
+        ],
+      },
+    ],
+  },
+  nhi_behavior: {
+    payloadKey: "events",
+    rowName: "Behavior event",
+    fixedConfig: { business_hours: { start_hour: 8, end_hour: 18 } },
+    fields: [
+      { key: "principal", fieldName: "Principal", required: true, placeholder: "payments-api" },
+      { key: "occurred_at", fieldName: "Occurred at", required: true, placeholder: "2026-06-01T10:00:00Z" },
+      { key: "ip", fieldName: "IP address", required: true, placeholder: "198.51.100.10" },
+      { key: "geo", fieldName: "Geo", required: true, placeholder: "US" },
+      { key: "user_agent", fieldName: "User agent", placeholder: "payments-agent/1.0" },
+      { key: "usage_count", fieldName: "Usage count", inputKind: "number", required: true, placeholder: "10" },
+      { key: "baseline", fieldName: "Baseline", inputKind: "checkbox" },
+    ],
+    templates: [
+      {
+        id: "baseline",
+        templateName: "Baseline activity",
+        rows: [
+          {
+            principal: "payments-api",
+            occurred_at: "2026-06-01T10:00:00Z",
+            ip: "198.51.100.10",
+            geo: "US",
+            user_agent: "payments-agent/1.0",
+            usage_count: 10,
+            baseline: true,
+          },
+        ],
+      },
+      {
+        id: "anomalous",
+        templateName: "Anomalous activity",
+        rows: [
+          {
+            principal: "payments-api",
+            occurred_at: "2026-06-02T02:15:00Z",
+            ip: "203.0.113.9",
+            geo: "DE",
+            user_agent: "curl/8.7",
+            usage_count: 90,
+          },
+        ],
+      },
+    ],
+  },
+  credential_compromise: {
+    payloadKey: "signals",
+    rowName: "Compromise signal",
+    fields: [
+      { key: "principal", fieldName: "Principal", required: true, placeholder: "payments-api" },
+      { key: "credential_ref", fieldName: "Credential reference", required: true, placeholder: "api-token:payments-ci" },
+      { key: "credential_kind", fieldName: "Credential kind", required: true, placeholder: "api_token" },
+      { key: "provider", fieldName: "Provider", required: true, placeholder: "github-actions" },
+      { key: "detector", fieldName: "Detector", required: true, placeholder: "honeytoken" },
+      { key: "observed_at", fieldName: "Observed at", required: true, placeholder: "2026-06-03T03:15:00Z" },
+      { key: "reason", fieldName: "Reason", required: true, placeholder: "revoked token replayed from unfamiliar network" },
+      {
+        key: "confidence",
+        fieldName: "Confidence",
+        inputKind: "select",
+        required: true,
+        choices: [
+          { value: "low", displayName: "Low" },
+          { value: "medium", displayName: "Medium" },
+          { value: "high", displayName: "High" },
+          { value: "critical", displayName: "Critical" },
+        ],
+      },
+      { key: "evidence_refs", fieldName: "Evidence refs", inputKind: "list", placeholder: "audit:api-token-use/evt-42" },
+    ],
+    templates: [
+      {
+        id: "honeytoken",
+        templateName: "Honeytoken replay",
+        rows: [
+          {
+            principal: "payments-api",
+            credential_ref: "api-token:payments-ci",
+            credential_kind: "api_token",
+            provider: "github-actions",
+            detector: "honeytoken",
+            observed_at: "2026-06-03T03:15:00Z",
+            reason: "revoked token replayed from unfamiliar network",
+            confidence: "critical",
+            evidence_refs: ["audit:api-token-use/evt-42"],
+          },
+        ],
+      },
+    ],
+  },
+  k8s_ingress_gateway: {
+    payloadKey: "resources",
+    rowName: "Kubernetes TLS resource",
+    fields: [
+      {
+        key: "kind",
+        fieldName: "Kind",
+        inputKind: "select",
+        required: true,
+        choices: [
+          { value: "Ingress", displayName: "Ingress" },
+          { value: "Gateway", displayName: "Gateway" },
+        ],
+      },
+      { key: "namespace", fieldName: "Namespace", required: true, placeholder: "payments" },
+      { key: "name", fieldName: "Name", required: true, placeholder: "payments-web" },
+      { key: "tls_secret_name", fieldName: "TLS secret", required: true, placeholder: "payments-web-tls" },
+      { key: "hosts", fieldName: "Hosts", inputKind: "list", required: true, placeholder: "payments.example.com" },
+      { key: "auto_issue", fieldName: "Auto issue", inputKind: "checkbox", defaultValue: true },
+    ],
+    templates: [
+      {
+        id: "ingress",
+        templateName: "Ingress TLS",
+        rows: [
+          {
+            kind: "Ingress",
+            namespace: "payments",
+            name: "payments-web",
+            tls_secret_name: "payments-web-tls",
+            hosts: ["payments.example.com"],
+            auto_issue: true,
+          },
+        ],
+      },
+      {
+        id: "gateway",
+        templateName: "Gateway TLS",
+        rows: [
+          {
+            kind: "Gateway",
+            namespace: "edge",
+            name: "public",
+            tls_secret_name: "edge-public-tls",
+            hosts: ["edge.example.com", "api.example.com"],
+            auto_issue: true,
+          },
+        ],
+      },
+    ],
+  },
+};
 const triageFilterOptions = [
   { value: "all", labelKey: "discovery.findings.filterStatusAll" },
   { value: "unmanaged", labelKey: "discovery.findings.statusUnmanaged" },
@@ -98,6 +514,22 @@ function gridMetadataString(metadata: Record<string, GridViewPrimitive>, key: st
   return typeof value === "string" && value ? value : fallback;
 }
 
+function isStructuredSourceKind(kind: SourceKind): kind is StructuredSourceKind {
+  return structuredSourceKinds.includes(kind as StructuredSourceKind);
+}
+
+function initialStructuredRows(): Record<StructuredSourceKind, StructuredRow[]> {
+  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, [emptyStructuredRow(structuredSourceConfigs[kind])]])) as Record<StructuredSourceKind, StructuredRow[]>;
+}
+
+function initialStructuredTemplates(): Record<StructuredSourceKind, string> {
+  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, structuredSourceConfigs[kind].templates[0]?.id ?? ""])) as Record<StructuredSourceKind, string>;
+}
+
+function initialStructuredJSONImports(): Record<StructuredSourceKind, string> {
+  return Object.fromEntries(structuredSourceKinds.map((kind) => [kind, ""])) as Record<StructuredSourceKind, string>;
+}
+
 export function Discovery() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sources, setSources] = useState<DiscoverySource[]>([]);
@@ -112,13 +544,10 @@ export function Discovery() {
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("network");
   const [targets, setTargets] = useState("");
-  const [tokenObservations, setTokenObservations] = useState("");
-  const [nhiObservations, setNHIObservations] = useState("");
-  const [oauthGrants, setOAuthGrants] = useState("");
-  const [serviceAccounts, setServiceAccounts] = useState("");
-  const [behaviorEvents, setBehaviorEvents] = useState("");
-  const [compromiseSignals, setCompromiseSignals] = useState("");
-  const [k8sResources, setK8sResources] = useState("");
+  const [structuredRows, setStructuredRows] = useState<Record<StructuredSourceKind, StructuredRow[]>>(() => initialStructuredRows());
+  const [structuredTemplates, setStructuredTemplates] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredTemplates());
+  const [structuredJSONImports, setStructuredJSONImports] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredJSONImports());
+  const [openJSONImportKind, setOpenJSONImportKind] = useState<StructuredSourceKind | null>(null);
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
@@ -219,31 +648,16 @@ export function Discovery() {
       const config =
         sourceKind === "network"
           ? { targets: parseTargets(targets) }
-          : sourceKind === "api_key"
-          ? { observations: parseTokenObservations(tokenObservations) }
-          : sourceKind === "nhi_cross_surface"
-          ? { observations: parseNHIObservations(nhiObservations) }
-          : sourceKind === "oauth_grant"
-          ? { grants: parseOAuthGrants(oauthGrants) }
-          : sourceKind === "service_account"
-          ? { accounts: parseServiceAccounts(serviceAccounts) }
-          : sourceKind === "nhi_behavior"
-          ? { events: parseBehaviorEvents(behaviorEvents), business_hours: { start_hour: 8, end_hour: 18 } }
-          : sourceKind === "credential_compromise"
-          ? { signals: parseCompromiseSignals(compromiseSignals) }
-          : sourceKind === "k8s_ingress_gateway"
-          ? { resources: parseKubernetesTLSResources(k8sResources) }
+          : isStructuredSourceKind(sourceKind)
+          ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
           : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
-      setTokenObservations("");
-      setNHIObservations("");
-      setOAuthGrants("");
-      setServiceAccounts("");
-      setBehaviorEvents("");
-      setCompromiseSignals("");
-      setK8sResources("");
+      setStructuredRows(initialStructuredRows());
+      setStructuredTemplates(initialStructuredTemplates());
+      setStructuredJSONImports(initialStructuredJSONImports());
+      setOpenJSONImportKind(null);
       setScheduleSourceID(created.id);
       await load();
     } catch (err) {
@@ -354,89 +768,19 @@ export function Discovery() {
               />
             </label>
           )}
-          {sourceKind === "nhi_cross_surface" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Observations JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={nhiObservations}
-                onChange={(event) => setNHIObservations(event.target.value)}
-                placeholder='[{"surface":"idp","system":"okta","external_id":"app/payments","principal":"payments-api","owner":"platform","credential_kind":"oauth_client"}]'
-                required
-              />
-            </label>
-          )}
-          {sourceKind === "api_key" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Observations JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={tokenObservations}
-                onChange={(event) => setTokenObservations(event.target.value)}
-                placeholder='[{"surface":"saas","system":"github","external_id":"user/payments-ci/pat","principal":"payments-ci","credential_kind":"personal_access_token","credential_ref":"github:user/payments-ci/pat","masked_fingerprint":"sha256:github-pat-ref","evidence_refs":["github:audit/pat-1"]}]'
-                required
-              />
-            </label>
-          )}
-          {sourceKind === "oauth_grant" && (
-            <label className="grid gap-1 text-sm font-medium">
-              OAuth grants JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={oauthGrants}
-                onChange={(event) => setOAuthGrants(event.target.value)}
-                placeholder='[{"provider":"entra-id","app_id":"evil-consent-app","principal":"legacy-mail-archive","resource":"microsoft-graph","scopes":["offline_access","Directory.ReadWrite.All","*.default"],"consent_type":"admin","third_party":true,"publisher_verified":false,"threat_signals":["consent_phishing"],"evidence_refs":["entra:audit/consent-42"]}]'
-                required
-              />
-            </label>
-          )}
-          {sourceKind === "service_account" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Service accounts JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={serviceAccounts}
-                onChange={(event) => setServiceAccounts(event.target.value)}
-                placeholder='[{"surface":"active_directory","provider":"ad","directory":"corp.example","account_id":"S-1-5-21-1000","principal":"svc-payments@corp.example","owner":"identity"},{"surface":"cloud","provider":"aws-iam","directory":"111111111111","account_id":"role/payments-prod","principal":"arn:aws:iam::111111111111:role/payments-prod","owner":"platform","privileged":true}]'
-                required
-              />
-            </label>
-          )}
-          {sourceKind === "nhi_behavior" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Behavior events JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={behaviorEvents}
-                onChange={(event) => setBehaviorEvents(event.target.value)}
-                placeholder='[{"principal":"payments-api","occurred_at":"2026-06-01T10:00:00Z","ip":"198.51.100.10","geo":"US","user_agent":"payments-agent/1.0","usage_count":10,"baseline":true}]'
-                required
-              />
-            </label>
-          )}
-          {sourceKind === "k8s_ingress_gateway" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Kubernetes resources JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={k8sResources}
-                onChange={(event) => setK8sResources(event.target.value)}
-                placeholder='[{"kind":"Ingress","namespace":"payments","name":"payments-web","tls_secret_name":"payments-web-tls","hosts":["payments.example.com"],"auto_issue":true}]'
-                required
-              />
-            </label>
-          )}
-          {sourceKind === "credential_compromise" && (
-            <label className="grid gap-1 text-sm font-medium">
-              Compromise signals JSON
-              <textarea
-                className="ui-input min-h-40 font-mono text-xs"
-                value={compromiseSignals}
-                onChange={(event) => setCompromiseSignals(event.target.value)}
-                placeholder='[{"principal":"payments-api","credential_ref":"api-token:payments-ci","credential_kind":"api_token","provider":"github-actions","detector":"honeytoken","observed_at":"2026-06-03T03:15:00Z","reason":"revoked token replayed from unfamiliar network","confidence":"critical","evidence_refs":["audit:api-token-use/evt-42"]}]'
-                required
-              />
-            </label>
+          {isStructuredSourceKind(sourceKind) && (
+            <StructuredSourceForm
+              key={sourceKind}
+              kind={sourceKind}
+              rows={structuredRows[sourceKind]}
+              selectedTemplate={structuredTemplates[sourceKind]}
+              jsonImport={structuredJSONImports[sourceKind]}
+              jsonImportOpen={openJSONImportKind === sourceKind}
+              onRowsChange={(rows) => setStructuredRows((current) => ({ ...current, [sourceKind]: rows }))}
+              onTemplateChange={(template) => setStructuredTemplates((current) => ({ ...current, [sourceKind]: template }))}
+              onJSONImportChange={(value) => setStructuredJSONImports((current) => ({ ...current, [sourceKind]: value }))}
+              onToggleJSONImport={() => setOpenJSONImportKind((current) => (current === sourceKind ? null : sourceKind))}
+            />
           )}
           <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -567,6 +911,182 @@ export function Discovery() {
         )}
       </section>
     </section>
+  );
+}
+
+function StructuredSourceForm({
+  kind,
+  rows,
+  selectedTemplate,
+  jsonImport,
+  jsonImportOpen,
+  onRowsChange,
+  onTemplateChange,
+  onJSONImportChange,
+  onToggleJSONImport,
+}: {
+  kind: StructuredSourceKind;
+  rows: StructuredRow[];
+  selectedTemplate: string;
+  jsonImport: string;
+  jsonImportOpen: boolean;
+  onRowsChange: (rows: StructuredRow[]) => void;
+  onTemplateChange: (template: string) => void;
+  onJSONImportChange: (value: string) => void;
+  onToggleJSONImport: () => void;
+}) {
+  const config = structuredSourceConfigs[kind];
+  const { t } = useTranslation();
+  const [csvError, setCSVError] = useState<string | null>(null);
+  const activeTemplate = config.templates.find((template) => template.id === selectedTemplate) ?? config.templates[0];
+
+  function updateRow(index: number, key: string, value: string | boolean) {
+    onRowsChange(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)));
+  }
+
+  function loadSampleRows() {
+    if (!activeTemplate) return;
+    setCSVError(null);
+    onRowsChange(activeTemplate.rows.map((row) => rowFromTemplate(config, row)));
+  }
+
+  async function handleCSVUpload(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const text = await readFileText(file);
+      onRowsChange(parseStructuredCSVRows(config, text));
+      setCSVError(null);
+    } catch (err) {
+      setCSVError(err instanceof Error && err.message !== "csv-read-failed" ? err.message : t("discovery.sourceForm.csvReadFailed"));
+    } finally {
+      input.value = "";
+    }
+  }
+
+  return (
+    <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto] xl:grid-cols-[1fr_auto_12rem]">
+        <label className="grid gap-1 text-sm font-medium">
+          Source template
+          <select className="ui-input" value={selectedTemplate} onChange={(event) => onTemplateChange(event.target.value)}>
+            {config.templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.templateName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button type="button" variant="outline" className="self-end" onClick={loadSampleRows}>
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          Load sample
+        </Button>
+        <label className="grid gap-1 text-sm font-medium">
+          CSV upload
+          <span className="relative">
+            <Upload className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <input type="file" accept=".csv,text/csv" className="ui-input file:mr-3 file:rounded-control file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:font-medium ps-9" onChange={handleCSVUpload} />
+          </span>
+        </label>
+      </div>
+
+      {csvError && (
+        <p role="alert" className="text-sm text-status-danger">
+          {csvError}
+        </p>
+      )}
+
+      <div className="grid gap-3">
+        {rows.map((row, rowIndex) => (
+          <fieldset key={rowIndex} className="grid gap-3 rounded-control border border-border p-3">
+            <legend className="px-1 text-xs font-semibold uppercase text-muted-foreground">
+              {config.rowName} {rowIndex + 1}
+            </legend>
+            <div className="grid gap-3 md:grid-cols-2">
+              {config.fields.map((field) => (
+                <StructuredSourceField key={field.key} kind={kind} field={field} rowIndex={rowIndex} value={row[field.key]} onChange={(value) => updateRow(rowIndex, field.key, value)} />
+              ))}
+            </div>
+            {rows.length > 1 && (
+              <Button type="button" variant="ghost" size="sm" className="justify-self-start" onClick={() => onRowsChange(rows.filter((_, index) => index !== rowIndex))}>
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Remove row
+              </Button>
+            )}
+          </fieldset>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={() => onRowsChange([...rows, emptyStructuredRow(config)])}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Add row
+        </Button>
+        <Button type="button" variant="ghost" onClick={onToggleJSONImport}>
+          <Code2 className="h-4 w-4" aria-hidden="true" />
+          Advanced JSON import
+        </Button>
+      </div>
+
+      {jsonImportOpen && (
+        <label className="grid gap-1 text-sm font-medium">
+          {sourceKindLabels[kind]} JSON import
+          <textarea className="ui-input min-h-32 font-mono text-xs" value={jsonImport} onChange={(event) => onJSONImportChange(event.target.value)} />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function StructuredSourceField({
+  kind,
+  field,
+  rowIndex,
+  value,
+  onChange,
+}: {
+  kind: StructuredSourceKind;
+  field: StructuredField;
+  rowIndex: number;
+  value: string | boolean | undefined;
+  onChange: (value: string | boolean) => void;
+}) {
+  const id = `discovery-${kind}-${rowIndex}-${field.key}`;
+  if (field.inputKind === "checkbox") {
+    return (
+      <label className="flex items-center gap-2 self-end text-sm font-medium" htmlFor={id}>
+        <input id={id} type="checkbox" className="h-4 w-4 rounded border-border" checked={value === true} onChange={(event) => onChange(event.target.checked)} />
+        {field.fieldName}
+      </label>
+    );
+  }
+  if (field.inputKind === "select") {
+    return (
+      <label className="grid gap-1 text-sm font-medium" htmlFor={id}>
+        {field.fieldName}
+        <select id={id} className="ui-input" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)}>
+          {(field.choices ?? []).map((choice) => (
+            <option key={choice.value} value={choice.value}>
+              {choice.displayName}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  return (
+    <label className="grid gap-1 text-sm font-medium" htmlFor={id}>
+      {field.fieldName}
+      <input
+        id={id}
+        type={field.inputKind === "number" ? "number" : "text"}
+        className="ui-input"
+        value={typeof value === "string" ? value : ""}
+        placeholder={field.placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
@@ -1507,46 +2027,169 @@ function parseTargets(value: string): string[] {
     .filter(Boolean);
 }
 
-function parseTokenObservations(value: string): unknown[] {
+function buildStructuredSourceConfig(kind: StructuredSourceKind, rows: StructuredRow[], jsonImport: string): Record<string, unknown> {
+  const config = structuredSourceConfigs[kind];
+  const records = jsonImport.trim() ? parseStructuredJSONImport(kind, jsonImport) : structuredRowsToRecords(config, rows);
+  return { ...(config.fixedConfig ?? {}), [config.payloadKey]: records };
+}
+
+function parseStructuredJSONImport(kind: StructuredSourceKind, value: string): unknown[] {
   const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("Token observations JSON must be an array.");
+  if (!Array.isArray(parsed)) throw new Error(`${sourceKindLabels[kind]} JSON import must be an array.`);
   return parsed;
 }
 
-function parseNHIObservations(value: string): unknown[] {
-  const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("Observations JSON must be an array.");
-  return parsed;
+function structuredRowsToRecords(config: StructuredSourceConfig, rows: StructuredRow[]): Array<Record<string, unknown>> {
+  const records = rows.map((row) => structuredRowToRecord(config, row));
+  if (records.length === 0) throw new Error(`Add at least one ${config.rowName.toLowerCase()}.`);
+  return records;
 }
 
-function parseOAuthGrants(value: string): unknown[] {
-  const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("OAuth grants JSON must be an array.");
-  return parsed;
+function structuredRowToRecord(config: StructuredSourceConfig, row: StructuredRow): Record<string, unknown> {
+  const record: Record<string, unknown> = {};
+  for (const field of config.fields) {
+    const value = row[field.key];
+    if (field.inputKind === "checkbox") {
+      record[field.key] = value === true;
+      continue;
+    }
+    const text = typeof value === "string" ? value.trim() : "";
+    if (!text) {
+      if (field.required) throw new Error(`${field.fieldName} is required.`);
+      continue;
+    }
+    if (field.inputKind === "list") {
+      const items = splitDelimitedList(text);
+      if (items.length > 0) record[field.key] = items;
+      continue;
+    }
+    if (field.inputKind === "number") {
+      const parsed = Number(text);
+      if (!Number.isFinite(parsed)) throw new Error(`${field.fieldName} must be a number.`);
+      record[field.key] = parsed;
+      continue;
+    }
+    record[field.key] = text;
+  }
+  return record;
 }
 
-function parseServiceAccounts(value: string): unknown[] {
-  const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("Service accounts JSON must be an array.");
-  return parsed;
+function emptyStructuredRow(config: StructuredSourceConfig): StructuredRow {
+  const row: StructuredRow = {};
+  for (const field of config.fields) {
+    if (field.inputKind === "checkbox") {
+      row[field.key] = field.defaultValue === true;
+    } else if (typeof field.defaultValue === "string") {
+      row[field.key] = field.defaultValue;
+    } else if (field.inputKind === "select") {
+      row[field.key] = field.choices?.[0]?.value ?? "";
+    } else {
+      row[field.key] = "";
+    }
+  }
+  return row;
 }
 
-function parseBehaviorEvents(value: string): unknown[] {
-  const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("Behavior events JSON must be an array.");
-  return parsed;
+function rowFromTemplate(config: StructuredSourceConfig, values: Record<string, string | boolean | number | string[]>): StructuredRow {
+  const row = emptyStructuredRow(config);
+  for (const field of config.fields) {
+    if (!Object.prototype.hasOwnProperty.call(values, field.key)) continue;
+    const value = values[field.key];
+    if (field.inputKind === "checkbox") row[field.key] = value === true || value === "true";
+    else if (Array.isArray(value)) row[field.key] = value.join(", ");
+    else row[field.key] = String(value);
+  }
+  return row;
 }
 
-function parseCompromiseSignals(value: string): unknown[] {
-  const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("Compromise signals JSON must be an array.");
-  return parsed;
+function parseStructuredCSVRows(config: StructuredSourceConfig, text: string): StructuredRow[] {
+  const rows = parseCSV(text);
+  if (rows.length < 2) throw new Error("Uploaded CSV must include a header row and at least one record.");
+  const headers = rows[0].map((header) => csvFieldKey(config, header));
+  const parsedRows = rows
+    .slice(1)
+    .filter((row) => row.some((cell) => cell.trim() !== ""))
+    .map((row) => {
+      const structured = emptyStructuredRow(config);
+      row.forEach((cell, index) => {
+        const key = headers[index];
+        if (!key) return;
+        const field = config.fields.find((candidate) => candidate.key === key);
+        if (!field) return;
+        structured[key] = field.inputKind === "checkbox" ? parseBooleanCell(cell) : cell.trim();
+      });
+      return structured;
+    });
+  if (parsedRows.length === 0) throw new Error("Uploaded CSV did not contain source records.");
+  return parsedRows;
 }
 
-function parseKubernetesTLSResources(value: string): unknown[] {
-  const parsed = JSON.parse(value);
-  if (!Array.isArray(parsed)) throw new Error("Kubernetes resources JSON must be an array.");
-  return parsed;
+function readFileText(file: File): Promise<string> {
+  if (typeof file.text === "function") return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(typeof reader.result === "string" ? reader.result : ""));
+    reader.addEventListener("error", () => reject(reader.error ?? new Error("csv-read-failed")));
+    reader.readAsText(file);
+  });
+}
+
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === "\"") {
+      if (quoted && next === "\"") {
+        cell += "\"";
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (char === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+  row.push(cell);
+  rows.push(row);
+  return rows.filter((candidate) => candidate.some((value) => value.trim() !== ""));
+}
+
+function csvFieldKey(config: StructuredSourceConfig, header: string): string | null {
+  const normalized = normalizeCSVHeader(header);
+  const field = config.fields.find((candidate) => normalizeCSVHeader(candidate.key) === normalized || normalizeCSVHeader(candidate.fieldName) === normalized);
+  return field?.key ?? null;
+}
+
+function normalizeCSVHeader(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function parseBooleanCell(value: string): boolean {
+  return /^(1|true|yes|y|on)$/i.test(value.trim());
+}
+
+function splitDelimitedList(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function targetCount(source: DiscoverySource): string {

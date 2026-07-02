@@ -460,6 +460,35 @@ describe("discovery control-plane surface", () => {
     expect(apiMock.startDiscoveryRun).toHaveBeenCalledWith({ source_id: "source-1", dry_run: false });
   });
 
+  it("uses structured templates instead of primary JSON textareas for complex source creation", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+
+    const complexSources = [
+      { kind: "nhi_cross_surface", oldJsonLabel: "Observations JSON" },
+      { kind: "api_key", oldJsonLabel: "Observations JSON" },
+      { kind: "oauth_grant", oldJsonLabel: "OAuth grants JSON" },
+      { kind: "service_account", oldJsonLabel: "Service accounts JSON" },
+      { kind: "nhi_behavior", oldJsonLabel: "Behavior events JSON" },
+      { kind: "credential_compromise", oldJsonLabel: "Compromise signals JSON" },
+      { kind: "k8s_ingress_gateway", oldJsonLabel: "Kubernetes resources JSON" },
+    ];
+
+    for (const source of complexSources) {
+      await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), source.kind);
+
+      expect(within(sourceForm as HTMLFormElement).queryByLabelText(source.oldJsonLabel)).not.toBeInTheDocument();
+      expect(within(sourceForm as HTMLFormElement).getByLabelText("Source template")).toBeInTheDocument();
+      expect(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Load sample" })).toBeInTheDocument();
+      expect(within(sourceForm as HTMLFormElement).getByLabelText("CSV upload")).toBeInTheDocument();
+      expect(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" })).toBeInTheDocument();
+    }
+  });
+
   it("creates a cross-surface NHI source from metadata-only observations", async () => {
     const user = userEvent.setup();
     renderDiscovery();
@@ -469,7 +498,8 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "nhi-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "nhi_cross_surface");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Observations JSON"), {
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("NHI surfaces JSON import"), {
       target: {
         value: JSON.stringify([
           { surface: "idp", system: "okta", external_id: "app/payments", principal: "payments-api" },
@@ -504,7 +534,8 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "tokens-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "api_key");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Observations JSON"), {
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("API keys JSON import"), {
       target: {
         value: JSON.stringify([
           {
@@ -553,26 +584,11 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "oauth-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "oauth_grant");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("OAuth grants JSON"), {
-      target: {
-        value: JSON.stringify([
-          {
-            provider: "okta",
-            app_id: "0oa-payments",
-            app_name: "Payments BI Export",
-            principal: "payments-bi-export",
-            resource: "google-workspace",
-            scopes: ["drive.readonly", "admin.directory.user.readonly"],
-            consent_type: "admin",
-            third_party: true,
-            owner: "finance-platform",
-            publisher_verified: false,
-            threat_signals: ["consent_phishing"],
-            evidence_refs: ["okta:audit/consent-42"],
-          },
-        ]),
-      },
-    });
+    const csv = [
+      "provider,app_id,app_name,principal,resource,scopes,consent_type,third_party,owner,publisher_verified,threat_signals,evidence_refs",
+      'okta,0oa-payments,Payments BI Export,payments-bi-export,google-workspace,"drive.readonly, admin.directory.user.readonly",admin,true,finance-platform,false,consent_phishing,okta:audit/consent-42',
+    ].join("\n");
+    await user.upload(within(sourceForm as HTMLFormElement).getByLabelText("CSV upload"), new File([csv], "oauth-grants.csv", { type: "text/csv" }));
     await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
 
     expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
@@ -602,7 +618,8 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "service-accounts");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "service_account");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Service accounts JSON"), {
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Service accounts JSON import"), {
       target: {
         value: JSON.stringify([
           {
@@ -652,7 +669,8 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "behavior-quarterly");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "nhi_behavior");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Behavior events JSON"), {
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("NHI behavior JSON import"), {
       target: {
         value: JSON.stringify([
           {
@@ -699,7 +717,8 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "compromise-signals");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "credential_compromise");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Compromise signals JSON"), {
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Compromised credentials JSON import"), {
       target: {
         value: JSON.stringify([
           {
@@ -742,7 +761,8 @@ describe("discovery control-plane surface", () => {
     expect(sourceForm).toBeTruthy();
     await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "k8s-tls");
     await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "k8s_ingress_gateway");
-    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Kubernetes resources JSON"), {
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Kubernetes TLS JSON import"), {
       target: {
         value: JSON.stringify([
           {

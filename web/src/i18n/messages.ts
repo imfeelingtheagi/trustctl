@@ -805,6 +805,10 @@ export const messages = {
     defaultMessage: "unscheduled",
     description: "Short status text for sources without an enabled monitoring schedule.",
   },
+  "discovery.sourceForm.csvReadFailed": {
+    defaultMessage: "Could not read CSV upload.",
+    description: "Fallback error shown when a discovery source CSV file cannot be read.",
+  },
   "discovery.shadow.heading": {
     defaultMessage: "Shadow NHI posture",
     description: "Heading for shadow and unmanaged non-human identity posture.",
@@ -4982,6 +4986,7 @@ const esESCatalog = {
   "discovery.monitoring.columnInventory": "Inventario",
   "discovery.monitoring.columnRepository": "Repositorio",
   "discovery.monitoring.unscheduled": "sin programación",
+  "discovery.sourceForm.csvReadFailed": "No se pudo leer la carga CSV.",
   "discovery.shadow.heading": "Postura NHI sombra",
   "discovery.shadow.metricFindings": "Hallazgos",
   "discovery.shadow.metricUnmanaged": "No administrados",
