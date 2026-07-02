@@ -75,6 +75,8 @@ operator-confirmed agent path.
      --ssh-trust-reload-cmd 'systemctl reload sshd' \
      --ssh-trust-health-cmd 'ssh -o BatchMode=yes localhost true'
    ```
+   The reload and health commands are parsed as argv and executed without a
+   shell; shell metacharacters and shell interpreters are rejected.
 
    What the agent writes for you, additively:
 

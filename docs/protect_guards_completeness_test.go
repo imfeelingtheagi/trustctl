@@ -517,14 +517,13 @@ func TestCover012Trace014LimitationsSeparatesServedVsLibrary(t *testing.T) {
 // ---- COVER-013: arch-linter fixtures pass ---------------------------------------
 
 // TestCover013ArchLinterFixturesStayPresent locks COVER-013: the architecture linter
-// keeps planted-violation fixtures and an analysistest harness for each of its five
-// rules (crypto-import boundary, idempotency, key-material, tenant-filter, event
-// sourcing). The guard asserts each analyzer dir has a _test.go and a testdata tree,
-// and that main.go wires all five analyzers. ELI5: the linter that enforces our
-// architecture is itself tested against deliberately-bad code, so it cannot silently
-// stop catching violations.
+// keeps planted-violation fixtures and an analysistest harness for each rule. The
+// guard asserts each analyzer dir has a _test.go and a testdata tree, and that
+// main.go wires every analyzer. ELI5: the linter that enforces our architecture is
+// itself tested against deliberately-bad code, so it cannot silently stop catching
+// violations.
 func TestCover013ArchLinterFixturesStayPresent(t *testing.T) {
-	for _, analyzer := range []string{"cryptoboundary", "idempotency", "keymaterial", "tenantfilter", "eventsource"} {
+	for _, analyzer := range []string{"cryptoboundary", "idempotency", "keymaterial", "tenantfilter", "eventsource", "cryptoagility", "netexec"} {
 		dir := filepath.FromSlash("../tools/trstctllint/" + analyzer)
 		if _, err := os.Stat(filepath.Join(dir, "testdata")); err != nil {
 			t.Errorf("COVER-013: tools/trstctllint/%s/testdata is missing; planted-fixture coverage regressed", analyzer)
@@ -541,6 +540,8 @@ func TestCover013ArchLinterFixturesStayPresent(t *testing.T) {
 		"keymaterial.Analyzer",
 		"tenantfilter.Analyzer",
 		"eventsource.Analyzer",
+		"cryptoagility.Analyzer",
+		"netexec.Analyzer",
 	)
 }
 

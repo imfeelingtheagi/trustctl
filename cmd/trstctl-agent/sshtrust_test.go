@@ -21,9 +21,9 @@ func writeCAKey(t *testing.T) string {
 }
 
 // baseOpts wires the SSH-trust op against a fresh temp sshd_config + keys file,
-// using the real production osFS and runShell so the test exercises the actual
-// wiring, not a stand-in. validateCmd/reloadCmd default to shell no-ops the test
-// can flip to induce failure.
+// using the real production osFS and runCommandLine so the test exercises the
+// actual wiring, not a stand-in. validateCmd/reloadCmd default to argv no-ops
+// the test can flip to induce failure.
 func baseOpts(t *testing.T) sshTrustOptions {
 	t.Helper()
 	dir := t.TempDir()
@@ -236,5 +236,21 @@ func TestAgentSSHTrustRollsBackOnHealthFailure(t *testing.T) {
 	trust, _ := os.ReadFile(o.trustedKeys)
 	if string(trust) != orig {
 		t.Errorf("trust file not rolled back after health failure: %q", trust)
+	}
+}
+
+func TestAgentSSHTrustCommandRejectsShellInjection(t *testing.T) {
+	cases := []string{
+		"sh -c true",
+		"/bin/bash -c true",
+		"true;rm",
+		"true && false",
+		"echo $(id)",
+		"true\nfalse",
+	}
+	for _, tc := range cases {
+		if err := runCommandLine(context.Background(), tc); err == nil {
+			t.Fatalf("runCommandLine(%q) succeeded; want injection rejection", tc)
+		}
 	}
 }

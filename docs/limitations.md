@@ -460,7 +460,9 @@ operator-facing edges and follow-up integration work.
   (`--ssh-trust-confirm`) before it will rewrite trust. The op is **additive** (it
   never removes existing
   trust), validates the new config with `sshd -t`, reloads, runs a separate
-  operator-supplied post-reload health command (`--ssh-trust-health-cmd`), and
+  operator-supplied post-reload health command (`--ssh-trust-health-cmd`), with
+  both operator commands executed as validated argv command lines instead of shell
+  strings, and
   **auto-rolls-back** to the last-known-good on any failure — so a bad rewrite
   cannot lock operators out. Reload success alone is not treated as health. Because
   weakening `sshd`/`authorized_keys` trust is a high-blast-radius

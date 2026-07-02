@@ -48,6 +48,19 @@ var providerRegistry = map[string]any{}
 `)
 	writeFile(t, filepath.Join(fixture, "internal", "policy", "policy.go"), `package policy
 `)
+	writeFile(t, filepath.Join(fixture, "internal", "badnetexec", "bad.go"), `package badnetexec
+
+import (
+	"net/http"
+	"os/exec"
+)
+
+var client = http.DefaultClient
+
+func reload() error {
+	return exec.Command("sh", "-c", "reload").Run()
+}
+`)
 
 	planted := exec.Command(bin, "./...")
 	planted.Dir = fixture
@@ -63,6 +76,8 @@ var providerRegistry = map[string]any{}
 		"secret-bearing API/auth code must not convert secret bytes to string",
 		`import "trstctl.com/trstctl/internal/policy" is not allowed in the crypto/signer boundary`,
 		`runtime-mutable crypto provider/engine registry "providerRegistry" is not allowed`,
+		"http.DefaultClient is not allowed in new outbound surfaces",
+		"direct shell interpreter execution is not allowed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("planted violation output missing %q:\n%s", want, got)

@@ -64,7 +64,8 @@ it does nothing; (3) writes changes atomically (write-temp-then-rename); (4) run
 three-step gauntlet — validate the new config (`sshd -t`), reload, then health-check that
 `sshd` still accepts connections; and (5) if *any* step fails, restores both files from
 backup and reloads the known-good config. In the agent binary, the reload command and
-the post-reload health command are both operator-supplied and required
+the post-reload health command are both operator-supplied, required, and executed as
+validated argv command lines with shell metacharacters rejected
 (`--ssh-trust-reload-cmd`, `--ssh-trust-health-cmd`); reload success alone is not treated
 as proof that SSH is healthy. Removing trust is never an implicit side
 effect: `RemoveCATrust` refuses to run without an explicit confirmation flag. Every

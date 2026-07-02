@@ -8,6 +8,7 @@ import (
 	"trstctl.com/trstctl/tools/trstctllint/eventsource"
 	"trstctl.com/trstctl/tools/trstctllint/idempotency"
 	"trstctl.com/trstctl/tools/trstctllint/keymaterial"
+	"trstctl.com/trstctl/tools/trstctllint/netexec"
 	"trstctl.com/trstctl/tools/trstctllint/tenantfilter"
 )
 
@@ -19,5 +20,6 @@ func main() {
 		idempotency.Analyzer,    // AN-5
 		eventsource.Analyzer,    // AN-2
 		cryptoagility.Analyzer,  // PQC-00
+		netexec.Analyzer,        // SEC-005
 	)
 }

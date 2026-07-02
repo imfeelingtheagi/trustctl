@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"unicode"
 
 	"trstctl.com/trstctl/internal/agent/sshtrust"
 )
@@ -134,31 +136,81 @@ func (r *sshdReloader) Validate(ctx context.Context) error {
 	if cmd == "" {
 		cmd = "sshd -t"
 	}
-	return runShell(ctx, cmd)
+	return runCommandLine(ctx, cmd)
 }
 
 func (r *sshdReloader) Reload(ctx context.Context) error {
 	if r.reloadCmd == "" {
 		return fmt.Errorf("no sshd reload command configured (--ssh-trust-reload-cmd); refusing to guess how to reload sshd")
 	}
-	return runShell(ctx, r.reloadCmd)
+	return runCommandLine(ctx, r.reloadCmd)
 }
 
 func (r *sshdReloader) HealthCheck(ctx context.Context) error {
 	if r.healthCmd == "" {
 		return fmt.Errorf("no sshd health command configured (--ssh-trust-health-cmd); refusing to treat reload success as daemon health")
 	}
-	return runShell(ctx, r.healthCmd)
+	return runCommandLine(ctx, r.healthCmd)
 }
 
-// runShell runs a command line via the system shell, returning its combined
-// output in the error on failure so the operator sees why sshd rejected the
-// change (which triggers rollback).
-func runShell(ctx context.Context, line string) error {
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", line)
+// runCommandLine runs a whitespace-delimited argv directly, without a shell.
+// Operator-provided reload/health commands are intentionally simple command
+// lines; shell pipelines and expansions are rejected so trust rewrites cannot
+// become a command-injection surface.
+func runCommandLine(ctx context.Context, line string) error {
+	argv, err := parseCommandLine(line)
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%q failed: %v: %s", line, err, string(out))
 	}
 	return nil
+}
+
+func parseCommandLine(line string) ([]string, error) {
+	if strings.ContainsAny(line, "\x00\r\n") {
+		return nil, fmt.Errorf("command contains a newline or NUL")
+	}
+	argv := strings.Fields(line)
+	if len(argv) == 0 {
+		return nil, fmt.Errorf("empty command")
+	}
+	if shellName(argv[0]) {
+		return nil, fmt.Errorf("command %q is a shell interpreter; configure the target binary directly", argv[0])
+	}
+	for i, token := range argv {
+		if err := validateCommandToken(fmt.Sprintf("arg[%d]", i), token); err != nil {
+			return nil, err
+		}
+	}
+	return argv, nil
+}
+
+func validateCommandToken(label, value string) error {
+	if value == "" {
+		return fmt.Errorf("%s cannot be empty", label)
+	}
+	if strings.ContainsAny(value, "\x00\r\n;&|`$<>{}[]*?") {
+		return fmt.Errorf("%s %q contains shell metacharacters", label, value)
+	}
+	for _, r := range value {
+		if unicode.IsSpace(r) {
+			return fmt.Errorf("%s %q contains whitespace; configure argv tokens explicitly", label, value)
+		}
+	}
+	return nil
+}
+
+func shellName(command string) bool {
+	base := strings.ToLower(filepath.Base(command))
+	base = strings.TrimSuffix(base, ".exe")
+	switch base {
+	case "sh", "bash", "dash", "zsh", "fish", "ksh", "cmd", "powershell", "pwsh":
+		return true
+	default:
+		return false
+	}
 }

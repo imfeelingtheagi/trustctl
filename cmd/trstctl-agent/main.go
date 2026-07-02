@@ -83,9 +83,9 @@ func main() {
 	sshTrustTenant := flag.String("ssh-trust-tenant", "", "tenant the SSH-trust change is audited under (AN-1)")
 	sshTrustConfig := flag.String("ssh-trust-sshd-config", "/etc/ssh/sshd_config", "path to sshd_config")
 	sshTrustKeysFile := flag.String("ssh-trust-keys-file", "/etc/ssh/trusted_user_ca_keys", "path to TrustedUserCAKeys")
-	sshTrustReloadCmd := flag.String("ssh-trust-reload-cmd", "", "command to reload sshd after a validated config change (e.g. \"systemctl reload sshd\"); required for --ssh-trust-add-ca")
-	sshTrustValidateCmd := flag.String("ssh-trust-validate-cmd", "sshd -t", "command that validates sshd config before reload")
-	sshTrustHealthCmd := flag.String("ssh-trust-health-cmd", "", "command that proves sshd is healthy after reload (for example, a localhost SSH handshake); required for --ssh-trust-add-ca")
+	sshTrustReloadCmd := flag.String("ssh-trust-reload-cmd", "", "validated argv command line to reload sshd after a validated config change (e.g. \"systemctl reload sshd\"); shell metacharacters are rejected; required for --ssh-trust-add-ca")
+	sshTrustValidateCmd := flag.String("ssh-trust-validate-cmd", "sshd -t", "validated argv command line that validates sshd config before reload; shell metacharacters are rejected")
+	sshTrustHealthCmd := flag.String("ssh-trust-health-cmd", "", "validated argv command line that proves sshd is healthy after reload (for example, a localhost SSH handshake); shell metacharacters are rejected; required for --ssh-trust-add-ca")
 	flag.Parse()
 
 	if *showVersion {
