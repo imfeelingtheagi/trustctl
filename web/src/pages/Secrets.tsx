@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Copy, Eye, KeyRound, Loader2, LogIn, PlayCircle, RefreshCw, RotateCw, Share2, ShieldCheck, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2 } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -7,10 +7,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
+import { formatDateTime as formatDate } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 import {
-  api,
   ApiError,
+  api,
   type CloudSecretManagerIntegration,
   type DynamicLease,
   type EphemeralAPIKey,
@@ -34,20 +35,25 @@ import {
   type TransitHMAC,
   type TransitSignature,
 } from "@/lib/api";
-import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
-
-type SecretApprovalQueueItem = {
-  id: string;
-  name: string;
-  action: SecretApprovalAction;
-  openedAt: string;
-  status: "pending" | "approved" | "completed";
-  approvals?: number;
-  approver?: string;
-  error?: string;
-};
-
-type Translate = ReturnType<typeof useTranslation>["t"];
+import {
+  DynamicLeaseMetadata,
+  MachineSession,
+  RepositoryScanPosture,
+  RevealPanel,
+  SecretApprovalQueue,
+  Snippet,
+  ThirdPartyScanPosture,
+  apiProblemMessage,
+  decodeTransitBytes,
+  defaultThirdPartyProviders,
+  encodeTransitBytes,
+  leaseMetadataOnly,
+  mergeMeta,
+  parseScopeList,
+  secretApprovalActionLabel,
+  secretApprovalQueueID,
+  type SecretApprovalQueueItem,
+} from "./secrets/SecretsPageParts";
 
 export function Secrets() {
   const { t } = useTranslation();
@@ -178,7 +184,9 @@ export function Secrets() {
       const syncCatalogPromise =
         typeof api.secretSyncTargets === "function" ? api.secretSyncTargets().catch(() => null) : Promise.resolve<SecretSyncTargetCatalog | null>(null);
       const cloudManagersPromise =
-        typeof api.cloudSecretManagers === "function" ? api.cloudSecretManagers().catch(() => null) : Promise.resolve<CloudSecretManagerIntegration | null>(null);
+        typeof api.cloudSecretManagers === "function"
+          ? api.cloudSecretManagers().catch(() => null)
+          : Promise.resolve<CloudSecretManagerIntegration | null>(null);
       const operatorPosturePromise =
         typeof api.kubernetesSecretOperator === "function"
           ? api.kubernetesSecretOperator().catch(() => null)
@@ -1963,398 +1971,4 @@ export function Secrets() {
       </section>
     </section>
   );
-}
-
-function RevealPanel({ title, value, children, onDismiss }: { title: string; value: string; children: ReactNode; onDismiss: () => void }) {
-  const [copied, setCopied] = useState(false);
-  async function copyValue() {
-    try {
-      await navigator.clipboard?.writeText(value);
-      setCopied(true);
-    } catch {
-      setCopied(true);
-    }
-  }
-  return (
-    <div className="ui-panel grid gap-3 p-3 text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-medium">{title}</p>
-          <p className="mt-1 text-muted-foreground">{children}</p>
-        </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
-          <X className="h-4 w-4" aria-hidden="true" />
-          Dismiss
-        </Button>
-      </div>
-      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded bg-muted px-3 py-2 font-mono text-xs">{value}</pre>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={() => void copyValue()}>
-          <Copy className="h-4 w-4" aria-hidden="true" />
-          Copy once
-        </Button>
-        {copied && <span className="text-xs text-muted-foreground">Copied from this reveal panel.</span>}
-      </div>
-    </div>
-  );
-}
-
-function Snippet({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="ui-panel grid gap-2 p-3 text-sm">
-      <p className="font-medium">{title}</p>
-      <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted px-3 py-2 font-mono text-xs">{text}</pre>
-    </div>
-  );
-}
-
-function MachineSession({ session }: { session: MachineLoginResponse }) {
-  return (
-    <dl className="ui-panel grid gap-2 p-3 text-sm md:grid-cols-2">
-      <div>
-        <dt className="font-medium text-muted-foreground">Session ID</dt>
-        <dd className="break-all font-mono text-xs">{session.session_id}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Principal</dt>
-        <dd>{session.principal}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Method</dt>
-        <dd>{session.method}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Expires</dt>
-        <dd>{formatDate(session.expires_at)}</dd>
-      </div>
-      <div className="md:col-span-2">
-        <dt className="font-medium text-muted-foreground">Scopes</dt>
-        <dd>{session.scopes.join(", ") || "No scopes"}</dd>
-      </div>
-    </dl>
-  );
-}
-
-function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
-  return (
-    <dl className="grid gap-2 md:grid-cols-2">
-      <div>
-        <dt className="font-medium text-muted-foreground">Lease ID</dt>
-        <dd className="break-all font-mono text-xs">{lease.id}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">State</dt>
-        <dd>{lease.state}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Provider</dt>
-        <dd>{lease.provider}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Role</dt>
-        <dd>{lease.role}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Issued</dt>
-        <dd>{formatDate(lease.issued_at)}</dd>
-      </div>
-      <div>
-        <dt className="font-medium text-muted-foreground">Expires</dt>
-        <dd>{formatDate(lease.expires_at)}</dd>
-      </div>
-    </dl>
-  );
-}
-
-function RepositoryScanPosture({ posture }: { posture: SecretRepositoryScanPosture }) {
-  const { t } = useTranslation();
-  return (
-    <div className="ui-panel grid gap-3 p-comfortable text-sm">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
-        <span className="font-medium">{posture.served ? t("secrets.repoScan.active") : t("secrets.repoScan.unavailable")}</span>
-        <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="ui-table min-w-[52rem]">
-          <caption className="sr-only">{t("secrets.repoScan.providerCaption")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("secrets.repoScan.provider")}</th>
-              <th scope="col">{t("secrets.repoScan.triggers")}</th>
-              <th scope="col">{t("secrets.repoScan.ingress")}</th>
-              <th scope="col">{t("secrets.repoScan.outbox")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {posture.providers.map((provider) => (
-              <tr key={provider.id} className="align-top">
-                <td className="font-medium">{provider.name}</td>
-                <td>{provider.realtime_triggers.join(", ")}</td>
-                <td>{provider.ingest_mode}</td>
-                <td>{provider.outbox_mode}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <dl className="grid gap-3 md:grid-cols-2">
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.webhookPaths")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
-            {posture.webhook_paths.map((path) => (
-              <span key={path}>{path}</span>
-            ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.eventFlow")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
-            {posture.event_flow.map((event) => (
-              <span key={event}>{event}</span>
-            ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.releaseGates")}</dt>
-          <dd className="mt-1">{posture.release_gates.map((gate) => gate.id).join(", ")}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.residuals")}</dt>
-          <dd className="mt-1">{posture.residuals.join(" ")}</dd>
-        </div>
-      </dl>
-    </div>
-  );
-}
-
-function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretScanPosture }) {
-  const { t } = useTranslation();
-  return (
-    <div className="ui-panel grid gap-3 p-comfortable text-sm">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
-        <span className="font-medium">{posture.served ? t("secrets.thirdPartyScan.active") : t("secrets.thirdPartyScan.unavailable")}</span>
-        <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="ui-table min-w-[52rem]">
-          <caption className="sr-only">{t("secrets.thirdPartyScan.providerCaption")}</caption>
-          <thead>
-            <tr>
-              <th scope="col">{t("secrets.repoScan.provider")}</th>
-              <th scope="col">{t("secrets.thirdPartyScan.artifactKinds")}</th>
-              <th scope="col">{t("secrets.repoScan.ingress")}</th>
-              <th scope="col">{t("secrets.repoScan.outbox")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {posture.providers.map((provider) => (
-              <tr key={provider.id} className="align-top">
-                <td className="font-medium">{provider.name}</td>
-                <td>{provider.artifact_kinds.join(", ")}</td>
-                <td>{provider.ingest_mode}</td>
-                <td>{provider.outbox_mode}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <dl className="grid gap-3 md:grid-cols-2">
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.thirdPartyScan.ingestPaths")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
-            {posture.ingest_paths.map((path) => (
-              <span key={path}>{path}</span>
-            ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.eventFlow")}</dt>
-          <dd className="mt-1 grid gap-1 font-mono text-xs">
-            {posture.event_flow.map((event) => (
-              <span key={event}>{event}</span>
-            ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.releaseGates")}</dt>
-          <dd className="mt-1">{posture.release_gates.map((gate) => gate.id).join(", ")}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.residuals")}</dt>
-          <dd className="mt-1">{posture.residuals.join(" ")}</dd>
-        </div>
-      </dl>
-    </div>
-  );
-}
-
-function SecretApprovalQueue({
-  items,
-  busyKey,
-  canRetry,
-  onApprove,
-  onRetry,
-}: {
-  items: SecretApprovalQueueItem[];
-  busyKey: string | null;
-  canRetry: (item: SecretApprovalQueueItem) => boolean;
-  onApprove: (item: SecretApprovalQueueItem) => void;
-  onRetry: (item: SecretApprovalQueueItem) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="ui-panel grid gap-3 p-comfortable">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-title font-semibold">{t("secrets.approvals.heading")}</h3>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.approvals.description")}</p>
-        </div>
-        <span className="rounded-control border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">{t("secrets.approvals.badge")}</span>
-      </div>
-      {items.length === 0 ? (
-        <p className="rounded-control border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">{t("secrets.approvals.empty")}</p>
-      ) : (
-        <div className="grid gap-2" role="list" aria-label={t("secrets.approvals.listLabel")}>
-          {items.map((item) => {
-            const approveBusy = busyKey === `${item.id}:approve`;
-            const retryBusy = busyKey === `${item.id}:retry`;
-            const retryReady = canRetry(item);
-            const actionLabel = secretApprovalActionLabel(item.action, t);
-            return (
-              <article key={item.id} role="listitem" className="grid gap-3 rounded-md border border-border bg-background p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium">
-                      {actionLabel} - {item.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t("secrets.approvals.openedStatus", { openedAt: formatDate(item.openedAt), status: secretApprovalStatusLabel(item, t) })}
-                    </p>
-                  </div>
-                  <span className="rounded-control border border-border px-2 py-1 text-xs font-semibold text-muted-foreground">{item.status}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    aria-label={t("secrets.approvals.approveAction", { action: actionLabel, name: item.name })}
-                    disabled={approveBusy || retryBusy || item.status === "completed"}
-                    onClick={() => onApprove(item)}
-                  >
-                    {approveBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />}
-                    {t("secrets.approvals.approve")}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={approveBusy || retryBusy || !retryReady}
-                    aria-label={t("secrets.approvals.retryAction", { action: actionLabel, name: item.name })}
-                    onClick={() => onRetry(item)}
-                  >
-                    {retryBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <PlayCircle className="h-4 w-4" aria-hidden="true" />}
-                    {t("secrets.approvals.retry")}
-                  </Button>
-                </div>
-                {item.error && <ErrorState title={t("secrets.approvals.errorTitle")}>{item.error}</ErrorState>}
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function defaultThirdPartyProviders(): ThirdPartySecretScanPosture["providers"] {
-  return [
-    { id: "cicd_log", name: "CI/CD logs", artifact_kinds: ["ci_cd_log"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
-    {
-      id: "container_registry",
-      name: "Container registry exports",
-      artifact_kinds: ["container_registry_export"],
-      ingest_mode: "",
-      secret_handling: "",
-      outbox_mode: "",
-    },
-    { id: "slack", name: "Slack exports", artifact_kinds: ["slack_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
-    { id: "jira", name: "Jira exports", artifact_kinds: ["jira_export"], ingest_mode: "", secret_handling: "", outbox_mode: "" },
-  ];
-}
-
-function secretApprovalQueueID(action: SecretApprovalAction, name: string): string {
-  return `${action}:${name}`;
-}
-
-function secretApprovalActionLabel(action: SecretApprovalAction, t: Translate): string {
-  switch (action) {
-    case "rotate":
-      return t("secrets.approvals.actionRotate");
-    case "recover":
-      return t("secrets.approvals.actionRecover");
-    case "delete":
-      return t("secrets.approvals.actionDelete");
-  }
-}
-
-function secretApprovalStatusLabel(item: SecretApprovalQueueItem, t: Translate): string {
-  if (item.status === "completed") return t("secrets.approvals.statusCompleted");
-  if (item.status === "approved") {
-    if (item.approver && item.approvals != null) return t("secrets.approvals.statusApprovedWithCount", { approver: item.approver, count: item.approvals });
-    if (item.approver) return t("secrets.approvals.statusApprovedBy", { approver: item.approver });
-    return t("secrets.approvals.statusApproved");
-  }
-  return item.approvals != null ? t("secrets.approvals.statusCount", { count: item.approvals }) : t("secrets.approvals.statusAwaiting");
-}
-
-function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): SecretMeta[] {
-  const byName = new Map(current.map((item) => [item.name, item]));
-  for (const item of incoming) byName.set(item.name, item);
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
-  const metadata = { ...lease };
-  delete metadata.credential;
-  return metadata;
-}
-
-function formatDate(value?: string): string {
-  if (!value) return "-";
-  return formatDateTimePolicy(value);
-}
-
-function parseScopeList(value: string): string[] {
-  return value
-    .split(/[\n,]+/)
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-}
-
-function encodeTransitBytes(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function decodeTransitBytes(value: string): string {
-  const binary = atob(value);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function apiProblemMessage(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.retryAfterSeconds != null) return `${fallback}: retry in ${err.retryAfterSeconds}s`;
-    try {
-      const problem = JSON.parse(err.body) as { detail?: string; title?: string };
-      return problem.detail || problem.title || err.message;
-    } catch {
-      return err.body || err.message;
-    }
-  }
-  return err instanceof Error ? err.message : fallback;
 }
