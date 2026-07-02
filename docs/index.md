@@ -55,6 +55,9 @@ Reference docs:
   throughput, queue, projection-lag, and right-sizing contract. **[Usability
   outcome SLOs](usability.md)** define which first-run and NPS claims need fresh
   receipts.
+- **[Category leadership ledger](category-leadership.md)** — the REPORT-004
+  score ledger: which category table-stakes now have served proof, and which
+  narrative or packaging residuals still need human product decisions.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Terraform provider](terraform-provider.md)** — manage profiles, short-lived
   PKI credentials, and application secrets from infrastructure-as-code.

@@ -43,7 +43,7 @@ three challenge types (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the o
 idempotent by key thumbprint, per the spec. **Served** endpoints start at
 `GET /directory`; challenge and order endpoints live under `/acme/...`.
 
-Operators can require ACME External Account Binding (EAB) for account registration.
+Operators can require ACME External Account Binding (EAB, CAP-ISS-04) for account registration.
 When `protocols.acme_eab.required` is on, the directory advertises
 `externalAccountRequired`, bare `newAccount` requests fail closed, and each supplied
 binding is checked as an HS256 JWS over the account JWK using the configured `kid` and

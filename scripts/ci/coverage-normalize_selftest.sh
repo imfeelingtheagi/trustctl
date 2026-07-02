@@ -25,7 +25,9 @@ repaired_profile="$(mktemp)"
 repaired_out="$(mktemp)"
 orphan_profile="$(mktemp)"
 orphan_out="$(mktemp)"
-trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out"' EXIT
+numeric_orphan_profile="$(mktemp)"
+numeric_orphan_out="$(mktemp)"
+trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out"' EXIT
 covered_block="trstctl.com/trstctl/cmd/terraform-provider-trstctl/main.go:13.13,17.16"
 uncovered_block="trstctl.com/trstctl/cmd/trstctl/connector.go:39.2,40.16"
 if [[ -z "${GOCACHE:-}" ]]; then
@@ -44,7 +46,7 @@ EOF
 "$normalizer" "$duplicate_profile" "$normalized_profile"
 
 expected="$(mktemp)"
-trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$expected"' EXIT
+trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$expected"' EXIT
 cat >"$expected" <<EOF
 mode: atomic
 ${covered_block} 2 3
@@ -87,6 +89,20 @@ if go tool cover -func="$orphan_out" >/dev/null; then
 	echo "PASS: ignores an orphan-only truncated coverage prefix"
 else
 	echo "FAIL: orphan-only fragment repair is not accepted by go tool cover"
+	fails=1
+fi
+
+cat >"$numeric_orphan_profile" <<EOF
+mode: atomic
+${covered_block} 2 3
+ 0
+EOF
+
+"$normalizer" "$numeric_orphan_profile" "$numeric_orphan_out"
+if go tool cover -func="$numeric_orphan_out" >/dev/null; then
+	echo "PASS: ignores a standalone numeric coverage fragment"
+else
+	echo "FAIL: numeric orphan fragment repair is not accepted by go tool cover"
 	fails=1
 fi
 

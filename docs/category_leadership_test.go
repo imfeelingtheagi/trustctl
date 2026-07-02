@@ -1,0 +1,69 @@
+package docs
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *testing.T) {
+	page := read(t, "category-leadership.md")
+	index := read(t, "index.md")
+
+	if !strings.Contains(index, "category-leadership.md") {
+		t.Fatal("docs index must link the REPORT-004 category leadership ledger")
+	}
+
+	required := []string{
+		"REPORT-004",
+		"Category-Leadership",
+		"COMPETE-001",
+		"CAP-K8S-03",
+		"COMPETE-021",
+		"CAP-ISS-04",
+		"COMPETE-012",
+		"CAP-SCALE-01",
+		"COMPETE-013",
+		"CAP-SCALE-02",
+		"docs/features/discovery-and-inventory.md",
+		"docs/features/acme-and-dns.md",
+		"docs/performance.md",
+		"docs/features/platform-and-api.md",
+		"NARRATIVE-001",
+		"PACKAGING-001",
+		"decision-track residual",
+		"outside the served Category-Leadership numerator",
+	}
+	for _, want := range required {
+		if !strings.Contains(page, want) {
+			t.Errorf("category-leadership.md missing REPORT-004 marker %q", want)
+		}
+	}
+
+	forbidden := []string{
+		"NARRATIVE-001 | served",
+		"PACKAGING-001 | served",
+		"no per-cert pricing decided",
+		"dominant category leader",
+	}
+	lower := strings.ToLower(page)
+	for _, phrase := range forbidden {
+		if strings.Contains(lower, strings.ToLower(phrase)) {
+			t.Errorf("category-leadership.md overclaims an undecided or unproved leadership point: %q", phrase)
+		}
+	}
+
+	servedEvidence := map[string][]string{
+		"features/discovery-and-inventory.md": {"CAP-K8S-03", "Ingress", "Gateway"},
+		"features/acme-and-dns.md":            {"CAP-ISS-04", "External Account Binding"},
+		"performance.md":                      {"CAP-SCALE-01", "CAP-SCALE-02", "100k", "1M"},
+		"features/platform-and-api.md":        {"CAP-SCALE-01", "CAP-SCALE-02"},
+	}
+	for rel, markers := range servedEvidence {
+		body := read(t, rel)
+		for _, marker := range markers {
+			if !strings.Contains(body, marker) {
+				t.Errorf("%s missing served leadership evidence marker %q", rel, marker)
+			}
+		}
+	}
+}
