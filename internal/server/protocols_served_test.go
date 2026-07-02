@@ -27,11 +27,30 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/projections"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// dnsProviderWASM is a minimal signed DNS-provider plugin: run() satisfies the
+// admission/conformance probe, and present_txt()/cleanup_txt() each perform one
+// granted host operation so the served path proves the capability sandbox is active.
+var dnsProviderWASM = []byte{
+	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+	0x01, 0x0a, 0x02, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x01, 0x7f,
+	0x02, 0x11, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x63, 0x61, 0x70, 0x5f, 0x77, 0x72, 0x69, 0x74, 0x65, 0x00, 0x00,
+	0x03, 0x04, 0x03, 0x01, 0x01, 0x01,
+	0x07, 0x23, 0x03,
+	0x03, 0x72, 0x75, 0x6e, 0x00, 0x01,
+	0x0b, 0x70, 0x72, 0x65, 0x73, 0x65, 0x6e, 0x74, 0x5f, 0x74, 0x78, 0x74, 0x00, 0x02,
+	0x0b, 0x63, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70, 0x5f, 0x74, 0x78, 0x74, 0x00, 0x03,
+	0x0a, 0x14, 0x03,
+	0x04, 0x00, 0x41, 0x00, 0x0b,
+	0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b,
+	0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b,
+}
 
 // servedHarness is the assembled control plane (server.Build -> Handler) over the
 // embedded stack (bundled PostgreSQL + in-process NATS) and a REAL out-of-process
@@ -469,6 +488,123 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 	}
 }
 
+// TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013 proves F70 on
+// the served path: a signed/conformant DNS provider plugin is admitted into the
+// running provider catalog, a tenant provider config can select it, and the served
+// ACME DNS-01 automation hook activates the plugin from the outbox worker before
+// publish/cleanup complete. TRACE-012 covers the stock ACME client finalization
+// over this same hook; this test isolates the plugin activation contract.
+func TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013(t *testing.T) {
+	dns := newServedDNSWebhookFixture(t, "dns-plugin-token")
+	validators := acmesrv.Validators{
+		HTTP01: acmesrv.HTTP01Validator{},
+		DNS01:  acmesrv.DNS01Validator{Resolver: dns},
+	}
+	pubDER, sign, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		t.Fatalf("generate plugin signing key: %v", err)
+	}
+	keyPEM := crypto.MarshalPublicKeyPEM(pubDER)
+	dnsDir := writePluginDir(t, "reference-dns", dnsProviderWASM, sign)
+
+	h := newServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.ACMEValidators = &validators
+			d.Plugins = PluginConfig{
+				DNSDir:         dnsDir,
+				TrustedKeyPEMs: [][]byte{keyPEM},
+				DNSGrant:       pluginhost.NewGrant(pluginhost.CapFSWrite),
+			}
+		},
+	)
+	startServedDirectOutboxPump(t, h.srv)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/dns-01/providers", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list DNS-01 provider catalog: status %d body %s", status, body)
+	}
+	var catalog struct {
+		Items []struct {
+			Name            string   `json:"name"`
+			Kind            string   `json:"kind"`
+			Conformance     string   `json:"conformance"`
+			ProviderPackage string   `json:"provider_package"`
+			Provenance      string   `json:"provenance"`
+			Capabilities    []string `json:"capabilities"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		t.Fatalf("decode DNS-01 provider catalog: %v body=%s", err, body)
+	}
+	var pluginCatalogOK bool
+	for _, item := range catalog.Items {
+		if item.Name == "reference-dns" {
+			if item.Kind != "plugin" || item.Conformance == "" || item.Provenance == "" || item.ProviderPackage != "signed-wasm:reference-dns" || !containsString(item.Capabilities, "fs.write") {
+				t.Fatalf("plugin catalog row lacks admission/conformance/provenance/grant evidence: %+v", item)
+			}
+			pluginCatalogOK = true
+		}
+	}
+	if !pluginCatalogOK {
+		t.Fatalf("signed DNS plugin was not exposed in provider catalog: %+v", catalog.Items)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "dns/plugin/bearer-token",
+		"value": "dns-plugin-token",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS plugin bearer secret: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+		"name":     "trace013-plugin",
+		"provider": "reference-dns",
+		"zone":     "trace013.test",
+		"credential_refs": map[string]any{
+			"bearer_token_ref": "secret://dns/plugin/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": dns.URL(),
+		},
+		"allowed_methods": []string{"dns-01"},
+		"allow_wildcards": true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS plugin provider config: status %d body %s", status, body)
+	}
+
+	const domain = "plugin-dns01.trace013.test"
+	const keyAuth = "trace013-key-authorization"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cleanup, err := h.srv.acmeDNS01.Present(ctx, h.tenant, domain, "", keyAuth)
+	if err != nil {
+		t.Fatalf("served ACME DNS-01 plugin present: %v", err)
+	}
+	recordName := acmesrv.DNS01RecordName(domain)
+	wantValue := acmesrv.DNS01RecordValue(keyAuth)
+	observed, err := dns.LookupTXT(ctx, recordName)
+	if err != nil {
+		t.Fatalf("lookup DNS plugin TXT: %v", err)
+	}
+	if !containsString(observed, wantValue) {
+		t.Fatalf("DNS plugin publish records = %v, want %s", observed, wantValue)
+	}
+	if err := cleanup(ctx); err != nil {
+		t.Fatalf("served ACME DNS-01 plugin cleanup: %v", err)
+	}
+	dns.assertPresentedAndCleaned(t, recordName, wantValue)
+	if !h.hasEvent(t, "acme.dns01.plugin.presented") || !h.hasEvent(t, "acme.dns01.plugin.cleaned") {
+		t.Fatal("served DNS plugin publish/cleanup did not append plugin audit events")
+	}
+	if h.hasEvent(t, "acme.dns01.plugin.denied") || h.hasEvent(t, "acme.dns01.plugin.failed") {
+		t.Fatal("served DNS plugin recorded a denial/failure despite its configured grant")
+	}
+}
+
 type servedDNSWebhookFixture struct {
 	srv         *httptest.Server
 	bearerToken string
@@ -589,6 +725,29 @@ func startServedOutboxPump(t *testing.T, srv *Server) {
 				return
 			case <-ticker.C:
 				srv.dispatchOnce(ctx)
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+}
+
+func startServedDirectOutboxPump(t *testing.T, srv *Server) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_, _ = srv.outbox.Dispatch(ctx, srv.obHandler)
 			}
 		}
 	}()

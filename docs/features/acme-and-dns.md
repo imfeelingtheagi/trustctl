@@ -97,10 +97,20 @@ must satisfy — `PresentTXT(name, value)` and `CleanupTXT(name, value)`, both r
 to be idempotent — and ships providers for Route 53, Cloudflare, Google Cloud DNS,
 Azure DNS, RFC 2136 dynamic DNS, generic DNS webhooks, NS1, Akamai, UltraDNS, and
 acme-dns. A served catalog at `GET /api/v1/acme/dns-01/providers` lists the running
-binary's provider coverage, conformance posture, least-privilege capability grant,
-and secret-reference fields without returning raw provider tokens. A conformance harness
-(`ConformDNSProvider`) proves a provider is correct before it's used: it presents,
-validates, cleans up, and confirms validation then fails.
+binary's provider coverage, conformance posture, admission state, provenance,
+least-privilege capability grant, provider package, and secret-reference fields
+without returning raw provider tokens. A conformance harness (`ConformDNSProvider`)
+proves a provider is correct before it's used: it presents, validates, cleans up,
+and confirms validation then fails.
+
+Operators can also place signed WASM DNS provider modules in `plugins.dns_dir`.
+The control plane admits them only after detached Ed25519 provenance verification
+and DNS contract checks for `run()`, `present_txt()`, and `cleanup_txt()`. Admitted
+plugins appear in the same provider catalog with `kind=plugin`, can be selected by
+tenant DNS-01 provider configs, and are activated by the ACME DNS-01 outbox worker
+during order-time publish and cleanup. If a plugin is unsigned, signed by an
+untrusted key, tampered, or missing the DNS entrypoints, startup fails closed before
+the provider is exposed.
 
 Each provider asks only for the narrow capability it needs (network dial to its zone
 API host, the least-privilege pattern from the [plugin SDK](extensibility-plugins.md)),

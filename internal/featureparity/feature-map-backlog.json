@@ -1456,59 +1456,59 @@
       ],
       "cli_na": "",
       "facet_evidence": {
-	        "served": {
-	          "evidence": [
-	            "served_state=served",
-	            "Dedicated CT monitoring endpoint creates or replaces a ct_log discovery source, optionally queues a poll, returns watched domains/log checkpoints/finding summary, and the served worker records ct_unexpected_issuance findings with outbox-backed alerts.",
-	            "Served discovery worker accepts source kind ct_log, polls CT logs through a bounded lane, persists checkpoints, records ct_unexpected_issuance findings, and enqueues notification.unexpected_issuance alerts."
-	          ],
-	          "refs": [
-	            "internal/api/ct_monitoring.go",
-	            "internal/server/discovery.go",
-	            "internal/server/ct_drift_served_test.go",
-	            "internal/discovery/ctmonitor"
-	          ]
-	        },
-	        "ui": {
-	          "evidence": [
-	            "current_frontend_mapping: strong: Posture at /posture serves CT watchlist/log configuration, checkpoint summary, unexpected-issuance findings, and run queueing; Discovery remains the generic source/run/finding surface",
-	            "target_gui_mapping: Production CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings."
-	          ],
-	          "refs": [
-	            "web/src/lib/navigation.ts",
-	            "web/src/pages/Discovery.tsx",
-	            "web/src/pages/Posture.tsx",
+        "served": {
+          "evidence": [
+            "served_state=served",
+            "Dedicated CT monitoring endpoint creates or replaces a ct_log discovery source, optionally queues a poll, returns watched domains/log checkpoints/finding summary, and the served worker records ct_unexpected_issuance findings with outbox-backed alerts.",
+            "Served discovery worker accepts source kind ct_log, polls CT logs through a bounded lane, persists checkpoints, records ct_unexpected_issuance findings, and enqueues notification.unexpected_issuance alerts."
+          ],
+          "refs": [
+            "internal/api/ct_monitoring.go",
+            "internal/server/discovery.go",
+            "internal/server/ct_drift_served_test.go",
+            "internal/discovery/ctmonitor"
+          ]
+        },
+        "ui": {
+          "evidence": [
+            "current_frontend_mapping: strong: Posture at /posture serves CT watchlist/log configuration, checkpoint summary, unexpected-issuance findings, and run queueing; Discovery remains the generic source/run/finding surface",
+            "target_gui_mapping: Production CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings."
+          ],
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/pages/Discovery.tsx",
+            "web/src/pages/Posture.tsx",
             "web/src/App.tsx"
           ]
         },
-	        "cli": {
-	          "evidence": [
-	            "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for ct_log sources through the generic discovery surface.",
-	            "Dedicated CLI commands discovery ct-monitoring get and discovery ct-monitoring update expose the CT watchlist/checkpoint endpoint.",
-	            "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
-	          ],
+        "cli": {
+          "evidence": [
+            "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for ct_log sources through the generic discovery surface.",
+            "Dedicated CLI commands discovery ct-monitoring get and discovery ct-monitoring update expose the CT watchlist/checkpoint endpoint.",
+            "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
+          ],
           "refs": [
             "internal/cli/command.go",
             "internal/cli/cli_test.go",
             "internal/cli/feature_parity_test.go"
           ]
         },
-	        "api": {
-	          "evidence": [
-	            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by ct_log sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings.",
-	            "Dedicated CT monitoring operationIds getCTMonitoring and updateCTMonitoring serve watchlist/log configuration, checkpoints, finding summary, and run queueing."
-	          ],
-	          "refs": [
-	            "internal/api/ct_monitoring.go",
-	            "internal/api/openapi.go",
-	            "internal/api/testdata/openapi.golden.json"
-	          ]
-	        },
-	        "test": {
-	          "evidence": [
-	            "acceptance_test: Served test proves a CT-log fixture certificate for a watched domain configured through the dedicated CT monitoring endpoint creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI configures watched names/logs and queues a CT poll.",
-	            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-	            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+        "api": {
+          "evidence": [
+            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by ct_log sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings.",
+            "Dedicated CT monitoring operationIds getCTMonitoring and updateCTMonitoring serve watchlist/log configuration, checkpoints, finding summary, and run queueing."
+          ],
+          "refs": [
+            "internal/api/ct_monitoring.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
+        },
+        "test": {
+          "evidence": [
+            "acceptance_test: Served test proves a CT-log fixture certificate for a watched domain configured through the dedicated CT monitoring endpoint creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI configures watched names/logs and queues a CT poll.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
+            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/ct_drift_served_test.go",
@@ -1577,8 +1577,8 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-	      }
-	    },
+      }
+    },
     {
       "id": "GUI-F009",
       "feature_id": "F18",
@@ -3534,24 +3534,26 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 56,
-      "served_state": "partial",
-      "backend_status": "partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation",
-      "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog and tenant provider configs with conformance, capability-grant, and secret-reference disclosure",
+      "served_state": "served",
+      "backend_status": "served signed DNS-provider plugin admission/conformance provenance, provider catalog disclosure, tenant provider-config CRUD, and ACME order-time DNS-01 activation through the outbox",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog and tenant provider configs with built-in/plugin kind, conformance, admission, provenance, capability-grant, provider-package, and secret-reference disclosure",
       "target_gui_mapping": "DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state.",
-      "acceptance_test": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
+      "acceptance_test": "UI distinguishes built-in providers from signed plugin providers and activation is blocked unless DNS plugin conformance/provenance passes startup admission.",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ],
       "source_backend": [
         "internal/dns",
         "internal/pluginhost",
-        "internal/api/acme_dns01.go"
+        "internal/api/acme_dns01.go",
+        "internal/server/plugins.go",
+        "internal/server/acme_dns01_automation.go"
       ],
       "source_frontend": [
         "web/src/pages/Protocols.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "TRACE-013 closure: signed DNS-provider plugins loaded from plugins.dns_dir are admitted only after Ed25519 provenance verification and DNS present/cleanup contract checks, appear in the served provider catalog, can be selected by tenant provider configs, and are activated from the ACME DNS-01 outbox worker before order-time publish/cleanup. Test evidence: TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013, TestServedDNSProviderPluginRequiresDNSContract, web Protocols rendering, feature facet coverage, route parity, and OpenAPI golden tests.",
       "api_surface": [
         "listACMEDNS01Providers",
         "createACMEDNS01ProviderConfig",
@@ -3575,19 +3577,22 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "GET /api/v1/acme/dns-01/providers returns the served DNS-01 provider catalog with Route 53, Google Cloud DNS, Azure DNS, Cloudflare, RFC 2136, webhook, and additional built-ins.",
-            "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values.",
-            "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01."
+            "GET /api/v1/acme/dns-01/providers returns built-in and signed DNS-provider plugin rows with provider kind, admission state, provenance, conformance, capability grant, provider package, and credential-reference-only fields.",
+            "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values, and admits provider names from the running built-in plus signed-plugin catalog.",
+            "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01.",
+            "POST /acme/chal/{id} on a served dns-01 challenge resolves a tenant provider config whose provider may be a signed DNS plugin, enqueues acme.dns01.present/acme.dns01.cleanup outbox rows, activates the plugin present/cleanup entrypoints, validates the published TXT, and finalizes through the signer-backed served ACME path."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
             "internal/server/protocols_served_test.go",
-            "internal/projections/projections.go"
+            "internal/projections/projections.go",
+            "internal/server/plugins.go",
+            "internal/server/acme_dns01_automation.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog and tenant provider configs with conformance, capability-grant, and secret-reference disclosure",
+            "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog and tenant provider configs with built-in/plugin kind, conformance, admission, provenance, capability-grant, provider-package, and secret-reference disclosure",
             "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
           "refs": [
@@ -3616,8 +3621,10 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
+            "acceptance_test: UI distinguishes built-in providers from signed plugin providers and activation is blocked unless DNS plugin conformance/provenance passes startup admission.",
             "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
+            "TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013 drives a signed DNS-provider plugin through provider catalog disclosure, tenant config selection, ACME order-time outbox activation, TXT publish/cleanup, plugin audit events, and certificate finalization.",
+            "TestServedDNSProviderPluginRequiresDNSContract proves a signed module without the DNS present/cleanup contract is rejected at startup before catalog exposure or activation.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -3625,7 +3632,8 @@
             "internal/server/protocols_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
-            "web/src/__tests__/feature_coverage.test.tsx"
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "internal/server/plugins_served_test.go"
           ]
         },
         "docs": {
@@ -3651,12 +3659,16 @@
         "audit": {
           "evidence": [
             "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
-            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata.",
+            "Order-time signed DNS-provider plugin publish/cleanup appends acme.dns01.plugin.presented and acme.dns01.plugin.cleaned tenant events without credential refs or TXT values, alongside the acme.dns01.record.presented/cleaned outbox delivery metadata."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
             "internal/projections/projections.go",
-            "internal/eventledger/ledger.go"
+            "internal/eventledger/ledger.go",
+            "internal/server/plugins.go",
+            "internal/server/acme_dns01_automation.go",
+            "internal/server/protocols_served_test.go"
           ]
         },
         "telemetry": {
@@ -3688,9 +3700,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F021",

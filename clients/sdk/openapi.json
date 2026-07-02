@@ -159,6 +159,9 @@
       },
       "ACMEDNS01ProviderCatalogItem": {
         "properties": {
+          "admission_state": {
+            "type": "string"
+          },
           "capabilities": {
             "items": {
               "type": "string"
@@ -188,6 +191,9 @@
           },
           "propagation_preflight": {
             "type": "boolean"
+          },
+          "provenance": {
+            "type": "string"
           },
           "provider_package": {
             "type": "string"

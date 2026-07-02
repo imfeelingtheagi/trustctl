@@ -324,11 +324,22 @@ export function Protocols() {
                   <td>
                     <p className="font-medium">{provider.display_name}</p>
                     <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.name}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.provider_package}</p>
                     <ProtocolServedBadge served={provider.served} servedLabel={t("protocols.dns01.served")} offLabel={t("protocols.dns01.off")} />
                   </td>
                   <td>{provider.kind}</td>
                   <td>
                     <p>{provider.conformance}</p>
+                    {provider.admission_state && (
+                      <p className="mt-1 text-caption text-muted-foreground">
+                        {t("protocols.dns01.admission")}: {provider.admission_state}
+                      </p>
+                    )}
+                    {provider.provenance && (
+                      <p className="mt-1 text-caption text-muted-foreground">
+                        {t("protocols.dns01.provenance")}: {provider.provenance}
+                      </p>
+                    )}
                     {provider.propagation_preflight && <p className="mt-1 text-caption text-muted-foreground">{t("protocols.dns01.propagationPreflight")}</p>}
                   </td>
                   <td>

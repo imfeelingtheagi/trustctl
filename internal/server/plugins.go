@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/bulkhead"
 	capkg "trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/connector"
@@ -24,6 +25,11 @@ import (
 // finds. (The conformance contract requires `run`; `deploy` is the connector-
 // semantic alias.)
 var pluginEntrypoints = []string{"deploy", "run"}
+
+const (
+	dnsPluginPresentEntrypoint = "present_txt"
+	dnsPluginCleanupEntrypoint = "cleanup_txt"
+)
 
 // PluginManager is the served WASM-plugin surface (ARCH-007): it loads operator-
 // supplied connector plugins from a directory, each only after its provenance is
@@ -44,9 +50,11 @@ type PluginManager struct {
 	log            *events.Log
 	connectorGrant pluginhost.Grant
 	caGrant        pluginhost.Grant
+	dnsGrant       pluginhost.Grant
 	mu             sync.RWMutex
 	plugins        map[string]*pluginhost.Plugin
 	caPlugins      map[string]*pluginhost.Plugin
+	dnsPlugins     map[string]*pluginhost.Plugin
 	caAdapters     map[string]*wasmCA
 	caAuthorities  map[string]*cryptoca.Authority
 }
@@ -62,6 +70,9 @@ type PluginConfig struct {
 	// CADir is scanned for signed CA plugins. Each `<name>.wasm` becomes an
 	// ExternalCA entry with id `<name>` and type `wasm-ca`.
 	CADir string
+	// DNSDir is scanned for signed DNS-provider plugins. Each `<name>.wasm`
+	// becomes a served ACME DNS-01 provider entry selectable by tenant configs.
+	DNSDir string
 	// ConnectorDir is scanned for signed deployment connector plugins. When empty,
 	// Dir remains the compatibility alias.
 	ConnectorDir string
@@ -77,6 +88,8 @@ type PluginConfig struct {
 	Grant pluginhost.Grant
 	// CAGrant overrides Grant for CA plugins.
 	CAGrant pluginhost.Grant
+	// DNSGrant overrides Grant for DNS-provider plugins.
+	DNSGrant pluginhost.Grant
 	// ConnectorGrant overrides Grant for connector plugins.
 	ConnectorGrant pluginhost.Grant
 	// ReferenceCAName optionally asserts that the named reference CA plugin loaded.
@@ -100,10 +113,11 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 		connectorDir = strings.TrimSpace(cfg.Dir)
 	}
 	caDir := strings.TrimSpace(cfg.CADir)
-	if connectorDir == "" && caDir == "" && len(cfg.TrustedKeyPEMs) == 0 {
+	dnsDir := strings.TrimSpace(cfg.DNSDir)
+	if connectorDir == "" && caDir == "" && dnsDir == "" && len(cfg.TrustedKeyPEMs) == 0 {
 		return nil, nil // not configured: served plugin surface stays off
 	}
-	if connectorDir == "" && caDir == "" {
+	if connectorDir == "" && caDir == "" && dnsDir == "" {
 		return nil, fmt.Errorf("server: plugins enabled but no plugin directory configured (fail closed)")
 	}
 	trust, err := pluginhost.NewTrustPolicy(cfg.TrustedKeyPEMs, cfg.PinnedDigestsHex)
@@ -122,14 +136,20 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 	if caGrant.Empty() {
 		caGrant = cfg.Grant
 	}
+	dnsGrant := cfg.DNSGrant
+	if dnsGrant.Empty() {
+		dnsGrant = cfg.Grant
+	}
 	pm := &PluginManager{
 		host:           pluginhost.New(opts...),
 		trust:          trust,
 		log:            log,
 		connectorGrant: connectorGrant,
 		caGrant:        caGrant,
+		dnsGrant:       dnsGrant,
 		plugins:        map[string]*pluginhost.Plugin{},
 		caPlugins:      map[string]*pluginhost.Plugin{},
+		dnsPlugins:     map[string]*pluginhost.Plugin{},
 		caAdapters:     map[string]*wasmCA{},
 		caAuthorities:  map[string]*cryptoca.Authority{},
 	}
@@ -141,6 +161,12 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 	}
 	if caDir != "" {
 		if err := pm.loadDir(ctx, caDir, caGrant, pm.addCAPlugin); err != nil {
+			_ = pm.Close(ctx)
+			return nil, err
+		}
+	}
+	if dnsDir != "" {
+		if err := pm.loadDir(ctx, dnsDir, dnsGrant, pm.addDNSPlugin); err != nil {
 			_ = pm.Close(ctx)
 			return nil, err
 		}
@@ -209,6 +235,16 @@ func (pm *PluginManager) addCAPlugin(_ context.Context, name string, p *pluginho
 	return nil
 }
 
+func (pm *PluginManager) addDNSPlugin(_ context.Context, name string, p *pluginhost.Plugin) error {
+	for _, fn := range []string{"run", dnsPluginPresentEntrypoint, dnsPluginCleanupEntrypoint} {
+		if !p.HasExport(fn) {
+			return fmt.Errorf("server: DNS provider plugin %q has no exported %s() function", name, fn)
+		}
+	}
+	pm.dnsPlugins[name] = p
+	return nil
+}
+
 // Has reports whether a verified plugin is loaded under name.
 func (pm *PluginManager) Has(name string) bool {
 	pm.mu.RLock()
@@ -223,6 +259,63 @@ func (pm *PluginManager) HasCA(name string) bool {
 	defer pm.mu.RUnlock()
 	_, ok := pm.caAdapters[name]
 	return ok
+}
+
+// HasDNS reports whether a verified DNS-provider plugin is loaded under name.
+func (pm *PluginManager) HasDNS(name string) bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	_, ok := pm.dnsPlugins[name]
+	return ok
+}
+
+// DNSPluginInfo is the operator-facing metadata for a loaded signed DNS provider
+// plugin. It contains no tenant data and no credential material.
+type DNSPluginInfo struct {
+	Name         string
+	Capabilities []string
+}
+
+// DNSPlugins returns loaded signed DNS-provider plugins in deterministic order.
+func (pm *PluginManager) DNSPlugins() []DNSPluginInfo {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	names := make([]string, 0, len(pm.dnsPlugins))
+	for name := range pm.dnsPlugins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	caps := grantCapabilityStrings(pm.dnsGrant)
+	out := make([]DNSPluginInfo, 0, len(names))
+	for _, name := range names {
+		out = append(out, DNSPluginInfo{Name: name, Capabilities: caps})
+	}
+	return out
+}
+
+func (s *Server) acmeDNS01PluginCatalog() []api.ACMEDNS01ProviderCatalogItem {
+	if s.plugins == nil {
+		return nil
+	}
+	plugins := s.plugins.DNSPlugins()
+	out := make([]api.ACMEDNS01ProviderCatalogItem, 0, len(plugins))
+	for _, p := range plugins {
+		out = append(out, api.ACMEDNS01ProviderCatalogItem{
+			Name:                      p.Name,
+			DisplayName:               p.Name,
+			Kind:                      "plugin",
+			Served:                    true,
+			PropagationPreflight:      true,
+			Conformance:               "signed-present-cleanup",
+			AdmissionState:            "verified",
+			Provenance:                "ed25519-signature-verified",
+			CredentialReferenceFields: []string{"bearer_token_ref"},
+			Capabilities:              p.Capabilities,
+			ProviderPackage:           "signed-wasm:" + p.Name,
+			Notes:                     "Signed DNS provider plugin admitted at startup and activated from the ACME DNS-01 outbox worker.",
+		})
+	}
+	return out
 }
 
 // ExternalCAs returns loaded WASM CA plugins as served external-CA registry
@@ -343,6 +436,33 @@ func (pm *PluginManager) Deploy(ctx context.Context, tenantID string, payload co
 	}
 }
 
+// InvokeDNS runs one DNS-provider plugin action through the same provenance-loaded,
+// capability-sandboxed, bounded WASM host as other served plugins. The caller owns
+// the external DNS side effect and tenant audit event; this method is only the
+// plugin activation gate.
+func (pm *PluginManager) InvokeDNS(ctx context.Context, name, fn string) error {
+	pm.mu.RLock()
+	p := pm.dnsPlugins[name]
+	pm.mu.RUnlock()
+	if p == nil {
+		return fmt.Errorf("server: DNS provider plugin %q is not loaded", name)
+	}
+	before := p.Stats()
+	rc, invErr := pm.host.Invoke(ctx, p, fn)
+	after := p.Stats()
+	deniedDelta := after.Denied - before.Denied
+	switch {
+	case invErr != nil:
+		return fmt.Errorf("server: DNS provider plugin %q %s: %w", name, fn, invErr)
+	case deniedDelta > 0:
+		return fmt.Errorf("server: DNS provider plugin %q attempted %d operation(s) outside its capability grant", name, deniedDelta)
+	case rc != 0:
+		return fmt.Errorf("server: DNS provider plugin %q %s returned non-zero status %d", name, fn, rc)
+	default:
+		return nil
+	}
+}
+
 // entrypoint returns the first exported entrypoint name the plugin actually
 // exports, defaulting to "run" (always present per the conformance contract).
 func (pm *PluginManager) entrypoint(p *pluginhost.Plugin) string {
@@ -383,12 +503,25 @@ func (pm *PluginManager) Close(ctx context.Context) error {
 	for _, p := range pm.caPlugins {
 		_ = p.Close(ctx)
 	}
+	for _, p := range pm.dnsPlugins {
+		_ = p.Close(ctx)
+	}
 	for _, a := range pm.caAuthorities {
 		a.Destroy()
 	}
 	pm.plugins = map[string]*pluginhost.Plugin{}
 	pm.caPlugins = map[string]*pluginhost.Plugin{}
+	pm.dnsPlugins = map[string]*pluginhost.Plugin{}
 	pm.caAdapters = map[string]*wasmCA{}
 	pm.caAuthorities = map[string]*cryptoca.Authority{}
 	return pm.host.Close(ctx)
+}
+
+func grantCapabilityStrings(g pluginhost.Grant) []string {
+	caps := g.Capabilities()
+	out := make([]string, 0, len(caps))
+	for _, cap := range caps {
+		out = append(out, string(cap))
+	}
+	return out
 }

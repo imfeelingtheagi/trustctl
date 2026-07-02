@@ -1512,6 +1512,8 @@ func componentSchemas() map[string]*Schema {
 		"served":                      {Type: "boolean"},
 		"propagation_preflight":       {Type: "boolean"},
 		"conformance":                 str(),
+		"admission_state":             str(),
+		"provenance":                  str(),
 		"credential_reference_fields": {Type: "array", Items: str()},
 		"secret_fields":               {Type: "array", Items: str()},
 		"capabilities":                {Type: "array", Items: str()},

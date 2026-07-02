@@ -87,14 +87,21 @@ openssl pkeyutl -sign -rawin \
 sha256sum dist/example-connector.wasm
 ```
 
-Operators place CA modules in `plugins.ca_dir` and connector modules in
-`plugins.connector_dir` (the older `plugins.dir` key is still accepted as a
-connector-plugin directory). Point `plugins.trusted_key_files` at
+Operators place CA modules in `plugins.ca_dir`, connector modules in
+`plugins.connector_dir`, and DNS-provider modules in `plugins.dns_dir` (the older
+`plugins.dir` key is still accepted as a connector-plugin directory). Point
+`plugins.trusted_key_files` at
 `plugin-signing.pub.pem`, and set `plugins.pinned_digests` or
 `TRSTCTL_PLUGINS_PINNED_DIGESTS` to the lower-case SHA-256 digest for an
 exact-artifact allowlist. An unsigned module, a signature from the wrong key, a
 byte-tampered module, or a signed module outside the pinned digest list fails
 closed before the WASM runtime is created.
+
+DNS provider plugins must export `run()`, `present_txt()`, and `cleanup_txt()`.
+The served ACME DNS-01 path rejects a signed module that lacks those entrypoints,
+lists admitted providers in `GET /api/v1/acme/dns-01/providers`, and invokes
+`present_txt()` / `cleanup_txt()` from the outbox worker when a tenant provider
+config selects the plugin.
 
 Use these environment variables when running the binary without a config file:
 
@@ -102,6 +109,7 @@ Use these environment variables when running the binary without a config file:
 TRSTCTL_PLUGINS_ENABLED=true
 TRSTCTL_PLUGINS_CA_DIR=/etc/trstctl/plugins/ca
 TRSTCTL_PLUGINS_CONNECTOR_DIR=/etc/trstctl/plugins/connectors
+TRSTCTL_PLUGINS_DNS_DIR=/etc/trstctl/plugins/dns
 TRSTCTL_PLUGINS_TRUSTED_KEY_FILES=/etc/trstctl/plugin-signing.pub.pem
 ```
 

@@ -818,6 +818,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if s.outbox != nil {
 		defaults = append(defaults, api.WithOutboxCircuitStatus(s.outbox.CircuitStates))
 	}
+	if s.plugins != nil {
+		defaults = append(defaults, api.WithACMEDNS01Providers(s.acmeDNS01PluginCatalog()...))
+	}
 	breakglassReconciler, err := buildBreakglassReconciler(d)
 	if err != nil {
 		return nil, nil, err
@@ -961,7 +964,7 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 		return err
 	}
 	if d.Store != nil && d.Log != nil && s.outbox != nil {
-		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK)
+		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK, s.plugins)
 	}
 	s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL)
 	if err := s.configureProtocolSurfaces(ctx, d); err != nil {

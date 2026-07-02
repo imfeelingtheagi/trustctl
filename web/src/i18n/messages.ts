@@ -3277,6 +3277,14 @@ export const messages = {
     defaultMessage: "Conformance",
     description: "DNS-01 provider conformance table column.",
   },
+  "protocols.dns01.admission": {
+    defaultMessage: "Admission",
+    description: "DNS-01 provider plugin admission label.",
+  },
+  "protocols.dns01.provenance": {
+    defaultMessage: "Provenance",
+    description: "DNS-01 provider plugin provenance label.",
+  },
   "protocols.dns01.secretReferences": {
     defaultMessage: "Secret references",
     description: "DNS-01 provider credential reference table column.",
@@ -5398,6 +5406,8 @@ const esESCatalog = {
   "protocols.dns01.provider": "Proveedor",
   "protocols.dns01.kind": "Tipo",
   "protocols.dns01.conformance": "Conformidad",
+  "protocols.dns01.admission": "Admisión",
+  "protocols.dns01.provenance": "Procedencia",
   "protocols.dns01.secretReferences": "Referencias de secretos",
   "protocols.dns01.capabilityGrant": "Permiso de capacidad",
   "protocols.dns01.propagationPreflight": "Preflight de propagación",

@@ -67,6 +67,7 @@ ACMEDNS01ProviderCatalog = TypedDict(
 ACMEDNS01ProviderCatalogItem = TypedDict(
     'ACMEDNS01ProviderCatalogItem',
     {
+        'admission_state': str,
         'capabilities': list[str],
         'conformance': str,
         'credential_reference_fields': list[str],
@@ -75,6 +76,7 @@ ACMEDNS01ProviderCatalogItem = TypedDict(
         'name': str,
         'notes': str,
         'propagation_preflight': bool,
+        'provenance': str,
         'provider_package': str,
         'secret_fields': list[str],
         'served': bool,

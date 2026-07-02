@@ -51,6 +51,7 @@ export interface ACMEDNS01ProviderCatalog {
 }
 
 export interface ACMEDNS01ProviderCatalogItem {
+  admission_state?: string;
   capabilities: string[];
   conformance: string;
   credential_reference_fields: string[];
@@ -59,6 +60,7 @@ export interface ACMEDNS01ProviderCatalogItem {
   name: string;
   notes?: string;
   propagation_preflight: boolean;
+  provenance?: string;
   provider_package: string;
   secret_fields: string[];
   served: boolean;

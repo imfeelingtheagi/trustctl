@@ -336,3 +336,22 @@ func TestServedPluginOutOfGrantDeployFails(t *testing.T) {
 		t.Error("an out-of-grant plugin reported a successful deploy; it must be denied (capability sandbox)")
 	}
 }
+
+// TestServedDNSProviderPluginRequiresDNSContract proves F70 admission fails closed
+// for a signed module that has provenance but does not export the DNS provider
+// present/cleanup contract. The server must not advertise or activate a plugin on
+// signature alone.
+func TestServedDNSProviderPluginRequiresDNSContract(t *testing.T) {
+	ctx := context.Background()
+	st, log, keyPEM, sign := servedPluginStack(t)
+
+	dir := writePluginDir(t, "not-dns", connectorWASM, sign)
+	_, err := Build(ctx, Deps{Store: st, Log: log, Plugins: PluginConfig{
+		DNSDir:         dir,
+		TrustedKeyPEMs: [][]byte{keyPEM},
+		Grant:          pluginhost.NewGrant(pluginhost.CapFSWrite),
+	}})
+	if err == nil {
+		t.Fatal("Build admitted a signed plugin that does not implement the DNS provider present/cleanup contract")
+	}
+}

@@ -51,7 +51,7 @@ Three properties make this trustworthy:
 This same capability model is what governs the [deployment connectors](deployment-connectors.md)
 and [DNS providers](acme-and-dns.md) — they declare a grant and run sandboxed.
 
-Plugins live under `plugins/ca/` and `plugins/connectors/`.
+Plugins live under `plugins/ca/`, `plugins/connectors/`, and `plugins/dns/`.
 
 ## Use it
 
@@ -62,6 +62,7 @@ Enable the served plugin surface by pointing trstctl at signed plugin directorie
 enabled = true
 ca_dir = "/etc/trstctl/plugins/ca"
 connector_dir = "/etc/trstctl/plugins/connectors"
+dns_dir = "/etc/trstctl/plugins/dns"
 trusted_key_files = ["/etc/trstctl/plugin-signing.pub.pem"]
 capabilities = ["fs.write"]
 ```
@@ -70,7 +71,11 @@ CA plugins loaded from `ca_dir` appear in `GET /api/v1/external-cas` with type
 `wasm-ca`, and issuance goes through `POST /api/v1/external-cas/{id}/issue`.
 Connector plugins loaded from `connector_dir` handle matching `connector.deploy`
 work from the served outbox. The legacy `plugins.dir` key remains a connector-plugin
-directory alias for older deployments.
+directory alias for older deployments. DNS provider plugins loaded from `dns_dir`
+appear in `GET /api/v1/acme/dns-01/providers` with `kind=plugin`, admission state,
+provenance, conformance, and capability-grant evidence; tenant DNS-01 provider
+configs can select them, and the ACME DNS-01 outbox worker activates their
+`present_txt()` and `cleanup_txt()` entrypoints at order time.
 
 A plugin is granted exactly what it needs and nothing more:
 

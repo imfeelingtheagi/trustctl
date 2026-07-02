@@ -122,6 +122,12 @@ describe("protocol surface", () => {
         provider("cloudflare", "Cloudflare DNS", "hosted-dns", ["zone_id", "api_token_ref"], ["net.dial:api.cloudflare.com"]),
         provider("rfc2136", "RFC 2136 dynamic DNS", "dynamic-dns", ["server", "zone", "tsig_secret_ref"], ["net.dial:authoritative-dns-server"]),
         provider("webhook", "Generic DNS webhook", "webhook", ["endpoint", "bearer_token_ref"], ["net.dial:webhook-host"]),
+        provider("reference-dns", "reference-dns", "plugin", ["bearer_token_ref"], ["fs.write"], {
+          admission_state: "verified",
+          conformance: "signed-present-cleanup",
+          provenance: "ed25519-signature-verified",
+          provider_package: "signed-wasm:reference-dns",
+        }),
       ],
     });
     apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({
@@ -198,6 +204,10 @@ describe("protocol surface", () => {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     expect(screen.getAllByText("present-validate-cleanup").length).toBeGreaterThanOrEqual(6);
+    expect(screen.getByText("signed-present-cleanup")).toBeInTheDocument();
+    expect(screen.getByText("Admission: verified")).toBeInTheDocument();
+    expect(screen.getByText("Provenance: ed25519-signature-verified")).toBeInTheDocument();
+    expect(screen.getByText("signed-wasm:reference-dns")).toBeInTheDocument();
     expect(screen.getAllByText("No raw secret fields").length).toBeGreaterThanOrEqual(6);
     expect(screen.getByText("tsig_secret_ref")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "DNS-01 provider configs" })).toBeInTheDocument();
@@ -313,7 +323,14 @@ describe("protocol surface", () => {
   });
 });
 
-function provider(name: string, displayName: string, kind: string, credentialReferenceFields: string[], capabilities: string[]) {
+function provider(
+  name: string,
+  displayName: string,
+  kind: string,
+  credentialReferenceFields: string[],
+  capabilities: string[],
+  overrides: Record<string, unknown> = {},
+) {
   return {
     name,
     display_name: displayName,
@@ -321,10 +338,13 @@ function provider(name: string, displayName: string, kind: string, credentialRef
     served: true,
     propagation_preflight: true,
     conformance: "present-validate-cleanup",
+    admission_state: "built-in",
+    provenance: "core-build",
     credential_reference_fields: credentialReferenceFields,
     secret_fields: [],
     capabilities,
     provider_package: `internal/dns/${name}`,
     notes: "served DNS-01 provider",
+    ...overrides,
   };
 }

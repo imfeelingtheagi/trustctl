@@ -1,6 +1,9 @@
 package pluginhost
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Capability names a privileged operation a plugin may be granted. A plugin can
 // only ever do what its grant permits; everything else is denied at runtime.
@@ -39,6 +42,20 @@ func (g Grant) WithPathPrefix(cap Capability, prefix string) Grant {
 // Has reports whether the capability is granted at all, ignoring resource
 // constraints. The host uses this to gate operations that carry no resource.
 func (g Grant) Has(cap Capability) bool { return g.caps[cap] }
+
+// Capabilities returns the granted capability names in deterministic order for
+// operator-facing catalog/reporting surfaces. It exposes only capability labels,
+// not any secret resource material.
+func (g Grant) Capabilities() []Capability {
+	out := make([]Capability, 0, len(g.caps))
+	for cap, ok := range g.caps {
+		if ok {
+			out = append(out, cap)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
 
 // Empty reports whether the grant carries no capabilities or resource
 // constraints. Server config uses it to preserve the legacy single-grant setting

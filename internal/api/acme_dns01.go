@@ -15,13 +15,15 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-type dns01ProviderCatalogItem struct {
+type ACMEDNS01ProviderCatalogItem struct {
 	Name                      string   `json:"name"`
 	DisplayName               string   `json:"display_name"`
 	Kind                      string   `json:"kind"`
 	Served                    bool     `json:"served"`
 	PropagationPreflight      bool     `json:"propagation_preflight"`
 	Conformance               string   `json:"conformance"`
+	AdmissionState            string   `json:"admission_state"`
+	Provenance                string   `json:"provenance"`
 	CredentialReferenceFields []string `json:"credential_reference_fields"`
 	SecretFields              []string `json:"secret_fields"`
 	Capabilities              []string `json:"capabilities"`
@@ -30,7 +32,7 @@ type dns01ProviderCatalogItem struct {
 }
 
 type dns01ProviderCatalogResponse struct {
-	Items []dns01ProviderCatalogItem `json:"items"`
+	Items []ACMEDNS01ProviderCatalogItem `json:"items"`
 }
 
 type dns01ProviderConfigRequest struct {
@@ -105,10 +107,11 @@ type dns01PreflightResponse struct {
 	FailedChecks    []string              `json:"failed_checks"`
 }
 
-var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
+var servedDNS01ProviderCatalog = []ACMEDNS01ProviderCatalogItem{
 	{
 		Name: "route53", DisplayName: "AWS Route 53", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"hosted_zone_id", "aws_access_key_ref", "aws_secret_key_ref", "aws_session_token_ref"},
 		Capabilities:              []string{"net.dial:route53.amazonaws.com"},
 		ProviderPackage:           "internal/dns/route53",
@@ -117,6 +120,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "googledns", DisplayName: "Google Cloud DNS", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"project", "managed_zone", "oauth_token_ref"},
 		Capabilities:              []string{"net.dial:dns.googleapis.com"},
 		ProviderPackage:           "internal/dns/googledns",
@@ -125,6 +129,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "azuredns", DisplayName: "Azure DNS", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"subscription_id", "resource_group", "zone", "aad_token_ref"},
 		Capabilities:              []string{"net.dial:management.azure.com"},
 		ProviderPackage:           "internal/dns/azuredns",
@@ -133,6 +138,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "cloudflare", DisplayName: "Cloudflare DNS", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"zone_id", "api_token_ref"},
 		Capabilities:              []string{"net.dial:api.cloudflare.com"},
 		ProviderPackage:           "internal/dns/cloudflare",
@@ -141,6 +147,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "rfc2136", DisplayName: "RFC 2136 dynamic DNS", Kind: "dynamic-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"server", "zone", "tsig_key_name", "tsig_secret_ref"},
 		Capabilities:              []string{"net.dial:authoritative-dns-server"},
 		ProviderPackage:           "internal/dns/rfc2136",
@@ -149,6 +156,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "webhook", DisplayName: "Generic DNS webhook", Kind: "webhook",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"endpoint", "bearer_token_ref"},
 		Capabilities:              []string{"net.dial:webhook-host"},
 		ProviderPackage:           "internal/dns/webhook",
@@ -157,6 +165,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "ns1", DisplayName: "NS1", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"zone", "api_key_ref"},
 		Capabilities:              []string{"net.dial:api.nsone.net"},
 		ProviderPackage:           "internal/dns/ns1",
@@ -165,6 +174,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "akamai", DisplayName: "Akamai Edge DNS", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"contract_id", "group_id", "zone", "client_token_ref", "client_secret_ref", "access_token_ref"},
 		Capabilities:              []string{"net.dial:akamai-edgedns-host"},
 		ProviderPackage:           "internal/dns/akamai",
@@ -173,6 +183,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "ultradns", DisplayName: "UltraDNS", Kind: "hosted-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"zone", "bearer_token_ref"},
 		Capabilities:              []string{"net.dial:api.ultradns.com"},
 		ProviderPackage:           "internal/dns/ultradns",
@@ -181,6 +192,7 @@ var servedDNS01ProviderCatalog = []dns01ProviderCatalogItem{
 	{
 		Name: "acmedns", DisplayName: "acme-dns", Kind: "delegated-validation-dns",
 		Served: true, PropagationPreflight: true, Conformance: "present-validate-cleanup",
+		AdmissionState: "built-in", Provenance: "core-build",
 		CredentialReferenceFields: []string{"subdomain", "username_ref", "password_ref"},
 		Capabilities:              []string{"net.dial:auth.acme-dns.io"},
 		ProviderPackage:           "internal/dns/acmedns",
@@ -193,14 +205,14 @@ func (a *API) listACMEDNS01Providers(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	a.writeJSON(w, http.StatusOK, dns01ProviderCatalogResponse{Items: servedDNS01ProviderCatalog})
+	a.writeJSON(w, http.StatusOK, dns01ProviderCatalogResponse{Items: a.dns01ProviderCatalog()})
 }
 
 //trstctl:mutation
 func (a *API) createACMEDNS01ProviderConfig(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		req, err := decodeACMEDNS01ProviderConfigRequest(r)
+		req, err := a.decodeACMEDNS01ProviderConfigRequest(r)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -260,7 +272,7 @@ func (a *API) updateACMEDNS01ProviderConfig(w http.ResponseWriter, r *http.Reque
 		if _, err := a.store.GetACMEDNS01ProviderConfig(ctx, tenantID, id); err != nil {
 			return 0, nil, err
 		}
-		req, err := decodeACMEDNS01ProviderConfigRequest(r)
+		req, err := a.decodeACMEDNS01ProviderConfigRequest(r)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -354,7 +366,7 @@ func (a *API) appendAndProjectACMEDNS01(ctx context.Context, tenantID, eventType
 	return projections.New(a.store).Apply(ctx, ev)
 }
 
-func decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01ProviderConfigRequest, error) {
+func (a *API) decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01ProviderConfigRequest, error) {
 	var raw json.RawMessage
 	if err := decodeJSON(r, &raw); err != nil {
 		return dns01ProviderConfigRequest{}, errWithStatus(http.StatusBadRequest, err)
@@ -379,7 +391,7 @@ func decodeACMEDNS01ProviderConfigRequest(r *http.Request) (dns01ProviderConfigR
 	if req.Name == "" || req.Provider == "" {
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "name and provider are required")
 	}
-	if !servedDNS01ProviderName(req.Provider) {
+	if !a.servedDNS01ProviderName(req.Provider) {
 		return dns01ProviderConfigRequest{}, errStatus(http.StatusBadRequest, "provider must name a served DNS-01 provider")
 	}
 	refs, err := normalizeDNS01JSONObject(req.CredentialRefs, "credential_refs")
@@ -459,13 +471,20 @@ func normalizeDNS01Methods(in []string) ([]string, error) {
 	return out, nil
 }
 
-func servedDNS01ProviderName(name string) bool {
-	for _, item := range servedDNS01ProviderCatalog {
+func (a *API) servedDNS01ProviderName(name string) bool {
+	for _, item := range a.dns01ProviderCatalog() {
 		if item.Name == name && item.Served {
 			return true
 		}
 	}
 	return false
+}
+
+func (a *API) dns01ProviderCatalog() []ACMEDNS01ProviderCatalogItem {
+	out := make([]ACMEDNS01ProviderCatalogItem, 0, len(servedDNS01ProviderCatalog)+len(a.acmeDNS01Providers))
+	out = append(out, servedDNS01ProviderCatalog...)
+	out = append(out, a.acmeDNS01Providers...)
+	return out
 }
 
 func toDNS01ProviderConfigResponse(rec store.ACMEDNS01ProviderConfig) dns01ProviderConfigResponse {

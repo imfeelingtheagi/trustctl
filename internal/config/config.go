@@ -310,8 +310,8 @@ func (h HA) LeaderCampaignIntervalDuration() (time.Duration, error) {
 }
 
 // Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
-// ARCH-007/SUPPLY-004): the running control plane loads operator-supplied CA and
-// connector plugins from directories and runs them capability-sandboxed through
+// ARCH-007/SUPPLY-004): the running control plane loads operator-supplied CA,
+// connector, and DNS-provider plugins from directories and runs them capability-sandboxed through
 // the wazero plugin host. It is OFF by default (Enabled=false): connector.deploy
 // is acknowledged unrouted, and no WASM CA appears in the external-CA registry.
 // When Enabled, a plugin is admitted ONLY after its detached Ed25519 signature
@@ -327,6 +327,9 @@ type Plugins struct {
 	// CADir is scanned for signed CA plugins. Each module becomes a
 	// `/api/v1/external-cas/{name}/issue` authority of type `wasm-ca`.
 	CADir string `json:"ca_dir,omitempty"`
+	// DNSDir is scanned for signed DNS-provider plugins. Each module becomes a
+	// served ACME DNS-01 provider that can be selected by tenant provider configs.
+	DNSDir string `json:"dns_dir,omitempty"`
 	// ConnectorDir is scanned for signed deployment connector plugins.
 	ConnectorDir string `json:"connector_dir,omitempty"`
 	// TrustedKeyFiles are paths to PEM Ed25519 public keys that admit a signed
@@ -335,7 +338,7 @@ type Plugins struct {
 	// PinnedDigests optionally restricts admitted modules to an exact-content
 	// allowlist (lowercase-hex SHA-256 of the `.wasm`).
 	PinnedDigests []string `json:"pinned_digests,omitempty"`
-	// Capabilities are the capability names every loaded connector plugin runs
+	// Capabilities are the capability names every loaded plugin runs
 	// under (a subset of fs.read, fs.write, net.dial, process.exec). Empty grants
 	// nothing privileged — operators widen it deliberately. A plugin can never
 	// exceed this grant at runtime.
@@ -1769,6 +1772,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_PLUGINS_ENABLED", &c.Plugins.Enabled)
 	setString(getenv, "TRSTCTL_PLUGINS_DIR", &c.Plugins.Dir)
 	setString(getenv, "TRSTCTL_PLUGINS_CA_DIR", &c.Plugins.CADir)
+	setString(getenv, "TRSTCTL_PLUGINS_DNS_DIR", &c.Plugins.DNSDir)
 	setString(getenv, "TRSTCTL_PLUGINS_CONNECTOR_DIR", &c.Plugins.ConnectorDir)
 	setCSV(getenv, "TRSTCTL_PLUGINS_TRUSTED_KEY_FILES", &c.Plugins.TrustedKeyFiles)
 	setCSV(getenv, "TRSTCTL_PLUGINS_PINNED_DIGESTS", &c.Plugins.PinnedDigests)
@@ -2960,8 +2964,8 @@ func mustDuration(d time.Duration, _ error) time.Duration { return d }
 // future vocabulary, the wrong thing).
 func (p Plugins) validate() []error {
 	var errs []error
-	if strings.TrimSpace(p.Dir) == "" && strings.TrimSpace(p.CADir) == "" && strings.TrimSpace(p.ConnectorDir) == "" {
-		errs = append(errs, errors.New("one of plugins.dir, plugins.ca_dir, or plugins.connector_dir is required when plugins.enabled is true"))
+	if strings.TrimSpace(p.Dir) == "" && strings.TrimSpace(p.CADir) == "" && strings.TrimSpace(p.DNSDir) == "" && strings.TrimSpace(p.ConnectorDir) == "" {
+		errs = append(errs, errors.New("one of plugins.dir, plugins.ca_dir, plugins.dns_dir, or plugins.connector_dir is required when plugins.enabled is true"))
 	}
 	if len(p.TrustedKeyFiles) == 0 {
 		errs = append(errs, errors.New("plugins.trusted_key_files requires at least one Ed25519 public key when plugins.enabled is true (SUPPLY-004: a plugin must be provenance-verified)"))

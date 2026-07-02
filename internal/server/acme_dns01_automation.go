@@ -38,10 +38,11 @@ const (
 )
 
 type servedACMEDNS01Automation struct {
-	store  *store.Store
-	log    *events.Log
-	outbox *orchestrator.Outbox
-	kek    sealKeyWrapper
+	store   *store.Store
+	log     *events.Log
+	outbox  *orchestrator.Outbox
+	kek     sealKeyWrapper
+	plugins *PluginManager
 }
 
 type acmeDNS01OutboxPayload struct {
@@ -64,8 +65,8 @@ type acmeDNS01RecordEvent struct {
 	OutboxID   int64  `json:"outbox_id"`
 }
 
-func newServedACMEDNS01Automation(st *store.Store, log *events.Log, outbox *orchestrator.Outbox, kek sealKeyWrapper) *servedACMEDNS01Automation {
-	return &servedACMEDNS01Automation{store: st, log: log, outbox: outbox, kek: kek}
+func newServedACMEDNS01Automation(st *store.Store, log *events.Log, outbox *orchestrator.Outbox, kek sealKeyWrapper, plugins *PluginManager) *servedACMEDNS01Automation {
+	return &servedACMEDNS01Automation{store: st, log: log, outbox: outbox, kek: kek, plugins: plugins}
 }
 
 func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domain, _ string, keyAuth string) (func(context.Context) error, error) {
@@ -510,8 +511,85 @@ func (a *servedACMEDNS01Automation) providerForPayload(ctx context.Context, tena
 		}
 		return dnsacmedns.New(cfg.Subdomain, dnsacmedns.Credentials{Username: username, Password: password}, opts...), nil
 	default:
+		if a.plugins != nil && a.plugins.HasDNS(payload.Provider) {
+			return a.pluginProviderForPayload(ctx, tenantID, payload)
+		}
 		return nil, fmt.Errorf("server: acme dns-01 provider %q is not wired for order-time automation", payload.Provider)
 	}
+}
+
+func (a *servedACMEDNS01Automation) pluginProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Endpoint string `json:"endpoint"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode DNS plugin provider config: %w", err)
+	}
+	cfg.Endpoint = strings.TrimSpace(cfg.Endpoint)
+	if cfg.Endpoint == "" {
+		return nil, fmt.Errorf("server: DNS provider plugin %q config requires endpoint", payload.Provider)
+	}
+	token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "bearer_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token})
+	secret.Wipe(token)
+	return &dns01PluginProvider{
+		plugins: a.plugins, log: a.log, tenantID: tenantID, provider: payload.Provider,
+		delegate: provider,
+	}, nil
+}
+
+type dns01PluginProvider struct {
+	plugins  *PluginManager
+	log      *events.Log
+	tenantID string
+	provider string
+	delegate acme.DNSProvider
+}
+
+var _ acme.DNSProvider = (*dns01PluginProvider)(nil)
+
+func (p *dns01PluginProvider) PresentTXT(ctx context.Context, name, value string) error {
+	if err := p.plugins.InvokeDNS(ctx, p.provider, dnsPluginPresentEntrypoint); err != nil {
+		p.appendEvent(ctx, "acme.dns01.plugin.denied", name, err.Error())
+		return err
+	}
+	if err := p.delegate.PresentTXT(ctx, name, value); err != nil {
+		p.appendEvent(ctx, "acme.dns01.plugin.failed", name, err.Error())
+		return err
+	}
+	p.appendEvent(ctx, "acme.dns01.plugin.presented", name, "")
+	return nil
+}
+
+func (p *dns01PluginProvider) CleanupTXT(ctx context.Context, name, value string) error {
+	if err := p.plugins.InvokeDNS(ctx, p.provider, dnsPluginCleanupEntrypoint); err != nil {
+		p.appendEvent(ctx, "acme.dns01.plugin.denied", name, err.Error())
+		return err
+	}
+	if err := p.delegate.CleanupTXT(ctx, name, value); err != nil {
+		p.appendEvent(ctx, "acme.dns01.plugin.failed", name, err.Error())
+		return err
+	}
+	p.appendEvent(ctx, "acme.dns01.plugin.cleaned", name, "")
+	return nil
+}
+
+func (p *dns01PluginProvider) appendEvent(ctx context.Context, eventType, recordName, detail string) {
+	if p.log == nil {
+		return
+	}
+	data, err := json.Marshal(struct {
+		Provider   string `json:"provider"`
+		RecordName string `json:"record_name"`
+		Detail     string `json:"detail,omitempty"`
+	}{Provider: p.provider, RecordName: recordName, Detail: detail})
+	if err != nil {
+		return
+	}
+	_, _ = p.log.Append(ctx, events.Event{Type: eventType, TenantID: p.tenantID, Data: data})
 }
 
 func decodeACMEDNS01ProviderConfig(raw json.RawMessage, out any) error {

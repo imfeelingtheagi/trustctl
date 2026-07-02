@@ -811,11 +811,13 @@ func buildPluginConfig(p config.Plugins) (PluginConfig, error) {
 	return PluginConfig{
 		Dir:              p.Dir,
 		CADir:            p.CADir,
+		DNSDir:           p.DNSDir,
 		ConnectorDir:     p.ConnectorDir,
 		TrustedKeyPEMs:   keys,
 		PinnedDigestsHex: p.PinnedDigests,
 		Grant:            grant,
 		CAGrant:          grant,
+		DNSGrant:         grant,
 		ConnectorGrant:   grant,
 	}, nil
 }

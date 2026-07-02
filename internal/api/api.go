@@ -96,6 +96,7 @@ type API struct {
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
+	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
@@ -158,6 +159,7 @@ type config struct {
 	outboxCircuits            func() []orchestrator.CircuitSnapshot
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
+	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	featureObserver           func(feature, action, outcome string, seconds float64)
@@ -259,6 +261,14 @@ func WithServiceNowBindings(bindings ...ServiceNowBinding) Option {
 func WithOutboundEnvCredentialRefs(refs ...string) Option {
 	return func(c *config) {
 		c.outboundEnvCredentialRefs = normalizeOutboundEnvCredentialRefs(refs)
+	}
+}
+
+// WithACMEDNS01Providers appends signed, served DNS-provider plugins to the
+// built-in ACME DNS-01 provider catalog and provider-config admission allowlist.
+func WithACMEDNS01Providers(items ...ACMEDNS01ProviderCatalogItem) Option {
+	return func(c *config) {
+		c.acmeDNS01Providers = append(c.acmeDNS01Providers, items...)
 	}
 }
 
@@ -476,6 +486,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		outboxCircuits:            cfg.outboxCircuits,
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
+		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
 		privacyRetentionSource:    cfg.privacyRetentionSource,

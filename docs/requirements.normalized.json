@@ -283,11 +283,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served signed DNS-provider plugin admission/conformance provenance, provider catalog disclosure, tenant provider-config CRUD, and ACME order-time DNS-01 activation through the outbox",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
