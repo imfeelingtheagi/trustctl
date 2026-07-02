@@ -538,6 +538,14 @@ jobs:
         with:
           node-version: 22
 
+      # npm dependency trees are outside go.sum. The SDK generator is a devDependency
+      # used by scripts/gen-sdk.sh, so this audits web production deps and SDK
+      # generator deps, then self-tests that a critical SDK advisory fails closed.
+      - name: npm dependency tree SCA (web + TypeScript SDK)
+        run: |
+          bash scripts/ci/npm-audit-dependency-surfaces_selftest.sh
+          bash scripts/ci/npm-audit-dependency-surfaces.sh
+
       # A CycloneDX SBOM of the Go module graph, complementing the image SBOM the
       # release pipeline attaches. The generator is pinned for reproducibility.
       - name: Generate module SBOM (CycloneDX)

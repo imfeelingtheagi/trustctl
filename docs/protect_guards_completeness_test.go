@@ -50,7 +50,7 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 		"golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)",
 		"$(GOVULNCHECK) ./...",
 		".PHONY: sca",
-		"npm audit --omit=dev --audit-level=high",
+		"bash scripts/ci/npm-audit-dependency-surfaces.sh",
 		"scripts/supply-chain/verify-embedded-postgres.sh",
 	)
 
@@ -59,6 +59,8 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 		"govulncheck:",
 		"go install golang.org/x/vuln/cmd/govulncheck@v1.1.4",
 		"run: govulncheck ./...",
+		"npm dependency tree SCA (web + TypeScript SDK)",
+		"bash scripts/ci/npm-audit-dependency-surfaces.sh",
 		"npm audit --omit=dev --audit-level=high",
 		"Verify & scan the embedded-postgres binary",
 		"run: bash scripts/supply-chain/verify-embedded-postgres.sh",

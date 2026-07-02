@@ -66,8 +66,8 @@ repository's release workflow identity.
 
 ## Software-composition analysis (every dependency surface)
 
-Dependencies live on three surfaces; two of them are **outside `go.sum`**, so they
-get their own scans. All three run in CI and via `make sca`.
+Dependencies live on four concrete surfaces; three are **outside `go.sum`**, so
+they get their own scans. All four run in CI and via `make sca`.
 
 ## Dependency freshness SLO
 
@@ -81,7 +81,7 @@ The committed report is `deploy/supply-chain/dependency-freshness.json`. It reco
 - `observed_at` and `max_report_age_days`, so stale reports fail closed;
 - freshness classes for critical Go runtime dependencies, web runtime dependencies,
   developer tooling, and release infrastructure;
-- the observed output families from `go list -m -u all` and `npm outdated --json`;
+- the observed output families from `go list -m -u all` and web `npm outdated --json`;
 - planned owners, next review dates, and accepted deferral windows for known major
   upgrades such as React, React Router, Vite, Vitest, Tailwind, and TypeScript; and
 - planned owners for critical Go runtime updates such as embedded-postgres, NATS
@@ -119,14 +119,23 @@ Your code is affected by 0 vulnerabilities.
 (advisories can exist in imported modules, but none are reachable from trstctl's code.)
 ```
 
-### npm (web UI) — `npm audit`
+### npm (web UI + TypeScript SDK generator) — `npm audit`
 
 The web dependency tree is pinned by `web/package-lock.json` and scanned with
-`npm audit --omit=dev --audit-level=high` in the CI `web` job.
+`npm audit --omit=dev --audit-level=high` in the CI `web` job. The TypeScript SDK
+generator tree is pinned by `clients/sdk/typescript/package-lock.json` and scanned
+by `scripts/ci/npm-audit-dependency-surfaces.sh` with dev dependencies included,
+because `openapi-typescript` is a generator dependency used by `scripts/gen-sdk.sh`.
+The CI `supply-chain` job runs the wrapper and its self-test; the self-test plants
+`minimist@0.0.8` in a temporary SDK lockfile and expects npm audit to fail on the
+known critical advisory.
 
 ```
-$ npm audit --omit=dev
-found 0 vulnerabilities   (300 production dependencies)
+$ bash scripts/ci/npm-audit-dependency-surfaces.sh
+>> npm audit (web production dependency tree)
+found 0 vulnerabilities
+>> npm audit (TypeScript SDK generator dependency tree)
+found 0 vulnerabilities
 ```
 
 ### embedded-postgres binary — committed checksum pin (CI **and** runtime) + Trivy
@@ -215,7 +224,7 @@ root-of-trust paths is codified in
 ## Run it yourself
 
 ```bash
-make supply-chain   # module SBOM + Go/npm/embedded-postgres SCA (network needed for the PG leg)
+make supply-chain   # module SBOM + Go/npm/embedded-postgres SCA (network needed for npm + PG legs)
 make vuln           # just the pinned govulncheck gate
 make sbom           # just the module SBOM
 make dependency-freshness # just the committed dependency freshness SLO report

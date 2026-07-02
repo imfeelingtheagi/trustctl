@@ -37,6 +37,18 @@ updates:
     commit-message:
       prefix: "deps(web)"
 
+  # TypeScript SDK generator/runtime npm dependencies.
+  - package-ecosystem: npm
+    directory: "/clients/sdk/typescript"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      sdk-typescript-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(sdk-ts)"
+
   # Container base images in the Dockerfile.
   - package-ecosystem: docker
     directory: "/deploy/docker"

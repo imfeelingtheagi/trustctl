@@ -58,7 +58,7 @@ required set.
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |
 | `actionlint (workflow lint)` | `ci.yml` | Workflow + shell lint of the pipelines themselves |
 | `govulncheck` | `ci.yml` | Reachability-aware vulnerability scan |
-| `supply-chain (SBOM + binary SCA)` | `ci.yml` | Module SBOM + embedded-Postgres provenance/scan |
+| `supply-chain (SBOM + binary SCA)` | `ci.yml` | Module SBOM + npm dependency SCA + embedded-Postgres provenance/scan |
 | `embedded-postgres scan receipts` | `ci.yml` | Aggregate gate requiring every arch-specific embedded-Postgres provenance/Trivy receipt |
 | `helm (lint + render + schema)` | `ci.yml` | Control-plane chart lint + kubeconform |
 | `proto (buf lint + breaking-change gate)` | `ci.yml` | Signer gRPC contract (AN-4) wire-compat |
