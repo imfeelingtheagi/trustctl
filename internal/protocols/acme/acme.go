@@ -184,6 +184,13 @@ type DNS01Automation interface {
 	Present(ctx context.Context, tenantID, domain, token, keyAuth string) (cleanup func(context.Context) error, err error)
 }
 
+// DomainValidationPolicy constrains the ACME challenge methods for a managed
+// domain. constrained=false means no tenant policy applies and the RFC 8555
+// default challenge set remains available.
+type DomainValidationPolicy interface {
+	AllowedMethods(ctx context.Context, tenantID, domain string) (methods []string, constrained bool, err error)
+}
+
 type challenge struct {
 	id      string
 	typ     string
@@ -271,6 +278,7 @@ type Server struct {
 	revokeHook      RevocationHook
 	accountLimiter  AccountOrderLimiter
 	dns01Automation DNS01Automation
+	dvPolicy        DomainValidationPolicy
 	stateLog        eventLog
 	stateTenantID   string
 	eabKeys         map[string]*secret.Buffer
@@ -333,6 +341,14 @@ func (s *Server) WithAccountOrderLimiter(l AccountOrderLimiter) *Server {
 // the challenge.
 func (s *Server) WithDNS01Automation(a DNS01Automation) *Server {
 	s.dns01Automation = a
+	return s
+}
+
+// WithDomainValidationPolicy wires tenant-managed DV method policy into new-order
+// challenge selection and challenge acceptance. Nil preserves the library default:
+// every public-trust order offers HTTP-01, DNS-01, and TLS-ALPN-01.
+func (s *Server) WithDomainValidationPolicy(p DomainValidationPolicy) *Server {
+	s.dvPolicy = p
 	return s
 }
 
@@ -422,6 +438,67 @@ func (s *Server) WithCertificateProfile(p profile.CertificateProfile) (*Server, 
 func (s *Server) WithRevocationHook(h RevocationHook) *Server {
 	s.revokeHook = h
 	return s
+}
+
+var errDVMethodNotAllowed = errors.New("acme: domain-validation method is not allowed")
+
+func defaultChallengeTypes() []string {
+	return []string{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01}
+}
+
+func (s *Server) challengeTypesForDomain(ctx context.Context, domain string) ([]string, error) {
+	if s.dvPolicy == nil {
+		return defaultChallengeTypes(), nil
+	}
+	methods, constrained, err := s.dvPolicy.AllowedMethods(ctx, s.stateTenantID, domain)
+	if err != nil {
+		return nil, fmt.Errorf("acme: domain-validation policy lookup for %q: %w", domain, err)
+	}
+	if !constrained {
+		return defaultChallengeTypes(), nil
+	}
+	allowed := make(map[string]bool, len(methods))
+	for _, method := range methods {
+		method = strings.TrimSpace(method)
+		if method == "" {
+			continue
+		}
+		if !knownMethod(method) {
+			return nil, fmt.Errorf("acme: domain-validation policy for %q returned unknown method %q", domain, method)
+		}
+		allowed[method] = true
+	}
+	challengeTypes := make([]string, 0, len(allowed))
+	for _, method := range defaultChallengeTypes() {
+		if allowed[method] {
+			challengeTypes = append(challengeTypes, method)
+		}
+	}
+	if len(challengeTypes) == 0 {
+		return nil, fmt.Errorf("%w for %q", errDVMethodNotAllowed, domain)
+	}
+	return challengeTypes, nil
+}
+
+func (s *Server) challengeAllowed(ctx context.Context, domain, challengeType string) error {
+	challengeTypes, err := s.challengeTypesForDomain(ctx, domain)
+	if err != nil {
+		return err
+	}
+	for _, allowed := range challengeTypes {
+		if allowed == challengeType {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %s for %q", errDVMethodNotAllowed, challengeType, domain)
+}
+
+func (s *Server) writeDVPolicyProblem(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errDVMethodNotAllowed) {
+		s.problem(w, r, http.StatusBadRequest, "unauthorized", err.Error())
+		return
+	}
+	s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
 }
 
 // ServeHTTP implements http.Handler.
@@ -752,14 +829,29 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 			return
 		}
 	}
-	base := baseURL(r)
-	s.mu.Lock()
-	now := time.Now()
-	s.pruneExpiredLocked(now)
 	authMode := s.authMode
 	if authMode == "" {
 		authMode = profile.ACMEAuthModePublicTrust
 	}
+	challengeTypesByDomain := make(map[string][]string, len(req.Identifiers))
+	pendingChallengeDelta := 0
+	if authMode == profile.ACMEAuthModeTrustAuthenticated {
+		pendingChallengeDelta = 0
+	} else {
+		for _, id := range req.Identifiers {
+			challengeTypes, err := s.challengeTypesForDomain(r.Context(), id.Value)
+			if err != nil {
+				s.writeDVPolicyProblem(w, r, err)
+				return
+			}
+			challengeTypesByDomain[id.Value] = challengeTypes
+			pendingChallengeDelta += len(challengeTypes)
+		}
+	}
+	base := baseURL(r)
+	s.mu.Lock()
+	now := time.Now()
+	s.pruneExpiredLocked(now)
 	if !s.consumeSourceLocked(sourceKey(r), "order", now) {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many ACME newOrder requests from this source")
@@ -776,10 +868,8 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		return
 	}
 	pendingAuthzDelta := len(req.Identifiers)
-	pendingChallengeDelta := len(req.Identifiers) * 3
 	if authMode == profile.ACMEAuthModeTrustAuthenticated {
 		pendingAuthzDelta = 0
-		pendingChallengeDelta = 0
 	}
 	if s.pendingAuthzsLocked()+pendingAuthzDelta > s.quota.MaxPendingAuthorizations {
 		s.mu.Unlock()
@@ -794,12 +884,10 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	orderStatus := statusPending
 	authzStatus := statusPending
 	challengeStatus := statusPending
-	challengeTypes := []string{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01}
 	if authMode == profile.ACMEAuthModeTrustAuthenticated {
 		orderStatus = statusReady
 		authzStatus = statusValid
 		challengeStatus = statusValid
-		challengeTypes = []string{ChallengeHTTP01}
 	}
 	o := &order{id: s.nextID(), accountURL: acct.url, status: orderStatus, authMode: authMode, replaces: req.Replaces, createdAt: now}
 	var authzURLs []string
@@ -807,6 +895,10 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	for _, id := range req.Identifiers {
 		o.domains = append(o.domains, id.Value)
 		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: authzStatus, createdAt: now}
+		challengeTypes := challengeTypesByDomain[id.Value]
+		if authMode == profile.ACMEAuthModeTrustAuthenticated {
+			challengeTypes = []string{ChallengeHTTP01}
+		}
 		for _, ct := range challengeTypes {
 			ch := &challenge{id: s.nextID(), typ: ct, token: randomToken(), status: challengeStatus, authzID: az.id}
 			az.challenges = append(az.challenges, ch)
@@ -862,6 +954,11 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 		return
 	}
 	s.mu.Unlock()
+
+	if err := s.challengeAllowed(r.Context(), az.domain, ch.typ); err != nil {
+		s.writeDVPolicyProblem(w, r, err)
+		return
+	}
 
 	keyAuth := ch.token + "." + acct.key.Thumbprint()
 	var cleanup func(context.Context) error

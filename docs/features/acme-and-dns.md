@@ -162,6 +162,14 @@ human-readable *rationale* string that is recorded in the tamper-evident audit t
 it **never silently degrades**. The dispatcher that runs the chosen validator fails closed
 on any unknown or unconfigured method — there is no accept-everything path.
 
+Tenant DNS-01 provider configs also carry an `allowed_methods` policy for each managed
+zone. Operators manage that policy through the served provider-config API, CLI, and
+Protocols page. The preflight route previews the selected method and denial reason, and
+the served ACME order path enforces the same policy before validation: new orders only
+advertise challenge types allowed by the matching config, and challenge acceptance
+re-checks the policy so stale or updated orders cannot use a method that is no longer
+allowed.
+
 ### Wildcards (F74)
 
 A wildcard certificate (`*.example.com`) covers every subdomain at once. By rule it can

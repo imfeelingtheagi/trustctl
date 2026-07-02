@@ -416,7 +416,7 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
 		"name":     "trace012-webhook",
 		"provider": "webhook",
-		"zone":     "served.test",
+		"zone":     "trace012.test",
 		"credential_refs": map[string]any{
 			"bearer_token_ref": "secret://dns/webhook/bearer-token",
 		},
@@ -439,7 +439,7 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 		t.Fatalf("register: %v", err)
 	}
 
-	const domain = "dns01.served.test"
+	const domain = "dns01.trace012.test"
 	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
 	if err != nil {
 		t.Fatalf("authorize order: %v", err)

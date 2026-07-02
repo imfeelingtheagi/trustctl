@@ -4024,8 +4024,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 59,
-      "served_state": "partial",
-      "backend_status": "partial served: method-selection helpers plus provider-config allowed_methods and DNS-01 preflight checks are served; full order-time domain-validation policy management remains a follow-up",
+      "served_state": "served",
+      "backend_status": "served method-selection helpers, tenant provider-config allowed_methods policy management, DNS-01 preflight policy checks, and ACME order-time challenge filtering plus acceptance enforcement",
       "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose allowed validation methods and preflight method selection",
       "target_gui_mapping": "Domain-validation policy UI for HTTP-01, DNS-01, TLS-ALPN-01 method choice, constraints, and challenge readiness.",
       "acceptance_test": "UI covers method selection preview and policy-denied challenge states.",
@@ -4034,7 +4034,10 @@
       ],
       "source_backend": [
         "internal/protocols/acme/dvmethod.go",
-        "internal/api/acme_dns01.go"
+        "internal/protocols/acme/acme.go",
+        "internal/api/acme_dns01.go",
+        "internal/server/acme_dns01_automation.go",
+        "internal/server/protocol_mounts.go"
       ],
       "source_frontend": [
         "web/src/pages/Protocols.tsx"
@@ -4042,10 +4045,14 @@
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
+        "createACMEDNS01ProviderConfig",
+        "updateACMEDNS01ProviderConfig",
         "preflightACMEDNS01"
       ],
       "api_na": "",
       "cli_surface": [
+        "acme dns-01 provider-configs create",
+        "acme dns-01 provider-configs update",
         "acme dns-01 preflight"
       ],
       "cli_na": "",
@@ -4053,10 +4060,14 @@
         "served": {
           "evidence": [
             "Tenant DNS-01 provider configs store allowed_methods and POST /api/v1/acme/dns-01/preflight runs the ACME method selector with optional override.",
-            "The served preflight route fails closed when the selected method is not allowed by the provider policy."
+            "The served preflight route fails closed when the selected method is not allowed by the provider policy.",
+            "The served ACME new-order path filters advertised HTTP-01, DNS-01, and TLS-ALPN-01 challenges by the matching tenant provider-config allowed_methods policy, and challenge acceptance re-checks the policy before validation."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
+            "internal/protocols/acme/acme.go",
+            "internal/server/acme_dns01_automation.go",
+            "internal/server/protocol_mounts.go",
             "internal/server/protocols_served_test.go",
             "internal/projections/projections.go",
             "internal/protocols/acme/dvmethod.go"
@@ -4074,6 +4085,7 @@
         },
         "cli": {
           "evidence": [
+            "CLI commands `trstctl acme dns-01 provider-configs create` and `update` manage allowed_methods policy.",
             "CLI command `trstctl acme dns-01 preflight` previews the selected validation method and policy denial state."
           ],
           "refs": [
@@ -4083,6 +4095,7 @@
         },
         "api": {
           "evidence": [
+            "OpenAPI operationIds createACMEDNS01ProviderConfig and updateACMEDNS01ProviderConfig manage allowed_methods policy.",
             "OpenAPI operationId: preflightACMEDNS01 for multi-method validation policy preflight."
           ],
           "refs": [
@@ -4095,6 +4108,7 @@
           "evidence": [
             "acceptance_test: UI covers method selection preview and policy-denied challenge states.",
             "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
+            "TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016 proves tenant allowed_methods policy filters served ACME order-time challenge advertisements and provider-config updates take effect on later orders.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -4166,8 +4180,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: method-selection helpers plus provider-config allowed_methods and DNS-01 preflight checks are served; full order-time domain-validation policy management remains a follow-up. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F024",

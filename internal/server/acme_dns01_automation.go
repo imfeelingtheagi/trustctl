@@ -169,6 +169,52 @@ func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, te
 	return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("acme: no served dns-01 provider config matches %s", domain)
 }
 
+func (a *servedACMEDNS01Automation) AllowedMethods(ctx context.Context, tenantID, domain string) ([]string, bool, error) {
+	if a == nil || a.store == nil {
+		return nil, false, nil
+	}
+	tenantID = strings.TrimSpace(tenantID)
+	domain = strings.TrimSpace(domain)
+	if tenantID == "" || domain == "" {
+		return nil, false, nil
+	}
+	configs, err := a.store.ListACMEDNS01ProviderConfigs(ctx, tenantID)
+	if err != nil {
+		return nil, false, err
+	}
+	matched := false
+	allowed := map[string]bool{}
+	wildcard := acme.IsWildcard(domain)
+	for _, cfg := range configs {
+		if !dns01ConfigMatchesDomain(cfg, domain) {
+			continue
+		}
+		matched = true
+		if wildcard && !cfg.AllowWildcards {
+			continue
+		}
+		for _, method := range cfg.AllowedMethods {
+			method = strings.TrimSpace(strings.ToLower(method))
+			if wildcard && method != acme.ChallengeDNS01 {
+				continue
+			}
+			if method != "" {
+				allowed[method] = true
+			}
+		}
+	}
+	if !matched {
+		return nil, false, nil
+	}
+	methods := make([]string, 0, len(allowed))
+	for _, method := range []string{acme.ChallengeHTTP01, acme.ChallengeDNS01, acme.ChallengeTLSALPN01} {
+		if allowed[method] {
+			methods = append(methods, method)
+		}
+	}
+	return methods, true, nil
+}
+
 func (a *servedACMEDNS01Automation) enforceLiveCAA(ctx context.Context, domain string, cfg store.ACMEDNS01ProviderConfig) error {
 	issuer := strings.TrimSpace(cfg.CAAIssuerDomain)
 	if issuer == "" {
