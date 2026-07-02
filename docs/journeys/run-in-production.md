@@ -27,6 +27,8 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
 
 1. **Serve over your own certificate, not the self-signed eval one.** TLS is on out
    of the box, but for production point it at a real certificate:
+   Public deployments must use `server.tls.mode=file` with an operator-provided
+   certificate chain from your CA rather than eval self-signed trust.
 
    ```yaml
    server:

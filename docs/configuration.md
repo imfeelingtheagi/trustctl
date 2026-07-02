@@ -31,7 +31,10 @@ session ever travels in cleartext.
 - **`internal`** (default) — the control plane presents a self-signed certificate
   it generates at startup, covering `localhost`, `127.0.0.1`, the container
   hostname, and the Compose service name `trstctl`. Clients must trust it (or use
-  `curl -k`); suitable for evaluation and internal or air-gapped use.
+  `curl -k`); suitable for evaluation and tightly controlled internal or air-gapped
+  use. Public deployments must use `server.tls.mode=file` with an
+  operator-provided certificate chain from your CA; do not expose the eval
+  self-signed certificate to public clients.
 - **`file`** — the control plane presents an operator-provided certificate and
   key. Use this in production with a certificate from your CA. A missing or
   malformed file fails fast at startup rather than falling back to plaintext.

@@ -4004,6 +4004,17 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"MinVersion:       tls.VersionTLS13",
 		"CurvePreferences: HybridCurvePreferences()",
 	)
+	configDoc := strings.Join(strings.Fields(read(t, "configuration.md")), " ")
+	check("configuration.md production TLS docs", configDoc,
+		"`file` (operator cert)",
+		"Use this in production with a certificate from your CA.",
+		"Public deployments must use `server.tls.mode=file` with an operator-provided certificate chain from your CA; do not expose the eval self-signed certificate to public clients.",
+	)
+	productionJourney := strings.Join(strings.Fields(read(t, "journeys/run-in-production.md")), " ")
+	check("journeys/run-in-production.md production TLS docs", productionJourney,
+		"Serve over your own certificate, not the self-signed eval one.",
+		"Public deployments must use `server.tls.mode=file` with an operator-provided certificate chain from your CA rather than eval self-signed trust.",
+	)
 
 	agentMTLS := read(t, "../internal/crypto/mtls/agent.go")
 	check("internal/crypto/mtls/agent.go tenant SAN", agentMTLS,
