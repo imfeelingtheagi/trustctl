@@ -718,7 +718,7 @@ export const messages = {
     description: "State label after external CA issuance succeeds.",
   },
   "caHierarchy.externalIssue.pathLabel": {
-    defaultMessage: "Served path",
+    defaultMessage: "API path",
     description: "Label for the external CA issuance served API path.",
   },
   "caHierarchy.externalIssue.serialLabel": {
@@ -1374,6 +1374,195 @@ export const messages = {
     defaultMessage: "Policy",
     description: "Primary navigation item.",
   },
+  "policy.overview.description": {
+    defaultMessage:
+      "Issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted.",
+    description: "Policy page overview text.",
+  },
+  "policy.enforcement.heading": {
+    defaultMessage: "Enforcement path",
+    description: "Heading for policy enforcement flow.",
+  },
+  "policy.enforcement.description": {
+    defaultMessage:
+      "The browser does not send a tenant id or bypass policy. It asks the lifecycle workflow to mutate state; the backend evaluates policy and either emits the event or returns a fail-closed problem.",
+    description: "Description of policy enforcement flow.",
+  },
+  "policy.enforcement.auditPrefix": {
+    defaultMessage:
+      "Decisions are evidence events. Use Audit to inspect allow, deny, and evaluation-error records with the actor, resource, hash, and payload from the event stream. Action errors still appear where the operator started the workflow on",
+    description: "Policy enforcement audit explanation before the identities link.",
+  },
+  "policy.enforcement.identitiesLink": {
+    defaultMessage: "Identities",
+    description: "Link text to the identities workflow from the policy page.",
+  },
+  "policy.enforcement.auditSuffix": {
+    defaultMessage: ".",
+    description: "Policy enforcement audit sentence suffix after the identities link.",
+  },
+  "policy.enforcement.policyDecisionsLink": {
+    defaultMessage: "Open policy decisions in Audit",
+    description: "Link text to policy decision audit events.",
+  },
+  "policy.enforcement.profileEvaluationsLink": {
+    defaultMessage: "Open profile evaluations in Audit",
+    description: "Link text to profile evaluation audit events.",
+  },
+  "policy.compliance.heading": {
+    defaultMessage: "Compliance posture and reports",
+    description: "Heading for compliance posture and reporting evidence.",
+  },
+  "policy.compliance.description": {
+    defaultMessage:
+      "Evidence packs are signed exports built from the audit log and cryptographic inventory. They show what trstctl can prove and what your organization must still attest; they are evidence, not certification.",
+    description: "Description for compliance evidence packs.",
+  },
+  "policy.compliance.frameworkGroup": {
+    defaultMessage: "Compliance framework",
+    description: "Accessible label for the compliance framework selector.",
+  },
+  "policy.compliance.loadingEvidencePack": {
+    defaultMessage: "Loading evidence pack.",
+    description: "Loading state for compliance evidence packs.",
+  },
+  "policy.compliance.evidencePackUnavailable": {
+    defaultMessage: "Evidence pack unavailable",
+    description: "Error title when a compliance evidence pack cannot load.",
+  },
+  "policy.versions.heading": {
+    defaultMessage: "Policy versions",
+    description: "Heading for lifecycle policy versions.",
+  },
+  "policy.versions.description": {
+    defaultMessage:
+      "Active lifecycle policy versions are checked before activation, recorded as policy.version events, and enforced before lifecycle changes run.",
+    description: "Description for lifecycle policy versions.",
+  },
+  "policy.versions.descriptionLabel": {
+    defaultMessage: "Description",
+    description: "Label and column header for a policy version description.",
+  },
+  "policy.versions.changeRef": {
+    defaultMessage: "Change ref",
+    description: "Label for the change reference on a policy version.",
+  },
+  "policy.versions.evidenceRefs": {
+    defaultMessage: "Evidence refs",
+    description: "Label for policy version evidence references.",
+  },
+  "policy.versions.lifecycleModule": {
+    defaultMessage: "Lifecycle Rego module",
+    description: "Label for the lifecycle policy Rego module editor.",
+  },
+  "policy.versions.authoring": {
+    defaultMessage: "Authoring...",
+    description: "Busy state while a policy version is being authored.",
+  },
+  "policy.versions.authorVersion": {
+    defaultMessage: "Author version",
+    description: "Button label to author a policy version.",
+  },
+  "policy.versions.activePolicy": {
+    defaultMessage: "Active policy",
+    description: "Heading for active policy version details.",
+  },
+  "policy.versions.status": {
+    defaultMessage: "Status",
+    description: "Policy version status label.",
+  },
+  "policy.versions.moduleHash": {
+    defaultMessage: "Module hash",
+    description: "Policy module digest label.",
+  },
+  "policy.versions.activated": {
+    defaultMessage: "Activated",
+    description: "Policy version activation timestamp label.",
+  },
+  "policy.versions.notActivated": {
+    defaultMessage: "not activated",
+    description: "Fallback value when a policy version has no activation timestamp.",
+  },
+  "policy.versions.noActive": {
+    defaultMessage: "No live policy version is active.",
+    description: "Empty state for active policy version details.",
+  },
+  "policy.versions.loading": {
+    defaultMessage: "Loading policy versions.",
+    description: "Loading state for policy versions.",
+  },
+  "policy.versions.unavailableTitle": {
+    defaultMessage: "Policy versions unavailable",
+    description: "Error title when policy versions cannot load.",
+  },
+  "policy.versions.tableLabel": {
+    defaultMessage: "Policy versions",
+    description: "Accessible label for the policy versions table.",
+  },
+  "policy.versions.hash": {
+    defaultMessage: "Hash",
+    description: "Column header for a policy version module hash.",
+  },
+  "policy.versions.change": {
+    defaultMessage: "Change",
+    description: "Column header for policy version change reference.",
+  },
+  "policy.versions.actions": {
+    defaultMessage: "Actions",
+    description: "Column header for policy version actions.",
+  },
+  "policy.versions.activating": {
+    defaultMessage: "Activating...",
+    description: "Busy state while a policy version is activating.",
+  },
+  "policy.versions.activate": {
+    defaultMessage: "Activate",
+    description: "Button label to activate a policy version.",
+  },
+  "policy.versions.rollingBack": {
+    defaultMessage: "Rolling back...",
+    description: "Busy state while a policy version is rolling back.",
+  },
+  "policy.versions.rollback": {
+    defaultMessage: "Rollback",
+    description: "Button label to roll back a policy version.",
+  },
+  "policy.versions.empty": {
+    defaultMessage: "No policy versions.",
+    description: "Empty state for the policy versions table.",
+  },
+  "policy.framework.pciDss": {
+    defaultMessage: "PCI DSS",
+    description: "Short label for the PCI DSS compliance evidence-pack selector.",
+  },
+  "policy.framework.hipaa": {
+    defaultMessage: "HIPAA",
+    description: "Short label for the HIPAA compliance evidence-pack selector.",
+  },
+  "policy.framework.soc2": {
+    defaultMessage: "SOC 2",
+    description: "Short label for the SOC 2 compliance evidence-pack selector.",
+  },
+  "policy.framework.nist80053": {
+    defaultMessage: "NIST 800-53",
+    description: "Short label for the NIST 800-53 compliance evidence-pack selector.",
+  },
+  "policy.framework.nistCsf20": {
+    defaultMessage: "NIST CSF 2.0",
+    description: "Short label for the NIST Cybersecurity Framework 2.0 evidence-pack selector.",
+  },
+  "policy.framework.fedramp": {
+    defaultMessage: "FedRAMP",
+    description: "Short label for the FedRAMP compliance evidence-pack selector.",
+  },
+  "policy.framework.cmmc20": {
+    defaultMessage: "CMMC 2.0",
+    description: "Short label for the CMMC 2.0 compliance evidence-pack selector.",
+  },
+  "policy.framework.cnsa20": {
+    defaultMessage: "CNSA 2.0",
+    description: "Short label for the CNSA 2.0 compliance evidence-pack selector.",
+  },
   "policy.framework.cabfBR": {
     defaultMessage: "CA/B Forum BR",
     description: "Short label for the CA/Browser Forum Baseline Requirements compliance evidence-pack selector.",
@@ -1385,6 +1574,22 @@ export const messages = {
   "policy.framework.commonCriteria": {
     defaultMessage: "Common Criteria",
     description: "Short label for the Common Criteria compliance evidence-pack selector.",
+  },
+  "policy.framework.webtrust": {
+    defaultMessage: "WebTrust",
+    description: "Short label for the WebTrust compliance evidence-pack selector.",
+  },
+  "policy.framework.etsi": {
+    defaultMessage: "ETSI",
+    description: "Short label for the ETSI compliance evidence-pack selector.",
+  },
+  "policy.framework.eidas": {
+    defaultMessage: "eIDAS",
+    description: "Short label for the eIDAS compliance evidence-pack selector.",
+  },
+  "policy.framework.nis2": {
+    defaultMessage: "NIS2",
+    description: "Short label for the NIS2 compliance evidence-pack selector.",
   },
   "policy.reportType.inventorySnapshot": {
     defaultMessage: "Inventory snapshot",
@@ -4755,7 +4960,7 @@ const esESCatalog = {
   "caHierarchy.externalIssue.stateLabel": "Estado",
   "caHierarchy.externalIssue.state.outboxPending": "outbox-pending",
   "caHierarchy.externalIssue.state.externalCAIssued": "external-ca-issued",
-  "caHierarchy.externalIssue.pathLabel": "Ruta servida",
+  "caHierarchy.externalIssue.pathLabel": "Ruta de API",
   "caHierarchy.externalIssue.serialLabel": "Serie",
   "caHierarchy.externalIssue.issuerLabel": "Emisor",
   "caHierarchy.externalIssue.notAfterLabel": "No después de",
@@ -4922,9 +5127,64 @@ const esESCatalog = {
   "nav.item.ownership": "Propiedad",
   "nav.item.rbac": "RBAC",
   "nav.item.policy": "Política",
+  "policy.overview.description":
+    "Las mutaciones de emision, despliegue y revocacion pasan por la compuerta OPA/Rego de denegacion predeterminada, separacion RA, aprobacion de doble control y comprobaciones de perfil vinculado antes de emitir cambios de estado.",
+  "policy.enforcement.heading": "Ruta de aplicacion",
+  "policy.enforcement.description":
+    "El navegador no envia un id de tenant ni salta la politica. Pide al flujo de ciclo de vida que cambie el estado; el backend evalua la politica y emite el evento o devuelve un problema cerrado por seguridad.",
+  "policy.enforcement.auditPrefix":
+    "Las decisiones son eventos de evidencia. Usa Auditoria para inspeccionar registros allow, deny y errores de evaluacion con actor, recurso, hash y payload del flujo de eventos. Los errores de accion siguen apareciendo donde el operador inicio el flujo en",
+  "policy.enforcement.identitiesLink": "Identidades",
+  "policy.enforcement.auditSuffix": ".",
+  "policy.enforcement.policyDecisionsLink": "Abrir decisiones de politica en Auditoria",
+  "policy.enforcement.profileEvaluationsLink": "Abrir evaluaciones de perfil en Auditoria",
+  "policy.compliance.heading": "Postura e informes de cumplimiento",
+  "policy.compliance.description":
+    "Los paquetes de evidencia son exportaciones firmadas creadas desde el registro de auditoria y el inventario criptografico. Muestran lo que trstctl puede probar y lo que tu organizacion aun debe atestar; son evidencia, no certificacion.",
+  "policy.compliance.frameworkGroup": "Marco de cumplimiento",
+  "policy.compliance.loadingEvidencePack": "Cargando paquete de evidencia.",
+  "policy.compliance.evidencePackUnavailable": "Paquete de evidencia no disponible",
+  "policy.versions.heading": "Versiones de politica",
+  "policy.versions.description":
+    "Las versiones activas de politica de ciclo de vida se comprueban antes de la activacion, se registran como eventos policy.version y se aplican antes de ejecutar cambios de ciclo de vida.",
+  "policy.versions.descriptionLabel": "Descripcion",
+  "policy.versions.changeRef": "Ref. de cambio",
+  "policy.versions.evidenceRefs": "Refs. de evidencia",
+  "policy.versions.lifecycleModule": "Modulo Rego de ciclo de vida",
+  "policy.versions.authoring": "Creando...",
+  "policy.versions.authorVersion": "Crear version",
+  "policy.versions.activePolicy": "Politica activa",
+  "policy.versions.status": "Estado",
+  "policy.versions.moduleHash": "Hash del modulo",
+  "policy.versions.activated": "Activada",
+  "policy.versions.notActivated": "no activada",
+  "policy.versions.noActive": "No hay ninguna version de politica activa.",
+  "policy.versions.loading": "Cargando versiones de politica.",
+  "policy.versions.unavailableTitle": "Versiones de politica no disponibles",
+  "policy.versions.tableLabel": "Versiones de politica",
+  "policy.versions.hash": "Hash",
+  "policy.versions.change": "Cambio",
+  "policy.versions.actions": "Acciones",
+  "policy.versions.activating": "Activando...",
+  "policy.versions.activate": "Activar",
+  "policy.versions.rollingBack": "Revirtiendo...",
+  "policy.versions.rollback": "Revertir",
+  "policy.versions.empty": "No hay versiones de politica.",
+  "policy.framework.pciDss": "PCI DSS",
+  "policy.framework.hipaa": "HIPAA",
+  "policy.framework.soc2": "SOC 2",
+  "policy.framework.nist80053": "NIST 800-53",
+  "policy.framework.nistCsf20": "NIST CSF 2.0",
+  "policy.framework.fedramp": "FedRAMP",
+  "policy.framework.cmmc20": "CMMC 2.0",
+  "policy.framework.cnsa20": "CNSA 2.0",
   "policy.framework.cabfBR": "BR del Foro CA/B",
   "policy.framework.fips140": "FIPS 140",
   "policy.framework.commonCriteria": "Criterios comunes",
+  "policy.framework.webtrust": "WebTrust",
+  "policy.framework.etsi": "ETSI",
+  "policy.framework.eidas": "eIDAS",
+  "policy.framework.nis2": "NIS2",
   "policy.reportType.inventorySnapshot": "Instantánea de inventario",
   "policy.reportType.frameworkEvidencePack": "Paquete de evidencia del marco",
   "policy.reportType.cbomPosture": "Postura CBOM",

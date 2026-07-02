@@ -274,6 +274,14 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.acknowledge.wildcard.blast.radius.868520eb71",
+    defaultMessage: "Acknowledge wildcard blast radius",
+    sources: [
+      "src/pages/Identities.tsx:1248",
+      "src/pages/Wizard.tsx:228",
+    ],
+  },
+  {
     key: "source.action.64cff1319d",
     defaultMessage: "Action",
     sources: [
@@ -287,7 +295,6 @@ export const extractedMessages = [
     sources: [
       "src/components/CommandPalette.tsx:239",
       "src/pages/Incidents.tsx:1253",
-      "src/pages/Policy.tsx:844",
     ],
   },
   {
@@ -305,13 +312,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.activated.7e7b3a0153",
-    defaultMessage: "Activated",
-    sources: [
-      "src/pages/Policy.tsx:818",
-    ],
-  },
-  {
     key: "source.active.9687961165",
     defaultMessage: "active",
     sources: [
@@ -323,20 +323,6 @@ export const extractedMessages = [
     defaultMessage: "Active ceremony",
     sources: [
       "src/pages/CAHierarchy.tsx:1394",
-    ],
-  },
-  {
-    key: "source.active.lifecycle.policy.versions.are.compi.8da98617ed",
-    defaultMessage: "Active lifecycle policy versions are compiled before activation, recorded as policy.version events, and applied to the served mutation gate.",
-    sources: [
-      "src/pages/Policy.tsx:756",
-    ],
-  },
-  {
-    key: "source.active.policy.487f8884e2",
-    defaultMessage: "Active policy",
-    sources: [
-      "src/pages/Policy.tsx:806",
     ],
   },
   {
@@ -406,29 +392,37 @@ export const extractedMessages = [
     key: "source.agent.fleet.ac46d1b700",
     defaultMessage: "Agent fleet",
     sources: [
-      "src/pages/Agents.tsx:241",
+      "src/pages/Agents.tsx:295",
     ],
   },
   {
     key: "source.agent.id.510bce732d",
     defaultMessage: "Agent ID",
     sources: [
-      "src/pages/Agents.tsx:327",
+      "src/pages/Agents.tsx:375",
       "src/pages/Workloads.tsx:854",
+    ],
+  },
+  {
+    key: "source.agent.identity.698c87920a",
+    defaultMessage: "Agent identity",
+    sources: [
+      "src/pages/Agents.tsx:224",
+      "src/pages/Wizard.tsx:327",
     ],
   },
   {
     key: "source.agent.profile.heartbeat.and.version.detail.fbb4a88e48",
     defaultMessage: "Agent profile, heartbeat, and version details.",
     sources: [
-      "src/pages/Agents.tsx:323",
+      "src/pages/Agents.tsx:371",
     ],
   },
   {
     key: "source.agents.279b44d2ab",
     defaultMessage: "Agents",
     sources: [
-      "src/pages/Agents.tsx:163",
+      "src/pages/Agents.tsx:203",
     ],
   },
   {
@@ -1059,8 +1053,8 @@ export const extractedMessages = [
     key: "source.bootstrap.token.2996dc8b78",
     defaultMessage: "Bootstrap token",
     sources: [
-      "src/pages/Agents.tsx:208",
-      "src/pages/Wizard.tsx:293",
+      "src/pages/Agents.tsx:262",
+      "src/pages/Wizard.tsx:346",
     ],
   },
   {
@@ -1271,21 +1265,21 @@ export const extractedMessages = [
     key: "source.campaign.268286d2ef",
     defaultMessage: "Campaign",
     sources: [
-      "src/pages/Policy.tsx:1020",
+      "src/pages/Policy.tsx:1007",
     ],
   },
   {
     key: "source.campaigns.certify.non.human.identity.acces.5d99189fbe",
     defaultMessage: "Campaigns certify non-human identity access from identifiers and evidence references. The console never accepts credential values here.",
     sources: [
-      "src/pages/Policy.tsx:1013",
+      "src/pages/Policy.tsx:1000",
     ],
   },
   {
     key: "source.cancel.19766ed6cc",
     defaultMessage: "Cancel",
     sources: [
-      "src/pages/Agents.tsx:295",
+      "src/pages/Agents.tsx:343",
       "src/pages/CAHierarchy.tsx:1549",
       "src/pages/Identities.tsx:733",
       "src/pages/Identities.tsx:783",
@@ -1434,7 +1428,7 @@ export const extractedMessages = [
     key: "source.certify.c1567c2908",
     defaultMessage: "Certify",
     sources: [
-      "src/pages/Policy.tsx:1740",
+      "src/pages/Policy.tsx:1727",
     ],
   },
   {
@@ -1455,15 +1449,7 @@ export const extractedMessages = [
     key: "source.change.c0bf75bd78",
     defaultMessage: "Change",
     sources: [
-      "src/pages/Policy.tsx:843",
       "src/pages/Profiles.tsx:456",
-    ],
-  },
-  {
-    key: "source.change.ref.f5e37546ca",
-    defaultMessage: "Change ref",
-    sources: [
-      "src/pages/Policy.tsx:773",
     ],
   },
   {
@@ -1477,7 +1463,7 @@ export const extractedMessages = [
     key: "source.check.for.agent.1649b814df",
     defaultMessage: "Check for agent",
     sources: [
-      "src/pages/Wizard.tsx:311",
+      "src/pages/Wizard.tsx:364",
     ],
   },
   {
@@ -1603,20 +1589,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.cmmc.2.0.64cf675dd5",
-    defaultMessage: "CMMC 2.0",
-    sources: [
-      "src/pages/Policy.tsx:38",
-    ],
-  },
-  {
-    key: "source.cnsa.2.0.986832a63d",
-    defaultMessage: "CNSA 2.0",
-    sources: [
-      "src/pages/Policy.tsx:39",
-    ],
-  },
-  {
     key: "source.code.and.ci.secret.scanning.bridge.27c18d763b",
     defaultMessage: "Code and CI secret scanning bridge",
     sources: [
@@ -1691,7 +1663,7 @@ export const extractedMessages = [
     key: "source.complete.setup.fe3da4e70b",
     defaultMessage: "Complete setup",
     sources: [
-      "src/pages/Wizard.tsx:348",
+      "src/pages/Wizard.tsx:404",
     ],
   },
   {
@@ -1699,20 +1671,6 @@ export const extractedMessages = [
     defaultMessage: "Completed",
     sources: [
       "src/pages/Identities.tsx:955",
-    ],
-  },
-  {
-    key: "source.compliance.framework.248b5a307a",
-    defaultMessage: "Compliance framework",
-    sources: [
-      "src/pages/Policy.tsx:898",
-    ],
-  },
-  {
-    key: "source.compliance.posture.and.reports.340cf36dd3",
-    defaultMessage: "Compliance posture and reports",
-    sources: [
-      "src/pages/Policy.tsx:890",
     ],
   },
   {
@@ -1882,7 +1840,7 @@ export const extractedMessages = [
     key: "source.control.32d7e82082",
     defaultMessage: "Control",
     sources: [
-      "src/pages/Policy.tsx:1487",
+      "src/pages/Policy.tsx:1474",
     ],
   },
   {
@@ -1903,14 +1861,14 @@ export const extractedMessages = [
     key: "source.copied.once.from.memory.ffb61f0314",
     defaultMessage: "Copied once from memory.",
     sources: [
-      "src/pages/Agents.tsx:223",
+      "src/pages/Agents.tsx:277",
     ],
   },
   {
     key: "source.copy.command.9a01feecae",
     defaultMessage: "Copy command",
     sources: [
-      "src/pages/Agents.tsx:220",
+      "src/pages/Agents.tsx:274",
     ],
   },
   {
@@ -1966,7 +1924,7 @@ export const extractedMessages = [
     key: "source.could.not.load.agents.1d510cf246",
     defaultMessage: "Could not load agents",
     sources: [
-      "src/pages/Agents.tsx:229",
+      "src/pages/Agents.tsx:283",
     ],
   },
   {
@@ -1994,7 +1952,7 @@ export const extractedMessages = [
     key: "source.could.not.mint.enrollment.token.7b0b6374e9",
     defaultMessage: "Could not mint enrollment token",
     sources: [
-      "src/pages/Agents.tsx:189",
+      "src/pages/Agents.tsx:243",
     ],
   },
   {
@@ -2217,8 +2175,8 @@ export const extractedMessages = [
     defaultMessage: "Critical",
     sources: [
       "src/lib/statusVocab.ts:28",
-      "src/pages/Policy.tsx:1046",
-      "src/pages/Policy.tsx:1172",
+      "src/pages/Policy.tsx:1033",
+      "src/pages/Policy.tsx:1159",
     ],
   },
   {
@@ -2330,7 +2288,7 @@ export const extractedMessages = [
     key: "source.current.session.subject.1f6510ea4d",
     defaultMessage: "current session subject",
     sources: [
-      "src/pages/Policy.tsx:1031",
+      "src/pages/Policy.tsx:1018",
     ],
   },
   {
@@ -2387,7 +2345,7 @@ export const extractedMessages = [
     key: "source.decision.640ae4baf9",
     defaultMessage: "Decision",
     sources: [
-      "src/pages/Policy.tsx:1711",
+      "src/pages/Policy.tsx:1698",
     ],
   },
   {
@@ -2571,14 +2529,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.description.526e0087cc",
-    defaultMessage: "Description",
-    sources: [
-      "src/pages/Policy.tsx:765",
-      "src/pages/Policy.tsx:840",
-    ],
-  },
-  {
     key: "source.destination.293d404a50",
     defaultMessage: "Destination",
     sources: [
@@ -2690,7 +2640,7 @@ export const extractedMessages = [
     key: "source.dismiss.48845bff33",
     defaultMessage: "Dismiss",
     sources: [
-      "src/pages/Agents.tsx:202",
+      "src/pages/Agents.tsx:256",
       "src/pages/CAHierarchy.tsx:1722",
       "src/pages/Operations.tsx:371",
       "src/pages/Platform.tsx:837",
@@ -2711,7 +2661,7 @@ export const extractedMessages = [
     defaultMessage: "Display name",
     sources: [
       "src/pages/Platform.tsx:855",
-      "src/pages/Policy.tsx:1063",
+      "src/pages/Policy.tsx:1050",
     ],
   },
   {
@@ -2719,7 +2669,7 @@ export const extractedMessages = [
     defaultMessage: "Download signed bundle",
     sources: [
       "src/pages/Audit.tsx:328",
-      "src/pages/Policy.tsx:1465",
+      "src/pages/Policy.tsx:1452",
     ],
   },
   {
@@ -2797,7 +2747,7 @@ export const extractedMessages = [
     key: "source.e.g.payments.api.b39781a2b3",
     defaultMessage: "e.g. payments-api",
     sources: [
-      "src/pages/Identities.tsx:1228",
+      "src/pages/Identities.tsx:1237",
     ],
   },
   {
@@ -2879,13 +2829,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.eidas.9c1e1e1c00",
-    defaultMessage: "eIDAS",
-    sources: [
-      "src/pages/Policy.tsx:45",
-    ],
-  },
-  {
     key: "source.email.969ccbd3cf",
     defaultMessage: "Email",
     sources: [
@@ -2943,13 +2886,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.enforcement.path.0e8665bcfe",
-    defaultMessage: "Enforcement path",
-    sources: [
-      "src/pages/Policy.tsx:725",
-    ],
-  },
-  {
     key: "source.engine.8e75ebbdb2",
     defaultMessage: "Engine",
     sources: [
@@ -2975,7 +2911,7 @@ export const extractedMessages = [
     defaultMessage: "Enroll an agent",
     sources: [
       "src/pages/Discovery.tsx:497",
-      "src/pages/Wizard.tsx:283",
+      "src/pages/Wizard.tsx:317",
     ],
   },
   {
@@ -2996,7 +2932,7 @@ export const extractedMessages = [
     key: "source.enrollment.token.6c86be7863",
     defaultMessage: "Enrollment token",
     sources: [
-      "src/pages/Agents.tsx:176",
+      "src/pages/Agents.tsx:216",
     ],
   },
   {
@@ -3024,7 +2960,7 @@ export const extractedMessages = [
     key: "source.entitlement.0d8f0b2d3a",
     defaultMessage: "Entitlement",
     sources: [
-      "src/pages/Policy.tsx:1087",
+      "src/pages/Policy.tsx:1074",
     ],
   },
   {
@@ -3098,13 +3034,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.etsi.e1bfef3514",
-    defaultMessage: "ETSI",
-    sources: [
-      "src/pages/Policy.tsx:44",
-    ],
-  },
-  {
     key: "source.event.detail.097e77abc2",
     defaultMessage: "Event detail",
     sources: [
@@ -3131,8 +3060,8 @@ export const extractedMessages = [
     sources: [
       "src/pages/Incidents.tsx:1252",
       "src/pages/Incidents.tsx:1419",
-      "src/pages/Policy.tsx:1489",
-      "src/pages/Policy.tsx:1709",
+      "src/pages/Policy.tsx:1476",
+      "src/pages/Policy.tsx:1696",
     ],
   },
   {
@@ -3143,18 +3072,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.evidence.pack.unavailable.7f26f198c7",
-    defaultMessage: "Evidence pack unavailable",
-    sources: [
-      "src/pages/Policy.tsx:913",
-    ],
-  },
-  {
     key: "source.evidence.refs.edfa905c2f",
     defaultMessage: "Evidence refs",
     sources: [
-      "src/pages/Policy.tsx:1071",
-      "src/pages/Policy.tsx:782",
+      "src/pages/Policy.tsx:1058",
     ],
   },
   {
@@ -3182,7 +3103,7 @@ export const extractedMessages = [
     key: "source.exception.b4fe3d529d",
     defaultMessage: "Exception",
     sources: [
-      "src/pages/Policy.tsx:1746",
+      "src/pages/Policy.tsx:1733",
     ],
   },
   {
@@ -3361,13 +3282,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.fedramp.7541788d67",
-    defaultMessage: "FedRAMP",
-    sources: [
-      "src/pages/Policy.tsx:37",
-    ],
-  },
-  {
     key: "source.file.50009ce1da",
     defaultMessage: "File",
     sources: [
@@ -3472,7 +3386,7 @@ export const extractedMessages = [
     key: "source.fresh.heartbeat.39d75ce503",
     defaultMessage: "Fresh heartbeat",
     sources: [
-      "src/pages/Agents.tsx:401",
+      "src/pages/Agents.tsx:449",
     ],
   },
   {
@@ -3656,7 +3570,6 @@ export const extractedMessages = [
     defaultMessage: "Hash",
     sources: [
       "src/pages/Audit.tsx:383",
-      "src/pages/Policy.tsx:842",
     ],
   },
   {
@@ -3692,8 +3605,8 @@ export const extractedMessages = [
     defaultMessage: "High",
     sources: [
       "src/lib/statusVocab.ts:29",
-      "src/pages/Policy.tsx:1045",
-      "src/pages/Policy.tsx:1171",
+      "src/pages/Policy.tsx:1032",
+      "src/pages/Policy.tsx:1158",
     ],
   },
   {
@@ -3701,13 +3614,6 @@ export const extractedMessages = [
     defaultMessage: "highest-risk",
     sources: [
       "src/pages/Dashboard.tsx:233",
-    ],
-  },
-  {
-    key: "source.hipaa.8cac80d8b5",
-    defaultMessage: "HIPAA",
-    sources: [
-      "src/pages/Policy.tsx:33",
     ],
   },
   {
@@ -3823,7 +3729,6 @@ export const extractedMessages = [
     defaultMessage: "Identities",
     sources: [
       "src/pages/Identities.tsx:579",
-      "src/pages/Policy.tsx:736",
     ],
   },
   {
@@ -3831,7 +3736,7 @@ export const extractedMessages = [
     defaultMessage: "Identity",
     sources: [
       "src/pages/Connectors.tsx:220",
-      "src/pages/Policy.tsx:1707",
+      "src/pages/Policy.tsx:1694",
       "src/pages/SSHTrust.tsx:386",
     ],
   },
@@ -3987,7 +3892,7 @@ export const extractedMessages = [
     key: "source.install.command.1ae9754205",
     defaultMessage: "Install command",
     sources: [
-      "src/pages/Agents.tsx:212",
+      "src/pages/Agents.tsx:266",
     ],
   },
   {
@@ -4080,7 +3985,7 @@ export const extractedMessages = [
     defaultMessage: "Issue",
     sources: [
       "src/pages/Identities.tsx:115",
-      "src/pages/Identities.tsx:1231",
+      "src/pages/Identities.tsx:1255",
     ],
   },
   {
@@ -4172,7 +4077,7 @@ export const extractedMessages = [
     key: "source.issue.your.first.certificate.8fbb374ce0",
     defaultMessage: "Issue your first certificate",
     sources: [
-      "src/pages/Wizard.tsx:192",
+      "src/pages/Wizard.tsx:197",
     ],
   },
   {
@@ -4436,7 +4341,7 @@ export const extractedMessages = [
     key: "source.last.seen.21fd79c7de",
     defaultMessage: "Last seen",
     sources: [
-      "src/pages/Agents.tsx:339",
+      "src/pages/Agents.tsx:387",
     ],
   },
   {
@@ -4504,13 +4409,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.lifecycle.rego.module.38b1589f9f",
-    defaultMessage: "Lifecycle Rego module",
-    sources: [
-      "src/pages/Policy.tsx:790",
-    ],
-  },
-  {
     key: "source.lifecycle.state.machine.4fd45925e4",
     defaultMessage: "Lifecycle state machine",
     sources: [
@@ -4556,7 +4454,7 @@ export const extractedMessages = [
     key: "source.loading.agents.a4e0608f99",
     defaultMessage: "Loading agents...",
     sources: [
-      "src/pages/Agents.tsx:230",
+      "src/pages/Agents.tsx:284",
     ],
   },
   {
@@ -4637,13 +4535,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.loading.evidence.pack.02321aed0c",
-    defaultMessage: "Loading evidence pack.",
-    sources: [
-      "src/pages/Policy.tsx:912",
-    ],
-  },
-  {
     key: "source.loading.gitops.sources.fd872181a9",
     defaultMessage: "Loading GitOps sources...",
     sources: [
@@ -4689,7 +4580,7 @@ export const extractedMessages = [
     key: "source.loading.nhi.access.reviews.cd87c4f77e",
     defaultMessage: "Loading NHI access reviews.",
     sources: [
-      "src/pages/Policy.tsx:1096",
+      "src/pages/Policy.tsx:1083",
     ],
   },
   {
@@ -4704,13 +4595,6 @@ export const extractedMessages = [
     defaultMessage: "Loading owners…",
     sources: [
       "src/pages/Owners.tsx:56",
-    ],
-  },
-  {
-    key: "source.loading.policy.versions.c17db61855",
-    defaultMessage: "Loading policy versions.",
-    sources: [
-      "src/pages/Policy.tsx:828",
     ],
   },
   {
@@ -4777,8 +4661,8 @@ export const extractedMessages = [
     defaultMessage: "Low",
     sources: [
       "src/lib/statusVocab.ts:31",
-      "src/pages/Policy.tsx:1043",
-      "src/pages/Policy.tsx:1169",
+      "src/pages/Policy.tsx:1030",
+      "src/pages/Policy.tsx:1156",
     ],
   },
   {
@@ -4949,8 +4833,8 @@ export const extractedMessages = [
     defaultMessage: "Medium",
     sources: [
       "src/lib/statusVocab.ts:30",
-      "src/pages/Policy.tsx:1044",
-      "src/pages/Policy.tsx:1170",
+      "src/pages/Policy.tsx:1031",
+      "src/pages/Policy.tsx:1157",
     ],
   },
   {
@@ -4981,7 +4865,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:813",
+      "src/lib/api.ts:816",
     ],
   },
   {
@@ -5023,7 +4907,7 @@ export const extractedMessages = [
     key: "source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e",
     defaultMessage: "Mint a one-time enrollment token, install an agent inside the tenant network, then refresh this page when it registers.",
     sources: [
-      "src/pages/Agents.tsx:233",
+      "src/pages/Agents.tsx:287",
     ],
   },
   {
@@ -5064,13 +4948,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.module.hash.a0fa5c8c81",
-    defaultMessage: "Module hash",
-    sources: [
-      "src/pages/Policy.tsx:814",
-    ],
-  },
-  {
     key: "source.move.within.overlay.659fa0eb0e",
     defaultMessage: "Move within overlay",
     sources: [
@@ -5088,121 +4965,121 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:1078",
-      "src/lib/api.ts:1091",
-      "src/lib/api.ts:1093",
-      "src/lib/api.ts:1099",
-      "src/lib/api.ts:1101",
-      "src/lib/api.ts:1103",
-      "src/lib/api.ts:1105",
-      "src/lib/api.ts:1115",
-      "src/lib/api.ts:1118",
+      "src/lib/api.ts:1096",
+      "src/lib/api.ts:1109",
+      "src/lib/api.ts:1111",
+      "src/lib/api.ts:1117",
       "src/lib/api.ts:1119",
-      "src/lib/api.ts:1120",
-      "src/lib/api.ts:1131",
-      "src/lib/api.ts:1132",
-      "src/lib/api.ts:1134",
+      "src/lib/api.ts:1121",
+      "src/lib/api.ts:1123",
+      "src/lib/api.ts:1133",
       "src/lib/api.ts:1136",
-      "src/lib/api.ts:1139",
-      "src/lib/api.ts:1142",
+      "src/lib/api.ts:1137",
+      "src/lib/api.ts:1138",
+      "src/lib/api.ts:1149",
+      "src/lib/api.ts:1150",
       "src/lib/api.ts:1152",
-      "src/lib/api.ts:1153",
-      "src/lib/api.ts:1156",
+      "src/lib/api.ts:1154",
       "src/lib/api.ts:1157",
-      "src/lib/api.ts:1158",
-      "src/lib/api.ts:1159",
       "src/lib/api.ts:1160",
-      "src/lib/api.ts:1161",
-      "src/lib/api.ts:1164",
-      "src/lib/api.ts:1165",
-      "src/lib/api.ts:1166",
       "src/lib/api.ts:1170",
+      "src/lib/api.ts:1171",
+      "src/lib/api.ts:1174",
+      "src/lib/api.ts:1175",
       "src/lib/api.ts:1176",
       "src/lib/api.ts:1177",
-      "src/lib/api.ts:1181",
+      "src/lib/api.ts:1178",
+      "src/lib/api.ts:1179",
       "src/lib/api.ts:1182",
       "src/lib/api.ts:1183",
-      "src/lib/api.ts:1186",
-      "src/lib/api.ts:1187",
+      "src/lib/api.ts:1184",
       "src/lib/api.ts:1188",
-      "src/lib/api.ts:1189",
       "src/lib/api.ts:1194",
       "src/lib/api.ts:1195",
-      "src/lib/api.ts:1196",
-      "src/lib/api.ts:1197",
-      "src/lib/api.ts:1198",
       "src/lib/api.ts:1199",
+      "src/lib/api.ts:1200",
       "src/lib/api.ts:1201",
-      "src/lib/api.ts:1202",
-      "src/lib/api.ts:1203",
       "src/lib/api.ts:1204",
       "src/lib/api.ts:1205",
       "src/lib/api.ts:1206",
       "src/lib/api.ts:1207",
-      "src/lib/api.ts:1211",
       "src/lib/api.ts:1212",
+      "src/lib/api.ts:1213",
       "src/lib/api.ts:1214",
+      "src/lib/api.ts:1215",
       "src/lib/api.ts:1216",
-      "src/lib/api.ts:1218",
+      "src/lib/api.ts:1217",
+      "src/lib/api.ts:1219",
       "src/lib/api.ts:1220",
+      "src/lib/api.ts:1221",
+      "src/lib/api.ts:1222",
       "src/lib/api.ts:1223",
       "src/lib/api.ts:1224",
       "src/lib/api.ts:1225",
-      "src/lib/api.ts:1227",
+      "src/lib/api.ts:1229",
+      "src/lib/api.ts:1230",
+      "src/lib/api.ts:1232",
+      "src/lib/api.ts:1234",
       "src/lib/api.ts:1236",
       "src/lib/api.ts:1238",
-      "src/lib/api.ts:1239",
-      "src/lib/api.ts:1240",
       "src/lib/api.ts:1241",
-      "src/lib/api.ts:1252",
-      "src/lib/api.ts:1253",
-      "src/lib/api.ts:1255",
+      "src/lib/api.ts:1242",
+      "src/lib/api.ts:1243",
+      "src/lib/api.ts:1245",
+      "src/lib/api.ts:1254",
       "src/lib/api.ts:1256",
+      "src/lib/api.ts:1257",
       "src/lib/api.ts:1258",
-      "src/lib/api.ts:1260",
-      "src/lib/api.ts:1262",
-      "src/lib/api.ts:1263",
-      "src/lib/api.ts:1265",
-      "src/lib/api.ts:1266",
-      "src/lib/api.ts:1267",
-      "src/lib/api.ts:1268",
+      "src/lib/api.ts:1259",
+      "src/lib/api.ts:1270",
+      "src/lib/api.ts:1271",
+      "src/lib/api.ts:1273",
+      "src/lib/api.ts:1274",
+      "src/lib/api.ts:1276",
+      "src/lib/api.ts:1278",
+      "src/lib/api.ts:1280",
       "src/lib/api.ts:1281",
-      "src/lib/api.ts:1282",
-      "src/lib/api.ts:1291",
-      "src/lib/api.ts:1292",
-      "src/lib/api.ts:1293",
-      "src/lib/api.ts:1294",
-      "src/lib/api.ts:1296",
+      "src/lib/api.ts:1283",
+      "src/lib/api.ts:1284",
+      "src/lib/api.ts:1285",
+      "src/lib/api.ts:1286",
       "src/lib/api.ts:1299",
-      "src/lib/api.ts:1301",
-      "src/lib/api.ts:1302",
+      "src/lib/api.ts:1300",
+      "src/lib/api.ts:1309",
       "src/lib/api.ts:1310",
+      "src/lib/api.ts:1311",
       "src/lib/api.ts:1312",
-      "src/lib/api.ts:1313",
       "src/lib/api.ts:1314",
-      "src/lib/api.ts:1315",
-      "src/lib/api.ts:1316",
       "src/lib/api.ts:1317",
-      "src/lib/api.ts:1318",
       "src/lib/api.ts:1319",
       "src/lib/api.ts:1320",
-      "src/lib/api.ts:1321",
-      "src/lib/api.ts:1322",
-      "src/lib/api.ts:1323",
-      "src/lib/api.ts:1324",
-      "src/lib/api.ts:1325",
-      "src/lib/api.ts:1326",
-      "src/lib/api.ts:1327",
       "src/lib/api.ts:1328",
+      "src/lib/api.ts:1330",
       "src/lib/api.ts:1331",
+      "src/lib/api.ts:1332",
       "src/lib/api.ts:1333",
       "src/lib/api.ts:1334",
+      "src/lib/api.ts:1335",
       "src/lib/api.ts:1336",
       "src/lib/api.ts:1337",
+      "src/lib/api.ts:1338",
       "src/lib/api.ts:1339",
       "src/lib/api.ts:1340",
       "src/lib/api.ts:1341",
       "src/lib/api.ts:1342",
+      "src/lib/api.ts:1343",
+      "src/lib/api.ts:1344",
+      "src/lib/api.ts:1345",
+      "src/lib/api.ts:1346",
+      "src/lib/api.ts:1349",
+      "src/lib/api.ts:1351",
+      "src/lib/api.ts:1352",
+      "src/lib/api.ts:1354",
+      "src/lib/api.ts:1355",
+      "src/lib/api.ts:1357",
+      "src/lib/api.ts:1358",
+      "src/lib/api.ts:1359",
+      "src/lib/api.ts:1360",
     ],
   },
   {
@@ -5217,14 +5094,6 @@ export const extractedMessages = [
     defaultMessage: "Mutation idempotency",
     sources: [
       "src/pages/Platform.tsx:759",
-    ],
-  },
-  {
-    key: "source.name.8a6d880a09",
-    defaultMessage: "\", \"--name",
-    sources: [
-      "src/pages/Agents.tsx:427",
-      "src/pages/Wizard.tsx:273",
     ],
   },
   {
@@ -5300,63 +5169,42 @@ export const extractedMessages = [
     key: "source.nhi.access.certification.3fd94ffdff",
     defaultMessage: "NHI access certification",
     sources: [
-      "src/pages/Policy.tsx:1010",
+      "src/pages/Policy.tsx:997",
     ],
   },
   {
     key: "source.nhi.access.review.campaigns.873389dac9",
     defaultMessage: "NHI access review campaigns",
     sources: [
-      "src/pages/Policy.tsx:1105",
+      "src/pages/Policy.tsx:1092",
     ],
   },
   {
     key: "source.nhi.access.review.items.d360cac314",
     defaultMessage: "NHI access review items",
     sources: [
-      "src/pages/Policy.tsx:1704",
+      "src/pages/Policy.tsx:1691",
     ],
   },
   {
     key: "source.nhi.access.review.unavailable.7f4d6bdefd",
     defaultMessage: "NHI access review unavailable",
     sources: [
-      "src/pages/Policy.tsx:1097",
+      "src/pages/Policy.tsx:1084",
     ],
   },
   {
     key: "source.nhi.id.52919bf0d5",
     defaultMessage: "NHI id",
     sources: [
-      "src/pages/Policy.tsx:1055",
-    ],
-  },
-  {
-    key: "source.nis2.42972de55f",
-    defaultMessage: "NIS2",
-    sources: [
-      "src/pages/Policy.tsx:46",
-    ],
-  },
-  {
-    key: "source.nist.800.53.e9cc336a47",
-    defaultMessage: "NIST 800-53",
-    sources: [
-      "src/pages/Policy.tsx:35",
-    ],
-  },
-  {
-    key: "source.nist.csf.2.0.03c2c75109",
-    defaultMessage: "NIST CSF 2.0",
-    sources: [
-      "src/pages/Policy.tsx:36",
+      "src/pages/Policy.tsx:1042",
     ],
   },
   {
     key: "source.no.access.review.campaigns.5e5e0fbd56",
     defaultMessage: "No access review campaigns.",
     sources: [
-      "src/pages/Policy.tsx:1123",
+      "src/pages/Policy.tsx:1110",
     ],
   },
   {
@@ -5377,7 +5225,7 @@ export const extractedMessages = [
     key: "source.no.agents.enrolled.yet.345799ad5d",
     defaultMessage: "No agents enrolled yet",
     sources: [
-      "src/pages/Agents.tsx:233",
+      "src/pages/Agents.tsx:287",
     ],
   },
   {
@@ -5616,7 +5464,7 @@ export const extractedMessages = [
     key: "source.no.heartbeat.timestamp.7c01a4e0ea",
     defaultMessage: "No heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:396",
+      "src/pages/Agents.tsx:444",
     ],
   },
   {
@@ -5651,21 +5499,14 @@ export const extractedMessages = [
     key: "source.no.item.details.loaded.e93e8c8e0d",
     defaultMessage: "No item details loaded.",
     sources: [
-      "src/pages/Policy.tsx:1765",
+      "src/pages/Policy.tsx:1752",
     ],
   },
   {
     key: "source.no.labels.in.this.pack.afb9ef5039",
     defaultMessage: "No labels in this pack.",
     sources: [
-      "src/pages/Policy.tsx:1912",
-    ],
-  },
-  {
-    key: "source.no.live.policy.version.is.active.d810aeb19d",
-    defaultMessage: "No live policy version is active.",
-    sources: [
-      "src/pages/Policy.tsx:823",
+      "src/pages/Policy.tsx:1899",
     ],
   },
   {
@@ -5715,13 +5556,6 @@ export const extractedMessages = [
     defaultMessage: "No pending approvals",
     sources: [
       "src/pages/Approvals.tsx:147",
-    ],
-  },
-  {
-    key: "source.no.policy.versions.4b3faf9dcc",
-    defaultMessage: "No policy versions.",
-    sources: [
-      "src/pages/Policy.tsx:878",
     ],
   },
   {
@@ -5799,6 +5633,14 @@ export const extractedMessages = [
     defaultMessage: "No transit ciphertext yet.",
     sources: [
       "src/pages/Secrets.tsx:1608",
+    ],
+  },
+  {
+    key: "source.node.a.66570ff05a",
+    defaultMessage: "node-a",
+    sources: [
+      "src/pages/Agents.tsx:228",
+      "src/pages/Wizard.tsx:331",
     ],
   },
   {
@@ -5945,7 +5787,7 @@ export const extractedMessages = [
     key: "source.offboard.9053e68ef6",
     defaultMessage: "Offboard",
     sources: [
-      "src/pages/Agents.tsx:150",
+      "src/pages/Agents.tsx:190",
       "src/pages/Platform.tsx:903",
     ],
   },
@@ -5960,7 +5802,7 @@ export const extractedMessages = [
     key: "source.offboard.reason.6c2b7a820c",
     defaultMessage: "Offboard reason",
     sources: [
-      "src/pages/Agents.tsx:356",
+      "src/pages/Agents.tsx:404",
     ],
   },
   {
@@ -5974,14 +5816,14 @@ export const extractedMessages = [
     key: "source.offboarded.bc5f0c93d1",
     defaultMessage: "Offboarded",
     sources: [
-      "src/pages/Agents.tsx:345",
+      "src/pages/Agents.tsx:393",
     ],
   },
   {
     key: "source.offboarded.by.4c49b0d40c",
     defaultMessage: "Offboarded by",
     sources: [
-      "src/pages/Agents.tsx:350",
+      "src/pages/Agents.tsx:398",
     ],
   },
   {
@@ -6079,7 +5921,7 @@ export const extractedMessages = [
     key: "source.open.audit.explorer.e155d6131a",
     defaultMessage: "Open audit explorer",
     sources: [
-      "src/pages/Policy.tsx:992",
+      "src/pages/Policy.tsx:979",
     ],
   },
   {
@@ -6111,24 +5953,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.open.policy.decisions.in.audit.90cbff764c",
-    defaultMessage: "Open policy decisions in Audit",
-    sources: [
-      "src/pages/Policy.tsx:742",
-    ],
-  },
-  {
     key: "source.open.posture.71199986c4",
     defaultMessage: "Open posture",
     sources: [
       "src/pages/Discovery.tsx:551",
-    ],
-  },
-  {
-    key: "source.open.profile.evaluations.in.audit.cde124deba",
-    defaultMessage: "Open profile evaluations in Audit",
-    sources: [
-      "src/pages/Policy.tsx:745",
     ],
   },
   {
@@ -6185,7 +6013,7 @@ export const extractedMessages = [
     key: "source.operator.attestations.bb1bff1074",
     defaultMessage: "Operator attestations",
     sources: [
-      "src/pages/Policy.tsx:1510",
+      "src/pages/Policy.tsx:1497",
     ],
   },
   {
@@ -6343,14 +6171,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:823",
+      "src/lib/api.ts:831",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:747",
+      "src/lib/api.ts:750",
     ],
   },
   {
@@ -6358,7 +6186,7 @@ export const extractedMessages = [
     defaultMessage: "payments-api",
     sources: [
       "src/pages/RequestCredential.tsx:266",
-      "src/pages/Wizard.tsx:207",
+      "src/pages/Wizard.tsx:216",
     ],
   },
   {
@@ -6366,13 +6194,6 @@ export const extractedMessages = [
     defaultMessage: "payments-pii",
     sources: [
       "src/pages/Secrets.tsx:1533",
-    ],
-  },
-  {
-    key: "source.pci.dss.59067e9cd0",
-    defaultMessage: "PCI DSS",
-    sources: [
-      "src/pages/Policy.tsx:32",
     ],
   },
   {
@@ -6469,32 +6290,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.policy.c611981fab",
-    defaultMessage: "Policy",
-    sources: [
-      "src/pages/Policy.tsx:719",
-    ],
-  },
-  {
     key: "source.policy.decisions.988b13232e",
     defaultMessage: "Policy decisions",
     sources: [
       "src/pages/Audit.tsx:233",
-    ],
-  },
-  {
-    key: "source.policy.versions.b4ed63b067",
-    defaultMessage: "Policy versions",
-    sources: [
-      "src/pages/Policy.tsx:753",
-      "src/pages/Policy.tsx:837",
-    ],
-  },
-  {
-    key: "source.policy.versions.unavailable.9962c0ef63",
-    defaultMessage: "Policy versions unavailable",
-    sources: [
-      "src/pages/Policy.tsx:829",
     ],
   },
   {
@@ -6508,10 +6307,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1245",
-      "src/lib/api.ts:1247",
-      "src/lib/api.ts:1248",
-      "src/lib/api.ts:1250",
+      "src/lib/api.ts:1263",
+      "src/lib/api.ts:1265",
+      "src/lib/api.ts:1266",
+      "src/lib/api.ts:1268",
     ],
   },
   {
@@ -6658,7 +6457,7 @@ export const extractedMessages = [
     key: "source.product.evidence.1b4586bcc7",
     defaultMessage: "Product evidence",
     sources: [
-      "src/pages/Policy.tsx:1509",
+      "src/pages/Policy.tsx:1496",
     ],
   },
   {
@@ -6773,8 +6572,8 @@ export const extractedMessages = [
       "src/pages/Certificates.tsx:120",
       "src/pages/Dashboard.tsx:24",
       "src/pages/Owners.tsx:22",
-      "src/pages/Policy.tsx:1673",
-      "src/pages/Policy.tsx:1781",
+      "src/pages/Policy.tsx:1660",
+      "src/pages/Policy.tsx:1768",
     ],
   },
   {
@@ -6994,14 +6793,14 @@ export const extractedMessages = [
     key: "source.ready.for.certificate.operations.e99f6e538f",
     defaultMessage: "Ready for certificate operations",
     sources: [
-      "src/pages/Wizard.tsx:337",
+      "src/pages/Wizard.tsx:395",
     ],
   },
   {
     key: "source.reason.f81ab834de",
     defaultMessage: "Reason",
     sources: [
-      "src/pages/Agents.tsx:285",
+      "src/pages/Agents.tsx:333",
       "src/pages/Connectors.tsx:231",
       "src/pages/Connectors.tsx:312",
       "src/pages/Identities.tsx:635",
@@ -7018,7 +6817,7 @@ export const extractedMessages = [
     key: "source.reason.for.revoke.or.exception.5df8423828",
     defaultMessage: "Reason for revoke or exception",
     sources: [
-      "src/pages/Policy.tsx:1735",
+      "src/pages/Policy.tsx:1722",
     ],
   },
   {
@@ -7219,7 +7018,7 @@ export const extractedMessages = [
     key: "source.reopen.setup.guide.0f10355fd2",
     defaultMessage: "Reopen setup guide",
     sources: [
-      "src/pages/Wizard.tsx:76",
+      "src/pages/Wizard.tsx:78",
     ],
   },
   {
@@ -7261,101 +7060,101 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:1071",
-      "src/lib/api.ts:1072",
-      "src/lib/api.ts:1073",
-      "src/lib/api.ts:1074",
-      "src/lib/api.ts:1075",
-      "src/lib/api.ts:1076",
-      "src/lib/api.ts:1077",
-      "src/lib/api.ts:1088",
       "src/lib/api.ts:1089",
       "src/lib/api.ts:1090",
+      "src/lib/api.ts:1091",
       "src/lib/api.ts:1092",
+      "src/lib/api.ts:1093",
       "src/lib/api.ts:1094",
       "src/lib/api.ts:1095",
-      "src/lib/api.ts:1096",
-      "src/lib/api.ts:1097",
-      "src/lib/api.ts:1098",
-      "src/lib/api.ts:1100",
-      "src/lib/api.ts:1102",
-      "src/lib/api.ts:1104",
       "src/lib/api.ts:1106",
       "src/lib/api.ts:1107",
       "src/lib/api.ts:1108",
-      "src/lib/api.ts:1109",
       "src/lib/api.ts:1110",
-      "src/lib/api.ts:1111",
       "src/lib/api.ts:1112",
       "src/lib/api.ts:1113",
       "src/lib/api.ts:1114",
+      "src/lib/api.ts:1115",
       "src/lib/api.ts:1116",
-      "src/lib/api.ts:1117",
+      "src/lib/api.ts:1118",
+      "src/lib/api.ts:1120",
+      "src/lib/api.ts:1122",
+      "src/lib/api.ts:1124",
+      "src/lib/api.ts:1125",
+      "src/lib/api.ts:1126",
+      "src/lib/api.ts:1127",
+      "src/lib/api.ts:1128",
+      "src/lib/api.ts:1129",
       "src/lib/api.ts:1130",
-      "src/lib/api.ts:1133",
+      "src/lib/api.ts:1131",
+      "src/lib/api.ts:1132",
+      "src/lib/api.ts:1134",
       "src/lib/api.ts:1135",
-      "src/lib/api.ts:1137",
-      "src/lib/api.ts:1138",
-      "src/lib/api.ts:1140",
-      "src/lib/api.ts:1141",
-      "src/lib/api.ts:1154",
+      "src/lib/api.ts:1148",
+      "src/lib/api.ts:1151",
+      "src/lib/api.ts:1153",
       "src/lib/api.ts:1155",
-      "src/lib/api.ts:1162",
-      "src/lib/api.ts:1163",
-      "src/lib/api.ts:1167",
-      "src/lib/api.ts:1168",
-      "src/lib/api.ts:1169",
-      "src/lib/api.ts:1171",
+      "src/lib/api.ts:1156",
+      "src/lib/api.ts:1158",
+      "src/lib/api.ts:1159",
+      "src/lib/api.ts:1172",
       "src/lib/api.ts:1173",
-      "src/lib/api.ts:1174",
-      "src/lib/api.ts:1178",
       "src/lib/api.ts:1180",
+      "src/lib/api.ts:1181",
       "src/lib/api.ts:1185",
-      "src/lib/api.ts:1190",
+      "src/lib/api.ts:1186",
+      "src/lib/api.ts:1187",
+      "src/lib/api.ts:1189",
       "src/lib/api.ts:1191",
       "src/lib/api.ts:1192",
-      "src/lib/api.ts:1193",
+      "src/lib/api.ts:1196",
+      "src/lib/api.ts:1198",
+      "src/lib/api.ts:1203",
       "src/lib/api.ts:1208",
       "src/lib/api.ts:1209",
       "src/lib/api.ts:1210",
-      "src/lib/api.ts:1213",
-      "src/lib/api.ts:1215",
-      "src/lib/api.ts:1217",
-      "src/lib/api.ts:1219",
-      "src/lib/api.ts:1222",
+      "src/lib/api.ts:1211",
       "src/lib/api.ts:1226",
+      "src/lib/api.ts:1227",
       "src/lib/api.ts:1228",
-      "src/lib/api.ts:1229",
-      "src/lib/api.ts:1230",
       "src/lib/api.ts:1231",
-      "src/lib/api.ts:1232",
       "src/lib/api.ts:1233",
-      "src/lib/api.ts:1234",
       "src/lib/api.ts:1235",
       "src/lib/api.ts:1237",
-      "src/lib/api.ts:1242",
-      "src/lib/api.ts:1243",
+      "src/lib/api.ts:1240",
       "src/lib/api.ts:1244",
       "src/lib/api.ts:1246",
+      "src/lib/api.ts:1247",
+      "src/lib/api.ts:1248",
       "src/lib/api.ts:1249",
+      "src/lib/api.ts:1250",
       "src/lib/api.ts:1251",
-      "src/lib/api.ts:1254",
+      "src/lib/api.ts:1252",
+      "src/lib/api.ts:1253",
+      "src/lib/api.ts:1255",
+      "src/lib/api.ts:1260",
+      "src/lib/api.ts:1261",
+      "src/lib/api.ts:1262",
       "src/lib/api.ts:1264",
-      "src/lib/api.ts:1289",
-      "src/lib/api.ts:1295",
-      "src/lib/api.ts:1298",
-      "src/lib/api.ts:1303",
-      "src/lib/api.ts:1304",
-      "src/lib/api.ts:1305",
-      "src/lib/api.ts:1306",
+      "src/lib/api.ts:1267",
+      "src/lib/api.ts:1269",
+      "src/lib/api.ts:1272",
+      "src/lib/api.ts:1282",
       "src/lib/api.ts:1307",
-      "src/lib/api.ts:1308",
-      "src/lib/api.ts:1309",
-      "src/lib/api.ts:1311",
+      "src/lib/api.ts:1313",
+      "src/lib/api.ts:1316",
+      "src/lib/api.ts:1321",
+      "src/lib/api.ts:1322",
+      "src/lib/api.ts:1323",
+      "src/lib/api.ts:1324",
+      "src/lib/api.ts:1325",
+      "src/lib/api.ts:1326",
+      "src/lib/api.ts:1327",
       "src/lib/api.ts:1329",
-      "src/lib/api.ts:1330",
-      "src/lib/api.ts:1332",
-      "src/lib/api.ts:1335",
+      "src/lib/api.ts:1347",
+      "src/lib/api.ts:1348",
+      "src/lib/api.ts:1350",
+      "src/lib/api.ts:1353",
     ],
   },
   {
@@ -7426,15 +7225,15 @@ export const extractedMessages = [
     defaultMessage: "Resource",
     sources: [
       "src/components/GraphView.tsx:23",
-      "src/pages/Policy.tsx:1079",
-      "src/pages/Policy.tsx:1708",
+      "src/pages/Policy.tsx:1066",
+      "src/pages/Policy.tsx:1695",
     ],
   },
   {
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:792",
+      "src/lib/api.ts:795",
     ],
   },
   {
@@ -7554,7 +7353,7 @@ export const extractedMessages = [
     key: "source.reviewer.d29f46772c",
     defaultMessage: "Reviewer",
     sources: [
-      "src/pages/Policy.tsx:1028",
+      "src/pages/Policy.tsx:1015",
     ],
   },
   {
@@ -7572,7 +7371,7 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:119",
       "src/pages/Identities.tsx:124",
       "src/pages/Identities.tsx:127",
-      "src/pages/Policy.tsx:1743",
+      "src/pages/Policy.tsx:1730",
     ],
   },
   {
@@ -7644,7 +7443,7 @@ export const extractedMessages = [
     defaultMessage: "Risk",
     sources: [
       "src/pages/Graph.tsx:545",
-      "src/pages/Policy.tsx:1037",
+      "src/pages/Policy.tsx:1024",
     ],
   },
   {
@@ -7914,7 +7713,7 @@ export const extractedMessages = [
     key: "source.save.the.one.time.token.with.0600.permissi.b35e2c6935",
     defaultMessage: "Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue certificates.",
     sources: [
-      "src/pages/Wizard.tsx:286",
+      "src/pages/Wizard.tsx:320",
     ],
   },
   {
@@ -8323,8 +8122,8 @@ export const extractedMessages = [
     key: "source.service.name.1bb8870cc0",
     defaultMessage: "Service name",
     sources: [
-      "src/pages/Identities.tsx:1220",
-      "src/pages/Wizard.tsx:200",
+      "src/pages/Identities.tsx:1226",
+      "src/pages/Wizard.tsx:206",
     ],
   },
   {
@@ -8381,15 +8180,15 @@ export const extractedMessages = [
     defaultMessage: "Set up trstctl",
     sources: [
       "src/pages/Dashboard.tsx:97",
-      "src/pages/Wizard.tsx:55",
-      "src/pages/Wizard.tsx:87",
+      "src/pages/Wizard.tsx:54",
+      "src/pages/Wizard.tsx:89",
     ],
   },
   {
     key: "source.setup.complete.aadaf35950",
     defaultMessage: "Setup complete",
     sources: [
-      "src/pages/Wizard.tsx:60",
+      "src/pages/Wizard.tsx:62",
     ],
   },
   {
@@ -8445,7 +8244,7 @@ export const extractedMessages = [
     key: "source.shown.once.22548d041f",
     defaultMessage: "Shown once",
     sources: [
-      "src/pages/Agents.tsx:195",
+      "src/pages/Agents.tsx:249",
     ],
   },
   {
@@ -8494,7 +8293,7 @@ export const extractedMessages = [
     key: "source.signed.export.plus.offline.verification.ke.f03caf9838",
     defaultMessage: "Signed export plus offline verification key for auditor handoff.",
     sources: [
-      "src/pages/Policy.tsx:1459",
+      "src/pages/Policy.tsx:1446",
     ],
   },
   {
@@ -8551,13 +8350,6 @@ export const extractedMessages = [
     defaultMessage: "Smallstep private CA with provisioner-backed issuance.",
     sources: [
       "src/lib/issuerCatalog.ts:53",
-    ],
-  },
-  {
-    key: "source.soc.2.307197603f",
-    defaultMessage: "SOC 2",
-    sources: [
-      "src/pages/Policy.tsx:34",
     ],
   },
   {
@@ -8673,7 +8465,7 @@ export const extractedMessages = [
     key: "source.stale.heartbeat.d8742526e2",
     defaultMessage: "Stale heartbeat",
     sources: [
-      "src/pages/Agents.tsx:400",
+      "src/pages/Agents.tsx:448",
     ],
   },
   {
@@ -8723,7 +8515,7 @@ export const extractedMessages = [
     key: "source.status.920e413c7d",
     defaultMessage: "Status",
     sources: [
-      "src/pages/Agents.tsx:331",
+      "src/pages/Agents.tsx:379",
       "src/pages/Certificates.tsx:1201",
       "src/pages/Connectors.tsx:306",
       "src/pages/Identities.tsx:1090",
@@ -8737,10 +8529,8 @@ export const extractedMessages = [
       "src/pages/Integrate.tsx:341",
       "src/pages/Platform.tsx:954",
       "src/pages/Platform.tsx:977",
-      "src/pages/Policy.tsx:1488",
-      "src/pages/Policy.tsx:1710",
-      "src/pages/Policy.tsx:810",
-      "src/pages/Policy.tsx:841",
+      "src/pages/Policy.tsx:1475",
+      "src/pages/Policy.tsx:1697",
       "src/pages/SSHTrust.tsx:245",
     ],
   },
@@ -8980,7 +8770,7 @@ export const extractedMessages = [
     key: "source.the.agent.row.remains.as.an.offboarded.tom.42a25faa10",
     defaultMessage: "The agent row remains as an offboarded tombstone, and future mTLS RPCs from this agent are rejected.",
     sources: [
-      "src/pages/Agents.tsx:281",
+      "src/pages/Agents.tsx:329",
     ],
   },
   {
@@ -9192,7 +8982,7 @@ export const extractedMessages = [
     key: "source.track.and.renew.certificates.f0f36882b6",
     defaultMessage: "Track and renew certificates",
     sources: [
-      "src/pages/Wizard.tsx:72",
+      "src/pages/Wizard.tsx:74",
     ],
   },
   {
@@ -9277,7 +9067,7 @@ export const extractedMessages = [
     key: "source.trstctl.will.track.this.credential.and.ale.258f3fc1df",
     defaultMessage: "trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.",
     sources: [
-      "src/pages/Wizard.tsx:345",
+      "src/pages/Wizard.tsx:403",
     ],
   },
   {
@@ -9402,7 +9192,7 @@ export const extractedMessages = [
     key: "source.unparseable.heartbeat.timestamp.bb97c8934b",
     defaultMessage: "Unparseable heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:398",
+      "src/pages/Agents.tsx:446",
     ],
   },
   {
@@ -9495,7 +9285,7 @@ export const extractedMessages = [
     key: "source.version.dd167905de",
     defaultMessage: "Version",
     sources: [
-      "src/pages/Agents.tsx:335",
+      "src/pages/Agents.tsx:383",
       "src/pages/Secrets.tsx:863",
     ],
   },
@@ -9524,7 +9314,7 @@ export const extractedMessages = [
     key: "source.view.details.d1bf045bb5",
     defaultMessage: "View details",
     sources: [
-      "src/pages/Agents.tsx:139",
+      "src/pages/Agents.tsx:179",
     ],
   },
   {
@@ -9581,13 +9371,6 @@ export const extractedMessages = [
     defaultMessage: "webhook slack/alerts",
     sources: [
       "src/lib/demoData.ts:52",
-    ],
-  },
-  {
-    key: "source.webtrust.f5a90cfc69",
-    defaultMessage: "WebTrust",
-    sources: [
-      "src/pages/Policy.tsx:43",
     ],
   },
   {

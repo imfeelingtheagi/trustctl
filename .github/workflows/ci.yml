@@ -393,6 +393,17 @@ jobs:
       - name: Test (Vitest + axe accessibility + coverage)
         run: npm run test:coverage
 
+      - name: Accessibility evidence receipt
+        working-directory: .
+        run: node scripts/accessibility/write-a11y-evidence-receipt.mjs --out "${RUNNER_TEMP}/accessibility-evidence-receipt.json"
+
+      - name: Upload accessibility evidence receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: a11y-evidence-receipt
+          path: ${{ runner.temp }}/accessibility-evidence-receipt.json
+          if-no-files-found: error
+
       - name: First-run usability receipt
         working-directory: .
         run: |
