@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -161,7 +163,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			return nil, fmt.Errorf("server: provision protocol transport key: %w", err)
 		}
 		if cfg.SCEP.Enabled {
-			scepHandler, scepTenant, err := s.buildServedSCEP(cfg, tenantFallback, issuer, raCertDER, raKeyPKCS8, pool)
+			scepHandler, scepTenant, err := s.buildServedSCEP(cfg, tenantFallback, issuer, raCertDER, raKeyPKCS8, pool, keyWrapper)
 			if err != nil {
 				return nil, err
 			}
@@ -277,9 +279,9 @@ func destroyACMEEABKeyCopies(keys []acme.ExternalAccountBindingKey) {
 	}
 }
 
-func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, raCertDER, raKeyPKCS8 []byte, pool *bulkhead.Pool) (http.Handler, string, error) {
+func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, raCertDER, raKeyPKCS8 []byte, pool *bulkhead.Pool, keyWrapper sealKeyWrapper) (http.Handler, string, error) {
 	tenantID := firstNonEmpty(cfg.SCEP.TenantID, tenantFallback)
-	challengeValidator, err := s.buildSCEPChallengeValidator(cfg.SCEPIntuneChallenge, tenantID)
+	challengeValidator, err := s.buildSCEPChallengeValidator(cfg.SCEPIntuneChallenge, tenantID, keyWrapper)
 	if err != nil {
 		return nil, "", err
 	}
@@ -365,7 +367,7 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, tenantID string) (scep.ChallengeValidator, error) {
+func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, tenantID string, keyWrapper sealKeyWrapper) (scep.ChallengeValidator, error) {
 	trust := make([][]byte, 0, len(cfg.TrustAnchorsDER)+len(cfg.TrustAnchorFiles))
 	for _, der := range cfg.TrustAnchorsDER {
 		trust = append(trust, append([]byte(nil), der...))
@@ -381,6 +383,7 @@ func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, ten
 		mdm.WithIntuneAudience(cfg.ExpectedAudience),
 		mdm.WithIntuneClockSkewTolerance(time.Duration(cfg.ClockSkewSeconds)*time.Second),
 		mdm.WithIntuneEventLog(s.log),
+		mdm.WithIntuneTrustConfigResolver(s.mdmSCEPIntuneTrustConfigResolver(keyWrapper)),
 	)
 	return func(ctx context.Context, req scep.ChallengeRequest) error {
 		return validator.Validate(ctx, mdm.IntuneChallengeRequest{
@@ -390,6 +393,118 @@ func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, ten
 			TransactionID: req.TransactionID,
 		})
 	}, nil
+}
+
+func (s *Server) mdmSCEPIntuneTrustConfigResolver(keyWrapper sealKeyWrapper) mdm.IntuneTrustConfigResolver {
+	if s.store == nil || keyWrapper == nil {
+		return nil
+	}
+	return func(ctx context.Context, req mdm.IntuneChallengeRequest) ([]mdm.IntuneTrustConfig, error) {
+		tenantID := strings.TrimSpace(req.TenantID)
+		if tenantID == "" {
+			return nil, nil
+		}
+		policies, err := s.store.ListMDMSCEPPolicies(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		configs := make([]mdm.IntuneTrustConfig, 0, len(policies))
+		for _, policy := range policies {
+			if !policy.Enabled || policy.Provider != "intune" || policy.ChallengeMode != "intune-jws" {
+				continue
+			}
+			anchors, err := s.mdmSCEPPolicyTrustAnchors(ctx, tenantID, policy.TrustAnchorRefs, keyWrapper)
+			if err != nil {
+				return nil, err
+			}
+			if len(anchors) == 0 {
+				continue
+			}
+			configs = append(configs, mdm.IntuneTrustConfig{
+				TrustAnchorsDER:  anchors,
+				ExpectedAudience: policy.ExpectedAudience,
+			})
+		}
+		return configs, nil
+	}
+}
+
+func (s *Server) mdmSCEPPolicyTrustAnchors(ctx context.Context, tenantID string, raw json.RawMessage, keyWrapper sealKeyWrapper) ([][]byte, error) {
+	if len(raw) == 0 || string(bytes.TrimSpace(raw)) == "{}" {
+		return nil, nil
+	}
+	var refs map[string]string
+	if err := json.Unmarshal(raw, &refs); err != nil {
+		return nil, fmt.Errorf("server: MDM SCEP trust_anchor_refs are invalid")
+	}
+	anchors := make([][]byte, 0, len(refs))
+	for key, ref := range refs {
+		loaded, err := s.loadMDMSCEPTrustAnchorRef(ctx, tenantID, key, ref, keyWrapper)
+		if err != nil {
+			return nil, err
+		}
+		anchors = append(anchors, loaded...)
+	}
+	return anchors, nil
+}
+
+func (s *Server) loadMDMSCEPTrustAnchorRef(ctx context.Context, tenantID, key, ref string, keyWrapper sealKeyWrapper) ([][]byte, error) {
+	if keyWrapper == nil {
+		return nil, fmt.Errorf("server: MDM SCEP trust-anchor references require a credential KEK")
+	}
+	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "secret://")
+	if !ok {
+		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s must use a secret:// reference", key)
+	}
+	name = strings.TrimSpace(strings.TrimPrefix(name, "/"))
+	if name == "" {
+		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s has an empty secret reference", key)
+	}
+	rec, err := s.store.GetSecret(ctx, tenantID, name)
+	if err != nil {
+		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is not readable", key)
+	}
+	plain, err := seal.Open(keyWrapper, rec.Sealed, secretStoreAADForMDMSCEP(tenantID, name))
+	if err != nil {
+		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is not openable", key)
+	}
+	defer secret.Wipe(plain)
+	anchors, err := decodeMDMSCEPTrustAnchorSecret(plain)
+	if err != nil {
+		return nil, fmt.Errorf("server: MDM SCEP trust anchor %s is invalid: %w", key, err)
+	}
+	return anchors, nil
+}
+
+func secretStoreAADForMDMSCEP(tenantID, name string) []byte {
+	return []byte(tenantID + "/secret-store/" + name)
+}
+
+func decodeMDMSCEPTrustAnchorSecret(raw []byte) ([][]byte, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, errors.New("empty certificate")
+	}
+	var anchors [][]byte
+	rest := trimmed
+	for len(rest) > 0 {
+		blk, after := pem.Decode(rest)
+		if blk == nil {
+			if len(anchors) > 0 {
+				return nil, errors.New("trailing non-PEM data")
+			}
+			break
+		}
+		if blk.Type != "CERTIFICATE" || len(blk.Bytes) == 0 {
+			return nil, errors.New("PEM block is not a certificate")
+		}
+		anchors = append(anchors, append([]byte(nil), blk.Bytes...))
+		rest = bytes.TrimSpace(after)
+	}
+	if len(anchors) > 0 {
+		return anchors, nil
+	}
+	return [][]byte{append([]byte(nil), trimmed...)}, nil
 }
 
 func loadSCEPIntuneTrustAnchor(path string) ([]byte, error) {

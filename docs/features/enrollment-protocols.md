@@ -120,7 +120,7 @@ expiry) before issuing — fail-closed on any defect. It's stateless: the HMAC k
 only shared secret, so there's no database lookup on the hot path. The HMAC key is held in
 wipeable `[]byte` memory and zeroed after use, never a copyable string.
 
-For Microsoft Intune, trstctl validates the Intune JWS challenge against configured
+For Microsoft Intune, trstctl validates the Intune JWS challenge against policy-backed
 trust anchors, checks tenant and CSR subject/SAN binding, and consumes the nonce through
 a single-use replay cache for the token TTL. A captured challenge cannot be replayed for
 a second enrollment. The gate wires into the served SCEP server's challenge hook.
@@ -131,9 +131,10 @@ plane: `POST/GET/PUT/DELETE /api/v1/mdm/scep/policies`, `POST
 the matching `trstctl mdm scep ...` commands. These records keep profile guidance,
 challenge mode, reference names for trust anchors, rotation version, and challenge
 telemetry visible in API, CLI, and the Protocols UI without storing raw MDM secrets.
-Runtime SCEP enforcement is still driven by the configured
-`protocols.scep.intune_challenge` trust anchors; hot-swapping live SCEP validator trust
-anchors directly from policy CRUD is the remaining hardening gap.
+At runtime the SCEP validator resolves enabled policy `trust_anchor_refs` from the
+served secret store (`secret://...`) for each challenge decision, so trust-anchor
+changes take effect without rebuilding or restarting the protocol handler. The static
+`protocols.scep.intune_challenge` anchors remain as a bootstrap/fallback path.
 
 ## Use it
 
@@ -172,7 +173,7 @@ Be precise about what's mounted in the running server today:
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
 | SCEP per-profile RA and rate limits | **Served when configured** — per-profile SCEP RA cert/key plus per-device rate limiter |
 | CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped |
-| MDM challenge (F56) | **Partially served** — API/CLI/UI policy management, challenge rotation evidence, profile guidance, and challenge telemetry are served; Intune JWS validation, tenant/CSR binding, and single-use replay cache run on the served SCEP endpoint when configured; live validator trust anchors remain config-driven |
+| MDM challenge (F56) | **Served** — API/CLI/UI policy management, challenge rotation evidence, profile guidance, challenge telemetry, Intune JWS validation, tenant/CSR binding, single-use replay cache, and live SCEP validator trust-anchor resolution from policy `trust_anchor_refs` backed by the served secret store |
 
 The protocol servers each expose a `Handler()` and are mounted on the control-plane
 TLS listener at startup, each behind the same issuance seam the API mint uses —

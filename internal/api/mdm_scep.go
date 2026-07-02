@@ -201,8 +201,8 @@ func (a *API) getMDMSCEPStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, mdmSCEPStatusResponse{
-		RuntimeGate: "served_scep_intune_validator_config_driven",
-		RuntimeNote: "The SCEP endpoint enforces the Intune/JAMF challenge gate when protocols.scep and protocols.scep.intune_challenge trust anchors are configured; policy CRUD exposes operator guidance and rotation evidence without storing raw challenges.",
+		RuntimeGate: "served_scep_intune_validator_policy_driven",
+		RuntimeNote: "The SCEP endpoint resolves enabled MDM SCEP policy trust_anchor_refs from the served secret store at challenge-validation time; protocols.scep.intune_challenge remains a static bootstrap/fallback path.",
 		Telemetry:   telemetry,
 		Policies:    toMDMSCEPPolicyResponses(recs),
 	})

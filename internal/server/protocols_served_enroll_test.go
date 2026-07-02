@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"testing"
 	"time"
@@ -163,12 +164,21 @@ func TestServedSCEPEndToEnd(t *testing.T) {
 // challenge rotation evidence, and see challenge-required/missing plus successful
 // Intune validation telemetry from the running SCEP endpoint.
 func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
-	intuneCfg, challenge := servedSCEPIntuneChallenge(t, "device-mdm-1")
+	trustDER, challenge := servedSCEPIntuneChallengeMaterial(t, "device-mdm-1", "")
+	intuneCfg := config.SCEPIntuneChallenge{TrustAnchorsDER: [][]byte{trustDER}}
 	h := newServedHarness(t, config.Protocols{
 		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEPIntuneChallenge: intuneCfg,
+	}, withSecretsEnabled(t, nil))
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "mdm/intune/root-ca",
+		"value": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: trustDER})),
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+	if status != http.StatusCreated {
+		t.Fatalf("create MDM SCEP trust-anchor secret: status %d body %s", status, body)
+	}
 
 	create := map[string]any{
 		"name":              "intune-mobile",
@@ -181,7 +191,7 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 			"root_ca_ref": "secret://mdm/intune/root-ca",
 		},
 	}
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, create)
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, create)
 	if status != http.StatusCreated {
 		t.Fatalf("create MDM SCEP policy: status %d body %s", status, body)
 	}
@@ -291,7 +301,7 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 	if err := json.Unmarshal(body, &mdmStatus); err != nil {
 		t.Fatalf("decode MDM SCEP status: %v body=%s", err, body)
 	}
-	if mdmStatus.RuntimeGate != "served_scep_intune_validator_config_driven" || len(mdmStatus.Policies) != 1 {
+	if mdmStatus.RuntimeGate != "served_scep_intune_validator_policy_driven" || len(mdmStatus.Policies) != 1 {
 		t.Fatalf("status did not expose runtime gate and policy: %+v", mdmStatus)
 	}
 	if mdmStatus.Policies[0].ID != created.ID || mdmStatus.Policies[0].RotationVersion != 2 {
@@ -302,6 +312,87 @@ func TestServedMDMSCEPPolicyAndIntuneTelemetryTRACE004(t *testing.T) {
 	}
 	if !h.hasEvent(t, projections.EventMDMSCEPPolicyUpserted) || !h.hasEvent(t, projections.EventMDMSCEPChallengeRotated) || !h.hasEvent(t, "mdm.intune_scep_challenge") {
 		t.Fatal("MDM SCEP policy or Intune challenge events were not recorded")
+	}
+}
+
+// TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010 proves the residual F56 gap is
+// closed on the served path: a tenant stores an Intune trust anchor through the served
+// secret lifecycle, references it from MDM SCEP policy CRUD, and the already-running
+// /scep endpoint validates a live Intune challenge with that policy-backed anchor
+// without requiring static protocols.scep.intune_challenge configuration.
+func TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010(t *testing.T) {
+	const audience = "https://ca.example.test/scep"
+	trustPEM, challenge := servedSCEPIntunePolicyAnchor(t, "device-mdm-policy-anchor", audience)
+	h := newServedHarness(t, config.Protocols{
+		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+	}, withSecretsEnabled(t, nil))
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "mdm/intune/root-ca",
+		"value": string(trustPEM),
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create served MDM trust-anchor secret: status %d body %s", status, body)
+	}
+	if bytes.Contains(body, []byte("BEGIN CERTIFICATE")) {
+		t.Fatalf("trust-anchor create response leaked PEM material: %s", body)
+	}
+
+	create := map[string]any{
+		"name":              "intune-live-anchor",
+		"provider":          "intune",
+		"scep_profile":      "mobile-scep",
+		"scep_endpoint":     h.ts.URL + "/scep/pkiclient.exe",
+		"expected_audience": audience,
+		"challenge_mode":    "intune-jws",
+		"trust_anchor_refs": map[string]any{
+			"root_ca_ref": "secret://mdm/intune/root-ca",
+		},
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, create)
+	if status != http.StatusCreated {
+		t.Fatalf("create MDM SCEP policy with served trust-anchor ref: status %d body %s", status, body)
+	}
+	if bytes.Contains(body, []byte("BEGIN CERTIFICATE")) {
+		t.Fatalf("MDM SCEP policy response leaked trust-anchor material: %s", body)
+	}
+
+	caResp, err := h.ts.Client().Get(h.ts.URL + "/scep?operation=GetCACert")
+	if err != nil {
+		t.Fatalf("GetCACert: %v", err)
+	}
+	caBody, _ := readAllClose(caResp)
+	raCertDER := scepRARecipient(t, caBody)
+	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClientWithChallenge(t, "device-mdm-policy-anchor", challenge)
+	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCertDER, clientKeyPKCS8, raCertDER, "trace-010-policy-anchor")
+	if err != nil {
+		t.Fatalf("build policy-anchor SCEP request: %v", err)
+	}
+	resp, err := h.ts.Client().Post(h.ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatalf("policy-anchor SCEP PKIOperation: %v", err)
+	}
+	replyDER, _ := readAllClose(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("policy-anchor SCEP status %d: %s", resp.StatusCode, replyDER)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/mdm/scep/status", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("MDM SCEP status after policy-backed validation: status %d body %s", status, body)
+	}
+	var mdmStatus struct {
+		RuntimeGate string `json:"runtime_gate"`
+		Telemetry   struct {
+			Allowed int `json:"allowed"`
+		} `json:"telemetry"`
+	}
+	if err := json.Unmarshal(body, &mdmStatus); err != nil {
+		t.Fatalf("decode MDM SCEP status: %v body=%s", err, body)
+	}
+	if mdmStatus.RuntimeGate != "served_scep_intune_validator_policy_driven" || mdmStatus.Telemetry.Allowed < 1 {
+		t.Fatalf("status did not expose policy-driven live validation: %+v", mdmStatus)
 	}
 }
 
@@ -437,6 +528,18 @@ func newSCEPClientWithChallenge(t *testing.T, cn, challenge string) (certDER, ke
 
 func servedSCEPIntuneChallenge(t *testing.T, cn string) (config.SCEPIntuneChallenge, string) {
 	t.Helper()
+	trustDER, challenge := servedSCEPIntuneChallengeMaterial(t, cn, "")
+	return config.SCEPIntuneChallenge{TrustAnchorsDER: [][]byte{trustDER}}, challenge
+}
+
+func servedSCEPIntunePolicyAnchor(t *testing.T, cn, audience string) ([]byte, string) {
+	t.Helper()
+	trustDER, challenge := servedSCEPIntuneChallengeMaterial(t, cn, audience)
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: trustDER}), challenge
+}
+
+func servedSCEPIntuneChallengeMaterial(t *testing.T, cn, audience string) ([]byte, string) {
+	t.Helper()
 	now := time.Now().UTC()
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
@@ -447,13 +550,17 @@ func servedSCEPIntuneChallenge(t *testing.T, cn string) (config.SCEPIntuneChalle
 	if err != nil {
 		t.Fatal(err)
 	}
-	challenge := signedServedIntuneChallenge(t, signer, map[string]any{
+	claims := map[string]any{
 		"iat":         now.Add(-time.Minute).Unix(),
 		"exp":         now.Add(time.Minute).Unix(),
 		"nonce":       "served-" + cn,
 		"device_name": cn,
-	})
-	return config.SCEPIntuneChallenge{TrustAnchorsDER: [][]byte{trustDER}}, challenge
+	}
+	if audience != "" {
+		claims["aud"] = audience
+	}
+	challenge := signedServedIntuneChallenge(t, signer, claims)
+	return trustDER, challenge
 }
 
 func signedServedIntuneChallenge(t *testing.T, signer crypto.DigestSigner, payload map[string]any) string {

@@ -80,8 +80,8 @@ describe("SIMP-02 lean protocol setup", () => {
     });
     apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({ items: [] });
     apiMock.mdmSCEPStatus.mockResolvedValue({
-      runtime_gate: "served_scep_intune_validator_config_driven",
-      runtime_note: "The SCEP endpoint enforces the configured Intune challenge gate.",
+      runtime_gate: "served_scep_intune_validator_policy_driven",
+      runtime_note: "The SCEP endpoint resolves policy-backed Intune challenge trust anchors.",
       telemetry: { allowed: 0, denied: 0, replay_rejected: 0 },
       policies: [],
     });

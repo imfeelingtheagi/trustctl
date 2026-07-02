@@ -15,6 +15,7 @@ import (
 var (
 	ErrIntuneChallengeTenant = errors.New("mdm: Intune challenge tenant mismatch")
 	ErrIntuneChallengeReplay = errors.New("mdm: Intune challenge replay")
+	ErrIntuneChallengeTrust  = errors.New("mdm: Intune challenge trust anchors unavailable")
 )
 
 // IntuneChallengeRequest is the tenant-bound SCEP challenge decision input. The
@@ -32,6 +33,7 @@ type IntuneChallengeValidator struct {
 	tenantID         string
 	trustAnchorsDER  [][]byte
 	expectedAudience string
+	trustConfigs     IntuneTrustConfigResolver
 	clock            func() time.Time
 	clockSkew        time.Duration
 	log              *events.Log
@@ -42,8 +44,25 @@ type IntuneChallengeValidator struct {
 
 type IntuneOption func(*IntuneChallengeValidator)
 
+// IntuneTrustConfig is one trusted Intune/JAMF challenge-signing configuration.
+// TrustAnchorsDER holds public certificate DER bytes; ExpectedAudience optionally
+// overrides the validator-level audience for this policy/config.
+type IntuneTrustConfig struct {
+	TrustAnchorsDER  [][]byte
+	ExpectedAudience string
+}
+
+// IntuneTrustConfigResolver resolves live trust configurations for a tenant-bound
+// SCEP challenge decision. It lets the served control plane hot-swap policy-backed
+// trust anchors without rebuilding the SCEP handler.
+type IntuneTrustConfigResolver func(context.Context, IntuneChallengeRequest) ([]IntuneTrustConfig, error)
+
 func WithIntuneAudience(audience string) IntuneOption {
 	return func(v *IntuneChallengeValidator) { v.expectedAudience = audience }
+}
+
+func WithIntuneTrustConfigResolver(resolve IntuneTrustConfigResolver) IntuneOption {
+	return func(v *IntuneChallengeValidator) { v.trustConfigs = resolve }
 }
 
 func WithIntuneClock(clock func() time.Time) IntuneOption {
@@ -78,12 +97,7 @@ func (v *IntuneChallengeValidator) Validate(ctx context.Context, req IntuneChall
 		return err
 	}
 	now := v.now()
-	claim, err := crypto.ValidateIntuneSCEPChallenge(req.Challenge, req.CSRDER, crypto.IntuneChallengeOptions{
-		TrustAnchorsDER:    v.trustAnchorsDER,
-		ExpectedAudience:   v.expectedAudience,
-		Now:                now,
-		ClockSkewTolerance: v.clockSkew,
-	})
+	claim, err := v.validateAgainstTrustConfigs(ctx, req, now)
 	if err != nil {
 		v.emit(ctx, req, "deny", err.Error(), "")
 		return err
@@ -94,6 +108,44 @@ func (v *IntuneChallengeValidator) Validate(ctx context.Context, req IntuneChall
 	}
 	v.emit(ctx, req, "allow", "", claim.Nonce)
 	return nil
+}
+
+func (v *IntuneChallengeValidator) validateAgainstTrustConfigs(ctx context.Context, req IntuneChallengeRequest, now time.Time) (crypto.IntuneChallengeClaim, error) {
+	configs := make([]IntuneTrustConfig, 0, 2)
+	if v.trustConfigs != nil {
+		dynamic, err := v.trustConfigs(ctx, req)
+		if err != nil {
+			return crypto.IntuneChallengeClaim{}, err
+		}
+		configs = append(configs, dynamic...)
+	}
+	if len(v.trustAnchorsDER) > 0 {
+		configs = append(configs, IntuneTrustConfig{TrustAnchorsDER: v.trustAnchorsDER, ExpectedAudience: v.expectedAudience})
+	}
+	var last error
+	for _, cfg := range configs {
+		if len(cfg.TrustAnchorsDER) == 0 {
+			continue
+		}
+		audience := cfg.ExpectedAudience
+		if audience == "" {
+			audience = v.expectedAudience
+		}
+		claim, err := crypto.ValidateIntuneSCEPChallenge(req.Challenge, req.CSRDER, crypto.IntuneChallengeOptions{
+			TrustAnchorsDER:    cfg.TrustAnchorsDER,
+			ExpectedAudience:   audience,
+			Now:                now,
+			ClockSkewTolerance: v.clockSkew,
+		})
+		if err == nil {
+			return claim, nil
+		}
+		last = err
+	}
+	if last != nil {
+		return crypto.IntuneChallengeClaim{}, last
+	}
+	return crypto.IntuneChallengeClaim{}, ErrIntuneChallengeTrust
 }
 
 func (v *IntuneChallengeValidator) now() time.Time {

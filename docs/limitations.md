@@ -37,6 +37,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F2 | Network discovery | docs/features/discovery-and-inventory.md |
 | F3 | Agent-based discovery | docs/features/discovery-and-inventory.md |
 | F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
+| F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F42 | SSH credential discovery and inventory | docs/features/discovery-and-inventory.md, docs/features/ssh.md |
 | F49 | Agentless cloud certificate discovery | docs/features/discovery-and-inventory.md |
 | F35 | Secret store discovery | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
@@ -120,7 +121,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
 | F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
 | F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
-| F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 
 ### Library-only

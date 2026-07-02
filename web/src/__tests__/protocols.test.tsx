@@ -146,9 +146,9 @@ describe("protocol surface", () => {
       ],
     });
     apiMock.mdmSCEPStatus.mockResolvedValue({
-      runtime_gate: "served_scep_intune_validator_config_driven",
+      runtime_gate: "served_scep_intune_validator_policy_driven",
       runtime_note:
-        "The SCEP endpoint enforces the Intune/JAMF challenge gate when protocols.scep and protocols.scep.intune_challenge trust anchors are configured.",
+        "The SCEP endpoint resolves enabled MDM SCEP policy trust_anchor_refs from the served secret store at challenge-validation time.",
       telemetry: {
         allowed: 7,
         denied: 2,

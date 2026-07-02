@@ -419,11 +419,9 @@
       "owner": "Enrollment protocols",
       "priority": "P2",
       "acceptance_criteria": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ]

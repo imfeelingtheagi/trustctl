@@ -4827,8 +4827,8 @@
       "domain": "Enrollment protocols",
       "phase": "P2",
       "priority": 61,
-      "served_state": "partial",
-      "backend_status": "served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors",
+      "served_state": "served",
+      "backend_status": "served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle",
       "current_frontend_mapping": "Protocols at /protocols - MDM SCEP policy table, profile guidance, challenge-rotation state, reference names, and Intune challenge telemetry",
       "target_gui_mapping": "MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures.",
       "acceptance_test": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
@@ -4846,7 +4846,7 @@
         "web/src/pages/Protocols.tsx"
       ],
       "status": "closed",
-      "notes": "Closed as partial by TRACE-004: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI, and served SCEP still enforces the Intune validator when configured. Remaining gap: live SCEP validator trust anchors are config-driven rather than hot-swapped directly from policy CRUD.",
+      "notes": "Closed by TRACE-010: served policy/status/rotation/telemetry surfaces exist across API, CLI, and Protocols UI; enabled MDM SCEP policies now resolve secret:// trust_anchor_refs from the served secret store at SCEP challenge-validation time, so live Intune trust anchors are policy-driven without rebuilding the protocol handler. Static protocols.scep.intune_challenge anchors remain a bootstrap/fallback path.",
       "api_surface": [
         "getMDMSCEPStatus",
         "createMDMSCEPPolicy",
@@ -4870,10 +4870,10 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial",
-            "backend_status=served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors",
+            "served_state=served",
+            "backend_status=served API/CLI/UI policy management, challenge rotation evidence, profile guidance, telemetry, and live SCEP Intune validator trust-anchor resolution from policy trust_anchor_refs backed by served secret-store lifecycle",
             "MDM SCEP policy CRUD and challenge rotation append mdm.scep_policy.* and mdm.scep_challenge.rotated events, project into mdm_scep_policies, and serve status telemetry without storing raw challenge secrets.",
-            "buildServedSCEP wires buildSCEPChallengeValidator into the served SCEP handler, and served SCEP tests prove a missing challenge is rejected while a valid Intune challenge can enroll."
+            "buildServedSCEP wires buildSCEPChallengeValidator into the served SCEP handler; TRACE-010 stores an Intune trust anchor through /api/v1/secrets/store, references it from MDM policy CRUD, and proves the already-running /scep endpoint accepts the policy-backed Intune challenge without static protocols.scep.intune_challenge anchors."
           ],
           "refs": [
             "internal/api/mdm_scep.go",
@@ -4920,6 +4920,7 @@
           "evidence": [
             "acceptance_test: UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
             "Served integration test creates an MDM SCEP policy, rotates its challenge version, rejects missing SCEP challenge material, accepts a valid Intune challenge, and reads challenge telemetry from the status API.",
+            "TRACE-010 served integration test creates a trust-anchor secret, references it from an enabled MDM SCEP policy, validates through the live /scep endpoint, and observes served_scep_intune_validator_policy_driven status.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -5000,9 +5001,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served API/CLI/UI policy management, challenge rotation evidence, profile guidance, and telemetry; served SCEP Intune validator remains configured by protocols.scep.intune_challenge trust anchors. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F030",
