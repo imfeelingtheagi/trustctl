@@ -25,8 +25,9 @@ master key (encryption-as-a-service). And every action needs ID and is logged
 > because they mint tenant API credentials, not stored secret values. **Transit**
 > encryption-as-a-service is now served separately at `/api/v1/transit/*` with the
 > `transit` CLI group and `keys:*` RBAC scopes. **KMIP** is served as an opt-in
-> mTLS listener (`protocols.kmip.*`) for AES-256 SymmetricKey Create/Get interop.
-> Broader KMIP operation coverage is still called out in
+> mTLS listener (`protocols.kmip.*`) for AES-256 SymmetricKey
+> Create/Get/Locate/Revoke/Destroy interop. Remaining KMIP appliance gaps are still
+> called out in
 > [Current limitations](../limitations.md).
 > This page is honest about that throughout.
 
@@ -314,11 +315,13 @@ an opt-in **KMIP** listener. Configure:
 
 The listener is raw KMIP over TLS 1.3 mutual TLS. The TLS layer verifies the client
 certificate chain before the KMIP handler sees a frame; the KMIP service stores objects
-under the configured tenant, emits immutable `kmip.object.created` audit events, and
-zeroizes in-memory key material on destroy, rekey, and server shutdown. The first served
-profile is intentionally narrow and stock-client-tested: PyKMIP can `Create` an AES-256
-`SymmetricKey` and `Get` the 32-byte key material back. Unsupported operations receive a
-KMIP failure response instead of an unframed TCP close.
+under the configured tenant, emits immutable `kmip.object.created`,
+`kmip.object.revoke`, and `kmip.object.destroyed` audit events, and zeroizes in-memory
+key material on destroy, rekey, and server shutdown. The served profile is intentionally
+bounded and stock-client-tested for the core path: clients can `Create` an AES-256
+`SymmetricKey`, `Get` the 32-byte key material back, `Locate` active AES objects,
+`Revoke` an object so later `Get` fails, and `Destroy` it over TTLV. Unsupported
+operations receive a KMIP failure response instead of an unframed TCP close.
 
 ### Secret sync (F68)
 
@@ -597,9 +600,9 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   must store a long-lived secret, put it on a rotation schedule.
 - **Transit/KMIP serving status:** Transit is served through `/api/v1/transit/*` and the
   `trstctl-cli transit` command group. KMIP is served through the separate
-  `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey Create/Get. Treat broader
-  appliance profiles, wrapping, Locate/Revoke/Destroy wire operations, and tenant
-  self-service listener management as future served-endpoint work.
+  `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
+  Create/Get/Locate/Revoke/Destroy. Treat broader appliance profiles, wrapping, and
+  tenant self-service listener management as future served-endpoint work.
 - **Sync is push + drift-detect**, not a two-way merge — trstctl is the source of truth.
 
 ## Reference
@@ -615,7 +618,7 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 - **Transit:** `/api/v1/transit/{keys,encrypt,decrypt,rewrap,hmac,sign,verify}`,
   `trstctl-cli transit ...`, versioned `trv:<n>:` ciphertext.
 - **KMIP:** opt-in mTLS listener (`TRSTCTL_PROTOCOLS_KMIP_ENABLED=true`) for AES-256
-  SymmetricKey Create/Get, default address `:5696`, tenant bound by
+  SymmetricKey Create/Get/Locate/Revoke/Destroy, default address `:5696`, tenant bound by
   `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
 - **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
   Parameter Store, webhook.

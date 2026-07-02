@@ -357,7 +357,7 @@ and tested. What remains:
 - **Close the remaining named residuals** — automatic ACME order-time DNS-01
   publish/cleanup, React console cursor pagination and list virtualization, Terraform
   Cloud/OpenTofu and arbitrary webhook secret-sync targets, Vault KV outbound sync
-  beyond discovery-only core, and broader KMIP operations (tracked in
+  beyond discovery-only core, and KMIP appliance profiles/wrapping (tracked in
   [Current limitations](docs/limitations.md)).
 - **Plugin marketplace maturity** for third-party CAs and connectors, on the existing
   WASM capability host.

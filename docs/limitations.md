@@ -69,6 +69,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
+| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
 | F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
 | F29 | Notification integrations | docs/features/policy-and-governance.md |
@@ -121,7 +122,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
 | F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
 | F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
-| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 
 ### Library-only
 
@@ -739,7 +739,7 @@ writing a new token file and restarting the control plane so the new hash is loa
   those providers receive deeper first-class APIs; Vault KV is discovery-only in core
   until a provider-specific outbound Vault sync target is configured. If a target is not configured, the
   route returns `503` and does not attempt an external call.
-- **Transit/KMIP (F66) — served, with a narrow first KMIP profile.**
+- **Transit/KMIP (F66) — served, with a bounded KMIP lifecycle profile.**
   The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`
   command group for tenant-scoped key create/rotate, encrypt/decrypt, rewrap,
   HMAC, sign, and verify. Transit keys never leave the process as exportable
@@ -751,11 +751,11 @@ writing a new token file and restarting the control plane so the new hash is loa
   `protocols.kmip.client_ca_file` are configured. That first served KMIP profile is
   intentionally bounded: it accepts verified client certificates, decodes TTLV with
   frame-size, field-count, and nesting-depth caps, serves AES-256 `SymmetricKey`
-  Create/Get for stock PyKMIP clients, records
-  `kmip.object.created`, and zeroizes in-memory key material on rekey/destroy/shutdown.
-  Broader KMIP operations (wrapping, Locate/Revoke/Destroy over the wire, profile
-  negotiation, appliance-specific templates, and tenant self-service listener
-  management) remain future served work.
+  Create/Get for stock PyKMIP clients plus Locate/Revoke/Destroy over the wire, records
+  `kmip.object.created`, `kmip.object.revoke`, and `kmip.object.destroyed`, and
+  zeroizes in-memory key material on rekey/destroy/shutdown. Remaining KMIP gaps
+  such as wrapping, profile negotiation, appliance-specific templates, and tenant
+  self-service listener management remain future served work.
 ## Authorization policy gates and ABAC overlays: served by the binary
 
 The RBAC guard, ABAC deny overlay, OPA/Rego default-deny policy gate, RA scope split,

@@ -40,10 +40,10 @@ func ReadFrame(r io.Reader, maxFrameSize int) ([]byte, error) {
 }
 
 // HandleFrame authenticates the verified client certificate, dispatches the
-// single-request KMIP frame, and returns a KMIP ResponseMessage. The first served
-// listener intentionally supports the stock-client path KMS-02 requires: AES
-// SymmetricKey Create and Get. Unsupported operations receive a parseable KMIP
-// failure instead of an unframed TCP close.
+// single-request KMIP frame, and returns a KMIP ResponseMessage. The served
+// listener supports the bounded appliance lifecycle path KMS-02 requires: AES
+// SymmetricKey Create/Get plus Locate/Revoke/Destroy. Unsupported operations
+// receive a parseable KMIP failure instead of an unframed TCP close.
 func (s *Server) HandleFrame(ctx context.Context, clientCertDER []byte, frame []byte) ([]byte, error) {
 	msg, err := DecodeRequestMessage(frame)
 	if err != nil {
@@ -63,8 +63,29 @@ func (s *Server) HandleFrame(ctx context.Context, clientCertDER []byte, frame []
 				continue
 			}
 			items = append(items, resp)
+		case OperationLocate:
+			resp, err := s.handleLocate(ctx, clientCertDER, item.Payload)
+			if err != nil {
+				items = append(items, errorItem(item.Operation, err))
+				continue
+			}
+			items = append(items, resp)
 		case OperationGet:
 			resp, err := s.handleGet(ctx, clientCertDER, item.Payload)
+			if err != nil {
+				items = append(items, errorItem(item.Operation, err))
+				continue
+			}
+			items = append(items, resp)
+		case OperationRevoke:
+			resp, err := s.handleRevoke(ctx, clientCertDER, item.Payload)
+			if err != nil {
+				items = append(items, errorItem(item.Operation, err))
+				continue
+			}
+			items = append(items, resp)
+		case OperationDestroy:
+			resp, err := s.handleDestroy(ctx, clientCertDER, item.Payload)
 			if err != nil {
 				items = append(items, errorItem(item.Operation, err))
 				continue
@@ -101,6 +122,25 @@ func (s *Server) handleCreate(ctx context.Context, clientCertDER []byte, payload
 	}, nil
 }
 
+func (s *Server) handleLocate(ctx context.Context, clientCertDER []byte, payload TTLV) (wireResponseItem, error) {
+	algorithm, err := parseLocateAlgorithm(payload)
+	if err != nil {
+		return wireResponseItem{}, err
+	}
+	ids, err := s.Locate(ctx, clientCertDER, algorithm)
+	if err != nil {
+		return wireResponseItem{}, err
+	}
+	children := make([][]byte, 0, len(ids))
+	for _, id := range ids {
+		children = append(children, encodeText(TagUniqueIdentifier, id))
+	}
+	return wireResponseItem{
+		operation: OperationLocate,
+		payload:   encodeStructure(TagResponsePayload, children...),
+	}, nil
+}
+
 func (s *Server) handleGet(ctx context.Context, clientCertDER []byte, payload TTLV) (wireResponseItem, error) {
 	id, err := parseUniqueIdentifierPayload(payload)
 	if err != nil {
@@ -127,6 +167,34 @@ func (s *Server) handleGet(ctx context.Context, clientCertDER []byte, payload TT
 				),
 			),
 		),
+	}, nil
+}
+
+func (s *Server) handleRevoke(ctx context.Context, clientCertDER []byte, payload TTLV) (wireResponseItem, error) {
+	id, err := parseUniqueIdentifierPayload(payload)
+	if err != nil {
+		return wireResponseItem{}, err
+	}
+	if err := s.Revoke(ctx, clientCertDER, id); err != nil {
+		return wireResponseItem{}, err
+	}
+	return wireResponseItem{
+		operation: OperationRevoke,
+		payload:   encodeStructure(TagResponsePayload, encodeText(TagUniqueIdentifier, id)),
+	}, nil
+}
+
+func (s *Server) handleDestroy(ctx context.Context, clientCertDER []byte, payload TTLV) (wireResponseItem, error) {
+	id, err := parseUniqueIdentifierPayload(payload)
+	if err != nil {
+		return wireResponseItem{}, err
+	}
+	if err := s.Destroy(ctx, clientCertDER, id); err != nil {
+		return wireResponseItem{}, err
+	}
+	return wireResponseItem{
+		operation: OperationDestroy,
+		payload:   encodeStructure(TagResponsePayload, encodeText(TagUniqueIdentifier, id)),
 	}, nil
 }
 
@@ -185,9 +253,37 @@ func normalizedAttributeName(name string) string {
 	return strings.ToLower(strings.NewReplacer(" ", "_", ".", "_", "-", "_").Replace(name))
 }
 
+func parseLocateAlgorithm(payload TTLV) (string, error) {
+	if payload.Tag == 0 {
+		return "", nil
+	}
+	if payload.Tag != TagRequestPayload || payload.Type != TTLVStructure {
+		return "", wireError{reason: resultReasonInvalidMessage, message: "Locate request payload malformed"}
+	}
+	if tmpl, ok := payload.FirstChild(TagTemplateAttribute); ok && tmpl.Type == TTLVStructure {
+		for _, attr := range tmpl.Children {
+			if attr.Tag != TagAttribute || attr.Type != TTLVStructure {
+				continue
+			}
+			name, value, ok := parseAttribute(attr)
+			if !ok || normalizedAttributeName(name) != "cryptographic_algorithm" {
+				continue
+			}
+			if value.Type != TTLVEnumeration || len(value.Value) != 4 {
+				return "", wireError{reason: resultReasonInvalidField, message: "Cryptographic Algorithm must be an enumeration"}
+			}
+			if int32(binary.BigEndian.Uint32(value.Value)) != cryptographicAlgorithmAES {
+				return "", wireError{reason: resultReasonInvalidField, message: "only AES SymmetricKey Locate is served"}
+			}
+			return "AES", nil
+		}
+	}
+	return "", nil
+}
+
 func parseUniqueIdentifierPayload(payload TTLV) (string, error) {
 	if payload.Tag != TagRequestPayload || payload.Type != TTLVStructure {
-		return "", wireError{reason: resultReasonInvalidMessage, message: "Get request payload missing"}
+		return "", wireError{reason: resultReasonInvalidMessage, message: "UniqueIdentifier request payload missing"}
 	}
 	uid, ok := payload.FirstChild(TagUniqueIdentifier)
 	if !ok || uid.Type != TTLVTextString {

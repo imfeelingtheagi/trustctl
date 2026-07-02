@@ -9230,9 +9230,9 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 78,
-      "served_state": "partial",
-      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - served transit API/CLI for key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; KMIP mTLS listener served for AES-256 SymmetricKey Create/Get",
+      "served_state": "served",
+      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - served transit API/CLI for key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure; KMIP mTLS listener served for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
       "target_gui_mapping": "Transit/KMIP UI for keys, encrypt/decrypt test, HMAC/sign/verify, key versions, rewrap, audit, and appliance profile status.",
       "acceptance_test": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
       "source_docs": [
@@ -9248,7 +9248,7 @@
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by route-level feature-map evidence and TRACE-011 KMIP lifecycle remediation. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage; ee/kmip TestKMIPWireLifecycleOperationsServed proves Create, Locate, Revoke, and Destroy over the served KMIP TTLV handler. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, go test ./ee/kmip, and git diff --check passed after implementation.",
       "api_surface": [
         "createTransitKey",
         "rotateTransitKey",
@@ -9275,8 +9275,8 @@
         "served": {
           "evidence": [
             "served transit API mounted at /api/v1/transit for key create/rotate, encrypt/decrypt, rewrap, HMAC, sign, and verify",
-            "served KMIP mTLS listener handles PyKMIP AES-256 SymmetricKey Create/Get",
-            "backend_status=served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get"
+            "served KMIP mTLS listener handles AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy over bounded TTLV frames",
+            "backend_status=served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy"
           ],
           "refs": [
             "internal/api/transit.go",
@@ -9335,6 +9335,7 @@
           "evidence": [
             "acceptance_test: served Transit API creates a key, encrypts, rotates, rewraps, decrypts, and records audit events.",
             "acceptance_test: real PyKMIP client container creates and retrieves an AES-256 SymmetricKey over the served KMIP mTLS listener.",
+            "acceptance_test: served KMIP wire handler creates, locates, revokes, destroys, and rejects post-destroy Get for an AES-256 SymmetricKey.",
             "memory-hygiene acceptance confirms Destroy zeroizes held AEAD key bytes.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
@@ -9372,7 +9373,7 @@
         "audit": {
           "evidence": [
             "mutating served transit operations emit immutable events such as transit.key.created, transit.key.rotated, transit.encrypt, transit.rewrap, transit.hmac, and transit.sign",
-            "served KMIP Create emits immutable kmip.object.created events"
+            "served KMIP Create/Revoke/Destroy emits immutable kmip.object.created, kmip.object.revoke, and kmip.object.destroyed events"
           ],
           "refs": [
             "internal/transit/transit.go",
@@ -9404,9 +9405,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F056",

@@ -783,11 +783,9 @@
       "owner": "Secrets",
       "priority": "P2",
       "acceptance_criteria": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
       "source_docs": [
         "docs/features/secrets.md"
       ]

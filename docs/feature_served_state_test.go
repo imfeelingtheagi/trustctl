@@ -209,7 +209,7 @@ func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
 		"cursor pagination and list virtualization",
 		"terraform cloud/opentofu and arbitrary webhook secret-sync targets",
 		"vault kv outbound sync",
-		"broader kmip operations",
+		"kmip appliance profiles/wrapping",
 	} {
 		if !strings.Contains(roadmapText, want) {
 			t.Errorf("README Roadmap must name residual %q instead of broad served-domain wiring", want)

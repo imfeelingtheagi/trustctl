@@ -783,7 +783,7 @@ and a client CA trust anchor.
 | `TRSTCTL_PROTOCOLS_SCEP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve SCEP at `/scep` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_CMP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve CMP at `/cmp` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_RA_KEY_FILE` | `data/protocols/ra-transport.key` | Sealed SCEP/CMP RSA transport identity. Put this on shared persistent storage in HA so replicas use the same cached-client RA material. |
-| `TRSTCTL_PROTOCOLS_KMIP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the KMIP mTLS listener for the named tenant. The current served profile supports AES-256 SymmetricKey Create/Get. |
+| `TRSTCTL_PROTOCOLS_KMIP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the KMIP mTLS listener for the named tenant. The current served profile supports AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy. |
 | `TRSTCTL_PROTOCOLS_KMIP_ADDR` | `:5696` | TCP listen address for KMIP. |
 | `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE` | — | PEM server certificate chain for the KMIP listener. Required when KMIP is enabled. |
 | `TRSTCTL_PROTOCOLS_KMIP_KEY_FILE` | — | PEM private key for the KMIP listener certificate. Required when KMIP is enabled. |

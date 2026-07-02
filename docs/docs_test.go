@@ -1918,7 +1918,7 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 		for _, want := range []string{
 			"served as an opt-in",
 			"mtls listener",
-			"aes-256 symmetrickey create/get",
+			"aes-256 symmetrickey create/get/locate/revoke/destroy",
 		} {
 			if !strings.Contains(feature, want) {
 				t.Errorf("features/secrets.md must describe served KMIP status (missing %q)", want)
@@ -1927,16 +1927,17 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 		for _, want := range []string{
 			"serves kmip as an opt-in tls 1.3 mutual-tls listener",
 			"aes-256 `symmetrickey` create/get",
+			"locate/revoke/destroy lifecycle operations",
 		} {
 			if !strings.Contains(glossary, want) {
 				t.Errorf("glossary.md must describe served KMIP status (missing %q)", want)
 			}
 		}
 		for _, want := range []string{
-			"transit/kmip (f66) — served, with a narrow first kmip profile",
+			"transit/kmip (f66) — served, with a bounded kmip lifecycle profile",
 			"stock pykmip clients",
 			"frame-size, field-count, and nesting-depth caps",
-			"broader kmip operations",
+			"locate/revoke/destroy over the wire",
 		} {
 			if !strings.Contains(limitations, want) {
 				t.Errorf("limitations.md must describe served-but-bounded KMIP status (missing %q)", want)

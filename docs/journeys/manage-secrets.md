@@ -41,10 +41,10 @@ Be precise here (see [Current limitations](../limitations.md) and
   at `/api/v1/transit/*` and `trstctl-cli transit`. A Vault/OpenBao-compatible
   common subset is served at `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, and
   `/v1/pki/issue/*` for stock `vault` CLI migration. KMIP is served as an opt-in
-  mTLS listener for AES-256 SymmetricKey Create/Get.
-- **Still outside this journey:** broader KMIP appliance profiles and secret-store /
-  API-key *discovery* of actual values. Discovery records references only and stays
-  covered by the discovery journey.
+  mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy.
+- **Still outside this journey:** broader KMIP appliance profiles, wrapping, and
+  secret-store / API-key *discovery* of actual values. Discovery records references
+  only and stays covered by the discovery journey.
 
 ## Steps
 
@@ -453,7 +453,8 @@ Be precise here (see [Current limitations](../limitations.md) and
 13. Know the edges before you rely on them. Transit encryption-as-a-service is now
     served through `/api/v1/transit/*` and `trstctl-cli transit`, and KMIP is served
     through a separate `protocols.kmip.*` mTLS listener for AES-256 SymmetricKey
-    Create/Get. Broader appliance profiles and KMIP operations are still future work.
+    Create/Get/Locate/Revoke/Destroy. Broader appliance profiles and wrapping are
+    still future work.
     Finding secrets already scattered across your estate (secret-store and API-key
     discovery) records references only, never values — see
     [Discovery & inventory](../features/discovery-and-inventory.md) and
