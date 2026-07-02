@@ -9,13 +9,6 @@
 // OpenAPI: 3.1.0  API: trstctl API v1
 
 /* eslint-disable */
-export interface ACMEDNS01CAARecord {
-  flag?: number;
-  issuer_domain: string;
-  name?: string;
-  tag: string;
-}
-
 export interface ACMEDNS01Preflight {
   checks: ACMEDNS01PreflightCheck[];
   config_id: string;
@@ -35,8 +28,6 @@ export interface ACMEDNS01PreflightCheck {
 }
 
 export interface ACMEDNS01PreflightRequest {
-  caa_lookup_error?: string;
-  caa_records?: ACMEDNS01CAARecord[];
   config_id: string;
   domain: string;
   expected_txt?: string;

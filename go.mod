@@ -19,6 +19,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/miekg/dns v1.1.57
 	github.com/miekg/pkcs11 v1.1.2
 	github.com/nats-io/nats-server/v2 v2.11.15
 	github.com/nats-io/nats.go v1.52.0

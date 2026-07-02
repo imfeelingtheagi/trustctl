@@ -1,27 +1,6 @@
 {
   "components": {
     "schemas": {
-      "ACMEDNS01CAARecord": {
-        "properties": {
-          "flag": {
-            "type": "integer"
-          },
-          "issuer_domain": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "tag": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "tag",
-          "issuer_domain"
-        ],
-        "type": "object"
-      },
       "ACMEDNS01Preflight": {
         "properties": {
           "checks": {
@@ -97,15 +76,6 @@
       },
       "ACMEDNS01PreflightRequest": {
         "properties": {
-          "caa_lookup_error": {
-            "type": "string"
-          },
-          "caa_records": {
-            "items": {
-              "$ref": "#/components/schemas/ACMEDNS01CAARecord"
-            },
-            "type": "array"
-          },
           "config_id": {
             "format": "uuid",
             "type": "string"

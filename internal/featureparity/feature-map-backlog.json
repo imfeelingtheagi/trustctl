@@ -3867,8 +3867,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 58,
-      "served_state": "partial",
-      "backend_status": "partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up",
+      "served_state": "served",
+      "backend_status": "served CAA checker, live DNS CAA resolver, provider-config caa_issuer_domain, DNS-01 preflight live CAA checks, and ACME order-time fail-closed CAA enforcement before DNS publish",
       "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose CAA issuer policy and preflight state",
       "target_gui_mapping": "CAA policy UI showing current CAA records, allowed issuers, fail-closed lookup errors, and recommended record changes.",
       "acceptance_test": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
@@ -3877,13 +3877,15 @@
       ],
       "source_backend": [
         "internal/protocols/acme/caa.go",
-        "internal/api/acme_dns01.go"
+        "internal/protocols/acme/caa_dns.go",
+        "internal/api/acme_dns01.go",
+        "internal/server/acme_dns01_automation.go"
       ],
       "source_frontend": [
         "web/src/pages/Protocols.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "TRACE-015 closure: served DNS-01 preflight and order-time ACME DNS-01 automation now use an authoritative live CAA resolver for the configured caa_issuer_domain, ignore request-supplied CAA as policy authority, fail closed on lookup errors or denied issuers, and stop before enqueueing DNS provider writes when live CAA disagrees. Test evidence: TestServedACMEDNS01LiveCAAEnforcementTRACE015 and TestServedACMEDNS01ProviderConfigAndPreflightTRACE003.",
       "api_surface": [
         "preflightACMEDNS01"
       ],
@@ -3895,14 +3897,16 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "Tenant DNS-01 provider configs store caa_issuer_domain and POST /api/v1/acme/dns-01/preflight evaluates submitted governing CAA records for issue/issuewild authorization.",
-            "The served preflight route fails closed on CAA lookup errors and denied CAA issuer values before issuance proceeds."
+            "Tenant DNS-01 provider configs store caa_issuer_domain and POST /api/v1/acme/dns-01/preflight evaluates authoritative live governing CAA records for issue/issuewild authorization rather than trusting request-supplied CAA values.",
+            "The served ACME DNS-01 automation path checks live CAA before enqueueing acme.dns01.present and fails closed before any DNS provider write when CAA lookup fails or denies the configured issuer."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
+            "internal/server/acme_dns01_automation.go",
             "internal/server/protocols_served_test.go",
             "internal/projections/projections.go",
-            "internal/protocols/acme/caa.go"
+            "internal/protocols/acme/caa.go",
+            "internal/protocols/acme/caa_dns.go"
           ]
         },
         "ui": {
@@ -3917,7 +3921,7 @@
         },
         "cli": {
           "evidence": [
-            "CLI command `trstctl acme dns-01 preflight` evaluates submitted CAA records and lookup errors against a tenant provider config."
+            "CLI command `trstctl acme dns-01 preflight` maps to the served preflight route that evaluates live CAA lookup results against a tenant provider config."
           ],
           "refs": [
             "internal/cli/command.go",
@@ -3926,7 +3930,7 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationId: preflightACMEDNS01 for CAA policy preflight."
+            "OpenAPI operationId: preflightACMEDNS01 for live CAA policy preflight."
           ],
           "refs": [
             "internal/api/api.go",
@@ -3938,6 +3942,7 @@
           "evidence": [
             "acceptance_test: UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
             "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
+            "TestServedACMEDNS01LiveCAAEnforcementTRACE015 proves served preflight uses live CAA over request-supplied CAA, live lookup errors fail closed, and order-time CAA denial stops before DNS provider writes or outbox enqueue.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -4009,8 +4014,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F023",

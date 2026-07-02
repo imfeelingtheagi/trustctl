@@ -309,11 +309,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served CAA checker, live DNS CAA resolver, provider-config caa_issuer_domain, DNS-01 preflight live CAA checks, and ACME order-time fail-closed CAA enforcement before DNS publish",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]

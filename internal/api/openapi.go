@@ -1540,13 +1540,9 @@ func componentSchemas() map[string]*Schema {
 	acmeDNS01ProviderConfigList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ACMEDNS01ProviderConfig")},
 	}, "items")
-	acmeDNS01CAARecord := object(map[string]*Schema{
-		"name": str(), "flag": {Type: "integer"}, "tag": str(), "issuer_domain": str(),
-	}, "tag", "issuer_domain")
 	acmeDNS01PreflightReq := object(map[string]*Schema{
 		"config_id": uuid(), "domain": str(), "method_override": {Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01"}},
 		"expected_txt": str(), "observed_txt": {Type: "array", Items: str()}, "observed_cname": str(),
-		"caa_lookup_error": str(), "caa_records": {Type: "array", Items: ref("ACMEDNS01CAARecord")},
 		"port80_reachable": {Type: "boolean"},
 	}, "config_id", "domain")
 	acmeDNS01PreflightCheck := object(map[string]*Schema{
@@ -3243,7 +3239,6 @@ func componentSchemas() map[string]*Schema {
 		"ACMEDNS01ProviderConfigRequest":           acmeDNS01ProviderConfigReq,
 		"ACMEDNS01ProviderConfig":                  acmeDNS01ProviderConfig,
 		"ACMEDNS01ProviderConfigList":              acmeDNS01ProviderConfigList,
-		"ACMEDNS01CAARecord":                       acmeDNS01CAARecord,
 		"ACMEDNS01PreflightRequest":                acmeDNS01PreflightReq,
 		"ACMEDNS01PreflightCheck":                  acmeDNS01PreflightCheck,
 		"ACMEDNS01Preflight":                       acmeDNS01Preflight,

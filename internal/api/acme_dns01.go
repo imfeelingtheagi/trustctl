@@ -71,22 +71,13 @@ type dns01ProviderConfigListResponse struct {
 }
 
 type dns01PreflightRequest struct {
-	ConfigID        string           `json:"config_id"`
-	Domain          string           `json:"domain"`
-	MethodOverride  string           `json:"method_override,omitempty"`
-	ExpectedTXT     string           `json:"expected_txt,omitempty"`
-	ObservedTXT     []string         `json:"observed_txt,omitempty"`
-	ObservedCNAME   string           `json:"observed_cname,omitempty"`
-	CAALookupError  string           `json:"caa_lookup_error,omitempty"`
-	CAARecords      []dns01CAARecord `json:"caa_records,omitempty"`
-	Port80Reachable bool             `json:"port80_reachable,omitempty"`
-}
-
-type dns01CAARecord struct {
-	Name         string `json:"name,omitempty"`
-	Flag         uint8  `json:"flag,omitempty"`
-	Tag          string `json:"tag"`
-	IssuerDomain string `json:"issuer_domain"`
+	ConfigID        string   `json:"config_id"`
+	Domain          string   `json:"domain"`
+	MethodOverride  string   `json:"method_override,omitempty"`
+	ExpectedTXT     string   `json:"expected_txt,omitempty"`
+	ObservedTXT     []string `json:"observed_txt,omitempty"`
+	ObservedCNAME   string   `json:"observed_cname,omitempty"`
+	Port80Reachable bool     `json:"port80_reachable,omitempty"`
 }
 
 type dns01PreflightCheck struct {
@@ -319,7 +310,6 @@ func (a *API) preflightACMEDNS01(w http.ResponseWriter, r *http.Request) {
 		req.MethodOverride = strings.TrimSpace(req.MethodOverride)
 		req.ExpectedTXT = strings.TrimSpace(req.ExpectedTXT)
 		req.ObservedCNAME = strings.TrimSpace(req.ObservedCNAME)
-		req.CAALookupError = strings.TrimSpace(req.CAALookupError)
 		if req.ConfigID == "" || req.Domain == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "config_id and domain are required")
 		}
@@ -327,7 +317,7 @@ func (a *API) preflightACMEDNS01(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		res := evaluateDNS01Preflight(req, cfg)
+		res := a.evaluateDNS01Preflight(ctx, req, cfg)
 		payload, err := json.Marshal(projections.ACMEDNS01Preflighted{
 			ConfigID: req.ConfigID, Domain: res.Domain, RecordName: res.RecordName,
 			SelectedMethod: res.SelectedMethod, Ready: res.Ready, FailedChecks: res.FailedChecks,
@@ -511,7 +501,7 @@ func toDNS01ProviderConfigResponse(rec store.ACMEDNS01ProviderConfig) dns01Provi
 	}
 }
 
-func evaluateDNS01Preflight(req dns01PreflightRequest, cfg store.ACMEDNS01ProviderConfig) dns01PreflightResponse {
+func (a *API) evaluateDNS01Preflight(ctx context.Context, req dns01PreflightRequest, cfg store.ACMEDNS01ProviderConfig) dns01PreflightResponse {
 	domain := strings.TrimSpace(req.Domain)
 	recordName := acmesrv.DNS01RecordName(domain)
 	wildcard := acmesrv.IsWildcard(domain)
@@ -536,7 +526,7 @@ func evaluateDNS01Preflight(req dns01PreflightRequest, cfg store.ACMEDNS01Provid
 	}
 	checks = append(checks, delegationCheck(recordName, cfg.DelegationTarget, req.ObservedCNAME))
 	checks = append(checks, propagationCheck(req.ExpectedTXT, req.ObservedTXT))
-	checks = append(checks, caaCheck(domain, wildcard, cfg.CAAIssuerDomain, req.CAALookupError, req.CAARecords))
+	checks = append(checks, caaCheck(ctx, a.acmeCAAResolver, domain, wildcard, cfg.CAAIssuerDomain))
 
 	failed := failedDNS01Checks(checks)
 	return dns01PreflightResponse{
@@ -571,78 +561,19 @@ func propagationCheck(expected string, observed []string) dns01PreflightCheck {
 	return dns01PreflightCheck{Name: "txt_propagation", Status: "fail", Detail: "observed TXT records do not contain the expected DNS-01 value"}
 }
 
-func caaCheck(domain string, wildcard bool, issuer, lookupErr string, records []dns01CAARecord) dns01PreflightCheck {
+func caaCheck(ctx context.Context, resolver acmesrv.CAAResolver, domain string, wildcard bool, issuer string) dns01PreflightCheck {
 	issuer = strings.TrimSpace(issuer)
 	if issuer == "" {
 		return dns01PreflightCheck{Name: "caa_policy", Status: "skipped", Detail: "provider config does not declare a CAA issuer domain"}
 	}
-	if lookupErr != "" {
-		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "CAA lookup failed closed: " + lookupErr}
+	if resolver == nil {
+		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "CAA lookup failed closed: no live CAA resolver is configured"}
 	}
-	relevant := governingCAARecords(domain, records)
-	if len(relevant) == 0 {
-		return dns01PreflightCheck{Name: "caa_policy", Status: "pass", Detail: "no governing CAA records were supplied; issuance is unrestricted"}
+	checker := acmesrv.CAAChecker{Resolver: resolver, IssuerDomain: issuer}
+	if err := checker.Check(ctx, domain, wildcard); err != nil {
+		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "live CAA lookup failed closed: " + err.Error()}
 	}
-	tag := "issue"
-	if wildcard && anyCAATag(relevant, "issuewild") {
-		tag = "issuewild"
-	}
-	var candidates []dns01CAARecord
-	for _, rec := range relevant {
-		if strings.EqualFold(strings.TrimSpace(rec.Tag), tag) {
-			candidates = append(candidates, rec)
-		}
-	}
-	if len(candidates) == 0 {
-		return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "governing CAA records authorize no issuer for this request"}
-	}
-	for _, rec := range candidates {
-		if caaValueAuthorizes(rec.IssuerDomain, issuer) {
-			return dns01PreflightCheck{Name: "caa_policy", Status: "pass", Detail: "governing CAA " + tag + " authorizes the configured issuer"}
-		}
-	}
-	return dns01PreflightCheck{Name: "caa_policy", Status: "fail", Detail: "governing CAA " + tag + " does not authorize the configured issuer"}
-}
-
-func governingCAARecords(domain string, records []dns01CAARecord) []dns01CAARecord {
-	if len(records) == 0 {
-		return nil
-	}
-	labels := strings.Split(strings.TrimSuffix(strings.TrimPrefix(domain, "*."), "."), ".")
-	for i := 0; i < len(labels); i++ {
-		name := strings.Join(labels[i:], ".")
-		var out []dns01CAARecord
-		for _, rec := range records {
-			recName := strings.TrimSuffix(strings.TrimSpace(rec.Name), ".")
-			if recName == "" {
-				recName = strings.TrimSuffix(strings.TrimPrefix(domain, "*."), ".")
-			}
-			if strings.EqualFold(recName, name) {
-				out = append(out, rec)
-			}
-		}
-		if len(out) > 0 {
-			return out
-		}
-	}
-	return nil
-}
-
-func anyCAATag(records []dns01CAARecord, tag string) bool {
-	for _, rec := range records {
-		if strings.EqualFold(strings.TrimSpace(rec.Tag), tag) {
-			return true
-		}
-	}
-	return false
-}
-
-func caaValueAuthorizes(value, issuer string) bool {
-	field := strings.TrimSpace(value)
-	if i := strings.IndexByte(field, ';'); i >= 0 {
-		field = strings.TrimSpace(field[:i])
-	}
-	return field != "" && strings.EqualFold(field, issuer)
+	return dns01PreflightCheck{Name: "caa_policy", Status: "pass", Detail: "live governing CAA authorizes the configured issuer or no CAA record restricts issuance"}
 }
 
 func failedDNS01Checks(checks []dns01PreflightCheck) []string {

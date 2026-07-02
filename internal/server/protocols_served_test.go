@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	xacme "golang.org/x/crypto/acme"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
@@ -267,7 +269,11 @@ func TestServedACMEDNS01ProviderCatalogCAPISS02(t *testing.T) {
 // only, and preflight evaluates delegation, TXT propagation, CAA, method, and
 // wildcard policy before ACME issuance relies on a DNS-01 provider.
 func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	caaDNS := newServedDNSWebhookFixture(t, "dns-preflight-token")
+	caaDNS.setCAA("example.test", []acmesrv.CAARecord{{Tag: "issuewild", Value: "trstctl.example"}})
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(caaDNS))
+	})
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
 
 	create := map[string]any{
@@ -488,6 +494,98 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 	}
 }
 
+// TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016 proves F73 on
+// the assembled served ACME path: tenant-managed allowed_methods policy is not just
+// a preflight helper. New orders for a managed domain advertise only the currently
+// allowed DV challenge types, and policy updates take effect on later orders.
+func TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016(t *testing.T) {
+	h := newServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+	)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+
+	create := map[string]any{
+		"name":     "trace016-dv-policy",
+		"provider": "webhook",
+		"zone":     "trace016.test",
+		"credential_refs": map[string]any{
+			"bearer_token_ref": "secret://dns/trace016/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": "https://dns.trace016.invalid",
+		},
+		"allowed_methods": []string{"dns-01"},
+	}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, create)
+	if status != http.StatusCreated {
+		t.Fatalf("create TRACE-016 DV policy provider config: status %d body %s", status, body)
+	}
+	var created struct {
+		ID             string   `json:"id"`
+		AllowedMethods []string `json:"allowed_methods"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode TRACE-016 provider config: %v body=%s", err, body)
+	}
+	if created.ID == "" || len(created.AllowedMethods) != 1 || created.AllowedMethods[0] != "dns-01" {
+		t.Fatalf("created TRACE-016 policy config did not retain dns-01 policy: %+v body=%s", created, body)
+	}
+
+	ctx := context.Background()
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatalf("acme client: %v", err)
+	}
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	assertServedACMEChallengeTypes(t, ctx, client, "dns-only.trace016.test", []string{"dns-01"})
+
+	update := map[string]any{
+		"name":     "trace016-dv-policy",
+		"provider": "webhook",
+		"zone":     "trace016.test",
+		"credential_refs": map[string]any{
+			"bearer_token_ref": "secret://dns/trace016/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": "https://dns.trace016.invalid",
+		},
+		"allowed_methods": []string{"tls-alpn-01"},
+	}
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/acme/dns-01/provider-configs/"+created.ID, tok, update)
+	if status != http.StatusOK {
+		t.Fatalf("update TRACE-016 DV policy provider config: status %d body %s", status, body)
+	}
+	assertServedACMEChallengeTypes(t, ctx, client, "alpn-only.trace016.test", []string{"tls-alpn-01"})
+
+	if !h.hasEvent(t, projections.EventACMEDNS01ProviderConfigUpserted) {
+		t.Fatal("TRACE-016 DV policy management did not append provider-config audit events")
+	}
+}
+
+func assertServedACMEChallengeTypes(t *testing.T, ctx context.Context, client *xacme.Client, domain string, want []string) {
+	t.Helper()
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
+	if err != nil {
+		t.Fatalf("authorize order for %s: %v", domain, err)
+	}
+	if len(order.AuthzURLs) != 1 {
+		t.Fatalf("order for %s returned %d authorizations, want 1", domain, len(order.AuthzURLs))
+	}
+	authz, err := client.GetAuthorization(ctx, order.AuthzURLs[0])
+	if err != nil {
+		t.Fatalf("get authorization for %s: %v", domain, err)
+	}
+	got := make([]string, 0, len(authz.Challenges))
+	for _, chal := range authz.Challenges {
+		got = append(got, chal.Type)
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("ACME challenges for %s = %v, want only %v", domain, got, want)
+	}
+}
+
 // TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014 proves F71
 // on the served order-time path: when a tenant provider config declares a
 // delegation target, ACME DNS-01 publish/cleanup writes only to that isolated
@@ -561,6 +659,134 @@ func TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014(t *tes
 		t.Fatal("served ACME DNS-01 delegated present succeeded without a CNAME")
 	}
 	dns.assertNeverRequested(t, missingRecord)
+}
+
+// TestServedACMEDNS01LiveCAAEnforcementTRACE015 proves F72 on the assembled served
+// path: CAA is read from the authoritative DNS resolver, not trusted from the
+// preflight request body, and an order-time CAA denial stops before any DNS write or
+// outbox row is committed.
+func TestServedACMEDNS01LiveCAAEnforcementTRACE015(t *testing.T) {
+	dns := newServedDNSWebhookFixture(t, "dns-caa-token")
+	h := newServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(dns))
+		},
+	)
+	h.srv.acmeDNS01.caaResolver = dns
+	startServedDirectOutboxPump(t, h.srv)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "dns/caa/bearer-token",
+		"value": "dns-caa-token",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS CAA bearer secret: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+		"name":              "trace015-caa-webhook",
+		"provider":          "webhook",
+		"zone":              "trace015.test",
+		"caa_issuer_domain": "trstctl.example",
+		"credential_refs": map[string]any{
+			"bearer_token_ref": "secret://dns/caa/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": dns.URL(),
+		},
+		"allowed_methods": []string{"dns-01"},
+		"allow_wildcards": true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create CAA DNS-01 provider config: status %d body %s", status, body)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode CAA provider config: %v body=%s", err, body)
+	}
+	if created.ID == "" {
+		t.Fatal("created CAA provider config returned no id")
+	}
+
+	dns.setCAA("trace015.test", []acmesrv.CAARecord{{Tag: "issue", Value: "trstctl.example"}})
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/preflight", tok, map[string]any{
+		"config_id":    created.ID,
+		"domain":       "allowed.trace015.test",
+		"expected_txt": "txt-proof",
+		"observed_txt": []string{"txt-proof"},
+		"caa_records": []map[string]any{
+			{"name": "trace015.test", "tag": "issue", "issuer_domain": "other.ca"},
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("CAA live preflight: status %d body %s", status, body)
+	}
+	var preflight struct {
+		Ready        bool     `json:"ready"`
+		FailedChecks []string `json:"failed_checks"`
+		Checks       []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+			Detail string `json:"detail"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal(body, &preflight); err != nil {
+		t.Fatalf("decode CAA preflight: %v body=%s", err, body)
+	}
+	if !preflight.Ready || containsString(preflight.FailedChecks, "caa_policy") {
+		t.Fatalf("preflight trusted request-supplied CAA instead of live DNS: %+v body=%s", preflight, body)
+	}
+	if !checkStatus(preflight.Checks, "caa_policy", "pass") {
+		t.Fatalf("preflight did not report passing live CAA policy: %+v", preflight.Checks)
+	}
+
+	dns.setCAA("trace015.test", []acmesrv.CAARecord{{Tag: "issue", Value: "other.ca"}})
+	const deniedDomain = "denied.trace015.test"
+	deniedRecord := acmesrv.DNS01RecordName(deniedDomain)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := h.srv.acmeDNS01.Present(ctx, h.tenant, deniedDomain, "", "trace015-denied-key-authorization"); err == nil {
+		t.Fatal("served ACME DNS-01 present succeeded when live CAA denied the configured issuer")
+	}
+	dns.assertNeverRequested(t, deniedRecord)
+	if rows := servedOutboxRowsByDestination(t, h, "acme.dns01."); len(rows) != 0 {
+		t.Fatalf("CAA denial should stop before enqueueing DNS-01 outbox work, got rows %#v", rows)
+	}
+
+	dns.setCAAError(errors.New("servfail"))
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/preflight", tok, map[string]any{
+		"config_id":    created.ID,
+		"domain":       "lookup-error.trace015.test",
+		"expected_txt": "txt-proof",
+		"observed_txt": []string{"txt-proof"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("CAA lookup-error preflight: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &preflight); err != nil {
+		t.Fatalf("decode CAA lookup-error preflight: %v body=%s", err, body)
+	}
+	if preflight.Ready || !containsString(preflight.FailedChecks, "caa_policy") {
+		t.Fatalf("preflight did not fail closed on live CAA lookup error: %+v body=%s", preflight, body)
+	}
+}
+
+func checkStatus(checks []struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+}, name, status string) bool {
+	for _, check := range checks {
+		if check.Name == name && check.Status == status {
+			return true
+		}
+	}
+	return false
 }
 
 // TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013 proves F70 on
@@ -687,6 +913,8 @@ type servedDNSWebhookFixture struct {
 	mu       sync.Mutex
 	records  map[string]map[string]bool
 	cnames   map[string]string
+	caa      map[string][]acmesrv.CAARecord
+	caaErr   error
 	requests []servedDNSWebhookRequest
 }
 
@@ -703,6 +931,7 @@ func newServedDNSWebhookFixture(t *testing.T, bearerToken string) *servedDNSWebh
 		bearerToken: bearerToken,
 		records:     map[string]map[string]bool{},
 		cnames:      map[string]string{},
+		caa:         map[string][]acmesrv.CAARecord{},
 	}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
@@ -715,6 +944,20 @@ func (f *servedDNSWebhookFixture) setCNAME(name, target string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cnames[strings.TrimSuffix(name, ".")] = strings.TrimSuffix(target, ".")
+}
+
+func (f *servedDNSWebhookFixture) setCAA(name string, records []acmesrv.CAARecord) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.caaErr = nil
+	name = strings.TrimSuffix(name, ".")
+	f.caa[name] = append([]acmesrv.CAARecord(nil), records...)
+}
+
+func (f *servedDNSWebhookFixture) setCAAError(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.caaErr = err
 }
 
 func (f *servedDNSWebhookFixture) handle(w http.ResponseWriter, r *http.Request) {
@@ -785,6 +1028,16 @@ func (f *servedDNSWebhookFixture) LookupCNAME(_ context.Context, name string) (s
 		return target + ".", nil
 	}
 	return name + ".", nil
+}
+
+func (f *servedDNSWebhookFixture) LookupCAA(_ context.Context, name string) ([]acmesrv.CAARecord, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.caaErr != nil {
+		return nil, f.caaErr
+	}
+	name = strings.TrimSuffix(name, ".")
+	return append([]acmesrv.CAARecord(nil), f.caa[name]...), nil
 }
 
 func (f *servedDNSWebhookFixture) assertPresentedAndCleaned(t *testing.T, name, value string) {

@@ -77,8 +77,8 @@ The served control plane has a tenant-scoped DNS-01 provider-config API:
 `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
 zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
 `credential_refs` only. Inline provider tokens are rejected.
-`POST /api/v1/acme/dns-01/preflight` evaluates CNAME delegation, TXT propagation, CAA,
-method policy, and wildcard policy against one of those configs and records an
+`POST /api/v1/acme/dns-01/preflight` evaluates CNAME delegation, TXT propagation,
+live CAA, method policy, and wildcard policy against one of those configs and records an
 `acme.dns01.preflighted` event. The matching CLI commands are
 `trstctl acme dns-01 provider-configs ...` and `trstctl acme dns-01 preflight`.
 
@@ -88,9 +88,12 @@ tenant's matching provider config, enqueues `acme.dns01.present` and
 validation, and records `acme.dns01.record.presented` /
 `acme.dns01.record.cleaned` metadata events. Provider credentials are resolved from
 secret references inside the outbox worker; TXT values and credential refs are not
-written to the audit events. When the provider config sets `delegation_target`, the
-outbox worker verifies the live `_acme-challenge` CNAME against that configured target
-and publishes/cleans up the TXT only at the delegated validation name.
+written to the audit events. When the provider config sets `caa_issuer_domain`, the
+served DNS-01 path checks authoritative live CAA before enqueueing provider writes and
+fails closed if the governing CAA set denies that issuer or cannot be read. When the
+provider config sets `delegation_target`, the outbox worker verifies the live
+`_acme-challenge` CNAME against that configured target and publishes/cleans up the TXT
+only at the delegated validation name.
 
 ### Any DNS provider: the plugin framework (F70)
 
@@ -143,8 +146,11 @@ a domain owner names which CAs are permitted to issue for the domain — a way t
 from the full name up toward the apex, finds the governing CAA record set, and refuses
 if that set doesn't authorize trstctl's issuer. Wildcard requests honor `issuewild`
 records with the right precedence, an empty issuer value (`;`) forbids all issuance, and
-a lookup error **fails closed**. The check runs before the CA is asked to sign, so a CAA
-violation surfaces with a clear reason instead of a confusing downstream rejection. RFC 8659.
+a lookup error **fails closed**. The served preflight route and the order-time DNS-01
+automation both use authoritative live DNS rather than caller-supplied CAA records; an
+order-time denial stops before any `acme.dns01.present` outbox row or DNS provider write.
+The check runs before the CA is asked to sign, so a CAA violation surfaces with a clear
+reason instead of a confusing downstream rejection. RFC 8659.
 
 ### Picking the right challenge: multi-method policy (F73)
 

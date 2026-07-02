@@ -46,6 +46,7 @@ type servedACMEDNS01Automation struct {
 	plugins *PluginManager
 
 	cnameResolver acme.CNAMEResolver
+	caaResolver   acme.CAAResolver
 }
 
 type acmeDNS01OutboxPayload struct {
@@ -84,6 +85,9 @@ func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domai
 	}
 	cfg, err := a.selectProviderConfig(ctx, tenantID, domain)
 	if err != nil {
+		return nil, err
+	}
+	if err := a.enforceLiveCAA(ctx, domain, cfg); err != nil {
 		return nil, err
 	}
 	recordName := acme.DNS01RecordName(domain)
@@ -163,6 +167,22 @@ func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, te
 		return cfg, nil
 	}
 	return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("acme: no served dns-01 provider config matches %s", domain)
+}
+
+func (a *servedACMEDNS01Automation) enforceLiveCAA(ctx context.Context, domain string, cfg store.ACMEDNS01ProviderConfig) error {
+	issuer := strings.TrimSpace(cfg.CAAIssuerDomain)
+	if issuer == "" {
+		return nil
+	}
+	resolver := a.caaResolver
+	if resolver == nil {
+		resolver = acme.DefaultCAAResolver()
+	}
+	checker := acme.CAAChecker{Resolver: resolver, IssuerDomain: issuer}
+	if err := checker.Check(ctx, domain, acme.IsWildcard(domain)); err != nil {
+		return fmt.Errorf("acme: live CAA policy rejected %s before DNS-01 publish: %w", domain, err)
+	}
+	return nil
 }
 
 func (a *servedACMEDNS01Automation) enqueueAndWait(ctx context.Context, tenantID, destination, idempotencyKey string, payload acmeDNS01OutboxPayload) error {

@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/privacy"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -97,6 +98,7 @@ type API struct {
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
+	acmeCAAResolver           acmesrv.CAAResolver
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
@@ -160,6 +162,7 @@ type config struct {
 	serviceNowBindings        []ServiceNowBinding
 	outboundEnvCredentialRefs map[string]struct{}
 	acmeDNS01Providers        []ACMEDNS01ProviderCatalogItem
+	acmeCAAResolver           acmesrv.CAAResolver
 	privacyRetentionPolicy    privacy.RetentionPolicy
 	privacyRetentionSource    privacy.RetentionPolicySource
 	featureObserver           func(feature, action, outcome string, seconds float64)
@@ -270,6 +273,13 @@ func WithACMEDNS01Providers(items ...ACMEDNS01ProviderCatalogItem) Option {
 	return func(c *config) {
 		c.acmeDNS01Providers = append(c.acmeDNS01Providers, items...)
 	}
+}
+
+// WithACMEDNS01CAAResolver wires the authoritative live CAA resolver used by
+// DNS-01 preflight. Production passes acme.DefaultCAAResolver; tests pass a
+// deterministic resolver.
+func WithACMEDNS01CAAResolver(resolver acmesrv.CAAResolver) Option {
+	return func(c *config) { c.acmeCAAResolver = resolver }
 }
 
 func normalizeOutboundEnvCredentialRefs(refs []string) map[string]struct{} {
@@ -487,6 +497,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
 		acmeDNS01Providers:        append([]ACMEDNS01ProviderCatalogItem(nil), cfg.acmeDNS01Providers...),
+		acmeCAAResolver:           cfg.acmeCAAResolver,
 		featureObserver:           cfg.featureObserver,
 		privacyRetentionPolicy:    policy.WithDefaults(),
 		privacyRetentionSource:    cfg.privacyRetentionSource,

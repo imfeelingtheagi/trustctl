@@ -800,6 +800,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithNotificationOutbox(s.outbox),
 		api.WithServiceNowBindings(d.ServiceNowBindings...),
 		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
+		api.WithACMEDNS01CAAResolver(acme.DefaultCAAResolver()),
 	}
 	if d.EnableRemediation {
 		defaults = append(defaults,
