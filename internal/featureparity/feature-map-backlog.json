@@ -3358,8 +3358,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 55,
-      "served_state": "partial",
-      "backend_status": "partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path",
+      "served_state": "served",
+      "backend_status": "served order-time DNS-01 publish/cleanup through the outbox using tenant provider configs, secret-reference-backed provider credentials, and DNS-01 preflight",
       "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider catalog and tenant provider configs with secret-reference-only disclosure, method/wildcard/CAA policy, and no raw provider-token controls",
       "target_gui_mapping": "DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist.",
       "acceptance_test": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
@@ -3367,9 +3367,13 @@
         "docs/features/acme-and-dns.md"
       ],
       "source_backend": [
+        "internal/protocols/acme/acme.go",
         "internal/protocols/acme/dns01.go",
         "internal/dns",
-        "internal/api/acme_dns01.go"
+        "internal/api/acme_dns01.go",
+        "internal/server/acme_dns01_automation.go",
+        "internal/server/issuance.go",
+        "internal/server/protocol_mounts.go"
       ],
       "source_frontend": [
         "web/src/pages/Protocols.tsx"
@@ -3401,10 +3405,15 @@
           "evidence": [
             "GET /api/v1/acme/dns-01/providers returns the served DNS-01 provider catalog with Route 53, Google Cloud DNS, Azure DNS, Cloudflare, RFC 2136, webhook, and additional built-ins.",
             "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values.",
-            "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01."
+            "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01.",
+            "POST /acme/chal/{id} on a served dns-01 challenge resolves the tenant provider config, enqueues acme.dns01.present/acme.dns01.cleanup outbox rows, validates the published TXT, and finalizes through the signer-backed served ACME path."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
+            "internal/server/acme_dns01_automation.go",
+            "internal/server/issuance.go",
+            "internal/server/protocol_mounts.go",
+            "internal/protocols/acme/acme.go",
             "internal/server/protocols_served_test.go",
             "internal/projections/projections.go"
           ]
@@ -3442,6 +3451,7 @@
           "evidence": [
             "acceptance_test: UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
             "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
+            "TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012 drives a stock ACME client through served dns-01 order-time publish, validation, cleanup, delivered outbox rows, audit events, and certificate finalization.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -3475,10 +3485,13 @@
         "audit": {
           "evidence": [
             "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
-            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata.",
+            "Order-time DNS-01 publish/cleanup appends acme.dns01.record.presented and acme.dns01.record.cleaned metadata events from delivered outbox work without credential refs or TXT values."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
+            "internal/server/acme_dns01_automation.go",
+            "internal/server/issuance.go",
             "internal/projections/projections.go",
             "internal/eventledger/ledger.go"
           ]
@@ -3512,9 +3525,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F020",

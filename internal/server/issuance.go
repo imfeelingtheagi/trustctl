@@ -121,6 +121,9 @@ type issuanceDispatcher struct {
 	// secretRepoScanner runs repository secret scans from the discovery.run outbox
 	// worker. It is the same pinned/redacting scanner used by POST /secrets/scans.
 	secretRepoScanner secretScanner
+	// dns01 publishes and cleans ACME DNS-01 challenge records through tenant
+	// provider configs. Nil makes acme.dns01.* destinations fail closed.
+	dns01 *servedACMEDNS01Automation
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -145,6 +148,11 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDeploy(ctx, m)
 	case "discovery.run":
 		return d.handleDiscoveryRun(ctx, m)
+	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
+		if d.dns01 == nil {
+			return fmt.Errorf("server: acme dns-01 outbox destination is not configured")
+		}
+		return d.dns01.Deliver(ctx, m)
 	case ca.DestinationExternalCAIssue:
 		if d.externalCAs == nil {
 			return fmt.Errorf("server: external CA outbox destination is not configured")
@@ -175,7 +183,7 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 			}
 			return d.transparency.Deliver(ctx, m)
 		}
-		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "external-ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") || strings.HasPrefix(m.Destination, "itsm.") || strings.HasPrefix(m.Destination, "response.") || strings.HasPrefix(m.Destination, "ct.") {
+		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "external-ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") || strings.HasPrefix(m.Destination, "acme.dns01.") || strings.HasPrefix(m.Destination, "itsm.") || strings.HasPrefix(m.Destination, "response.") || strings.HasPrefix(m.Destination, "ct.") {
 			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
 		}
 		return nil

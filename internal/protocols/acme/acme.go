@@ -176,6 +176,14 @@ type RevocationRequest struct {
 // trustctl HTTP Idempotency-Key on revokeCert.
 type RevocationHook func(context.Context, RevocationRequest) error
 
+// DNS01Automation publishes the DNS-01 TXT record needed for a challenge and
+// returns a cleanup function that retracts it. Served deployments implement this
+// with tenant provider configs plus the outbox; library embeds can leave it nil
+// and publish records out of band.
+type DNS01Automation interface {
+	Present(ctx context.Context, tenantID, domain, token, keyAuth string) (cleanup func(context.Context) error, err error)
+}
+
 type challenge struct {
 	id      string
 	typ     string
@@ -260,11 +268,12 @@ type Server struct {
 	sources    map[string]*sourceBudget
 	seq        int
 
-	revokeHook     RevocationHook
-	accountLimiter AccountOrderLimiter
-	stateLog       eventLog
-	stateTenantID  string
-	eabKeys        map[string]*secret.Buffer
+	revokeHook      RevocationHook
+	accountLimiter  AccountOrderLimiter
+	dns01Automation DNS01Automation
+	stateLog        eventLog
+	stateTenantID   string
+	eabKeys         map[string]*secret.Buffer
 
 	mux *http.ServeMux
 }
@@ -315,6 +324,15 @@ func (s *Server) WithQuota(q QuotaConfig) *Server {
 // a process-local token bucket.
 func (s *Server) WithAccountOrderLimiter(l AccountOrderLimiter) *Server {
 	s.accountLimiter = l
+	return s
+}
+
+// WithDNS01Automation wires managed DNS-01 publish/cleanup for served
+// deployments. Nil leaves the ACME server's RFC 8555 behavior unchanged:
+// clients/operators must publish DNS-01 TXT records out of band before accepting
+// the challenge.
+func (s *Server) WithDNS01Automation(a DNS01Automation) *Server {
+	s.dns01Automation = a
 	return s
 }
 
@@ -846,8 +864,23 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 	s.mu.Unlock()
 
 	keyAuth := ch.token + "." + acct.key.Thumbprint()
-	if err := s.validator.Validate(r.Context(), ch.typ, az.domain, ch.token, keyAuth); err != nil {
-		s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
+	var cleanup func(context.Context) error
+	if ch.typ == ChallengeDNS01 && s.dns01Automation != nil {
+		var err error
+		cleanup, err = s.dns01Automation.Present(r.Context(), s.stateTenantID, az.domain, ch.token, keyAuth)
+		if err != nil {
+			s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
+			return
+		}
+	}
+	validateErr := s.validator.Validate(r.Context(), ch.typ, az.domain, ch.token, keyAuth)
+	if cleanup != nil {
+		if validateErr != nil {
+			_ = cleanup(context.WithoutCancel(r.Context()))
+		}
+	}
+	if validateErr != nil {
+		s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+validateErr.Error())
 		return
 	}
 
@@ -894,6 +927,9 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 	}
 	s.mu.Unlock()
 
+	if cleanup != nil {
+		_ = cleanup(context.WithoutCancel(r.Context()))
+	}
 	addLink(w, base+"/acme/authz/"+az.id, "up")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"type": ch.typ, "url": base + "/acme/chal/" + ch.id, "token": ch.token, "status": ch.status,

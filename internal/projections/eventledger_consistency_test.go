@@ -33,6 +33,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventACMEDNS01ProviderConfigUpserted:     "EventACMEDNS01ProviderConfigUpserted",
 	projections.EventACMEDNS01ProviderConfigDeleted:      "EventACMEDNS01ProviderConfigDeleted",
 	projections.EventACMEDNS01Preflighted:                "EventACMEDNS01Preflighted",
+	projections.EventACMEDNS01RecordPresented:            "EventACMEDNS01RecordPresented",
+	projections.EventACMEDNS01RecordCleaned:              "EventACMEDNS01RecordCleaned",
 	projections.EventMDMSCEPPolicyUpserted:               "EventMDMSCEPPolicyUpserted",
 	projections.EventMDMSCEPPolicyDeleted:                "EventMDMSCEPPolicyDeleted",
 	projections.EventMDMSCEPChallengeRotated:             "EventMDMSCEPChallengeRotated",

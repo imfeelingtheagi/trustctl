@@ -54,6 +54,8 @@ const (
 	EventACMEDNS01ProviderConfigUpserted     = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted      = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted                = "acme.dns01.preflighted"
+	EventACMEDNS01RecordPresented            = "acme.dns01.record.presented"
+	EventACMEDNS01RecordCleaned              = "acme.dns01.record.cleaned"
 	EventMDMSCEPPolicyUpserted               = "mdm.scep_policy.upserted"
 	EventMDMSCEPPolicyDeleted                = "mdm.scep_policy.deleted"
 	EventMDMSCEPChallengeRotated             = "mdm.scep_challenge.rotated"
@@ -143,6 +145,8 @@ var ledger = []FeatureEvent{
 	{"F69", "DNS-01 challenge automation", "configure_provider", "createACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigUpserted}},
 	{"F69", "DNS-01 challenge automation", "delete_provider", "deleteACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigDeleted}},
 	{"F69", "DNS-01 challenge automation", "preflight", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
+	{"F69", "DNS-01 challenge automation", "publish_challenge", "acceptACMEDNS01Challenge", []string{EventACMEDNS01RecordPresented}},
+	{"F69", "DNS-01 challenge automation", "cleanup_challenge", "acceptACMEDNS01Challenge", []string{EventACMEDNS01RecordCleaned}},
 	{"F70", "DNS-provider plugin framework", "configure_provider", "createACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigUpserted}},
 	{"F70", "DNS-provider plugin framework", "delete_provider", "deleteACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigDeleted}},
 	{"F71", "CNAME delegation for validation isolation", "preflight_delegation", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},

@@ -50,6 +50,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F48 | Private/enterprise CA hierarchy management | docs/features/issuance-and-cas.md, docs/runbooks/key-ceremony.md |
 | F53 | Certificate profiles and registration-authority model | docs/features/issuance-and-cas.md, docs/guides/profile-authoring.md |
 | F46 | ACME Renewal Information (ARI) | docs/features/issuance-and-cas.md, docs/features/acme-and-dns.md |
+| F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
 | F47 | X.509 revocation infrastructure | docs/features/issuance-and-cas.md |
 | F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
 | F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
@@ -116,7 +117,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
 | F70 | DNS-provider plugin framework | docs/features/acme-and-dns.md |
 | F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
@@ -902,8 +902,10 @@ This is a deliberate, documented trust boundary (not an accident):
   Tenant DNS-01 provider configs are served through
   `POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs`, and
   `POST /api/v1/acme/dns-01/preflight` evaluates delegation, TXT propagation, CAA,
-  method, and wildcard policy before issuance. Automatic ACME order-time DNS
-  publish/cleanup still belongs on the issuance/outbox execution path.
+  method, and wildcard policy before issuance. Served ACME DNS-01 challenge
+  acceptance now publishes and cleans through `acme.dns01.present` /
+  `acme.dns01.cleanup` outbox rows using tenant provider configs and
+  secret-reference-backed credentials.
   The ACME server is now **served by the running
   binary**: it is mounted on the control-plane TLS listener at `/directory` +
   `/acme/...` and brokers issuance through the orchestrator-backed path — signed in the

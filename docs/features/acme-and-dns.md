@@ -82,6 +82,14 @@ method policy, and wildcard policy against one of those configs and records an
 `acme.dns01.preflighted` event. The matching CLI commands are
 `trstctl acme dns-01 provider-configs ...` and `trstctl acme dns-01 preflight`.
 
+On an actual served ACME DNS-01 order, accepting the `dns-01` challenge resolves the
+tenant's matching provider config, enqueues `acme.dns01.present` and
+`acme.dns01.cleanup` outbox rows, waits for the published TXT record before
+validation, and records `acme.dns01.record.presented` /
+`acme.dns01.record.cleaned` metadata events. Provider credentials are resolved from
+secret references inside the outbox worker; TXT values and credential refs are not
+written to the audit events.
+
 ### Any DNS provider: the plugin framework (F70)
 
 Every DNS host has a different API, so trstctl defines one tiny interface a provider
@@ -192,11 +200,10 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
   `GET /api/v1/acme/dns-01/providers`.
 - **DNS-01 provider config:** `POST/GET/PUT/DELETE
   /api/v1/acme/dns-01/provider-configs`; `POST /api/v1/acme/dns-01/preflight`.
+- **Order-time DNS-01 automation:** `POST /acme/chal/{id}` for a served `dns-01`
+  challenge publishes, validates, and cleans through `acme.dns01.*` outbox rows.
 - **Key functions:** `SelectMethod` (method choice), `ConformDNSProvider` (provider
   conformance), `VerifyDelegation` / `PreflightDNS01` (onboarding checks).
-- **Known shortfall:** provider config and preflight are served; automatic ACME
-  order-time DNS publish/cleanup through the outbox is still a follow-up before this
-  becomes full end-to-end DNS-01 automation.
 - **RFCs:** 8555 (ACME), 8659 (CAA), 9773 (ARI).
 
 ## See also

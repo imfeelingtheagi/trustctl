@@ -229,6 +229,9 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	}
 	acmeSrv := acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
 		WithQuota(acmeQuotaConfig(cfg.ACMEQuota))
+	if s.acmeDNS01 != nil {
+		acmeSrv = acmeSrv.WithDNS01Automation(s.acmeDNS01)
+	}
 	eabKeys, err := acmeExternalAccountBindingKeys(cfg.ACMEEAB)
 	if err != nil {
 		return nil, err

@@ -205,7 +205,7 @@ func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"automatic acme order-time dns-01 publish/cleanup",
+		"automated wildcard renewal scheduling",
 		"cursor pagination and list virtualization",
 		"terraform cloud/opentofu and arbitrary webhook secret-sync targets",
 		"vault kv outbound sync",

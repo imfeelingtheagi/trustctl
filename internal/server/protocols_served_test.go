@@ -14,9 +14,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	xacme "golang.org/x/crypto/acme"
 
 	"trstctl.com/trstctl/internal/config"
@@ -356,6 +358,272 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 	if !h.hasEvent(t, projections.EventACMEDNS01ProviderConfigUpserted) || !h.hasEvent(t, projections.EventACMEDNS01Preflighted) {
 		t.Fatal("DNS-01 provider config/preflight did not append expected audit events")
 	}
+}
+
+// TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012 proves the
+// TRACE-012 closure on the running control-plane surface: a stock ACME client
+// accepts dns-01 without pre-publishing the TXT itself, and the served ACME order
+// path resolves the tenant provider config, publishes the TXT through the outbox,
+// validates it, cleans it up through the outbox, and then finalizes a real signer-
+// issued certificate.
+func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testing.T) {
+	dns := newServedDNSWebhookFixture(t, "dns-webhook-token")
+	validators := acmesrv.Validators{
+		HTTP01: acmesrv.HTTP01Validator{},
+		DNS01:  acmesrv.DNS01Validator{Resolver: dns},
+	}
+	h := newServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) { d.ACMEValidators = &validators },
+	)
+	startServedOutboxPump(t, h.srv)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "dns/webhook/bearer-token",
+		"value": "dns-webhook-token",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS webhook bearer secret: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+		"name":     "trace012-webhook",
+		"provider": "webhook",
+		"zone":     "served.test",
+		"credential_refs": map[string]any{
+			"bearer_token_ref": "secret://dns/webhook/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": dns.URL(),
+		},
+		"allowed_methods": []string{"dns-01"},
+		"allow_wildcards": true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS-01 provider config: status %d body %s", status, body)
+	}
+
+	ctx := context.Background()
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatalf("acme client: %v", err)
+	}
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	const domain = "dns01.served.test"
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
+	if err != nil {
+		t.Fatalf("authorize order: %v", err)
+	}
+	for _, authzURL := range order.AuthzURLs {
+		authz, err := client.GetAuthorization(ctx, authzURL)
+		if err != nil {
+			t.Fatalf("get authorization: %v", err)
+		}
+		var chal *xacme.Challenge
+		for _, c := range authz.Challenges {
+			if c.Type == "dns-01" {
+				chal = c
+				break
+			}
+		}
+		if chal == nil {
+			t.Fatal("served ACME offered no dns-01 challenge")
+		}
+		wantValue, err := client.DNS01ChallengeRecord(chal.Token)
+		if err != nil {
+			t.Fatalf("compute dns-01 challenge record: %v", err)
+		}
+		if _, err := client.Accept(ctx, chal); err != nil {
+			t.Fatalf("accept dns-01 challenge: %v", err)
+		}
+		if _, err := client.WaitAuthorization(ctx, authzURL); err != nil {
+			t.Fatalf("wait authorization: %v", err)
+		}
+		dns.assertPresentedAndCleaned(t, acmesrv.DNS01RecordName(domain), wantValue)
+	}
+	if order, err = client.WaitOrder(ctx, order.URI); err != nil {
+		t.Fatalf("wait order: %v", err)
+	}
+
+	der, _, err := client.CreateOrderCert(ctx, order.FinalizeURL, buildServedCSR(t, domain), true)
+	if err != nil {
+		t.Fatalf("finalize/create cert: %v", err)
+	}
+	if len(der) == 0 {
+		t.Fatal("served ACME DNS-01 order returned no certificate")
+	}
+	if err := crypto.VerifyLeafSignedByCA(der[0], caCertDER(t, h.caPEM)); err != nil {
+		t.Fatalf("served ACME DNS-01 cert does not verify against the served CA: %v", err)
+	}
+	rows := servedOutboxRowsByDestination(t, h, "acme.dns01.")
+	if rows["acme.dns01.present:delivered"] != 1 || rows["acme.dns01.cleanup:delivered"] != 1 {
+		t.Fatalf("dns-01 outbox rows = %#v, want one delivered present and cleanup row", rows)
+	}
+	if !h.hasEvent(t, "acme.dns01.record.presented") || !h.hasEvent(t, "acme.dns01.record.cleaned") {
+		t.Fatal("served DNS-01 publish/cleanup did not append audit events")
+	}
+}
+
+type servedDNSWebhookFixture struct {
+	srv         *httptest.Server
+	bearerToken string
+
+	mu       sync.Mutex
+	records  map[string]map[string]bool
+	requests []servedDNSWebhookRequest
+}
+
+type servedDNSWebhookRequest struct {
+	Action        string `json:"action"`
+	Name          string `json:"name"`
+	Value         string `json:"value"`
+	Authorization string `json:"-"`
+}
+
+func newServedDNSWebhookFixture(t *testing.T, bearerToken string) *servedDNSWebhookFixture {
+	t.Helper()
+	f := &servedDNSWebhookFixture{bearerToken: bearerToken, records: map[string]map[string]bool{}}
+	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+func (f *servedDNSWebhookFixture) URL() string { return f.srv.URL }
+
+func (f *servedDNSWebhookFixture) handle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	action := strings.TrimPrefix(r.URL.Path, "/")
+	if action != "present" && action != "cleanup" {
+		http.NotFound(w, r)
+		return
+	}
+	if got := r.Header.Get("Authorization"); got != "Bearer "+f.bearerToken {
+		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		return
+	}
+	defer func() { _ = r.Body.Close() }()
+	var req servedDNSWebhookRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Authorization = r.Header.Get("Authorization")
+	if req.Action != action || req.Name == "" || req.Value == "" {
+		http.Error(w, "invalid webhook request", http.StatusBadRequest)
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.requests = append(f.requests, req)
+	switch action {
+	case "present":
+		if f.records[req.Name] == nil {
+			f.records[req.Name] = map[string]bool{}
+		}
+		f.records[req.Name][req.Value] = true
+	case "cleanup":
+		if f.records[req.Name] != nil {
+			delete(f.records[req.Name], req.Value)
+			if len(f.records[req.Name]) == 0 {
+				delete(f.records, req.Name)
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{}`))
+}
+
+func (f *servedDNSWebhookFixture) LookupTXT(_ context.Context, name string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	values := make([]string, 0, len(f.records[name]))
+	for value := range f.records[name] {
+		values = append(values, value)
+	}
+	return values, nil
+}
+
+func (f *servedDNSWebhookFixture) assertPresentedAndCleaned(t *testing.T, name, value string) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var presented, cleaned bool
+	for _, req := range f.requests {
+		if req.Name != name || req.Value != value || req.Authorization != "Bearer "+f.bearerToken {
+			continue
+		}
+		switch req.Action {
+		case "present":
+			presented = true
+		case "cleanup":
+			cleaned = true
+		}
+	}
+	if !presented || !cleaned {
+		t.Fatalf("DNS webhook requests = %+v, want present and cleanup for %s=%s", f.requests, name, value)
+	}
+	if len(f.records[name]) != 0 {
+		t.Fatalf("DNS webhook still has TXT records for %s after cleanup: %#v", name, f.records[name])
+	}
+}
+
+func startServedOutboxPump(t *testing.T, srv *Server) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				srv.dispatchOnce(ctx)
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+}
+
+func servedOutboxRowsByDestination(t *testing.T, h *servedHarness, prefix string) map[string]int {
+	t.Helper()
+	out := map[string]int{}
+	if err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(context.Background(),
+			`SELECT destination, status, count(*)
+			   FROM outbox
+			  WHERE tenant_id = $1 AND destination LIKE $2
+			  GROUP BY destination, status`, h.tenant, prefix+"%")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var destination, status string
+			var count int
+			if err := rows.Scan(&destination, &status, &count); err != nil {
+				return err
+			}
+			out[destination+":"+status] = count
+		}
+		return rows.Err()
+	}); err != nil {
+		t.Fatalf("query outbox rows: %v", err)
+	}
+	return out
 }
 
 // TestServedACMEEndToEnd is the EXC-WIRE-02 / INTEROP-001/002/003 acceptance proof for

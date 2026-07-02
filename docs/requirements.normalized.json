@@ -270,11 +270,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served order-time DNS-01 publish/cleanup through the outbox using tenant provider configs, secret-reference-backed provider credentials, and DNS-01 preflight",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]

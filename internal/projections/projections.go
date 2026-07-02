@@ -63,6 +63,8 @@ const (
 	EventACMEDNS01ProviderConfigUpserted     = "acme.dns01.provider_config.upserted"
 	EventACMEDNS01ProviderConfigDeleted      = "acme.dns01.provider_config.deleted"
 	EventACMEDNS01Preflighted                = "acme.dns01.preflighted"
+	EventACMEDNS01RecordPresented            = "acme.dns01.record.presented"
+	EventACMEDNS01RecordCleaned              = "acme.dns01.record.cleaned"
 	EventMDMSCEPPolicyUpserted               = "mdm.scep_policy.upserted"
 	EventMDMSCEPPolicyDeleted                = "mdm.scep_policy.deleted"
 	EventMDMSCEPChallengeRotated             = "mdm.scep_challenge.rotated"
@@ -598,6 +600,16 @@ type ACMEDNS01Preflighted struct {
 	SelectedMethod string   `json:"selected_method,omitempty"`
 	Ready          bool     `json:"ready"`
 	FailedChecks   []string `json:"failed_checks,omitempty"`
+}
+
+// ACMEDNS01RecordChanged is the audit payload for order-time DNS-01 publish and
+// cleanup. It intentionally omits the TXT value and all credential references.
+type ACMEDNS01RecordChanged struct {
+	ConfigID   string `json:"config_id"`
+	Provider   string `json:"provider"`
+	Domain     string `json:"domain"`
+	RecordName string `json:"record_name"`
+	OutboxID   int64  `json:"outbox_id"`
 }
 
 // MDMSCEPPolicyUpserted is the payload of mdm.scep_policy.upserted. It carries
@@ -1234,6 +1246,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01ProviderConfigUpserted:     {1: true},
 	EventACMEDNS01ProviderConfigDeleted:      {1: true},
 	EventACMEDNS01Preflighted:                {1: true},
+	EventACMEDNS01RecordPresented:            {1: true},
+	EventACMEDNS01RecordCleaned:              {1: true},
 	EventMDMSCEPPolicyUpserted:               {1: true},
 	EventMDMSCEPPolicyDeleted:                {1: true},
 	EventMDMSCEPChallengeRotated:             {1: true},
@@ -1724,6 +1738,15 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		}
 		if pl.Domain == "" || pl.RecordName == "" {
 			return fmt.Errorf("projections: %s requires domain and record_name", e.Type)
+		}
+		return nil
+	case EventACMEDNS01RecordPresented, EventACMEDNS01RecordCleaned:
+		var pl ACMEDNS01RecordChanged
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ConfigID == "" || pl.Provider == "" || pl.Domain == "" || pl.RecordName == "" || pl.OutboxID == 0 {
+			return fmt.Errorf("projections: %s requires config_id, provider, domain, record_name, and outbox_id", e.Type)
 		}
 		return nil
 	case EventMDMSCEPPolicyUpserted:
