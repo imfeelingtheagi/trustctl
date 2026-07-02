@@ -60,10 +60,12 @@ describe("first-run wizard", () => {
 
     // Step 3 — install an agent: a one-time token is minted and shown in the
     // install command, then the wizard detects the agent's registration.
-    await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalled());
+    await user.type(await screen.findByLabelText(/agent identity/i), "edge-01");
+    await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
+    await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" }));
     expect(await screen.findByText(/BOOT-TOKEN-XYZ/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /check (for agent|now)/i }));
-    await waitFor(() => expect(screen.getByText(/edge-01/)).toBeInTheDocument());
+    expect(await screen.findByText(/Agent edge-01 registered/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /next: complete setup/i }));
 
     expect(await screen.findByText(/ready for certificate operations/i)).toBeInTheDocument();

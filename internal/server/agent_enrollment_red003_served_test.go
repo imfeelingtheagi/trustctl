@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -39,14 +40,61 @@ func TestServedEnrollmentTokenPersistsAllowedIdentityRED003(t *testing.T) {
 	}
 }
 
-func TestServedBootstrapRejectsCSRIdentityMismatchRED003(t *testing.T) {
+func TestServedBootstrapHonorsAllowedIdentityWIRE001(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
-	token, err := h.srv.agentEnroll.IssueBootstrapToken(context.Background(), h.tenant, "node-a")
-	if err != nil {
-		t.Fatalf("issue pinned bootstrap token: %v", err)
-	}
-	csr := agentCSRWithDNS(t, "node-a", []string{"rogue-node"})
+	bearer := seedScopedToken(t, h.store, h.tenant, "agents:write")
 
+	mismatchToken := mintServedEnrollmentToken(t, h, bearer, "wire-001-mismatch", "node-a")
+	status, body := postServedBootstrap(t, h, mismatchToken, agentCSRWithDNS(t, "node-a", []string{"rogue-node"}))
+	if status != http.StatusUnauthorized {
+		t.Fatalf("bootstrap with mismatched CSR SAN = %d body %s, want 401", status, body)
+	}
+
+	matchToken := mintServedEnrollmentToken(t, h, bearer, "wire-001-match", "node-a")
+	status, body = postServedBootstrap(t, h, matchToken, agentCSRWithDNS(t, "node-a", nil))
+	if status != http.StatusOK {
+		t.Fatalf("bootstrap with matching CSR CN = %d body %s, want 200", status, body)
+	}
+	var out struct {
+		Certificate string `json:"certificate"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode bootstrap response: %v", err)
+	}
+	leaf, err := mtls.FirstCertDER([]byte(out.Certificate))
+	if err != nil {
+		t.Fatalf("parse issued agent cert: %v", err)
+	}
+	gotTenant, err := mtls.TenantFromClientCert(leaf)
+	if err != nil {
+		t.Fatalf("issued agent cert tenant SAN: %v", err)
+	}
+	if gotTenant != h.tenant {
+		t.Fatalf("issued agent cert tenant = %q, want %q", gotTenant, h.tenant)
+	}
+}
+
+func mintServedEnrollmentToken(t *testing.T, h *servedHarness, bearer, idemKey, allowedIdentity string) string {
+	t.Helper()
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/enrollment-tokens", bearer,
+		idemKey, map[string]any{"allowed_identity": allowedIdentity})
+	if status != http.StatusCreated {
+		t.Fatalf("create pinned enrollment token = %d body %s, want 201", status, body)
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode enrollment token response: %v", err)
+	}
+	if out.Token == "" {
+		t.Fatal("enrollment token response did not include token")
+	}
+	return out.Token
+}
+
+func postServedBootstrap(t *testing.T, h *servedHarness, token string, csr []byte) (int, []byte) {
+	t.Helper()
 	body, _ := json.Marshal(map[string]string{
 		"token": token,
 		"csr":   base64.StdEncoding.EncodeToString(csr),
@@ -61,9 +109,8 @@ func TestServedBootstrapRejectsCSRIdentityMismatchRED003(t *testing.T) {
 		t.Fatalf("POST /enroll/bootstrap: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("bootstrap with mismatched CSR SAN = %d, want 401", resp.StatusCode)
-	}
+	data, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, data
 }
 
 func agentCSRWithDNS(t *testing.T, cn string, dns []string) []byte {

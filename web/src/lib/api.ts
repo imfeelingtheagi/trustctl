@@ -164,6 +164,7 @@ import type {
   BrokerAgentIdentity as GenBrokerAgentIdentity,
   BrokerAgentIdentityRequest,
   EnrollmentToken as GenEnrollmentToken,
+  EnrollmentTokenRequest as GenEnrollmentTokenRequest,
   MCPToolCall,
   MCPToolList,
   MCPToolResult,
@@ -300,6 +301,7 @@ export type CADiscovery = CADiscoveryInventory;
 export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
+export type EnrollmentTokenRequest = GenEnrollmentTokenRequest;
 export type Attestation = GenAttestation;
 export type AttestedSVID = GenAttestedSVID;
 export type BrokerAgentIdentity = GenBrokerAgentIdentity;
@@ -819,6 +821,11 @@ function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
   });
 }
 
+function enrollmentTokenRequest(input?: EnrollmentTokenRequest): EnrollmentTokenRequest | undefined {
+  const allowedIdentity = input?.allowed_identity?.trim();
+  return allowedIdentity ? { allowed_identity: allowedIdentity } : undefined;
+}
+
 /** postRead sends a read-only POST. These endpoints accept structured bodies but do
  * not mutate state, so they deliberately do not carry Idempotency-Key. */
 function postRead<T>(path: string, body?: unknown): Promise<T> {
@@ -898,7 +905,7 @@ export interface Api {
    * action use: it ensures an owner, creates the identity, and issues it. */
   issueCertificate(input: IssueCertificateInput): Promise<Identity>;
   agents(): Promise<Agent[]>;
-  createEnrollmentToken(): Promise<EnrollmentToken>;
+  createEnrollmentToken(input?: EnrollmentTokenRequest): Promise<EnrollmentToken>;
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
   discoverySources(options?: { limit?: number; cursor?: string }): Promise<DiscoverySourceList>;
   createDiscoverySource(input: DiscoverySourceRequest): Promise<DiscoverySource>;
@@ -1139,7 +1146,7 @@ export const api: Api = {
     return api.transitionIdentity(identity.id, "issued", "first issuance via UI");
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
-  createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
+  createEnrollmentToken: (input) => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens", enrollmentTokenRequest(input)),
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
   discoverySources: (options) => req<DiscoverySourceList>(`/api/v1/discovery/sources${pageQueryString(options)}`),
   createDiscoverySource: (input) => mutate<DiscoverySource>("POST", "/api/v1/discovery/sources", input),

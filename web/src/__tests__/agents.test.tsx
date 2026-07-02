@@ -41,9 +41,21 @@ describe("agent fleet surface", () => {
         last_seen_at: "2999-01-01T00:00:00Z",
         inventory_report_path: "agent.mtls.ReportInventory",
         discovery_capabilities: [
-          { source_kind: "filesystem", label: "Filesystem certificates", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+          {
+            source_kind: "filesystem",
+            label: "Filesystem certificates",
+            reported_over: "agent.mtls.ReportInventory",
+            metadata_only: true,
+            private_key_bytes: false,
+          },
           { source_kind: "trust-store", label: "Trust stores", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
-          { source_kind: "private-key", label: "Private-key material", reported_over: "agent.mtls.ReportInventory", metadata_only: true, private_key_bytes: false },
+          {
+            source_kind: "private-key",
+            label: "Private-key material",
+            reported_over: "agent.mtls.ReportInventory",
+            metadata_only: true,
+            private_key_bytes: false,
+          },
         ],
       },
       {
@@ -89,12 +101,15 @@ describe("agent fleet surface", () => {
     renderAgents();
     await screen.findByText("branch-02");
 
+    fireEvent.change(screen.getByLabelText(/agent identity/i), { target: { value: "edge-01" } });
     fireEvent.click(screen.getByRole("button", { name: /mint enrollment token/i }));
 
     await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledTimes(1));
+    expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" });
     expect(await screen.findByText("BOOT-TOKEN-XYZ")).toBeInTheDocument();
     expect(screen.getByText(/shown once/i)).toBeInTheDocument();
     expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("/enroll/bootstrap");
+    expect(screen.getByText(/trstctl-agent --enroll-url/i)).toHaveTextContent("--name edge-01");
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);

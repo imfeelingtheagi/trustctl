@@ -54,6 +54,9 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     await user.click(screen.getByRole("button", { name: "Next: enroll agent" }));
 
     expect(await screen.findByRole("heading", { name: "Enroll an agent" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Agent identity"), "edge-01");
+    await user.click(screen.getByRole("button", { name: "Mint enrollment token" }));
+    await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" }));
     expect(await screen.findByText("BOOT-TOKEN-DESIGN-001")).toBeInTheDocument();
     expect(screen.getByText(/agent enrollment tokens cannot issue certificates/i)).toBeInTheDocument();
   });

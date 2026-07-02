@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, FileKey2, Loader2, RotateCcw, Server, ShieldCheck } from "lucide-react";
-import { api, type Agent } from "@/lib/api";
+import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
@@ -252,19 +252,12 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
 }
 
 function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (agent: Agent) => void; pollMs: number }) {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<EnrollmentToken | null>(null);
+  const [agentIdentity, setAgentIdentity] = useState("");
+  const [tokenIdentity, setTokenIdentity] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [minting, setMinting] = useState(false);
   const [checking, setChecking] = useState(false);
-  const minted = useRef(false);
-
-  useEffect(() => {
-    if (minted.current) return;
-    minted.current = true;
-    api
-      .createEnrollmentToken()
-      .then((result) => setToken(result.token))
-      .catch((err) => setError(`Could not mint an enrollment token: ${String(err instanceof Error ? err.message : err)}`));
-  }, []);
 
   useEffect(() => {
     if (agent) return undefined;
@@ -275,6 +268,21 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
     // check is intentionally not a dependency; each tick uses the latest setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent, pollMs]);
+
+  async function mintToken() {
+    setError(null);
+    setMinting(true);
+    try {
+      const allowedIdentity = agentIdentity.trim();
+      const result = await api.createEnrollmentToken(allowedIdentity ? { allowed_identity: allowedIdentity } : undefined);
+      setToken(result);
+      setTokenIdentity(allowedIdentity);
+    } catch (err) {
+      setError(`Could not mint an enrollment token: ${String(err instanceof Error ? err.message : err)}`);
+    } finally {
+      setMinting(false);
+    }
+  }
 
   async function check() {
     setChecking(true);
@@ -290,12 +298,14 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
   }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example";
+  const enrollPath = token?.enroll_path || "/enroll/bootstrap";
+  const nameArg = (token ? tokenIdentity : agentIdentity).trim();
   const command = [
     "trstctl-agent",
-    `--enroll-url ${origin}`,
+    `--enroll-url ${origin}${enrollPath}`,
     "--bootstrap-token-file ./trstctl-bootstrap-token",
     "--server <control-plane-grpc:9443>",
-    "--name <agent-name>",
+    `--name ${nameArg ? shellArg(nameArg) : "<agent-name>"}`,
     "--ca-bundle ./trstctl-ca.pem",
   ].join(" ");
 
@@ -313,10 +323,28 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
           </p>
         </div>
       </div>
+      <div className="grid gap-2 sm:grid-cols-[minmax(12rem,18rem)_auto] sm:items-end">
+        <label className="grid gap-1 text-sm font-medium">
+          Agent identity
+          <input
+            className="rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
+            placeholder="node-a"
+            value={agentIdentity}
+            onChange={(event) => setAgentIdentity(event.target.value)}
+            disabled={minting}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <Button type="button" className="justify-self-start" onClick={() => void mintToken()} disabled={minting}>
+          {minting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          Mint enrollment token
+        </Button>
+      </div>
       {token && (
         <div>
           <p className="text-caption font-medium text-muted-foreground">Bootstrap token</p>
-          <code className="mt-1 block break-all rounded-control bg-muted px-3 py-2 text-caption">{token}</code>
+          <code className="mt-1 block break-all rounded-control bg-muted px-3 py-2 text-caption">{token.token}</code>
         </div>
       )}
       <pre className="overflow-x-auto rounded-control border border-border bg-muted p-3 text-caption">
@@ -343,6 +371,11 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
       )}
     </section>
   );
+}
+
+function shellArg(value: string): string {
+  if (/^[A-Za-z0-9._:/@-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function CompleteStep({

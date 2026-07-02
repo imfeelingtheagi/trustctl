@@ -73,6 +73,9 @@ describe("C10-7 carousel onboarding wizard", () => {
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments" }));
     await user.click(screen.getByRole("button", { name: "Next: enroll agent" }));
 
+    await user.type(await screen.findByLabelText("Agent identity"), "edge-01");
+    await user.click(screen.getByRole("button", { name: "Mint enrollment token" }));
+    await waitFor(() => expect(apiMock.createEnrollmentToken).toHaveBeenCalledWith({ allowed_identity: "edge-01" }));
     expect(await screen.findByText("BOOT-TOKEN-C10")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check for agent" }));
     await waitFor(() => expect(apiMock.agents).toHaveBeenCalled());

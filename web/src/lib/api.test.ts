@@ -288,6 +288,20 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBeUndefined();
+  });
+
+  it("pins an enrollment token to the requested agent identity", async () => {
+    document.cookie = "trstctl_csrf=csrf-token-agent-pin; path=/";
+    mockFetch(201, JSON.stringify({ token: "BOOT-TOKEN-PINNED", enroll_path: "/enroll/bootstrap" }));
+
+    await api.createEnrollmentToken({ allowed_identity: " node-a " });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/agents/enrollment-tokens");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["X-CSRF-Token"]).toBe("csrf-token-agent-pin");
+    expect(sentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ allowed_identity: "node-a" });
   });
 
   it("drives dynamic lease issue, renew, and revoke through served mutations", async () => {
