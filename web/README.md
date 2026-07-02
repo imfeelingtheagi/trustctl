@@ -18,6 +18,9 @@ npm test           # Vitest (component + axe accessibility tests)
 npm run build      # tsc + Vite build -> ../internal/webui/dist (embedded by the Go binary)
 ```
 
+Accessibility procurement evidence lives in `docs/accessibility-vpat.md`. CI uploads
+the current `a11y-evidence-receipt` JSON artifact after the Vitest + axe run.
+
 `npm run build` emits into `internal/webui/dist`, which the control-plane binary
 embeds with `//go:embed` and serves from `internal/webui` (SPA fallback). From the
 repository root, `make web` runs the install + build.

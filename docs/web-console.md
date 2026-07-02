@@ -218,6 +218,9 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
 - **Accessibility & theming** — keyboard-navigable, screen-reader-labeled, reduced-motion
   aware, light/dark themed, and RTL-capable; the theme preference is the only thing the SPA
   is permitted to keep in browser storage.
+- **VPAT evidence** — `docs/accessibility-vpat.md` is the Voluntary Product Accessibility
+  Template evidence packet. CI uploads the current `a11y-evidence-receipt` artifact with
+  the manual assistive-technology audit receipt anchors and automated axe gate references.
 
 ## Use it
 

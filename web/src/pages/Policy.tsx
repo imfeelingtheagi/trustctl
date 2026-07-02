@@ -28,22 +28,22 @@ type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
 type PolicyDryRunKind = "lifecycle" | "abac";
 type SafeHref = { href: string; external: boolean };
 
-const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; labelKey?: MessageKey }> = [
-  { id: "pci-dss", label: "PCI DSS" },
-  { id: "hipaa", label: "HIPAA" },
-  { id: "soc2", label: "SOC 2" },
-  { id: "nist-800-53", label: "NIST 800-53" },
-  { id: "nist-csf-2.0", label: "NIST CSF 2.0" },
-  { id: "fedramp", label: "FedRAMP" },
-  { id: "cmmc-2.0", label: "CMMC 2.0" },
-  { id: "cnsa-2.0", label: "CNSA 2.0" },
+const complianceFrameworks: Array<{ id: ComplianceFramework; labelKey: MessageKey }> = [
+  { id: "pci-dss", labelKey: "policy.framework.pciDss" },
+  { id: "hipaa", labelKey: "policy.framework.hipaa" },
+  { id: "soc2", labelKey: "policy.framework.soc2" },
+  { id: "nist-800-53", labelKey: "policy.framework.nist80053" },
+  { id: "nist-csf-2.0", labelKey: "policy.framework.nistCsf20" },
+  { id: "fedramp", labelKey: "policy.framework.fedramp" },
+  { id: "cmmc-2.0", labelKey: "policy.framework.cmmc20" },
+  { id: "cnsa-2.0", labelKey: "policy.framework.cnsa20" },
   { id: "fips-140", labelKey: "policy.framework.fips140" },
   { id: "common-criteria", labelKey: "policy.framework.commonCriteria" },
   { id: "cabf-br", labelKey: "policy.framework.cabfBR" },
-  { id: "webtrust", label: "WebTrust" },
-  { id: "etsi", label: "ETSI" },
-  { id: "eidas", label: "eIDAS" },
-  { id: "nis2", label: "NIS2" },
+  { id: "webtrust", labelKey: "policy.framework.webtrust" },
+  { id: "etsi", labelKey: "policy.framework.etsi" },
+  { id: "eidas", labelKey: "policy.framework.eidas" },
+  { id: "nis2", labelKey: "policy.framework.nis2" },
 ];
 
 const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: MessageKey }> = [
@@ -714,36 +714,28 @@ export function Policy() {
 
   return (
     <section aria-labelledby="policy-heading" className="grid gap-6">
-      <PageHeader
-        titleId="policy-heading"
-        title="Policy"
-        description="Issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted."
-      />
+      <PageHeader titleId="policy-heading" title={t("nav.item.policy")} description={t("policy.overview.description")} />
 
       <section aria-labelledby="policy-gate-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-gate-heading" className="text-title font-semibold">
-            Enforcement path
+            {t("policy.enforcement.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The browser does not send a tenant id or bypass policy. It asks the lifecycle workflow to mutate state; the backend evaluates policy and either
-            emits the event or returns a fail-closed problem.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.enforcement.description")}</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          Decisions are evidence events. Use Audit to inspect allow, deny, and evaluation-error records with the actor, resource, hash, and payload from the
-          event stream. Action errors still appear where the operator started the workflow on{" "}
+          {t("policy.enforcement.auditPrefix")}{" "}
           <Link className="underline" to="/identities">
-            Identities
+            {t("policy.enforcement.identitiesLink")}
           </Link>{" "}
-          .
+          {t("policy.enforcement.auditSuffix")}
         </p>
         <div className="flex flex-wrap gap-2">
           <Link className="underline" to="/audit?type=policy.decision">
-            Open policy decisions in Audit
+            {t("policy.enforcement.policyDecisionsLink")}
           </Link>
           <Link className="underline" to="/audit?type=issuance.profile_evaluated">
-            Open profile evaluations in Audit
+            {t("policy.enforcement.profileEvaluationsLink")}
           </Link>
         </div>
       </section>
@@ -751,18 +743,16 @@ export function Policy() {
       <section aria-labelledby="policy-version-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-version-heading" className="text-title font-semibold">
-            Policy versions
+            {t("policy.versions.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Active lifecycle policy versions are compiled before activation, recorded as policy.version events, and applied to the served mutation gate.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.versions.description")}</p>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <form className="grid gap-3 rounded-md border border-border p-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1">
-                <span className="font-medium">Description</span>
+                <span className="font-medium">{t("policy.versions.descriptionLabel")}</span>
                 <input
                   className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
                   value={policyVersionForm.description}
@@ -770,7 +760,7 @@ export function Policy() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="font-medium">Change ref</span>
+                <span className="font-medium">{t("policy.versions.changeRef")}</span>
                 <input
                   className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
                   value={policyVersionForm.changeRef}
@@ -779,7 +769,7 @@ export function Policy() {
               </label>
             </div>
             <label className="grid gap-1">
-              <span className="font-medium">Evidence refs</span>
+              <span className="font-medium">{t("policy.versions.evidenceRefs")}</span>
               <input
                 className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
                 value={policyVersionForm.evidenceRefs}
@@ -787,7 +777,7 @@ export function Policy() {
               />
             </label>
             <label className="grid gap-1">
-              <span className="font-medium">Lifecycle Rego module</span>
+              <span className="font-medium">{t("policy.versions.lifecycleModule")}</span>
               <textarea
                 className="min-h-64 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
@@ -797,36 +787,36 @@ export function Policy() {
             </label>
             <div>
               <Button type="submit" disabled={policyVersionAction === "create" || !policyVersionForm.module.trim()}>
-                {policyVersionAction === "create" ? "Authoring..." : "Author version"}
+                {policyVersionAction === "create" ? t("policy.versions.authoring") : t("policy.versions.authorVersion")}
               </Button>
             </div>
           </form>
 
           <aside className="rounded-md border border-border p-4 text-sm">
-            <h3 className="text-sm font-semibold">Active policy</h3>
+            <h3 className="text-sm font-semibold">{t("policy.versions.activePolicy")}</h3>
             {activePolicyVersion ? (
               <dl className="mt-3 grid gap-2">
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Status</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.status")}</dt>
                   <dd>{activePolicyVersion.status}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Module hash</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.moduleHash")}</dt>
                   <dd className="break-all font-mono text-xs">{activePolicyVersion.module_sha256}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Activated</dt>
-                  <dd>{activePolicyVersion.activated_at ? formatDate(activePolicyVersion.activated_at) : "not activated"}</dd>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.activated")}</dt>
+                  <dd>{activePolicyVersion.activated_at ? formatDate(activePolicyVersion.activated_at) : t("policy.versions.notActivated")}</dd>
                 </div>
               </dl>
             ) : (
-              <p className="mt-3 text-muted-foreground">No live policy version is active.</p>
+              <p className="mt-3 text-muted-foreground">{t("policy.versions.noActive")}</p>
             )}
           </aside>
         </div>
 
-        {policyVersionLoading && <LoadingState>Loading policy versions.</LoadingState>}
-        {policyVersionError && <ErrorState title="Policy versions unavailable">{policyVersionError}</ErrorState>}
+        {policyVersionLoading && <LoadingState>{t("policy.versions.loading")}</LoadingState>}
+        {policyVersionError && <ErrorState title={t("policy.versions.unavailableTitle")}>{policyVersionError}</ErrorState>}
         {policyVersionNotice && (
           <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
             {policyVersionNotice}
@@ -834,14 +824,14 @@ export function Policy() {
         )}
 
         <div className="overflow-x-auto rounded-md border border-border">
-          <table className="min-w-full text-left text-sm" aria-label="Policy versions">
+          <table className="min-w-full text-left text-sm" aria-label={t("policy.versions.tableLabel")}>
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Description</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Hash</th>
-                <th className="px-3 py-2">Change</th>
-                <th className="px-3 py-2">Actions</th>
+                <th className="px-3 py-2">{t("policy.versions.descriptionLabel")}</th>
+                <th className="px-3 py-2">{t("policy.versions.status")}</th>
+                <th className="px-3 py-2">{t("policy.versions.hash")}</th>
+                <th className="px-3 py-2">{t("policy.versions.change")}</th>
+                <th className="px-3 py-2">{t("policy.versions.actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -859,7 +849,7 @@ export function Policy() {
                         onClick={() => void activatePolicyVersion(version)}
                         disabled={version.active || policyVersionAction === `activate:${version.id}`}
                       >
-                        {policyVersionAction === `activate:${version.id}` ? "Activating..." : "Activate"}
+                        {policyVersionAction === `activate:${version.id}` ? t("policy.versions.activating") : t("policy.versions.activate")}
                       </Button>
                       <Button
                         type="button"
@@ -867,7 +857,7 @@ export function Policy() {
                         onClick={() => void rollbackPolicyVersion(version)}
                         disabled={!version.active || policyVersionAction === `rollback:${version.id}`}
                       >
-                        {policyVersionAction === `rollback:${version.id}` ? "Rolling back..." : "Rollback"}
+                        {policyVersionAction === `rollback:${version.id}` ? t("policy.versions.rollingBack") : t("policy.versions.rollback")}
                       </Button>
                     </div>
                   </td>
@@ -876,7 +866,7 @@ export function Policy() {
               {policyVersions.length === 0 && (
                 <tr>
                   <td className="px-3 py-4 text-muted-foreground" colSpan={5}>
-                    No policy versions.
+                    {t("policy.versions.empty")}
                   </td>
                 </tr>
               )}
@@ -888,14 +878,11 @@ export function Policy() {
       <section aria-labelledby="compliance-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="compliance-heading" className="text-title font-semibold">
-            Compliance posture and reports
+            {t("policy.compliance.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Evidence packs are signed exports built from the audit log and cryptographic inventory. They show what trstctl can prove and what your organization
-            must still attest; they are evidence, not certification.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.compliance.description")}</p>
         </div>
-        <div className="flex flex-wrap gap-2" aria-label="Compliance framework">
+        <div className="flex flex-wrap gap-2" aria-label={t("policy.compliance.frameworkGroup")}>
           {complianceFrameworks.map((framework) => (
             <Button
               key={framework.id}
@@ -909,8 +896,8 @@ export function Policy() {
           ))}
         </div>
 
-        {evidencePackLoading && <LoadingState>Loading evidence pack.</LoadingState>}
-        {evidencePackError && <ErrorState title="Evidence pack unavailable">{evidencePackError}</ErrorState>}
+        {evidencePackLoading && <LoadingState>{t("policy.compliance.loadingEvidencePack")}</LoadingState>}
+        {evidencePackError && <ErrorState title={t("policy.compliance.evidencePackUnavailable")}>{evidencePackError}</ErrorState>}
         {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework, t)} />}
 
         {reportLoading && <LoadingState>{t("policy.reporting.loading")}</LoadingState>}
@@ -1936,8 +1923,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function frameworkLabel(framework: ComplianceFramework, t: (key: MessageKey) => string): string {
   const item = complianceFrameworks.find((candidate) => candidate.id === framework);
   if (!item) return framework;
-  if (item.labelKey) return t(item.labelKey);
-  return item.label ?? framework;
+  return t(item.labelKey);
 }
 
 function plural(count: number, singular: string): string {

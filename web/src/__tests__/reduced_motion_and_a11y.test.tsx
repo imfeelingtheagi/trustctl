@@ -13,6 +13,7 @@ import { AppShell } from "@/components/AppShell";
 import { LoadingState } from "@/components/StatePrimitives";
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = path.resolve(SRC, "..", "..");
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -112,5 +113,19 @@ describe("reduced motion and a11y evidence (PRODUCT-005 / COVER-010)", () => {
     expect(dashboardLink).toHaveFocus();
     await user.tab();
     await waitFor(() => expect(document.activeElement).not.toBe(dashboardLink));
+  });
+
+  it("commits VPAT and manual assistive-technology evidence with a CI receipt upload", () => {
+    const vpat = readFileSync(path.join(REPO_ROOT, "docs", "accessibility-vpat.md"), "utf8");
+    expect(vpat).toMatch(/VPAT|Voluntary Product Accessibility Template/);
+    expect(vpat).toMatch(/screen reader audit/i);
+    expect(vpat).toMatch(/manual assistive/i);
+    expect(vpat).toMatch(/WCAG 2\.1 AA/i);
+    expect(vpat).toMatch(/Retest cadence/i);
+
+    const workflow = readFileSync(path.join(REPO_ROOT, ".github", "workflows", "ci.yml"), "utf8");
+    expect(workflow).toMatch(/Upload accessibility evidence receipt/);
+    expect(workflow).toMatch(/a11y-evidence-receipt/);
+    expect(workflow).toMatch(/accessibility-evidence-receipt\.json/);
   });
 });

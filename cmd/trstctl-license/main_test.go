@@ -1,0 +1,91 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"trstctl.com/trstctl/internal/license"
+)
+
+func TestLicenseHelperSignsVerifiesAndInspectsOfflineLicense(t *testing.T) {
+	dir := t.TempDir()
+	privPath := filepath.Join(dir, "vendor-ed25519.key")
+	pubPath := filepath.Join(dir, "vendor-ed25519.pub")
+	licPath := filepath.Join(dir, "license.json")
+
+	var genOut bytes.Buffer
+	if err := run([]string{"gen-key", "--private-key", privPath, "--public-key", pubPath}, &genOut, &bytes.Buffer{}); err != nil {
+		t.Fatalf("gen-key: %v", err)
+	}
+	if !strings.Contains(genOut.String(), privPath) || !strings.Contains(genOut.String(), pubPath) {
+		t.Fatalf("gen-key output did not name written key files: %q", genOut.String())
+	}
+	for _, path := range []string{privPath, pubPath} {
+		if info, err := os.Stat(path); err != nil || info.Size() == 0 {
+			t.Fatalf("expected non-empty key file %s: info=%v err=%v", path, info, err)
+		}
+	}
+
+	signArgs := []string{
+		"sign",
+		"--private-key", privPath,
+		"--out", licPath,
+		"--id", "lic-report-004",
+		"--customer", "Example Corp",
+		"--tier", string(license.TierProvider),
+		"--features", string(license.FeatureGovernance) + ", " + string(license.FeatureProviderPlane),
+		"--tenant-band", "25",
+		"--issued-at", "2026-07-01T00:00:00Z",
+		"--expires-at", "2027-07-01T00:00:00Z",
+	}
+	if err := run(signArgs, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	var verifyOut bytes.Buffer
+	if err := run([]string{"verify", "--license", licPath, "--public-key", pubPath}, &verifyOut, &bytes.Buffer{}); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	for _, want := range []string{"ok:", "lic-report-004", "Example Corp", string(license.TierProvider), "2027-07-01T00:00:00Z"} {
+		if !strings.Contains(verifyOut.String(), want) {
+			t.Fatalf("verify output missing %q: %s", want, verifyOut.String())
+		}
+	}
+
+	var inspectOut bytes.Buffer
+	if err := run([]string{"inspect", "--license", licPath}, &inspectOut, &bytes.Buffer{}); err != nil {
+		t.Fatalf("inspect: %v", err)
+	}
+	var claims license.Claims
+	if err := json.Unmarshal(inspectOut.Bytes(), &claims); err != nil {
+		t.Fatalf("inspect did not emit claims JSON: %v\n%s", err, inspectOut.String())
+	}
+	if claims.ID != "lic-report-004" || claims.Customer != "Example Corp" || claims.Tier != license.TierProvider {
+		t.Fatalf("unexpected inspected claims: %+v", claims)
+	}
+	if claims.TenantBand != 25 {
+		t.Fatalf("tenant band = %d, want 25", claims.TenantBand)
+	}
+	if got := parseFeatures(" governance, ,provider_plane "); len(got) != 2 || got[0] != license.FeatureGovernance || got[1] != license.FeatureProviderPlane {
+		t.Fatalf("parseFeatures = %#v, want governance and provider_plane", got)
+	}
+}
+
+func TestLicenseHelperRejectsIncompleteCommands(t *testing.T) {
+	for _, tc := range [][]string{
+		nil,
+		{"unknown"},
+		{"gen-key", "--private-key", "only-private"},
+		{"sign", "--id", "missing-required-flags"},
+		{"verify", "--license", "missing-public-key"},
+		{"inspect"},
+	} {
+		if err := run(tc, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+			t.Fatalf("run(%v) succeeded, want an error", tc)
+		}
+	}
+}

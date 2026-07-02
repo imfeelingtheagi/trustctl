@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/perf"
@@ -67,5 +68,39 @@ func TestPerfGateRunsLiveProfile(t *testing.T) {
 	}
 	if got, want := len(report.Results), len(perf.HotPaths())*2; got != want {
 		t.Fatalf("live result count = %d, want %d", got, want)
+	}
+}
+
+func TestRunProfileUsesSmokeLiveAndRejectsUnknownProfiles(t *testing.T) {
+	smoke, err := runProfile("", 1, nil)
+	if err != nil {
+		t.Fatalf("runProfile smoke: %v", err)
+	}
+	if smoke.Profile != "smoke" || smoke.ServedStack {
+		t.Fatalf("smoke profile metadata = %+v", smoke)
+	}
+
+	live, err := runProfile("live-load", 1, nil)
+	if err != nil {
+		t.Fatalf("runProfile live-load: %v", err)
+	}
+	if live.Profile != "live" || !live.ServedStack || live.MeasurementArtifact != perf.LiveMeasurementArtifact {
+		t.Fatalf("live profile metadata = %+v", live)
+	}
+
+	breached, err := runProfile("smoke", 1, map[string]perf.Observation{
+		"api.issuance":            {QueueSaturation: 0.99},
+		"spine.projection_replay": {ProjectionLagEvents: 999},
+		"api.secrets":             {ErrorBudgetPercent: 0.5},
+	})
+	if err != nil {
+		t.Fatalf("runProfile breached smoke: %v", err)
+	}
+	if breached.Summary.OK || breached.Summary.Failed == 0 {
+		t.Fatalf("breached observations should fail the report: %+v", breached.Summary)
+	}
+
+	if _, err := runProfile("bogus", 1, nil); err == nil || !strings.Contains(err.Error(), "unknown perf profile") {
+		t.Fatalf("unknown profile error = %v, want unknown perf profile", err)
 	}
 }
