@@ -88,7 +88,9 @@ tenant's matching provider config, enqueues `acme.dns01.present` and
 validation, and records `acme.dns01.record.presented` /
 `acme.dns01.record.cleaned` metadata events. Provider credentials are resolved from
 secret references inside the outbox worker; TXT values and credential refs are not
-written to the audit events.
+written to the audit events. When the provider config sets `delegation_target`, the
+outbox worker verifies the live `_acme-challenge` CNAME against that configured target
+and publishes/cleans up the TXT only at the delegated validation name.
 
 ### Any DNS provider: the plugin framework (F70)
 
@@ -128,8 +130,10 @@ trstctl only ever writes in *that* zone. It never holds production DNS credentia
 trstctl's `DelegatingProvider` wraps any base provider and follows the CNAME before
 publishing; if the name isn't actually delegated it **fails closed** rather than
 silently writing to production. A `VerifyDelegation` preflight confirms the CNAME points
-where it should before you rely on it. This is the well-known acme-dns pattern, and
-trstctl's acme-dns provider is the typical validation-zone backend.
+where it should before you rely on it. The served ACME order-time path applies the same
+fail-closed check from the DNS-01 outbox worker, so a missing or mismatched CNAME stops
+issuance before any production-zone TXT write can happen. This is the well-known
+acme-dns pattern, and trstctl's acme-dns provider is the typical validation-zone backend.
 
 ### Who's allowed to issue: CAA (F72)
 

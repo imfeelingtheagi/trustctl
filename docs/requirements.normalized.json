@@ -296,11 +296,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served CNAME delegation helpers, provider-config delegation_target, DNS-01 preflight checks, and ACME order-time delegated publish/cleanup through the outbox with fail-closed CNAME verification",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]

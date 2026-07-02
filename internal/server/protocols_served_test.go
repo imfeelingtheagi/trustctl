@@ -488,6 +488,81 @@ func TestServedACMEDNS01OrderPublishesAndCleansUpThroughOutboxTRACE012(t *testin
 	}
 }
 
+// TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014 proves F71
+// on the served order-time path: when a tenant provider config declares a
+// delegation target, ACME DNS-01 publish/cleanup writes only to that isolated
+// validation target and fails closed when the production _acme-challenge name is
+// not delegated.
+func TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014(t *testing.T) {
+	dns := newServedDNSWebhookFixture(t, "dns-delegated-token")
+	h := newServedHarness(t,
+		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
+		withSecretsEnabled(t, nil),
+	)
+	h.srv.acmeDNS01.cnameResolver = dns
+	startServedDirectOutboxPump(t, h.srv)
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write", "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok, map[string]any{
+		"name":  "dns/delegated/bearer-token",
+		"value": "dns-delegated-token",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create DNS delegated bearer secret: status %d body %s", status, body)
+	}
+
+	const delegatedTarget = "tenant-123.auth.acme-dns.example.net"
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, map[string]any{
+		"name":              "trace014-delegated-webhook",
+		"provider":          "webhook",
+		"zone":              "trace014.test",
+		"delegation_target": delegatedTarget,
+		"credential_refs": map[string]any{
+			"bearer_token_ref": "secret://dns/delegated/bearer-token",
+		},
+		"config": map[string]any{
+			"endpoint": dns.URL(),
+		},
+		"allowed_methods": []string{"dns-01"},
+		"allow_wildcards": true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create delegated DNS-01 provider config: status %d body %s", status, body)
+	}
+
+	const domain = "delegated.trace014.test"
+	const keyAuth = "trace014-key-authorization"
+	recordName := acmesrv.DNS01RecordName(domain)
+	wantValue := acmesrv.DNS01RecordValue(keyAuth)
+	dns.setCNAME(recordName, delegatedTarget+".")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cleanup, err := h.srv.acmeDNS01.Present(ctx, h.tenant, domain, "", keyAuth)
+	if err != nil {
+		t.Fatalf("served ACME DNS-01 delegated present: %v", err)
+	}
+	observed, err := dns.LookupTXT(ctx, recordName)
+	if err != nil {
+		t.Fatalf("lookup delegated DNS-01 TXT: %v", err)
+	}
+	if !containsString(observed, wantValue) {
+		t.Fatalf("delegated DNS-01 records = %v, want %s at %s via %s", observed, wantValue, recordName, delegatedTarget)
+	}
+	if err := cleanup(ctx); err != nil {
+		t.Fatalf("served ACME DNS-01 delegated cleanup: %v", err)
+	}
+	dns.assertPresentedAndCleaned(t, delegatedTarget, wantValue)
+	dns.assertNeverRequested(t, recordName)
+
+	const missingDomain = "missing-delegation.trace014.test"
+	missingRecord := acmesrv.DNS01RecordName(missingDomain)
+	if _, err := h.srv.acmeDNS01.Present(ctx, h.tenant, missingDomain, "", "trace014-missing-key-authorization"); err == nil {
+		t.Fatal("served ACME DNS-01 delegated present succeeded without a CNAME")
+	}
+	dns.assertNeverRequested(t, missingRecord)
+}
+
 // TestServedACMEDNS01OrderActivatesSignedDNSProviderPluginTRACE013 proves F70 on
 // the served path: a signed/conformant DNS provider plugin is admitted into the
 // running provider catalog, a tenant provider config can select it, and the served
@@ -611,6 +686,7 @@ type servedDNSWebhookFixture struct {
 
 	mu       sync.Mutex
 	records  map[string]map[string]bool
+	cnames   map[string]string
 	requests []servedDNSWebhookRequest
 }
 
@@ -623,13 +699,23 @@ type servedDNSWebhookRequest struct {
 
 func newServedDNSWebhookFixture(t *testing.T, bearerToken string) *servedDNSWebhookFixture {
 	t.Helper()
-	f := &servedDNSWebhookFixture{bearerToken: bearerToken, records: map[string]map[string]bool{}}
+	f := &servedDNSWebhookFixture{
+		bearerToken: bearerToken,
+		records:     map[string]map[string]bool{},
+		cnames:      map[string]string{},
+	}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
 	return f
 }
 
 func (f *servedDNSWebhookFixture) URL() string { return f.srv.URL }
+
+func (f *servedDNSWebhookFixture) setCNAME(name, target string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cnames[strings.TrimSuffix(name, ".")] = strings.TrimSuffix(target, ".")
+}
 
 func (f *servedDNSWebhookFixture) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -680,6 +766,10 @@ func (f *servedDNSWebhookFixture) handle(w http.ResponseWriter, r *http.Request)
 func (f *servedDNSWebhookFixture) LookupTXT(_ context.Context, name string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	name = strings.TrimSuffix(name, ".")
+	if target := f.cnames[name]; target != "" {
+		name = target
+	}
 	values := make([]string, 0, len(f.records[name]))
 	for value := range f.records[name] {
 		values = append(values, value)
@@ -687,10 +777,21 @@ func (f *servedDNSWebhookFixture) LookupTXT(_ context.Context, name string) ([]s
 	return values, nil
 }
 
+func (f *servedDNSWebhookFixture) LookupCNAME(_ context.Context, name string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	name = strings.TrimSuffix(name, ".")
+	if target := f.cnames[name]; target != "" {
+		return target + ".", nil
+	}
+	return name + ".", nil
+}
+
 func (f *servedDNSWebhookFixture) assertPresentedAndCleaned(t *testing.T, name, value string) {
 	t.Helper()
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	name = strings.TrimSuffix(name, ".")
 	var presented, cleaned bool
 	for _, req := range f.requests {
 		if req.Name != name || req.Value != value || req.Authorization != "Bearer "+f.bearerToken {
@@ -708,6 +809,18 @@ func (f *servedDNSWebhookFixture) assertPresentedAndCleaned(t *testing.T, name, 
 	}
 	if len(f.records[name]) != 0 {
 		t.Fatalf("DNS webhook still has TXT records for %s after cleanup: %#v", name, f.records[name])
+	}
+}
+
+func (f *servedDNSWebhookFixture) assertNeverRequested(t *testing.T, name string) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	name = strings.TrimSuffix(name, ".")
+	for _, req := range f.requests {
+		if strings.TrimSuffix(req.Name, ".") == name {
+			t.Fatalf("DNS webhook touched %s despite delegation isolation: %+v", name, f.requests)
+		}
 	}
 }
 

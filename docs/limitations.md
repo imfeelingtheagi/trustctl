@@ -52,6 +52,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F46 | ACME Renewal Information (ARI) | docs/features/issuance-and-cas.md, docs/features/acme-and-dns.md |
 | F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
 | F70 | DNS-provider plugin framework | docs/features/acme-and-dns.md |
+| F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
 | F47 | X.509 revocation infrastructure | docs/features/issuance-and-cas.md |
 | F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
 | F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
@@ -118,7 +119,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
 | F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
 | F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |

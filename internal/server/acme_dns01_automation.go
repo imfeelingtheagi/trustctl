@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -43,18 +44,21 @@ type servedACMEDNS01Automation struct {
 	outbox  *orchestrator.Outbox
 	kek     sealKeyWrapper
 	plugins *PluginManager
+
+	cnameResolver acme.CNAMEResolver
 }
 
 type acmeDNS01OutboxPayload struct {
-	ConfigID        string          `json:"config_id"`
-	Provider        string          `json:"provider"`
-	Domain          string          `json:"domain"`
-	Zone            string          `json:"zone,omitempty"`
-	ChallengeDomain string          `json:"challenge_domain,omitempty"`
-	RecordName      string          `json:"record_name"`
-	Value           string          `json:"value"`
-	CredentialRefs  json.RawMessage `json:"credential_refs,omitempty"`
-	Config          json.RawMessage `json:"config,omitempty"`
+	ConfigID         string          `json:"config_id"`
+	Provider         string          `json:"provider"`
+	Domain           string          `json:"domain"`
+	Zone             string          `json:"zone,omitempty"`
+	ChallengeDomain  string          `json:"challenge_domain,omitempty"`
+	DelegationTarget string          `json:"delegation_target,omitempty"`
+	RecordName       string          `json:"record_name"`
+	Value            string          `json:"value"`
+	CredentialRefs   json.RawMessage `json:"credential_refs,omitempty"`
+	Config           json.RawMessage `json:"config,omitempty"`
 }
 
 type acmeDNS01RecordEvent struct {
@@ -85,15 +89,16 @@ func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domai
 	recordName := acme.DNS01RecordName(domain)
 	value := acme.DNS01RecordValue(keyAuth)
 	payload := acmeDNS01OutboxPayload{
-		ConfigID:        cfg.ID,
-		Provider:        cfg.Provider,
-		Domain:          domain,
-		Zone:            cfg.Zone,
-		ChallengeDomain: cfg.ChallengeDomain,
-		RecordName:      recordName,
-		Value:           value,
-		CredentialRefs:  cfg.CredentialRefs,
-		Config:          cfg.Config,
+		ConfigID:         cfg.ID,
+		Provider:         cfg.Provider,
+		Domain:           domain,
+		Zone:             cfg.Zone,
+		ChallengeDomain:  cfg.ChallengeDomain,
+		DelegationTarget: cfg.DelegationTarget,
+		RecordName:       recordName,
+		Value:            value,
+		CredentialRefs:   cfg.CredentialRefs,
+		Config:           cfg.Config,
 	}
 	presentKey := acmeDNS01IdempotencyKey(destinationACMEDNS01Present, cfg.ID, recordName, value)
 	if err := a.enqueueAndWait(ctx, tenantID, destinationACMEDNS01Present, presentKey, payload); err != nil {
@@ -117,6 +122,10 @@ func (a *servedACMEDNS01Automation) Deliver(ctx context.Context, m orchestrator.
 		return errors.New("server: acme dns-01 payload requires config_id, provider, domain, record_name, and value")
 	}
 	provider, err := a.providerForPayload(ctx, m.TenantID, payload)
+	if err != nil {
+		return err
+	}
+	provider, err = a.wrapDelegatedDNS01Provider(payload, provider)
 	if err != nil {
 		return err
 	}
@@ -619,6 +628,48 @@ func payloadZoneFallback(payload acmeDNS01OutboxPayload) string {
 		return domain
 	}
 	return strings.TrimSuffix(strings.ToLower(strings.TrimPrefix(strings.TrimSpace(payload.RecordName), "_acme-challenge.")), ".")
+}
+
+func (a *servedACMEDNS01Automation) wrapDelegatedDNS01Provider(payload acmeDNS01OutboxPayload, provider acme.DNSProvider) (acme.DNSProvider, error) {
+	target := strings.TrimSuffix(strings.TrimSpace(payload.DelegationTarget), ".")
+	if target == "" {
+		return provider, nil
+	}
+	resolver := a.cnameResolver
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+	return acme.DelegatingProvider{
+		Base: provider,
+		Resolver: acmeDNS01ExpectedCNAMEResolver{
+			resolver:   resolver,
+			wantTarget: target,
+		},
+	}, nil
+}
+
+type acmeDNS01ExpectedCNAMEResolver struct {
+	resolver   acme.CNAMEResolver
+	wantTarget string
+}
+
+func (r acmeDNS01ExpectedCNAMEResolver) LookupCNAME(ctx context.Context, name string) (string, error) {
+	if r.resolver == nil {
+		return "", errors.New("server: acme dns-01 delegation requires a CNAME resolver")
+	}
+	got, err := r.resolver.LookupCNAME(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	want := strings.TrimSuffix(strings.TrimSpace(r.wantTarget), ".")
+	got = strings.TrimSuffix(strings.TrimSpace(got), ".")
+	if want == "" {
+		return "", errors.New("server: acme dns-01 delegation target is empty")
+	}
+	if !strings.EqualFold(got, want) {
+		return "", fmt.Errorf("server: acme dns-01 delegation target mismatch for %s: got %q, want %q", name, got, want)
+	}
+	return got, nil
 }
 
 func (a *servedACMEDNS01Automation) secretRef(ctx context.Context, tenantID string, refsJSON json.RawMessage, field string) ([]byte, error) {

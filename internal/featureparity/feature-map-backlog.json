@@ -3709,8 +3709,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 57,
-      "served_state": "partial",
-      "backend_status": "partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path",
+      "served_state": "served",
+      "backend_status": "served CNAME delegation helpers, provider-config delegation_target, DNS-01 preflight checks, and ACME order-time delegated publish/cleanup through the outbox with fail-closed CNAME verification",
       "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose delegation target and preflight status inputs",
       "target_gui_mapping": "Validation delegation UI with CNAME target suggestions, isolation status, preflight checks, and per-domain policy.",
       "acceptance_test": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
@@ -3719,7 +3719,8 @@
       ],
       "source_backend": [
         "internal/protocols/acme/dns01_delegation.go",
-        "internal/api/acme_dns01.go"
+        "internal/api/acme_dns01.go",
+        "internal/server/acme_dns01_automation.go"
       ],
       "source_frontend": [
         "web/src/pages/Protocols.tsx"
@@ -3738,10 +3739,12 @@
         "served": {
           "evidence": [
             "Tenant DNS-01 provider configs store delegation_target and POST /api/v1/acme/dns-01/preflight checks observed_cname against the configured validation target.",
-            "The served preflight route fails closed when the observed CNAME does not match the configured validation target."
+            "The served preflight route fails closed when the observed CNAME does not match the configured validation target.",
+            "Order-time ACME DNS-01 publish/cleanup carries delegation_target through the outbox worker, verifies the live _acme-challenge CNAME against that configured target, writes TXT only to the delegated validation target, and fails closed before provider publish when the CNAME is missing or mismatched."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
+            "internal/server/acme_dns01_automation.go",
             "internal/server/protocols_served_test.go",
             "internal/projections/projections.go",
             "internal/protocols/acme/dns01_delegation.go"
@@ -3780,6 +3783,7 @@
           "evidence": [
             "acceptance_test: UI explains production DNS isolation and tests passing/failing delegation fixtures.",
             "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
+            "TestServedACMEDNS01OrderPublishesDelegatedCNAMEThroughOutboxTRACE014 proves delegated order-time DNS-01 publish/cleanup writes only to the configured CNAME target and fails closed for a non-delegated production name.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -3813,10 +3817,12 @@
         "audit": {
           "evidence": [
             "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
-            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata.",
+            "Order-time delegated publish/cleanup appends acme.dns01.record.presented and acme.dns01.record.cleaned metadata events from delivered outbox work without credential refs or TXT values."
           ],
           "refs": [
             "internal/api/acme_dns01.go",
+            "internal/server/acme_dns01_automation.go",
             "internal/projections/projections.go",
             "internal/eventledger/ledger.go"
           ]
@@ -3851,8 +3857,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F022",
