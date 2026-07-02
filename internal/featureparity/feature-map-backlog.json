@@ -191,8 +191,9 @@
           ],
           "refs": [
             "internal/api/api.go",
+            "internal/api/enroll.go",
             "internal/api/audit.go",
-            "internal/server/issuance.go"
+            "internal/server/agentchannel.go"
           ]
         },
         "telemetry": {
@@ -4661,23 +4662,27 @@
       "domain": "Enrollment protocols",
       "phase": "P1",
       "priority": 26,
-      "served_state": "partial",
-      "backend_status": "bootstrap served; renewal not mounted",
-      "current_frontend_mapping": "thin: Wizard agent setup",
-      "target_gui_mapping": "Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and unsupported-renewal disclosure.",
-      "acceptance_test": "UI shows bootstrap available and renewal not mounted until served; tests cover token one-time visibility.",
+      "served_state": "served",
+      "backend_status": "served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal",
+      "current_frontend_mapping": "Agents and Wizard expose one-time bootstrap-token setup, install commands, agent version/status, and served endpoint-discovery capability evidence.",
+      "target_gui_mapping": "Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and endpoint-discovery evidence.",
+      "acceptance_test": "Served tests bootstrap with a one-time token, reject token replay, renew through POST /enroll/renewal only with a verified current client certificate, reject missing or expired renewal peers, and UI tests cover token one-time visibility.",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ],
       "source_backend": [
         "/enroll/bootstrap",
+        "/enroll/renewal",
+        "internal/api/enroll.go",
+        "internal/server/agentchannel.go",
         "cmd/trstctl-agent"
       ],
       "source_frontend": [
+        "web/src/pages/Agents.tsx",
         "web/src/pages/Wizard.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "TRACE-009 closed by mounting POST /enroll/renewal on the served enrollment surface with verified client-certificate authentication, missing/expired-peer rejection, and deterministic served idempotency when the API has the idempotency store. Test evidence: internal/api/enroll_routes_test.go covers bootstrap, renewal auth failure, expired-peer failure, and successful verified renewal; internal/projections/enroll_e2e_test.go covers assembled-server bootstrap-to-renewal; internal/server/agentchannel_served_test.go covers signer-custodied agent-channel renewal and idempotent retry; web tests cover token one-time visibility and route evidence.",
       "api_surface": [
         "listAgents",
         "createEnrollmentToken",
@@ -4695,14 +4700,14 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial",
-            "backend_status=bootstrap served; renewal not mounted"
+            "served_state=served",
+            "backend_status=served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: Wizard agent setup",
-            "target_gui_mapping: Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and unsupported-renewal disclosure."
+            "current_frontend_mapping: Agents and Wizard expose one-time bootstrap-token setup, install commands, agent version/status, and served endpoint-discovery capability evidence.",
+            "target_gui_mapping: Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and endpoint-discovery evidence."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -4714,7 +4719,8 @@
           "evidence": [
             "CLI command: agents list",
             "CLI command: agents enroll-token",
-            "CLI command: agents revoke-cert"
+            "CLI command: agents revoke-cert",
+            "CLI command: agents offboard"
           ],
           "refs": [
             "internal/cli/command.go",
@@ -4725,7 +4731,8 @@
           "evidence": [
             "OpenAPI operationId: listAgents",
             "OpenAPI operationId: createEnrollmentToken",
-            "OpenAPI operationId: revokeAgentCertificate"
+            "OpenAPI operationId: revokeAgentCertificate",
+            "OpenAPI operationId: offboardAgent"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -4736,11 +4743,14 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows bootstrap available and renewal not mounted until served; tests cover token one-time visibility.",
+            "acceptance_test: Served tests bootstrap with a one-time token, reject token replay, renew through POST /enroll/renewal only with a verified current client certificate, reject missing or expired renewal peers, and UI tests cover token one-time visibility.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/api/enroll_routes_test.go",
+            "internal/projections/enroll_e2e_test.go",
+            "internal/server/agentchannel_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -4756,7 +4766,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listAgents, createEnrollmentToken, revokeAgentCertificate, offboardAgent",
+            "POST /enroll/bootstrap uses the one-time bootstrap token as its credential boundary; POST /enroll/renewal uses the verified agent client certificate and stays outside the bearer-token OpenAPI surface.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -4769,8 +4780,8 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: listAgents, createEnrollmentToken",
-            "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
+            "mutating served surface requires audit/event evidence: createEnrollmentToken, revokeAgentCertificate, offboardAgent, agent-channel renew",
+            "served agent-channel renewal emits agent.cert.renewed and HTTP enrollment renewal uses a deterministic idempotency key when the served API has idempotency storage."
           ],
           "refs": [
             "internal/api/api.go",
@@ -4807,9 +4818,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: bootstrap served; renewal not mounted. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F029",

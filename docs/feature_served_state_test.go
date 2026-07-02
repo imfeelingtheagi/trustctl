@@ -198,13 +198,13 @@ func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
 	for _, stale := range []string{
 		"enrollment protocols, connectors, workload identity, and the secrets domain",
 		"wire the library-complete capabilities into the served binary",
+		"embedded/iot enrollment renewal",
 	} {
 		if strings.Contains(roadmapText, stale) {
 			t.Errorf("README Roadmap must replace stale broad binary-wiring wording %q with exact residuals from limitations.md", stale)
 		}
 	}
 	for _, want := range []string{
-		"embedded/iot enrollment renewal",
 		"automatic acme order-time dns-01 publish/cleanup",
 		"cursor pagination and list virtualization",
 		"terraform cloud/opentofu and arbitrary webhook secret-sync targets",

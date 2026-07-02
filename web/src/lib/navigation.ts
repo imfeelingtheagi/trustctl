@@ -509,7 +509,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/agents", "/wizard"],
     component: "Agents",
     kind: "operate",
-    evidence: "bootstrap token install command plus renewal-status unavailable state",
+    evidence: "bootstrap token install command plus served renewal and endpoint-discovery evidence",
   },
   { featureId: "F55", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CMP endpoint setup and protocol-status unavailable state" },
   {

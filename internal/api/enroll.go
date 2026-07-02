@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -20,6 +21,10 @@ import (
 // transport stack (the same decoupling as BootstrapTokenIssuer).
 var ErrInvalidBootstrapToken = errors.New("api: invalid or already-used bootstrap token")
 
+// ErrUnauthenticatedAgentRenewal is what a renewal-capable enroller returns when a
+// request is not authenticated by a verified current agent client certificate.
+var ErrUnauthenticatedAgentRenewal = errors.New("api: agent renewal requires a verified client certificate")
+
 // BootstrapEnroller consumes a one-time agent bootstrap token and signs the
 // agent's CSR into a client-certificate chain (PEM), and exposes the CA bundle an
 // agent trusts. Agents generate keys locally and submit only a CSR, so private
@@ -29,9 +34,19 @@ type BootstrapEnroller interface {
 	CABundlePEM() []byte
 }
 
+// RenewalEnroller signs an agent's rotation CSR after the caller has already
+// authenticated with its current, verified agent client certificate. The peer
+// chain is DER and leaf-first; the implementation binds the new certificate to
+// the tenant in that verified leaf rather than trusting the CSR.
+type RenewalEnroller interface {
+	EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, csrDER []byte) ([]byte, error)
+}
+
 // WithAgentEnroller wires the authority that backs POST /enroll/bootstrap — the
-// path an agent presents its one-time token and CSR to. When unset, the route is
-// not mounted (the capability is simply absent).
+// path an agent presents its one-time token and CSR to. If the authority also
+// implements RenewalEnroller, POST /enroll/renewal is mounted for verified-mTLS
+// rotation. When unset, the routes are not mounted (the capability is simply
+// absent).
 func WithAgentEnroller(e BootstrapEnroller) Option {
 	return func(c *config) { c.agentEnroller = e }
 }
@@ -62,16 +77,7 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
 		return
 	}
-	// Agent↔control-plane version negotiation (SCHEMA-003): the server always echoes
-	// the protocol version it speaks, and rejects an agent whose protocol is outside
-	// the supported window with a clear, actionable error instead of failing opaquely
-	// later. A pre-handshake agent (no header) reads as the baseline and is accepted,
-	// so the handshake is additive and does not break already-deployed agents.
-	w.Header().Set(protocol.HeaderServerProtocol, strconv.Itoa(protocol.Version))
-	if ver := protocol.ParseAgentProtocol(r.Header); !protocol.Supported(ver) {
-		a.writeError(w, errStatus(http.StatusBadRequest, fmt.Sprintf(
-			"unsupported agent protocol version %d (this control plane supports %d-%d); upgrade or downgrade the agent",
-			ver, protocol.MinSupportedVersion, protocol.MaxSupportedVersion)))
+	if !a.negotiateAgentProtocol(w, r) {
 		return
 	}
 	var req enrollBootstrapRequest
@@ -106,6 +112,102 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		Certificate: string(chain),
 		CABundle:    string(a.agentEnroller.CABundlePEM()),
 	})
+}
+
+type enrollRenewalRequest struct {
+	CSR string `json:"csr"`
+}
+
+// enrollRenewal signs a rotation CSR after the caller authenticates with the
+// current agent client certificate. It intentionally lives outside /api/v1 and has
+// no bearer/RBAC path: the credential boundary is the verified agent mTLS peer
+// chain. A missing, raw-unverified, expired, or not-yet-valid client certificate is
+// a 401, and the enrollment authority receives only DER from VerifiedChains.
+func (a *API) enrollRenewal(w http.ResponseWriter, r *http.Request) {
+	if a.agentEnroller == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
+		return
+	}
+	renewal, ok := a.agentEnroller.(RenewalEnroller)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent renewal is not configured"))
+		return
+	}
+	if !a.negotiateAgentProtocol(w, r) {
+		return
+	}
+	peerCertsDER, err := mtls.VerifiedPeerCertsDERFromTLS(r.TLS)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal requires a valid verified client certificate"))
+		return
+	}
+	tenantID, err := mtls.TenantFromClientCert(peerCertsDER[0])
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal certificate is not tenant-attributed"))
+		return
+	}
+	fingerprint, err := mtls.CertFingerprintSHA256(peerCertsDER[0])
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal certificate is invalid"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{
+		TokenKey: "enroll-renewal:" + fingerprint,
+		TenantID: tenantID,
+	}) {
+		return
+	}
+	var req enrollRenewalRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if req.CSR == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "csr is required"))
+		return
+	}
+	csrDER, err := decodeCSR(req.CSR)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	signRenewal := func(ctx context.Context) ([]byte, error) {
+		return renewal.EnrollRenewal(ctx, peerCertsDER, csrDER)
+	}
+	var chain []byte
+	if a.idem != nil {
+		chain, err = a.idem.Do(r.Context(), tenantID, "agent-enroll-renewal:"+fingerprint+":"+crypto.SHA256Hex(csrDER), signRenewal)
+	} else {
+		chain, err = signRenewal(r.Context())
+	}
+	if err != nil {
+		if errors.Is(err, ErrUnauthenticatedAgentRenewal) {
+			a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal requires a valid verified client certificate"))
+			return
+		}
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, enrollBootstrapResponse{
+		Certificate: string(chain),
+		CABundle:    string(a.agentEnroller.CABundlePEM()),
+	})
+}
+
+func (a *API) negotiateAgentProtocol(w http.ResponseWriter, r *http.Request) bool {
+	// Agent↔control-plane version negotiation (SCHEMA-003): the server always echoes
+	// the protocol version it speaks, and rejects an agent whose protocol is outside
+	// the supported window with a clear, actionable error instead of failing opaquely
+	// later. A pre-handshake agent (no header) reads as the baseline and is accepted,
+	// so the handshake is additive and does not break already-deployed agents.
+	w.Header().Set(protocol.HeaderServerProtocol, strconv.Itoa(protocol.Version))
+	if ver := protocol.ParseAgentProtocol(r.Header); !protocol.Supported(ver) {
+		a.writeError(w, errStatus(http.StatusBadRequest, fmt.Sprintf(
+			"unsupported agent protocol version %d (this control plane supports %d-%d); upgrade or downgrade the agent",
+			ver, protocol.MinSupportedVersion, protocol.MaxSupportedVersion)))
+		return false
+	}
+	return true
 }
 
 func (a *API) observeAgentEnrollment(result string) {

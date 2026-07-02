@@ -36,6 +36,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F1 | Certificate inventory | docs/features/discovery-and-inventory.md |
 | F2 | Network discovery | docs/features/discovery-and-inventory.md |
 | F3 | Agent-based discovery | docs/features/discovery-and-inventory.md |
+| F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
 | F42 | SSH credential discovery and inventory | docs/features/discovery-and-inventory.md, docs/features/ssh.md |
 | F49 | Agentless cloud certificate discovery | docs/features/discovery-and-inventory.md |
 | F35 | Secret store discovery | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
@@ -119,7 +120,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
 | F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
 | F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
-| F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
 | F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 
@@ -1122,6 +1122,13 @@ This is a deliberate, documented trust boundary (not an accident):
   enroll → heartbeat → endpoint inventory report → served API capability readback →
   Discovery findings → graph node, plus renew → idempotent retry → reject untrusted) and rendered-chart
   assertions.
+- **Embedded HTTP enrollment renewal:** `POST /enroll/bootstrap` and
+  `POST /enroll/renewal` are mounted on the served control-plane HTTP listener.
+  Bootstrap consumes a one-time token. Renewal requires the current verified agent
+  client certificate, rejects missing or expired peers with 401, and deduplicates on
+  the presented certificate fingerprint plus CSR when the served API has idempotency
+  storage. The renewed certificate is tenant-attributed from the verified peer, never
+  from a request header or CSR field.
 
 ## Revocation
 

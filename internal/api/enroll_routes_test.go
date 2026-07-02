@@ -7,67 +7,122 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
-// enrollOnlyEnroller is a minimal BootstrapEnroller so api.New mounts the bootstrap
-// route without the full enrollment authority.
-type enrollOnlyEnroller struct{}
+// enrollOnlyEnroller is a minimal agent enroller so api.New mounts the enrollment
+// routes without the full server assembly.
+type enrollOnlyEnroller struct {
+	renewalPeerChains [][][]byte
+}
 
 func (enrollOnlyEnroller) EnrollBootstrap(_ context.Context, _ []byte, _ []byte) ([]byte, error) {
 	return []byte("-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n"), nil
+}
+func (e *enrollOnlyEnroller) EnrollRenewal(_ context.Context, peerCertsDER [][]byte, _ []byte) ([]byte, error) {
+	if len(peerCertsDER) == 0 {
+		return nil, context.Canceled
+	}
+	e.renewalPeerChains = append(e.renewalPeerChains, peerCertsDER)
+	return []byte("-----BEGIN CERTIFICATE-----\nrenewed\n-----END CERTIFICATE-----\n"), nil
 }
 func (enrollOnlyEnroller) CABundlePEM() []byte {
 	return []byte("-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n")
 }
 
 // TestEnrollRoutesServed pins the EXACT served /enroll/* route set of the running
-// binary (DOCS-001). The composition mounts ONLY POST /enroll/bootstrap; renewal is
-// library-complete (internal/agent/enroll has EnrollRenewal + a POST /enroll/renewal
-// handler) but is NOT wired into the served API, so /enroll/renewal must 404 against
-// the running binary. enrollment-protocols.md was corrected to this reality, and this
-// test guards it: if renewal is ever mounted (EXC-WIRE-02 closes), this test must be
-// updated alongside the doc — and if someone re-claims renewal is served without
-// mounting it, the doc reality-test (docs/enroll_routes_test.go) fails.
+// binary (TRACE-009). The composition mounts POST /enroll/bootstrap and
+// POST /enroll/renewal. Renewal is not a public mint endpoint: it must reject a
+// request without a verified current agent certificate, reject an expired presented
+// certificate, and pass only the verified peer chain into the enrollment authority.
 func TestEnrollRoutesServed(t *testing.T) {
-	a := api.New(nil, nil, nil, api.WithAgentEnroller(enrollOnlyEnroller{}))
-	srv := httptest.NewServer(a)
-	t.Cleanup(srv.Close)
+	enroller := &enrollOnlyEnroller{}
+	a := api.New(nil, nil, nil, api.WithAgentEnroller(enroller))
 
-	body, _ := json.Marshal(map[string]string{
+	bootstrapBody, _ := json.Marshal(map[string]string{
 		"token": "tok",
 		"csr":   base64.StdEncoding.EncodeToString([]byte("csr-der")),
 	})
+	renewalBody, _ := json.Marshal(map[string]string{
+		"csr": base64.StdEncoding.EncodeToString([]byte("csr-der")),
+	})
 
-	post := func(path string) int {
-		req, err := http.NewRequest(http.MethodPost, srv.URL+path, bytes.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
+	post := func(path string, body []byte, tlsState bool) (int, string) {
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+		if tlsState {
+			req.TLS = agentPeerTLSState(t, time.Hour).ConnectionState()
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("POST %s: %v", path, err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		return resp.StatusCode
+		rec := httptest.NewRecorder()
+		a.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
 	}
 
 	// Bootstrap IS served: it must not 404 (the stub enroller returns a chain → 200).
-	if code := post("/enroll/bootstrap"); code == http.StatusNotFound {
+	if code, _ := post("/enroll/bootstrap", bootstrapBody, false); code == http.StatusNotFound {
 		t.Errorf("POST /enroll/bootstrap should be served, got 404")
 	}
 
-	// Renewal is NOT served by the running binary: it must 404 (DOCS-001). A non-404
-	// here means renewal was mounted — update enrollment-protocols.md and this test.
-	if code := post("/enroll/renewal"); code != http.StatusNotFound {
-		t.Errorf("POST /enroll/renewal is documented as not-yet-mounted (DOCS-001) but returned %d, not 404 — if it was wired (EXC-WIRE-02), update the docs and this test", code)
+	if code, body := post("/enroll/renewal", renewalBody, false); code != http.StatusUnauthorized {
+		t.Fatalf("POST /enroll/renewal without verified client cert = %d, want 401: %s", code, body)
+	}
+	if len(enroller.renewalPeerChains) != 0 {
+		t.Fatal("unauthenticated renewal reached the enrollment authority")
+	}
+
+	if code, body := post("/enroll/renewal", renewalBody, true); code != http.StatusOK || !strings.Contains(body, "renewed") {
+		t.Fatalf("POST /enroll/renewal with verified client cert = %d body %q, want 200 renewed certificate", code, body)
+	}
+	if len(enroller.renewalPeerChains) != 1 || len(enroller.renewalPeerChains[0]) == 0 {
+		t.Fatalf("renewal peer chains = %#v, want one verified peer chain", enroller.renewalPeerChains)
+	}
+
+	expiredReq := httptest.NewRequest(http.MethodPost, "/enroll/renewal", bytes.NewReader(renewalBody))
+	expiredReq.TLS = agentPeerTLSState(t, -time.Hour).ConnectionState()
+	expiredReq.Header.Set("Content-Type", "application/json")
+	expiredRec := httptest.NewRecorder()
+	a.ServeHTTP(expiredRec, expiredReq)
+	if expiredRec.Code != http.StatusUnauthorized {
+		t.Fatalf("POST /enroll/renewal with expired client cert = %d, want 401", expiredRec.Code)
 	}
 
 	// And there is no served reenroll alias either.
-	if code := post("/enroll/reenroll"); code != http.StatusNotFound {
+	if code, _ := post("/enroll/reenroll", renewalBody, false); code != http.StatusNotFound {
 		t.Errorf("POST /enroll/reenroll should not be served, got %d", code)
 	}
+}
+
+func agentPeerTLSState(t *testing.T, ttl time.Duration) *crypto.TLSConnectionState {
+	t.Helper()
+	ca, err := mtls.NewCA("test-agent-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := mtls.GenerateAgentKey("edge-agent-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := id.CSR()
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, err := ca.SignClientCSRWithTenant(csr, "11111111-1111-1111-1111-111111111111", ttl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := mtls.FirstCertDER(chain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := crypto.TLSStateWithPeerCertificates([][]byte{leaf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -79,6 +80,47 @@ func TestAssembledServerEnrollsAgent(t *testing.T) {
 	}
 	if err := crypto.VerifyLeafSignedByCA(leafBlk.Bytes, caBlk.Bytes); err != nil {
 		t.Fatalf("enrolled client certificate does not chain to the enrollment CA: %v", err)
+	}
+
+	// The mounted renewal route is authenticated by the current agent certificate.
+	// The request carries a fresh CSR only; tenant attribution comes from the
+	// verified peer certificate, not from request JSON.
+	renewKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer renewKey.Destroy()
+	renewCSR, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "agent-01"}, renewKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewBody, err := json.Marshal(map[string]string{"csr": base64.StdEncoding.EncodeToString(renewCSR)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsState, err := crypto.TLSStateWithPeerCertificates([][]byte{leafBlk.Bytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewReq := httptest.NewRequest(http.MethodPost, "/enroll/renewal", strings.NewReader(string(renewBody)))
+	renewReq.Header.Set("Content-Type", "application/json")
+	renewReq.TLS = tlsState.ConnectionState()
+	renewRec := httptest.NewRecorder()
+	asm.Handler().ServeHTTP(renewRec, renewReq)
+	if renewRec.Code != http.StatusOK {
+		t.Fatalf("POST /enroll/renewal = %d: %s (the renewal handler must be mounted)", renewRec.Code, renewRec.Body.String())
+	}
+	renewResp := decode(t, renewRec.Body.Bytes())
+	renewedPEM, _ := renewResp["certificate"].(string)
+	renewedLeaf, _ := pem.Decode([]byte(renewedPEM))
+	if renewedLeaf == nil {
+		t.Fatalf("renewal response missing PEM certificate: %s", renewRec.Body.String())
+	}
+	if string(renewedLeaf.Bytes) == string(leafBlk.Bytes) {
+		t.Fatal("renewal returned the original certificate instead of a fresh client certificate")
+	}
+	if err := crypto.VerifyLeafSignedByCA(renewedLeaf.Bytes, caBlk.Bytes); err != nil {
+		t.Fatalf("renewed client certificate does not chain to the enrollment CA: %v", err)
 	}
 
 	// The bootstrap token is one-time: presenting it again is rejected (401). The

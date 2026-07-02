@@ -32,6 +32,7 @@ func TLSStateWithPeerCertificates(certsDER [][]byte) (*TLSConnectionState, error
 	return &TLSConnectionState{state: &tls.ConnectionState{
 		HandshakeComplete: true,
 		PeerCertificates:  certs,
+		VerifiedChains:    [][]*x509.Certificate{certs},
 	}}, nil
 }
 

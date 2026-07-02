@@ -102,16 +102,12 @@ on libc and the `openssl` CLI — small enough for constrained hardware — and 
 suite actually compiles and runs it against a real EST server. A bootstrap token is
 checked-and-deleted atomically, so it works exactly once.
 
-**Status:** the running control plane mounts **only `POST /enroll/bootstrap`**. Renewal is
-**library-complete but not yet mounted**: an `EnrollRenewal` operation and a
-`POST /enroll/renewal` handler exist in the codebase, but the served API does not register
-that route, so a request to `/enroll/renewal` against the running binary returns **404**
-today. This matches the served route set in
-[discovery-and-inventory.md](discovery-and-inventory.md). Mounting renewal (and the agent
-mTLS steady-state channel it pairs with) onto the served listener is tracked as future
-work; until then, the served *agent* enrollment path is bootstrap-only. (The RFC issuance
-protocols — ACME/EST/SCEP/CMP/SPIFFE/SSH — are now served; see the table below and
-[limitations.md](../limitations.md).)
+**Status:** the running control plane mounts **`POST /enroll/bootstrap`** and
+**`POST /enroll/renewal`**. Bootstrap consumes the one-time token. Renewal accepts only a
+verified client certificate from the current agent identity, rejects missing or expired
+peer certificates, and signs a fresh CSR without ever receiving the device's private key.
+The steady-state agent channel is also served when `agent_channel.enabled`, so larger
+agents can renew over mTLS gRPC while embedded clients can use the HTTP renewal surface.
 
 ### Intune / MDM enrollment (F56)
 
@@ -170,7 +166,7 @@ Be precise about what's mounted in the running server today:
 | Surface | Status |
 |---|---|
 | Embedded bootstrap (`POST /enroll/bootstrap`, F54) | **Served** by the control plane |
-| Embedded renewal (`POST /enroll/renewal`, F54) | **Library-complete, not yet mounted** — 404 on the running binary; mounting it (with the agent steady-state channel) is tracked as future work |
+| Embedded renewal (`POST /enroll/renewal`, F54) | **Served** by the control plane; requires the current verified client certificate and rejects missing or expired peers |
 | EST server (F22) | **Served** at `/.well-known/est/...` (`protocols.est.enabled` + `protocols.est.tenant_id`) — Bearer-token + TLS auth, orchestrator-backed, tenant-scoped |
 | EST serverkeygen / channel binding / profile routes | **Served when configured** — `/serverkeygen`, RFC 9266 `tls-server-end-point`, per-profile PathID, and the mTLS sibling route |
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
@@ -200,9 +196,8 @@ in HA so all replicas use the same CMS transport identity.
   `/.well-known/est-mtls/<PathID>/...`.
 - **SCEP:** `/scep?operation=GetCACaps|GetCACert|PKIOperation` (RFC 8894).
 - **CMP:** `POST /cmp` (RFC 4210 / RFC 6712).
-- **Embedded:** `POST /enroll/bootstrap` (served). `POST /enroll/renewal` is
-  library-complete but **not yet mounted** (404 on the running binary; mounting it,
-  alongside the agent steady-state channel, is tracked as future work).
+- **Embedded:** `POST /enroll/bootstrap` (one-time token) and `POST /enroll/renewal`
+  (verified client certificate) are served by the running control plane.
 - **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`,
   `mdm.scep_policy.*`, `mdm.scep_challenge.rotated`, and
   `mdm.intune_scep_challenge*`.

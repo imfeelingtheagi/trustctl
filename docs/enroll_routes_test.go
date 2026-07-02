@@ -5,68 +5,45 @@ import (
 	"testing"
 )
 
-// TestEnrollRenewalDisclosedAsNotServed is the reality-bound disclosure for DOCS-001:
-// enrollment-protocols.md previously claimed POST /enroll/renewal "is mounted and
-// served," but the running binary's API mounts ONLY POST /enroll/bootstrap, so a
-// renewal request 404s. This test binds the doc to the served code, in both
-// directions:
-//
-//   - while the served API does NOT mount renewal, the doc must say so (no "renewal
-//     ... mounted and served" over-claim, and an explicit not-yet-mounted/404
-//     statement) and disclose that wiring it is still outstanding (future work);
-//   - if a future change mounts renewal (the route appears in internal/api), the
-//     stale not-served disclosure must be retired.
-//
-// The behavioral companion is internal/api/TestEnrollRoutesServed, which drives the
-// real mux and asserts bootstrap serves while renewal 404s.
-func TestEnrollRenewalDisclosedAsNotServed(t *testing.T) {
+// TestEnrollRenewalDocumentedAsServed binds enrollment-protocols.md to the served
+// /enroll route set. TRACE-009 mounted POST /enroll/renewal, so the old
+// library-complete-but-404 disclosure must stay retired.
+func TestEnrollRenewalDocumentedAsServed(t *testing.T) {
 	const apiSrc = "../internal/api/api.go"
 	api := read(t, apiSrc)
 
 	bootstrapServed := strings.Contains(api, `"POST /enroll/bootstrap"`)
 	renewalServed := strings.Contains(api, `"POST /enroll/renewal"`)
 
-	// Code anchor: the served API must still mount bootstrap (the disclosure that
-	// "bootstrap is served, renewal is not" rests on this being true).
 	if !bootstrapServed {
-		t.Fatal("internal/api no longer mounts POST /enroll/bootstrap; the DOCS-001 served-vs-library disclosure has no code anchor — revisit this reality test")
+		t.Fatal("internal/api no longer mounts POST /enroll/bootstrap; revisit the F54 enrollment docs")
+	}
+	if !renewalServed {
+		t.Fatal("internal/api no longer mounts POST /enroll/renewal; docs must not claim F54 renewal is served")
 	}
 
 	doc := read(t, "features/enrollment-protocols.md")
 	low := strings.Join(strings.Fields(strings.ToLower(doc)), " ")
 
-	if renewalServed {
-		// Renewal is now genuinely served: the not-served disclosure would be a stale
-		// under-claim and must have been retired.
-		if strings.Contains(low, "not yet mounted") && strings.Contains(low, "/enroll/renewal") {
-			t.Error("POST /enroll/renewal appears to be SERVED now (mounted in internal/api), but enrollment-protocols.md still discloses it as not-yet-mounted — update the doc (EXC-WIRE-02 closed) (DOCS-001)")
-		}
-		return
-	}
-
-	// Not served: the doc must NOT over-claim renewal as served, and must disclose the
-	// 404 reality + link the epic.
-	for _, overClaim := range []string{
-		"renewal endpoints (`post /enroll/bootstrap`, `post /enroll/renewal`) **are mounted and served**",
-		"post /enroll/renewal` (served)",
-		"bootstrap and renewal endpoints (`post /enroll/bootstrap`, `post /enroll/renewal`) are mounted and served",
+	for _, stale := range []string{
+		"not yet mounted",
+		"404 on the running binary",
+		"tracked as future work",
+		"library-complete but **not yet mounted**",
 	} {
-		if strings.Contains(low, overClaim) {
-			t.Errorf("enrollment-protocols.md over-claims POST /enroll/renewal as served (%q) while internal/api does not mount it (DOCS-001)", overClaim)
+		if strings.Contains(low, stale) && strings.Contains(low, "/enroll/renewal") {
+			t.Errorf("enrollment-protocols.md still carries stale F54 renewal under-claim %q", stale)
 		}
 	}
-	if !strings.Contains(low, "not yet mounted") {
-		t.Error("enrollment-protocols.md must disclose POST /enroll/renewal as library-complete-but-not-yet-mounted (DOCS-001)")
-	}
-	if !strings.Contains(low, "404") {
-		t.Error("enrollment-protocols.md should state that /enroll/renewal returns 404 on the running binary (DOCS-001)")
-	}
-	// Rebound off the internal "EXC-WIRE-02" epic link to the customer-facing
-	// disclosure that wiring renewal onto the served listener is still outstanding.
-	// Keeping this asserted means the doc cannot quietly drop "renewal is pending, not
-	// served" wording while still under-claiming it as a current capability.
-	if !strings.Contains(low, "tracked as future work") {
-		t.Error("enrollment-protocols.md must disclose that mounting the renewal route onto the served binary is still outstanding (tracked as future work) (DOCS-001)")
+	for _, want := range []string{
+		"`post /enroll/bootstrap`",
+		"`post /enroll/renewal`",
+		"verified client certificate",
+		"served",
+	} {
+		if !strings.Contains(low, want) {
+			t.Errorf("enrollment-protocols.md must document served embedded enrollment renewal (missing %q)", want)
+		}
 	}
 }
 

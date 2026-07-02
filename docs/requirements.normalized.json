@@ -405,12 +405,10 @@
       "requirement_text": "trstctl shall provide Embedded / IoT enrollment agent.",
       "owner": "Enrollment protocols",
       "priority": "P1",
-      "acceptance_criteria": "UI shows bootstrap available and renewal not mounted until served; tests cover token one-time visibility.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "bootstrap served; renewal not mounted",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: bootstrap served; renewal not mounted. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served tests bootstrap with a one-time token, reject token replay, renew through POST /enroll/renewal only with a verified current client certificate, reject missing or expired renewal peers, and UI tests cover token one-time visibility.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served bootstrap and verified-mTLS renewal endpoints plus agent steady-state channel renewal",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ]

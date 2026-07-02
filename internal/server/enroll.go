@@ -35,6 +35,14 @@ func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrD
 	return chain, err
 }
 
+func (e enrollAuthority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, csrDER []byte) ([]byte, error) {
+	chain, err := e.a.EnrollRenewal(ctx, peerCertsDER, csrDER)
+	if errors.Is(err, enroll.ErrUnauthenticatedRenewal) {
+		return nil, fmt.Errorf("%w", api.ErrUnauthenticatedAgentRenewal)
+	}
+	return chain, err
+}
+
 func (e enrollAuthority) CABundlePEM() []byte { return e.a.CABundlePEM() }
 
 // storeTokenStore adapts the PostgreSQL store to enroll.TokenStore, giving

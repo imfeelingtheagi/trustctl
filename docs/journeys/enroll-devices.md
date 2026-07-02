@@ -93,9 +93,9 @@ against its rules, and hands back a signed certificate.
    challenge. This is covered in
    [Enrollment protocols](../features/enrollment-protocols.md).
 
-   > Honest status: the EST, SCEP, and CMP servers are served end-to-end and
-   > cross-checked against stock reference clients in CI. The embedded *renewal*
-   > endpoint and the MDM challenge gate's served activation are tracked in
+   > Honest status: the EST, SCEP, CMP, embedded bootstrap, and embedded renewal
+   > endpoints are served end-to-end and cross-checked by acceptance tests. The MDM
+   > challenge gate's trust-anchor lifecycle is still tracked in
    > [Current limitations](../limitations.md).
 
 ## Where next

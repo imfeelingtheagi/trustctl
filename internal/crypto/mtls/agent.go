@@ -404,6 +404,34 @@ func PeerCertInfoFromAuthInfo(authInfo credentials.AuthInfo) (PeerCertInfo, erro
 	}, nil
 }
 
+// VerifiedPeerCertsDERFromTLS extracts the DER chain from a net/http TLS state after
+// mutual-TLS verification. It deliberately reads VerifiedChains, not
+// PeerCertificates, so a raw client-supplied but untrusted certificate never becomes
+// an enrollment credential. A stale/not-yet-valid leaf is rejected defensively even
+// though a real TLS verifier would already exclude it from VerifiedChains.
+func VerifiedPeerCertsDERFromTLS(state *tls.ConnectionState) ([][]byte, error) {
+	if state == nil || len(state.VerifiedChains) == 0 || len(state.VerifiedChains[0]) == 0 {
+		return nil, errors.New("mtls: no verified peer certificate")
+	}
+	chain := state.VerifiedChains[0]
+	leaf := chain[0]
+	if leaf == nil {
+		return nil, errors.New("mtls: verified peer certificate is empty")
+	}
+	now := time.Now()
+	if now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
+		return nil, errors.New("mtls: verified peer certificate is expired or not yet valid")
+	}
+	out := make([][]byte, 0, len(chain))
+	for _, cert := range chain {
+		if cert == nil || len(cert.Raw) == 0 {
+			return nil, errors.New("mtls: verified peer chain contains an empty certificate")
+		}
+		out = append(out, cert.Raw)
+	}
+	return out, nil
+}
+
 // LocalServerKey is a TLS server key the control plane generates locally for its
 // agent-channel listener (WIRE-004). The key never leaves the process and is NOT a CA
 // key (the agent CA key lives in the signer, AN-4); this is only the channel's
