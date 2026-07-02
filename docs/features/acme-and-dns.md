@@ -181,6 +181,14 @@ the *same* `_acme-challenge.example.com` record as the bare domain — so the sa
 propagation checker, CNAME delegation, and cleanup handle wildcards and ordinary names
 identically once the opt-in check passes. RFC 8555 §7.1.1, §8.4.
 
+For served X.509 identity issuance, `POST /api/v1/identities` fails closed for wildcard
+names until the request carries both `wildcard_blast_radius_acknowledged=true` and
+`validation_method=dns-01` in `attributes`; the Identities page exposes that
+acknowledgement before it sends the issue request. Once the wildcard identity is deployed,
+the lifecycle scheduler treats it like any other deployed X.509 identity: it queues
+`ca.renew`, mints a successor with the same wildcard SAN, and records
+`lifecycle.rotation.recorded` evidence for renewal history.
+
 ## Use it
 
 Point any ACME client at trstctl's directory. With certbot, using DNS-01:
@@ -206,7 +214,8 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
   delegation so trstctl never holds production DNS keys.
 - **Propagation takes time.** Use the propagation checker and the preflight so renewals
   don't fail on a too-early lookup.
-- **Wildcards require DNS-01 and a profile opt-in** — this is deliberate, not a bug.
+- **Wildcards require DNS-01, profile/provider opt-in, and blast-radius acknowledgement**
+  — this is deliberate, not a bug.
 - **CAA fails closed** on lookup errors: if your DNS is unreachable, issuance is
   refused rather than risked.
 - **`trust_authenticated` is not public issuance.** Use it only for internal profiles

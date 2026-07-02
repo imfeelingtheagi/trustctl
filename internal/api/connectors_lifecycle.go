@@ -425,6 +425,9 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
 			return 0, nil, err
 		}
+		if err := validateWildcardIdentityPolicy(req.IdentityName, nil); err != nil {
+			return 0, nil, err
+		}
 		target, err := a.endpointBindingTarget(ctx, tenantID, req)
 		if err != nil {
 			return 0, nil, err

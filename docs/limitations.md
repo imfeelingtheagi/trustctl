@@ -55,6 +55,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
 | F72 | CAA policy enforcement and management | docs/features/acme-and-dns.md |
 | F73 | Multi-method domain-validation policy | docs/features/acme-and-dns.md |
+| F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
 | F47 | X.509 revocation infrastructure | docs/features/issuance-and-cas.md |
 | F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
 | F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
@@ -121,7 +122,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
 
 ### Library-only
 
@@ -905,7 +905,10 @@ This is a deliberate, documented trust boundary (not an accident):
   live CAA, method, and wildcard policy before issuance. Served ACME DNS-01
   challenge acceptance now checks live CAA before any DNS write, then publishes
   and cleans through `acme.dns01.present` / `acme.dns01.cleanup` outbox rows
-  using tenant provider configs and secret-reference-backed credentials.
+  using tenant provider configs and secret-reference-backed credentials. Wildcard
+  X.509 identity issuance requires an explicit blast-radius acknowledgement and
+  `validation_method=dns-01`; deployed wildcard identities renew through the
+  lifecycle scheduler's `ca.renew` path with rotation evidence.
   The ACME server is now **served by the running
   binary**: it is mounted on the control-plane TLS listener at `/directory` +
   `/acme/...` and brokers issuance through the orchestrator-backed path — signed in the

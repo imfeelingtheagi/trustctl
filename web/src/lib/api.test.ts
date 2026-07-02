@@ -386,6 +386,23 @@ describe("api CSRF contract (SEC-001)", () => {
     });
   });
 
+  it("adds wildcard DNS-01 acknowledgement attributes only after operator acknowledgement", () => {
+    expect(firstCertificateIdentityRequest({ name: "*.payments.example" }, "owner-1")).toEqual({
+      kind: "x509_certificate",
+      name: "*.payments.example",
+      owner_id: "owner-1",
+    });
+    expect(firstCertificateIdentityRequest({ name: "*.payments.example", wildcardBlastRadiusAcknowledged: true }, "owner-1")).toEqual({
+      kind: "x509_certificate",
+      name: "*.payments.example",
+      owner_id: "owner-1",
+      attributes: {
+        validation_method: "dns-01",
+        wildcard_blast_radius_acknowledged: true,
+      },
+    });
+  });
+
   it("issues the first wizard certificate without posting a fake issuer_id", async () => {
     document.cookie = "trstctl_csrf=csrf-token-first-cert; path=/";
     mockFetchSequence([
@@ -586,7 +603,15 @@ describe("secrets contract", () => {
         capability: "CAP-SEC-04",
         served: true,
         generated_at: "2026-06-29T00:00:00Z",
-        summary: { total_providers: 4, discovery_supported: 4, discovery_configured: 4, sync_supported: 3, sync_configured: 3, fully_configured: 4, configured_connections: 7 },
+        summary: {
+          total_providers: 4,
+          discovery_supported: 4,
+          discovery_configured: 4,
+          sync_supported: 3,
+          sync_configured: 3,
+          fully_configured: 4,
+          configured_connections: 7,
+        },
         providers: [
           {
             id: "azure-key-vault",

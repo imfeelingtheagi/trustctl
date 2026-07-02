@@ -30,9 +30,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   const currentStep = onboardingSteps[stepIndex]?.id as WizardStepID;
   const nextEnabled =
-    (currentStep === "issuer" && issuerReady) ||
-    (currentStep === "certificate" && Boolean(certificateName)) ||
-    (currentStep === "agent" && Boolean(agent));
+    (currentStep === "issuer" && issuerReady) || (currentStep === "certificate" && Boolean(certificateName)) || (currentStep === "agent" && Boolean(agent));
 
   function resetWizard() {
     setStepIndex(0);
@@ -52,7 +50,11 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   if (completed) {
     return (
       <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
-        <PageHeader title="Set up trstctl" titleId="wizard-heading" description="First-run guide completed — trstctl will not prompt setup again on this browser." />
+        <PageHeader
+          title="Set up trstctl"
+          titleId="wizard-heading"
+          description="First-run guide completed — trstctl will not prompt setup again on this browser."
+        />
         <section className="ui-panel grid gap-4 p-comfortable" aria-labelledby="setup-complete-heading">
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
@@ -106,9 +108,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
         )}
         {currentStep === "certificate" && <CertificateStep certificateName={certificateName} onIssued={setCertificateName} />}
         {currentStep === "agent" && <AgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} />}
-        {currentStep === "complete" && (
-          <CompleteStep certificateName={certificateName} issuerName={issuerName} agent={agent} onComplete={markComplete} />
-        )}
+        {currentStep === "complete" && <CompleteStep certificateName={certificateName} issuerName={issuerName} agent={agent} onComplete={markComplete} />}
       </StepShell>
     </section>
   );
@@ -166,16 +166,21 @@ function IssuerStep({ issuerName, onReady, ready }: { issuerName: string | null;
 
 function CertificateStep({ certificateName, onIssued }: { certificateName: string | null; onIssued: (name: string) => void }) {
   const [name, setName] = useState("");
+  const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const serviceName = name.trim() || "first-service";
+  const isWildcard = serviceName.startsWith("*.");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setBusy(true);
-    const serviceName = name.trim() || "first-service";
     try {
-      await api.issueCertificate({ name: name.trim() || "first-service" });
+      await api.issueCertificate({
+        name: serviceName,
+        ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
+      });
       onIssued(serviceName);
     } catch (err) {
       setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);
@@ -193,7 +198,8 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
             Issue your first certificate
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Name the service this certificate belongs to. This action uses an operator credential with certificate issuance authority; setup and agent tokens cannot issue certificates.
+            Name the service this certificate belongs to. This action uses an operator credential with certificate issuance authority; setup and agent tokens
+            cannot issue certificates.
           </p>
         </div>
       </div>
@@ -202,18 +208,36 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
         <input
           id="svc-name"
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (!event.target.value.trim().startsWith("*.")) setWildcardAck(false);
+          }}
           className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
           placeholder="payments-api"
         />
       </label>
+      {isWildcard && (
+        <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-wildcard-ack">
+          <input
+            id="wizard-wildcard-ack"
+            type="checkbox"
+            checked={wildcardAck}
+            onChange={(event) => setWildcardAck(event.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-border"
+          />
+          <span>
+            Acknowledge wildcard blast radius
+            <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
+          </span>
+        </label>
+      )}
       {certificateName ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           {certificateName} was issued.
         </p>
       ) : (
-        <Button type="submit" className="justify-self-start" disabled={busy}>
+        <Button type="submit" className="justify-self-start" disabled={busy || (isWildcard && !wildcardAck)}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           Issue certificate
         </Button>
@@ -284,7 +308,8 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
             Enroll an agent
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue certificates.
+            Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue
+            certificates.
           </p>
         </div>
       </div>
@@ -342,9 +367,7 @@ function CompleteStep({
         <SummaryItem label="Certificate" value={certificateName ?? "first-service"} />
         <SummaryItem label="Agent" value={agent?.name ?? "not enrolled"} />
       </dl>
-      <p className="text-sm text-muted-foreground">
-        trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.
-      </p>
+      <p className="text-sm text-muted-foreground">trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.</p>
       <Button type="button" className="justify-self-start" onClick={onComplete}>
         Complete setup
       </Button>

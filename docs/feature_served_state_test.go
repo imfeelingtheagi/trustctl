@@ -74,7 +74,7 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 		t.Fatalf("feature-map served_state denominator = %d, features.tsv denominator = %d", len(byID), len(featureCatalog(t)))
 	}
 
-	for _, state := range []string{"served", "conditional", "partial"} {
+	for _, state := range []string{"served", "conditional"} {
 		if counts[state] == 0 {
 			t.Errorf("served_state ledger should include at least one %q row so enum handling is exercised", state)
 		}
@@ -205,7 +205,6 @@ func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"automated wildcard renewal scheduling",
 		"cursor pagination and list virtualization",
 		"terraform cloud/opentofu and arbitrary webhook secret-sync targets",
 		"vault kv outbound sync",

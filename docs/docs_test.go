@@ -654,8 +654,14 @@ func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *tes
 	if strings.Contains(apiTS, `kind: "x509_ca"`) || strings.Contains(apiTS, `"kind":"x509_ca"`) {
 		t.Error("wizard convenience client must not create a name-only x509_ca issuer")
 	}
-	if !strings.Contains(wizardTS, `api.issueCertificate({ name: name.trim() || "first-service" })`) {
-		t.Error("wizard should call the first-certificate convenience API with only the service name")
+	for _, want := range []string{
+		`const serviceName = name.trim() || "first-service";`,
+		`const isWildcard = serviceName.startsWith("*.");`,
+		`...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {})`,
+	} {
+		if !strings.Contains(wizardTS, want) {
+			t.Errorf("wizard should call the first-certificate convenience API with service name plus conditional wildcard acknowledgement; missing %q", want)
+		}
 	}
 	if strings.Contains(wizardTS, "api.createIssuer") {
 		t.Error("wizard should not post an issuer payload during first-run setup")

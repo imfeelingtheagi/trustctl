@@ -250,6 +250,142 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 	}
 }
 
+func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+	})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write",
+		"identities:read", "identities:write",
+		"certs:read", "certs:issue", "lifecycle:read",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload",
+		"name": "trace017-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind":     "x509_certificate",
+		"name":     "*.missing-ack.trace017.test",
+		"owner_id": owner.ID,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("wildcard identity without blast-radius acknowledgement: status %d body %s, want 400", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind":     "x509_certificate",
+		"name":     "*.http.trace017.test",
+		"owner_id": owner.ID,
+		"attributes": map[string]any{
+			"wildcard_blast_radius_acknowledged": true,
+			"validation_method":                  "http-01",
+		},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("wildcard identity with non-DNS validation method: status %d body %s, want 400", status, body)
+	}
+
+	const wildcardName = "*.trace017.test"
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind":     "x509_certificate",
+		"name":     wildcardName,
+		"owner_id": owner.ID,
+		"attributes": map[string]any{
+			"wildcard_blast_radius_acknowledged": true,
+			"validation_method":                  "dns-01",
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create acknowledged wildcard identity: status %d body %s", status, body)
+	}
+	var ident struct {
+		ID         string          `json:"id"`
+		Attributes json.RawMessage `json:"attributes"`
+	}
+	if err := json.Unmarshal(body, &ident); err != nil {
+		t.Fatalf("decode wildcard identity: %v", err)
+	}
+	if ident.ID == "" || !jsonContains(t, ident.Attributes, "wildcard_blast_radius_acknowledged") || !jsonContains(t, ident.Attributes, "dns-01") {
+		t.Fatalf("wildcard identity response lost acknowledgement/DNS-01 attributes: %s", ident.Attributes)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
+		"to":     "issued",
+		"reason": "TRACE-017 wildcard issuance",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("issue wildcard identity: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain wildcard issue: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
+		"to":     "deployed",
+		"reason": "TRACE-017 wildcard deployed for renewal",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("deploy wildcard identity: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain wildcard deploy: %v", err)
+	}
+	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, wildcardName)
+	if err != nil {
+		t.Fatalf("load wildcard certificate: %v", err)
+	}
+	if len(certs) != 1 || !containsString(certs[0].SANs, wildcardName) {
+		t.Fatalf("issued wildcard certs = %+v, want one active cert retaining %s SAN", certs, wildcardName)
+	}
+	predecessor := certs[0]
+	now := time.Now().UTC()
+	notBefore := now.Add(-45 * 24 * time.Hour)
+	notAfter := now.Add(12 * time.Hour)
+	predecessor.NotBefore = &notBefore
+	predecessor.NotAfter = &notAfter
+	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, predecessor); err != nil {
+		t.Fatalf("record wildcard renewal window: %v", err)
+	}
+
+	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	if err != nil {
+		t.Fatalf("run wildcard lifecycle scheduler: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("scheduled wildcard renewals = %d, want 1", queued)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain wildcard renewal: %v", err)
+	}
+	runs := rotationRunsForIdentity(t, h, tok, ident.ID)
+	if len(runs.Items) != 1 {
+		t.Fatalf("wildcard rotation runs = %d, want 1 (%s)", len(runs.Items), runs.Raw)
+	}
+	run := runs.Items[0]
+	if run.Status != "succeeded" || run.Trigger != "scheduler" || run.PredecessorFingerprint != predecessor.Fingerprint || run.SuccessorFingerprint == "" {
+		t.Fatalf("bad wildcard renewal run: %+v", run)
+	}
+	renewed, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, wildcardName)
+	if err != nil {
+		t.Fatalf("load renewed wildcard certificate: %v", err)
+	}
+	if len(renewed) != 1 || !containsString(renewed[0].SANs, wildcardName) || renewed[0].Fingerprint != run.SuccessorFingerprint {
+		t.Fatalf("renewed wildcard cert = %+v, want active successor %s retaining wildcard SAN", renewed, run.SuccessorFingerprint)
+	}
+	if !h.hasEvent(t, "lifecycle.rotation.recorded") {
+		t.Fatal("wildcard renewal did not append lifecycle.rotation.recorded evidence")
+	}
+}
+
 func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour

@@ -50,7 +50,18 @@ describe("lifecycle actions from the UI", () => {
       coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
       reason: "departure decommission via UI",
       summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
-      items: [{ identity_id: "dep-1", name: "payments-api", kind: "api_key", owner_id: "own-1", signal_type: "departure", action: "revoked", from: "deployed", to: "revoked" }],
+      items: [
+        {
+          identity_id: "dep-1",
+          name: "payments-api",
+          kind: "api_key",
+          owner_id: "own-1",
+          signal_type: "departure",
+          action: "revoked",
+          from: "deployed",
+          to: "revoked",
+        },
+      ],
     });
     apiMock.approveIdentityAction.mockReset().mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.graphBlastRadius.mockReset().mockResolvedValue({
@@ -466,7 +477,18 @@ describe("lifecycle actions from the UI", () => {
       coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
       reason: "vendor termination CAB-22",
       summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
-      items: [{ identity_id: "dep-1", name: "payments-api", kind: "api_key", owner_id: "owner-1", signal_type: "vendor_term", action: "revoked", from: "deployed", to: "revoked" }],
+      items: [
+        {
+          identity_id: "dep-1",
+          name: "payments-api",
+          kind: "api_key",
+          owner_id: "owner-1",
+          signal_type: "vendor_term",
+          action: "revoked",
+          from: "deployed",
+          to: "revoked",
+        },
+      ],
     });
     const user = userEvent.setup();
     renderIdentities();
@@ -660,6 +682,28 @@ describe("lifecycle actions from the UI", () => {
     await user.type(screen.getByLabelText(/name/i), "svc");
     await user.click(screen.getByRole("button", { name: /create|issue/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc" })));
+  });
+
+  it("requires explicit acknowledgement before issuing a wildcard identity", async () => {
+    apiMock.identities.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    await user.click(await screen.findByRole("button", { name: /issue certificate|new identity/i }));
+    await user.type(screen.getByLabelText(/name/i), "*.payments.example");
+    const issue = screen.getByRole("button", { name: /create|issue/i });
+    expect(issue).toBeDisabled();
+    expect(screen.getByText(/DNS-01 validation is required/i)).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/Acknowledge wildcard blast radius/i));
+    expect(issue).toBeEnabled();
+    await user.click(issue);
+    await waitFor(() =>
+      expect(apiMock.issueCertificate).toHaveBeenCalledWith({
+        name: "*.payments.example",
+        wildcardBlastRadiusAcknowledged: true,
+      }),
+    );
   });
 
   it("does not record dual-control approval from the identity row", async () => {

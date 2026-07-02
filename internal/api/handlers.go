@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -295,6 +296,9 @@ func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 		if req.OwnerID == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "owner_id is required")
 		}
+		if err := validateIdentityRequest(req); err != nil {
+			return 0, nil, err
+		}
 		if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
 			if store.IsNotFound(err) {
 				return 0, nil, errStatus(http.StatusUnprocessableEntity, "owner_id does not reference an existing owner")
@@ -320,6 +324,36 @@ func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, toIdentityResponse(created), nil
 	})
+}
+
+func validateIdentityRequest(req identityRequest) error {
+	if store.IdentityKind(req.Kind) != store.KindX509Certificate {
+		return nil
+	}
+	return validateWildcardIdentityPolicy(req.Name, req.Attributes)
+}
+
+func validateWildcardIdentityPolicy(name string, attrs json.RawMessage) error {
+	if !strings.HasPrefix(strings.TrimSpace(name), "*.") {
+		return nil
+	}
+	raw := bytes.TrimSpace(attrs)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		raw = []byte("{}")
+	}
+	var values map[string]any
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return errWithStatus(http.StatusBadRequest, err)
+	}
+	ack, _ := values["wildcard_blast_radius_acknowledged"].(bool)
+	if !ack {
+		return errStatus(http.StatusBadRequest, "wildcard X.509 identities require wildcard_blast_radius_acknowledged=true")
+	}
+	method, _ := values["validation_method"].(string)
+	if strings.ToLower(strings.TrimSpace(method)) != "dns-01" {
+		return errStatus(http.StatusBadRequest, "wildcard X.509 identities require validation_method=dns-01")
+	}
+	return nil
 }
 
 func (a *API) getIdentity(w http.ResponseWriter, r *http.Request) {

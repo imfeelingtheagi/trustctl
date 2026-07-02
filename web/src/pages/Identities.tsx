@@ -1008,8 +1008,8 @@ function BlastRadiusImpactPanel({ state }: { state: BlastRadiusState }) {
         Blast-radius impact
       </h3>
       <p className="mt-1">
-        Graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream affected node{affected === 1 ? "" : "s"}{" "}
-        before this destructive action.
+        Graph node <span className="font-mono text-xs">{state.nodeId}</span> reports {affected} downstream affected node{affected === 1 ? "" : "s"} before this
+        destructive action.
       </p>
       {byKind.length > 0 && (
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -1197,15 +1197,21 @@ function IdentityDetailPanel({
 
 function NewIdentityForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState("");
+  const [wildcardAck, setWildcardAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const serviceName = name.trim() || "new-service";
+  const isWildcard = serviceName.startsWith("*.");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await api.issueCertificate({ name: name.trim() || "new-service" });
+      await api.issueCertificate({
+        name: serviceName,
+        ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
+      });
       onDone();
     } catch (err) {
       setError(`Could not issue: ${String(err)}`);
@@ -1223,12 +1229,30 @@ function NewIdentityForm({ onDone }: { onDone: () => void }) {
         <input
           id="new-identity-name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (!e.target.value.trim().startsWith("*.")) setWildcardAck(false);
+          }}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           placeholder="e.g. payments-api"
         />
+        {isWildcard && (
+          <label className="mt-2 flex items-start gap-2 text-sm font-medium" htmlFor="wildcard-ack">
+            <input
+              id="wildcard-ack"
+              type="checkbox"
+              checked={wildcardAck}
+              onChange={(e) => setWildcardAck(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-border"
+            />
+            <span>
+              Acknowledge wildcard blast radius
+              <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
+            </span>
+          </label>
+        )}
       </div>
-      <Button type="submit" disabled={busy}>
+      <Button type="submit" disabled={busy || (isWildcard && !wildcardAck)}>
         Issue
       </Button>
       {error && (

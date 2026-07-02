@@ -318,6 +318,7 @@ export type IssueCertificateInput = {
   name: string;
   ownerId?: string;
   issuerId?: string;
+  wildcardBlastRadiusAcknowledged?: boolean;
 };
 export type {
   ActiveActiveIssuancePlan,
@@ -829,11 +830,21 @@ function postRead<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export function firstCertificateIdentityRequest(input: IssueCertificateInput, ownerId: string): IdentityRequest {
+  const wildcardAttrs =
+    input.name.trim().startsWith("*.") && input.wildcardBlastRadiusAcknowledged
+      ? {
+          attributes: {
+            validation_method: "dns-01",
+            wildcard_blast_radius_acknowledged: true,
+          },
+        }
+      : {};
   return {
     kind: "x509_certificate",
     name: input.name,
     owner_id: ownerId,
     ...(input.issuerId ? { issuer_id: input.issuerId } : {}),
+    ...wildcardAttrs,
   };
 }
 
