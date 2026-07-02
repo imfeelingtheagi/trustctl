@@ -351,6 +351,62 @@ func TestAuthCallbackRejectsBadState(t *testing.T) {
 	}
 }
 
+func TestSAMLACSRejectsMismatchedRelayState(t *testing.T) {
+	cfg, _ := authConfig()
+	called := false
+	cfg.VerifySAMLResponse = func(*http.Request, []string) (auth.Claims, error) {
+		called = true
+		return auth.Claims{}, nil
+	}
+	h := api.New(nil, nil, nil, api.WithAuth(cfg))
+
+	form := url.Values{"RelayState": {"attacker-state"}, "SAMLResponse": {"opaque"}}
+	req := httptest.NewRequest(http.MethodPost, "/auth/saml/acs", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_state", Value: "server-state"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_request_id", Value: "req-1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("SAML ACS mismatched RelayState = %d, want 400", rec.Code)
+	}
+	if called {
+		t.Fatal("SAML response verifier was called before RelayState was validated")
+	}
+}
+
+func TestSAMLACSForwardsRequestIDForSPInitiatedState(t *testing.T) {
+	cfg, _ := authConfig()
+	var gotRequestIDs []string
+	cfg.VerifySAMLResponse = func(_ *http.Request, possibleRequestIDs []string) (auth.Claims, error) {
+		gotRequestIDs = append([]string(nil), possibleRequestIDs...)
+		return auth.Claims{Subject: "saml-user", Email: "saml@example.test"}, nil
+	}
+	cfg.ResolveSAMLTenant = func(auth.Claims) (string, []string, error) {
+		return testTenant, []string{"viewer"}, nil
+	}
+	h := api.New(nil, nil, nil, api.WithAuth(cfg))
+
+	form := url.Values{"RelayState": {"server-state"}, "SAMLResponse": {"opaque"}}
+	req := httptest.NewRequest(http.MethodPost, "/auth/saml/acs", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_state", Value: "server-state"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_saml_request_id", Value: "req-1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("SAML ACS valid RelayState = %d, want 302: %s", rec.Code, rec.Body.String())
+	}
+	if len(gotRequestIDs) != 1 || gotRequestIDs[0] != "req-1" {
+		t.Fatalf("SAML request IDs = %#v, want [req-1]", gotRequestIDs)
+	}
+	if session := cookieValue(rec.Result().Cookies(), "__Host-trstctl_session"); session == "" {
+		t.Fatal("SAML ACS did not establish a session")
+	}
+}
+
 func cookieValue(cookies []*http.Cookie, name string) string {
 	for _, c := range cookies {
 		if c.Name == name {
